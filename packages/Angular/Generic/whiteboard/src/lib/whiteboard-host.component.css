@@ -1,3 +1,10 @@
+/* The host carries tabindex="-1" so the board has a focus scope for its keyboard
+   shortcuts (WCAG 2.1.4). Suppress the ring for the pointer path only — a keyboard
+   focus, if the board ever becomes tab-reachable, must still show one (2.4.7). */
+:host:focus:not(:focus-visible) {
+  outline: none;
+}
+
 /* LIVE WHITEBOARD host chrome — board header, board wrap, agent toast, status footer.
    Ported pixel-faithfully from plans/realtime/mockups/whiteboard.html
    (.board-head, .head-btn, .board-legend, .board-toast, .board-status). */

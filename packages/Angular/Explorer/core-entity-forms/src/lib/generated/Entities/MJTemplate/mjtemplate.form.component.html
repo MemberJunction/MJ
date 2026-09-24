@@ -152,9 +152,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Contents','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: Template Contents')"
+                [NewRecordValues]="NewRecordValues('MJ: Template Contents','TemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJTemplateContents')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTemplateContents', $event.totalRowCount)"
                 >
@@ -177,9 +177,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Params','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: Template Params')"
+                [NewRecordValues]="NewRecordValues('MJ: Template Params','TemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJTemplateParams')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTemplateParams', $event.totalRowCount)"
                 >
@@ -202,9 +202,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','EmailTemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
+                [NewRecordValues]="NewRecordValues('MJ: User Notification Types','EmailTemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJUserNotificationTypesEmailTemplateID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypesEmailTemplateID', $event.totalRowCount)"
                 >
@@ -227,9 +227,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompts','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompts')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompts','TemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJAIPrompts')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIPrompts', $event.totalRowCount)"
                 >
@@ -252,9 +252,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Providers','QueryTransformTemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Providers')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Providers','QueryTransformTemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJSearchScopeProviders')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchScopeProviders', $event.totalRowCount)"
                 >
@@ -277,9 +277,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Notification Types','SMSTemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Notification Types')"
+                [NewRecordValues]="NewRecordValues('MJ: User Notification Types','SMSTemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJUserNotificationTypesSMSTemplateID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserNotificationTypesSMSTemplateID', $event.totalRowCount)"
                 >
@@ -302,9 +302,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Search Scopes','QueryTemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Search Scopes')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Search Scopes','QueryTemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgentSearchScopes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentSearchScopes', $event.totalRowCount)"
                 >
@@ -327,9 +327,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Documents','TemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Documents')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Documents','TemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityDocuments')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
                 >
@@ -352,9 +352,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Routines','NotificationTemplateID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Routines')"
+                [NewRecordValues]="NewRecordValues('MJ: User Routines','NotificationTemplateID')"
                 [AllowLoad]="IsSectionExpanded('mJUserRoutines')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserRoutines', $event.totalRowCount)"
                 >

@@ -553,11 +553,15 @@ export class TimelineViewRendererComponent
       group.SubtitleFieldName = subtitleField;
     }
 
+    const imageField = this.findImageField();
     group.CardConfig = {
       collapsible: true,
       defaultExpanded: false,
       showDate: true,
       dateFormat: 'MMM d, yyyy h:mm a',
+      ...(imageField
+        ? { imageField, imagePosition: 'left' as const, imageSize: 'small' as const }
+        : {}),
     };
 
     this.TimelineGroups = [group];
@@ -635,6 +639,17 @@ export class TimelineViewRendererComponent
 
     const firstOther = fields.find((f) => f.Name !== excludeField);
     return firstOther?.Name || null;
+  }
+
+  /** Image field (ExtendedType='Image') so timeline cards crop a thumbnail, same as grid/cards. */
+  private findImageField(): string | null {
+    if (!this._entity) {
+      return null;
+    }
+    const match = this._entity.Fields.find(
+      (f) => f.ExtendedType === 'Image' && f.TSType === EntityFieldTSType.String,
+    );
+    return match?.Name ?? null;
   }
 }
 

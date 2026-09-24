@@ -46,6 +46,34 @@ export interface AISkillImportMarkdownOutput {
     warnings: string[];
 }
 
+/** Input for `Authorization.Check`. */
+export interface AuthorizationCheckInput {
+    /**
+     * Authorization names to evaluate (e.g. `Orders.Price.OverrideList`).
+     * Matching is case-insensitive. Empty array returns an empty Results list.
+     */
+    Names: string[];
+}
+
+/** One row of `Authorization.Check` output. */
+export interface AuthorizationCheckResultRow {
+    /** The name as requested. */
+    Name: string;
+    /** True when the user has this authorization or an ancestor grant. */
+    Allowed: boolean;
+    /** True when no `MJ: Authorizations` row matches this name. Fail-closed: Allowed is then false. */
+    Unknown: boolean;
+    /** True when Allowed because of an ancestor grant, not a direct role on this row. */
+    ViaAncestor: boolean;
+    /** The authorization Name that actually matched (leaf or ancestor). Null when not allowed. */
+    MatchedAuthorizationName: string | null;
+}
+
+/** Output of `Authorization.Check`. */
+export interface AuthorizationCheckOutput {
+    Results: AuthorizationCheckResultRow[];
+}
+
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -549,6 +577,29 @@ export interface TaskGraphControlOutput {
     errorMessage?: string;
 }
 
+/** Input for the step-scoped intervention verbs. */
+export interface TaskGraphTaskInterventionInput {
+    taskID: string;
+    /** ForceCompleteTask: the output downstream paths evaluate against. UpdateTaskInput: the new input. */
+    payload?: Record<string, unknown> | string | null;
+}
+
+/** Output of the task-graph debug control verbs — what happened and the debug state now in force. */
+export interface TaskGraphDebugControlOutput {
+    success: boolean;
+    /** The graph's debug state after the verb (pause/step/breakpoints/overrides). */
+    debug?: {
+        paused?: boolean;
+        pausedBy?: string | null;
+        pausedReason?: 'user' | 'breakpoint';
+        pausedAtTaskID?: string | null;
+        breakpoints?: string[];
+        step?: string;
+        edgeOverrides?: Record<string, 'true' | 'false'>;
+    };
+    errorMessage?: string;
+}
+
 /** Output of `TaskGraph.GetStatus`. */
 export interface TaskGraphStatusOutput {
     success: boolean;
@@ -567,10 +618,41 @@ export interface TaskGraphStatusOutput {
     errorMessage?: string;
 }
 
-/** Input for `TaskGraph.RetryTask`. */
+/** Input for TaskGraph.OverrideEdge. */
+export interface TaskGraphOverrideEdgeInput {
+    parentTaskID: string;
+    /** The MJ: Task Dependencies row being answered. */
+    edgeID: string;
+    /** 'false' = branch not taken, 'true' = gate open, omitted/null = remove the override. */
+    verdict?: 'true' | 'false' | null;
+}
+
+/** Input for TaskGraph.Pause and TaskGraph.Resume. */
+export interface TaskGraphPauseInput {
+    /** Parent task ID identifying the workflow run. */
+    parentTaskID: string;
+}
+
+/** Input for TaskGraph.RetryTask. */
 export interface TaskGraphRetryInput {
-    /** The failed task to retry. */
+    /** The failed task to return to Pending. */
     taskID: string;
+    /** Optional edited input for the re-run — the operator saw why it failed and corrected the brief. Applies to this run only. */
+    inputPayload?: Record<string, unknown> | string;
+}
+
+/** Input for TaskGraph.SetBreakpoints. */
+export interface TaskGraphSetBreakpointsInput {
+    parentTaskID: string;
+    /** The full breakpoint set — replaces what was there. Empty clears all breakpoints. */
+    taskIDs: string[];
+}
+
+/** Input for TaskGraph.Step. */
+export interface TaskGraphStepInput {
+    parentTaskID: string;
+    /** 'one' (default) releases the next eligible step, 'wave' the current frontier, a task ID exactly that step. */
+    target?: string;
 }
 
 /** Input for `TaskGraph.Submit`. */
@@ -608,6 +690,10 @@ export interface TaskGraphSubmitInput {
     environmentID: string;
     /** Conversation this graph answers, when submitted from a conversational channel. */
     conversationDetailID?: string;
+    /** Continuation hops that produced this graph. Counts toward the runaway-loop reinvoke cap exactly as in-process submissions do; omit for a fresh submission. */
+    reinvokeDepth?: number;
+    /** The invocation's runtime parameters, resolved by the flow dialect's `data.*` and `context.*` condition roots. Without it those documented conditions evaluate against nothing. */
+    invocation?: { data?: unknown; context?: unknown };
 }
 
 /** Output of `TaskGraph.Submit`. */
@@ -634,6 +720,98 @@ export interface TemplateRunOutput {
     output: string;
     /** Wall-clock render time in milliseconds. */
     executionTimeMs?: number;
+}
+
+/**
+ * Input for `WebSearch.Query`.
+ *
+ * NO import statements — this definition is emitted verbatim into the generated
+ * remote_operations.ts and any import here would break that file.
+ */
+export interface WebSearchQueryInput {
+    /** The search query. Required, non-empty. */
+    query: string;
+    /** Desired result count. Clamped to the serving provider's cap. Default 10. */
+    maxResults?: number;
+    /**
+     * Pin the search to one provider, by Name (e.g. `Brave`) or DriverClass.
+     *
+     * When set there is NO failover: if that provider is missing, inactive, unavailable or
+     * incapable of what was asked, the call fails rather than quietly serving from another
+     * vendor. Omit it to let the administrator's priority order decide.
+     */
+    provider?: string;
+    /** Restrict results to these domains, where the serving provider supports it. */
+    includeDomains?: string[];
+    /** Exclude these domains, where the serving provider supports it. */
+    excludeDomains?: string[];
+    /** Relative recency window: `day`, `week`, `month` or `year`. */
+    freshness?: 'day' | 'week' | 'month' | 'year';
+    /** Two-letter country code for localisation, e.g. `US`, `GB`. */
+    country?: string;
+    /** Language code for results, e.g. `en`. */
+    language?: string;
+    /** Adult-content filter. Default `moderate`. */
+    safeSearch?: 'off' | 'moderate' | 'strict';
+    /**
+     * Ask for a synthesized answer alongside the hits.
+     *
+     * This restricts selection to providers that can produce one, so it changes which provider
+     * serves the request — not merely what comes back.
+     */
+    includeAnswer?: boolean;
+}
+
+/**
+ * Output of `WebSearch.Query`.
+ *
+ * NO import statements — emitted verbatim into the generated remote_operations.ts.
+ */
+export interface WebSearchQueryHit {
+    /** Page title as the provider reports it. */
+    title: string;
+    /** Absolute URL of the result. */
+    url: string;
+    /** Snippet or extracted page content. Length and style vary by provider. */
+    snippet: string;
+    /** Host as the provider displays it, e.g. `irs.gov`. */
+    displayUrl?: string;
+    /** Publication or last-modified date, ISO-8601, when the provider resolved one. */
+    publishedAt?: string;
+    /**
+     * The provider's own relevance score.
+     *
+     * Provider-relative and NOT comparable across providers — use it to order hits within one
+     * response, never to threshold or to compare two vendors.
+     */
+    score?: number;
+}
+
+/** One provider's turn, recorded whether it succeeded or not. */
+export interface WebSearchQueryAttempt {
+    providerName: string;
+    succeeded: boolean;
+    durationMs: number;
+    hitCount?: number;
+    /** `transient` (another provider may succeed) or `permanent` (the request itself is bad). */
+    failureKind?: string;
+    errorMessage?: string;
+}
+
+export interface WebSearchQueryOutput {
+    /** Normalised results. Legitimately empty for a narrow query — that is not a failure. */
+    hits: WebSearchQueryHit[];
+    /** Synthesized answer, only when `includeAnswer` was requested and the provider produced one. */
+    answer?: string;
+    /** Name of the provider that actually served this result. */
+    providerUsed: string;
+    /**
+     * Every provider tried, in order — including on success.
+     *
+     * If the primary rate-limits every call and the secondary quietly serves everything, nothing
+     * else makes that visible while the bill moves to a vendor nobody chose.
+     */
+    attempts: WebSearchQueryAttempt[];
 }
 
 /** Input for `Workflow.Draft`. */
@@ -780,6 +958,22 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
     public readonly OperationKey = "AISkill.ImportMarkdown";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "aiskill:manage";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// Authorization.Check — Check Authorization
+// ============================================================
+/**
+ * Check Authorization
+ * Ask whether the calling user can execute one or more named MJ: Authorizations, including ancestor grants. Unknown names fail closed (Allowed=false, Unknown=true). When a row has UseAuditLog, a MJ: Audit Logs record is written. Implemented by AuthorizationCheckOperation in @memberjunction/core-entities.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Authorization.Check'. This generated base provides the typed contract only (client-safe).
+ */
+export class AuthorizationCheckOperation extends BaseRemotableOperation<AuthorizationCheckInput, AuthorizationCheckOutput> {
+    public readonly OperationKey = "Authorization.Check";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "authorization:check";
     public readonly RequiresSystemUser = false;
 }
 
@@ -1007,6 +1201,22 @@ export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphCo
 }
 
 // ============================================================
+// TaskGraph.ForceCompleteTask — Force Complete Workflow Step
+// ============================================================
+/**
+ * Force Complete Workflow Step
+ * Mark a wedged or externally-resolved step Complete with an operator-supplied output; downstream paths evaluate against it exactly as they would a runner's. Refused for a step running under a live claim (cancel it or wait for the claim to lapse) and for human steps (those complete through CompleteTask with the assignee check). Implemented by TaskGraphForceCompleteTaskServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.ForceCompleteTask'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphForceCompleteTaskOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.ForceCompleteTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // TaskGraph.GetStatus — Get Task Graph Status
 // ============================================================
 /**
@@ -1023,6 +1233,54 @@ export class TaskGraphGetStatusOperation extends BaseRemotableOperation<TaskGrap
 }
 
 // ============================================================
+// TaskGraph.OverrideEdge — Override Workflow Path
+// ============================================================
+/**
+ * Override Workflow Path
+ * Answer one path's condition by operator decision — the escape hatch for a held graph (a condition that cannot be evaluated) or a broken guard. 'false' reads as branch-not-taken and cascades skips; 'true' opens the gate; omitting the verdict removes the override. Durable: survives restarts and is honored by every dispatcher instance. Implemented by TaskGraphOverrideEdgeServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.OverrideEdge'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphOverrideEdgeOperation extends BaseRemotableOperation<TaskGraphOverrideEdgeInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.OverrideEdge";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Pause — Pause Workflow Run
+// ============================================================
+/**
+ * Pause Workflow Run
+ * Pause a running workflow: nothing new is claimed until it is resumed, while in-flight steps finish naturally and their completions land. Durable, declarative state the dispatcher's claim filter consults on its next pass — works across instances and restarts. Implemented by TaskGraphPauseServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Pause'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphPauseOperation extends BaseRemotableOperation<TaskGraphPauseInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Pause";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Resume — Resume Workflow Run
+// ============================================================
+/**
+ * Resume Workflow Run
+ * Resume a paused workflow run; claiming continues normally. Breakpoints and edge overrides survive — only the pause clears. Implemented by TaskGraphResumeServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Resume'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphResumeOperation extends BaseRemotableOperation<TaskGraphPauseInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Resume";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // TaskGraph.RetryTask — Retry Task
 // ============================================================
 /**
@@ -1033,6 +1291,54 @@ export class TaskGraphGetStatusOperation extends BaseRemotableOperation<TaskGrap
  */
 export class TaskGraphRetryTaskOperation extends BaseRemotableOperation<TaskGraphRetryInput, TaskGraphControlOutput> {
     public readonly OperationKey = "TaskGraph.RetryTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.SetBreakpoints — Set Workflow Breakpoints
+// ============================================================
+/**
+ * Set Workflow Breakpoints
+ * Replace a workflow run's breakpoint set. When an eligible step carries a breakpoint the dispatcher pauses the whole graph BEFORE claiming it and announces BreakpointHit — a breakpoint is an authored hold, implemented by the same claim-filter machinery that already holds unevaluable conditions. Empty array clears all breakpoints. Implemented by TaskGraphSetBreakpointsServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.SetBreakpoints'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphSetBreakpointsOperation extends BaseRemotableOperation<TaskGraphSetBreakpointsInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.SetBreakpoints";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.SkipTask — Skip Workflow Step
+// ============================================================
+/**
+ * Skip Workflow Step
+ * Declare a Pending step not-taken. Dependents proceed (Skipped satisfies a prerequisite) and any open human request for the step is withdrawn. Only a step that has not started can be skipped. Implemented by TaskGraphSkipTaskServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.SkipTask'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphSkipTaskOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.SkipTask";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// TaskGraph.Step — Step Workflow Run
+// ============================================================
+/**
+ * Step Workflow Run
+ * Arm a one-shot claim allowance on a paused workflow run: 'one' releases the next eligible step, 'wave' releases the current frontier, a task ID releases exactly that step. Consumed atomically so two dispatcher instances stepping the same graph release work exactly once. Implemented by TaskGraphStepServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.Step'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphStepOperation extends BaseRemotableOperation<TaskGraphStepInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.Step";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
@@ -1055,6 +1361,22 @@ export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSu
 }
 
 // ============================================================
+// TaskGraph.UpdateTaskInput — Update Workflow Step Input
+// ============================================================
+/**
+ * Update Workflow Step Input
+ * Replace a Pending step's input — the edit-the-brief-before-stepping move at a breakpoint. Applies to this run only; the step must not have started. Implemented by TaskGraphUpdateTaskInputServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.UpdateTaskInput'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphUpdateTaskInputOperation extends BaseRemotableOperation<TaskGraphTaskInterventionInput, TaskGraphDebugControlOutput> {
+    public readonly OperationKey = "TaskGraph.UpdateTaskInput";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
 // Template.Run — Run Template
 // ============================================================
 /**
@@ -1067,6 +1389,22 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly OperationKey = "Template.Run";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "template:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// WebSearch.Query — Web Search
+// ============================================================
+/**
+ * Web Search
+ * Run a web search through the configured external provider set. The administrator's WebSearchProvider records decide which vendor serves the request and in what failover order; a caller may pin one explicitly, in which case the call fails rather than substituting another. Implemented by WebSearchQueryServerOperation in @memberjunction/web-search-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'WebSearch.Query'. This generated base provides the typed contract only (client-safe).
+ */
+export class WebSearchQueryOperation extends BaseRemotableOperation<WebSearchQueryInput, WebSearchQueryOutput> {
+    public readonly OperationKey = "WebSearch.Query";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "websearch:execute";
     public readonly RequiresSystemUser = false;
 }
 

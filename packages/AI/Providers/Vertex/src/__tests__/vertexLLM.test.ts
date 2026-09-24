@@ -255,6 +255,8 @@ describe('VertexLLM', () => {
       expect(result.data.choices[0].message.content.toLowerCase()).toContain('alice');
     }, 30000);
 
+    // KNOWN LIMITATION: the streaming path is inherited from GeminiLLM and exercised by
+    // its suite; running it here needs live Vertex credentials.
     it.skip('should support streaming with callbacks (inherited from GeminiLLM)', async () => {
       if (!shouldRunIntegrationTests) {
         console.log('Skipping integration test - credentials not configured');

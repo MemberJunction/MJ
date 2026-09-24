@@ -2,8 +2,9 @@ import { RunView, type UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
-import { computeContentHash } from './ContentHash.js';
-import { serializeKeyValue } from './KeySerialization.js';
+import { ComputeContentHash } from './ContentHash.js';
+import { SerializeKeyValue } from './KeySerialization.js';
+import { PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE } from './StreamingDiscovery.js';
 import {
     BaseIntegrationConnector,
     type ExternalObjectSchema,
@@ -259,7 +260,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
         const fields = this.GetCachedFields(obj.ID);
 
-        return fields.map(f => this.FieldEntityToSchema(f));
+        return fields.map(f => this.fieldEntityToSchema(f));
     }
 
     /**
@@ -281,7 +282,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
 
         for (const obj of objects) {
             const fields = this.GetCachedFields(obj.ID);
-            const sourceObject = this.BuildSourceObjectInfo(obj, fields, objects);
+            const sourceObject = this.buildSourceObjectInfo(obj, fields, objects);
             result.Objects.push(sourceObject);
         }
 
@@ -298,13 +299,13 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
         const baseURL = this.GetBaseURL(ctx.CompanyIntegration, auth);
 
-        const templateVars = this.DetectTemplateVars(obj.APIPath);
+        const templateVars = this.detectTemplateVars(obj.APIPath);
 
         if (templateVars.length > 0) {
-            return this.FetchWithTemplateVars(auth, baseURL, obj, fields, templateVars, ctx);
+            return this.fetchWithTemplateVars(auth, baseURL, obj, fields, templateVars, ctx);
         }
 
-        return this.FetchFlat(auth, baseURL, obj, fields, ctx);
+        return this.fetchFlat(auth, baseURL, obj, fields, ctx);
     }
 
     // ── Generic metadata-driven CRUD ─────────────────────────────────
@@ -337,7 +338,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const auth = await this.Authenticate(ci, contextUser);
         const baseURL = this.GetBaseURL(ci, auth);
         const headers = this.BuildHeaders(auth);
-        const url = this.BuildFullURL(baseURL, obj.CreateAPIPath);
+        const url = this.buildFullURL(baseURL, obj.CreateAPIPath);
         const body = this.BuildOperationBody(ctx.Attributes, obj.CreateBodyShape, obj.CreateBodyKey);
         const response = await this.MakeHTTPRequest(auth, url, obj.CreateMethod, headers, body);
         if (response.Status >= 200 && response.Status < 300) {
@@ -365,7 +366,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const auth = await this.Authenticate(ci, contextUser);
         const baseURL = this.GetBaseURL(ci, auth);
         const headers = this.BuildHeaders(auth);
-        const url = this.BuildFullURL(
+        const url = this.buildFullURL(
             baseURL,
             this.SubstituteIDInPath(obj.UpdateAPIPath, ctx.ExternalID, obj.UpdateIDLocation)
         );
@@ -395,7 +396,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const auth = await this.Authenticate(ci, contextUser);
         const baseURL = this.GetBaseURL(ci, auth);
         const headers = this.BuildHeaders(auth);
-        const url = this.BuildFullURL(
+        const url = this.buildFullURL(
             baseURL,
             this.SubstituteIDInPath(obj.DeleteAPIPath, ctx.ExternalID, obj.DeleteIDLocation)
         );
@@ -423,7 +424,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const getPath = obj.UpdateAPIPath
             ? this.SubstituteIDInPath(obj.UpdateAPIPath, ctx.ExternalID, obj.UpdateIDLocation)
             : `${obj.APIPath.replace(/\/+$/, '')}/${encodeURIComponent(ctx.ExternalID)}`;
-        const url = this.BuildFullURL(baseURL, getPath);
+        const url = this.buildFullURL(baseURL, getPath);
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         if (response.Status === 404) return null;
         if (response.Status < 200 || response.Status >= 300) {
@@ -434,7 +435,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
         if (records.length === 0) return null;
         const transformed = this.applyTransformPreservingKeys(records[0], obj, fields);
-        return this.ToExternalRecord(transformed, ctx.ObjectName, this.FindPrimaryKeyFieldNames(fields));
+        return this.toExternalRecord(transformed, ctx.ObjectName, this.findPrimaryKeyFieldNames(fields));
     }
 
     // ── CRUD helpers ─────────────────────────────────────────────────
@@ -521,19 +522,19 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Fetches records from a flat endpoint (no template variable substitution).
      */
-    private async FetchFlat(
+    private async fetchFlat(
         auth: RESTAuthContext,
         baseURL: string,
         obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
         ctx: FetchContext
     ): Promise<FetchBatchResult> {
-        const fullPath = this.BuildFullURL(baseURL, obj.APIPath);
-        const result = await this.FetchWithPagination(auth, fullPath, obj, ctx);
-        const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
+        const fullPath = this.buildFullURL(baseURL, obj.APIPath);
+        const result = await this.fetchWithPagination(auth, fullPath, obj, ctx);
+        const pkFieldNames = this.findPrimaryKeyFieldNames(fields);
 
         return {
-            Records: result.Records.map(r => this.ToExternalRecord(
+            Records: result.Records.map(r => this.toExternalRecord(
                 this.applyTransformPreservingKeys(r, obj, fields),
                 ctx.ObjectName,
                 pkFieldNames
@@ -559,7 +560,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * This is the connector-side realization of the topological traversal the engine
      * already uses for sync ORDER. A single-var path behaves exactly as before.
      */
-    private async FetchWithTemplateVars(
+    private async fetchWithTemplateVars(
         auth: RESTAuthContext,
         baseURL: string,
         obj: MJIntegrationObjectEntity,
@@ -570,7 +571,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const resolutions: ResolvedTemplateVar[] = [];
         const seenParents = new Set<string>();
         for (const tVar of templateVars) {
-            const info = this.ResolveParentForVar(obj, fields, tVar, ctx.CompanyIntegration.IntegrationID);
+            const info = this.resolveParentForVar(obj, fields, tVar, ctx.CompanyIntegration.IntegrationID);
             if (!info) {
                 return { Records: [], HasMore: false, Warnings: [{
                     Code: 'PARENT_UNRESOLVED',
@@ -591,7 +592,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             resolutions.push(info);
         }
 
-        const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
+        const pkFieldNames = this.findPrimaryKeyFieldNames(fields);
 
         // ── TOP-LEVEL parent iteration: RESUMABLE + BOUNDED-BATCH + CONCURRENT + ADAPTIVELY RATE-LIMITED ──
         // A second-layer object fires one request PER PARENT. Doing that for all parents in a single
@@ -605,7 +606,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // child no longer routes through here — the REST DiscoverySampleRecordStream override drives it via
         // StreamRecordsForDiscovery (which fetches parents live), so FetchWithTemplateVars is sync-exclusive
         // and an unsynced parent correctly yields ZERO_PARENTS ("sync the parent first").
-        const allParentIDs = this.SortIdsStable(await this.LoadParentIDs(top.parentObjectID, ctx.ContextUser, []));
+        const allParentIDs = this.sortIdsStable(await this.loadParentIDs(top.parentObjectID, ctx.ContextUser, []));
         if (allParentIDs.length === 0) {
             const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(top.parentObjectID);
             return { Records: [], HasMore: false, Warnings: [{
@@ -615,17 +616,17 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             }] };
         }
         const after = ctx.AfterKeyValue ?? null;
-        const remaining = after != null ? allParentIDs.filter(id => this.CompareIds(id, after) > 0) : allParentIDs;
+        const remaining = after != null ? allParentIDs.filter(id => this.compareIds(id, after) > 0) : allParentIDs;
         const batchParents = remaining.slice(0, Math.max(1, this.TemplateVarParentBatchSize()));
 
         const out: ExternalRecord[] = [];
-        await this.RunBounded(batchParents, Math.max(1, ctx.MaxConcurrency ?? 1), async (parentID) => {
+        await this.runBounded(batchParents, Math.max(1, ctx.MaxConcurrency ?? 1), async (parentID) => {
             if (ctx.RateLimitAcquire) await ctx.RateLimitAcquire();   // adaptive token (replaces fixed self-throttle)
-            const nextPath = this.SubstituteTemplateVars(obj.APIPath, top.templateVar, parentID);
+            const nextPath = this.substituteTemplateVars(obj.APIPath, top.templateVar, parentID);
             const nextTags: Record<string, string> = { [top.fkFieldName]: parentID };
             const sub: ExternalRecord[] = [];
             try {
-                await this.DescendTemplateVars(
+                await this.descendTemplateVars(
                     auth, baseURL, obj, fields, resolutions, 1, nextPath, nextTags,
                     [{ objectID: top.parentObjectID, idValue: parentID }], ctx, pkFieldNames, sub
                 );
@@ -663,6 +664,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
+     * DISCOVERY-ONLY: how many rows of a KEYLESS parent to read before classifying its key.
+     *
+     * Only reached when a parent declares no primary key — with a declared one nothing is buffered
+     * and the chain stays lazy. The default is the value-statistic classifier's own significance
+     * floor: below it the classifier abstains, above it more rows change no verdict, and every row
+     * here is a fetch that recurses up the whole dependency chain.
+     *
+     * Overridable the same way every other discovery bound is — per-connection `Configuration`
+     * (`discoveryParentKeySampleRows`), then `MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS`,
+     * then this getter. Bounded above by the per-table sample target, so lowering that lowers this
+     * too and the two can never disagree in the direction that matters.
+     */
+    protected DiscoveryParentKeySampleRows(): number {
+        return PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
+    }
+
+    /**
      * REST override (§sample-discover): a SINGLE-template-var CHILD is sampled with the recursive,
      * record-constrained {@link StreamRecordsForDiscovery}. Flat objects fall back to the generic
      * FetchChanges loop; MULTI-var (composition) children are deferred — {@link StreamRecordsForDiscovery}
@@ -674,14 +692,28 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         contextUser: UserInfo,
         batchSize: number,
         maxRecords: number,
+        deadlineMs?: number,
+        watchKey?: string,
     ): AsyncGenerator<Record<string, unknown>> {
         const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
-        if (this.DetectTemplateVars(obj.APIPath).length === 0) {
-            yield* super.DiscoverySampleRecordStream(companyIntegration, objectName, contextUser, batchSize, maxRecords);
+        if (this.detectTemplateVars(obj.APIPath).length === 0) {
+            // FORWARD THE DEADLINE. Dropping it here silently un-bounds every REST connector that
+            // lands on this fallback — which is every connector expressing parent scope as
+            // CONFIGURATION rather than as URL template vars.
+            //
+            // The record-constrained sampler below is gated on template vars, so a connector like
+            // Totara (parent scope declared via `Configuration.parentScope` + a wsfunction, no vars
+            // in its APIPath) never qualifies for it and arrives here instead. Without the deadline
+            // the base builds a FetchContext carrying no discovery marker at all, the connector
+            // cannot tell a sample from a sync, and one FetchChanges call walks every parent.
+            // Live 2026-08-12: 28 minutes inside a single call, returning rows=0.
+            yield* super.DiscoverySampleRecordStream(
+                companyIntegration, objectName, contextUser, batchSize, maxRecords, deadlineMs, watchKey,
+            );
             return;
         }
         let yielded = 0;
-        for await (const rec of this.StreamRecordsForDiscovery(companyIntegration, obj.ID, contextUser, maxRecords, 0)) {
+        for await (const rec of this.streamRecordsForDiscovery(companyIntegration, obj.ID, contextUser, maxRecords, 0)) {
             yield rec.Fields;
             if (++yielded >= maxRecords) return;
         }
@@ -690,22 +722,28 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * DISCOVERY-ONLY recursive lazy sampler. Yields records of `objectID` for field/PK analysis by
      * STREAMING — never bulk. A top-level object paginates its endpoint directly. A template-var CHILD
-     * streams its PARENT (recursively, via this same routine), classifies the parent's key from the
-     * parent's own ~`target` rows (declared PK → value-statistic classifier → adjourn — never a guessed
-     * name), and fetches children under parent rows until the child has `target`. Parent rows beyond what
-     * the child needs are analysis-only — they keep the parent's key classified on a CONSISTENT ~`target`
-     * sample; if the child needs MORE parents than `target`, it keeps streaming, so the parent count may
-     * be over OR under `target`. Record-constrained (unlike sync, which walks ALL rows via the DAG): a
-     * million-row ancestor is streamed and cut off early. Pure HTTP — no SQL, dialect-agnostic.
+     * streams its PARENT (recursively, via this same routine), classifies the parent's key from a
+     * significance-sized slice of the parent's rows (declared PK → value-statistic classifier → adjourn
+     * — never a guessed name), and fetches children under parent rows until the child has `target`.
+     *
+     * Parents are pulled ON DEMAND, so the leaf's `target` is the only bound and it propagates up the
+     * whole chain. The single exception is a parent that declares no key: it cannot be descended into
+     * until its key is known, so a bounded slice of its rows is read first. That slice is sized by
+     * {@link DiscoveryParentKeySampleRows} — per-connection Configuration, then env, then the
+     * classifier's own significance floor — and is capped by the leaf's target so it can never
+     * exceed the per-table sample size.
+     *
+     * Record-constrained (unlike sync, which walks ALL rows via the DAG): a million-row ancestor is
+     * streamed and cut off early. Pure HTTP — no SQL, dialect-agnostic.
      */
-    private async *StreamRecordsForDiscovery(
+    private async *streamRecordsForDiscovery(
         companyIntegration: MJCompanyIntegrationEntity,
         objectID: string,
         contextUser: UserInfo,
         target: number,
         depth: number,
     ): AsyncGenerator<ExternalRecord> {
-        const maxDepth = this.ReadDiscoveryConfig(companyIntegration)
+        const maxDepth = this.readDiscoveryConfig(companyIntegration)
             .int('discoverySampleMaxDepth', 'MJ_INTEGRATION_DISCOVERY_SAMPLE_MAX_DEPTH', this.DiscoverySampleMaxDepth());
         if (depth > maxDepth) return;
         const obj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(objectID);
@@ -713,14 +751,14 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const fields = this.GetCachedFields(obj.ID);
         const auth = await this.Authenticate(companyIntegration, contextUser);
         const baseURL = this.GetBaseURL(companyIntegration, auth);
-        const templateVars = this.DetectTemplateVars(obj.APIPath);
-        const pkFieldNames = this.FindPrimaryKeyFieldNames(fields);
+        const templateVars = this.detectTemplateVars(obj.APIPath);
+        const pkFieldNames = this.findPrimaryKeyFieldNames(fields);
 
         // TOP-LEVEL: paginate the flat endpoint lazily; the caller stops pulling at its own target.
         if (templateVars.length === 0) {
             let pageCtx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: target, ContextUser: contextUser };
             for (let guard = 0; guard < 100_000; guard++) {
-                const batch = await this.FetchFlat(auth, baseURL, obj, fields, pageCtx);
+                const batch = await this.fetchFlat(auth, baseURL, obj, fields, pageCtx);
                 for (const rec of batch.Records) yield rec;
                 if (!batch.HasMore) return;
                 pageCtx = { ...pageCtx, CurrentPage: batch.NextPage, CurrentOffset: batch.NextOffset, CurrentCursor: batch.NextCursor };
@@ -728,12 +766,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             return;
         }
 
-        // MULTI-VAR (composition) children are DEFERRED, and deferring means NOT ATTEMPTING: resolving only
-        // templateVars[0] would leave the remaining `{Vars}` as literal, unsubstituted text in the fetch URL
-        // (e.g. `/orgs/123/profiles/{ProfileId}/events`) — malformed requests fired at the vendor API. Adjourn
-        // instead → the multi-var child falls back to declared-only fields, caught at first real sync (which
-        // handles multi-var properly via FetchWithTemplateVars). (rkihm-BC #3049.)
-        if (templateVars.length > 1) return;
+        // MULTI-VAR (composition) child: sampleable exactly when ONE parent's records can supply a
+        // value for EVERY var. Real multi-var paths are overwhelmingly NESTED — /campaigns/{cid}/
+        // funds/{fid}/gifts, where funds is itself a child of campaigns — and a streamed `funds`
+        // record already carries BOTH ids: its own natively, its ancestor's tagged on by this very
+        // routine one level down. Streaming that innermost parent therefore yields complete,
+        // data-proven var tuples; no combination is ever fabricated, so no malformed URL is ever
+        // fired (rkihm-BC #3049's constraint holds — we never substitute a partial set).
+        //
+        // GENUINELY independent parents (/a/{aId}/b/{bId}/d where neither A nor B knows the other)
+        // stay adjourned: valid (aId,bId) pairs are unknowable without data that carries both, and
+        // guessing pairs IS the malformed-request bug. Such a child falls back to declared-only
+        // fields, caught at first real sync via FetchWithTemplateVars — and everything BENEATH it
+        // was previously dead too, which is the cascade this branch exists to end.
+        if (templateVars.length > 1) {
+            yield* this.streamMultiVarChildForDiscovery(companyIntegration, obj, fields, templateVars, contextUser, target, depth, auth, baseURL, pkFieldNames);
+            return;
+        }
 
         // CHILD (single template var): stream the PARENT recursively via this SAME routine — so a
         // grandparent is sampled identically (uniform to all depths). Classify the parent's key from its
@@ -746,36 +795,50 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // next parent — which lazily pulls the next grandparent, and so on to the highest ancestor. That is
         // where the "fill to N" completion actually happens — at the top of the dependency chain, not
         // locally.
-        const parentInfo = this.ResolveParentForVar(obj, fields, templateVars[0], companyIntegration.IntegrationID);
+        const parentInfo = this.resolveParentForVar(obj, fields, templateVars[0], companyIntegration.IntegrationID);
         if (!parentInfo) return;
         const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentInfo.parentObjectID);
         if (!parentObj) return;
 
         let parentKey: string | null = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey)?.Name ?? null;
         const buffer: ExternalRecord[] = [];   // parent rows awaiting descent until the key is classified
+        // How many parents to hold back before classifying their key.
+        //
+        // This is the ONE eager step in an otherwise lazy chain, so its size is the whole cost. With
+        // a declared key nothing is buffered and parents are pulled strictly on demand; without one
+        // we must read some parents before we can descend at all.
+        //
+        // Bound it by what the CLASSIFIER needs, not by what the leaf wants. The value-statistic
+        // classifier needs MIN_ROWS_FOR_SIGNIFICANCE rows to call a key significant; buffering the
+        // leaf's full target instead pulled up to 10x that — and because a parent may itself be a
+        // child, those pulls recurse up the whole chain before one child record is yielded.
+        const classifySampleSize = Math.min(target, this.readDiscoveryConfig(companyIntegration)
+            .int('discoveryParentKeySampleRows', 'MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS',
+                 this.DiscoveryParentKeySampleRows()));
 
         const fetchChildren = async function* (this: BaseRESTIntegrationConnector, key: string, parentRec: ExternalRecord): AsyncGenerator<ExternalRecord> {
             const idVal = parentRec.Fields?.[key];
             if (idVal == null || String(idVal) === '') return;
-            const path = this.SubstituteTemplateVars(obj.APIPath, parentInfo.templateVar, String(idVal));
-            const fullURL = this.BuildFullURL(baseURL, path);
+            const path = this.substituteTemplateVars(obj.APIPath, parentInfo.templateVar, String(idVal));
+            const fullURL = this.buildFullURL(baseURL, path);
             const ctx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: target, ContextUser: contextUser };
-            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
+            const result = await this.fetchWithPagination(auth, fullURL, obj, ctx);
             for (const r of result.Records) {
                 r[parentInfo.fkFieldName] = String(idVal);   // tag the resolved parent FK onto the child row
                 const transformed = this.applyTransformPreservingKeys(r, obj, fields);
-                yield this.ToExternalRecord(transformed, obj.Name, pkFieldNames);
+                yield this.toExternalRecord(transformed, obj.Name, pkFieldNames);
             }
         }.bind(this);
 
-        for await (const parentRec of this.StreamRecordsForDiscovery(companyIntegration, parentInfo.parentObjectID, contextUser, target, depth + 1)) {
+        for await (const parentRec of this.streamRecordsForDiscovery(companyIntegration, parentInfo.parentObjectID, contextUser, target, depth + 1)) {
             if (parentKey) { yield* fetchChildren(parentKey, parentRec); continue; }
-            // Key not declared: buffer up to `target` parent rows, classify the key from them, then flush.
-            // This buffer pulls `target` parents up the chain (recursively resolving THEIR parents) — the
-            // "resolve N at the highest dependency" step — bounded by `target`, never the parent's total.
+            // Key not declared: read a significance-sized slice of parents, classify the key from it,
+            // then flush their children and go lazy again. Every row here is pulled up the chain
+            // (recursively resolving THEIR parents), so this slice's size is multiplied by the depth
+            // above it — which is why it is sized to the classifier, not to the leaf's target.
             buffer.push(parentRec);
-            if (buffer.length >= target) {
-                parentKey = await this.ResolveParentKeyField(parentObj, buffer);
+            if (buffer.length >= classifySampleSize) {
+                parentKey = await this.resolveParentKeyField(parentObj, buffer);
                 if (!parentKey) return;   // parent genuinely keyless → adjourn
                 for (const bp of buffer) yield* fetchChildren(parentKey, bp);
                 buffer.length = 0;
@@ -783,9 +846,114 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         }
         // Parent stream ended before `target`: classify on whatever we buffered, then flush its children.
         if (!parentKey && buffer.length > 0) {
-            parentKey = await this.ResolveParentKeyField(parentObj, buffer);
+            parentKey = await this.resolveParentKeyField(parentObj, buffer);
             if (parentKey) for (const bp of buffer) yield* fetchChildren(parentKey, bp);
         }
+    }
+
+    /**
+     * DISCOVERY-ONLY sampler for a MULTI-VAR child (2+ template vars in the APIPath).
+     *
+     * The strategy is "one stream proves the whole tuple": resolve every var to its parent object,
+     * pick the candidate parent whose records are most likely to carry values for ALL the vars (the
+     * innermost one — ranked by how many of the OTHER vars appear in its own APIPath, i.e. how deep
+     * it sits in the same nesting), stream it via {@link StreamRecordsForDiscovery} (so ITS ancestors
+     * resolve recursively, tags included), and per record substitute every var from the record's own
+     * fields. A record that cannot fill every var is SKIPPED — a partial substitution is a malformed
+     * URL, and fabricating the missing half is the exact bug the old blanket deferral existed to
+     * prevent. A candidate that proves barren (a probe slice streamed, zero covering records) is
+     * abandoned for the next; when no candidate covers, the child adjourns to declared-only fields
+     * exactly as the blanket deferral did — but its DESCENDANTS now only die when the tuple is
+     * genuinely unknowable, not whenever an ancestor merely had two parents.
+     *
+     * Bounds: the leaf's `target` is the only fill bound (lazy, same as single-var); the barren-probe
+     * slice is {@link DiscoveryParentKeySampleRows} per candidate, the same knob that bounds keyless-
+     * parent classification, because it is the same question — "how many rows before we admit this
+     * stream cannot answer".
+     */
+    private async *streamMultiVarChildForDiscovery(
+        companyIntegration: MJCompanyIntegrationEntity,
+        obj: MJIntegrationObjectEntity,
+        fields: MJIntegrationObjectFieldEntity[],
+        templateVars: string[],
+        contextUser: UserInfo,
+        target: number,
+        depth: number,
+        auth: RESTAuthContext,
+        baseURL: string,
+        pkFieldNames: string[],
+    ): AsyncGenerator<ExternalRecord> {
+        // Resolve every var; any unresolvable var means the tuple can never be completed from data.
+        const resolved: Array<{ templateVar: string; parentObjectID: string; fkFieldName: string }> = [];
+        for (const tVar of templateVars) {
+            const info = this.resolveParentForVar(obj, fields, tVar, companyIntegration.IntegrationID);
+            if (!info) {
+                console.warn(`[DiscoverySampleStream] "${obj.Name}" multi-var: no parent resolves {${tVar}} — adjourning (declared-only fields)`);
+                return;
+            }
+            resolved.push({ templateVar: tVar, parentObjectID: info.parentObjectID, fkFieldName: info.fkFieldName });
+        }
+
+        // Rank candidates innermost-first: the parent whose own path mentions more of the OTHER vars
+        // sits deeper in the same nesting, so its records carry more of the tuple. Ties keep var order.
+        const otherVarsInPath = (parentObjectID: string, ownVar: string): number => {
+            const p = IntegrationEngineBase.Instance.GetIntegrationObjectByID(parentObjectID);
+            if (!p) return -1;
+            const vars = new Set(this.detectTemplateVars(p.APIPath).map(v => v.toLowerCase()));
+            return templateVars.filter(v => v.toLowerCase() !== ownVar.toLowerCase() && vars.has(v.toLowerCase())).length;
+        };
+        const candidates = [...resolved].sort((a, b) =>
+            otherVarsInPath(b.parentObjectID, b.templateVar) - otherVarsInPath(a.parentObjectID, a.templateVar));
+
+        const probeSlice = Math.min(target, this.readDiscoveryConfig(companyIntegration)
+            .int('discoveryParentKeySampleRows', 'MJ_INTEGRATION_DISCOVERY_PARENT_KEY_SAMPLE_ROWS',
+                 this.DiscoveryParentKeySampleRows()));
+
+        for (const candidate of candidates) {
+            const parentObj = IntegrationEngineBase.Instance.GetIntegrationObjectByID(candidate.parentObjectID);
+            if (!parentObj) continue;
+            // The candidate's OWN var may be carried under the parent's key name rather than the
+            // var's name (a `funds` record may say `id`, not `fund_id`). Map that one var through the
+            // parent's declared key when the record lacks the var-named field.
+            const parentDeclaredKey = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey)?.Name ?? null;
+
+            let scanned = 0, covered = 0, yielded = 0;
+            for await (const parentRec of this.streamRecordsForDiscovery(companyIntegration, candidate.parentObjectID, contextUser, target, depth + 1)) {
+                scanned++;
+                const recFields = parentRec.Fields ?? {};
+                const lower = new Map(Object.entries(recFields).map(([k, v]) => [k.toLowerCase(), v] as const));
+                const values = new Map<string, string>();
+                for (const v of resolved) {
+                    let raw = lower.get(v.templateVar.toLowerCase());
+                    if ((raw == null || String(raw) === '') && v === candidate && parentDeclaredKey) {
+                        raw = lower.get(parentDeclaredKey.toLowerCase());
+                    }
+                    if (raw == null || String(raw) === '') { values.clear(); break; }
+                    values.set(v.templateVar, String(raw));
+                }
+                if (values.size !== resolved.length) {
+                    // Cannot fill the tuple from THIS record. Never substitute a partial set.
+                    if (covered === 0 && scanned >= probeSlice) break;   // barren candidate — try the next
+                    continue;
+                }
+                covered++;
+                let path = obj.APIPath;
+                for (const [tVar, val] of values) path = this.substituteTemplateVars(path, tVar, val);
+                const fullURL = this.buildFullURL(baseURL, path);
+                const ctx: FetchContext = { CompanyIntegration: companyIntegration, ObjectName: obj.Name, WatermarkValue: null, BatchSize: target, ContextUser: contextUser };
+                const result = await this.fetchWithPagination(auth, fullURL, obj, ctx);
+                for (const r of result.Records) {
+                    // Tag EVERY resolved fk onto the child row — same contract as the single-var path,
+                    // extended to the whole tuple, so the child's FK columns are discoverable.
+                    for (const v of resolved) r[v.fkFieldName] = values.get(v.templateVar);
+                    const transformed = this.applyTransformPreservingKeys(r, obj, fields);
+                    yield this.toExternalRecord(transformed, obj.Name, pkFieldNames);
+                    if (++yielded >= target) return;
+                }
+            }
+            if (covered > 0) return;   // this candidate answered; exhausting it means the data ran out
+        }
+        console.warn(`[DiscoverySampleStream] "${obj.Name}" multi-var: no parent's records carry the full {${templateVars.join('}, {')}} tuple — adjourning (declared-only fields)`);
     }
 
     /**
@@ -794,7 +962,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Returns null when the parent is genuinely keyless (→ the caller adjourns). No conventional identity
      * name is ever guessed — a name is never assumed for a field the data doesn't prove is the key.
      */
-    private async ResolveParentKeyField(parentObj: MJIntegrationObjectEntity, records: ExternalRecord[]): Promise<string | null> {
+    private async resolveParentKeyField(parentObj: MJIntegrationObjectEntity, records: ExternalRecord[]): Promise<string | null> {
         // (1) metadata: a declared PK sticks.
         const declared = this.GetCachedFields(parentObj.ID).find(f => f.IsPrimaryKey);
         if (declared) return declared.Name;
@@ -811,7 +979,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /** Reads the discovery knob precedence — per-connection Configuration (int) → operator env → default. */
-    private ReadDiscoveryConfig(ci: MJCompanyIntegrationEntity): { int: (cfgKey: string, envKey: string, def: number) => number } {
+    private readDiscoveryConfig(ci: MJCompanyIntegrationEntity): { int: (cfgKey: string, envKey: string, def: number) => number } {
         let cfg: Record<string, unknown> = {};
         try { if (ci.Configuration) cfg = JSON.parse(ci.Configuration) as Record<string, unknown>; } catch { /* malformed → env/default */ }
         const asInt = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : undefined);
@@ -826,12 +994,12 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /** Stable total order over ID strings — numeric when ALL are integer-like, else lexical. */
-    private SortIdsStable(ids: string[]): string[] {
-        return [...ids].sort((a, b) => this.CompareIds(a, b));
+    private sortIdsStable(ids: string[]): string[] {
+        return [...ids].sort((a, b) => this.compareIds(a, b));
     }
 
     /** Total-order comparator matching SortIdsStable, used for keyset resume (id > AfterKeyValue). */
-    private CompareIds(a: string, b: string): number {
+    private compareIds(a: string, b: string): number {
         const na = Number(a), nb = Number(b);
         if (Number.isFinite(na) && Number.isFinite(nb) && /^\d+$/.test(a) && /^\d+$/.test(b)) {
             return na === nb ? 0 : (na < nb ? -1 : 1);
@@ -840,7 +1008,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /** Runs `worker` over `items` with at most `concurrency` in flight. Rejects on the first worker error. */
-    private async RunBounded<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+    private async runBounded<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
         let idx = 0;
         const runners: Promise<void>[] = [];
         const next = async (): Promise<void> => {
@@ -865,7 +1033,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * (all vars substituted) it fetches with pagination and tags each record with the
      * resolved parent FK values.
      */
-    private async DescendTemplateVars(
+    private async descendTemplateVars(
         auth: RESTAuthContext,
         baseURL: string,
         obj: MJIntegrationObjectEntity,
@@ -880,7 +1048,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         out: ExternalRecord[]
     ): Promise<void> {
         if (level >= resolutions.length) {
-            const fullURL = this.BuildFullURL(baseURL, path);
+            const fullURL = this.buildFullURL(baseURL, path);
             // Leaf-scoped context: the outer ctx.BatchSize bounds how many PARENTS this call
             // processes (see the resumable AfterKeyValue loop above the first call into this
             // method) — it is NOT a per-parent record cap. Passing ctx as-is here made
@@ -896,11 +1064,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             // data for an item the engine chose to sync this call; drain it to completion instead
             // of truncating it.
             const leafCtx: FetchContext = { ...ctx, BatchSize: Number.MAX_SAFE_INTEGER, CurrentPage: undefined, CurrentOffset: undefined, CurrentCursor: undefined };
-            const result = await this.FetchWithPagination(auth, fullURL, obj, leafCtx);
+            const result = await this.fetchWithPagination(auth, fullURL, obj, leafCtx);
             for (const r of result.Records) {
                 for (const [k, v] of Object.entries(fkTags)) r[k] = v;
                 const transformed = this.applyTransformPreservingKeys(r, obj, fields);
-                out.push(this.ToExternalRecord(transformed, ctx.ObjectName, pkFieldNames));
+                out.push(this.toExternalRecord(transformed, ctx.ObjectName, pkFieldNames));
             }
             return;
         }
@@ -909,15 +1077,15 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // Prune to the valid subset: one AND-filter per prior layer this parent has an FK to.
         const filters: Array<{ column: string; value: string }> = [];
         for (const prior of outerStack) {
-            const fkCol = this.FindFKColumnToParent(res.parentObjectID, prior.objectID);
+            const fkCol = this.findFKColumnToParent(res.parentObjectID, prior.objectID);
             if (fkCol) filters.push({ column: fkCol, value: prior.idValue });
         }
-        const parentIDs = await this.LoadParentIDs(res.parentObjectID, ctx.ContextUser, filters);
+        const parentIDs = await this.loadParentIDs(res.parentObjectID, ctx.ContextUser, filters);
 
         for (const parentID of parentIDs) {
-            const nextPath = this.SubstituteTemplateVars(path, res.templateVar, parentID);
+            const nextPath = this.substituteTemplateVars(path, res.templateVar, parentID);
             const nextTags = { ...fkTags, [res.fkFieldName]: parentID };
-            await this.DescendTemplateVars(
+            await this.descendTemplateVars(
                 auth, baseURL, obj, fields, resolutions, level + 1, nextPath, nextTags,
                 [...outerStack, { objectID: res.parentObjectID, idValue: parentID }],
                 ctx, pkFieldNames, out
@@ -937,7 +1105,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Returns null when neither strategy matches.
      */
     /** Reads a trimmed string value from an IntegrationObject's Configuration JSON (tolerant of absent/invalid). */
-    private ReadObjectConfigString(obj: MJIntegrationObjectEntity, key: string): string | null {
+    private readObjectConfigString(obj: MJIntegrationObjectEntity, key: string): string | null {
         const raw = (obj as unknown as { Configuration?: string | null }).Configuration;
         if (!raw || typeof raw !== 'string') return null;
         try {
@@ -950,7 +1118,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /** Reads an OBJECT-valued key from an IntegrationObject's Configuration JSON as a string→string map
      *  with lowercased keys (tolerant of absent/invalid). Used for the per-var parent maps that let a
      *  MULTI-LEVEL template-var path resolve each variable to its own parent. */
-    private ReadObjectConfigStringMap(obj: MJIntegrationObjectEntity, key: string): Record<string, string> | null {
+    private readObjectConfigStringMap(obj: MJIntegrationObjectEntity, key: string): Record<string, string> | null {
         const raw = (obj as unknown as { Configuration?: string | null }).Configuration;
         if (!raw || typeof raw !== 'string') return null;
         try {
@@ -965,7 +1133,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         } catch { return null; }
     }
 
-    private ResolveParentForVar(
+    private resolveParentForVar(
         obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
         templateVar: string,
@@ -983,13 +1151,13 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // parent. Checked FIRST; absent → falls through to the single-valued Strategy A. Backward-compatible
         // (existing single-parent connectors declare no parentObjectNames and are unaffected). By-name only —
         // no guessing; an unmatched entry is a LOUD skip like Strategy A.
-        const perVarMap = this.ReadObjectConfigStringMap(obj, 'parentObjectNames');
+        const perVarMap = this.readObjectConfigStringMap(obj, 'parentObjectNames');
         if (perVarMap) {
             const parentName = perVarMap[tVarLower];
             if (parentName) {
                 const parent = siblingObjects.find(s => s.Name.toLowerCase() === parentName.toLowerCase());
                 if (parent) {
-                    const fkMap = this.ReadObjectConfigStringMap(obj, 'parentObjectIDFieldNames');
+                    const fkMap = this.readObjectConfigStringMap(obj, 'parentObjectIDFieldNames');
                     const fkFieldName = (fkMap && fkMap[tVarLower]) || templateVar;
                     return { templateVar, fkFieldName, parentObjectID: parent.ID };
                 }
@@ -1004,11 +1172,11 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // Configuration.parentObjectName (the extractor emits this for second-layer / {param} objects). A
         // by-name reference needs NO RelatedIntegrationObjectID FK-UUID — which a dense @lookup FK graph
         // often can't deploy (same-transaction rollback). When a valid declaration is present it WINS.
-        const declaredParent = this.ReadObjectConfigString(obj, 'parentObjectName');
+        const declaredParent = this.readObjectConfigString(obj, 'parentObjectName');
         if (declaredParent) {
             const parent = siblingObjects.find(s => s.Name.toLowerCase() === declaredParent.toLowerCase());
             if (parent) {
-                const fkFieldName = this.ReadObjectConfigString(obj, 'parentObjectIDFieldName') ?? templateVar;
+                const fkFieldName = this.readObjectConfigString(obj, 'parentObjectIDFieldName') ?? templateVar;
                 return { templateVar, fkFieldName, parentObjectID: parent.ID };
             }
             console.warn(
@@ -1040,7 +1208,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * filter a child level by its parent in a nested path. Returns null when no FK links
      * them, in which case that level loads unfiltered (independent vars / cartesian).
      */
-    private FindFKColumnToParent(innerObjectID: string, outerObjectID: string): string | null {
+    private findFKColumnToParent(innerObjectID: string, outerObjectID: string): string | null {
         const innerFields = IntegrationEngineBase.Instance.GetIntegrationObjectFields(innerObjectID);
         const fk = innerFields.find(f => f.RelatedIntegrationObjectID && UUIDsEqual(f.RelatedIntegrationObjectID, outerObjectID));
         return fk ? fk.Name : null;
@@ -1051,7 +1219,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Uses IntegrationEngineBase cache for object/field metadata lookups,
      * then queries the MJ entity via RunView for actual synced record IDs.
      */
-    private async LoadParentIDs(
+    private async loadParentIDs(
         parentObjectID: string,
         contextUser: UserInfo,
         filters?: Array<{ column: string; value: string }>
@@ -1103,23 +1271,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Fetches records from a single URL with pagination support.
      * Loops through pages until no more data or maxRecords is reached.
      */
-    private async FetchWithPagination(
+    private async fetchWithPagination(
         auth: RESTAuthContext,
         basePath: string,
         obj: MJIntegrationObjectEntity,
         ctx: FetchContext
     ): Promise<PaginatedFetchResult> {
         if (!obj.SupportsPagination || obj.PaginationType === 'None') {
-            return this.FetchSinglePage(auth, basePath, obj);
+            return this.fetchSinglePage(auth, basePath, obj);
         }
 
-        return this.FetchPaginatedLoop(auth, basePath, obj, ctx);
+        return this.fetchPaginatedLoop(auth, basePath, obj, ctx);
     }
 
     /**
      * Fetches a single non-paginated page.
      */
-    private async FetchSinglePage(
+    private async fetchSinglePage(
         auth: RESTAuthContext,
         url: string,
         obj: MJIntegrationObjectEntity
@@ -1137,7 +1305,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             return { Records: [], HasMore: false };
         }
 
-        this.ValidateHTTPResponse(response, requestURL);
+        this.validateHTTPResponse(response, requestURL);
         const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
         return { Records: records, HasMore: false };
     }
@@ -1149,7 +1317,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Cursor state is maintained internally within the batch, avoiding the need to
      * externalize it through FetchBatchResult (which would break cursor-based connectors).
      */
-    private async FetchPaginatedLoop(
+    private async fetchPaginatedLoop(
         auth: RESTAuthContext,
         basePath: string,
         obj: MJIntegrationObjectEntity,
@@ -1181,7 +1349,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
                 return { Records: allRecords, HasMore: false };
             }
 
-            this.ValidateHTTPResponse(response, requestURL);
+            this.validateHTTPResponse(response, requestURL);
             const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
 
             if (records.length === 0) {
@@ -1226,7 +1394,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Combines baseURL and apiPath into a full URL.
      */
-    private BuildFullURL(baseURL: string, apiPath: string): string {
+    private buildFullURL(baseURL: string, apiPath: string): string {
         const base = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
         const path = apiPath.startsWith('/') ? apiPath : `/${apiPath}`;
         return `${base}${path}`;
@@ -1279,7 +1447,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             if (entries.length === 0) return url;
 
             // Extract existing param keys from the URL (case-insensitive) to avoid duplicates
-            const existingKeys = this.ExtractURLParamKeys(url);
+            const existingKeys = this.extractURLParamKeys(url);
 
             // Filter out any default params whose key already exists in the URL
             const filtered = entries.filter(([k]) => !existingKeys.has(k.toLowerCase()));
@@ -1300,7 +1468,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Extracts query parameter keys from a URL, returned as a Set of lowercase strings.
      * Used to detect duplicates between pagination params and DefaultQueryParams.
      */
-    private ExtractURLParamKeys(url: string): Set<string> {
+    private extractURLParamKeys(url: string): Set<string> {
         const keys = new Set<string>();
         const qIndex = url.indexOf('?');
         if (qIndex < 0) return keys;
@@ -1320,7 +1488,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Detects template variables in an API path. Template variables use
      * the format {VariableName} (e.g., "/profiles/{ProfileID}/events").
      */
-    private DetectTemplateVars(apiPath: string): string[] {
+    private detectTemplateVars(apiPath: string): string[] {
         const matches = apiPath.match(/\{(\w+)\}/g);
         return matches ? matches.map(m => m.slice(1, -1)) : [];
     }
@@ -1328,7 +1496,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Substitutes a single template variable in a path.
      */
-    private SubstituteTemplateVars(apiPath: string, varName: string, value: string): string {
+    private substituteTemplateVars(apiPath: string, varName: string, value: string): string {
         return apiPath.replace(`{${varName}}`, encodeURIComponent(value));
     }
 
@@ -1349,12 +1517,49 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Gets IntegrationObjectField records from the engine's cache for a given object ID.
      * Returns only active fields sorted by Sequence.
+     *
+     * MEMOISED. This sits on per-record paths — `RawToExternalRecord` / `TransformRecord` resolve
+     * an object's fields for every record transformed, and several callers then run a `.find()` for
+     * the primary key over the freshly-sorted result — so the filter and sort were being repeated
+     * per record over a list that only changes when the engine reloads its metadata.
+     *
+     * Invalidation is the ARRAY IDENTITY of the engine's field cache: it is replaced wholesale on
+     * load/refresh, so a new array yields a new memo automatically, including after a schema
+     * refresh. A fresh copy is returned per call, preserving the previous contract for callers that
+     * sort or splice the result.
      */
     protected GetCachedFields(objectID: string): MJIntegrationObjectFieldEntity[] {
-        return IntegrationEngineBase.Instance.GetIntegrationObjectFields(objectID)
+        const allFields = IntegrationEngineBase.Instance.IntegrationObjectFields;
+        if (this.__cachedFieldsSource !== allFields) {
+            this.__cachedFieldsByObject = new Map();
+            this.__cachedFieldsSource = allFields;
+        }
+
+        const key = objectID?.trim().toLowerCase() ?? '';
+        const hit = this.__cachedFieldsByObject.get(key);
+        if (hit) {
+            return hit.slice();
+        }
+
+        const computed = IntegrationEngineBase.Instance.GetIntegrationObjectFields(objectID)
             .filter(f => f.Status === 'Active')
             .sort((a, b) => a.Sequence - b.Sequence);
+
+        // NEVER memoise an empty result. An empty list is indistinguishable from "the engine's
+        // metadata has not loaded yet", and because invalidation keys on array identity, a single
+        // call landing before the cache is seeded would pin `[]` for the life of that array.
+        // Callers derive primary-key field names from this list, so an empty answer builds records
+        // with NO key — rows that can never be matched again, and are therefore re-inserted on
+        // every subsequent sync.
+        if (computed.length > 0) {
+            this.__cachedFieldsByObject.set(key, computed);
+        }
+        return computed.slice();
     }
+
+    /** Memo backing {@link GetCachedFields}, keyed on the engine field cache's array identity. */
+    private __cachedFieldsByObject: Map<string, MJIntegrationObjectFieldEntity[]> = new Map();
+    private __cachedFieldsSource: MJIntegrationObjectFieldEntity[] | null = null;
 
     // ── Conversion helpers ───────────────────────────────────────────
 
@@ -1362,7 +1567,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Converts a raw API record object to the ExternalRecord format.
      * For composite primary keys, joins all PK values with '|' to form a unique ExternalID.
      */
-    private ToExternalRecord(
+    private toExternalRecord(
         raw: Record<string, unknown>,
         objectType: string,
         pkFieldNames: string[]
@@ -1375,9 +1580,9 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // so an object-valued PK (a connector that surfaces a nested {id,...} blob as its key) yields
         // a stable, distinct ExternalID instead of every record collapsing to "[object Object]".
         const allPkPresent = pkFieldNames.length > 0
-            && pkFieldNames.every(name => raw[name] != null && serializeKeyValue(raw[name]).length > 0);
-        const externalID = pkFieldNames.map(name => serializeKeyValue(raw[name])).join('|');
-        const resolvedID = allPkPresent ? externalID : computeContentHash(raw);
+            && pkFieldNames.every(name => raw[name] != null && SerializeKeyValue(raw[name]).length > 0);
+        const externalID = pkFieldNames.map(name => SerializeKeyValue(raw[name])).join('|');
+        const resolvedID = allPkPresent ? externalID : ComputeContentHash(raw);
 
         // §4 cont'd — write the synthetic identity INTO the PK column. When the source never populates the
         // declared PK (nested/derived records: contact phones, event sponsors, scheduled billing, …) the row
@@ -1388,7 +1593,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         // are idempotent (same content → same hash → upsert match). Single-PK only; the full source record is
         // otherwise preserved (full-record pass-through), so this never drops a source key.
         let fields = raw;
-        if (!allPkPresent && pkFieldNames.length === 1 && (raw[pkFieldNames[0]] == null || serializeKeyValue(raw[pkFieldNames[0]]).length === 0)) {
+        if (!allPkPresent && pkFieldNames.length === 1 && (raw[pkFieldNames[0]] == null || SerializeKeyValue(raw[pkFieldNames[0]]).length === 0)) {
             fields = { ...raw, [pkFieldNames[0]]: resolvedID };
         }
         return {
@@ -1403,7 +1608,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * sorted by Sequence. For composite PKs, returns all PK fields.
      * Falls back to ["ID"] if no PK fields are explicitly marked.
      */
-    private FindPrimaryKeyFieldNames(fields: MJIntegrationObjectFieldEntity[]): string[] {
+    private findPrimaryKeyFieldNames(fields: MJIntegrationObjectFieldEntity[]): string[] {
         const pkFields = fields
             .filter(f => f.IsPrimaryKey)
             .sort((a, b) => a.Sequence - b.Sequence);
@@ -1413,7 +1618,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Converts an IntegrationObjectFieldEntity to the ExternalFieldSchema format.
      */
-    private FieldEntityToSchema(f: MJIntegrationObjectFieldEntity): ExternalFieldSchema {
+    private fieldEntityToSchema(f: MJIntegrationObjectFieldEntity): ExternalFieldSchema {
         return {
             Name: f.Name,
             Label: f.DisplayName ?? f.Name,
@@ -1431,12 +1636,12 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Builds a SourceObjectInfo from an IntegrationObject and its fields.
      * Resolves FK relationships using the RelatedIntegrationObjectID.
      */
-    private BuildSourceObjectInfo(
+    private buildSourceObjectInfo(
         obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
         allObjects: MJIntegrationObjectEntity[]
     ): SourceObjectInfo {
-        const relationships = this.BuildRelationships(fields, allObjects);
+        const relationships = this.buildRelationships(fields, allObjects);
 
         return {
             ExternalName: obj.Name,
@@ -1464,7 +1669,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Builds SourceRelationshipInfo entries from FK fields.
      */
-    private BuildRelationships(
+    private buildRelationships(
         fields: MJIntegrationObjectFieldEntity[],
         allObjects: MJIntegrationObjectEntity[]
     ): SourceRelationshipInfo[] {
@@ -1491,7 +1696,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     /**
      * Validates an HTTP response and throws a descriptive error on non-2xx status.
      */
-    private ValidateHTTPResponse(response: RESTResponse, url: string): void {
+    private validateHTTPResponse(response: RESTResponse, url: string): void {
         if (response.Status < 200 || response.Status >= 300) {
             const bodyPreview = typeof response.Body === 'string'
                 ? response.Body.slice(0, 500)

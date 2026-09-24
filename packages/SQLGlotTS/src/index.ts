@@ -4,6 +4,7 @@ export type {
   MJPostgresTranspilerOptions,
   MJPostgresTranspileResult,
   MJUnhandledStatement,
+  BitColumnRef,
 } from './MJPostgresTranspiler.js';
 export type {
   SQLDialect,

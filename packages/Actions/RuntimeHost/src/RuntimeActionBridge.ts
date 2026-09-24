@@ -62,7 +62,7 @@ import { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus'
  *
  * Callers pass this map to `RuntimeActionExecutor.execute({ bridgeHandlers })`.
  */
-export function buildRuntimeActionBridgeHandlers(ctx: BridgeContext): BridgeHandlerMap {
+export function BuildRuntimeActionBridgeHandlers(ctx: BridgeContext): BridgeHandlerMap {
     return {
         // ---- Metadata (md) ----
         'md.GetEntity': makeHandler(ctx, (args) => handleGetEntity(ctx, args as { name: string })),
@@ -125,6 +125,11 @@ export function buildRuntimeActionBridgeHandlers(ctx: BridgeContext): BridgeHand
             handleGetEmbedding(ctx, args as { text: string })
         )
     };
+}
+
+/** @deprecated Use {@link BuildRuntimeActionBridgeHandlers}. */
+export function buildRuntimeActionBridgeHandlers(ctx: BridgeContext): BridgeHandlerMap {
+    return BuildRuntimeActionBridgeHandlers(ctx);
 }
 
 // =========================================================================
@@ -963,7 +968,7 @@ async function handleGetEmbedding(
  * strictly required to forward calls — all security / permissions live
  * host-side.
  */
-export function getRuntimeActionBridgePreamble(): string {
+export function GetRuntimeActionBridgePreamble(): string {
     return `
         (function installUtilities() {
             const call = (name, args) => globalThis.__bridgeCall(name, args);
@@ -1004,6 +1009,11 @@ export function getRuntimeActionBridgePreamble(): string {
             };
         })();
     `;
+}
+
+/** @deprecated Use {@link GetRuntimeActionBridgePreamble}. */
+export function getRuntimeActionBridgePreamble(): string {
+    return GetRuntimeActionBridgePreamble();
 }
 
 // =========================================================================

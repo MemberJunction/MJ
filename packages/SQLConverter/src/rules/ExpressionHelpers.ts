@@ -4,7 +4,7 @@
  * convert_charindex, convert_stuff, convert_string_concat, convert_iif,
  * convert_top_to_limit, etc.
  */
-import { resolveInlineType } from './TypeResolver.js';
+import { ResolveInlineType } from './TypeResolver.js';
 
 /**
  * Split SQL into segments of code, string literals, and comments.
@@ -83,11 +83,77 @@ function segmentSQL(sql: string): Array<{ text: string; type: 'code' | 'string' 
  * Apply a transformation function only to SQL code segments,
  * preserving string literals and comments unchanged.
  */
-export function transformCodeOnly(sql: string, transform: (code: string) => string): string {
+export function TransformCodeOnly(sql: string, transform: (code: string) => string): string {
   return segmentSQL(sql).map(seg => {
     if (seg.type !== 'code') return seg.text;
     return transform(seg.text);
   }).join('');
+}
+
+/** @deprecated Use {@link TransformCodeOnly}. */
+export function transformCodeOnly(sql: string, transform: (code: string) => string): string {
+  return TransformCodeOnly(sql, transform);
+}
+
+/**
+ * Escape every regex metacharacter in `literal` so it can be interpolated into a
+ * `RegExp` and match itself.
+ *
+ * The configured schema name is data, not pattern: SQL Server and PostgreSQL both
+ * permit `$` in an identifier, and interpolating one raw silently changes what the
+ * pattern means — a `$` becomes an end-anchor, so the pattern matches nothing and
+ * the conversion quietly emits nothing. See issue #3171.
+ */
+export function EscapeRegExp(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** @deprecated Use {@link EscapeRegExp}. */
+export function escapeRegExp(literal: string): string {
+  return EscapeRegExp(literal);
+}
+
+/**
+ * Remove comments, keeping code and string literals intact.
+ *
+ * Use this before matching a pattern that decides what a batch IS or what it names. Matching the
+ * raw batch means a comment can win — a migration that documents itself above a statement gets the
+ * prose matched instead of the code, and the rule acts on a word from the comment.
+ */
+export function StripComments(sql: string): string {
+  return segmentSQL(sql)
+    .map((seg) => (seg.type === 'comment' ? '' : seg.text))
+    .join('');
+}
+
+/**
+ * Quote constraint names that contain uppercase, so they survive PostgreSQL's folding.
+ *
+ * T-SQL is case-insensitive and CodeGen emits constraint names unquoted, so PostgreSQL folds them
+ * to lowercase at both definition and lookup. That is self-consistent only while EVERY site agrees.
+ * It is shared between CREATE TABLE (inline constraints) and ALTER TABLE (ADD / DROP CONSTRAINT)
+ * because those two disagreeing is what breaks: an unquoted CREATE registers `ck_payment_status`
+ * while a quoted `DROP CONSTRAINT "CK_Payment_Status"` misses it, and the ADD that follows then
+ * succeeds under the case-preserved name — leaving BOTH constraints on the table, so the original
+ * narrower one keeps rejecting exactly the rows the migration was written to allow. Nothing fails
+ * loudly; the only trace is one non-fatal error in the install log.
+ *
+ * The `IF EXISTS` exclusion is load-bearing, not defensive. `DROP CONSTRAINT IF EXISTS Foo` puts
+ * the keyword `IF` exactly where a constraint name otherwise sits, so the bare pattern captures
+ * `IF` as the name, sees an uppercase letter, and emits:
+ *
+ *     ALTER TABLE __mj."Foo" DROP CONSTRAINT "IF" EXISTS "CK_Foo_Bar";
+ *
+ * — which is a syntax error, on the one statement form whose whole purpose is to be safe to run.
+ * Four of the five T-SQL migrations in the repo using that syntax converted broken. It predates
+ * this rule's refactor, but this is the file that widened the pattern's reach to CREATE TABLE and
+ * separately added a path that EMITS `DROP CONSTRAINT IF EXISTS`, so the collision now round-trips
+ * through one module.
+ */
+export function QuoteConstraintNames(sql: string): string {
+  return TransformCodeOnly(sql, (code) =>
+    code.replace(/\bCONSTRAINT\s+(?!IF\s+EXISTS\b)([A-Za-z_]\w*)\b/gi, (match, name: string) =>
+      (/[A-Z]/.test(name) ? `CONSTRAINT "${name}"` : match)));
 }
 
 /**
@@ -109,7 +175,7 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
  * identical across both so reviewers reading converter output recognize
  * the pattern at a glance.
  */
-export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
+export function EmitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
   return (
     `DO $$ DECLARE r record;\n` +
     `BEGIN\n` +
@@ -122,21 +188,42 @@ export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'
   );
 }
 
+/** @deprecated Use {@link EmitDropOverloadsBlock}. */
+export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
+  return EmitDropOverloadsBlock(funcName, schema);
+}
+
 /** Convert [schema].[name] bracket identifiers to schema."name" double-quote format.
  *  Also converts T-SQL temp table #name references to PostgreSQL equivalents.
  *  Skips content inside SQL string literals and comments. */
-export function convertIdentifiers(sql: string): string {
-  return transformCodeOnly(sql, (code) => {
+export function ConvertIdentifiers(sql: string): string {
+  return TransformCodeOnly(sql, (code) => {
     // Temp table: CREATE TABLE #name → CREATE TEMP TABLE "name"
     code = code.replace(/\bCREATE\s+TABLE\s+#(\w+)/gi, 'CREATE TEMP TABLE "$1"');
     // Strip # from remaining temp object references: #name → "name"
     code = code.replace(/(?<!["\w])#(\w+)/g, '"$1"');
-    // Replace [Schema].[Name] with Schema."Name" (any schema, not just __mj)
-    code = code.replace(/\[(\w+)\]\.\[([^\]]+)\]/g, '$1."$2"');
+    // Replace [Schema].[Name] with Schema."Name" (any schema, not just __mj).
+    // The schema stays UNQUOTED so PostgreSQL folds it to lowercase, matching the lowercase
+    // schema `CREATE SCHEMA` produces (it is emitted unquoted too). The name is quoted because
+    // object names are case-sensitive and MJ's are PascalCase.
+    //
+    // The schema part may be built from a migration placeholder — `[${mjSchema}_BizAppsCommon]`
+    // is how an open app references a sibling app's schema. Those characters are not \w, so
+    // without them here the whole bracket falls through to the blanket rule below and comes out
+    // QUOTED: `"${mjSchema}_BizAppsCommon"`. At apply time the placeholder is substituted as
+    // plain text, giving `"__mj_BizAppsCommon"` — a schema that does not exist, because the real
+    // one folded to `__mj_bizappscommon` when it was created. Every cross-schema reference in
+    // that file then fails, while the unbracketed references beside them resolve fine.
+    code = code.replace(/\[([\w${}:]+)\]\.\[([^\]]+)\]/g, '$1."$2"');
     // Replace remaining [Name] with "Name"
     code = code.replace(/\[([^\]]+)\]/g, '"$1"');
     return code;
   });
+}
+
+/** @deprecated Use {@link ConvertIdentifiers}. */
+export function convertIdentifiers(sql: string): string {
+  return ConvertIdentifiers(sql);
 }
 
 /**
@@ -144,12 +231,17 @@ export function convertIdentifiers(sql: string): string {
  * Convert DATEDIFF(unit, start, end) → EXTRACT/age patterns
  * Convert DATEPART(unit, date) → EXTRACT(field FROM date)
  */
-export function convertDateFunctions(sql: string): string {
+export function ConvertDateFunctions(sql: string): string {
   sql = convertDateAdd(sql);
   sql = convertDateDiff(sql);
   sql = convertDatePart(sql);
   sql = convertSimpleDateFunctions(sql);
   return sql;
+}
+
+/** @deprecated Use {@link ConvertDateFunctions}. */
+export function convertDateFunctions(sql: string): string {
+  return ConvertDateFunctions(sql);
 }
 
 /**
@@ -311,7 +403,7 @@ function convertDatePart(sql: string): string {
  * Convert CHARINDEX(substr, str[, start]) → POSITION(substr IN str)
  * 3-arg form: → (POSITION(substr IN SUBSTRING(str FROM start)) + start - 1)
  */
-export function convertCharIndex(sql: string): string {
+export function ConvertCharIndex(sql: string): string {
   return sql.replace(
     /\bCHARINDEX\s*\(\s*([^,]+)\s*,\s*([^,)]+)(?:\s*,\s*([^)]+))?\s*\)/gi,
     (_match, substr: string, str: string, start?: string) => {
@@ -326,17 +418,27 @@ export function convertCharIndex(sql: string): string {
   );
 }
 
+/** @deprecated Use {@link ConvertCharIndex}. */
+export function convertCharIndex(sql: string): string {
+  return ConvertCharIndex(sql);
+}
+
 /**
  * Convert STUFF(string, start, length, replacement) →
  * OVERLAY(string PLACING replacement FROM start FOR length)
  */
-export function convertStuff(sql: string): string {
+export function ConvertStuff(sql: string): string {
   return sql.replace(
     /\bSTUFF\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi,
     (_match, str: string, start: string, length: string, replacement: string) => {
       return `OVERLAY(${str.trim()} PLACING ${replacement.trim()} FROM ${start.trim()} FOR ${length.trim()})`;
     }
   );
+}
+
+/** @deprecated Use {@link ConvertStuff}. */
+export function convertStuff(sql: string): string {
+  return ConvertStuff(sql);
 }
 
 /** PG type strings that represent textual/string data */
@@ -383,7 +485,7 @@ function isStringColumn(
  * uses column type information to disambiguate "ColA" + "ColB" —
  * converting to || only when at least one side is a known string type.
  */
-export function convertStringConcat(
+export function ConvertStringConcat(
   sql: string,
   tableColumns?: Map<string, Map<string, string>>
 ): string {
@@ -461,11 +563,19 @@ export function convertStringConcat(
   return segments.map(s => s.text).join('');
 }
 
+/** @deprecated Use {@link ConvertStringConcat}. */
+export function convertStringConcat(
+  sql: string,
+  tableColumns?: Map<string, Map<string, string>>
+): string {
+  return ConvertStringConcat(sql, tableColumns);
+}
+
 /**
  * Convert IIF(condition, true_val, false_val) → CASE WHEN condition THEN true_val ELSE false_val END
  * Uses paren-aware argument splitting to handle nested function calls.
  */
-export function convertIIF(sql: string): string {
+export function ConvertIIF(sql: string): string {
   let iterations = 0;
   const maxIterations = 50;
 
@@ -497,6 +607,11 @@ export function convertIIF(sql: string): string {
     iterations++;
   }
   return sql;
+}
+
+/** @deprecated Use {@link ConvertIIF}. */
+export function convertIIF(sql: string): string {
+  return ConvertIIF(sql);
 }
 
 /** Find the position of the matching closing parenthesis, respecting nesting and string literals */
@@ -575,7 +690,7 @@ function splitTopLevelCommas(str: string): string[] {
  * Moves TOP N from after SELECT to LIMIT N at end of statement.
  * Skips matches inside string literals and comments.
  */
-export function convertTopToLimit(sql: string): string {
+export function ConvertTopToLimit(sql: string): string {
   // Build protected ranges from string literals and comments
   const segments = segmentSQL(sql);
   const protectedRanges: Array<{ start: number; end: number }> = [];
@@ -630,6 +745,11 @@ export function convertTopToLimit(sql: string): string {
   return sql;
 }
 
+/** @deprecated Use {@link ConvertTopToLimit}. */
+export function convertTopToLimit(sql: string): string {
+  return ConvertTopToLimit(sql);
+}
+
 /**
  * Convert common T-SQL CAST patterns to PostgreSQL types.
  * Used in views, procedures, and expressions.
@@ -641,7 +761,7 @@ export function convertTopToLimit(sql: string): string {
  * exist`. We strip quotes from known T-SQL type names first so the
  * existing patterns below match.
  */
-export function convertCastTypes(sql: string): string {
+export function ConvertCastTypes(sql: string): string {
   // Strip quotes from quoted T-SQL type tokens produced by convertIdentifiers
   // when the source SQL had bracket-wrapped types (e.g. CAST(x AS [INT])).
   const quotedTypes = [
@@ -669,11 +789,16 @@ export function convertCastTypes(sql: string): string {
   return sql;
 }
 
+/** @deprecated Use {@link ConvertCastTypes}. */
+export function convertCastTypes(sql: string): string {
+  return ConvertCastTypes(sql);
+}
+
 /**
  * Convert T-SQL CONVERT(type, expr[, style]) → CAST(expr AS mapped_type).
  * Drops the optional style parameter.
  */
-export function convertConvertFunction(sql: string): string {
+export function ConvertConvertFunction(sql: string): string {
   // 3-arg: CONVERT(type, expr, style)
   sql = sql.replace(
     /\bCONVERT\s*\(\s*(\w+(?:\s*\([^)]*\))?)\s*,\s*([^,)]+)\s*,\s*[^)]+\)/gi,
@@ -691,12 +816,17 @@ export function convertConvertFunction(sql: string): string {
   return sql;
 }
 
+/** @deprecated Use {@link ConvertConvertFunction}. */
+export function convertConvertFunction(sql: string): string {
+  return ConvertConvertFunction(sql);
+}
+
 /**
  * Map a T-SQL type name to PostgreSQL for inline CAST/CONVERT usage.
  * Delegates to the centralized TypeResolver for consistent mapping.
  */
 function mapInlineType(tsqlType: string): string {
-  return resolveInlineType(tsqlType);
+  return ResolveInlineType(tsqlType);
 }
 
 /**
@@ -716,16 +846,26 @@ function mapInlineType(tsqlType: string): string {
  * operator, comma, equals, start of line). This leaves N' inside a
  * string alone.
  */
-export function removeNPrefix(sql: string): string {
+export function RemoveNPrefix(sql: string): string {
   // Anchors: start of string, or after one of the "string-start" context chars.
   // Whitespace, comma, paren, comparison operators, brackets, semicolon.
   return sql.replace(/(^|[\s(,=<>!+\-*\/[;])N'/g, "$1'");
 }
 
+/** @deprecated Use {@link RemoveNPrefix}. */
+export function removeNPrefix(sql: string): string {
+  return RemoveNPrefix(sql);
+}
+
 /** Remove COLLATE clauses */
-export function removeCollate(sql: string): string {
+export function RemoveCollate(sql: string): string {
   return sql.replace(/\s+COLLATE\s+SQL_Latin1_General_CP1_CI_AS/gi, '')
     .replace(/\s+COLLATE\s+\S+/gi, '');
+}
+
+/** @deprecated Use {@link RemoveCollate}. */
+export function removeCollate(sql: string): string {
+  return RemoveCollate(sql);
 }
 
 /** SQL keywords that should NOT be quoted by quotePascalCaseIdentifiers */
@@ -746,10 +886,20 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
   'FOR', 'EACH', 'ROW', 'AFTER', 'BEFORE', 'INSTEAD', 'OF',
   'GENERATED', 'BY', 'IDENTITY', 'SERIAL', 'REPLACE', 'ACTION',
   'ASC', 'DESC', 'ORDER', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'TOP',
+  // MERGE (PostgreSQL 15+) and its MATCHED sub-keyword. Every other word in a MERGE statement was
+  // already here — USING, ON, WHEN, THEN, NOT, INSERT, UPDATE, SET, VALUES, AS — so a converted
+  // MERGE emerged as `"MERGE" __mj."X" AS tgt … WHEN "MATCHED" THEN UPDATE` and PostgreSQL rejected
+  // it with `syntax error at or near ""MERGE""`. The rest of the statement transpiles to valid PG
+  // MERGE already; these two were the only tokens being mistaken for identifiers.
+  'MERGE', 'MATCHED',
   'INNER', 'LEFT', 'RIGHT', 'OUTER', 'JOIN', 'CROSS', 'FULL',
   'UNION', 'ALL', 'DISTINCT', 'BETWEEN', 'CASE', 'WHEN', 'COALESCE',
   'CAST', 'MAX', 'MIN', 'COUNT', 'SUM', 'AVG', 'NOW', 'CURRENT_USER',
   'INFORMATION_SCHEMA', 'NONCLUSTERED', 'CLUSTERED', 'NO',
+  // Emitted by the table-variable → temp-table rewrite (CREATE TEMP TABLE … ON COMMIT DROP)
+  // and the delete-join rewrite (DELETE … USING …). Quoted as identifiers these produce
+  // `CREATE "TEMP" TABLE` / `ON "COMMIT" DROP`, which PostgreSQL cannot parse.
+  'TEMP', 'COMMIT', 'USING',
   // SQL functions that should not be quoted
   'LENGTH', 'SUBSTRING', 'REPLACE', 'LTRIM', 'RTRIM', 'TRIM', 'UPPER', 'LOWER',
   'POSITION', 'OVERLAY', 'EXTRACT', 'FLOOR', 'CEIL', 'ROUND', 'ABS',
@@ -763,8 +913,8 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
  * and only quotes identifiers in code segments.
  * Used by InsertRule to quote column names in INSERT/UPDATE/DELETE statements.
  */
-export function quotePascalCaseIdentifiers(sql: string): string {
-  return transformCodeOnly(sql, (code) => {
+export function QuotePascalCaseIdentifiers(sql: string): string {
+  return TransformCodeOnly(sql, (code) => {
     return code.replace(/(?<!")(?<!\w)([A-Z]\w*)(?!")(?!\w)/g, (match, word: string) => {
       if (PASCAL_QUOTE_KEYWORDS.has(word.toUpperCase())) return match;
       return `"${word}"`;
@@ -772,8 +922,13 @@ export function quotePascalCaseIdentifiers(sql: string): string {
   });
 }
 
+/** @deprecated Use {@link QuotePascalCaseIdentifiers}. */
+export function quotePascalCaseIdentifiers(sql: string): string {
+  return QuotePascalCaseIdentifiers(sql);
+}
+
 /** Common function replacements */
-export function convertCommonFunctions(sql: string): string {
+export function ConvertCommonFunctions(sql: string): string {
   sql = sql.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
   sql = sql.replace(/\bGETUTCDATE\s*\(\s*\)/gi, 'NOW()');
   sql = sql.replace(/\bGETDATE\s*\(\s*\)/gi, 'NOW()');
@@ -786,7 +941,20 @@ export function convertCommonFunctions(sql: string): string {
   sql = sql.replace(/\bSUSER_SNAME\s*\(\s*\)/gi, 'current_user');
   sql = sql.replace(/\bSUSER_NAME\s*\(\s*\)/gi, 'current_user');
   sql = sql.replace(/\bUSER_NAME\s*\(\s*\)/gi, 'current_user');
+  // `INTO` is OPTIONAL in T-SQL's MERGE and REQUIRED in PostgreSQL's, so `MERGE [dbo].[T] AS tgt`
+  // transpiles token-for-token into something PostgreSQL rejects at the target name rather than at
+  // MERGE — `syntax error at or near "__mj"`, which points one token past the actual problem.
+  // Only the bare form is rewritten; `MERGE INTO` is already correct and left alone. Anchored to
+  // statement position (start of line) so the word MERGE in prose — a migration's own header comment
+  // explaining "re-runnable: MERGE on fixed UUIDs" — is not rewritten into "MERGE INTO on fixed
+  // UUIDs". A `--`/`*` comment line cannot match either, since the anchor requires MERGE first.
+  sql = sql.replace(/^([ \t]*)MERGE[ \t]+(?!INTO\b)/gim, '$1MERGE INTO ');
   return sql;
+}
+
+/** @deprecated Use {@link ConvertCommonFunctions}. */
+export function convertCommonFunctions(sql: string): string {
+  return ConvertCommonFunctions(sql);
 }
 
 /**
@@ -802,7 +970,7 @@ export function convertCommonFunctions(sql: string): string {
  * AND never a non-boolean type in any other table, so an integer column that
  * merely shares a name with a boolean column elsewhere is left untouched.
  */
-export function collectBooleanColumnNames(
+export function CollectBooleanColumnNames(
   tableColumns: Map<string, Map<string, string>>,
 ): Set<string> {
   const boolNames = new Set<string>();
@@ -818,11 +986,18 @@ export function collectBooleanColumnNames(
   return boolNames;
 }
 
-export function convertBooleanLiteralComparisons(
+/** @deprecated Use {@link CollectBooleanColumnNames}. */
+export function collectBooleanColumnNames(
+  tableColumns: Map<string, Map<string, string>>,
+): Set<string> {
+  return CollectBooleanColumnNames(tableColumns);
+}
+
+export function ConvertBooleanLiteralComparisons(
   sql: string,
   tableColumns: Map<string, Map<string, string>>,
 ): string {
-  const boolNames = collectBooleanColumnNames(tableColumns);
+  const boolNames = CollectBooleanColumnNames(tableColumns);
   if (boolNames.size === 0) return sql;
 
   // `(?![\w.])` guards against matching inside a larger number/identifier
@@ -834,6 +1009,14 @@ export function convertBooleanLiteralComparisons(
         ? `"${col}" ${op} ${val === '1' ? 'TRUE' : 'FALSE'}`
         : match,
   );
+}
+
+/** @deprecated Use {@link ConvertBooleanLiteralComparisons}. */
+export function convertBooleanLiteralComparisons(
+  sql: string,
+  tableColumns: Map<string, Map<string, string>>,
+): string {
+  return ConvertBooleanLiteralComparisons(sql, tableColumns);
 }
 
 /**
@@ -880,7 +1063,7 @@ function splitArgs(body: string): string[] {
  * so it is order-independent relative to identifier quoting. PG 16+ provides the IS JSON
  * predicate; JSON_VALUE's `$.`-rooted path is rewritten to jsonb path-extraction operators.
  */
-export function convertJsonFunctions(sql: string): string {
+export function ConvertJsonFunctions(sql: string): string {
   sql = convertNamedJsonCall(sql, 'JSON_VALUE', (args, after) => {
     if (args.length < 2) return null;
     const expr = args[0];
@@ -909,6 +1092,11 @@ export function convertJsonFunctions(sql: string): string {
   });
 
   return sql;
+}
+
+/** @deprecated Use {@link ConvertJsonFunctions}. */
+export function convertJsonFunctions(sql: string): string {
+  return ConvertJsonFunctions(sql);
 }
 
 /**
@@ -947,26 +1135,79 @@ function convertNamedJsonCall(
  * time. Column types come from the accumulated CREATE TABLE map (plus the seeded
  * core-metadata catalog); tuple values are tokenized string-aware so commas inside
  * quoted JSON/text never split a value. Handles multi-row VALUES and INSERTs that
- * appear inside a wrapping DO/IF block (only the INSERT...VALUES segment is rewritten).
+ * appear inside a wrapping DO/IF block.
+ *
+ * EVERY `INSERT ... VALUES` in the input is rewritten, each against its own table's
+ * column types. A single-statement rule (InsertRule) only ever passes one, but a
+ * DECLARE/DML block is one batch containing many INSERTs against different tables —
+ * rewriting only the first would silently leave the rest as integer literals.
+ * Each statement's VALUES region is bounded by its own top-level `;`, so an
+ * intervening statement can never be rewritten with the wrong table's positions.
  */
+export function CastBooleanInsertValues(
+  sql: string,
+  tableColumns: Map<string, Map<string, string>>,
+): string {
+  const re = /INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*VALUES/gi;
+  let out = '';
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+
+  while ((m = re.exec(sql)) !== null) {
+    const headEnd = m.index + m[0].length;
+    const valuesEnd = endOfStatement(sql, headEnd);
+    out += sql.slice(cursor, headEnd);
+
+    const body = sql.slice(headEnd, valuesEnd);
+    const boolPos = booleanColumnPositions(m[1], m[2], tableColumns);
+    out += boolPos.size > 0 ? rewriteValuesTuples(body, boolPos) : body;
+
+    cursor = valuesEnd;
+    re.lastIndex = valuesEnd;
+  }
+
+  return cursor === 0 ? sql : out + sql.slice(cursor);
+}
+
+/** @deprecated Use {@link CastBooleanInsertValues}. */
 export function castBooleanInsertValues(
   sql: string,
   tableColumns: Map<string, Map<string, string>>,
 ): string {
-  const m = sql.match(/INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*VALUES/i);
-  if (!m) return sql;
-  const cols = tableColumns.get(m[1].toLowerCase());
-  if (!cols) return sql;
+  return CastBooleanInsertValues(sql, tableColumns);
+}
 
-  const colNames = m[2].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
-  const boolPos = new Set<number>();
-  colNames.forEach((c, i) => {
-    if ((cols.get(c.toLowerCase()) ?? '').toUpperCase() === 'BOOLEAN') boolPos.add(i);
+/** Ordinal positions in an INSERT column list whose column is BOOLEAN on PG. */
+function booleanColumnPositions(
+  table: string,
+  columnList: string,
+  tableColumns: Map<string, Map<string, string>>,
+): Set<number> {
+  const positions = new Set<number>();
+  const cols = tableColumns.get(table.toLowerCase());
+  if (!cols) return positions;
+
+  columnList.split(',').forEach((raw, i) => {
+    const name = raw.trim().replace(/^"|"$/g, '').toLowerCase();
+    if ((cols.get(name) ?? '').toUpperCase() === 'BOOLEAN') positions.add(i);
   });
-  if (boolPos.size === 0) return sql;
+  return positions;
+}
 
-  const headEnd = m.index! + m[0].length;
-  return sql.slice(0, headEnd) + rewriteValuesTuples(sql.slice(headEnd), boolPos);
+/** Index just past the statement-terminating `;` at or after `from`, string- and paren-aware. */
+function endOfStatement(sql: string, from: number): number {
+  let depth = 0;
+  let inStr = false;
+  for (let i = from; i < sql.length; i++) {
+    const c = sql[i];
+    if (inStr) {
+      if (c === "'") { if (sql[i + 1] === "'") i++; else inStr = false; }
+    } else if (c === "'") inStr = true;
+    else if (c === '(') depth++;
+    else if (c === ')') depth--;
+    else if (c === ';' && depth <= 0) return i + 1;
+  }
+  return sql.length;
 }
 
 /** Walk the post-VALUES text, rewriting boolean-position literals in each top-level tuple. */
@@ -1001,7 +1242,23 @@ function rewriteTuple(tuple: string, boolPos: Set<number>): string {
   return '(' + vals.join(',') + ')';
 }
 
-/** Split a tuple body on top-level commas, respecting single-quoted strings and nested parens. */
+/**
+ * Split a tuple body on top-level commas, respecting single-quoted strings, nested parens AND SQL
+ * comments.
+ *
+ * Comments matter because positional rewriting is only correct if the split yields exactly one
+ * entry per column. CodeGen interleaves explanatory comments between values, and one of them
+ * contains a comma:
+ *
+ *   (SELECT COALESCE(MAX("Sequence"), 0) + 1 FROM …)
+ *   /* Apply-time sequence, not the literal CodeGen emitted (MJ#4202): … *\/, 'ExposeToModel', …
+ *
+ * Counting that comma as a separator inserts a phantom value and shifts every later column by one,
+ * so the rewriter lands on the wrong ordinals — observed as PostgreSQL rejecting
+ * `column "Scale" is of type integer but expression is of type boolean`, because the flag intended
+ * for `AllowsNull` was written one position early. Comment bodies are copied through untouched;
+ * they are simply not scanned for separators.
+ */
 function splitTopLevelValues(s: string): string[] {
   const out: string[] = [];
   let cur = '', depth = 0, inStr = false;
@@ -1010,7 +1267,23 @@ function splitTopLevelValues(s: string): string[] {
     if (inStr) {
       cur += c;
       if (c === "'") { if (s[i + 1] === "'") cur += s[++i]; else inStr = false; }
-    } else if (c === "'") { inStr = true; cur += c; }
+      continue;
+    }
+    if (c === '/' && s[i + 1] === '*') {              // block comment — copy verbatim, do not scan
+      const end = s.indexOf('*/', i + 2);
+      const stop = end === -1 ? s.length : end + 2;
+      cur += s.slice(i, stop);
+      i = stop - 1;
+      continue;
+    }
+    if (c === '-' && s[i + 1] === '-') {              // line comment — runs to end of line
+      const nl = s.indexOf('\n', i);
+      const stop = nl === -1 ? s.length : nl;
+      cur += s.slice(i, stop);
+      i = stop - 1;
+      continue;
+    }
+    if (c === "'") { inStr = true; cur += c; }
     else if (c === '(') { depth++; cur += c; }
     else if (c === ')') { depth--; cur += c; }
     else if (c === ',' && depth === 0) { out.push(cur); cur = ''; }

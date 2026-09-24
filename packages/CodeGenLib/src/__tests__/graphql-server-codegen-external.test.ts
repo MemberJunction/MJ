@@ -51,21 +51,25 @@ vi.mock('../Misc/status_logging', () => ({ logError: vi.fn(), logStatus: vi.fn()
 // (Externally-owned-schema behaviour has its own file: graphql-external-schema-filter.test.ts.)
 vi.mock('../Config/config', () => ({
   mjCoreSchema: '__mj',
-  resolveEntityPackageName: () => 'pkg',
-  getExternalEntitySchemas: () => [],
+  ResolveEntityPackageName: () => 'pkg',
+    get resolveEntityPackageName() { return this.ResolveEntityPackageName; },
+  GetExternalEntitySchemas: () => [],
+    get getExternalEntitySchemas() { return this.GetExternalEntitySchemas; },
 }));
 vi.mock('../Misc/util', () => ({
-  makeDir: vi.fn(),
-  sortBySequenceAndCreatedAt: (items: unknown[]) => [...items],
-  sortRelatedEntities: (items: unknown[]) => [...items],
+  MakeDir: vi.fn(),
+    get makeDir() { return this.MakeDir; },
+  SortBySequenceAndCreatedAt: (items: unknown[]) => [...items],
+    get sortBySequenceAndCreatedAt() { return this.SortBySequenceAndCreatedAt; },
+  SortRelatedEntities: (items: unknown[]) => [...items],
+    get sortRelatedEntities() { return this.SortRelatedEntities; },
 }));
 
 import { GraphQLServerGeneratorBase } from '../Misc/graphql_server_codegen';
 
 class TestableGenerator extends GraphQLServerGeneratorBase {
   public resolver(entity: unknown, typeName: string) {
-    // (entity, serverGraphQLTypeName, excludeRelatedEntitiesExternalToSchema, isInternal)
-    return this.generateServerGraphQLResolver(entity as never, typeName, false, true);
+    return this.generateServerGraphQLResolver(entity as never, typeName);
   }
 }
 
@@ -111,7 +115,7 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
       expect(out).not.toContain('SELECT * FROM');
     });
 
-    it('skips a relationship whose RELATED entity is external (comment, no SELECT *)', () => {
+    it('does not emit a child-array FieldResolver for an external related entity', () => {
       metadataEntities.push({ Name: 'Ext Line Items', IncludeInAPI: true, ExternalDataSourceID: 'ds-1', SchemaName: 'ext' });
       const out = gen.resolver(
         makeEntity({
@@ -121,8 +125,8 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
         }),
         'DemoOrders_',
       );
-      expect(out).toContain('Relationship to Ext Line Items not generated: related entity is external');
-      expect(out).not.toContain('SELECT * FROM');
+      expect(out).not.toContain('@FieldResolver');
+      expect(out).not.toMatch(/\w+Array\(/);
     });
   });
 
@@ -134,7 +138,7 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
       expect(out).not.toContain('intentionally not generated');
     });
 
-    it('still generates a relationship resolver to a non-external related entity', () => {
+    it('does not emit a child-array FieldResolver for a local related entity either', () => {
       metadataEntities.push({
         Name: 'Line Items', IncludeInAPI: true, ExternalDataSourceID: null, SchemaName: 'ext',
         CodeName: 'LineItems', ClassName: 'LineItems', BaseView: 'vwLineItems', BaseTableCodeName: 'LineItems',
@@ -148,7 +152,37 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
         }),
         'DemoOrders_',
       );
-      expect(out).not.toContain('not generated: related entity is external');
+      expect(out).not.toContain('@FieldResolver');
+      expect(out).not.toMatch(/\w+Array\(/);
     });
+  });
+});
+
+describe('GraphQLServerGeneratorBase — record-access audit log key', () => {
+  let gen: TestableGenerator;
+  beforeEach(() => {
+    gen = new TestableGenerator();
+    metadataEntities.length = 0;
+  });
+
+  it('single-column key: passes the bare resolver argument, named after the PK CodeName', () => {
+    const out = gen.resolver(makeEntity({ AuditRecordAccess: true, PrimaryKeys: [pk('order_id')], FirstPrimaryKey: pk('order_id') }), 'DemoOrders_');
+    expect(out).toContain("this.createRecordAccessAuditLogRecord(provider, userPayload, 'Demo Orders', order_id)");
+  });
+
+  it('composite key: serializes every key column with ToConcatenatedString() instead of truncating to the first', () => {
+    const out = gen.resolver(
+      makeEntity({ AuditRecordAccess: true, PrimaryKeys: [pk('order_id'), pk('line_no')], FirstPrimaryKey: pk('order_id') }),
+      'DemoOrders_',
+    );
+    expect(out).toContain(
+      "this.createRecordAccessAuditLogRecord(provider, userPayload, 'Demo Orders', new CompositeKey([{ FieldName: 'order_id', Value: order_id }, { FieldName: 'line_no', Value: line_no }]).ToConcatenatedString())",
+    );
+    expect(out).not.toMatch(/createRecordAccessAuditLogRecord\([^\n]*'Demo Orders', order_id\)/);
+  });
+
+  it('emits no audit call when AuditRecordAccess is off', () => {
+    const out = gen.resolver(makeEntity({ AuditRecordAccess: false, PrimaryKeys: [pk('order_id'), pk('line_no')] }), 'DemoOrders_');
+    expect(out).not.toContain('createRecordAccessAuditLogRecord');
   });
 });

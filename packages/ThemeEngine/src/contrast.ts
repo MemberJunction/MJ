@@ -6,7 +6,7 @@
  * @module @memberjunction/theme-engine
  */
 
-import { contrastRatio, hexToOKLCH, oklchToHex, relativeLuminance } from './color.js';
+import { ContrastRatio, HexToOKLCH, OklchToHex, RelativeLuminance } from './color.js';
 
 /** WCAG AA thresholds. Normal text 4.5:1; large text / UI affordances 3:1. */
 export const AA_TEXT = 4.5;
@@ -53,15 +53,15 @@ export interface PairSpec {
  * value that reaches `target` contrast against `other`. Returns null if unreachable.
  */
 function clampLightness(color: string, other: string, target: number): string | null {
-  const base = hexToOKLCH(color);
+  const base = HexToOKLCH(color);
   // Move away from the other color's luminance: if we're already the darker of the
   // pair, get darker still; otherwise get lighter. (Moving toward it lowers contrast.)
-  const goDarker = relativeLuminance(color) <= relativeLuminance(other);
+  const goDarker = RelativeLuminance(color) <= RelativeLuminance(other);
   const steps = 100;
   for (let i = 1; i <= steps; i++) {
     const l = goDarker ? base.l - (base.l * i) / steps : base.l + ((1 - base.l) * i) / steps;
-    const candidate = oklchToHex({ l, c: base.c, h: base.h });
-    if (contrastRatio(candidate, other) >= target) return candidate;
+    const candidate = OklchToHex({ l, c: base.c, h: base.h });
+    if (ContrastRatio(candidate, other) >= target) return candidate;
   }
   return null;
 }
@@ -69,7 +69,7 @@ function clampLightness(color: string, other: string, target: number): string | 
 /** Evaluate one list of pairs. */
 function evaluate(pairs: PairSpec[]): ContrastCheck[] {
   return pairs.map((p) => {
-    const ratio = contrastRatio(p.fg, p.bg);
+    const ratio = ContrastRatio(p.fg, p.bg);
     const passes = ratio >= p.required;
     const check: ContrastCheck = {
       name: p.name,
@@ -90,7 +90,7 @@ function evaluate(pairs: PairSpec[]): ContrastCheck[] {
 }
 
 /** Build and evaluate the report from resolved per-mode token maps. */
-export function buildContrastReport(
+export function BuildContrastReport(
   light: Record<string, string>,
   dark: Record<string, string>,
 ): ContrastReport {
@@ -106,4 +106,12 @@ export function buildContrastReport(
   const l = evaluate(pairsFor(light));
   const d = evaluate(pairsFor(dark));
   return { light: l, dark: d, passes: [...l, ...d].every((c) => c.passes) };
+}
+
+/** @deprecated Use {@link BuildContrastReport}. */
+export function buildContrastReport(
+  light: Record<string, string>,
+  dark: Record<string, string>,
+): ContrastReport {
+  return BuildContrastReport(light, dark);
 }

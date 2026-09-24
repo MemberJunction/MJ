@@ -11,7 +11,7 @@ import { AIModelConfiguration } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, BaseEntityEvent, BaseEngineRegistry, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJEventType, MJLruCache, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
@@ -26,33 +26,33 @@ import { MJAIActionEntity, MJActionEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
          MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
-         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity } from "@memberjunction/core-entities";
-import { AIEngineBase } from "@memberjunction/ai-engine-base";
+         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
+         MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
+import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
-import { EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
 
 
 /**
  * @deprecated AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
  */
 export class AIActionParams {
-    actionId: string
-    modelId: string
-    modelName?: string
-    systemPrompt?: string
-    userPrompt?: string
+    actionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelName?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    systemPrompt?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    userPrompt?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
  * @deprecated Entity AI Actions are deprecated. Use AIPromptRunner with the new AI Prompt system instead.
  */
 export class EntityAIActionParams extends AIActionParams {
-    entityAIActionId: string
-    entityRecord: BaseEntity
+    entityAIActionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    entityRecord: BaseEntity  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -147,7 +147,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     private _agentBaseCatalogCache: Map<string, object> = new Map();
     private _agentCatalogListenerSetUp: boolean = false;
     /** Entities whose change must coarse-invalidate the agent base-catalog cache (lowercased). */
-    private static readonly AgentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
+    private static readonly agentCatalogInvalidatingEntities: ReadonlySet<string> = new Set([
         'ai agents',
         'mj: ai agent actions',
         'mj: ai agent relationships',
@@ -189,7 +189,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                     const e = event.args as BaseEntityEvent;
                     if (e?.type === 'save' || e?.type === 'delete' || e?.type === 'remote-invalidate') {
                         const name = e.baseEntity?.EntityInfo?.Name?.toLowerCase().trim();
-                        if (name && AIEngine.AgentCatalogInvalidatingEntities.has(name)) {
+                        if (name && AIEngine.agentCatalogInvalidatingEntities.has(name)) {
                             this.ClearAgentBaseCatalogCache();
                         }
                     }
@@ -261,6 +261,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     /** Double-gated self-activation set — see {@link AIEngineBase.GetAutoActivatableSkillsForAgent}. */
     public GetAutoActivatableSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] { return this.Base.GetAutoActivatableSkillsForAgent(agent, user); }
     public GetSkillActionIDs(skillID: string): string[] { return this.Base.GetSkillActionIDs(skillID); }
+    public GetSkillExposedActionIDs(skillID: string): string[] { return this.Base.GetSkillExposedActionIDs(skillID); }
     public GetSkillSubAgentIDs(skillID: string): string[] { return this.Base.GetSkillSubAgentIDs(skillID); }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
     public get AgentNoteTypes(): MJAIAgentNoteTypeEntity[] { return this.Base.AgentNoteTypes; }
@@ -338,23 +339,46 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public GetModalityByName(name: string): MJAIModalityEntity | undefined {
         return this.Base.GetModalityByName(name);
     }
-    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
-        return this.Base.GetAgentModalities(agentId, direction);
+    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output', modelId?: string): MJAIModalityEntity[] {
+        return this.Base.GetAgentModalities(agentId, direction, modelId);
     }
     public GetModelModalitiesByDirection(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         return this.Base.GetModelModalities(modelId, direction);
     }
-    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
-        return this.Base.AgentSupportsModality(agentId, modalityName, direction);
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output', modelId?: string): boolean {
+        return this.Base.AgentSupportsModality(agentId, modalityName, direction, modelId);
     }
     public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
         return this.Base.ModelSupportsModality(modelId, modalityName, direction);
     }
-    public AgentSupportsAttachments(agentId: string): boolean {
-        return this.Base.AgentSupportsAttachments(agentId);
+    public AgentSupportsAttachments(agentId: string, modelId?: string): boolean {
+        return this.Base.AgentSupportsAttachments(agentId, modelId);
     }
-    public GetAgentSupportedInputModalities(agentId: string): string[] {
-        return this.Base.GetAgentSupportedInputModalities(agentId);
+    public GetAgentSupportedInputModalities(agentId: string, modelId?: string): string[] {
+        return this.Base.GetAgentSupportedInputModalities(agentId, modelId);
+    }
+
+    // Persona getters - delegated from AIEngineBase
+    public get Personas(): MJAIPersonaEntity[] { return this.Base.Personas; }
+    public get PersonaVendors(): MJAIPersonaVendorEntity[] { return this.Base.PersonaVendors; }
+    public get ModelPersonas(): MJAIModelPersonaEntity[] { return this.Base.ModelPersonas; }
+    public get AgentPersonas(): MJAIAgentPersonaEntity[] { return this.Base.AgentPersonas; }
+
+    // Persona helper methods - delegated from AIEngineBase
+    public GetModelPersonas(modelId: string, modalityName = 'Audio', vendorId?: string): ResolvedModelPersona[] {
+        return this.Base.GetModelPersonas(modelId, modalityName, vendorId);
+    }
+    public GetModelPersonaExclusions(modelId: string, modalityName = 'Audio', vendorId?: string): string[] {
+        return this.Base.GetModelPersonaExclusions(modelId, modalityName, vendorId);
+    }
+    public GetAgentPersonas(agentId: string): ResolvedAgentPersona[] {
+        return this.Base.GetAgentPersonas(agentId);
+    }
+    public ResolveAgentPersona(
+        agentId: string,
+        options?: { modelId?: string; vendorId?: string; modalityName?: string }
+    ): EffectiveAgentPersona | null {
+        return this.Base.ResolveAgentPersona(agentId, options);
     }
 
     // Delegate AIEngineBase public methods
@@ -1229,7 +1253,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
 
         // Sort by creation date (most recent first) and take topK
         const sorted = notes
-            .sort((a, b) => (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0))
+            .sort((a, b) => ToEpochMs(b.__mj_CreatedAt) - ToEpochMs(a.__mj_CreatedAt))
             .slice(0, topK);
 
         // Return with similarity of 0 to indicate no semantic ranking was applied
@@ -1339,7 +1363,7 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
                 const scoreA = a.SuccessScore ?? 0;
                 const scoreB = b.SuccessScore ?? 0;
                 if (scoreB !== scoreA) return scoreB - scoreA;
-                return (b.__mj_CreatedAt?.getTime() || 0) - (a.__mj_CreatedAt?.getTime() || 0);
+                return ToEpochMs(b.__mj_CreatedAt) - ToEpochMs(a.__mj_CreatedAt);
             })
             .slice(0, topK);
 
@@ -1453,7 +1477,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             markupTokens.forEach(token => {
                 const fieldName = token.replace('{','').replace('}','');
                 const fieldValue = entityRecord.Get(fieldName);
-                temp = temp.replace(token, fieldValue ? fieldValue : '');
+                // Function replacement — field data may contain `$`. See issue #3171.
+                const replacement = fieldValue ? String(fieldValue) : '';
+                temp = temp.replace(token, () => replacement);
             });
         }
         return temp;

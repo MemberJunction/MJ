@@ -329,21 +329,21 @@ export interface MCPSyncToolsResult {
  */
 export interface MCPSyncActionsResult {
     /** Whether the sync succeeded */
-    success: boolean;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Number of actions created */
-    actionsCreated: number;
+    actionsCreated: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Number of actions updated */
-    actionsUpdated: number;
+    actionsUpdated: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Number of action params created */
-    paramsCreated: number;
+    paramsCreated: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Number of action params updated */
-    paramsUpdated: number;
+    paramsUpdated: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Number of action params deleted */
-    paramsDeleted: number;
+    paramsDeleted: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Server category ID that was used/created */
-    serverCategoryId?: string;
+    serverCategoryId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Error message if failed */
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -562,19 +562,19 @@ export type MCPClientEventListener = (event: MCPClientEvent) => void;
  */
 export interface JSONSchemaProperty {
     /** Property type */
-    type?: string | string[];
+    type?: string | string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Property description */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Default value */
-    default?: unknown;
+    default?: unknown;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Enum values */
-    enum?: unknown[];
+    enum?: unknown[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Items schema for arrays */
-    items?: JSONSchemaProperty;
+    items?: JSONSchemaProperty;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Nested properties for objects */
-    properties?: Record<string, JSONSchemaProperty>;
+    properties?: Record<string, JSONSchemaProperty>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Required properties for objects */
-    required?: string[];
+    required?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -582,9 +582,9 @@ export interface JSONSchemaProperty {
  */
 export interface JSONSchemaProperties {
     /** Schema type (usually 'object') */
-    type?: string;
+    type?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Property definitions */
-    properties?: Record<string, JSONSchemaProperty>;
+    properties?: Record<string, JSONSchemaProperty>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Required property names */
-    required?: string[];
+    required?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }

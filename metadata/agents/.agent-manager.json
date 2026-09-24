@@ -12,7 +12,20 @@
       "IconClass": "fa-solid fa-robot",
       "PayloadSelfWritePaths": [
         "ID"
-      ]
+      ],
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Find Candidate Actions",
+              "Find Candidate Agents",
+              "Load Agent Spec"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Data Sources": [
@@ -95,15 +108,15 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "CDAD6D7F-A1A2-40E4-A34C-A133B6DCBA1E"
           },
           "sync": {
-            "lastModified": "2026-03-26T22:05:18.876Z",
-            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+            "lastModified": "2026-09-21T02:45:36.473Z",
+            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
         {
@@ -132,6 +145,34 @@
           "sync": {
             "lastModified": "2026-02-13T21:09:22.026Z",
             "checksum": "eb374413b832106653fce686b208ca75da6d73946138457ddfe5dc2b1c255959"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Load Agent Spec",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "45112BA4-DAFF-4800-838B-E65E841F9E95"
+          },
+          "sync": {
+            "lastModified": "2026-08-20T22:30:08.905Z",
+            "checksum": "4bf81cacd7d90c73dd8931843d7ddf962b5be8bec19c2134586b70150980f7c9"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0427003E-1B67-4D6F-90BE-ADA265541B31"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.528Z"
           }
         }
       ],
@@ -246,15 +287,15 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+                  "ActionID": "@lookup:MJ: Actions.Name=Web Search",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "80761138-B0DA-4A63-94B4-EC89B45E6F2E"
                 },
                 "sync": {
-                  "lastModified": "2026-03-26T22:05:19.084Z",
-                  "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                  "lastModified": "2026-09-21T02:45:36.499Z",
+                  "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
                 }
               },
               {
@@ -269,6 +310,20 @@
                 "sync": {
                   "lastModified": "2026-02-13T21:09:22.241Z",
                   "checksum": "eb374413b832106653fce686b208ca75da6d73946138457ddfe5dc2b1c255959"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5FBCC196-BFEE-42A5-B539-9AAD4E6C819B"
+                },
+                "deleteRecord": {
+                  "delete": true,
+                  "deletedAt": "2026-09-22T18:53:11.541Z"
                 }
               }
             ]
@@ -397,15 +452,15 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+                  "ActionID": "@lookup:MJ: Actions.Name=Web Search",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "658B7296-90D7-4C2F-BEFF-1485E981E46B"
                 },
                 "sync": {
-                  "lastModified": "2026-03-26T22:05:19.207Z",
-                  "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+                  "lastModified": "2026-09-21T02:45:36.517Z",
+                  "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
                 }
               },
               {
@@ -420,6 +475,20 @@
                 "sync": {
                   "lastModified": "2026-02-13T21:09:22.372Z",
                   "checksum": "eb374413b832106653fce686b208ca75da6d73946138457ddfe5dc2b1c255959"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7F347B61-92EC-4D63-9545-5DD23EE25E0D"
+                },
+                "deleteRecord": {
+                  "delete": true,
+                  "deletedAt": "2026-09-22T18:53:11.553Z"
                 }
               }
             ],
@@ -557,13 +626,14 @@
           }
         },
         {
+          "_comment": "DEPRECATED & DISABLED. A Flow agent cannot run as a sub-agent — the runtime refuses it (FlowAgentType.DetermineInitialStep rejects params.parentRun). Superseded by the 'Load Agent Spec' action, which Agent Manager now calls directly. Kept as a Disabled record (the runtime's Status==='Active' sub-agent filter excludes it) because MetadataSync is update-only and will not delete an omitted record.",
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Agent Spec Loader",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
-            "Description": "Simple flow agent that loads complete agent specification from database by agent ID",
+            "Description": "DEPRECATED and DISABLED - superseded by the 'Load Agent Spec' action called directly by Agent Manager. A Flow agent cannot be invoked as a sub-agent.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
-            "Status": "Active",
+            "Status": "Disabled",
             "ExecutionOrder": 5,
             "ExposeAsAction": false,
             "InvocationMode": "Sub-Agent",
@@ -578,79 +648,25 @@
           "relatedEntities": {
             "MJ: AI Agent Actions": [
               {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Load Agent Spec",
-                  "Status": "Active"
-                },
+                "_comment": "Tombstone: this action binding belonged to the Flow-based Agent Spec Loader, now superseded by Agent Manager calling the Load Agent Spec action directly. Deleted via deleteRecord (not just omitted) so MetadataSync removes it from existing DBs and the deletion reaches the consolidated release migration.",
                 "primaryKey": {
                   "ID": "90BB672E-1837-4CF3-8C75-6F1A454C6D3A"
                 },
-                "sync": {
-                  "lastModified": "2026-02-13T21:09:22.377Z",
-                  "checksum": "4bf81cacd7d90c73dd8931843d7ddf962b5be8bec19c2134586b70150980f7c9"
+                "deleteRecord": {
+                  "delete": true,
+                  "deletedAt": "2026-08-20T22:30:53.938Z"
                 }
               }
             ],
             "MJ: AI Agent Steps": [
               {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "Name": "Load Agent Spec",
-                  "StepType": "Action",
-                  "StartingStep": true,
-                  "ActionID": "@lookup:MJ: Actions.Name=Load Agent Spec",
-                  "ActionInputMapping": {
-                    "AgentID": "payload.ID"
-                  },
-                  "ActionOutputMapping": {
-                    "AgentSpec.ID": "ID",
-                    "AgentSpec.Name": "Name",
-                    "AgentSpec.Description": "Description",
-                    "AgentSpec.TypeID": "TypeID",
-                    "AgentSpec.Status": "Status",
-                    "AgentSpec.FunctionalRequirement": "FunctionalRequirement",
-                    "AgentSpec.TechnicalDesign": "TechnicalDesign",
-                    "AgentSpec.IconClass": "IconClass",
-                    "AgentSpec.LogoURL": "LogoURL",
-                    "AgentSpec.ParentID": "ParentID",
-                    "AgentSpec.DriverClass": "DriverClass",
-                    "AgentSpec.ModelSelectionMode": "ModelSelectionMode",
-                    "AgentSpec.PayloadDownstreamPaths": "PayloadDownstreamPaths",
-                    "AgentSpec.PayloadUpstreamPaths": "PayloadUpstreamPaths",
-                    "AgentSpec.PayloadSelfReadPaths": "PayloadSelfReadPaths",
-                    "AgentSpec.PayloadSelfWritePaths": "PayloadSelfWritePaths",
-                    "AgentSpec.PayloadScope": "PayloadScope",
-                    "AgentSpec.FinalPayloadValidation": "FinalPayloadValidation",
-                    "AgentSpec.FinalPayloadValidationMode": "FinalPayloadValidationMode",
-                    "AgentSpec.FinalPayloadValidationMaxRetries": "FinalPayloadValidationMaxRetries",
-                    "AgentSpec.MaxCostPerRun": "MaxCostPerRun",
-                    "AgentSpec.MaxTokensPerRun": "MaxTokensPerRun",
-                    "AgentSpec.MaxIterationsPerRun": "MaxIterationsPerRun",
-                    "AgentSpec.MaxTimePerRun": "MaxTimePerRun",
-                    "AgentSpec.MinExecutionsPerRun": "MinExecutionsPerRun",
-                    "AgentSpec.MaxExecutionsPerRun": "MaxExecutionsPerRun",
-                    "AgentSpec.StartingPayloadValidation": "StartingPayloadValidation",
-                    "AgentSpec.StartingPayloadValidationMode": "StartingPayloadValidationMode",
-                    "AgentSpec.DefaultPromptEffortLevel": "DefaultPromptEffortLevel",
-                    "AgentSpec.ChatHandlingOption": "ChatHandlingOption",
-                    "AgentSpec.DefaultArtifactTypeID": "DefaultArtifactTypeID",
-                    "AgentSpec.OwnerUserID": "OwnerUserID",
-                    "AgentSpec.InvocationMode": "InvocationMode",
-                    "AgentSpec.Actions": "Actions",
-                    "AgentSpec.SubAgents": "SubAgents",
-                    "AgentSpec.Prompts": "Prompts",
-                    "AgentSpec.Steps": "Steps",
-                    "AgentSpec.Paths": "Paths"
-                  },
-                  "Status": "Active"
-                },
+                "_comment": "Tombstone: the loader's single Action step, removed for the same reason as the action binding above.",
                 "primaryKey": {
                   "ID": "33533220-480D-4693-BAC0-980E98077CC7"
                 },
-                "sync": {
-                  "lastModified": "2026-02-13T21:09:22.378Z",
-                  "checksum": "d9ff376573cc6195d21211b58e6be764b69fb2663ba23a3f442c11274ed2a8d1"
+                "deleteRecord": {
+                  "delete": true,
+                  "deletedAt": "2026-08-20T22:30:53.958Z"
                 }
               }
             ]
@@ -659,8 +675,8 @@
             "ID": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
           },
           "sync": {
-            "lastModified": "2026-03-13T19:10:48.246Z",
-            "checksum": "2947a4e22fb5ade95cc08170d448a3f93b73acc01b067e3cecfef04971bd718f"
+            "lastModified": "2026-08-20T22:30:09.013Z",
+            "checksum": "2987bdd9ee2664d341badc9a4cf948345176e603d40994f43692a8451898140c"
           }
         }
       ]
@@ -669,8 +685,8 @@
       "ID": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:48.006Z",
-      "checksum": "7766e1b59a251e6c0530d0f1a5b08d9775a983be325f1e159a1d99116ade9099"
+      "lastModified": "2026-09-12T15:03:56.820Z",
+      "checksum": "1a9b1d1e7807833866adfdba2e29bf7d85923f182f4582f638586eba15c259f5"
     }
   }
 ]

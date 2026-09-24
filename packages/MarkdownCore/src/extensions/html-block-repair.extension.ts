@@ -21,7 +21,7 @@ import { MarkedExtension, Token, Tokens } from 'marked';
  * framework-agnostic core engine and benefits both the web (HTML) and native
  * (AST) output paths.
  */
-export function createHtmlBlockRepairExtension(): MarkedExtension {
+export function CreateHtmlBlockRepairExtension(): MarkedExtension {
   const looksLikeHtml = (text: string): boolean => /^\s*<\/?[a-zA-Z!]/.test(text || '');
   return {
     hooks: {
@@ -44,4 +44,9 @@ export function createHtmlBlockRepairExtension(): MarkedExtension {
       }
     }
   };
+}
+
+/** @deprecated Use {@link CreateHtmlBlockRepairExtension}. */
+export function createHtmlBlockRepairExtension(): MarkedExtension {
+  return CreateHtmlBlockRepairExtension();
 }

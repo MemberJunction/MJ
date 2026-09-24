@@ -16,7 +16,7 @@ import { MediaTranscriptCue } from '../media-player.types';
  * @param cues the ordered transcript cues
  * @returns the index of the active cue, or -1 if none is active (e.g. before the first cue)
  */
-export function computeActiveCueIndex(currentMs: number, cues: MediaTranscriptCue[] | null | undefined): number {
+export function ComputeActiveCueIndex(currentMs: number, cues: MediaTranscriptCue[] | null | undefined): number {
   if (!cues || cues.length === 0) {
     return -1;
   }
@@ -25,7 +25,7 @@ export function computeActiveCueIndex(currentMs: number, cues: MediaTranscriptCu
   for (let i = 0; i < cues.length; i++) {
     const cue = cues[i];
     const start = cue.StartMs;
-    const end = resolveCueEndMs(cues, i);
+    const end = ResolveCueEndMs(cues, i);
     if (currentMs >= start && currentMs < end) {
       activeIndex = i; // last qualifying wins
     }
@@ -33,11 +33,16 @@ export function computeActiveCueIndex(currentMs: number, cues: MediaTranscriptCu
   return activeIndex;
 }
 
+/** @deprecated Use {@link ComputeActiveCueIndex}. */
+export function computeActiveCueIndex(currentMs: number, cues: MediaTranscriptCue[] | null | undefined): number {
+  return ComputeActiveCueIndex(currentMs, cues);
+}
+
 /**
  * Resolves the effective end time (exclusive) of the cue at `index`.
  * Uses the cue's own `EndMs`, else the next cue's `StartMs`, else `+Infinity`.
  */
-export function resolveCueEndMs(cues: MediaTranscriptCue[], index: number): number {
+export function ResolveCueEndMs(cues: MediaTranscriptCue[], index: number): number {
   const cue = cues[index];
   if (cue.EndMs != null) {
     return cue.EndMs;
@@ -47,4 +52,9 @@ export function resolveCueEndMs(cues: MediaTranscriptCue[], index: number): numb
     return next.StartMs;
   }
   return Number.POSITIVE_INFINITY;
+}
+
+/** @deprecated Use {@link ResolveCueEndMs}. */
+export function resolveCueEndMs(cues: MediaTranscriptCue[], index: number): number {
+  return ResolveCueEndMs(cues, index);
 }

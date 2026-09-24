@@ -1,5 +1,752 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 38c4a81: AI model & vendor metadata refresh (weekly research run, 2026-09-14).
+  - Adds **Sakana AI** as a vendor and its two orchestration models, **Fugu Max** (`sakana/fugu-max`, $2/$6 per 1M) and **Fugu Ultra v2** (`sakana/fugu-ultra-v2`, $5/$30 per 1M short-context), both routed through OpenRouter.
+  - Corrects **GPT 5.6** (Sol) pricing: the $5/$30 cost row is expired at 2026-08-21 and replaced by OpenAI's current $4/$20 rate (cached input $0.40), which OpenAI guarantees only through 2026-11-21.
+  - Adds the missing **DeepSeek V4.1 Flash** OpenRouter cost row ($0.15/$0.60 off-peak, $0.003 cache read).
+  - Corrects the **GLM 5.3** OpenRouter context window (200,000 → 1,310,720) and refreshes its description, which still claimed no rate card had been published.
+
+- e51296c: AI model & vendor metadata refresh (weekly research run, 2026-09-21).
+  - Adds **GLM-5.3-FlashX** (`glm-5.3-flashx`, `z-ai/glm-5.3-flashx`), Z.AI's 200 tokens/s serving variant of GLM-5.3-Flash released 2026-09-18, with a Z.AI cost row at $0.37/$1.25 per 1M and $0.075 cache read. Same weights and PowerRank as GLM-5.3-Flash; only CostRank moves. No OpenRouter cost row yet — the gateway rate could not be confirmed independently.
+  - Marks the **Claude Opus 5 Fast** Anthropic route `Deprecated`: Anthropic retired the dedicated `claude-opus-5-fast` model id on 2026-09-01 in favour of `speed: "fast"` on `claude-opus-5`. The id still serves, so the cost row stays `Active` and the model stays `IsActive`. The description now records the replacement invocation.
+  - Adds a **Grok 4.6** route on **Microsoft Foundry (Azure)** at `Status: "Preview"` (public preview from 2026-08-26), with a cost row at $2/$6 per 1M and $0.50 cache read. Foundry caps the context window at 200K, so no long-context tier applies on this route.
+
+  No cost row was expired and no vendor was added. DeepSeek V4 Pro is deliberately untouched: its announced 2026-09-14 retirement was reversed within 45 hours and the model still serves at unchanged prices.
+
+- 7658d68: Mobile app v6: make realtime voice actually resolve on a device, route hosted applications' generic nav items, and scope the new agent-session grants with row-level security.
+
+  **Why `minor`.** The branch adds metadata — two `MJ: Row Level Security Filters` rows and the `UI` role's `MJ: AI Agent Sessions` / `MJ: AI Agent Session Channels` permissions — which becomes a consolidated metadata-sync migration at release.
+
+  **Realtime voice could not have worked on a device.** The React Native WebRTC drivers registered against `OpenAILiveClient` / `OpenAIRealtimeClient`, but `ClassFactory` matches on the registered base class's _name_ and the session runtime resolves against `BaseRealtimeClient` — so the RN drivers were filed in a bucket lookup never reads, the browser driver won, and `new RTCPeerConnection()` threw under Hermes. They now register against `BaseRealtimeClient` under the same provider keys the browser drivers use, `registerGlobals()` from `react-native-webrtc` runs at module load, and a unit test asserts on the resolved _class_ rather than merely that something resolves.
+
+  Two related corrections: the RN drivers now override `createAudioSink()` rather than `attachRemoteAudio()` — the latter is where the base driver installs `pc.ontrack`, so overriding it silently removed the remote stream, its subscribers and the output audio meter — and `'xai'` is no longer advertised as supported. Grok Voice speaks the OpenAI protocol but over a websocket with a client-owned PCM plane, so it would have hit the `AudioContext` crash the provider filter exists to prevent.
+
+  **Session lifecycle.** `RealtimeSessionRuntime` gains three fixes that apply to every host, Explorer included: a start abandoned mid-flight (the user leaves while the mint is in progress) now releases the microphone, the provider connection and the server-side session instead of leaking all three; concurrent teardowns coalesce onto one run instead of racing into two `Disconnect()` calls and two `CloseAgentSession` mutations; and a host that declines the resolved provider now unwinds through the shared teardown, so channel plugins are disposed rather than left published with live tool handlers. `IRealtimeMediaHost` gains an optional `ReleaseMicrophone()` — iOS is put into a record-and-play audio category for a call, and nothing was putting it back. `LastStartError` lets a host tell a denied microphone apart from a provider failure.
+
+  **Agent runs reported failure as success.** `ConversationAgentRunner.processMessage` returns `null` only when no agent resolves; every other failure — a quota rejection, an agent that threw, a transport error — comes back as a well-formed result carrying `success: false`. The mobile send path tested only for `null`, so those turns reported success and left a permanently spinning bubble with no error anywhere in the UI.
+
+  **Attachments were uploaded after the agent had already answered.** Photograph an invoice, ask for the totals, and the agent replied "I don't see an attachment" while the file appeared a second later. `SendMessage` now takes an `onUserMessageSaved` hook that runs in the window between the user's row existing and the run starting.
+
+  **Hosted applications.** Nav items are parsed into a shape derived from the generated `MJApplicationEntity_IDefaultNavItem` rather than a hand-copy, which restores `RecordID` — the field identifying which record a non-`Custom` item opens. Generic resource types now resolve through the same registry as `Custom` ones, keyed by the type name, and this build ships a `Dashboards` surface backed by the same `DashboardView` the Explorer route mounts. Retired applications and deactivated nav items are filtered the way MJ Explorer filters them, and the launcher's ordering now matches `compareUserApplications`.
+
+  **Storage seam corrections.** `MJStorageBlobStore` restores the compensating `DeleteObject` when the `MJ: Files` row fails to save (otherwise a successful upload with a failed row leaves permanently orphaned bytes) and configures `FileStorageEngine` before reading its accounts, so a cold process does not silently fall back to environment-only credentials. `ConversationAttachmentService.DeleteAttachment` now honours the store's return value instead of deleting the row regardless — the anti-orphan guarantee three doc comments promised. The browser store implements `GetDownloadUrl` through `CreateMediaAccessToken`, which is what makes Explorer's new storage-backed attachments readable rather than write-only, and `saveAttachments` accepts the agent whose `InlineStorageThresholdBytes` the decision should honour.
+
+  **Security.** The `UI` role's new read/update permissions on agent sessions and session channels are scoped by two new RLS filters (`UI: Own Agent Sessions`, `UI: Own Agent Session Channels`), matching the pattern the Widget Guest rows already use. Unscoped, any signed-in user could read and modify another user's sessions.
+
+  The sample application no longer sets `DefaultForNewUser` — a worked example should not install itself into every deployment's new users — and its screen now handles transport failures rather than showing "Loading…" forever on a dead network.
+
+### Patch Changes
+
+- 37891d3: Move the conversation-attachment blob seam (`IAttachmentBlobStore`, `AttachmentBlobUploadInput`,
+  `AttachmentBlobUploadResult`, `AttachmentBlobStoreUnavailableError`) from `@memberjunction/aiengine`
+  to `@memberjunction/ai-core-plus`, next to the placement policy in `ConversationUtility`. `aiengine`
+  re-exports it, so existing consumers are unaffected.
+
+  `ng-conversations` implements this seam for the browser and imported the types with `import type`,
+  on the reasoning that an erased import costs nothing. It costs nothing at _runtime_ — but the
+  class-registration manifest generator walks **package.json**, not imports, so the declared
+  dependency was a live edge regardless. When `aiengine` gained a `@memberjunction/storage`
+  dependency, that edge carried seven storage-driver classes into the browser manifest and broke the
+  MJExplorer bundle on `node:net` / `node:stream` / `node-fetch`.
+
+  The rule this encodes: a browser-reachable package must not _declare_ a server-only dependency,
+  even for a type. `ng-conversations` no longer declares `aiengine` at all.
+
+- 6ad6434: Put conversation-attachment blob access behind a seam, so the attachment service stops being server-only — and fix the inline-everything bug that duplication had already caused.
+
+  `ConversationAttachmentService` is 859 lines of attachment _policy_: limit validation, the inline-vs-MJStorage threshold, modality resolution, thumbnails, content URLs for AI consumption. None of it is platform-specific. But it imported `@memberjunction/storage` for four members, and that package depends on `@aws-sdk/client-s3`, `@azure/storage-blob`, `dropbox` and more — so one import made the whole package unusable from any browser or React Native client. It was that package's **only** server-only dependency.
+
+  The predictable result was three implementations of one policy: this service, a 494-line copy in `@memberjunction/ng-conversations`, and a third in the mobile app. And they had already drifted — **the Angular copy stored every attachment inline**, never consulting `ConversationUtility.ShouldStoreInline`, so a 5 MB image went into a database column instead of MJStorage, contradicting the `MJ: Conversation Detail Attachments` contract that `InlineData` is for small attachments and `FileID` for large ones.
+
+  **The seam.** `IAttachmentBlobStore` — `Upload` / `Download` / `GetDownloadUrl` / `Delete`. Three deliberate choices:
+  - **base64 at the boundary, never `Buffer`.** `Buffer` is a Node global; its presence in a shared signature is precisely what pinned this to one runtime. (The realtime runtime extraction learned the same lesson when `Blob` had leaked into session orchestration.)
+  - **Optional by contract.** A host binding nothing gets inline attachments and a distinct, recognizable "storage not available on this host" — so a caller can tell a _deployment shape_ from an _incident_. That is the normal case for an end user, who typically cannot write to MJStorage at all.
+  - **Bindings live outside the service.** `MJStorageBlobStore` (MJServer, wrapping `FileStorageEngine`) and `GraphQLAttachmentBlobStore` (ng-conversations, wrapping the existing `GraphQLFileStorageClient`). Neither is imported by the service.
+
+  **What changed behaviourally:** Explorer now honours the storage threshold — large attachments go to MJStorage through MJAPI instead of silently inline. Everything else is a same-shape substitution.
+
+  `DownloadFileContent` returns `string` (base64) rather than `Buffer | null`; its one caller, `RunAIAgentResolver`, is updated. Behaviour is otherwise unchanged: the MJStorage bodies moved verbatim, and the account-vs-provider credential resolution — which previously existed in only one of the three near-identical driver-resolution blocks — is now shared by all of them.
+
+  Verified: full monorepo build 306/306 + 278/278; ng-conversations 1,324 tests green; aiengine 130 tests green (including new seam coverage); mobile 195 green.
+
+  **Scope of the portability win, stated exactly.** This takes `@memberjunction/storage` — and with it the AWS, Azure and Dropbox SDKs — out of the attachment service's dependency graph, and it puts the inline-vs-storage decision behind one shared `ConversationUtility.ShouldStoreInline` call on every surface. It does **not** make `@memberjunction/aiengine` importable from a browser at runtime: the package's entry point also exports `AIEngine`, which imports Node's `crypto` at module scope for an embedding-cache key, and Explorer's bundler cannot resolve that. So the Angular host takes the _type_ from this package (`import type`, erased at compile time) and the _policy_ from `@memberjunction/ai-core-plus`, holding its own `GraphQLAttachmentBlobStore` rather than reaching through `GetAttachmentService()`. Removing that one `crypto` import — or splitting the package's entry points — is the remaining step, and it belongs to `aiengine`'s owners.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/ai-vectors-memory@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- a987913: Implement modality inheritance, AI Persona metadata catalog, and persona resolution across BaseAIEngine and realtime agents.
+  - BaseAIEngine: implement modality inheritance according to Agent -> Model -> System -> Default precedence, honoring InheritTypeModalities, AIModelType default input/output modalities, and junction IsSupported = 0 / IsAllowed = 0 vetoes.
+  - BaseAIEngine: cache and resolve AI Personas (GetModelPersonas, GetAgentPersonas, ResolveAgentPersona) incorporating agent style overrides and sequence ordering.
+  - AIEngine: delegate persona and modality getters and helper methods to BaseAIEngine.
+  - AIAgents: update GetRealtimeModelVoices to consult metadata personas first before falling back to driver SupportedVoices.
+  - Metadata: seed canonical modalities (metadata/ai-modalities/) and initial personas (metadata/ai-personas/, metadata/ai-persona-vendors/, metadata/ai-model-personas/, metadata/ai-agent-personas/).
+  - JSONType: simplify IAIPersonaVendorSettings to eliminate duplicate flat members and vendor namespacing.
+
+- e533ce5: Weekly AI model & vendor intelligence report (2026-08-24) + two metadata edits.
+  - **New model** `GLM 5.3` (Zhipu, released 2026-08-14). Placeholder record with Z.AI as Model Developer and OpenRouter as Inference Provider; no `MJ: AI Model Costs` rows populated because Zhipu has not posted a per-token API rate.
+  - **Deprecation** `GLM 4.7` on Cerebras — the Cerebras vendor row and matching cost record are now `Status: "Inactive"` per Cerebras' 2026-08-17 retirement of GLM-4.7 from its inference cloud. OpenRouter and Fireworks.ai vendor rows for GLM 4.7 remain Active.
+  - Full report at `reports/ai-model-research/2026-08-24-weekly-report.md`, including 4 items flagged for human review (DeepSeek V4 Pro Aug-16 cost record, GPT-5.6 Sol pricing conflict, FLUX.2 family refresh, redundant Sonnet 5 Sep-1 cost row).
+
+- b1b24d7: Weekly AI model & vendor intelligence report (2026-08-31) + four metadata edits.
+  - **New model** `GLM-5.3-Flash` (Z.AI, released 2026-08-26). Z.AI as Model Developer + Inference Provider, plus OpenRouter and Fireworks.ai as Inference Providers. Cost rows for Z.AI direct ($0.15/$0.50 per 1M) and OpenRouter ($0.05/$0.1667 reflecting a 50% Z.AI promo through 2026-09-09; a follow-up row should be added when the promo expires so the historical rate is preserved).
+  - **New model** `Qwen3.8-Flash` (Alibaba Cloud, released 2026-08-26). Alibaba Cloud as Model Developer + Inference Provider, plus OpenRouter and Fireworks.ai as Inference Providers. Cost rows for Alibaba direct and OpenRouter at $0.15/$0.47 per 1M.
+  - **New inference provider** on `Grok 4.6`: Amazon Bedrock vendor row (`xai.grok-4-6-v1:0`) and matching cost record (2026-08-25 start, $2/$6 sub-200K tier at vendor parity with x.ai direct).
+  - **Deprecation** `Kimi K2.5` on Moonshot AI direct — the Moonshot Inference Provider vendor row and cost record are now `Status: "Inactive"` per Moonshot's 2026-08-31 sunset of `moonshotai/Kimi-K2.5` and the `moonshot-v1-*` series. Fireworks.ai and OpenRouter vendor rows remain Active (weights are MIT-licensed and both providers may continue to serve the model).
+  - Full report at `reports/ai-model-research/2026-08-31-weekly-report.md`, including 5 items flagged for human review (DeepSeek V4 Flash Vision Experimental, OpenAI Daybreak Red/Blue on Bedrock, OpenAI Astra, Azure OpenAI cache-write charges on GPT-5.6 family, plus prior-week open items).
+
+- 2c826f7: AI model metadata refresh — week of 2026-09-07
+
+  Weekly AI model/vendor research pass over `metadata/ai-models/` and `metadata/ai-vendors/`. Four new
+  models, one new vendor, one rate card resolved, one retirement recorded.
+
+  **New models**
+  - **Claude Fable 5.1** (Anthropic, 2026-09-01) — `claude-fable-5-1`, 1M context / 128K output,
+    $10/$50 per 1M unchanged from Fable 5, but cache reads cut 75% to $0.25/1M. Anthropic direct,
+    Amazon Bedrock and OpenRouter routes.
+  - **GPT-6 Astra** (OpenAI, 2026-09-03) — `gpt-6-astra`, 1.05M context / 128K output, $10/$50 at the
+    short-context tier. Requests above 272K input tokens are rebilled entirely at $20/$75; that second
+    tier is documented in the cost record's Comments rather than given its own row. OpenAI direct plus
+    a Microsoft Foundry/Azure route (Limited Access Program). No Bedrock or OpenRouter row — neither
+    was serving it at the time of research.
+  - **Gemini 3.8 Flash** (Google, 2026-09-02) — `gemini-3.8-flash`, 1M context / 64K output, holding
+    3.7 Flash's $0.75/$3.75 introductory rate through 2026-12-31 before stepping to $1.50/$7.50.
+    Google, Vertex AI and OpenRouter routes.
+  - **Muse Spark 1.3** (Meta, 2026-09-02) — 1,048,576-token context, $1.25/$4.25 Standard tier.
+
+  **New vendor**
+  - **Meta**, credential type `API Key`, added as a Model Developer only. Muse Spark 1.3 reaches
+    inference through OpenRouter (`meta/muse-spark-1.3`, `OpenRouterLLM`), so no new driver class is
+    required. The cheaper Contributor tier is intentionally not recorded — it grants Meta training
+    rights over submitted data.
+
+  **Pricing**
+  - **GLM 5.3** gains a Z.AI Inference Provider row (`glm-5.3`, 1M context / 128K output) and its
+    first cost record at $1.40/$4.40 per 1M with $0.26/1M cached input, resolving the "pricing TBD"
+    placeholder left when the model was added on 2026-08-24.
+
+  **Deprecation**
+  - **Claude Opus 4.1** was retired on the Anthropic API on 2026-08-05. Its Anthropic Inference
+    Provider row moves to `Inactive` and its Anthropic cost row to `Expired` with
+    `EndedAt: 2026-08-05`. The Model Developer row stays `Active`, and the Amazon Bedrock and
+    OpenRouter rows are untouched — those platforms set their own retirement schedules and still serve
+    the model.
+
+  The full report, including everything flagged for human review rather than applied, is in
+  `reports/ai-model-research/2026-09-07-weekly-report.md`.
+
+- 61b5612: Weekly AI model & vendor intelligence report (2026-09-13) + three metadata edits.
+  - **Promo expiry** `GLM-5.3-Flash` on OpenRouter. Z.AI's 50% launch promo ended 2026-09-09 16:00 UTC (24:00 Singapore), the instant last week's report predicted. The promo cost row is now `Status: "Expired"` with `EndedAt`, and a new row records the list rate ($0.15/$0.50 per 1M) from that same instant — so the historical rate is preserved rather than overwritten, which is what the 2026-08-31 changeset asked a later run to do. The Z.AI direct row already carried list pricing and is unchanged. One discrepancy is recorded rather than smoothed over: our promo row was captured at $0.05/$0.1667 while Z.AI's later materials describe the promo as $0.075/$0.25; the original figure is left as evidence of what we were quoted, and the divergence is noted in the row's `Comments`.
+  - **New inference provider** on `GPT-6 Astra`: Amazon Bedrock vendor row (`openai.gpt-6-astra`, GA 2026-09-08) and cost record at $10/$50 per 1M with $1 cache read and $12.50 cache write. That is the GLOBAL cross-Region Standard rate at the short-context tier (≤272K input) — the same convention the existing OpenAI-direct and Azure rows use. Above 272K the whole request rebills at $20/$75, and in-Region / US-geographic routes run 10% higher. Closes an item open since Astra's launch.
+  - **New model** `DeepSeek V4.1 Flash` (released 2026-09-10, supersedes `DeepSeek V4 Flash`). 552B MoE with native vision, 1,048,576-token context, 384K output. DeepSeek as Model Developer + Inference Provider (`deepseek-flash`) plus an OpenRouter inference row. Cost record carries the **off-peak** tier ($0.15/$0.60, $0.003 cached input); peak is exactly double during Mon–Fri 01:00–04:00 and 06:00–10:00 UTC. Recording a real tier rather than a blend is deliberate — the 2026-08-16 `DeepSeek V4 Pro` row was written at a figure matching neither tier and has been an open reconciliation item ever since. **No OpenRouter cost row was written**: the route exists but its rate was not confirmed, and an invented price is worse than an absent one.
+
+  Not applied, flagged in the report: Grok 4.7 (a third missed date — still in supplemental training with no model card or rate card), GPT Image 2.5 Flare/Sunburst and the FLUX family (both blocked on one image-model cost-schema decision), Sakana AI / Fugu Max (new vendor plus a missing driver class), and the carried-forward Claude 4 cost-row cleanup, `GLM 5.3` OpenRouter context-window discrepancy, and `DeepSeek V4 Pro` reconciliation.
+
+  The §0.3 pure-JSON pre-flight passes (`OK`) and every `@lookup:MJ: AI Vendors.Name=…` resolves.
+
+- 48ff99f: Add `ModelConfiguration` — a per-modality, strongly-typed JSON configuration bag on the AI model catalog — at three levels forming an inherit-with-override cascade: `AIModelType` < `AIModel` < `AIModelVendor`, resolved base-first with per-key deep merge. One interface (`IAIModelConfiguration`: `LLM` / `Realtime` / `Vision` / `Audio` sections) is shared by all three levels via MJ's JSONType mechanism, so CodeGen emits typed `ModelConfigurationObject` accessors on all three entities. This generalizes the scalar cascade those tables already carry (`SupportsPrefill` / `PrefillFallbackText`): new session/call-time capability knobs now land as typed properties in one bag instead of a column per knob. Existing capability columns are untouched. `AIEngine.GetEffectiveModelConfiguration(modelID, modelVendorID)` is the single canonical read path; the pure `ParseModelConfiguration` / `ResolveEffectiveModelConfiguration` live in `@memberjunction/ai`.
+
+  First consumer: realtime turn detection. `Realtime.TurnDetection` (`Mode: 'default' | 'serverVad' | 'semanticVad' | 'native'`, plus eagerness / threshold / silence tuning) flows catalog → session config bag → provider wire block on both realtime topologies, with precedence `profile default < ModelConfiguration cascade < realtime.session.turnDetection < runtime configOverridesJson`. Profiles declare `supportedTurnModes` and translate through the shared `MapNormalizedTurnDetection`; an unsupported mode is diagnostic-logged and falls back to the profile default, so a shared model catalog never rejects a session on any provider. Non-protocol drivers scrub the key. Turn detection was previously hardcoded per provider profile, so smarter models had no way to opt into their smarter turn modes.
+
+  Fixes a latent bug: a live `Reconfigure` (the meeting-mode auto-response flip) hardcoded `server_vad`, silently downgrading any session running a non-server-VAD turn mode. It now rebuilds the session's actual resolved mode, with meeting-mode floor control composed on top.
+
+  GPT Realtime 2.1 and 2.1-mini are seeded to `semanticVad` (eagerness `auto`) at the model level — the one behavior-affecting change here. Everything else is behavior-neutral while `ModelConfiguration` is `NULL`.
+
+- 1100077: Standardize entity semantic search on `Provider.SearchEntity` (Tier 1).
+
+  Retires the bespoke in-memory "find similar by description" code paths in favor of
+  the unified Search-type `EntityDocument` + `Provider.SearchEntity` pipeline introduced
+  in #2709.
+
+  **`@memberjunction/aiengine`** — removed the ephemeral agent/action embedding machinery
+  that re-embedded every agent and action on first search:
+  - Deleted `AgentEmbeddingService` and `ActionEmbeddingService`.
+  - Removed `AIEngine.FindSimilarAgents`, `AIEngine.FindSimilarActions`,
+    `AIEngine.RefreshAgentEmbeddings`, `AIEngine.RefreshActionEmbeddings`, and the
+    `AgentVectorService` / `ActionVectorService` getters.
+  - `RegenerateEmbeddings` and the lazy `ensureEmbeddingsGenerated` path now cover only
+    the remaining local note/example pools (unchanged Pattern B). Callers needing
+    agent/action discovery should use `Provider.SearchEntity({ entityName: 'MJ: AI Agents' | 'MJ: Actions', ... })`.
+
+  **`@memberjunction/core-actions`** — the "Find Best Action", "Find Candidate Actions",
+  "Find Best Agent", "Find Candidate Agents", and "Search Query Catalog" actions are now
+  thin, backward-compatible wrappers around `Provider.SearchEntity` (semantic mode, backed
+  by the daily-synced "Actions Search" / "AI Agents Search" / "Queries Search"
+  EntityDocuments). Their input parameters and output shapes are preserved; new callers
+  should prefer the generic **Search Entity** action directly.
+
+  Also seeds the `Queries Search` EntityDocument + template, and deletes the now-obsolete
+  `scripts/backfill-query-embeddings.ts` (the daily Entity Vector Sync job populates query
+  vectors automatically).
+
+- 4cdfdcf: **A skill can bundle an action without putting it into the agent's run.**
+
+  Bundling an action into a skill (an `MJ: AI Skill Actions` row) put the action into the activating
+  agent's run — described to the model and executable — for the rest of the run. A skill whose reply
+  carries a menu (buttons the application wires to an action, pressed by the person on the next turn)
+  wants the association without the model ever calling the action on its own mid-conversation (#4226).
+  - `AISkillAction.ExposeToModel` (BIT, NOT NULL, default 1). `1` is today's behaviour. `0` keeps the
+    action bundled — SKILL.md export, tooling — but out of the run: not described to the model and not
+    executable by the agent; application code invokes it through the Actions API.
+  - `AIEngineBase.GetSkillExposedActionIDs(skillID)` returns the `ExposeToModel` subset;
+    `BaseAgent.enableSkillCapabilities` pushes that subset onto the run. `GetSkillActionIDs` (every
+    bundled action) is unchanged.
+  - SKILL.md round-trips the flag: the frontmatter gains an optional `codeOnlyActions` list (names, a
+    subset of `actions`), written on export for rows with the flag off and applied on import; a file
+    without the key leaves surviving rows' flags as they were.
+
+  Migration `V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
+  rows keep today's behaviour).
+
+### Patch Changes
+
+- 834f8d7: Fix a `TypeError` that could kill an agent mid-run during context assembly, and take down scheduled-job dispatch entirely (`__mj_CreatedAt?.getTime is not a function`, `job.NextRunAt.getTime is not a function`).
+
+  Two defects, one crash:
+  - **`BaseEngine.OnExternalCacheChange` poisoned `entity_object` caches (the root cause).** When a cross-server cache-change event carried a payload, its rows — plain JSON objects, since cache payloads are serialized — were assigned straight into the engine property. For a config whose effective `ResultType` is `entity_object` (the default), that silently replaced the array's `BaseEntity` instances with plain objects, so `BaseEntity`'s coercing accessors were bypassed and a date field declared `Date` held a raw ISO string. Rows are now materialized via `TransformSimpleObjectToEntityObject` — the same conversion RunView's own cache-hit path uses — before assignment, with `'simple'` configs still passing through untouched and any failure degrading to the pre-existing full reload. Because materialization is async, the payload branch now claims a refresh generation (`beginConfigRefresh`/`isLatestConfigRefresh`, as `LoadSingleConfig` already does) so overlapping cache events cannot commit out of order. This affects **every** engine with `CacheLocal: true`.
+  - **Unguarded `Date` method calls on those fields (the crash sites).** Optional chaining does not protect them — `"…"?.getTime` is `undefined`, and calling it throws. A new `ToEpochMs(value)` helper is exported from `@memberjunction/global` (a pure date utility — it needs no entity or metadata concepts) and now backs every affected read across four engines: `AgentContextInjector.sortExamples`/`sortNotes`, `AIEngine.fallbackGetNotesFromCache`/`fallbackGetExamplesFromCache`, `ConversationEngine.sortConversations`, and the scheduling engine's `isJobDue` plus its `NextRunAt`/`EndAt` diagnostics. It also closes a latent issue in the previous form: an Invalid `Date`'s `getTime()` returns `NaN`, which `?? 0` did not catch, yielding an incoherent comparator.
+
+  Two exposures worth calling out. `AIEngine.fallbackGetNotesFromCache` is reached whenever the note vector service is uninitialized or a query embedding fails, so semantic retrieval with real input text could crash too — not just the empty-input path. And `SchedulingEngine.isJobDue` throws on the _first_ job in the dispatch loop, so a poisoned cache stopped **all** scheduled jobs from running, on every poll, until the cache reloaded.
+
+  `isJobDue` also had a silent variant of the same bug: `evalTime < job.StartAt` does not throw on a string — relational operators coerce toward numbers, an ISO string yields `NaN`, and every comparison is false — so `StartAt`/`EndAt` activation windows silently stopped being enforced and a job could fire outside its range with nothing in the logs. Those comparisons now go through `ToEpochMs` as well.
+
+  Making the cache-event path work also exposed a filtering gap (caught in review): `SchedulingEngineBase` loads `MJ: Scheduled Jobs` unfiltered and applies its Active-only invariant in memory, but only re-applied it on entity events — not after a cross-server cache event, whose payload carries every row. In a multi-instance deployment, one server's engine load could therefore hand another server's dispatch loop Disabled/Paused/Pending jobs. The engine now re-applies the filter (and notifies `JobsChanged$`) after `OnExternalCacheChange`, and `isJobDue` independently refuses non-Active jobs so dispatch can never depend on the array staying pre-filtered.
+
+- 07cb22e: Fix `$`-sequence corruption in `String.prototype.replace` calls carrying runtime data (#3171).
+
+  `replace(search, replacement)` treats `$$`, `$&`, `` $` ``, `$'` and `$1`–`$99` as metacharacters when `replacement` is a **string**. Every site below passed runtime data there, so a `$` in that data was silently executed rather than inserted. The `$&`/`` $` ``/`$'` forms are worse than value corruption: they splice surrounding text _into_ the value. All are fixed by passing a replacement **function**, whose return value is used literally.
+  - **`@memberjunction/installer` — corrupted secrets (highest impact).** Re-running `mj install` syncs the root `.env` into MJAPI's. A DB password containing `$&` had the _stale_ MJAPI password spliced into it; ``$` `` spliced in the preceding `.env` line. The result was a wrong secret written to disk with no error, surfacing later as "MJAPI can't connect". Only the replace branch was affected — fresh installs (append branch, string concatenation) were always correct, which is why this survived. Also fixes the `newUserSetup` block (embeds user name/email) and the `mjRepoVersion` and Explorer `environment.ts` patchers.
+  - **`@memberjunction/core` — rewritten RLS predicates.** `RowLevelSecurityFilterInfo.MarkupFilterText` substitutes user properties, magic-link scope and `{{Acting*}}` tokens into row-level-security filters. A `$` in any of them rewrote the predicate — the exact outcome the neighbouring `'`-escaping exists to prevent. This feeds `GetEffectiveRowFilterWhereClause`, used across RunView reads, Create and Update. Also fixes organic-key `Custom` normalization, which builds a SQL `WHERE` from a data value.
+  - **`@memberjunction/generic-database-provider`, `@memberjunction/postgresql-dataprovider`** — end-user search terms substituted into `UserSearchParamFormatAPI` predicates, plus view-template inner SQL and PG identifier quoting. Also `QueryCompositionEngine.renameSQLIdentifier`, which rewrites CTE identifiers in composed queries: the search side was regex-escaped but the replacement side was not, so a `$` in a deconflicted CTE name (SQL Server bracketed and PG quoted identifiers both permit one) was expanded into the executed SQL.
+  - **`@memberjunction/ai-prompts`, `@memberjunction/computer-use`, `@memberjunction/ai-vector-sync`, `@memberjunction/aiengine`, `@memberjunction/ai-agents`** — assistant prefill text (routinely contains `$$` for LaTeX or currency), computer-use goals/URLs/step summaries, embedding-document field values, and entity field values, all interpolated into prompts and templates.
+  - **`@memberjunction/metadata-sync`** — parameter values in the debug SQL log.
+  - **`@memberjunction/testing-engine`** — test input/expected/actual values into the LLM-judge prompt, and parameter values into `SQLValidatorOracle`'s generated SQL.
+  - **`@memberjunction/sql-converter`** — the configured schema name substituted into emitted PostgreSQL view SQL, in both `ViewRule` and its previously-missed twin in `InsertRule`. The schema is now escaped on the _search_ side too: a `$` in it acted as an end-anchor, so the pattern matched nothing and the conversion silently emitted no rewrite.
+  - **`@memberjunction/sql-parser`** — `restoreAliases` swaps generated aliases back to the caller's original bracketed identifiers. Two of its three branches used `split`/`join` and were already safe; the third expanded `$`-sequences, so `[a$'b]` spliced surrounding SQL into an identifier. The aliasing path fires precisely _because_ an identifier contains a non-word character, so the input that triggers aliasing is the input that corrupted the restore. Reached from the public `ToSQL()`.
+  - **`@memberjunction/sqlserver-dataprovider`** — batch execution rewrites `@name` placeholders to `@q<N>_name`; the parameter name went into the `RegExp` unescaped, so a `$` in it prevented the rewrite entirely and mssql failed with "Must declare the scalar variable". Sibling of the PostgreSQL `escapeRegExp` fix below.
+  - **`@memberjunction/react-linter`** — component data substituted into diagnostic messages.
+  - **`@memberjunction/actions-bizapps-social`, `@memberjunction/ai-cli`** — hardened a numeric-only site; documented the AICLI JSON highlighter's `$1` back-references as intentional.
+
+  Also fixes a **test-tooling safety defect** found while verifying the above on a clean database: `@memberjunction/testing-cli` loaded `.env` with `dotenv.config({ override: true })`, so a variable already set in the environment was overwritten. `DB_DATABASE=MJ_scratch mj test …` was silently discarded and the suite ran — **including mutation tests** — against whatever `.env` pointed at. That made the "one database per agent" rule unenforceable by environment variable and diverged from every other `mj` command (`migrate`, `codegen`, `sync push` all honour the environment). `override` is now dotenv's default `false`, so `.env` still fills in anything unset but an explicit value wins. Guarded by a unit test. **Note the inverse hazard when upgrading:** any environment that exports `DB_*` globally — a Docker image, a CI container, a stale `export` in a shell profile — now wins over `.env`, where `.env` used to be authoritative. If a `mj test` run suddenly targets an unexpected database, check the exported environment first; the CLI prints `config.dbDatabase: <name>` at startup.
+
+  And an adjacent defect found while testing the above: `PostgreSQLDataProvider.quoteFieldNamesInToken` interpolated a field name into a `RegExp` **without escaping regex metacharacters**, so a column named `a.b` matched (and wrongly quoted) unrelated text like `axb`, and a column containing `$` was never matched at all — which had also made the replacement-side fix on that line unreachable. Field names are now escaped before interpolation.
+
+  Also adds `.github/scripts/check-dynamic-replace.mjs`, a CI gate that flags `.replace()`/`.replaceAll()` whose replacement is neither a string literal nor a function. No existing lint rule covered this — the React `string-replace-all-occurrences` rule only ever inspects the _search_ argument. The gate is line-aware (only lines a change touches), since ~100 pre-existing sites remain and a bare identifier holding a function reference is indistinguishable from one holding a string; `--all` is available for auditing. Regression tests now push `$$`, `$&`, `` $` ``, `$'` and `$1` through each fixed path.
+
+  Also fixes a **silently inert security check** found while verifying the above. `BaseTestDriver.Provider` fell back to `new Metadata() as unknown as IMetadataProvider`. `Metadata` is a facade that proxies a hand-maintained subset of members to the global provider, not a provider itself, and the cast is the only reason the compiler accepted it. Members it does not proxy read `undefined` — `RowLevelSecurityFilters` among them. The integration suite's `discoverTokenFilter` reads exactly that property to find a `{{UserID}}`-scoped filter, so it always found none: the `rls-isolation` RLS1/RLS2 token-substitution checks skipped-as-pass **on every database**, while the bundle reported green. There were 13 filters present, 5 of them `{{UserID}}`-scoped. The fallback now returns the global provider, which is what the getter's own doc comment always promised, and both checks now execute. A new `rls-isolation` check (RLS11) additionally pushes `$$`, `$&`, `` $` ``, `$'` and `$1` through a substituted user property and executes the resulting predicate, so the RLS half of this fix has live coverage rather than unit coverage alone.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [22ec804]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [199eb2b]
+- Updated dependencies [1940a4d]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [5e987a7]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [0db6105]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [bc45ded]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [394d276]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ai-engine-base@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/storage@6.1.0
+  - @memberjunction/actions-base@6.1.0
+  - @memberjunction/ai-vectors-memory@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- a987913: Implement modality inheritance, AI Persona metadata catalog, and persona resolution across BaseAIEngine and realtime agents.
+  - BaseAIEngine: implement modality inheritance according to Agent -> Model -> System -> Default precedence, honoring InheritTypeModalities, AIModelType default input/output modalities, and junction IsSupported = 0 / IsAllowed = 0 vetoes.
+  - BaseAIEngine: cache and resolve AI Personas (GetModelPersonas, GetAgentPersonas, ResolveAgentPersona) incorporating agent style overrides and sequence ordering.
+  - AIEngine: delegate persona and modality getters and helper methods to BaseAIEngine.
+  - AIAgents: update GetRealtimeModelVoices to consult metadata personas first before falling back to driver SupportedVoices.
+  - Metadata: seed canonical modalities (metadata/ai-modalities/) and initial personas (metadata/ai-personas/, metadata/ai-persona-vendors/, metadata/ai-model-personas/, metadata/ai-agent-personas/).
+  - JSONType: simplify IAIPersonaVendorSettings to eliminate duplicate flat members and vendor namespacing.
+
+- 61b5612: Weekly AI model & vendor intelligence report (2026-09-13) + three metadata edits.
+  - **Promo expiry** `GLM-5.3-Flash` on OpenRouter. Z.AI's 50% launch promo ended 2026-09-09 16:00 UTC (24:00 Singapore), the instant last week's report predicted. The promo cost row is now `Status: "Expired"` with `EndedAt`, and a new row records the list rate ($0.15/$0.50 per 1M) from that same instant — so the historical rate is preserved rather than overwritten, which is what the 2026-08-31 changeset asked a later run to do. The Z.AI direct row already carried list pricing and is unchanged. One discrepancy is recorded rather than smoothed over: our promo row was captured at $0.05/$0.1667 while Z.AI's later materials describe the promo as $0.075/$0.25; the original figure is left as evidence of what we were quoted, and the divergence is noted in the row's `Comments`.
+  - **New inference provider** on `GPT-6 Astra`: Amazon Bedrock vendor row (`openai.gpt-6-astra`, GA 2026-09-08) and cost record at $10/$50 per 1M with $1 cache read and $12.50 cache write. That is the GLOBAL cross-Region Standard rate at the short-context tier (≤272K input) — the same convention the existing OpenAI-direct and Azure rows use. Above 272K the whole request rebills at $20/$75, and in-Region / US-geographic routes run 10% higher. Closes an item open since Astra's launch.
+  - **New model** `DeepSeek V4.1 Flash` (released 2026-09-10, supersedes `DeepSeek V4 Flash`). 552B MoE with native vision, 1,048,576-token context, 384K output. DeepSeek as Model Developer + Inference Provider (`deepseek-flash`) plus an OpenRouter inference row. Cost record carries the **off-peak** tier ($0.15/$0.60, $0.003 cached input); peak is exactly double during Mon–Fri 01:00–04:00 and 06:00–10:00 UTC. Recording a real tier rather than a blend is deliberate — the 2026-08-16 `DeepSeek V4 Pro` row was written at a figure matching neither tier and has been an open reconciliation item ever since. **No OpenRouter cost row was written**: the route exists but its rate was not confirmed, and an invented price is worse than an absent one.
+
+  Not applied, flagged in the report: Grok 4.7 (a third missed date — still in supplemental training with no model card or rate card), GPT Image 2.5 Flare/Sunburst and the FLUX family (both blocked on one image-model cost-schema decision), Sakana AI / Fugu Max (new vendor plus a missing driver class), and the carried-forward Claude 4 cost-row cleanup, `GLM 5.3` OpenRouter context-window discrepancy, and `DeepSeek V4 Pro` reconciliation.
+
+  The §0.3 pure-JSON pre-flight passes (`OK`) and every `@lookup:MJ: AI Vendors.Name=…` resolves.
+
+- 4cdfdcf: **A skill can bundle an action without putting it into the agent's run.**
+
+  Bundling an action into a skill (an `MJ: AI Skill Actions` row) put the action into the activating
+  agent's run — described to the model and executable — for the rest of the run. A skill whose reply
+  carries a menu (buttons the application wires to an action, pressed by the person on the next turn)
+  wants the association without the model ever calling the action on its own mid-conversation (#4226).
+  - `AISkillAction.ExposeToModel` (BIT, NOT NULL, default 1). `1` is today's behaviour. `0` keeps the
+    action bundled — SKILL.md export, tooling — but out of the run: not described to the model and not
+    executable by the agent; application code invokes it through the Actions API.
+  - `AIEngineBase.GetSkillExposedActionIDs(skillID)` returns the `ExposeToModel` subset;
+    `BaseAgent.enableSkillCapabilities` pushes that subset onto the run. `GetSkillActionIDs` (every
+    bundled action) is unchanged.
+  - SKILL.md round-trips the flag: the frontmatter gains an optional `codeOnlyActions` list (names, a
+    subset of `actions`), written on export for rows with the flag off and applied on import; a file
+    without the key leaves surviving rows' flags as they were.
+
+  Migration `V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
+  rows keep today's behaviour).
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [5e987a7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/storage@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- 2c826f7: AI model metadata refresh — week of 2026-09-07
+
+  Weekly AI model/vendor research pass over `metadata/ai-models/` and `metadata/ai-vendors/`. Four new
+  models, one new vendor, one rate card resolved, one retirement recorded.
+
+  **New models**
+  - **Claude Fable 5.1** (Anthropic, 2026-09-01) — `claude-fable-5-1`, 1M context / 128K output,
+    $10/$50 per 1M unchanged from Fable 5, but cache reads cut 75% to $0.25/1M. Anthropic direct,
+    Amazon Bedrock and OpenRouter routes.
+  - **GPT-6 Astra** (OpenAI, 2026-09-03) — `gpt-6-astra`, 1.05M context / 128K output, $10/$50 at the
+    short-context tier. Requests above 272K input tokens are rebilled entirely at $20/$75; that second
+    tier is documented in the cost record's Comments rather than given its own row. OpenAI direct plus
+    a Microsoft Foundry/Azure route (Limited Access Program). No Bedrock or OpenRouter row — neither
+    was serving it at the time of research.
+  - **Gemini 3.8 Flash** (Google, 2026-09-02) — `gemini-3.8-flash`, 1M context / 64K output, holding
+    3.7 Flash's $0.75/$3.75 introductory rate through 2026-12-31 before stepping to $1.50/$7.50.
+    Google, Vertex AI and OpenRouter routes.
+  - **Muse Spark 1.3** (Meta, 2026-09-02) — 1,048,576-token context, $1.25/$4.25 Standard tier.
+
+  **New vendor**
+  - **Meta**, credential type `API Key`, added as a Model Developer only. Muse Spark 1.3 reaches
+    inference through OpenRouter (`meta/muse-spark-1.3`, `OpenRouterLLM`), so no new driver class is
+    required. The cheaper Contributor tier is intentionally not recorded — it grants Meta training
+    rights over submitted data.
+
+  **Pricing**
+  - **GLM 5.3** gains a Z.AI Inference Provider row (`glm-5.3`, 1M context / 128K output) and its
+    first cost record at $1.40/$4.40 per 1M with $0.26/1M cached input, resolving the "pricing TBD"
+    placeholder left when the model was added on 2026-08-24.
+
+  **Deprecation**
+  - **Claude Opus 4.1** was retired on the Anthropic API on 2026-08-05. Its Anthropic Inference
+    Provider row moves to `Inactive` and its Anthropic cost row to `Expired` with
+    `EndedAt: 2026-08-05`. The Model Developer row stays `Active`, and the Amazon Bedrock and
+    OpenRouter rows are untouched — those platforms set their own retirement schedules and still serve
+    the model.
+
+  The full report, including everything flagged for human review rather than applied, is in
+  `reports/ai-model-research/2026-09-07-weekly-report.md`.
+
+### Patch Changes
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/storage@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- b1b24d7: Weekly AI model & vendor intelligence report (2026-08-31) + four metadata edits.
+  - **New model** `GLM-5.3-Flash` (Z.AI, released 2026-08-26). Z.AI as Model Developer + Inference Provider, plus OpenRouter and Fireworks.ai as Inference Providers. Cost rows for Z.AI direct ($0.15/$0.50 per 1M) and OpenRouter ($0.05/$0.1667 reflecting a 50% Z.AI promo through 2026-09-09; a follow-up row should be added when the promo expires so the historical rate is preserved).
+  - **New model** `Qwen3.8-Flash` (Alibaba Cloud, released 2026-08-26). Alibaba Cloud as Model Developer + Inference Provider, plus OpenRouter and Fireworks.ai as Inference Providers. Cost rows for Alibaba direct and OpenRouter at $0.15/$0.47 per 1M.
+  - **New inference provider** on `Grok 4.6`: Amazon Bedrock vendor row (`xai.grok-4-6-v1:0`) and matching cost record (2026-08-25 start, $2/$6 sub-200K tier at vendor parity with x.ai direct).
+  - **Deprecation** `Kimi K2.5` on Moonshot AI direct — the Moonshot Inference Provider vendor row and cost record are now `Status: "Inactive"` per Moonshot's 2026-08-31 sunset of `moonshotai/Kimi-K2.5` and the `moonshot-v1-*` series. Fireworks.ai and OpenRouter vendor rows remain Active (weights are MIT-licensed and both providers may continue to serve the model).
+  - Full report at `reports/ai-model-research/2026-08-31-weekly-report.md`, including 5 items flagged for human review (DeepSeek V4 Flash Vision Experimental, OpenAI Daybreak Red/Blue on Bedrock, OpenAI Astra, Azure OpenAI cache-write charges on GPT-5.6 family, plus prior-week open items).
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- e533ce5: Weekly AI model & vendor intelligence report (2026-08-24) + two metadata edits.
+  - **New model** `GLM 5.3` (Zhipu, released 2026-08-14). Placeholder record with Z.AI as Model Developer and OpenRouter as Inference Provider; no `MJ: AI Model Costs` rows populated because Zhipu has not posted a per-token API rate.
+  - **Deprecation** `GLM 4.7` on Cerebras — the Cerebras vendor row and matching cost record are now `Status: "Inactive"` per Cerebras' 2026-08-17 retirement of GLM-4.7 from its inference cloud. OpenRouter and Fireworks.ai vendor rows for GLM 4.7 remain Active.
+  - Full report at `reports/ai-model-research/2026-08-24-weekly-report.md`, including 4 items flagged for human review (DeepSeek V4 Pro Aug-16 cost record, GPT-5.6 Sol pricing conflict, FLUX.2 family refresh, redundant Sonnet 5 Sep-1 cost row).
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 834f8d7: Fix a `TypeError` that could kill an agent mid-run during context assembly, and take down scheduled-job dispatch entirely (`__mj_CreatedAt?.getTime is not a function`, `job.NextRunAt.getTime is not a function`).
+
+  Two defects, one crash:
+  - **`BaseEngine.OnExternalCacheChange` poisoned `entity_object` caches (the root cause).** When a cross-server cache-change event carried a payload, its rows — plain JSON objects, since cache payloads are serialized — were assigned straight into the engine property. For a config whose effective `ResultType` is `entity_object` (the default), that silently replaced the array's `BaseEntity` instances with plain objects, so `BaseEntity`'s coercing accessors were bypassed and a date field declared `Date` held a raw ISO string. Rows are now materialized via `TransformSimpleObjectToEntityObject` — the same conversion RunView's own cache-hit path uses — before assignment, with `'simple'` configs still passing through untouched and any failure degrading to the pre-existing full reload. Because materialization is async, the payload branch now claims a refresh generation (`beginConfigRefresh`/`isLatestConfigRefresh`, as `LoadSingleConfig` already does) so overlapping cache events cannot commit out of order. This affects **every** engine with `CacheLocal: true`.
+  - **Unguarded `Date` method calls on those fields (the crash sites).** Optional chaining does not protect them — `"…"?.getTime` is `undefined`, and calling it throws. A new `ToEpochMs(value)` helper is exported from `@memberjunction/global` (a pure date utility — it needs no entity or metadata concepts) and now backs every affected read across four engines: `AgentContextInjector.sortExamples`/`sortNotes`, `AIEngine.fallbackGetNotesFromCache`/`fallbackGetExamplesFromCache`, `ConversationEngine.sortConversations`, and the scheduling engine's `isJobDue` plus its `NextRunAt`/`EndAt` diagnostics. It also closes a latent issue in the previous form: an Invalid `Date`'s `getTime()` returns `NaN`, which `?? 0` did not catch, yielding an incoherent comparator.
+
+  Two exposures worth calling out. `AIEngine.fallbackGetNotesFromCache` is reached whenever the note vector service is uninitialized or a query embedding fails, so semantic retrieval with real input text could crash too — not just the empty-input path. And `SchedulingEngine.isJobDue` throws on the _first_ job in the dispatch loop, so a poisoned cache stopped **all** scheduled jobs from running, on every poll, until the cache reloaded.
+
+  `isJobDue` also had a silent variant of the same bug: `evalTime < job.StartAt` does not throw on a string — relational operators coerce toward numbers, an ISO string yields `NaN`, and every comparison is false — so `StartAt`/`EndAt` activation windows silently stopped being enforced and a job could fire outside its range with nothing in the logs. Those comparisons now go through `ToEpochMs` as well.
+
+  Making the cache-event path work also exposed a filtering gap (caught in review): `SchedulingEngineBase` loads `MJ: Scheduled Jobs` unfiltered and applies its Active-only invariant in memory, but only re-applied it on entity events — not after a cross-server cache event, whose payload carries every row. In a multi-instance deployment, one server's engine load could therefore hand another server's dispatch loop Disabled/Paused/Pending jobs. The engine now re-applies the filter (and notifies `JobsChanged$`) after `OnExternalCacheChange`, and `isJobDue` independently refuses non-Active jobs so dispatch can never depend on the array staying pre-filtered.
+
+- 07cb22e: Fix `$`-sequence corruption in `String.prototype.replace` calls carrying runtime data (#3171).
+
+  `replace(search, replacement)` treats `$$`, `$&`, `` $` ``, `$'` and `$1`–`$99` as metacharacters when `replacement` is a **string**. Every site below passed runtime data there, so a `$` in that data was silently executed rather than inserted. The `$&`/`` $` ``/`$'` forms are worse than value corruption: they splice surrounding text _into_ the value. All are fixed by passing a replacement **function**, whose return value is used literally.
+  - **`@memberjunction/installer` — corrupted secrets (highest impact).** Re-running `mj install` syncs the root `.env` into MJAPI's. A DB password containing `$&` had the _stale_ MJAPI password spliced into it; ``$` `` spliced in the preceding `.env` line. The result was a wrong secret written to disk with no error, surfacing later as "MJAPI can't connect". Only the replace branch was affected — fresh installs (append branch, string concatenation) were always correct, which is why this survived. Also fixes the `newUserSetup` block (embeds user name/email) and the `mjRepoVersion` and Explorer `environment.ts` patchers.
+  - **`@memberjunction/core` — rewritten RLS predicates.** `RowLevelSecurityFilterInfo.MarkupFilterText` substitutes user properties, magic-link scope and `{{Acting*}}` tokens into row-level-security filters. A `$` in any of them rewrote the predicate — the exact outcome the neighbouring `'`-escaping exists to prevent. This feeds `GetEffectiveRowFilterWhereClause`, used across RunView reads, Create and Update. Also fixes organic-key `Custom` normalization, which builds a SQL `WHERE` from a data value.
+  - **`@memberjunction/generic-database-provider`, `@memberjunction/postgresql-dataprovider`** — end-user search terms substituted into `UserSearchParamFormatAPI` predicates, plus view-template inner SQL and PG identifier quoting. Also `QueryCompositionEngine.renameSQLIdentifier`, which rewrites CTE identifiers in composed queries: the search side was regex-escaped but the replacement side was not, so a `$` in a deconflicted CTE name (SQL Server bracketed and PG quoted identifiers both permit one) was expanded into the executed SQL.
+  - **`@memberjunction/ai-prompts`, `@memberjunction/computer-use`, `@memberjunction/ai-vector-sync`, `@memberjunction/aiengine`, `@memberjunction/ai-agents`** — assistant prefill text (routinely contains `$$` for LaTeX or currency), computer-use goals/URLs/step summaries, embedding-document field values, and entity field values, all interpolated into prompts and templates.
+  - **`@memberjunction/metadata-sync`** — parameter values in the debug SQL log.
+  - **`@memberjunction/testing-engine`** — test input/expected/actual values into the LLM-judge prompt, and parameter values into `SQLValidatorOracle`'s generated SQL.
+  - **`@memberjunction/sql-converter`** — the configured schema name substituted into emitted PostgreSQL view SQL, in both `ViewRule` and its previously-missed twin in `InsertRule`. The schema is now escaped on the _search_ side too: a `$` in it acted as an end-anchor, so the pattern matched nothing and the conversion silently emitted no rewrite.
+  - **`@memberjunction/sql-parser`** — `restoreAliases` swaps generated aliases back to the caller's original bracketed identifiers. Two of its three branches used `split`/`join` and were already safe; the third expanded `$`-sequences, so `[a$'b]` spliced surrounding SQL into an identifier. The aliasing path fires precisely _because_ an identifier contains a non-word character, so the input that triggers aliasing is the input that corrupted the restore. Reached from the public `ToSQL()`.
+  - **`@memberjunction/sqlserver-dataprovider`** — batch execution rewrites `@name` placeholders to `@q<N>_name`; the parameter name went into the `RegExp` unescaped, so a `$` in it prevented the rewrite entirely and mssql failed with "Must declare the scalar variable". Sibling of the PostgreSQL `escapeRegExp` fix below.
+  - **`@memberjunction/react-linter`** — component data substituted into diagnostic messages.
+  - **`@memberjunction/actions-bizapps-social`, `@memberjunction/ai-cli`** — hardened a numeric-only site; documented the AICLI JSON highlighter's `$1` back-references as intentional.
+
+  Also fixes a **test-tooling safety defect** found while verifying the above on a clean database: `@memberjunction/testing-cli` loaded `.env` with `dotenv.config({ override: true })`, so a variable already set in the environment was overwritten. `DB_DATABASE=MJ_scratch mj test …` was silently discarded and the suite ran — **including mutation tests** — against whatever `.env` pointed at. That made the "one database per agent" rule unenforceable by environment variable and diverged from every other `mj` command (`migrate`, `codegen`, `sync push` all honour the environment). `override` is now dotenv's default `false`, so `.env` still fills in anything unset but an explicit value wins. Guarded by a unit test. **Note the inverse hazard when upgrading:** any environment that exports `DB_*` globally — a Docker image, a CI container, a stale `export` in a shell profile — now wins over `.env`, where `.env` used to be authoritative. If a `mj test` run suddenly targets an unexpected database, check the exported environment first; the CLI prints `config.dbDatabase: <name>` at startup.
+
+  And an adjacent defect found while testing the above: `PostgreSQLDataProvider.quoteFieldNamesInToken` interpolated a field name into a `RegExp` **without escaping regex metacharacters**, so a column named `a.b` matched (and wrongly quoted) unrelated text like `axb`, and a column containing `$` was never matched at all — which had also made the replacement-side fix on that line unreachable. Field names are now escaped before interpolation.
+
+  Also adds `.github/scripts/check-dynamic-replace.mjs`, a CI gate that flags `.replace()`/`.replaceAll()` whose replacement is neither a string literal nor a function. No existing lint rule covered this — the React `string-replace-all-occurrences` rule only ever inspects the _search_ argument. The gate is line-aware (only lines a change touches), since ~100 pre-existing sites remain and a bare identifier holding a function reference is indistinguishable from one holding a string; `--all` is available for auditing. Regression tests now push `$$`, `$&`, `` $` ``, `$'` and `$1` through each fixed path.
+
+  Also fixes a **silently inert security check** found while verifying the above. `BaseTestDriver.Provider` fell back to `new Metadata() as unknown as IMetadataProvider`. `Metadata` is a facade that proxies a hand-maintained subset of members to the global provider, not a provider itself, and the cast is the only reason the compiler accepted it. Members it does not proxy read `undefined` — `RowLevelSecurityFilters` among them. The integration suite's `discoverTokenFilter` reads exactly that property to find a `{{UserID}}`-scoped filter, so it always found none: the `rls-isolation` RLS1/RLS2 token-substitution checks skipped-as-pass **on every database**, while the bundle reported green. There were 13 filters present, 5 of them `{{UserID}}`-scoped. The fallback now returns the global provider, which is what the getter's own doc comment always promised, and both checks now execute. A new `rls-isolation` check (RLS11) additionally pushes `$$`, `$&`, `` $` ``, `$'` and `$1` through a substituted user property and executes the resulting predicate, so the RLS half of this fix has live coverage rather than unit coverage alone.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+
 ## 6.1.0-edge.2
 
 ### Minor Changes

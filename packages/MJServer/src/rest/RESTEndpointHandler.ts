@@ -16,7 +16,7 @@ export interface RESTEndpointHandlerOptions {
      * If provided, only these entities will be accessible through the REST API
      * Supports wildcards using '*' (e.g., 'User*' matches 'User', 'UserRole', etc.)
      */
-    includeEntities?: string[];
+    IncludeEntities?: string[];
     
     /**
      * Array of entity names to exclude from the API (case-insensitive)
@@ -24,20 +24,20 @@ export interface RESTEndpointHandlerOptions {
      * Supports wildcards using '*' (e.g., 'Secret*' matches 'Secret', 'SecretKey', etc.)
      * Note: Exclude patterns always override include patterns
      */
-    excludeEntities?: string[];
+    ExcludeEntities?: string[];
     
     /**
      * Array of schema names to include in the API (case-insensitive)
      * If provided, only entities in these schemas will be accessible through the REST API
      */
-    includeSchemas?: string[];
+    IncludeSchemas?: string[];
     
     /**
      * Array of schema names to exclude from the API (case-insensitive)
      * Entities in these schemas will not be accessible through the REST API
      * Note: Exclude patterns always override include patterns
      */
-    excludeSchemas?: string[];
+    ExcludeSchemas?: string[];
 }
 
 /**
@@ -85,21 +85,21 @@ export class RESTEndpointHandler {
         const schemaName = entity.SchemaName.toLowerCase();
         
         // 1. Check schema exclusions first (these take highest precedence)
-        if (this.options.excludeSchemas && this.options.excludeSchemas.length > 0) {
-            if (this.options.excludeSchemas.some(schema => schema.toLowerCase() === schemaName)) {
+        if (this.options.ExcludeSchemas && this.options.ExcludeSchemas.length > 0) {
+            if (this.options.ExcludeSchemas.some(schema => schema.toLowerCase() === schemaName)) {
                 return false;
             }
         }
         
         // 2. Check entity exclusions next (these override entity inclusions)
-        if (this.options.excludeEntities && this.options.excludeEntities.length > 0) {
+        if (this.options.ExcludeEntities && this.options.ExcludeEntities.length > 0) {
             // Check for direct match
-            if (this.options.excludeEntities.includes(name)) {
+            if (this.options.ExcludeEntities.includes(name)) {
                 return false;
             }
             
             // Check for wildcard matches
-            for (const pattern of this.options.excludeEntities) {
+            for (const pattern of this.options.ExcludeEntities) {
                 if (pattern.includes('*')) {
                     const regex = new RegExp('^' + pattern.toLowerCase().replace(/\*/g, '.*') + '$');
                     if (regex.test(name)) {
@@ -110,21 +110,21 @@ export class RESTEndpointHandler {
         }
         
         // 3. Check schema inclusions (if specified, only entities from these schemas are allowed)
-        if (this.options.includeSchemas && this.options.includeSchemas.length > 0) {
-            if (!this.options.includeSchemas.some(schema => schema.toLowerCase() === schemaName)) {
+        if (this.options.IncludeSchemas && this.options.IncludeSchemas.length > 0) {
+            if (!this.options.IncludeSchemas.some(schema => schema.toLowerCase() === schemaName)) {
                 return false;
             }
         }
         
         // 4. Check entity inclusions
-        if (this.options.includeEntities && this.options.includeEntities.length > 0) {
+        if (this.options.IncludeEntities && this.options.IncludeEntities.length > 0) {
             // Check for direct match
-            if (this.options.includeEntities.includes(name)) {
+            if (this.options.IncludeEntities.includes(name)) {
                 return true;
             }
             
             // Check for wildcard matches
-            for (const pattern of this.options.includeEntities) {
+            for (const pattern of this.options.IncludeEntities) {
                 if (pattern.includes('*')) {
                     const regex = new RegExp('^' + pattern.toLowerCase().replace(/\*/g, '.*') + '$');
                     if (regex.test(name)) {
@@ -794,31 +794,22 @@ export class RESTEndpointHandler {
     }
 
     /**
-     * Helper method to create a composite key from an ID
+     * Build the record key from the `:id` path segment. A single-column key (any column name) is
+     * the bare value; a composite key is the URL-encoded `Field1|Value1||Field2|Value2` segment.
      */
     private createCompositeKey(entityInfo: EntityInfo, id: string): CompositeKey {
-        if (entityInfo.PrimaryKeys.length === 1) {
-            // Single primary key
-            const primaryKeyField = entityInfo.PrimaryKeys[0].Name;
-            const compositeKey = new CompositeKey();
-            
-            // Use key-value pairs instead of SetValue
-            compositeKey.KeyValuePairs = [
-                { FieldName: primaryKeyField, Value: id }
-            ];
-            
-            return compositeKey;
-        } else {
-            // Composite primary key
-            // This is a simplification - in a real implementation, we would need to handle composite keys properly
-            throw new Error('Composite primary keys are not supported in this implementation');
-        }
+        return CompositeKey.FromURLSegment(entityInfo, id);
     }
 
     /**
      * Get the Express router with all configured routes
      */
-    public getRouter(): express.Router {
+    public GetRouter(): express.Router {
         return this.router;
+    }
+
+    /** @deprecated Use {@link GetRouter}. */
+    public getRouter(): express.Router {
+        return this.GetRouter();
     }
 }

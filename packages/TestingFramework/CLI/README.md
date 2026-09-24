@@ -183,4 +183,4 @@ Configuration includes database connection settings for the MJ Provider.
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.

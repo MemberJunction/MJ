@@ -1,16 +1,55 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
-import { FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { EntityFieldExtendedType, FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { SafeJSONParse } from "@memberjunction/global";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { CodeGenReporter } from "./codegen-reporter";
-import { normalizeSmartFieldResultShape } from "../Database/search-guardrails";
+import { NormalizeSmartFieldResultShape } from "../Database/search-guardrails";
 
-export type EntityNameResult = { entityName: string, tableName: string }
-export type EntityDescriptionResult = { entityDescription: string, tableName: string }
+export type EntityNameResult = { entityName: string, tableName: string }  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+export type EntityDescriptionResult = { entityDescription: string, tableName: string }  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
+
+/** Width of `Entity.Name`; a candidate longer than this cannot be inserted. */
+const MAX_ENTITY_NAME_LENGTH = 255;
+
+/**
+ * Tokens a model returns in place of a name when it has no answer. Compared case-insensitively
+ * against the trimmed candidate.
+ */
+const NON_NAME_SENTINELS: ReadonlySet<string> = new Set([
+    'null', 'undefined', 'none', 'n/a', 'na', 'error', 'unknown', 'entityname', 'entity name'
+]);
+
+/**
+ * True when `candidate` could plausibly be an entity name: a non-empty string that fits the column,
+ * contains at least one run of two letters, and is not a bare non-answer token.
+ *
+ * Exists because a model can — and did — answer the entity-name prompt with `-1`. Nothing between the
+ * prompt and the INSERT questioned it: the name became `-1`, the INSERT failed on the metadata
+ * constraints, the failure was logged and swallowed, and CodeGen carried on reporting success with the
+ * table silently absent. Eleven of twenty-seven tables vanished from one connector that way.
+ */
+export function IsPlausibleEntityName(candidate: unknown): candidate is string {
+    if (typeof candidate !== 'string') {
+        return false;
+    }
+    const name = candidate.trim();
+    if (name.length === 0 || name.length > MAX_ENTITY_NAME_LENGTH) {
+        return false;
+    }
+    if (NON_NAME_SENTINELS.has(name.toLowerCase())) {
+        return false;
+    }
+    return /[A-Za-z]{2,}/.test(name);
+}
+
+/** @deprecated Use {@link IsPlausibleEntityName}. */
+export function isPlausibleEntityName(candidate: unknown): candidate is string {
+    return IsPlausibleEntityName(candidate);
+}
 
 export type SmartFieldIdentificationResult = {
     /**
@@ -25,45 +64,45 @@ export type SmartFieldIdentificationResult = {
      * Composite display names are NOT implemented downstream; treat extra entries as
      * fallback candidates, not as a concatenation recipe.
      */
-    nameFields: string[];
-    nameFieldsReason: string;
-    defaultInView: string[];
-    defaultInViewReason: string;
-    searchableFields: string[];
-    searchableFieldsReason: string;
+    nameFields: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    nameFieldsReason: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    defaultInView: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    defaultInViewReason: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    searchableFields: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    searchableFieldsReason: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether this entity should be searchable by users via the search API */
-    allowUserSearch?: boolean;
-    allowUserSearchReason?: string;
+    allowUserSearch?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    allowUserSearchReason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Per-field search predicate recommendations (BeginsWith, Contains, EndsWith, Exact) */
-    searchPredicates?: Array<{ field: string; predicate: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact' }>;
-    searchPredicatesReason?: string;
+    searchPredicates?: Array<{ field: string; predicate: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact' }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    searchPredicatesReason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether full-text search should be enabled for this entity */
-    enableFullTextSearch?: boolean;
+    enableFullTextSearch?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Which fields should be included in the full-text search index */
-    fullTextSearchFields?: string[];
-    fullTextSearchReason?: string;
-    confidence: 'high' | 'medium' | 'low';
+    fullTextSearchFields?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    fullTextSearchReason?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    confidence: 'high' | 'medium' | 'low';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export type TransitiveJoinResult = {
-    isJunctionTable: boolean;
-    reason: string;
-    additionalFields: Array<{
-        fieldName: string;
-        fieldType: 'virtual' | 'existing';
-        includeInView: boolean;
-        displayFields?: string[];
-        reason: string;
+    isJunctionTable: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    reason: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    additionalFields: Array<{  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        fieldName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        fieldType: 'virtual' | 'existing';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        includeInView: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        displayFields?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        reason: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     }>;
-    confidence: 'high' | 'medium' | 'low';
+    confidence: 'high' | 'medium' | 'low';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export type EntityImportanceInfo = {
-    defaultForNewUser: boolean;
-    entityCategory: 'primary' | 'supporting' | 'reference' | 'junction' | 'system';
-    confidence: 'high' | 'medium' | 'low';
-    reasoning: string;
-    recommendedSequence?: number;
+    defaultForNewUser: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    entityCategory: 'primary' | 'supporting' | 'reference' | 'junction' | 'system';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    confidence: 'high' | 'medium' | 'low';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    reasoning: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    recommendedSequence?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -71,43 +110,43 @@ export type EntityImportanceInfo = {
  * Identifies PKs, FKs, field descriptions, and category assignments for constraint-less views.
  */
 export type VirtualEntityDecorationResult = {
-    primaryKeys: string[];
-    foreignKeys: Array<{
-        fieldName: string;
-        relatedEntityName: string;
-        relatedFieldName: string;
-        confidence: 'high' | 'medium' | 'low';
+    primaryKeys: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    foreignKeys: Array<{  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        fieldName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        relatedEntityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        relatedFieldName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        confidence: 'high' | 'medium' | 'low';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     }>;
-    fieldDescriptions: Array<{
-        fieldName: string;
-        description: string;
-        extendedType: string | null;
-        category: string | null;
-        displayName: string | null;
-        codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
+    fieldDescriptions: Array<{  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        fieldName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        description: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        extendedType: EntityFieldExtendedType | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        category: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        displayName: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     }>;
     /** Font Awesome icon class for the entity (e.g. "fa-solid fa-chart-line") */
-    entityIcon?: string;
+    entityIcon?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Per-category icon + description */
-    categoryInfo?: Record<string, FieldCategoryInfo>;
-    reasoning: string;
+    categoryInfo?: Record<string, FieldCategoryInfo>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    reasoning: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export type FormLayoutResult = {
-    entityIcon?: string;
-    fieldCategories: Array<{
-        fieldName: string;
-        category: string;
-        reason: string;
-        displayName: string;
-        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince' | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
-        codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
+    entityIcon?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    fieldCategories: Array<{  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        fieldName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        category: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        reason: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        displayName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        extendedType: EntityFieldExtendedType | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+        codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     }>;
     /** @deprecated Use categoryInfo instead */
     categoryIcons?: Record<string, string>;
     /** New format: category name -> { icon, description } */
-    categoryInfo?: Record<string, FieldCategoryInfo>;
-    entityImportance?: EntityImportanceInfo;
+    categoryInfo?: Record<string, FieldCategoryInfo>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    entityImportance?: EntityImportanceInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -130,8 +169,13 @@ export class AdvancedGeneration {
         this._promptRunner = new AIPromptRunner();
     }
 
-    public get enabled(): boolean {
+    public get Enabled(): boolean {
         return configInfo.advancedGeneration?.enableAdvancedGeneration ?? false;
+    }
+
+    /** @deprecated Use {@link Enabled}. */
+    public get enabled(): boolean {
+        return this.Enabled;
     }
 
     /**
@@ -190,23 +234,33 @@ export class AdvancedGeneration {
         }
     }
 
-    public features(): AdvancedGenerationFeature[] | undefined {
+    public Features(): AdvancedGenerationFeature[] | undefined {
         return configInfo.advancedGeneration?.features;
     }
 
-    public getFeature(featureName: string): AdvancedGenerationFeature | undefined {
-        return this.features()?.find(f => f.name === featureName);
+    /** @deprecated Use {@link Features}. */
+    public features(): AdvancedGenerationFeature[] | undefined {
+        return this.Features();
     }
 
-    public featureEnabled(featureName: string): boolean {
-        return this.enabled && this.getFeature(featureName)?.enabled === true;
+    public GetFeature(featureName: string): AdvancedGenerationFeature | undefined {
+        return this.Features()?.find(f => f.name === featureName);
+    }
+
+    /** @deprecated Use {@link GetFeature}. */
+    public getFeature(featureName: string): AdvancedGenerationFeature | undefined {
+        return this.GetFeature(featureName);
+    }
+
+    public featureEnabled(featureName: string): boolean {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
+        return this.Enabled && this.GetFeature(featureName)?.enabled === true;
     }
 
     /**
      * Load a prompt by name from metadata.
      * Prompts include their model configuration via the MJ: AI Prompt Models relationship.
      */
-    private async getPromptEntity(promptName: string, contextUser: UserInfo): Promise<MJAIPromptEntityExtended> {
+    protected async getPromptEntity(promptName: string, contextUser: UserInfo): Promise<MJAIPromptEntityExtended> {
         const prompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === promptName?.trim().toLowerCase());
 
         if (!prompt) {
@@ -220,7 +274,7 @@ export class AdvancedGeneration {
      * Execute a prompt using AIPromptRunner.
      * Model selection and failover is handled automatically by the prompt's configuration.
      */
-    private async executePrompt<T>(
+    protected async executePrompt<T>(
         params: AIPromptParams
     ): Promise<AIPromptRunResult<T>> {
         // Defense-in-depth: once the credential circuit is open, skip the round-trip entirely.
@@ -281,7 +335,7 @@ export class AdvancedGeneration {
     /**
      * Smart Field Identification - determine name field and default in view
      */
-    public async identifyFields(
+    public async identifyFields(  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         entity: any,
         contextUser: UserInfo
     ): Promise<SmartFieldIdentificationResult | null> {
@@ -342,7 +396,7 @@ export class AdvancedGeneration {
                 // with allowUserSearch=true). The full code-level guardrail pipeline runs
                 // in ManageMetadataBase.normalizeSearchFlagsInPlace; this is just the
                 // first-pass cleanup so any caller of identifyFields() gets a coherent result.
-                return normalizeSmartFieldResultShape(r);
+                return NormalizeSmartFieldResultShape(r);
             } else {
                 LogError(`AdvancedGeneration:Smart field identification failed or returned a non-object result: ${result.errorMessage ?? `got ${typeof result.result}`}`);
                 return null;
@@ -356,7 +410,7 @@ export class AdvancedGeneration {
     /**
      * Transitive Join Intelligence - detect junction tables and recommend additional fields
      */
-    public async analyzeTransitiveJoin(
+    public async AnalyzeTransitiveJoin(
         sourceEntity: any,
         targetEntity: any,
         contextUser: UserInfo
@@ -402,6 +456,15 @@ export class AdvancedGeneration {
             LogError(`AdvancedGeneration:Error in analyzeTransitiveJoin: ${error}`);
             return null;
         }
+    }
+
+    /** @deprecated Use {@link AnalyzeTransitiveJoin}. */
+    public async analyzeTransitiveJoin(
+        sourceEntity: any,
+        targetEntity: any,
+        contextUser: UserInfo
+    ): Promise<TransitiveJoinResult | null> {
+        return this.AnalyzeTransitiveJoin(sourceEntity, targetEntity, contextUser);
     }
 
     /**
@@ -479,7 +542,7 @@ export class AdvancedGeneration {
      * @param contextUser The user context
      * @param isNewEntity If true, this is a newly created entity; if false, entityImportance will be ignored
      */
-    public async generateFormLayout(
+    public async generateFormLayout(  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
         entity: any,
         contextUser: UserInfo,
         isNewEntity: boolean = false
@@ -500,23 +563,31 @@ export class AdvancedGeneration {
             const isChildEntity = entity.IsChildEntity === true && parentChain.length > 0;
 
             // Map fields with FK flag for statistics calculation
-            const mappedFields = entity.Fields.map((f: any) => ({
-                Name: f.Name,
-                Type: f.Type,
-                IsNullable: f.AllowsNull,
-                IsPrimaryKey: f.IsPrimaryKey,
-                IsForeignKey: f.EntityIDFieldName != null,
-                RelatedEntity: f.RelatedEntity,
-                Description: f.Description,
-                // Include existing category information for ALL fields
-                ExistingCategory: f.Category || null,
-                // HasExistingCategory=true means locked (don't update), false means can update
-                HasExistingCategory: !f.AutoUpdateCategory && f.Category != null,
-                IsNewField: f.AutoUpdateCategory === true && !f.Category,
-                // IS-A inheritance: which parent entity this field was inherited from (null if own field)
-                InheritedFromEntityName: f.InheritedFromEntityName || null,
-                InheritedFromEntityID: f.InheritedFromEntityID || null
-            }));
+            const mappedFields = entity.Fields.map((f: Record<string, unknown>) => {
+                const hasCategory = f.Category != null && String(f.Category).trim().length > 0;
+                const isNewField = f.IsNew === true;
+                const categoryLocked = !isNewEntity && !isNewField && hasCategory; // §3.2 row 1, mirrored for the prompt
+                const reviewOnly = categoryLocked && (f.DescriptionReopened === true || f.TypeReopened === true); // §3.4
+                return {
+                    Name: f.Name,
+                    Type: f.Type,
+                    IsNullable: f.AllowsNull,
+                    IsPrimaryKey: f.IsPrimaryKey,
+                    IsForeignKey: f.EntityIDFieldName != null,
+                    RelatedEntity: f.RelatedEntity,
+                    Description: f.Description,
+                    // Include existing category information for ALL fields
+                    ExistingCategory: hasCategory ? (f.Category as string) : null,
+                    // HasExistingCategory=true means locked (don't update), false means can update
+                    HasExistingCategory: categoryLocked || !f.AutoUpdateCategory,
+                    IsNewField: isNewEntity || isNewField,
+                    ReviewDisplayName: reviewOnly && f.DescriptionReopened === true,
+                    ReviewExtendedType: reviewOnly && f.TypeReopened === true,
+                    // IS-A inheritance: which parent entity this field was inherited from (null if own field)
+                    InheritedFromEntityName: f.InheritedFromEntityName || null,
+                    InheritedFromEntityID: f.InheritedFromEntityID || null
+                };
+            });
 
             // Calculate FK statistics for entity importance analysis
             const fkStats = this.calculateFkStatistics(mappedFields);
@@ -538,7 +609,8 @@ export class AdvancedGeneration {
                 existingCategories: existingInfo.categories,
                 fieldsByCategory: existingInfo.fieldsByCategory,
                 hasExistingCategories: hasExistingCategories,
-                // Pass existing category info (icons + descriptions) so LLM can reference them
+                // Pass both existingCategoryInfo and existingFieldCategoryInfo (FM2)
+                existingCategoryInfo: existingInfo.categoryInfo || {},
                 existingFieldCategoryInfo: existingInfo.categoryInfo || {},
                 // Flag to tell LLM whether to bother with entityImportance
                 isExistingEntity: !isNewEntity,
@@ -559,13 +631,15 @@ export class AdvancedGeneration {
                 // Merge category info - preserve ALL existing categories, only add new ones
                 if (existingInfo.categoryInfo) {
                     const newFieldCategoryInfo = result.result.categoryInfo || {};
-                    result.result.categoryInfo = {
-                        ...newFieldCategoryInfo  // Only new categories from LLM
+                    const mergedCategoryInfo: Record<string, FieldCategoryInfo> = {
+                        ...existingInfo.categoryInfo
                     };
-                    // Preserve existing - don't let LLM overwrite
-                    for (const [category, info] of Object.entries(existingInfo.categoryInfo)) {
-                        result.result.categoryInfo[category] = info;
+                    for (const [category, info] of Object.entries(newFieldCategoryInfo)) {
+                        if (!mergedCategoryInfo[category]) {
+                            mergedCategoryInfo[category] = info;
+                        }
                     }
+                    result.result.categoryInfo = mergedCategoryInfo;
                 }
 
                 // Handle legacy categoryIcons format for backwards compatibility
@@ -606,7 +680,7 @@ export class AdvancedGeneration {
     /**
      * Generate entity name from table name
      */
-    public async generateEntityName(
+    public async GenerateEntityName(
         tableName: string,
         contextUser: UserInfo
     ): Promise<EntityNameResult | null> {
@@ -625,6 +699,10 @@ export class AdvancedGeneration {
             const result = await this.executePrompt<EntityNameResult>(params);
 
             if (result.success && result.result) {
+                if (!IsPlausibleEntityName(result.result.entityName)) {
+                    LogError(`AdvancedGeneration:Entity name generation for ${tableName} returned ${JSON.stringify(result.result.entityName)}, which is not a name; the table-derived name will be used instead`);
+                    return null;
+                }
                 LogStatus(`Entity name generated for ${tableName}: ${result.result.entityName}`);
                 return result.result;
             } else {
@@ -637,10 +715,18 @@ export class AdvancedGeneration {
         }
     }
 
+    /** @deprecated Use {@link GenerateEntityName}. */
+    public async generateEntityName(
+        tableName: string,
+        contextUser: UserInfo
+    ): Promise<EntityNameResult | null> {
+        return this.GenerateEntityName(tableName, contextUser);
+    }
+
     /**
      * Generate entity description
      */
-    public async generateEntityDescription(
+    public async GenerateEntityDescription(
         entityName: string,
         tableName: string,
         fields: Array<{Name: string, Type: string}>,
@@ -673,10 +759,20 @@ export class AdvancedGeneration {
         }
     }
 
+    /** @deprecated Use {@link GenerateEntityDescription}. */
+    public async generateEntityDescription(
+        entityName: string,
+        tableName: string,
+        fields: Array<{Name: string, Type: string}>,
+        contextUser: UserInfo
+    ): Promise<EntityDescriptionResult | null> {
+        return this.GenerateEntityDescription(entityName, tableName, fields, contextUser);
+    }
+
     /**
      * Parse CHECK constraint and generate TypeScript validation method
      */
-    public async parseCheckConstraint(
+    public async ParseCheckConstraint(
         constraintText: string,
         entityFieldList: string,
         existingMethodName: string | null,
@@ -723,6 +819,16 @@ export class AdvancedGeneration {
         }
     }
 
+    /** @deprecated Use {@link ParseCheckConstraint}. */
+    public async parseCheckConstraint(
+        constraintText: string,
+        entityFieldList: string,
+        existingMethodName: string | null,
+        contextUser: UserInfo
+    ): Promise<CheckConstraintParserResult | null> {
+        return this.ParseCheckConstraint(constraintText, entityFieldList, existingMethodName, contextUser);
+    }
+
     /**
      * Decorates virtual entity fields using LLM analysis of the view definition.
      * Identifies primary keys, foreign keys, generates field descriptions,
@@ -739,7 +845,7 @@ export class AdvancedGeneration {
      * @param contextUser The context user for AI operations
      * @returns Decoration result or null if feature disabled or LLM call fails
      */
-    public async decorateVirtualEntityFields(
+    public async DecorateVirtualEntityFields(
         entityName: string,
         schemaName: string,
         viewName: string,
@@ -808,5 +914,43 @@ export class AdvancedGeneration {
             LogError(`AdvancedGeneration:Error in decorateVirtualEntityFields for ${entityName}: ${error}`);
             return null;
         }
+    }
+
+    /** @deprecated Use {@link DecorateVirtualEntityFields}. */
+    public async decorateVirtualEntityFields(
+        entityName: string,
+        schemaName: string,
+        viewName: string,
+        viewDefinition: string,
+        entityDescription: string,
+        fields: Array<{
+            Name: string;
+            Type: string;
+            Length: number;
+            AllowsNull: boolean;
+            IsPrimaryKey: boolean;
+            RelatedEntityName: string | null;
+        }>,
+        availableEntities: Array<{
+            Name: string;
+            SchemaName: string;
+            BaseTable: string;
+            PrimaryKeyField: string;
+        }>,
+        sourceEntities: Array<{
+            Name: string;
+            Description: string;
+            Fields: Array<{
+                Name: string;
+                Type: string;
+                Description: string;
+                Category: string | null;
+                IsPrimaryKey: boolean;
+                IsForeignKey: boolean;
+            }>;
+        }>,
+        contextUser: UserInfo
+    ): Promise<VirtualEntityDecorationResult | null> {
+        return this.DecorateVirtualEntityFields(entityName, schemaName, viewName, viewDefinition, entityDescription, fields, availableEntities, sourceEntities, contextUser);
     }
 }

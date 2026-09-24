@@ -1,5 +1,5 @@
 import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual } from "@memberjunction/global";
+import { ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
@@ -661,15 +661,15 @@ export class AgentContextInjector {
                 }
 
                 // Tie-breaker: most recent first
-                const dateA = a.__mj_CreatedAt?.getTime() ?? 0;
-                const dateB = b.__mj_CreatedAt?.getTime() ?? 0;
+                const dateA = ToEpochMs(a.__mj_CreatedAt);
+                const dateB = ToEpochMs(b.__mj_CreatedAt);
                 return dateB - dateA;
             });
         } else {
             // 'Recent' strategy (or default): sort by creation date DESC
             sorted.sort((a, b) => {
-                const dateA = a.__mj_CreatedAt?.getTime() ?? 0;
-                const dateB = b.__mj_CreatedAt?.getTime() ?? 0;
+                const dateA = ToEpochMs(a.__mj_CreatedAt);
+                const dateB = ToEpochMs(b.__mj_CreatedAt);
                 return dateB - dateA;
             });
         }
@@ -705,8 +705,8 @@ export class AgentContextInjector {
 
         if (strategy === 'Recent') {
             sorted.sort((a, b) => {
-                const dateA = a.__mj_CreatedAt?.getTime() ?? 0;
-                const dateB = b.__mj_CreatedAt?.getTime() ?? 0;
+                const dateA = ToEpochMs(a.__mj_CreatedAt);
+                const dateB = ToEpochMs(b.__mj_CreatedAt);
                 return dateB - dateA;
             });
             return sorted;
@@ -720,8 +720,8 @@ export class AgentContextInjector {
                 return priorityA - priorityB;
             }
 
-            const dateA = a.__mj_CreatedAt?.getTime() ?? 0;
-            const dateB = b.__mj_CreatedAt?.getTime() ?? 0;
+            const dateA = ToEpochMs(a.__mj_CreatedAt);
+            const dateB = ToEpochMs(b.__mj_CreatedAt);
             return dateB - dateA;
         });
 

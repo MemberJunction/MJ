@@ -1,0 +1,50 @@
+<div class="claim-redeem-container">
+    <div class="claim-redeem-card">
+        <!-- Loading State -->
+        @if (IsLoading) {
+            <div class="claim-status loading">
+                <mj-loading text="{{ StatusMessage }}"></mj-loading>
+            </div>
+        }
+
+        <!-- Error State -->
+        @if (HasError) {
+            <div class="claim-status error">
+                <div class="icon-container error-icon">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                </div>
+                <h2>{{ NeedsSignIn ? 'Sign In Required' : 'Claim Not Redeemed' }}</h2>
+                <p class="error-message">{{ ErrorMessage }}</p>
+                <div class="button-group">
+                    @if (!NeedsSignIn) {
+                        <button mjButton variant="secondary" (click)="onRetry()">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            Try Again
+                        </button>
+                    }
+                    <button mjButton [variant]="NeedsSignIn ? 'primary' : 'outline'" (click)="onGoToApp()">
+                        <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                        {{ NeedsSignIn ? 'Go to Sign In' : 'Open the App' }}
+                    </button>
+                </div>
+            </div>
+        }
+
+        <!-- Success State -->
+        @if (!IsLoading && !HasError) {
+            <div class="claim-status success">
+                <div class="icon-container success-icon">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <h2>Claim Redeemed</h2>
+                <p>{{ StatusMessage }}</p>
+                <div class="button-group">
+                    <button mjButton variant="primary" (click)="onGoToApp()">
+                        <i class="fa-solid fa-house"></i>
+                        Open the App
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+</div>

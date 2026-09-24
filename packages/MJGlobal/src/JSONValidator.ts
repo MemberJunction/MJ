@@ -98,7 +98,7 @@ export class JSONValidator {
      * @param path - The current path in the object hierarchy (used internally)
      * @returns ValidationResult with Success flag and any validation errors
      */
-    public validate(
+    public Validate(
         data: unknown,
         template: unknown,
         path: string = ''
@@ -109,6 +109,15 @@ export class JSONValidator {
             Success: errors.length === 0,
             Errors: errors
         };
+    }
+
+    /** @deprecated Use {@link Validate}. */
+    public validate(
+        data: unknown,
+        template: unknown,
+        path: string = ''
+    ): ValidationResult {
+        return this.Validate(data, template, path);
     }
 
     /**
@@ -454,13 +463,13 @@ export class JSONValidator {
      * @param schemaJson - JSON string containing the validation schema
      * @returns ValidationResult with Success flag and any validation errors
      */
-    public validateAgainstSchema(
+    public ValidateAgainstSchema(
         data: unknown,
         schemaJson: string
     ): ValidationResult {
         try {
             const schema = JSON.parse(schemaJson);
-            return this.validate(data, schema);
+            return this.Validate(data, schema);
         } catch (parseError) {
             const errorMessage = parseError instanceof Error ? parseError.message : String(parseError);
             return {
@@ -475,6 +484,14 @@ export class JSONValidator {
                 ]
             };
         }
+    }
+
+    /** @deprecated Use {@link ValidateAgainstSchema}. */
+    public validateAgainstSchema(
+        data: unknown,
+        schemaJson: string
+    ): ValidationResult {
+        return this.ValidateAgainstSchema(data, schemaJson);
     }
 
     /**
@@ -506,7 +523,7 @@ export class JSONValidator {
      * @param data - The JSON data to clean
      * @returns A new object with cleaned keys, typed as T
      */
-    public cleanValidationSyntax<T>(data: unknown): T {
+    public CleanValidationSyntax<T>(data: unknown): T {
         // Handle non-objects
         if (data === null || data === undefined) {
             return data as T;
@@ -514,7 +531,7 @@ export class JSONValidator {
 
         if (Array.isArray(data)) {
             // Recursively clean array elements
-            return data.map(item => this.cleanValidationSyntax(item)) as T;
+            return data.map(item => this.CleanValidationSyntax(item)) as T;
         }
 
         if (typeof data !== 'object') {
@@ -531,12 +548,17 @@ export class JSONValidator {
             const parsed = this.parseFieldKey(key);
             
             // Recursively clean the value
-            const cleanedValue = this.cleanValidationSyntax(value);
+            const cleanedValue = this.CleanValidationSyntax(value);
             
             // Use the clean field name as the key
             cleaned[parsed.fieldName] = cleanedValue;
         }
 
         return cleaned as T;
+    }
+
+    /** @deprecated Use {@link CleanValidationSyntax}. */
+    public cleanValidationSyntax<T>(data: unknown): T {
+        return this.CleanValidationSyntax(data);
     }
 }

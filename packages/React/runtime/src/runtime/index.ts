@@ -4,31 +4,31 @@
  */
 
 export {
-  createErrorBoundary,
-  withErrorBoundary,
-  formatComponentError,
-  createErrorLogger
+  CreateErrorBoundary, createErrorBoundary,
+  WithErrorBoundary, withErrorBoundary,
+  FormatComponentError, formatComponentError,
+  CreateErrorLogger, createErrorLogger
 } from './error-boundary';
 
 
 export {
-  buildComponentProps,
-  normalizeCallbacks,
-  normalizeStyles,
-  validateComponentProps,
-  mergeProps,
-  createPropsTransformer,
-  wrapCallbacksWithLogging,
-  extractPropPaths,
+  BuildComponentProps, buildComponentProps,
+  NormalizeCallbacks, normalizeCallbacks,
+  NormalizeStyles, normalizeStyles,
+  ValidateComponentProps, validateComponentProps,
+  MergeProps, mergeProps,
+  CreatePropsTransformer, createPropsTransformer,
+  WrapCallbacksWithLogging, wrapCallbacksWithLogging,
+  ExtractPropPaths, extractPropPaths,
   PropBuilderOptions
 } from './prop-builder';
 
 export {
   ComponentHierarchyRegistrar,
-  registerComponentHierarchy,
-  validateComponentSpec,
-  flattenComponentHierarchy,
-  countComponentsInHierarchy,
+  RegisterComponentHierarchy, registerComponentHierarchy,
+  ValidateComponentSpec, validateComponentSpec,
+  FlattenComponentHierarchy, flattenComponentHierarchy,
+  CountComponentsInHierarchy, countComponentsInHierarchy,
   HierarchyRegistrationResult,
   ComponentRegistrationError,
   HierarchyRegistrationOptions

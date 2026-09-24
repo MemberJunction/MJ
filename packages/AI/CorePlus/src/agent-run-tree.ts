@@ -170,6 +170,20 @@ export type AgentRunTreeRow = {
      */
     SourceKind: string | null;
     SourceID: string;
+
+    /**
+     * WHAT this node runs, as ids a consumer resolves from a cache rather than another query.
+     *
+     * `ActionID` comes from the TASK where there is one, so it is present even for a step that was
+     * SKIPPED — a branch not taken still knows which action it would have run, which the execution
+     * log cannot say because no log exists. For a loop's passes, whose identity is the log itself,
+     * it comes from that log.
+     *
+     * Null on anything that runs neither: a run, a prompt step, a graph container.
+     */
+    ActionID: string | null;
+    /** The agent a task delegates to, for the same reason and from the same place. */
+    AgentID: string | null;
 };
 
 /** A node with its children resolved. What consumers actually work with. */

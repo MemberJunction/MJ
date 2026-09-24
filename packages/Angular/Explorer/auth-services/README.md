@@ -38,6 +38,57 @@ graph TD
 - **Observable State**: Reactive authentication state, user info, and email streams
 - **Configuration Validation**: Each provider declares and validates its required configuration
 - **Angular 21+ Compatible**: Built for modern Angular applications
+- **Metadata-driven provider catalog**: the server publishes its configured providers pre-auth, and the app resolves which one to bootstrap from that catalog (falling back to `AUTH_TYPE`)
+- **Multi-IdP login picker**: reusable, app-agnostic `<mj-login-picker>` rendered when 2+ providers are available
+
+## Metadata-driven providers and the login picker
+
+The server can define providers as data (`MJ: Authentication Providers`) and publishes the
+non-secret subset at `GET /auth/providers`. The browser reads that **before login** and decides
+which provider to wire into DI.
+
+**Bootstrap.** `AuthServicesModule.forRoot()` runs at module-definition time, so the catalog must
+be fetched before the root module is imported:
+
+```typescript
+// main.ts
+await AuthProviderCatalog.Preload(environment.GRAPHQL_URI);
+const { AppModule } = await import('./app/app.module');   // dynamic import is REQUIRED — see below
+platformBrowserDynamic().bootstrapModule(AppModule);
+```
+
+The dynamic import is not stylistic: a static import is hoisted and would evaluate `AppModule`
+(and `forRoot`) before the `await`, making the preload pointless. `forRoot()` reads the preload
+itself — do **not** pass `AuthProviderCatalog.GetPreloaded()` as an argument, because Angular's
+compiler rejects a function call in an `imports` array (`Value could not be determined statically`).
+
+`Preload` never rejects. A 404 (older server), a network failure or a malformed body all yield an
+empty catalog, and resolution falls back to `environment.AUTH_TYPE` — behaviour identical to before
+the catalog existed.
+
+**Rendering the picker.** Inject `MJ_AUTH_PROVIDER_RESOLUTION` and embed the shared component in
+your own login surface:
+
+```html
+@if (resolution.showPicker) {
+  <mj-login-picker [Providers]="resolution.choices" [Busy]="SigningIn"
+                   (ProviderSelected)="OnProviderSelected($event)"></mj-login-picker>
+}
+```
+
+`showPicker` is true only with 2+ providers — one option is not a choice, so single-provider
+deployments render exactly as they always have.
+
+**Switching providers reloads the page**, by necessity: each browser SDK contributes Angular
+providers (interceptors, guards, config tokens) at module-definition time, so a live injector
+cannot be re-composed. `AuthProviderCatalog.Select()` reports whether a reload is needed — choosing
+the already-active provider logs in immediately; choosing another persists the choice, reloads, and
+resumes login automatically.
+
+**Catalog → driver config.** A row's values are projected onto the prefixed environment keys the
+drivers already read (`AUTH0_DOMAIN`, `WORKOS_CLIENTID`, …), which covers Auth0/Okta/Cognito/WorkOS
+with no per-driver code. A driver that reads different keys (MSAL uses unprefixed `CLIENT_ID` /
+`CLIENT_AUTHORITY`) supplies a static `EnvironmentFromCatalog(info)` and maps the row itself.
 
 ## Installation
 
@@ -176,6 +227,12 @@ try {
 | `AuthErrorType` | Enum | Semantic error categories |
 | `TokenRefreshResult` | Interface | Token refresh operation result |
 | `AuthState` | Interface | Complete authentication state snapshot |
+| `AuthProviderCatalog` | Class (static) | Pre-auth catalog fetch, provider resolution, and selection persistence |
+| `AuthProviderResolution` | Interface | Which provider this page load bootstrapped, the choices, and whether to show the picker |
+| `MJ_AUTH_PROVIDER_RESOLUTION` | InjectionToken | The resolution, for login surfaces |
+| `MJLoginPickerComponent` | Component | Reusable `<mj-login-picker>` multi-IdP picker |
+| `CatalogEnvironmentMapper` | Interface | Optional `EnvironmentFromCatalog` static for drivers with non-conventional keys |
+| `mergeCatalogEnvironment` | Function | Projects a catalog row onto a driver's environment keys |
 
 ## Build
 
@@ -185,4 +242,4 @@ cd packages/Angular/Explorer/auth-services && npm run build
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

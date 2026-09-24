@@ -23,28 +23,123 @@ import { LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import type { FileStorageBase, ByteRange } from '@memberjunction/storage';
-import { getSystemUser } from '../auth/index.js';
+import { GetSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
-import { parseRange, parseRangeHeaderLoose } from './mediaRange.js';
+import { UploadTokenManager } from './UploadTokenManager.js';
+import { ParseRange, ParseRangeHeaderLoose } from './mediaRange.js';
 
 /** A located bytes source for a file: the driver + the provider key to read. */
 interface FileBytesSource {
   driver: FileStorageBase;
   providerKey: string;
   contentType: string;
+  fileName: string;
 }
 
-
 /**
- * Builds the Express router exposing `GET /media/:fileId`. Stateless — verification
- * and byte-source resolution happen per request.
+ * Builds the Express router exposing:
+ * - `GET /media/:fileId` and `GET /media/:fileId/:filename` (Range streaming)
+ * - `POST /media/upload-stage` (Raw binary upload staging)
  */
-export function createMediaStreamRouter(): Router {
+export function CreateMediaStreamRouter(): Router {
   const router = express.Router();
+
+  router.post(
+    '/upload-stage',
+    express.raw({ type: () => true, limit: '100mb' }),
+    async (req: Request, res: Response) => {
+      await handleUploadStageRequest(req, res);
+    }
+  );
+
   router.get('/:fileId', async (req: Request, res: Response) => {
     await handleMediaRequest(req, res);
   });
+  router.get('/:fileId/:filename', async (req: Request, res: Response) => {
+    await handleMediaRequest(req, res);
+  });
   return router;
+}
+
+/** @deprecated Use {@link CreateMediaStreamRouter}. */
+export function createMediaStreamRouter(): Router {
+  return CreateMediaStreamRouter();
+}
+
+/**
+ * Authenticated raw binary upload staging handler (`POST /media/upload-stage`).
+ *
+ * Accepts raw file binary bytes directly in request body, stages in UploadTokenManager
+ * memory cache, and returns an ephemeral single-use upload token for the GraphQL mutation.
+ *
+ * Security: Requires a cryptographically signed media-upload token minted by `CreateUploadStageToken`
+ * (verified via `MediaAccessKeyManager.Instance.VerifyUpload`).
+ */
+async function handleUploadStageRequest(req: Request, res: Response): Promise<void> {
+  // Never let CDNs or shared caches retain upload endpoints
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  // 1. Resolve signed upload token strictly from Authorization header (avoids bearer token in URL logs)
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim();
+
+  if (!token) {
+    console.warn('[MediaStreamHandler] POST /media/upload-stage: Missing or empty Authorization header');
+    res.status(401).json({ Success: false, ErrorMessage: 'Authorization header with Bearer token required.' });
+    return;
+  }
+
+  // Cryptographically verify token signature, expiry, and 'media-upload' typ claim
+  const uploadVerify = MediaAccessKeyManager.Instance.VerifyUpload(token);
+  if (!uploadVerify.Valid || !uploadVerify.UserId) {
+    console.warn(`[MediaStreamHandler] POST /media/upload-stage: Token verification failed: ${uploadVerify.Error || 'invalid or expired'}`);
+    res.status(401).json({ Success: false, ErrorMessage: `Invalid or expired upload token: ${uploadVerify.Error || 'unauthorized'}` });
+    return;
+  }
+
+  const userId = uploadVerify.UserId;
+
+  // 2. Validate binary body
+  const buffer = req.body as Buffer;
+  if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+    res.status(400).json({ Success: false, ErrorMessage: 'Empty or invalid file payload.' });
+    return;
+  }
+
+  // 3. Extract and sanitize metadata
+  const rawFileName = (req.headers['x-file-name'] as string) || (req.query.fileName as string) || 'upload.bin';
+  let fileName = 'upload.bin';
+  try {
+    fileName = decodeURIComponent(rawFileName);
+  } catch {
+    fileName = rawFileName;
+  }
+  // Sanitize filename: remove directory traversal, leading slashes, control chars
+  fileName = fileName.replace(/[/\\]+/g, '_').replace(/^\.+/, '').replace(/[\x00-\x1f\x7f]/g, '').trim() || 'upload.bin';
+
+  const mimeType = (req.headers['content-type'] as string) || (req.query.mimeType as string) || 'application/octet-stream';
+
+  try {
+    const uploadToken = UploadTokenManager.Instance.Stage({
+      buffer,
+      fileName,
+      mimeType,
+      userId,
+    });
+
+    res.status(200).json({
+      Success: true,
+      UploadToken: uploadToken,
+      FileName: fileName,
+      MimeType: mimeType,
+      ContentLength: buffer.length,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    LogError(`[MediaStream] Upload staging failed for '${fileName}': ${message}`);
+    res.status(400).json({ Success: false, ErrorMessage: message });
+  }
 }
 
 /** Top-level request handler: verify token → resolve bytes → stream/buffer with Range support. */
@@ -106,15 +201,25 @@ function verifyMediaToken(token: string, fileId: string): { fileId: string; user
  * Returns null when the file row, its account, or its provider key can't be resolved
  * (→ 404). Mirrors `readRealtimeRecordingFile`'s account-resolution (engine config with
  * force-refresh fallback for newly-provisioned accounts).
+ *
+ * Each `null` return is LOGGED with which of those three distinct causes it was. The response
+ * stays a bare 404 (no body — the route must not describe server config to an unauthenticated
+ * caller), so the log is the only diagnostic there is; an unlogged 404 made a misconfigured
+ * provider indistinguishable from a deleted file.
  */
 async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource | null> {
-  const systemUser: UserInfo = await getSystemUser();
+  const systemUser: UserInfo = await GetSystemUser();
 
   // The /media route runs pre-auth on the server's own provider; access was already authorized
   // at token-mint time, so this load only locates the bytes.
   const md = new Metadata(); // global-provider-ok: pre-auth system-context route, no per-request provider
   const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', systemUser);
-  if (!await file.Load(fileId) || !file.ProviderKey) {
+  if (!await file.Load(fileId)) {
+    LogError(`[MediaStream] File ${fileId} could not be loaded (no such 'MJ: Files' row?) — responding 404.`);
+    return null;
+  }
+  if (!file.ProviderKey) {
+    LogError(`[MediaStream] File ${fileId} ('${file.Name}') has no ProviderKey, so its bytes cannot be located — responding 404.`);
     return null;
   }
 
@@ -128,6 +233,10 @@ async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource |
   }
   const account = accounts[0];
   if (!account) {
+    LogError(
+      `[MediaStream] File ${fileId} points at storage provider ${file.ProviderID}, which has no ` +
+        `'MJ: File Storage Accounts' row — nothing can read its bytes. Responding 404.`,
+    );
     return null;
   }
 
@@ -136,6 +245,7 @@ async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource |
     driver,
     providerKey: file.ProviderKey,
     contentType: file.ContentType ?? 'application/octet-stream',
+    fileName: file.Name || 'file',
   };
 }
 
@@ -156,7 +266,7 @@ async function streamOrBuffer(req: Request, res: Response, source: FileBytesSour
 
 /** True-streaming path: `GetObjectStream` + pipe, with 206 when a Range was honored. */
 async function serveViaStream(res: Response, source: FileBytesSource, rangeHeader: string | undefined): Promise<void> {
-  const range = rangeHeader ? parseRangeHeaderLoose(rangeHeader) : undefined;
+  const range = rangeHeader ? ParseRangeHeaderLoose(rangeHeader) : undefined;
   // Omit End for an open-ended range so the driver streams to EOF (per ByteRange semantics).
   const streamRange: ByteRange | undefined = range
     ? (range.end == null ? { Start: range.start } : { Start: range.start, End: range.end })
@@ -166,6 +276,8 @@ async function serveViaStream(res: Response, source: FileBytesSource, rangeHeade
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', result.ContentType ?? source.contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   if (result.ContentLength != null) {
     res.setHeader('Content-Length', String(result.ContentLength));
   }
@@ -198,6 +310,8 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
 
   res.setHeader('Accept-Ranges', 'bytes');
   res.setHeader('Content-Type', source.contentType);
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(source.fileName)}"`);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
 
   if (!rangeHeader) {
     res.status(200);
@@ -206,7 +320,7 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
     return;
   }
 
-  const range = parseRange(rangeHeader, total);
+  const range = ParseRange(rangeHeader, total);
   if (!range) {
     // Unsatisfiable range — per RFC 7233, 416 + Content-Range with the total size.
     res.setHeader('Content-Range', `bytes */${total}`);

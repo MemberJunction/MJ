@@ -11,12 +11,13 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (6 classes)
+// @memberjunction/ai-realtime-client (7 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
+    OpenAILiveClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
 } from '@memberjunction/ai-realtime-client';
@@ -32,13 +33,14 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (400 classes)
+// @memberjunction/core-entities (418 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -61,6 +63,7 @@ import {
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -91,10 +94,13 @@ import {
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -108,6 +114,7 @@ import {
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
+    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -147,6 +154,7 @@ import {
     MJArtifactVersionEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
@@ -200,6 +208,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -245,6 +254,7 @@ import {
     MJEntityEntityExtended,
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
+    MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
@@ -263,14 +273,19 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
     MJFileStorageAccountEntity,
     MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
+    MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -307,6 +322,8 @@ import {
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -333,6 +350,7 @@ import {
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -430,6 +448,7 @@ import {
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -454,12 +473,16 @@ import {
     MJEntityDocumentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
-// @memberjunction/ai-engine-base (4 classes)
+// @memberjunction/ai-engine-base (8 classes)
 import {
+    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
 } from '@memberjunction/ai-engine-base';
 
 // @memberjunction/communication-types (1 classes)
@@ -525,9 +548,24 @@ import {
     TimelineViewType,
 } from '@memberjunction/ng-entity-viewer';
 
-// @memberjunction/ng-core-entity-forms (20 classes)
+// @memberjunction/ng-core-entity-forms (50 classes)
 import {
+    AIAgentCategoryHeaderPanel,
+    AIAgentCategoryHierarchyPanel,
+    AIAgentCategoryOverviewPanel,
+    AIPromptCategoryHierarchyPanel,
+    ActionCategoryHierarchyPanel,
+    CompanyHeaderPanel,
+    CompanyOverviewPanel,
+    ContentItemHierarchyPanel,
+    ConversationHeaderPanel,
+    ConversationOverviewPanel,
+    DashboardCategoryHierarchyPanel,
+    EmployeeHeaderPanel,
+    EmployeeOverviewPanel,
+    FileCategoryHierarchyPanel,
     FlowAgentFormSectionComponent,
+    ListCategoryHierarchyPanel,
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
@@ -538,6 +576,7 @@ import {
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
+    MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
     MJTemplateFormComponentExtended,
@@ -547,6 +586,20 @@ import {
     MJTestRunFormComponentExtended,
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
+    MLModelFormComponentExtended,
+    MLModelFormPolicy,
+    ProjectHierarchyPanel,
+    QueryCategoryHierarchyPanel,
+    RecordProcessCategoryHierarchyPanel,
+    RecordProcessFormComponentExtended,
+    RecordProcessFormPolicy,
+    SkillHierarchyPanel,
+    TagHierarchyPanel,
+    TemplateCategoryHierarchyPanel,
+    TestSuiteHierarchyPanel,
+    UserHeaderPanel,
+    UserOverviewPanel,
+    UserViewCategoryHierarchyPanel,
 } from '@memberjunction/ng-core-entity-forms';
 
 // @memberjunction/ng-dashboard-viewer (8 classes)
@@ -586,13 +639,17 @@ import {
 /**
  * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
+ *
+ * Split into fixed-size chunks so no single array literal grows a union large
+ * enough to trip TS2590; the exported array is their concatenation.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CLASS_REGISTRATIONS: any[] = [
+const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
+    OpenAILiveClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SaveEntityGraphOperation,
@@ -603,6 +660,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -625,6 +683,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -655,10 +714,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -672,6 +734,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
+    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -711,6 +774,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJArtifactVersionEntity,
     MJAuditLogEntity,
     MJAuditLogTypeEntity,
+    MJAuthenticationProviderEntity,
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJClusterAnalysisClusterEntity,
@@ -764,6 +828,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -780,6 +845,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
@@ -809,6 +878,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityEntityExtended,
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
+    MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
@@ -827,14 +897,19 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
     MJFileStorageAccountEntity,
     MJFileStorageAccountPermissionEntity,
     MJFileStorageProviderEntity,
+    MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -871,6 +946,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMagicLinkInviteEntity,
     MJMagicLinkInviteRoleEntity,
     MJMagicLinkRedemptionEntity,
+    MJMaterializedResultEntity,
+    MJMaterializedResultQueryEntity,
     MJOAuthAuthServerMetadataCacheEntity,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
@@ -897,6 +974,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueueEntity,
     MJQueueTaskEntity,
     MJQueueTypeEntity,
+    MJRSUPendingWorkEntity,
     MJRecommendationEntity,
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
@@ -971,6 +1049,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJThemeEntity,
     MJUserApplicationEntity,
     MJUserApplicationEntityEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJUserEntity,
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
@@ -994,6 +1076,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1008,10 +1091,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
     MJEntityDocumentEntityExtended,
+    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
     MJCommunicationProviderEntityExtended,
     MJEntityCommunicationMessageTypeEntityExtended,
     AudioArtifactViewerComponent,
@@ -1047,7 +1134,22 @@ export const CLASS_REGISTRATIONS: any[] = [
     GridViewType,
     MapViewType,
     TimelineViewType,
+    AIAgentCategoryHeaderPanel,
+    AIAgentCategoryHierarchyPanel,
+    AIAgentCategoryOverviewPanel,
+    AIPromptCategoryHierarchyPanel,
+    ActionCategoryHierarchyPanel,
+    CompanyHeaderPanel,
+    CompanyOverviewPanel,
+    ContentItemHierarchyPanel,
+    ConversationHeaderPanel,
+    ConversationOverviewPanel,
+    DashboardCategoryHierarchyPanel,
+    EmployeeHeaderPanel,
+    EmployeeOverviewPanel,
+    FileCategoryHierarchyPanel,
     FlowAgentFormSectionComponent,
+    ListCategoryHierarchyPanel,
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
@@ -1058,6 +1160,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionFormComponentExtended,
     MJEntityActionFormComponentExtended,
     MJEntityFormComponentExtended,
+    MJFileFormComponentExtended,
     MJListFormComponentExtended,
     MJQueryFormComponentExtended,
     MJTemplateFormComponentExtended,
@@ -1067,6 +1170,20 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTestRunFormComponentExtended,
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
+    MLModelFormComponentExtended,
+    MLModelFormPolicy,
+    ProjectHierarchyPanel,
+    QueryCategoryHierarchyPanel,
+    RecordProcessCategoryHierarchyPanel,
+    RecordProcessFormComponentExtended,
+    RecordProcessFormPolicy,
+    SkillHierarchyPanel,
+    TagHierarchyPanel,
+    TemplateCategoryHierarchyPanel,
+    TestSuiteHierarchyPanel,
+    UserHeaderPanel,
+    UserOverviewPanel,
+    UserViewCategoryHierarchyPanel,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
     QueryConfigPanelComponent,
@@ -1091,11 +1208,18 @@ export const CLASS_REGISTRATIONS: any[] = [
     UserViewResource,
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const CLASS_REGISTRATIONS: any[] = [
+    ...CLASS_REGISTRATIONS_0,
+    ...CLASS_REGISTRATIONS_1,
+    ...CLASS_REGISTRATIONS_2,
+];
+
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 500;
+export const CLASS_REGISTRATIONS_COUNT = 553;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

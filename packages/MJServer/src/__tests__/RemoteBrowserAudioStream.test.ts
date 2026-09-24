@@ -2,7 +2,7 @@
 // polyfill is loaded first. MUST precede any import that pulls in the resolver file.
 import 'reflect-metadata';
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { RemoteBrowserCapabilityNotSupportedError } from '@memberjunction/remote-browser-base';
 
 // type-graphql's `@Field()`/`@ObjectType()`/`@Mutation()` decorators need `emitDecoratorMetadata`
@@ -32,14 +32,21 @@ vi.mock('type-graphql', () => {
 });
 
 // --- Mock the live-session engine the resolver drives. A single mutable session object lets each
-//     test script what StartAudioStream/StopAudioStream do (succeed / throw a capability error). ---
+//     test script what StartAudioStream/StopAudioStream (and, for the TTL-sweep tests below,
+//     StartScreencast/StopScreencast) do (succeed / throw a capability error). ---
 interface FakeLiveSession {
   StartAudioStream: ReturnType<typeof vi.fn>;
   StopAudioStream: ReturnType<typeof vi.fn>;
+  StartScreencast: ReturnType<typeof vi.fn>;
+  StopScreencast: ReturnType<typeof vi.fn>;
+  GetCurrentUrl: ReturnType<typeof vi.fn>;
 }
 const liveSession: FakeLiveSession = {
   StartAudioStream: vi.fn(async () => undefined),
   StopAudioStream: vi.fn(async () => undefined),
+  StartScreencast: vi.fn(async () => undefined),
+  StopScreencast: vi.fn(async () => undefined),
+  GetCurrentUrl: vi.fn(() => 'https://example.com'),
 };
 const startSessionMock = vi.fn(async () => liveSession);
 const getSessionMock = vi.fn(() => liveSession as FakeLiveSession | undefined);
@@ -49,6 +56,17 @@ vi.mock('@memberjunction/remote-browser-server', () => ({
       StartSessionForAgentSession: (...args: unknown[]) => startSessionMock(...(args as [])),
       GetSessionForAgentSession: (...args: unknown[]) => getSessionMock(...(args as [])),
     },
+  },
+  // The resolver's per-surface bookkeeping (`streamKey`) and its publish envelopes route through the
+  // engine's own key normaliser (#3531), so the double has to supply it or every audio-path test dies
+  // at import-of-symbol rather than on an assertion. Mirrors the real pure export exactly — trim +
+  // lowercase, with empty/whitespace collapsing to `null` (the single unnamed instance) — because the
+  // whole point of the shared export is that no layer normalises differently. Re-implemented rather
+  // than spread from `importOriginal` on purpose: this factory exists to keep the engine module inert,
+  // and loading it for real would run its import-time `RegisterForStartup` side effect.
+  NormalizeInstanceKey: (instanceKey?: string | null): string | null => {
+    const name = (instanceKey ?? '').trim().toLowerCase();
+    return name.length === 0 ? null : name;
   },
 }));
 
@@ -105,6 +123,8 @@ describe('RemoteBrowserActionResolver — audio stream', () => {
     resolver = new TestableResolver();
     liveSession.StartAudioStream.mockReset().mockResolvedValue(undefined);
     liveSession.StopAudioStream.mockReset().mockResolvedValue(undefined);
+    liveSession.StartScreencast.mockReset().mockResolvedValue(undefined);
+    liveSession.StopScreencast.mockReset().mockResolvedValue(undefined);
     startSessionMock.mockReset().mockResolvedValue(liveSession);
     getSessionMock.mockReset().mockReturnValue(liveSession);
   });
@@ -152,6 +172,10 @@ describe('RemoteBrowserActionResolver — audio stream', () => {
       resolver: 'RemoteBrowserActionResolver',
       type: 'RemoteBrowserAudioChunk',
       agentSessionID: 'sess-1',
+      // WHICH surface made this sound (#3531). `null` is the unnamed instance, and the envelope states
+      // it explicitly rather than omitting the property so a client can route on the value — asserted
+      // here (not dropped from the exact-match) to pin that contract.
+      instanceKey: null,
       dataBase64: 'QUJD',
       codec: 'webm-opus',
       sampleRate: 48000,
@@ -177,5 +201,75 @@ describe('RemoteBrowserActionResolver — audio stream', () => {
     await resolver.StartRemoteBrowserAudioStream('sess-1', ctx, pubSub as never);
     liveSession.StopAudioStream.mockRejectedValueOnce(new Error('no audio backend'));
     await expect(resolver.StopRemoteBrowserAudioStream('sess-1', ctx)).resolves.toBe(true);
+  });
+});
+
+describe('RemoteBrowserActionResolver — stream idempotency-map TTL sweep', () => {
+  // Regression coverage for the Round 13 memory-leak-audit finding: `startedScreencasts` /
+  // `startedAudioStreams` are process-lifetime maps (the resolver is instantiated once per process by
+  // type-graphql's default container) that only ever shrink via an explicit Stop call. A session that
+  // crashes/disconnects/times out before calling Stop — a normal occurrence, not an edge case — used to
+  // leave its entry behind forever. These tests drive the maps past their internal TTL (see
+  // MAX_STREAM_ENTRY_AGE_MS in RemoteBrowserActionResolver.ts) WITHOUT ever calling Stop, and assert the
+  // swept entry no longer blocks a fresh Start — proving the leak is now bounded rather than permanent.
+  let resolver: TestableResolver;
+
+  beforeEach(() => {
+    resolver = new TestableResolver();
+    liveSession.StartAudioStream.mockReset().mockResolvedValue(undefined);
+    liveSession.StopAudioStream.mockReset().mockResolvedValue(undefined);
+    liveSession.StartScreencast.mockReset().mockResolvedValue(undefined);
+    liveSession.StopScreencast.mockReset().mockResolvedValue(undefined);
+    startSessionMock.mockReset().mockResolvedValue(liveSession);
+    getSessionMock.mockReset().mockReturnValue(liveSession);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('audio stream: a crashed session (no Stop call) is forgotten after the TTL, so a later Start re-invokes StartAudioStream', async () => {
+    const pubSub = makePubSub();
+    await resolver.StartRemoteBrowserAudioStream('sess-crash-1', ctx, pubSub as never);
+    expect(liveSession.StartAudioStream).toHaveBeenCalledTimes(1);
+
+    // Well under the TTL: still idempotent, exactly like a legitimately long-lived active stream.
+    vi.advanceTimersByTime(60 * 60 * 1000); // +1h
+    await resolver.StartRemoteBrowserAudioStream('sess-crash-1', ctx, pubSub as never);
+    expect(liveSession.StartAudioStream).toHaveBeenCalledTimes(1);
+
+    // Past the TTL, with Stop NEVER called (simulating a crash/disconnect): the stale entry is swept,
+    // and a fresh Start is treated as a real (re)start rather than trusting the dead flag forever.
+    vi.advanceTimersByTime(5 * 60 * 60 * 1000); // +5h more (6h total, past the 4h TTL)
+    await resolver.StartRemoteBrowserAudioStream('sess-crash-1', ctx, pubSub as never);
+    expect(liveSession.StartAudioStream).toHaveBeenCalledTimes(2);
+  });
+
+  it('screencast: a crashed session (no Stop call) is forgotten after the TTL, so a later Start re-invokes StartScreencast', async () => {
+    const pubSub = makePubSub();
+    await resolver.StartRemoteBrowserScreencast('sess-crash-2', ctx, pubSub as never);
+    expect(liveSession.StartScreencast).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(6 * 60 * 60 * 1000); // 6h, past the 4h TTL
+    await resolver.StartRemoteBrowserScreencast('sess-crash-2', ctx, pubSub as never);
+    expect(liveSession.StartScreencast).toHaveBeenCalledTimes(2);
+  });
+
+  it('sweeping one stale surface does not evict an unrelated surface still inside the TTL', async () => {
+    const pubSub = makePubSub();
+    await resolver.StartRemoteBrowserAudioStream('sess-old', ctx, pubSub as never);
+
+    vi.advanceTimersByTime(3 * 60 * 60 * 1000); // +3h — sess-old is now 3h old, sess-new is fresh
+    await resolver.StartRemoteBrowserAudioStream('sess-new', ctx, pubSub as never);
+    expect(liveSession.StartAudioStream).toHaveBeenCalledTimes(2);
+
+    vi.advanceTimersByTime(2 * 60 * 60 * 1000); // +2h more — sess-old is 5h old (past TTL), sess-new is 2h old (within TTL)
+    // Triggering the sweep via a third session's Start must not evict sess-new's still-valid entry.
+    await resolver.StartRemoteBrowserAudioStream('sess-trigger', ctx, pubSub as never);
+    await resolver.StartRemoteBrowserAudioStream('sess-new', ctx, pubSub as never);
+    // sess-old, sess-new(first call), sess-trigger all real starts = 3 so far; the second sess-new
+    // call must still be idempotent (no 4th real start).
+    expect(liveSession.StartAudioStream).toHaveBeenCalledTimes(3);
   });
 });

@@ -1,3 +1,4 @@
+import type { BaseEntity } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 
 /**
@@ -82,6 +83,14 @@ export interface FormContext {
    * Fields filter by `ValidationErrorInfo.Source === FieldName` to find their errors.
    */
   validationErrors?: ValidationErrorInfo[];
+  /**
+   * Increments every time the form publishes a fresh set of `validationErrors` (each failed save).
+   * A field compares it with the revision current when the user last edited it: an edit made AFTER
+   * the failure means the user is addressing the error, so the field goes back to its own live
+   * validation; an edit made BEFORE it must not hide an error the save just reported — which is what
+   * happened to a server-side `ValidateAsync()` refusal on the very field the user had just typed in.
+   */
+  validationRevision?: number;
   /** Whether drag-and-drop section reordering is allowed. Read by panels to show/hide drag handles. */
   allowSectionReorder?: boolean;
   /**
@@ -131,6 +140,14 @@ export interface RecordSavedEvent {
   /** The display name of the saved record (for tab title updates, etc.) */
   RecordDisplayName?: string;
   Result: FormSaveResult;
+}
+
+/**
+ * Event emitted after a saved record is reloaded from the database in place.
+ */
+export interface RecordRefreshedEvent {
+  EntityName: string;
+  Record: BaseEntity;
 }
 
 /**
@@ -187,11 +204,16 @@ export type BaseFormContext = FormContext;
 /**
  * Creates a default FormContext with sensible defaults.
  */
-export function createDefaultFormContext(): FormContext {
+export function CreateDefaultFormContext(): FormContext {
   return {
     sectionFilter: '',
     showEmptyFields: false,
     showValidation: false,
     validationErrors: []
   };
+}
+
+/** @deprecated Use {@link CreateDefaultFormContext}. */
+export function createDefaultFormContext(): FormContext {
+  return CreateDefaultFormContext();
 }

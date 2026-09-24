@@ -134,6 +134,7 @@ flowchart LR
 | `entityTransactionScope.ts` | `EntityTransactionScope` + `RunInEntityTransaction()` — the one provider-arbitrated transaction primitive, shared by IS-A, composites and application cascades |
 | `entityCompanion.ts` | `EntityCompanion` — named, serialisable state attached to a record (the "bag") |
 | `relatedRecordCollection.ts` | `RelatedRecordCollection<T>` — the typed parent/children companion |
+| `embeddedRecord.ts` | `EmbeddedRecord<T>` — owner-held 1:1 peer (`Deal.OrderID` → Order), inverted save order |
 | `relatedRecordBatchLoader.ts` | One batched child query per collection across a whole result set (`RunView.IncludeRelatedRecords`) |
 | `entitySavePlan.ts` | `EntitySavePlan` + executor — the ordered unit of work a composite save produces |
 | `saveEntityGraphOperation.ts` | `MJ.SaveEntityGraph` — routes a whole composite save to the server from a client provider |
@@ -358,6 +359,24 @@ const data = { ...entity };
 // CORRECT -- GetAll() returns a plain object with all field values
 const data = { ...entity.GetAll(), customField: 'value' };
 ```
+
+#### Recursive Foreign Keys & Hierarchy Traversal
+
+When an entity has a single-column primary key and a self-referencing foreign key configured as a hierarchy (`EntityField.Configuration` setting `{ "Hierarchy": { "IsHierarchy": true } }`), CodeGen automatically adds strongly-typed hierarchy traversal helper methods to the generated subclass in `@memberjunction/core-entities`:
+
+```typescript
+// Fetch all descendants in the subtree with an optional maxDepth limit
+const descendants = await category.GetDescendants();     // all descendants
+const directAndGrand = await category.GetDescendants(2); // max 2 levels down
+
+// Fetch all ancestors from root down to this record's parent
+const ancestors = await category.GetAncestors();
+
+// Fetch direct child records
+const children = await category.GetChildren();
+```
+
+All three methods execute a single optimized `RunView` query using the view's computed `Root<Field>`, `<Field>Depth`, `<Field>Path`, and `<Field>IsLeaf` columns. See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md).
 
 #### State Tracking and Events
 
@@ -1791,7 +1810,7 @@ This library is written in TypeScript and provides full type definitions. All ge
 
 ## License
 
-ISC License - see LICENSE file for details.
+Business Source License 1.1 - see LICENSE file for details.
 
 ## Remote Operations (the 4th Data Primitive)
 

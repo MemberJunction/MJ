@@ -9,10 +9,10 @@
  * while the trigger reports success.
  */
 import { describe, it, expect } from 'vitest';
-import { decideOnChangeAction, ON_CHANGE_SCOPE_SCRIPT, RUN_RECORD_PROCESS_ACTION } from '../custom/RecordProcessOnChangeReconciler';
+import { DecideOnChangeAction, ON_CHANGE_SCOPE_SCRIPT, RUN_RECORD_PROCESS_ACTION } from '../custom/RecordProcessOnChangeReconciler';
 
-const decide = (over: Partial<Parameters<typeof decideOnChangeAction>[0]> = {}) =>
-    decideOnChangeAction({ status: 'Active', onChangeEnabled: true, onChangeInvocationType: 'AfterUpdate', ...over });
+const decide = (over: Partial<Parameters<typeof DecideOnChangeAction>[0]> = {}) =>
+    DecideOnChangeAction({ status: 'Active', onChangeEnabled: true, onChangeInvocationType: 'AfterUpdate', ...over });
 
 describe('decideOnChangeAction', () => {
     it('owns an active binding when the process is Active with the trigger on', () => {

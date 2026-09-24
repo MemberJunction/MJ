@@ -128,6 +128,11 @@ function projectRow(raw: unknown): AgentRunTreeRow {
         SourceEntity: String(r['SourceEntity'] ?? ''),
         SourceKind: r['SourceKind'] == null ? null : String(r['SourceKind']),
         SourceID: String(r['SourceID'] ?? r['NodeID'] ?? ''),
+        // Null rather than '' when absent: a node that runs no action is different from one whose
+        // action id came back empty, and a consumer looking these up in a cache must be able to
+        // tell "nothing to resolve" from "resolve this".
+        ActionID: r['ActionID'] == null ? null : String(r['ActionID']),
+        AgentID: r['AgentID'] == null ? null : String(r['AgentID']),
     };
 }
 

@@ -41,12 +41,16 @@ function sqlHelpers(ctx: IntegrationCheckContext) {
     const d = db.Dialect;
     const T = (t: string): string => d.QuoteSchema(MJ_SCHEMA, t);
     const lit = (v: string): string => d.QuoteStringLiteral(v);
+    // Current UTC timestamp for whichever backend is running. The T-SQL SYSDATETIMEOFFSET() this
+    // replaces fails on PostgreSQL with `function sysdatetimeoffset() does not exist`, which took
+    // out this bundle's fixture setup before a single assertion ran.
+    const nowUTC = (): string => d.CurrentTimestampUTC();
     const exec = (sql: string) => db.ExecuteSQL<Record<string, unknown>>(sql);
     const count = async (table: string, where: string): Promise<number> => {
         const rows = await exec(`SELECT COUNT(*) AS n FROM ${T(table)} WHERE ${where}`);
         return rows && rows[0] ? Number(rows[0].n) : 0;
     };
-    return { db, T, lit, exec, count };
+    return { db, T, lit, nowUTC, exec, count };
 }
 
 export const OpenAppTeardownChecks: NamedCheck[] = [
@@ -108,7 +112,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('open-app-teardown', {
             RecordChangeID: randomUUID(),
             ApplicationID: randomUUID(), // link-less nav Application — fixed for the PK-collision re-create test
         };
-        const { T, lit, exec } = sqlHelpers(ctx);
+        const { T, lit, nowUTC, exec } = sqlHelpers(ctx);
         const user = ctx.User;
 
         // Publish the handle (all IDs are pre-generated above) BEFORE the first INSERT, so a
@@ -131,7 +135,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('open-app-teardown', {
         // The dependent the old hardcoded list MISSES — a NOT-NULL FK RecordChange.EntityID -> Entity.
         await exec(
             `INSERT INTO ${T('RecordChange')} (ID, EntityID, RecordID, UserID, Type, Source, ChangedAt, ChangesJSON, ChangesDescription, FullRecordJSON, Status, CreatedAt, UpdatedAt) ` +
-            `VALUES (${lit(fixture.RecordChangeID)}, ${lit(fixture.EntityID)}, 'widget-1', ${lit(user.ID)}, 'Create', 'Internal', SYSDATETIMEOFFSET(), '{}', 'teardown IT', '{}', 'Complete', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET())`,
+            `VALUES (${lit(fixture.RecordChangeID)}, ${lit(fixture.EntityID)}, 'widget-1', ${lit(user.ID)}, 'Create', 'Internal', ${nowUTC()}, '{}', 'teardown IT', '{}', 'Complete', ${nowUTC()}, ${nowUTC()})`,
         );
         await exec(
             `INSERT INTO ${T('Application')} (ID, Name, Path) ` +

@@ -1,6 +1,6 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { logError, logStatus } from "./status_logging";
-import { configInfo, dbPlatform, mj_core_schema } from "../Config/config";
+import { configInfo, DbPlatform, MjCoreSchema } from "../Config/config";
 
 
 export type IntegrityCheckResult = {
@@ -20,7 +20,7 @@ export type RunIntegrityCheck = {
  * SQL Server uses [brackets], PostgreSQL uses "double quotes".
  */
 function qi(name: string): string {
-    if (dbPlatform() === 'postgresql') {
+    if (DbPlatform() === 'postgresql') {
         return '"' + name + '"';
     }
     return '[' + name + ']';
@@ -32,7 +32,7 @@ function qi(name: string): string {
  * PostgreSQL: SELECT * FROM ... LIMIT 1
  */
 function selectOne(schema: string, viewName: string): string {
-    if (dbPlatform() === 'postgresql') {
+    if (DbPlatform() === 'postgresql') {
         return `SELECT * FROM ${qi(schema)}.${qi(viewName)} LIMIT 1`;
     }
     return `SELECT TOP 1 * FROM ${qi(schema)}.${qi(viewName)}`;
@@ -115,7 +115,7 @@ export class SystemIntegrityBase {
 
     protected static async CheckEntityFieldSequencesInternal(pool: CodeGenConnection, filter: string): Promise<IntegrityCheckResult> {
         try {
-            const schema = mj_core_schema();
+            const schema = MjCoreSchema();
             const sSQL = `SELECT ${qi('ID')}, ${qi('Entity')}, ${qi('SchemaName')}, ${qi('BaseView')}, ${qi('EntityID')}, ${qi('Name')}, ${qi('Sequence')} FROM ${qi(schema)}.${qi('vwEntityFields')} ${filter} ORDER BY ${qi('Entity')}, ${qi('Sequence')}`;
             const resultResult = await pool.query(sSQL);
             const result = resultResult.recordset;
@@ -130,7 +130,15 @@ export class SystemIntegrityBase {
 
                 // loop through all the fields. Each time the entity changes, check to see if there are any duplicate fields
                 // that has the same sequence number and flag that as an error.
+                const excludedSchemas = new Set(
+                    (configInfo.excludeSchemas ?? []).map((s) => s.toLowerCase())
+                );
+
                 for (const row of result) {
+                    if (excludedSchemas.has(String(row.SchemaName ?? '').toLowerCase())) {
+                        lastEntity = row.Entity;
+                        continue;
+                    }
                     if (lastEntity !== row.Entity) {
                         // we have a new entity, check all the fields in this entity
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any

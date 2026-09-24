@@ -28,21 +28,21 @@ export type OperateValueKind = 'score' | 'class';
  */
 export interface OperateModelState {
   /** `MJ: ML Models` id the created scoring process runs. */
-  modelId: string;
+  ModelId: string;
   /** Target entity whose rows are scored (resolved registered entity name, e.g. `Memberships`). */
-  targetEntityName: string;
+  TargetEntityName: string;
   /** Scope segment selection. */
-  scopeMode: OperateScopeMode;
-  /** Selected `User Views` id when {@link scopeMode} is `'view'`. */
-  viewId: string | null;
-  /** Selected `Lists` id when {@link scopeMode} is `'list'`. */
-  listId: string | null;
+  ScopeMode: OperateScopeMode;
+  /** Selected `User Views` id when {@link ScopeMode} is `'view'`. */
+  ViewId: string | null;
+  /** Selected `Lists` id when {@link ScopeMode} is `'list'`. */
+  ListId: string | null;
   /** Output segment selection. */
-  outputMode: OperateOutputMode;
-  /** Target column to write predictions into when {@link outputMode} is `'writeback'`. */
-  outputField: string;
+  OutputMode: OperateOutputMode;
+  /** Target column to write predictions into when {@link OutputMode} is `'writeback'`. */
+  OutputField: string;
   /** Which value the write-back lands (only meaningful for classification + write-back). */
-  valueKind: OperateValueKind;
+  ValueKind: OperateValueKind;
 }
 
 /** Why a state can't be turned into a valid scoring-process input. */
@@ -55,21 +55,21 @@ export type OperateMappingError =
 
 /** Discriminated result of {@link mapStateToCreateScoringInput}. */
 export type OperateMappingResult =
-  | { ok: true; input: PredictiveStudioCreateScoringProcessInput }
-  | { ok: false; error: OperateMappingError };
+  | { ok: true; input: PredictiveStudioCreateScoringProcessInput }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  | { ok: false; error: OperateMappingError };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Build the `scope` object for the create-scoring input from the scope knobs. */
 function buildScope(state: OperateModelState):
   | { ok: true; scope: PredictiveStudioCreateScoringProcessInput['scope'] }
   | { ok: false; error: OperateMappingError } {
-  switch (state.scopeMode) {
+  switch (state.ScopeMode) {
     case 'view': {
-      const viewId = state.viewId?.trim();
+      const viewId = state.ViewId?.trim();
       if (!viewId) return { ok: false, error: 'missing-view' };
       return { ok: true, scope: { viewId } };
     }
     case 'list': {
-      const listId = state.listId?.trim();
+      const listId = state.ListId?.trim();
       if (!listId) return { ok: false, error: 'missing-list' };
       return { ok: true, scope: { listId } };
     }
@@ -90,11 +90,11 @@ function buildScope(state: OperateModelState):
  *
  * Returns a discriminated result so the component can surface a precise, non-throwing error.
  */
-export function mapStateToCreateScoringInput(state: OperateModelState): OperateMappingResult {
-  const modelId = state.modelId?.trim();
+export function MapStateToCreateScoringInput(state: OperateModelState): OperateMappingResult {
+  const modelId = state.ModelId?.trim();
   if (!modelId) return { ok: false, error: 'missing-model' };
 
-  const targetEntityName = state.targetEntityName?.trim();
+  const targetEntityName = state.TargetEntityName?.trim();
   if (!targetEntityName) return { ok: false, error: 'missing-target-entity' };
 
   const scopeResult = buildScope(state);
@@ -106,18 +106,23 @@ export function mapStateToCreateScoringInput(state: OperateModelState): OperateM
     scope: scopeResult.scope,
   };
 
-  if (state.outputMode === 'writeback') {
-    const outputField = state.outputField?.trim();
+  if (state.OutputMode === 'writeback') {
+    const outputField = state.OutputField?.trim();
     if (!outputField) return { ok: false, error: 'missing-output-field' };
     input.outputField = outputField;
-    input.valueKind = state.valueKind;
+    input.valueKind = state.ValueKind;
   }
 
   return { ok: true, input };
 }
 
+/** @deprecated Use {@link MapStateToCreateScoringInput}. */
+export function mapStateToCreateScoringInput(state: OperateModelState): OperateMappingResult {
+  return MapStateToCreateScoringInput(state);
+}
+
 /** A short, user-facing message for a mapping error (used by the dialog's notifications). */
-export function describeOperateMappingError(error: OperateMappingError): string {
+export function DescribeOperateMappingError(error: OperateMappingError): string {
   switch (error) {
     case 'missing-model':
       return 'No model selected to operate.';
@@ -130,4 +135,9 @@ export function describeOperateMappingError(error: OperateMappingError): string 
     case 'missing-output-field':
       return 'Enter the column to write predictions into.';
   }
+}
+
+/** @deprecated Use {@link DescribeOperateMappingError}. */
+export function describeOperateMappingError(error: OperateMappingError): string {
+  return DescribeOperateMappingError(error);
 }

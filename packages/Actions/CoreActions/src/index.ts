@@ -51,6 +51,10 @@ export * from './custom/web/url-link-validator.action';
 export * from './custom/web/url-metadata-extractor.action';
 export * from './custom/web/perplexity-search.action';
 export * from './custom/web/google-custom-search.action';
+export * from './custom/web/tavily-search.action';
+export * from './custom/web/brave-search.action';
+export * from './custom/web/rss-feed-read.action';
+export * from './custom/web/rss-feed-parsing';
 
 // Data Transformation Actions
 export * from './custom/data/csv-parser.action';

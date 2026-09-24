@@ -61,6 +61,7 @@ type TestSuiteRunResult = {
   totalTests: number;
   passedTests: number;
   failedTests: number;
+  skippedTests?: number;
   durationMs: number;
   totalCost: number;
   testResults: TestRunResult[];
@@ -98,6 +99,21 @@ describe('OutputFormatter', () => {
     totalChecks: 5,
   };
 
+  const mockSkippedResult: TestRunResult = {
+    testName: 'Test Gated',
+    status: 'Skipped',
+    score: 0,
+    durationMs: 0,
+    totalCost: 0,
+    oracleResults: [
+      { passed: true, oracleType: 'gate', message: 'RUN_MUTATION_TESTS not set — tier gated', score: 0 },
+    ],
+    targetType: 'agent',
+    targetLogId: 'log-003',
+    passedChecks: 0,
+    totalChecks: 0,
+  };
+
   describe('formatTestResult', () => {
     it('should format test result as JSON', () => {
       const output = OutputFormatter.formatTestResult(mockTestResult as never, 'json');
@@ -123,6 +139,18 @@ describe('OutputFormatter', () => {
       const output = OutputFormatter.formatTestResult(mockFailedResult as never, 'markdown');
       expect(output).toContain('FAILED');
       expect(output).toContain('Assertion failed');
+    });
+
+    it('should render a skipped result as SKIP, not FAIL, in console', () => {
+      const output = OutputFormatter.formatTestResult(mockSkippedResult as never, 'console');
+      expect(output).toContain('[TEST_SKIP]');
+      expect(output).not.toContain('[TEST_FAIL]');
+    });
+
+    it('should render a skipped result as SKIPPED, not FAILED, in markdown', () => {
+      const output = OutputFormatter.formatTestResult(mockSkippedResult as never, 'markdown');
+      expect(output).toContain('**Status:** SKIPPED');
+      expect(output).not.toContain('FAILED');
     });
   });
 
@@ -151,10 +179,33 @@ describe('OutputFormatter', () => {
       expect(output).toContain('**Failed:** 1');
     });
 
-    it('should format suite result for console', () => {
+    it('should format suite result for console (passed/failed/skipped accounting)', () => {
       const output = OutputFormatter.formatSuiteResult(suiteResult as never, 'console');
       expect(output).toContain('Auth Suite');
-      expect(output).toContain('1/2 passed');
+      // The summary now surfaces skips explicitly so a silently-shrunk run is visible.
+      expect(output).toContain('1 passed / 1 failed / 0 skipped of 2');
+    });
+
+    it('should mark skipped tests SKIP in the markdown table and keep them out of Failures', () => {
+      const suiteWithSkip: TestSuiteRunResult = {
+        suiteName: 'Gated Suite',
+        totalTests: 3,
+        passedTests: 1,
+        failedTests: 1,
+        skippedTests: 1,
+        durationMs: 8000,
+        totalCost: 0.0823,
+        testResults: [mockTestResult, mockFailedResult, mockSkippedResult],
+      };
+      const output = OutputFormatter.formatSuiteResult(suiteWithSkip as never, 'markdown');
+      expect(output).toContain('− SKIP');
+      expect(output).toContain('## Skipped (NOT executed)');
+
+      // The skipped test belongs in the Skipped section, never in Failures.
+      const skippedSection = output.slice(output.indexOf('## Skipped'));
+      expect(skippedSection).toContain('Test Gated');
+      const failuresSection = output.slice(output.indexOf('## Failures'), output.indexOf('## Skipped'));
+      expect(failuresSection).not.toContain('### Test Gated');
     });
   });
 

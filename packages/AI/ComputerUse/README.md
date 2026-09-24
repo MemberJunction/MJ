@@ -52,6 +52,7 @@ This package serves as the foundational layer for MemberJunction's Computer Use 
 - **Isolated Interface**: No direct browser library dependencies in core logic
 - **Extensibility**: Implement `BaseBrowserAdapter` for custom browsers
 - **External-Browser Attach**: Connect to an already-running Chrome (CDP) or Playwright server via `BrowserConfig.Connect` — see **[External Browser Attach Guide](docs/EXTERNAL_BROWSER_ATTACH.md)**
+- **DOM Selection & Replay**: Ground the model on an indexed element list, then distil a passing run into a replay script later runs execute with no model calls — see **[DOM Selection and Replay Guide](docs/DOM_SELECTION_AND_REPLAY.md)**
 
 ### 🎪 Robust Error Handling
 - **No Uncaught Exceptions**: All errors wrapped in `ComputerUseResult`
@@ -806,6 +807,33 @@ const params = new RunComputerUseParams();
 params.BrowserAdapter = new SeleniumBrowserAdapter();
 ```
 
+### Replaying a Recorded Script
+
+`Replay()` executes a script through the same browser adapter as a live run — no screenshots, no model calls. It is scored against the script's own goal postconditions rather than a judge.
+
+```typescript
+import { ComputerUseEngine, RunComputerUseParams } from '@memberjunction/computer-use';
+
+const params = new RunComputerUseParams();
+params.Goal = 'Open the Data Explorer and run a saved query';
+params.ReplayHeal = 'off';        // see below; default is 'llm'
+
+const result = await engine.Replay(script, params);
+console.log(result.Replay?.Healed, result.Replay?.Diverged);
+```
+
+**`ReplayHeal`** decides how far a diverged step may be repaired:
+
+| Value | Deterministic re-resolution | Model call |
+|---|---|---|
+| `'llm'` *(default)* | yes | on an ambiguous or failed match |
+| `'deterministic'` | yes | never |
+| `'off'` | no | never |
+
+`'off'` treats the script as a contract — the first step whose target no longer matches fails the run instead of being silently re-pointed. Repair runs on two legs (a proactive selector re-point before the precondition, and a reactive heal after a guard fails); `'off'` disables both.
+
+Full design, including the two script slots and the review gate: **[DOM Selection and Replay](docs/DOM_SELECTION_AND_REPLAY.md)**.
+
 ### Cooperative Cancellation
 
 For long-running tasks, support graceful cancellation:
@@ -1015,4 +1043,4 @@ For more details, see [scripts/README.md](scripts/README.md).
 
 ## License
 
-This package is part of the MemberJunction project and is licensed under the MIT License. See [LICENSE](../../../LICENSE) for details.
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.

@@ -132,7 +132,7 @@ export interface ITelephonyCallSdk {
      * @param args Provider-specific dial parameters (resolved credential refs, region, recording flags, …).
      * @returns The platform-native call identifier (e.g. Twilio Call SID) for the placed call.
      */
-    dial(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string>;
+    dial(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Answers an **inbound** call that has routed to the agent's number.
@@ -140,7 +140,7 @@ export interface ITelephonyCallSdk {
      * @param callId The platform-native identifier of the inbound call to answer (from the inbound webhook).
      * @returns A promise resolving once the call is answered and the media path is live.
      */
-    answer(callId: string): Promise<void>;
+    answer(callId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Hangs up the call and releases all platform resources.
@@ -148,7 +148,7 @@ export interface ITelephonyCallSdk {
      * @param callId The platform-native identifier of the call to end.
      * @returns A promise resolving once the call has been torn down.
      */
-    hangup(callId: string): Promise<void>;
+    hangup(callId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends one raw PCM audio frame as the agent's outbound voice into the call (the provider's media-
@@ -156,7 +156,7 @@ export interface ITelephonyCallSdk {
      *
      * @param pcm The PCM audio bytes to send.
      */
-    sendAudioFrame(pcm: ArrayBuffer): void;
+    sendAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound raw audio frames from the call — what the agent hears. There is a
@@ -165,7 +165,7 @@ export interface ITelephonyCallSdk {
      *
      * @param cb Invoked with each inbound PCM audio frame.
      */
-    onAudioFrame(cb: (pcm: ArrayBuffer) => void): void;
+    onAudioFrame(cb: (pcm: ArrayBuffer) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends DTMF touch-tones on the call (the agent dialing into an IVR, entering a code, …).
@@ -173,14 +173,14 @@ export interface ITelephonyCallSdk {
      * @param digits The DTMF digit string to send (e.g. `'1234#'`).
      * @returns A promise resolving once the tones have been sent.
      */
-    sendDtmf(digits: string): Promise<void>;
+    sendDtmf(digits: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound DTMF tones the remote party presses. "Latest handler wins."
      *
      * @param cb Invoked with each received DTMF digit string.
      */
-    onDtmf(cb: (digits: string) => void): void;
+    onDtmf(cb: (digits: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Transfers the call to another party (a number or platform endpoint).
@@ -189,7 +189,7 @@ export interface ITelephonyCallSdk {
      * @param toNumber The transfer destination (a phone number or platform endpoint identifier).
      * @returns A promise resolving once the transfer has been initiated.
      */
-    transfer(callId: string, toNumber: string): Promise<void>;
+    transfer(callId: string, toNumber: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the call ends — the remote party hangs up, the carrier drops it, or
@@ -197,7 +197,7 @@ export interface ITelephonyCallSdk {
      *
      * @param cb Invoked when the call has ended.
      */
-    onCallEnded(cb: () => void): void;
+    onCallEnded(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Discards any outbound audio the provider has QUEUED but not yet played — the agent's not-yet-heard
@@ -207,7 +207,7 @@ export interface ITelephonyCallSdk {
      * **Optional**: a provider whose media path plays in near-real-time with no client-side queue has
      * nothing to flush and omits it (the base treats an absent method as a no-op).
      */
-    flushOutbound?(): void;
+    flushOutbound?(): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -344,8 +344,10 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
      */
     public async Connect(ctx: RealtimeBridgeContext): Promise<BridgeConnectResult> {
         this.applyContext(ctx);
-        this.RequireFeature('AudioIn'); // a phone call requires bidirectional audio at minimum
-        this.RequireFeature('AudioOut');
+        if (!ctx.Features.DetachedMediaPlane) {
+            this.RequireFeature('AudioIn'); // a phone call requires bidirectional audio at minimum
+            this.RequireFeature('AudioOut');
+        }
 
         const config = ctx.Configuration ?? {};
         this.direction = this.readDirection(config);

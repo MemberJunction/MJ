@@ -10,9 +10,10 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { ListDelta, ListSource } from '@memberjunction/lists-base';
-import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
-import { resolveVennRegion } from './lists-operations-region-resolver';
-import { buildListOperationsAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
+import { ValidateEnumParam, ValidateStringParam } from '../../shared/agent-tool-validation';
+import { BuildRecordIdFilter } from '../../shared/record-id-filter';
+import { ResolveVennRegion } from './lists-operations-region-resolver';
+import { BuildListOperationsAgentContext, ResolveNamedRecord, BuildNotFoundError } from '../lists-agent-context';
 interface ListSelection {
   list: MJListEntity;
   entityName: string;
@@ -1814,68 +1815,446 @@ interface EntityOption {
 export class ListsOperationsResource extends BaseResourceComponent implements OnDestroy {
   protected override destroy$ = new Subject<void>();
 
-  maxLists = 4;
-  selectedLists: ListSelection[] = [];
-  availableLists: MJListEntity[] = [];
-  filteredAvailableLists: MJListEntity[] = [];
-  listSearchTerm = '';
-  showListDropdown = false;
+  MaxLists = 4;
+
+  /** @deprecated Use {@link MaxLists}. */
+  get maxLists() {
+    return this.MaxLists;
+  }
+  /** @deprecated Use {@link MaxLists}. */
+  set maxLists(value) {
+    this.MaxLists = value;
+  }
+  SelectedLists: ListSelection[] = [];
+
+  /** @deprecated Use {@link SelectedLists}. */
+  get selectedLists(): ListSelection[] {
+    return this.SelectedLists;
+  }
+  /** @deprecated Use {@link SelectedLists}. */
+  set selectedLists(value: ListSelection[]) {
+    this.SelectedLists = value;
+  }
+  AvailableLists: MJListEntity[] = [];
+
+  /** @deprecated Use {@link AvailableLists}. */
+  get availableLists(): MJListEntity[] {
+    return this.AvailableLists;
+  }
+  /** @deprecated Use {@link AvailableLists}. */
+  set availableLists(value: MJListEntity[]) {
+    this.AvailableLists = value;
+  }
+  FilteredAvailableLists: MJListEntity[] = [];
+
+  /** @deprecated Use {@link FilteredAvailableLists}. */
+  get filteredAvailableLists(): MJListEntity[] {
+    return this.FilteredAvailableLists;
+  }
+  /** @deprecated Use {@link FilteredAvailableLists}. */
+  set filteredAvailableLists(value: MJListEntity[]) {
+    this.FilteredAvailableLists = value;
+  }
+  ListSearchTerm = '';
+
+  /** @deprecated Use {@link ListSearchTerm}. */
+  get listSearchTerm() {
+    return this.ListSearchTerm;
+  }
+  /** @deprecated Use {@link ListSearchTerm}. */
+  set listSearchTerm(value) {
+    this.ListSearchTerm = value;
+  }
+  ShowListDropdown = false;
+
+  /** @deprecated Use {@link ShowListDropdown}. */
+  get showListDropdown() {
+    return this.ShowListDropdown;
+  }
+  /** @deprecated Use {@link ShowListDropdown}. */
+  set showListDropdown(value) {
+    this.ShowListDropdown = value;
+  }
 
   // View operands (new in Phase 1.8). Tracked separately from selectedLists
   // so the existing list-only logic keeps working; the operand-aware
   // service combines both into a single computation.
-  selectedViews: ViewSelection[] = [];
-  availableViews: MJUserViewEntity[] = [];
-  filteredAvailableViews: MJUserViewEntity[] = [];
-  viewSearchTerm = '';
-  showViewDropdown = false;
+  SelectedViews: ViewSelection[] = [];
+
+  /** @deprecated Use {@link SelectedViews}. */
+  get selectedViews(): ViewSelection[] {
+    return this.SelectedViews;
+  }
+  /** @deprecated Use {@link SelectedViews}. */
+  set selectedViews(value: ViewSelection[]) {
+    this.SelectedViews = value;
+  }
+  AvailableViews: MJUserViewEntity[] = [];
+
+  /** @deprecated Use {@link AvailableViews}. */
+  get availableViews(): MJUserViewEntity[] {
+    return this.AvailableViews;
+  }
+  /** @deprecated Use {@link AvailableViews}. */
+  set availableViews(value: MJUserViewEntity[]) {
+    this.AvailableViews = value;
+  }
+  FilteredAvailableViews: MJUserViewEntity[] = [];
+
+  /** @deprecated Use {@link FilteredAvailableViews}. */
+  get filteredAvailableViews(): MJUserViewEntity[] {
+    return this.FilteredAvailableViews;
+  }
+  /** @deprecated Use {@link FilteredAvailableViews}. */
+  set filteredAvailableViews(value: MJUserViewEntity[]) {
+    this.FilteredAvailableViews = value;
+  }
+  ViewSearchTerm = '';
+
+  /** @deprecated Use {@link ViewSearchTerm}. */
+  get viewSearchTerm() {
+    return this.ViewSearchTerm;
+  }
+  /** @deprecated Use {@link ViewSearchTerm}. */
+  set viewSearchTerm(value) {
+    this.ViewSearchTerm = value;
+  }
+  ShowViewDropdown = false;
+
+  /** @deprecated Use {@link ShowViewDropdown}. */
+  get showViewDropdown() {
+    return this.ShowViewDropdown;
+  }
+  /** @deprecated Use {@link ShowViewDropdown}. */
+  set showViewDropdown(value) {
+    this.ShowViewDropdown = value;
+  }
 
   // Entity filter
-  entityOptions: EntityOption[] = [];
-  selectedEntityId = '';
+  EntityOptions: EntityOption[] = [];
 
-  vennData: VennData | null = null;
-  selectedRegion: VennIntersection | null = null;
-  lastOperationResult: SetOperationResult | null = null;
-  previewRecords: string[] = [];
-  previewRecordsDisplay: PreviewRecord[] = [];
-  loadingPreview = false;
+  /** @deprecated Use {@link EntityOptions}. */
+  get entityOptions(): EntityOption[] {
+    return this.EntityOptions;
+  }
+  /** @deprecated Use {@link EntityOptions}. */
+  set entityOptions(value: EntityOption[]) {
+    this.EntityOptions = value;
+  }
+  SelectedEntityId = '';
 
-  isCalculating = false;
-  isSaving = false;
+  /** @deprecated Use {@link SelectedEntityId}. */
+  get selectedEntityId() {
+    return this.SelectedEntityId;
+  }
+  /** @deprecated Use {@link SelectedEntityId}. */
+  set selectedEntityId(value) {
+    this.SelectedEntityId = value;
+  }
+
+  VennData: VennData | null = null;
+
+  /** @deprecated Use {@link VennData}. */
+  get vennData(): VennData | null {
+    return this.VennData;
+  }
+  /** @deprecated Use {@link VennData}. */
+  set vennData(value: VennData | null) {
+    this.VennData = value;
+  }
+  SelectedRegion: VennIntersection | null = null;
+
+  /** @deprecated Use {@link SelectedRegion}. */
+  get selectedRegion(): VennIntersection | null {
+    return this.SelectedRegion;
+  }
+  /** @deprecated Use {@link SelectedRegion}. */
+  set selectedRegion(value: VennIntersection | null) {
+    this.SelectedRegion = value;
+  }
+  LastOperationResult: SetOperationResult | null = null;
+
+  /** @deprecated Use {@link LastOperationResult}. */
+  get lastOperationResult(): SetOperationResult | null {
+    return this.LastOperationResult;
+  }
+  /** @deprecated Use {@link LastOperationResult}. */
+  set lastOperationResult(value: SetOperationResult | null) {
+    this.LastOperationResult = value;
+  }
+  PreviewRecords: string[] = [];
+
+  /** @deprecated Use {@link PreviewRecords}. */
+  get previewRecords(): string[] {
+    return this.PreviewRecords;
+  }
+  /** @deprecated Use {@link PreviewRecords}. */
+  set previewRecords(value: string[]) {
+    this.PreviewRecords = value;
+  }
+  PreviewRecordsDisplay: PreviewRecord[] = [];
+
+  /** @deprecated Use {@link PreviewRecordsDisplay}. */
+  get previewRecordsDisplay(): PreviewRecord[] {
+    return this.PreviewRecordsDisplay;
+  }
+  /** @deprecated Use {@link PreviewRecordsDisplay}. */
+  set previewRecordsDisplay(value: PreviewRecord[]) {
+    this.PreviewRecordsDisplay = value;
+  }
+  LoadingPreview = false;
+
+  /** @deprecated Use {@link LoadingPreview}. */
+  get loadingPreview() {
+    return this.LoadingPreview;
+  }
+  /** @deprecated Use {@link LoadingPreview}. */
+  set loadingPreview(value) {
+    this.LoadingPreview = value;
+  }
+
+  IsCalculating = false;
+
+  /** @deprecated Use {@link IsCalculating}. */
+  get isCalculating() {
+    return this.IsCalculating;
+  }
+  /** @deprecated Use {@link IsCalculating}. */
+  set isCalculating(value) {
+    this.IsCalculating = value;
+  }
+  IsSaving = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  get isSaving() {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  set isSaving(value) {
+    this.IsSaving = value;
+  }
 
   // Create dialog
   showCreateDialog = false;
-  newListName = '';
-  newListDescription = '';
-  recordsToAdd: string[] = [];
+  NewListName = '';
+
+  /** @deprecated Use {@link NewListName}. */
+  get newListName() {
+    return this.NewListName;
+  }
+  /** @deprecated Use {@link NewListName}. */
+  set newListName(value) {
+    this.NewListName = value;
+  }
+  NewListDescription = '';
+
+  /** @deprecated Use {@link NewListDescription}. */
+  get newListDescription() {
+    return this.NewListDescription;
+  }
+  /** @deprecated Use {@link NewListDescription}. */
+  set newListDescription(value) {
+    this.NewListDescription = value;
+  }
+  RecordsToAdd: string[] = [];
+
+  /** @deprecated Use {@link RecordsToAdd}. */
+  get recordsToAdd(): string[] {
+    return this.RecordsToAdd;
+  }
+  /** @deprecated Use {@link RecordsToAdd}. */
+  set recordsToAdd(value: string[]) {
+    this.RecordsToAdd = value;
+  }
 
   // Add to existing list dialog
-  showAddToListDialog = false;
-  addToListSearchTerm = '';
-  filteredAddToListOptions: MJListEntity[] = [];
-  selectedTargetListId: string | null = null;
+  ShowAddToListDialog = false;
+
+  /** @deprecated Use {@link ShowAddToListDialog}. */
+  get showAddToListDialog() {
+    return this.ShowAddToListDialog;
+  }
+  /** @deprecated Use {@link ShowAddToListDialog}. */
+  set showAddToListDialog(value) {
+    this.ShowAddToListDialog = value;
+  }
+  AddToListSearchTerm = '';
+
+  /** @deprecated Use {@link AddToListSearchTerm}. */
+  get addToListSearchTerm() {
+    return this.AddToListSearchTerm;
+  }
+  /** @deprecated Use {@link AddToListSearchTerm}. */
+  set addToListSearchTerm(value) {
+    this.AddToListSearchTerm = value;
+  }
+  FilteredAddToListOptions: MJListEntity[] = [];
+
+  /** @deprecated Use {@link FilteredAddToListOptions}. */
+  get filteredAddToListOptions(): MJListEntity[] {
+    return this.FilteredAddToListOptions;
+  }
+  /** @deprecated Use {@link FilteredAddToListOptions}. */
+  set filteredAddToListOptions(value: MJListEntity[]) {
+    this.FilteredAddToListOptions = value;
+  }
+  SelectedTargetListId: string | null = null;
+
+  /** @deprecated Use {@link SelectedTargetListId}. */
+  get selectedTargetListId(): string | null {
+    return this.SelectedTargetListId;
+  }
+  /** @deprecated Use {@link SelectedTargetListId}. */
+  set selectedTargetListId(value: string | null) {
+    this.SelectedTargetListId = value;
+  }
 
   // Compose-into-target panel (Phase 1.10) — picks an op + target for
   // committing the result of the selected operands.
-  composeOp: SetOperation = 'union';
-  composeTarget: 'new' | 'existing' = 'new';
-  composeNewListName = '';
-  composeTargetListId: string | null = null;
-  composeTargetSearch = '';
-  showComposeTargetDropdown = false;
-  isComposing = false;
-  composeDelta: ListDelta | null = null;
-  composeConfirmVisible = false;
+  ComposeOp: SetOperation = 'union';
+
+  /** @deprecated Use {@link ComposeOp}. */
+  get composeOp(): SetOperation {
+    return this.ComposeOp;
+  }
+  /** @deprecated Use {@link ComposeOp}. */
+  set composeOp(value: SetOperation) {
+    this.ComposeOp = value;
+  }
+  ComposeTarget: 'new' | 'existing' = 'new';
+
+  /** @deprecated Use {@link ComposeTarget}. */
+  get composeTarget(): 'new' | 'existing' {
+    return this.ComposeTarget;
+  }
+  /** @deprecated Use {@link ComposeTarget}. */
+  set composeTarget(value: 'new' | 'existing') {
+    this.ComposeTarget = value;
+  }
+  ComposeNewListName = '';
+
+  /** @deprecated Use {@link ComposeNewListName}. */
+  get composeNewListName() {
+    return this.ComposeNewListName;
+  }
+  /** @deprecated Use {@link ComposeNewListName}. */
+  set composeNewListName(value) {
+    this.ComposeNewListName = value;
+  }
+  ComposeTargetListId: string | null = null;
+
+  /** @deprecated Use {@link ComposeTargetListId}. */
+  get composeTargetListId(): string | null {
+    return this.ComposeTargetListId;
+  }
+  /** @deprecated Use {@link ComposeTargetListId}. */
+  set composeTargetListId(value: string | null) {
+    this.ComposeTargetListId = value;
+  }
+  ComposeTargetSearch = '';
+
+  /** @deprecated Use {@link ComposeTargetSearch}. */
+  get composeTargetSearch() {
+    return this.ComposeTargetSearch;
+  }
+  /** @deprecated Use {@link ComposeTargetSearch}. */
+  set composeTargetSearch(value) {
+    this.ComposeTargetSearch = value;
+  }
+  ShowComposeTargetDropdown = false;
+
+  /** @deprecated Use {@link ShowComposeTargetDropdown}. */
+  get showComposeTargetDropdown() {
+    return this.ShowComposeTargetDropdown;
+  }
+  /** @deprecated Use {@link ShowComposeTargetDropdown}. */
+  set showComposeTargetDropdown(value) {
+    this.ShowComposeTargetDropdown = value;
+  }
+  IsComposing = false;
+
+  /** @deprecated Use {@link IsComposing}. */
+  get isComposing() {
+    return this.IsComposing;
+  }
+  /** @deprecated Use {@link IsComposing}. */
+  set isComposing(value) {
+    this.IsComposing = value;
+  }
+  ComposeDelta: ListDelta | null = null;
+
+  /** @deprecated Use {@link ComposeDelta}. */
+  get composeDelta(): ListDelta | null {
+    return this.ComposeDelta;
+  }
+  /** @deprecated Use {@link ComposeDelta}. */
+  set composeDelta(value: ListDelta | null) {
+    this.ComposeDelta = value;
+  }
+  ComposeConfirmVisible = false;
+
+  /** @deprecated Use {@link ComposeConfirmVisible}. */
+  get composeConfirmVisible() {
+    return this.ComposeConfirmVisible;
+  }
+  /** @deprecated Use {@link ComposeConfirmVisible}. */
+  set composeConfirmVisible(value) {
+    this.ComposeConfirmVisible = value;
+  }
 
   // Export dialog (mockup 26). Opens before any export; lets the user
   // pick format + which entity fields to include. Fields are resolved
   // from EntityInfo when the dialog opens — no separate fetch.
-  showExportDialog = false;
-  exportFormat: 'excel' | 'csv' | 'json' = 'excel';
-  exportFields: Array<{ Name: string; DisplayName: string; Selected: boolean }> = [];
-  exportRecordCount = 0;
-  isExporting = false;
+  ShowExportDialog = false;
+
+  /** @deprecated Use {@link ShowExportDialog}. */
+  get showExportDialog() {
+    return this.ShowExportDialog;
+  }
+  /** @deprecated Use {@link ShowExportDialog}. */
+  set showExportDialog(value) {
+    this.ShowExportDialog = value;
+  }
+  ExportFormat: 'excel' | 'csv' | 'json' = 'excel';
+
+  /** @deprecated Use {@link ExportFormat}. */
+  get exportFormat(): 'excel' | 'csv' | 'json' {
+    return this.ExportFormat;
+  }
+  /** @deprecated Use {@link ExportFormat}. */
+  set exportFormat(value: 'excel' | 'csv' | 'json') {
+    this.ExportFormat = value;
+  }
+  ExportFields: Array<{ Name: string; DisplayName: string; Selected: boolean }> = [];
+
+  /** @deprecated Use {@link ExportFields}. */
+  get exportFields(): Array<{ Name: string; DisplayName: string; Selected: boolean }> {
+    return this.ExportFields;
+  }
+  /** @deprecated Use {@link ExportFields}. */
+  set exportFields(value: Array<{ Name: string; DisplayName: string; Selected: boolean }>) {
+    this.ExportFields = value;
+  }
+  ExportRecordCount = 0;
+
+  /** @deprecated Use {@link ExportRecordCount}. */
+  get exportRecordCount() {
+    return this.ExportRecordCount;
+  }
+  /** @deprecated Use {@link ExportRecordCount}. */
+  set exportRecordCount(value) {
+    this.ExportRecordCount = value;
+  }
+  IsExporting = false;
+
+  /** @deprecated Use {@link IsExporting}. */
+  get isExporting() {
+    return this.IsExporting;
+  }
+  /** @deprecated Use {@link IsExporting}. */
+  set isExporting(value) {
+    this.IsExporting = value;
+  }
 
   private entityIdFromSelectedLists: string | null = null;
   private currentEntityInfo: EntityInfo | null = null;
@@ -1894,18 +2273,23 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     super();
   }
 
-  get hasMultipleEntities(): boolean {
-    if (this.totalOperandCount < 2) return false;
+  get HasMultipleEntities(): boolean {
+    if (this.TotalOperandCount < 2) return false;
     const entities = new Set<string>();
-    for (const s of this.selectedLists) entities.add(s.list.EntityID);
-    for (const s of this.selectedViews) entities.add(s.entityID);
+    for (const s of this.SelectedLists) entities.add(s.list.EntityID);
+    for (const s of this.SelectedViews) entities.add(s.entityID);
     return entities.size > 1;
+  }
+
+  /** @deprecated Use {@link HasMultipleEntities}. */
+  get hasMultipleEntities(): boolean {
+    return this.HasMultipleEntities;
   }
 
   async ngOnInit() {
     super.ngOnInit();
     this.setOperationsService.Provider = this.ProviderToUse;
-    await this.loadAvailableLists();
+    await this.LoadAvailableLists();
     await this.loadSavedState();
     this.registerAgentTools();
     this.publishAgentContext();
@@ -1936,28 +2320,28 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * change so the agent always knows what is on the canvas.
    */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, buildListOperationsAgentContext({
+    this.navigationService.SetAgentContext(this, BuildListOperationsAgentContext({
       // Deep context: the operands on the canvas (name / kind / entity), the
       // entity-filter options, the available Venn regions, and a preview of the
       // selected region's records — so the agent sees everything on screen and
       // can act on operands/regions by name.
       Operands: [
-        ...this.selectedLists.map(s => ({ Name: s.list.Name, Kind: 'list' as const, EntityName: s.entityName })),
-        ...this.selectedViews.map(s => ({ Name: s.view.Name, Kind: 'view' as const, EntityName: s.entityName })),
+        ...this.SelectedLists.map(s => ({ Name: s.list.Name, Kind: 'list' as const, EntityName: s.entityName })),
+        ...this.SelectedViews.map(s => ({ Name: s.view.Name, Kind: 'view' as const, EntityName: s.entityName })),
       ],
-      ListOperandCount: this.selectedLists.length,
-      ViewOperandCount: this.selectedViews.length,
-      TotalOperandCount: this.totalOperandCount,
-      MaxOperands: this.maxLists,
-      LockedEntityName: this.lockedEntityName,
-      ComposeOp: this.composeOp,
-      AvailableEntityNames: this.entityOptions.map(o => o.name),
-      AvailableRegions: (this.vennData?.intersections ?? []).map(r => ({ Label: r.label, Size: r.size })),
-      SelectedRegionLabel: this.selectedRegion?.label ?? null,
-      SelectedRegionSize: this.selectedRegion?.size ?? null,
-      PreviewRecordNames: this.previewRecordsDisplay.map(p => p.displayName),
-      LastOperation: this.lastOperationResult
-        ? { operation: this.lastOperationResult.operation, resultCount: this.lastOperationResult.resultCount }
+      ListOperandCount: this.SelectedLists.length,
+      ViewOperandCount: this.SelectedViews.length,
+      TotalOperandCount: this.TotalOperandCount,
+      MaxOperands: this.MaxLists,
+      LockedEntityName: this.LockedEntityName,
+      ComposeOp: this.ComposeOp,
+      AvailableEntityNames: this.EntityOptions.map(o => o.name),
+      AvailableRegions: (this.VennData?.intersections ?? []).map(r => ({ Label: r.label, Size: r.size })),
+      SelectedRegionLabel: this.SelectedRegion?.label ?? null,
+      SelectedRegionSize: this.SelectedRegion?.size ?? null,
+      PreviewRecordNames: this.PreviewRecordsDisplay.map(p => p.displayName),
+      LastOperation: this.LastOperationResult
+        ? { operation: this.LastOperationResult.operation, resultCount: this.LastOperationResult.resultCount }
         : null,
     }));
   }
@@ -1968,11 +2352,11 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * helper. Returns the matching {@link MJListEntity}, or null.
    */
   private resolveAvailableList(input: string): MJListEntity | null {
-    const match = resolveNamedRecord(input, this.availableLists.map(l => ({ ID: l.ID, Name: l.Name })));
+    const match = ResolveNamedRecord(input, this.AvailableLists.map(l => ({ ID: l.ID, Name: l.Name })));
     if (!match) {
       return null;
     }
-    return this.availableLists.find(l => UUIDsEqual(l.ID, match.ID)) ?? null;
+    return this.AvailableLists.find(l => UUIDsEqual(l.ID, match.ID)) ?? null;
   }
 
   /**
@@ -1987,22 +2371,22 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         Description: 'Add a list as an operand to the comparison, by its ID or name. Operands are locked to a single entity type; the first operand sets the type. The tool resolves an exact ID, an exact name, or a partial name match.',
         ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to add' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['list'] ?? params['listId'], 'list');
+          const check = ValidateStringParam(params['list'] ?? params['listId'], 'list');
           if (!check.ok) return check.result;
-          if (this.totalOperandCount >= this.maxLists) {
-            return { Success: false, ErrorMessage: `Maximum of ${this.maxLists} operands already selected.` };
+          if (this.TotalOperandCount >= this.MaxLists) {
+            return { Success: false, ErrorMessage: `Maximum of ${this.MaxLists} operands already selected.` };
           }
           const list = this.resolveAvailableList(check.value);
-          if (!list) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.availableLists.map(l => ({ ID: l.ID, Name: l.Name })), 'list') };
-          if (this.selectedLists.some(s => UUIDsEqual(s.list.ID, list.ID))) {
+          if (!list) return { Success: false, ErrorMessage: BuildNotFoundError(check.value, this.AvailableLists.map(l => ({ ID: l.ID, Name: l.Name })), 'list') };
+          if (this.SelectedLists.some(s => UUIDsEqual(s.list.ID, list.ID))) {
             return { Success: false, ErrorMessage: `List "${list.Name}" is already an operand.` };
           }
           if (this.lockedEntityID && !UUIDsEqual(list.EntityID, this.lockedEntityID)) {
-            return { Success: false, ErrorMessage: `List "${list.Name}" is a different entity type than the current operands (locked to "${this.lockedEntityName}").` };
+            return { Success: false, ErrorMessage: `List "${list.Name}" is a different entity type than the current operands (locked to "${this.LockedEntityName}").` };
           }
-          this.addList(list);
+          this.AddList(list);
           this.publishAgentContext();
-          return { Success: true, Data: { listName: list.Name, totalOperandCount: this.totalOperandCount } };
+          return { Success: true, Data: { listName: list.Name, totalOperandCount: this.TotalOperandCount } };
         },
       },
       {
@@ -2012,13 +2396,13 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         Handler: async (params: Record<string, unknown>) => {
           const raw = params['index'];
           const index = typeof raw === 'number' ? raw : Number(raw);
-          if (!Number.isInteger(index) || index < 0 || index >= this.selectedLists.length) {
-            return { Success: false, ErrorMessage: `index must be an integer between 0 and ${this.selectedLists.length - 1}.` };
+          if (!Number.isInteger(index) || index < 0 || index >= this.SelectedLists.length) {
+            return { Success: false, ErrorMessage: `index must be an integer between 0 and ${this.SelectedLists.length - 1}.` };
           }
-          const removed = this.selectedLists[index].list.Name;
-          this.removeList(index);
+          const removed = this.SelectedLists[index].list.Name;
+          this.RemoveList(index);
           this.publishAgentContext();
-          return { Success: true, Data: { removedListName: removed, totalOperandCount: this.totalOperandCount } };
+          return { Success: true, Data: { removedListName: removed, totalOperandCount: this.TotalOperandCount } };
         },
       },
       {
@@ -2026,15 +2410,15 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         Description: 'Set the entity filter (by entity ID) that narrows which lists/views can be added as operands. Pass an empty string to clear the filter. Changing to a different entity than the current operands clears the canvas.',
         ParameterSchema: { type: 'object', properties: { entityId: { type: 'string', description: 'The entity ID to filter by, or "" to clear' } }, required: ['entityId'] },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['entityId'], 'entityId');
+          const check = ValidateStringParam(params['entityId'], 'entityId');
           if (!check.ok) return check.result;
-          if (check.value !== '' && !this.entityOptions.some(o => UUIDsEqual(o.id, check.value))) {
+          if (check.value !== '' && !this.EntityOptions.some(o => UUIDsEqual(o.id, check.value))) {
             return { Success: false, ErrorMessage: `No entity option found with ID "${check.value}".` };
           }
-          this.selectedEntityId = check.value;
-          this.onEntityFilterChange();
+          this.SelectedEntityId = check.value;
+          this.OnEntityFilterChange();
           this.publishAgentContext();
-          return { Success: true, Data: { totalOperandCount: this.totalOperandCount } };
+          return { Success: true, Data: { totalOperandCount: this.TotalOperandCount } };
         },
       },
       {
@@ -2060,17 +2444,17 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         Description: 'Select a region of the Venn diagram by its label (e.g. "A ∩ B") or by the operand names it covers (e.g. "List A, List B"). Selecting a region loads its records for preview and enables the create/append tools.',
         ParameterSchema: { type: 'object', properties: { region: { type: 'string', description: 'Region label or comma-separated operand labels' } }, required: ['region'] },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['region'], 'region');
+          const check = ValidateStringParam(params['region'], 'region');
           if (!check.ok) return check.result;
-          if (!this.vennData || this.vennData.intersections.length === 0) {
+          if (!this.VennData || this.VennData.intersections.length === 0) {
             return { Success: false, ErrorMessage: 'No Venn regions are available. Add operands first.' };
           }
-          const region = resolveVennRegion(this.vennData.intersections, check.value);
+          const region = ResolveVennRegion(this.VennData.intersections, check.value);
           if (!region) {
-            const available = this.vennData.intersections.map(r => r.label).join(', ');
+            const available = this.VennData.intersections.map(r => r.label).join(', ');
             return { Success: false, ErrorMessage: `Could not resolve region "${check.value}". Available regions: ${available}.` };
           }
-          this.onRegionClick({ intersection: region, recordIds: region.recordIds });
+          this.OnRegionClick({ intersection: region, recordIds: region.recordIds });
           this.publishAgentContext();
           return { Success: true, Data: { regionLabel: region.label, recordCount: region.size } };
         },
@@ -2083,11 +2467,11 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         Description: 'Open the "Create List" dialog pre-filled with the records of the currently-selected Venn region. Requires a region to be selected first (see SelectVennRegion). Nothing is saved until the user confirms.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          if (!this.selectedRegion || this.selectedRegion.size === 0) {
+          if (!this.SelectedRegion || this.SelectedRegion.size === 0) {
             return { Success: false, ErrorMessage: 'No region with records is selected. Use SelectVennRegion first.' };
           }
-          const count = this.selectedRegion.size;
-          this.createListFromSelection();
+          const count = this.SelectedRegion.size;
+          this.CreateListFromSelection();
           return { Success: true, Data: { recordCount: count } };
         },
       },
@@ -2099,11 +2483,11 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         Description: 'Open the "Add to Existing List" dialog for the records of the currently-selected Venn region (append-only). Requires a region to be selected first. Nothing is written until the user picks a target and confirms.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          if (!this.selectedRegion || this.selectedRegion.size === 0) {
+          if (!this.SelectedRegion || this.SelectedRegion.size === 0) {
             return { Success: false, ErrorMessage: 'No region with records is selected. Use SelectVennRegion first.' };
           }
-          const count = this.selectedRegion.size;
-          this.addToExistingList();
+          const count = this.SelectedRegion.size;
+          this.AddToExistingList();
           return { Success: true, Data: { recordCount: count } };
         },
       },
@@ -2117,15 +2501,15 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * PerformSymmetricDifference tools.
    */
   private async runAgentOperation(operation: SetOperation): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
-    if (this.totalOperandCount < 2) {
-      return { Success: false, ErrorMessage: `At least 2 operands are required (currently ${this.totalOperandCount}).` };
+    if (this.TotalOperandCount < 2) {
+      return { Success: false, ErrorMessage: `At least 2 operands are required (currently ${this.TotalOperandCount}).` };
     }
-    await this.performOperation(operation);
+    await this.PerformOperation(operation);
     this.publishAgentContext();
-    if (!this.lastOperationResult) {
+    if (!this.LastOperationResult) {
       return { Success: false, ErrorMessage: 'Operation did not produce a result.' };
     }
-    return { Success: true, Data: { operation, resultCount: this.lastOperationResult.resultCount } };
+    return { Success: true, Data: { operation, resultCount: this.LastOperationResult.resultCount } };
   }
 
   ngOnDestroy() {
@@ -2139,7 +2523,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     }
   }
 
-  async loadAvailableLists() {
+  async LoadAvailableLists() {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const md = this.ProviderToUse;
 
@@ -2167,14 +2551,19 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     ]);
 
     if (listResult.Success) {
-      this.availableLists = listResult.Results || [];
+      this.AvailableLists = listResult.Results || [];
       this.buildEntityOptions();
-      this.filterAvailableLists();
+      this.FilterAvailableLists();
     }
     if (viewResult.Success) {
-      this.availableViews = viewResult.Results || [];
-      this.filterAvailableViews();
+      this.AvailableViews = viewResult.Results || [];
+      this.FilterAvailableViews();
     }
+  }
+
+  /** @deprecated Use {@link LoadAvailableLists}. */
+  async loadAvailableLists() {
+    return this.LoadAvailableLists();
   }
 
   /**
@@ -2183,7 +2572,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   private buildEntityOptions(): void {
     const entityCounts = new Map<string, { name: string; count: number }>();
 
-    for (const list of this.availableLists) {
+    for (const list of this.AvailableLists) {
       const existing = entityCounts.get(list.EntityID);
       if (existing) {
         existing.count++;
@@ -2192,7 +2581,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       }
     }
 
-    this.entityOptions = Array.from(entityCounts.entries())
+    this.EntityOptions = Array.from(entityCounts.entries())
       .map(([id, data]) => ({
         id,
         name: data.name,
@@ -2204,32 +2593,37 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   /**
    * Handle entity filter change
    */
-  onEntityFilterChange(): void {
+  OnEntityFilterChange(): void {
     // If we're locked to an entity and the filter changes to a different
     // one, wipe both list AND view selections — the entity invariant
     // applies to all operands.
     const lockedEntityId = this.lockedEntityID;
-    if (lockedEntityId && this.selectedEntityId && this.selectedEntityId !== lockedEntityId) {
-      this.selectedLists = [];
-      this.selectedViews = [];
-      this.vennData = null;
-      this.selectedRegion = null;
-      this.lastOperationResult = null;
-      this.previewRecordsDisplay = [];
+    if (lockedEntityId && this.SelectedEntityId && this.SelectedEntityId !== lockedEntityId) {
+      this.SelectedLists = [];
+      this.SelectedViews = [];
+      this.VennData = null;
+      this.SelectedRegion = null;
+      this.LastOperationResult = null;
+      this.PreviewRecordsDisplay = [];
     }
-    this.filterAvailableLists();
-    this.filterAvailableViews();
+    this.FilterAvailableLists();
+    this.FilterAvailableViews();
     this.saveState();
     this.publishAgentContext();
   }
 
-  filterAvailableLists() {
-    const selectedIds = new Set(this.selectedLists.map(s => s.list.ID));
-    let filtered = this.availableLists.filter(l => !selectedIds.has(l.ID));
+  /** @deprecated Use {@link OnEntityFilterChange}. */
+  onEntityFilterChange(): void {
+    return this.OnEntityFilterChange();
+  }
+
+  FilterAvailableLists() {
+    const selectedIds = new Set(this.SelectedLists.map(s => s.list.ID));
+    let filtered = this.AvailableLists.filter(l => !selectedIds.has(l.ID));
 
     // Apply entity filter from dropdown
-    if (this.selectedEntityId) {
-      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.selectedEntityId));
+    if (this.SelectedEntityId) {
+      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.SelectedEntityId));
     }
 
     // If we have any operands selected (list or view), restrict to same entity.
@@ -2238,27 +2632,32 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       filtered = filtered.filter(l => UUIDsEqual(l.EntityID, lockedEntityId));
     }
 
-    if (this.listSearchTerm) {
-      const term = this.listSearchTerm.toLowerCase();
+    if (this.ListSearchTerm) {
+      const term = this.ListSearchTerm.toLowerCase();
       filtered = filtered.filter(l =>
         l.Name.toLowerCase().includes(term) ||
         (l.Entity && l.Entity.toLowerCase().includes(term))
       );
     }
 
-    this.filteredAvailableLists = filtered.slice(0, 10);
+    this.FilteredAvailableLists = filtered.slice(0, 10);
+  }
+
+  /** @deprecated Use {@link FilterAvailableLists}. */
+  filterAvailableLists() {
+    return this.FilterAvailableLists();
   }
 
   /**
    * Same logic as `filterAvailableLists` for the view picker. Views are
    * locked to the same entity as any already-selected list or view.
    */
-  filterAvailableViews() {
-    const selectedIds = new Set(this.selectedViews.map(s => s.view.ID));
-    let filtered = this.availableViews.filter(v => !selectedIds.has(v.ID));
+  FilterAvailableViews() {
+    const selectedIds = new Set(this.SelectedViews.map(s => s.view.ID));
+    let filtered = this.AvailableViews.filter(v => !selectedIds.has(v.ID));
 
-    if (this.selectedEntityId) {
-      filtered = filtered.filter(v => UUIDsEqual(v.EntityID, this.selectedEntityId));
+    if (this.SelectedEntityId) {
+      filtered = filtered.filter(v => UUIDsEqual(v.EntityID, this.SelectedEntityId));
     }
 
     const lockedEntityId = this.lockedEntityID;
@@ -2266,15 +2665,20 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       filtered = filtered.filter(v => UUIDsEqual(v.EntityID, lockedEntityId));
     }
 
-    if (this.viewSearchTerm) {
-      const term = this.viewSearchTerm.toLowerCase();
+    if (this.ViewSearchTerm) {
+      const term = this.ViewSearchTerm.toLowerCase();
       filtered = filtered.filter(v =>
         v.Name.toLowerCase().includes(term) ||
         (v.Entity && v.Entity.toLowerCase().includes(term))
       );
     }
 
-    this.filteredAvailableViews = filtered.slice(0, 10);
+    this.FilteredAvailableViews = filtered.slice(0, 10);
+  }
+
+  /** @deprecated Use {@link FilterAvailableViews}. */
+  filterAvailableViews() {
+    return this.FilterAvailableViews();
   }
 
   /**
@@ -2283,8 +2687,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * come first in the operand list; either source is authoritative.
    */
   private get lockedEntityID(): string | null {
-    if (this.selectedLists.length > 0) return this.selectedLists[0].list.EntityID;
-    if (this.selectedViews.length > 0) return this.selectedViews[0].entityID;
+    if (this.SelectedLists.length > 0) return this.SelectedLists[0].list.EntityID;
+    if (this.SelectedViews.length > 0) return this.SelectedViews[0].entityID;
     return null;
   }
 
@@ -2293,110 +2697,145 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * "Comparing operands of type: …" hint in the UI. Falls back to the
    * first available denormalized name we have.
    */
-  public get lockedEntityName(): string | null {
-    if (this.selectedLists.length > 0) return this.selectedLists[0].entityName;
-    if (this.selectedViews.length > 0) return this.selectedViews[0].entityName;
+  public get LockedEntityName(): string | null {
+    if (this.SelectedLists.length > 0) return this.SelectedLists[0].entityName;
+    if (this.SelectedViews.length > 0) return this.SelectedViews[0].entityName;
     return null;
   }
 
-  addList(list: MJListEntity) {
-    const color = this.setOperationsService.getColorForIndex(this.totalOperandCount);
+  /** @deprecated Use {@link LockedEntityName}. */
+  public get lockedEntityName(): string | null {
+    return this.LockedEntityName;
+  }
 
-    this.selectedLists.push({
+  AddList(list: MJListEntity) {
+    const color = this.setOperationsService.getColorForIndex(this.TotalOperandCount);
+
+    this.SelectedLists.push({
       list,
       entityName: list.Entity || 'Unknown',
       color
     });
 
-    this.listSearchTerm = '';
-    this.showListDropdown = false;
-    this.filterAvailableLists();
-    this.filterAvailableViews();
-    this.recalculateVenn();
+    this.ListSearchTerm = '';
+    this.ShowListDropdown = false;
+    this.FilterAvailableLists();
+    this.FilterAvailableViews();
+    this.RecalculateVenn();
     this.saveState();
     this.publishAgentContext();
   }
 
-  removeList(index: number) {
-    this.selectedLists.splice(index, 1);
+  /** @deprecated Use {@link AddList}. */
+  addList(list: MJListEntity) {
+    return this.AddList(list);
+  }
+
+  RemoveList(index: number) {
+    this.SelectedLists.splice(index, 1);
 
     // Reassign colors across BOTH lists and views so the palette stays in order.
     this.reassignOperandColors();
 
-    this.filterAvailableLists();
-    this.filterAvailableViews();
-    this.recalculateVenn();
+    this.FilterAvailableLists();
+    this.FilterAvailableViews();
+    this.RecalculateVenn();
     this.saveState();
     this.publishAgentContext();
   }
 
-  addView(view: MJUserViewEntity) {
-    const color = this.setOperationsService.getColorForIndex(this.totalOperandCount);
-    this.selectedViews.push({
+  /** @deprecated Use {@link RemoveList}. */
+  removeList(index: number) {
+    return this.RemoveList(index);
+  }
+
+  AddView(view: MJUserViewEntity) {
+    const color = this.setOperationsService.getColorForIndex(this.TotalOperandCount);
+    this.SelectedViews.push({
       view,
       entityName: view.Entity || 'Unknown',
       entityID: view.EntityID,
       color,
     });
-    this.viewSearchTerm = '';
-    this.showViewDropdown = false;
-    this.filterAvailableLists();
-    this.filterAvailableViews();
-    this.recalculateVenn();
+    this.ViewSearchTerm = '';
+    this.ShowViewDropdown = false;
+    this.FilterAvailableLists();
+    this.FilterAvailableViews();
+    this.RecalculateVenn();
     this.saveState();
     this.publishAgentContext();
   }
 
-  removeView(index: number) {
-    this.selectedViews.splice(index, 1);
+  /** @deprecated Use {@link AddView}. */
+  addView(view: MJUserViewEntity) {
+    return this.AddView(view);
+  }
+
+  RemoveView(index: number) {
+    this.SelectedViews.splice(index, 1);
     this.reassignOperandColors();
-    this.filterAvailableLists();
-    this.filterAvailableViews();
-    this.recalculateVenn();
+    this.FilterAvailableLists();
+    this.FilterAvailableViews();
+    this.RecalculateVenn();
     this.saveState();
     this.publishAgentContext();
+  }
+
+  /** @deprecated Use {@link RemoveView}. */
+  removeView(index: number) {
+    return this.RemoveView(index);
   }
 
   private reassignOperandColors(): void {
     let i = 0;
-    for (const s of this.selectedLists) {
+    for (const s of this.SelectedLists) {
       s.color = this.setOperationsService.getColorForIndex(i++);
     }
-    for (const s of this.selectedViews) {
+    for (const s of this.SelectedViews) {
       s.color = this.setOperationsService.getColorForIndex(i++);
     }
   }
 
-  async recalculateVenn() {
-    if (this.totalOperandCount === 0) {
-      this.vennData = null;
-      this.selectedRegion = null;
-      this.lastOperationResult = null;
+  async RecalculateVenn() {
+    if (this.TotalOperandCount === 0) {
+      this.VennData = null;
+      this.SelectedRegion = null;
+      this.LastOperationResult = null;
       return;
     }
 
-    this.isCalculating = true;
+    this.IsCalculating = true;
     this.cdr.detectChanges();
 
     try {
       const operands = this.buildAllOperands();
-      this.vennData = await this.setOperationsService.calculateVennDataForOperands(operands);
-      this.selectedRegion = null;
-      this.lastOperationResult = null;
+      this.VennData = await this.setOperationsService.calculateVennDataForOperands(operands);
+      this.SelectedRegion = null;
+      this.LastOperationResult = null;
     } catch (error) {
       console.error('Error calculating Venn data:', error);
     } finally {
-      this.isCalculating = false;
+      this.IsCalculating = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link RecalculateVenn}. */
+  async recalculateVenn() {
+    return this.RecalculateVenn();
   }
 
   /**
    * Combined operand count — drives "≥ 2 operands" checks for showing
    * operation buttons + the Venn diagram empty-state.
    */
+  get TotalOperandCount(): number {
+    return this.SelectedLists.length + this.SelectedViews.length;
+  }
+
+  /** @deprecated Use {@link TotalOperandCount}. */
   get totalOperandCount(): number {
-    return this.selectedLists.length + this.selectedViews.length;
+    return this.TotalOperandCount;
   }
 
   /**
@@ -2405,7 +2844,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * color is picked sequentially from the same palette.
    */
   private buildAllOperands(): SetOperand[] {
-    const fromLists: SetOperand[] = this.selectedLists.map((s) => ({
+    const fromLists: SetOperand[] = this.SelectedLists.map((s) => ({
       kind: 'list',
       id: s.list.ID,
       name: s.list.Name,
@@ -2413,7 +2852,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       entityName: s.entityName,
       color: s.color,
     }));
-    const fromViews: SetOperand[] = this.selectedViews.map((s) => ({
+    const fromViews: SetOperand[] = this.SelectedViews.map((s) => ({
       kind: 'view',
       id: s.view.ID,
       name: s.view.Name,
@@ -2424,38 +2863,43 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     return [...fromLists, ...fromViews];
   }
 
-  onRegionClick(event: VennRegionClickEvent) {
-    this.selectedRegion = event.intersection;
-    this.lastOperationResult = null;
-    this.previewRecords = event.recordIds.slice(0, 10);
+  OnRegionClick(event: VennRegionClickEvent) {
+    this.SelectedRegion = event.intersection;
+    this.LastOperationResult = null;
+    this.PreviewRecords = event.recordIds.slice(0, 10);
     this.loadPreviewRecords(event.recordIds.slice(0, 10));
     this.cdr.detectChanges();
     this.publishAgentContext();
+  }
+
+  /** @deprecated Use {@link OnRegionClick}. */
+  onRegionClick(event: VennRegionClickEvent) {
+    return this.OnRegionClick(event);
   }
 
   /**
    * Load preview records with meaningful display fields
    */
   private async loadPreviewRecords(recordIds: string[]): Promise<void> {
-    if (recordIds.length === 0 || this.selectedLists.length === 0) {
-      this.previewRecordsDisplay = [];
+    if (recordIds.length === 0 || this.SelectedLists.length === 0) {
+      this.PreviewRecordsDisplay = [];
       return;
     }
 
-    this.loadingPreview = true;
+    this.LoadingPreview = true;
     this.cdr.detectChanges();
 
     try {
       const md = this.ProviderToUse;
-      const entityId = this.selectedLists[0].list.EntityID;
+      const entityId = this.SelectedLists[0].list.EntityID;
       const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
 
       if (!entityInfo) {
         // Fallback to showing just IDs
-        this.previewRecordsDisplay = recordIds.map(id => ({
+        this.PreviewRecordsDisplay = recordIds.map(id => ({
           id,
           displayName: id,
-          entityName: this.selectedLists[0].entityName
+          entityName: this.SelectedLists[0].entityName
         }));
         return;
       }
@@ -2479,7 +2923,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       });
 
       if (result.Success && result.Results) {
-        this.previewRecordsDisplay = result.Results.map(record => {
+        this.PreviewRecordsDisplay = result.Results.map(record => {
           const id = String(record[primaryKeyField] || '');
           const displayName = this.getDisplayValue(record, displayFields[0]) || id;
           const secondaryInfo = displayFields.length > 1
@@ -2495,7 +2939,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         });
       } else {
         // Fallback
-        this.previewRecordsDisplay = recordIds.map(id => ({
+        this.PreviewRecordsDisplay = recordIds.map(id => ({
           id,
           displayName: id,
           entityName: entityInfo.Name
@@ -2503,13 +2947,13 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       }
     } catch (error) {
       console.error('Error loading preview records:', error);
-      this.previewRecordsDisplay = recordIds.map(id => ({
+      this.PreviewRecordsDisplay = recordIds.map(id => ({
         id,
         displayName: id,
-        entityName: this.selectedLists[0]?.entityName || 'Unknown'
+        entityName: this.SelectedLists[0]?.entityName || 'Unknown'
       }));
     } finally {
-      this.loadingPreview = false;
+      this.LoadingPreview = false;
       this.cdr.detectChanges();
     }
   }
@@ -2551,7 +2995,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     // If still nothing, include primary key
     if (fields.length === 0 && entityInfo.PrimaryKeys.length > 0) {
-      fields.push(entityInfo.PrimaryKeys[0].Name);
+      fields.push(...entityInfo.PrimaryKeys.map(pk => pk.Name));
     }
 
     return fields.slice(0, 3); // Max 3 fields
@@ -2572,11 +3016,11 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   /**
    * Open a record in the entity viewer
    */
-  openRecord(record: PreviewRecord): void {
+  OpenRecord(record: PreviewRecord): void {
     if (!this.currentEntityInfo) {
       // Try to get entity info
       const md = this.ProviderToUse;
-      const entityId = this.selectedLists[0]?.list.EntityID;
+      const entityId = this.SelectedLists[0]?.list.EntityID;
       if (entityId) {
         this.currentEntityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId)) || null;
       }
@@ -2584,35 +3028,42 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     if (this.currentEntityInfo) {
       SharedService.Instance.InvokeManualResize();
-      // Create composite key for navigation
-      const primaryKeyField = this.currentEntityInfo.PrimaryKeys.length > 0
-        ? this.currentEntityInfo.PrimaryKeys[0].Name
-        : 'ID';
-      const compositeKey = new CompositeKey([{ FieldName: primaryKeyField, Value: record.id }]);
+      // record.id is the compact List Detail RecordID (bare value, or "F1|v1||F2|v2" for composite)
+      const compositeKey = CompositeKey.FromURLSegment(this.currentEntityInfo, record.id);
       SharedService.Instance.OpenEntityRecord(this.currentEntityInfo.Name, compositeKey);
     } else {
       this.notificationService.CreateSimpleNotification('Unable to open record', 'error', 3000);
     }
   }
 
-  async performOperation(operation: SetOperation) {
-    if (this.totalOperandCount < 2) return;
+  /** @deprecated Use {@link OpenRecord}. */
+  openRecord(record: PreviewRecord): void {
+    return this.OpenRecord(record);
+  }
 
-    this.isCalculating = true;
-    this.selectedRegion = null;
+  async PerformOperation(operation: SetOperation) {
+    if (this.TotalOperandCount < 2) return;
+
+    this.IsCalculating = true;
+    this.SelectedRegion = null;
     this.cdr.detectChanges();
 
     try {
       const operands = this.buildAllOperands();
-      this.lastOperationResult = await this.setOperationsService.performOperationForOperands(operation, operands);
-      this.previewRecords = this.lastOperationResult.resultRecordIds.slice(0, 10);
+      this.LastOperationResult = await this.setOperationsService.performOperationForOperands(operation, operands);
+      this.PreviewRecords = this.LastOperationResult.resultRecordIds.slice(0, 10);
     } catch (error) {
       console.error('Error performing operation:', error);
     } finally {
-      this.isCalculating = false;
+      this.IsCalculating = false;
       this.cdr.detectChanges();
       this.publishAgentContext();
     }
+  }
+
+  /** @deprecated Use {@link PerformOperation}. */
+  async performOperation(operation: SetOperation) {
+    return this.PerformOperation(operation);
   }
 
   // -------------------------------------------------------------------
@@ -2638,20 +3089,25 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * target is an existing list.
    */
   private buildComposeInputs(): ListSource[] {
-    const inputs: ListSource[] = this.selectedLists.map<ListSource>((s) => ({
+    const inputs: ListSource[] = this.SelectedLists.map<ListSource>((s) => ({
       kind: 'list',
       listId: s.list.ID,
     }));
-    for (const s of this.selectedViews) {
+    for (const s of this.SelectedViews) {
       inputs.push({ kind: 'view', viewId: s.view.ID });
     }
     return inputs;
   }
 
+  public get CanCompose(): boolean {
+    if (this.TotalOperandCount < 2) return false;
+    if (this.ComposeTarget === 'new') return this.ComposeNewListName.trim().length > 0;
+    return !!this.ComposeTargetListId;
+  }
+
+  /** @deprecated Use {@link CanCompose}. */
   public get canCompose(): boolean {
-    if (this.totalOperandCount < 2) return false;
-    if (this.composeTarget === 'new') return this.composeNewListName.trim().length > 0;
-    return !!this.composeTargetListId;
+    return this.CanCompose;
   }
 
   /**
@@ -2661,9 +3117,14 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * server here because preview is a read-only operation that doesn't
    * need a delta token (target is null) — staying local keeps it fast.
    */
+  public async PreviewCompose(): Promise<void> {
+    if (this.TotalOperandCount < 2) return;
+    await this.PerformOperation(this.ComposeOp);
+  }
+
+  /** @deprecated Use {@link PreviewCompose}. */
   public async previewCompose(): Promise<void> {
-    if (this.totalOperandCount < 2) return;
-    await this.performOperation(this.composeOp);
+    return this.PreviewCompose();
   }
 
   /**
@@ -2671,12 +3132,12 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * the previewed record IDs) or merge into an existing list via the
    * server's ComposeLists + ApplyListDelta flow.
    */
-  public async composeAndSave(): Promise<void> {
-    if (!this.canCompose || this.isComposing) return;
-    this.isComposing = true;
+  public async ComposeAndSave(): Promise<void> {
+    if (!this.CanCompose || this.IsComposing) return;
+    this.IsComposing = true;
     this.cdr.detectChanges();
     try {
-      if (this.composeTarget === 'new') {
+      if (this.ComposeTarget === 'new') {
         await this.composeToNewList();
       } else {
         await this.composeToExistingList();
@@ -2685,9 +3146,14 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const message = e instanceof Error ? e.message : String(e);
       this.notificationService.CreateSimpleNotification(`Compose failed: ${message}`, 'error', 5000);
     } finally {
-      this.isComposing = false;
+      this.IsComposing = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link ComposeAndSave}. */
+  public async composeAndSave(): Promise<void> {
+    return this.ComposeAndSave();
   }
 
   /**
@@ -2698,8 +3164,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   private async composeToNewList(): Promise<void> {
     // Refresh preview so result reflects the compose-panel's op (the user
     // may have run a different op via Quick Operations).
-    await this.performOperation(this.composeOp);
-    if (!this.lastOperationResult || this.lastOperationResult.resultCount === 0) {
+    await this.PerformOperation(this.ComposeOp);
+    if (!this.LastOperationResult || this.LastOperationResult.resultCount === 0) {
       this.notificationService.CreateSimpleNotification(
         'Compose produced zero records — nothing to save.',
         'warning',
@@ -2707,12 +3173,12 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       );
       return;
     }
-    this.newListName = this.composeNewListName.trim();
-    this.newListDescription = `Composed via ${this.getOperationLabel(this.composeOp)} of ${this.totalOperandCount} source(s).`;
-    this.recordsToAdd = this.lastOperationResult.resultRecordIds;
-    await this.confirmCreateList();
+    this.NewListName = this.ComposeNewListName.trim();
+    this.NewListDescription = `Composed via ${this.GetOperationLabel(this.ComposeOp)} of ${this.TotalOperandCount} source(s).`;
+    this.RecordsToAdd = this.LastOperationResult.resultRecordIds;
+    await this.ConfirmCreateList();
     // Clear the compose form on success.
-    this.composeNewListName = '';
+    this.ComposeNewListName = '';
     this.cdr.detectChanges();
   }
 
@@ -2723,36 +3189,41 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * are in the target but not in the compose result.
    */
   private async composeToExistingList(): Promise<void> {
-    if (!this.composeTargetListId) return;
+    if (!this.ComposeTargetListId) return;
     const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
     const client = new GraphQLListsClient(provider);
     const delta = await client.ComposeLists({
-      Op: this.composeOp as 'union' | 'intersection' | 'difference',
+      Op: this.ComposeOp as 'union' | 'intersection' | 'difference',
       Inputs: this.buildComposeInputs(),
-      Target: { kind: 'list', listId: this.composeTargetListId },
+      Target: { kind: 'list', listId: this.ComposeTargetListId },
     });
-    this.composeDelta = delta;
-    this.composeConfirmVisible = true;
+    this.ComposeDelta = delta;
+    this.ComposeConfirmVisible = true;
   }
 
-  public onComposeConfirmCancel(): void {
-    this.composeConfirmVisible = false;
-    this.composeDelta = null;
+  public OnComposeConfirmCancel(): void {
+    this.ComposeConfirmVisible = false;
+    this.ComposeDelta = null;
     this.cdr.detectChanges();
   }
 
-  public async onComposeConfirmCommit(deltaToken: string): Promise<void> {
-    if (!this.composeDelta) return;
+  /** @deprecated Use {@link OnComposeConfirmCancel}. */
+  public onComposeConfirmCancel(): void {
+    return this.OnComposeConfirmCancel();
+  }
+
+  public async OnComposeConfirmCommit(deltaToken: string): Promise<void> {
+    if (!this.ComposeDelta) return;
     const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
     const client = new GraphQLListsClient(provider);
     try {
       const result = await client.ApplyListDelta({
-        Delta: { ...this.composeDelta, DeltaToken: deltaToken },
-        ConfirmDrops: (this.composeDelta.Counts.Remove ?? 0) > 0,
+        Delta: { ...this.ComposeDelta, DeltaToken: deltaToken },
+        ConfirmDrops: (this.ComposeDelta.Counts.Remove ?? 0) > 0,
       });
       if (result.Success) {
-        this.composeConfirmVisible = false;
-        this.composeDelta = null;
+        this.ComposeConfirmVisible = false;
+        this.ComposeDelta = null;
         this.notificationService.CreateSimpleNotification(
           `Target updated: +${result.Counts?.Added ?? 0} / -${result.Counts?.Removed ?? 0}`,
           'success',
@@ -2773,39 +3244,59 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     }
   }
 
+  /** @deprecated Use {@link OnComposeConfirmCommit}. */
+  public async onComposeConfirmCommit(deltaToken: string): Promise<void> {
+    return this.OnComposeConfirmCommit(deltaToken);
+  }
+
   /**
    * Filtered list of existing lists eligible as compose targets. We
    * exclude lists already in the selected operands (committing to a
    * source list would be a self-referential compose) and lists from
    * other entities (the entity invariant still applies).
    */
-  public get filteredComposeTargets(): MJListEntity[] {
-    const operandListIds = new Set(this.selectedLists.map((s) => s.list.ID));
+  public get FilteredComposeTargets(): MJListEntity[] {
+    const operandListIds = new Set(this.SelectedLists.map((s) => s.list.ID));
     const lockedEntityId = this.lockedEntityID;
-    let pool = this.availableLists.filter((l) => !operandListIds.has(l.ID));
+    let pool = this.AvailableLists.filter((l) => !operandListIds.has(l.ID));
     if (lockedEntityId) {
       pool = pool.filter((l) => UUIDsEqual(l.EntityID, lockedEntityId));
     }
-    if (this.composeTargetSearch.trim().length > 0) {
-      const term = this.composeTargetSearch.toLowerCase();
+    if (this.ComposeTargetSearch.trim().length > 0) {
+      const term = this.ComposeTargetSearch.toLowerCase();
       pool = pool.filter((l) => l.Name.toLowerCase().includes(term));
     }
     return pool.slice(0, 10);
   }
 
-  public selectComposeTarget(list: MJListEntity): void {
-    this.composeTargetListId = list.ID;
-    this.composeTargetSearch = list.Name;
-    this.showComposeTargetDropdown = false;
+  /** @deprecated Use {@link FilteredComposeTargets}. */
+  public get filteredComposeTargets(): MJListEntity[] {
+    return this.FilteredComposeTargets;
   }
 
-  public composeTargetDisplayName(): string {
-    if (!this.composeTargetListId) return '';
-    const found = this.availableLists.find((l) => UUIDsEqual(l.ID, this.composeTargetListId!));
+  public SelectComposeTarget(list: MJListEntity): void {
+    this.ComposeTargetListId = list.ID;
+    this.ComposeTargetSearch = list.Name;
+    this.ShowComposeTargetDropdown = false;
+  }
+
+  /** @deprecated Use {@link SelectComposeTarget}. */
+  public selectComposeTarget(list: MJListEntity): void {
+    return this.SelectComposeTarget(list);
+  }
+
+  public ComposeTargetDisplayName(): string {
+    if (!this.ComposeTargetListId) return '';
+    const found = this.AvailableLists.find((l) => UUIDsEqual(l.ID, this.ComposeTargetListId!));
     return found?.Name ?? '';
   }
 
-  getOperationLabel(operation: SetOperation): string {
+  /** @deprecated Use {@link ComposeTargetDisplayName}. */
+  public composeTargetDisplayName(): string {
+    return this.ComposeTargetDisplayName();
+  }
+
+  GetOperationLabel(operation: SetOperation): string {
     switch (operation) {
       case 'union': return 'Union (All Records)';
       case 'intersection': return 'Intersection (Common Records)';
@@ -2816,37 +3307,57 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     }
   }
 
+  /** @deprecated Use {@link GetOperationLabel}. */
+  getOperationLabel(operation: SetOperation): string {
+    return this.GetOperationLabel(operation);
+  }
+
+  CreateListFromSelection() {
+    if (!this.SelectedRegion || this.SelectedRegion.size === 0) return;
+    this.RecordsToAdd = [...this.SelectedRegion.recordIds];
+    this.NewListName = '';
+    this.NewListDescription = `Created from: ${this.SelectedRegion.label}`;
+    this.showCreateDialog = true;
+  }
+
+  /** @deprecated Use {@link CreateListFromSelection}. */
   createListFromSelection() {
-    if (!this.selectedRegion || this.selectedRegion.size === 0) return;
-    this.recordsToAdd = [...this.selectedRegion.recordIds];
-    this.newListName = '';
-    this.newListDescription = `Created from: ${this.selectedRegion.label}`;
+    return this.CreateListFromSelection();
+  }
+
+  CreateListFromResult() {
+    if (!this.LastOperationResult || this.LastOperationResult.resultCount === 0) return;
+    this.RecordsToAdd = [...this.LastOperationResult.resultRecordIds];
+    this.NewListName = '';
+    this.NewListDescription = `Created from: ${this.GetOperationLabel(this.LastOperationResult.operation)}`;
     this.showCreateDialog = true;
   }
 
+  /** @deprecated Use {@link CreateListFromResult}. */
   createListFromResult() {
-    if (!this.lastOperationResult || this.lastOperationResult.resultCount === 0) return;
-    this.recordsToAdd = [...this.lastOperationResult.resultRecordIds];
-    this.newListName = '';
-    this.newListDescription = `Created from: ${this.getOperationLabel(this.lastOperationResult.operation)}`;
-    this.showCreateDialog = true;
+    return this.CreateListFromResult();
   }
 
-  cancelCreateDialog() {
+  CancelCreateDialog() {
     this.showCreateDialog = false;
-    this.newListName = '';
-    this.newListDescription = '';
-    this.recordsToAdd = [];
+    this.NewListName = '';
+    this.NewListDescription = '';
+    this.RecordsToAdd = [];
   }
 
-  async confirmCreateList() {
-    if (!this.newListName || this.recordsToAdd.length === 0) return;
+  /** @deprecated Use {@link CancelCreateDialog}. */
+  cancelCreateDialog() {
+    return this.CancelCreateDialog();
+  }
+
+  async ConfirmCreateList() {
+    if (!this.NewListName || this.RecordsToAdd.length === 0) return;
 
     // Get entity ID from selected lists
-    if (this.selectedLists.length === 0) return;
-    const entityId = this.selectedLists[0].list.EntityID;
+    if (this.SelectedLists.length === 0) return;
+    const entityId = this.SelectedLists[0].list.EntityID;
 
-    this.isSaving = true;
+    this.IsSaving = true;
     this.cdr.detectChanges();
 
     try {
@@ -2858,14 +3369,14 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       // before the list actually persists.
       const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
       list.NewRecord();
-      list.Name = this.newListName;
-      list.Description = this.newListDescription || null;
+      list.Name = this.NewListName;
+      list.Description = this.NewListDescription || null;
       list.EntityID = entityId;
       list.UserID = md.CurrentUser!.ID;
       list.TransactionGroup = tg;
       await list.Save();
 
-      for (const recordId of this.recordsToAdd) {
+      for (const recordId of this.RecordsToAdd) {
         const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
         detail.NewRecord();
         detail.ListID = list.ID;
@@ -2885,112 +3396,142 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       }
 
       this.notificationService.CreateSimpleNotification(
-        `Created "${this.newListName}" with ${this.recordsToAdd.length} items`,
+        `Created "${this.NewListName}" with ${this.RecordsToAdd.length} items`,
         'success',
         3000
       );
 
-      this.cancelCreateDialog();
+      this.CancelCreateDialog();
 
       // Refresh available lists
-      await this.loadAvailableLists();
+      await this.LoadAvailableLists();
     } catch (error) {
       console.error('Error creating list:', error);
       this.notificationService.CreateSimpleNotification('Error creating list', 'error', 4000);
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
       this.cdr.detectChanges();
     }
   }
 
-  addToExistingList() {
-    if (!this.selectedRegion || this.selectedRegion.size === 0) return;
-    this.recordsToAdd = [...this.selectedRegion.recordIds];
+  /** @deprecated Use {@link ConfirmCreateList}. */
+  async confirmCreateList() {
+    return this.ConfirmCreateList();
+  }
+
+  AddToExistingList() {
+    if (!this.SelectedRegion || this.SelectedRegion.size === 0) return;
+    this.RecordsToAdd = [...this.SelectedRegion.recordIds];
     this.openAddToListDialog();
   }
 
-  addResultToExistingList() {
-    if (!this.lastOperationResult || this.lastOperationResult.resultCount === 0) return;
-    this.recordsToAdd = [...this.lastOperationResult.resultRecordIds];
+  /** @deprecated Use {@link AddToExistingList}. */
+  addToExistingList() {
+    return this.AddToExistingList();
+  }
+
+  AddResultToExistingList() {
+    if (!this.LastOperationResult || this.LastOperationResult.resultCount === 0) return;
+    this.RecordsToAdd = [...this.LastOperationResult.resultRecordIds];
     this.openAddToListDialog();
+  }
+
+  /** @deprecated Use {@link AddResultToExistingList}. */
+  addResultToExistingList() {
+    return this.AddResultToExistingList();
   }
 
   /**
    * Open the Add to Existing List dialog
    */
   private openAddToListDialog(): void {
-    this.showAddToListDialog = true;
-    this.addToListSearchTerm = '';
-    this.selectedTargetListId = null;
-    this.filterAddToListOptions();
+    this.ShowAddToListDialog = true;
+    this.AddToListSearchTerm = '';
+    this.SelectedTargetListId = null;
+    this.FilterAddToListOptions();
   }
 
   /**
    * Filter available lists for add-to-list dialog
    */
-  filterAddToListOptions(): void {
+  FilterAddToListOptions(): void {
     // Get entity ID from selected lists to filter to same entity type
-    if (this.selectedLists.length === 0) {
-      this.filteredAddToListOptions = [];
+    if (this.SelectedLists.length === 0) {
+      this.FilteredAddToListOptions = [];
       return;
     }
 
-    const entityId = this.selectedLists[0].list.EntityID;
+    const entityId = this.SelectedLists[0].list.EntityID;
 
     // Filter to same entity, exclude already selected lists
-    const selectedIds = new Set(this.selectedLists.map(s => s.list.ID));
-    let filtered = this.availableLists.filter(l =>
+    const selectedIds = new Set(this.SelectedLists.map(s => s.list.ID));
+    let filtered = this.AvailableLists.filter(l =>
       UUIDsEqual(l.EntityID, entityId) && !selectedIds.has(l.ID)
     );
 
     // Apply search filter
-    if (this.addToListSearchTerm) {
-      const term = this.addToListSearchTerm.toLowerCase();
+    if (this.AddToListSearchTerm) {
+      const term = this.AddToListSearchTerm.toLowerCase();
       filtered = filtered.filter(l =>
         l.Name.toLowerCase().includes(term)
       );
     }
 
-    this.filteredAddToListOptions = filtered;
+    this.FilteredAddToListOptions = filtered;
+  }
+
+  /** @deprecated Use {@link FilterAddToListOptions}. */
+  filterAddToListOptions(): void {
+    return this.FilterAddToListOptions();
   }
 
   /**
    * Select a target list for adding records
    */
   IsTargetListSelected(list: MJListEntity): boolean {
-    return UUIDsEqual(this.selectedTargetListId, list.ID);
+    return UUIDsEqual(this.SelectedTargetListId, list.ID);
   }
 
+  SelectTargetList(listId: string): void {
+    this.SelectedTargetListId = listId;
+  }
+
+  /** @deprecated Use {@link SelectTargetList}. */
   selectTargetList(listId: string): void {
-    this.selectedTargetListId = listId;
+    return this.SelectTargetList(listId);
   }
 
   /**
    * Cancel the add to list dialog
    */
+  CancelAddToListDialog(): void {
+    this.ShowAddToListDialog = false;
+    this.AddToListSearchTerm = '';
+    this.SelectedTargetListId = null;
+    this.RecordsToAdd = [];
+  }
+
+  /** @deprecated Use {@link CancelAddToListDialog}. */
   cancelAddToListDialog(): void {
-    this.showAddToListDialog = false;
-    this.addToListSearchTerm = '';
-    this.selectedTargetListId = null;
-    this.recordsToAdd = [];
+    return this.CancelAddToListDialog();
   }
 
   /**
    * Confirm adding records to selected list
    */
-  async confirmAddToList(): Promise<void> {
-    if (!this.selectedTargetListId || this.recordsToAdd.length === 0) return;
+  async ConfirmAddToList(): Promise<void> {
+    if (!this.SelectedTargetListId || this.RecordsToAdd.length === 0) return;
 
-    this.isSaving = true;
+    this.IsSaving = true;
     this.cdr.detectChanges();
 
     try {
       const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
 
-      for (const recordId of this.recordsToAdd) {
+      for (const recordId of this.RecordsToAdd) {
         const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
-        detail.ListID = this.selectedTargetListId;
+        detail.ListID = this.SelectedTargetListId;
         detail.RecordID = recordId;
         detail.Sequence = 0;
         detail.TransactionGroup = tg;
@@ -3000,9 +3541,9 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const success = await tg.Submit();
 
       if (success) {
-        const targetList = this.availableLists.find(l => UUIDsEqual(l.ID, this.selectedTargetListId));
+        const targetList = this.AvailableLists.find(l => UUIDsEqual(l.ID, this.SelectedTargetListId));
         this.notificationService.CreateSimpleNotification(
-          `Added ${this.recordsToAdd.length} records to "${targetList?.Name || 'list'}"`,
+          `Added ${this.RecordsToAdd.length} records to "${targetList?.Name || 'list'}"`,
           'success',
           3000
         );
@@ -3014,14 +3555,19 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         );
       }
 
-      this.cancelAddToListDialog();
+      this.CancelAddToListDialog();
     } catch (error) {
       console.error('Error adding to list:', error);
       this.notificationService.CreateSimpleNotification('Error adding records to list', 'error', 4000);
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link ConfirmAddToList}. */
+  async confirmAddToList(): Promise<void> {
+    return this.ConfirmAddToList();
   }
 
   /**
@@ -3030,13 +3576,13 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * extra RunView. Default selection mirrors what the previous
    * "export all" behavior produced.
    */
-  public openExportDialog(): void {
-    const recordIds = this.selectedRegion?.recordIds ?? this.lastOperationResult?.resultRecordIds ?? [];
+  public OpenExportDialog(): void {
+    const recordIds = this.SelectedRegion?.recordIds ?? this.LastOperationResult?.resultRecordIds ?? [];
     if (recordIds.length === 0) {
       this.notificationService.CreateSimpleNotification('Nothing to export — pick a region first.', 'info', 3000);
       return;
     }
-    const entityName = this.selectedLists[0]?.entityName ?? this.selectedViews[0]?.entityName ?? null;
+    const entityName = this.SelectedLists[0]?.entityName ?? this.SelectedViews[0]?.entityName ?? null;
     if (!entityName) {
       this.notificationService.CreateSimpleNotification('Cannot determine entity for export.', 'error', 4000);
       return;
@@ -3058,32 +3604,57 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     // virtual / not-queryable fields so users can't pick them and get
     // a confusing empty column. Default-select everything to match the
     // previous "export all" behavior.
-    this.exportFields = entityInfo.Fields
+    this.ExportFields = entityInfo.Fields
       .filter((f) => f.IsVirtual !== true)
       .map((f) => ({
         Name: f.Name,
         DisplayName: f.DisplayName || f.Name,
         Selected: true,
       }));
-    this.exportRecordCount = recordIds.length;
-    this.exportFormat = 'excel';
-    this.showExportDialog = true;
+    this.ExportRecordCount = recordIds.length;
+    this.ExportFormat = 'excel';
+    this.ShowExportDialog = true;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OpenExportDialog}. */
+  public openExportDialog(): void {
+    return this.OpenExportDialog();
+  }
+
+  public CloseExportDialog(): void {
+    this.ShowExportDialog = false;
+    this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link CloseExportDialog}. */
   public closeExportDialog(): void {
-    this.showExportDialog = false;
-    this.cdr.detectChanges();
+    return this.CloseExportDialog();
   }
 
+  public SelectAllExportFields(): void {
+    for (const f of this.ExportFields) f.Selected = true;
+  }
+
+  /** @deprecated Use {@link SelectAllExportFields}. */
   public selectAllExportFields(): void {
-    for (const f of this.exportFields) f.Selected = true;
+    return this.SelectAllExportFields();
   }
+  public SelectNoneExportFields(): void {
+    for (const f of this.ExportFields) f.Selected = false;
+  }
+
+  /** @deprecated Use {@link SelectNoneExportFields}. */
   public selectNoneExportFields(): void {
-    for (const f of this.exportFields) f.Selected = false;
+    return this.SelectNoneExportFields();
   }
+  public get SelectedExportFieldCount(): number {
+    return this.ExportFields.filter((f) => f.Selected).length;
+  }
+
+  /** @deprecated Use {@link SelectedExportFieldCount}. */
   public get selectedExportFieldCount(): number {
-    return this.exportFields.filter((f) => f.Selected).length;
+    return this.SelectedExportFieldCount;
   }
 
   /**
@@ -3091,28 +3662,26 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * via RunView restricted to the chosen Fields so we don't shuttle
    * data we'll then throw away.
    */
-  public async executeExport(): Promise<void> {
-    const recordIds = this.selectedRegion?.recordIds ?? this.lastOperationResult?.resultRecordIds ?? [];
+  public async ExecuteExport(): Promise<void> {
+    const recordIds = this.SelectedRegion?.recordIds ?? this.LastOperationResult?.resultRecordIds ?? [];
     if (recordIds.length === 0) return;
-    const entityName = this.selectedLists[0]?.entityName ?? this.selectedViews[0]?.entityName ?? null;
+    const entityName = this.SelectedLists[0]?.entityName ?? this.SelectedViews[0]?.entityName ?? null;
     if (!entityName) return;
-    const selectedFields = this.exportFields.filter((f) => f.Selected).map((f) => f.Name);
+    const selectedFields = this.ExportFields.filter((f) => f.Selected).map((f) => f.Name);
     if (selectedFields.length === 0) return;
 
-    this.isExporting = true;
+    this.IsExporting = true;
     this.cdr.detectChanges();
     try {
       const md = this.ProviderToUse;
       const entityInfo = md.EntityByName(entityName)!;
-      const pk = entityInfo.PrimaryKeys[0].Name;
-      // Always include the PK in the SELECT — RunView won't filter on
-      // a column it didn't pull, and downstream lookups expect it.
-      const fieldsForQuery = Array.from(new Set([pk, ...selectedFields]));
-      const escaped = recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
+      // Always include the key column(s) in the SELECT — RunView won't filter on
+      // a column it didn't pull, and downstream lookups expect them.
+      const fieldsForQuery = Array.from(new Set([...entityInfo.PrimaryKeys.map((pk) => pk.Name), ...selectedFields]));
       const rv = RunView.FromMetadataProvider(md);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
-        ExtraFilter: `${pk} IN (${escaped})`,
+        ExtraFilter: BuildRecordIdFilter(entityInfo, recordIds.map(String)),
         Fields: fieldsForQuery,
         ResultType: 'simple',
       });
@@ -3129,17 +3698,17 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         return projected;
       });
       const dateStamp = new Date().toISOString().slice(0, 10);
-      const ext = this.exportFormat === 'excel' ? 'xlsx' : this.exportFormat;
+      const ext = this.ExportFormat === 'excel' ? 'xlsx' : this.ExportFormat;
       const fileName = `lists-operations-${dateStamp}.${ext}`;
-      const exportResult = this.exportFormat === 'excel'
+      const exportResult = this.ExportFormat === 'excel'
         ? await this.exportService.toExcel(rows, { fileName, includeHeaders: true })
-        : this.exportFormat === 'csv'
+        : this.ExportFormat === 'csv'
           ? await this.exportService.toCSV(rows, { fileName, includeHeaders: true })
           : await this.exportService.toJSON(rows, { fileName });
       if (exportResult.success) {
         this.exportService.downloadResult(exportResult);
         this.notificationService.CreateSimpleNotification(`Exported ${rows.length} record(s)`, 'success', 3000);
-        this.showExportDialog = false;
+        this.ShowExportDialog = false;
       } else {
         this.notificationService.CreateSimpleNotification('Export failed', 'error', 5000);
       }
@@ -3147,9 +3716,14 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const message = e instanceof Error ? e.message : String(e);
       this.notificationService.CreateSimpleNotification(`Export error: ${message}`, 'error', 5000);
     } finally {
-      this.isExporting = false;
+      this.IsExporting = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link ExecuteExport}. */
+  public async executeExport(): Promise<void> {
+    return this.ExecuteExport();
   }
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -3163,18 +3737,23 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   /**
    * Clear all selections and reset state
    */
-  clearAllSelections(): void {
-    this.selectedLists = [];
-    this.selectedViews = [];
-    this.selectedEntityId = '';
-    this.vennData = null;
-    this.selectedRegion = null;
-    this.lastOperationResult = null;
-    this.previewRecordsDisplay = [];
-    this.filterAvailableLists();
-    this.filterAvailableViews();
+  ClearAllSelections(): void {
+    this.SelectedLists = [];
+    this.SelectedViews = [];
+    this.SelectedEntityId = '';
+    this.VennData = null;
+    this.SelectedRegion = null;
+    this.LastOperationResult = null;
+    this.PreviewRecordsDisplay = [];
+    this.FilterAvailableLists();
+    this.FilterAvailableViews();
     this.saveState();
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link ClearAllSelections}. */
+  clearAllSelections(): void {
+    return this.ClearAllSelections();
   }
 
   /**
@@ -3203,8 +3782,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       if (!userId) return;
 
       const stateToSave = {
-        entityId: this.selectedEntityId,
-        listIds: this.selectedLists.map(s => s.list.ID)
+        entityId: this.SelectedEntityId,
+        listIds: this.SelectedLists.map(s => s.list.ID)
       };
 
       const engine = UserInfoEngine.Instance;
@@ -3249,16 +3828,16 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
         // Restore entity filter
         if (state.entityId) {
-          this.selectedEntityId = state.entityId;
+          this.SelectedEntityId = state.entityId;
         }
 
         // Restore selected lists
         if (state.listIds && state.listIds.length > 0) {
           for (const listId of state.listIds) {
-            const list = this.availableLists.find(l => UUIDsEqual(l.ID, listId));
+            const list = this.AvailableLists.find(l => UUIDsEqual(l.ID, listId));
             if (list) {
-              const color = this.setOperationsService.getColorForIndex(this.selectedLists.length);
-              this.selectedLists.push({
+              const color = this.setOperationsService.getColorForIndex(this.SelectedLists.length);
+              this.SelectedLists.push({
                 list,
                 entityName: list.Entity || 'Unknown',
                 color
@@ -3267,9 +3846,9 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
           }
 
           // If we restored lists, recalculate venn
-          if (this.selectedLists.length > 0) {
-            this.filterAvailableLists();
-            await this.recalculateVenn();
+          if (this.SelectedLists.length > 0) {
+            this.FilterAvailableLists();
+            await this.RecalculateVenn();
           }
         }
 

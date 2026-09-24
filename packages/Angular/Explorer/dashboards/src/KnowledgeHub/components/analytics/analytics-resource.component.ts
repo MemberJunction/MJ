@@ -18,18 +18,18 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import {
-    buildAnalyticsAgentContext,
-    isValidAnalyticsTab,
-    isValidAnalyticsDateRange,
-    resolveAnalyticsName,
-    buildAnalyticsNotFoundError,
-    capAnalyticsList,
+    BuildAnalyticsAgentContext,
+    IsValidAnalyticsTab,
+    IsValidAnalyticsDateRange,
+    ResolveAnalyticsName,
+    BuildAnalyticsNotFoundError,
+    CapAnalyticsList,
     ANALYTICS_TABS,
     ANALYTICS_DATE_RANGES,
     AnalyticsTab,
     AnalyticsDateRange,
 } from './analytics-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 // ================================================================
 // Interfaces
@@ -305,13 +305,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         }
 
         const md = this.ProviderToUse;
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
-        const pkey = new CompositeKey();
-        if (entityInfo) {
-            pkey.LoadFromURLSegment(entityInfo, recordID);
-        } else {
-            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordID }];
-        }
+        const pkey = CompositeKey.FromURLSegment(md.EntityByName(entityName), recordID);
         this.navigationService.OpenEntityRecord(entityName, pkey);
     }
 
@@ -440,7 +434,16 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     private rawTags: Record<string, unknown>[] = [];
     private rawContentItemTags: Record<string, unknown>[] = [];
     private rawContentItems: Record<string, unknown>[] = [];
-    public rawProcessRuns: Record<string, unknown>[] = [];
+    public RawProcessRuns: Record<string, unknown>[] = [];
+
+    /** @deprecated Use {@link RawProcessRuns}. */
+    public get rawProcessRuns(): Record<string, unknown>[] {
+        return this.RawProcessRuns;
+    }
+    /** @deprecated Use {@link RawProcessRuns}. */
+    public set rawProcessRuns(value: Record<string, unknown>[]) {
+        this.RawProcessRuns = value;
+    }
     private rawContentSources: Record<string, unknown>[] = [];
     private rawContentTypes: Record<string, unknown>[] = [];
     private rawRunDetails: Record<string, unknown>[] = [];
@@ -467,8 +470,8 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
      * cost KPIs) — built by the pure, mode-scoped {@link buildAnalyticsAgentContext}.
      */
     private emitAgentContext(): void {
-        const activeTab: AnalyticsTab = isValidAnalyticsTab(this.ActiveTab) ? this.ActiveTab : 'overview';
-        this.navigationService.SetAgentContext(this, buildAnalyticsAgentContext({
+        const activeTab: AnalyticsTab = IsValidAnalyticsTab(this.ActiveTab) ? this.ActiveTab : 'overview';
+        this.navigationService.SetAgentContext(this, BuildAnalyticsAgentContext({
             ActiveTab: activeTab,
             DateRange: this.ActiveDateRange,
             EntityFilter: this.EntityFilter,
@@ -523,7 +526,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                     required: ['tab'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    if (!isValidAnalyticsTab(params['tab'])) {
+                    if (!IsValidAnalyticsTab(params['tab'])) {
                         return { Success: false, ErrorMessage: `Invalid tab. Expected one of: ${ANALYTICS_TABS.join(', ')}.` };
                     }
                     this.SelectTab(params['tab']);
@@ -539,7 +542,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                     required: ['range'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    if (!isValidAnalyticsDateRange(params['range'])) {
+                    if (!IsValidAnalyticsDateRange(params['range'])) {
                         return { Success: false, ErrorMessage: `Invalid range. Expected one of: ${ANALYTICS_DATE_RANGES.join(', ')}.` };
                     }
                     this.SetDateRange(params['range'] as AnalyticsDateRange);
@@ -555,13 +558,13 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                     required: ['entity'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['entity'], 'entity');
+                    const check = ValidateStringParam(params['entity'], 'entity');
                     if (!check.ok) {
                         return check.result;
                     }
-                    const match = resolveAnalyticsName(check.value, this.EntityFilterOptions);
+                    const match = ResolveAnalyticsName(check.value, this.EntityFilterOptions);
                     if (!match) {
-                        return buildAnalyticsNotFoundError(check.value, this.EntityFilterOptions, 'entity filter');
+                        return BuildAnalyticsNotFoundError(check.value, this.EntityFilterOptions, 'entity filter');
                     }
                     this.SetEntityFilter(match);
                     return { Success: true, Data: { EntityFilter: this.EntityFilter } };
@@ -576,14 +579,14 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                     required: ['source'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['source'], 'source');
+                    const check = ValidateStringParam(params['source'], 'source');
                     if (!check.ok) {
                         return check.result;
                     }
                     const names = this.SourceComparison.map(s => s.Name);
-                    const match = resolveAnalyticsName(check.value, names);
+                    const match = ResolveAnalyticsName(check.value, names);
                     if (!match) {
-                        return buildAnalyticsNotFoundError(check.value, names, 'source');
+                        return BuildAnalyticsNotFoundError(check.value, names, 'source');
                     }
                     if (this.ActiveTab !== 'sources') {
                         this.SelectTab('sources');
@@ -602,7 +605,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                     required: ['key'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['key'], 'key');
+                    const check = ValidateStringParam(params['key'], 'key');
                     if (!check.ok) {
                         return check.result;
                     }
@@ -633,7 +636,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                     required: ['dataKey'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['dataKey'], 'dataKey');
+                    const check = ValidateStringParam(params['dataKey'], 'dataKey');
                     if (!check.ok) {
                         return check.result;
                     }
@@ -672,7 +675,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                     return {
                         Success: true,
                         Data: {
-                            Sources: capAnalyticsList(this.SourceComparison.map(s => ({ Name: s.Name, Items: s.Items, Status: s.Status }))),
+                            Sources: CapAnalyticsList(this.SourceComparison.map(s => ({ Name: s.Name, Items: s.Items, Status: s.Status }))),
                             TotalCount: this.SourceComparison.length,
                         },
                     };
@@ -692,15 +695,25 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // ================================================================
 
     /** Wraps `NavItems` for `<mj-left-nav>`. */
-    public get navSections(): MJLeftNavSection[] {
+    public get NavSections(): MJLeftNavSection[] {
         return [{
             items: this.NavItems.map(n => ({ id: n.ID, label: n.Label, icon: n.Icon }))
         }];
     }
 
+    /** @deprecated Use {@link NavSections}. */
+    public get navSections(): MJLeftNavSection[] {
+        return this.NavSections;
+    }
+
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
-    public onNavItemClicked(item: MJLeftNavItem): void {
+    public OnNavItemClicked(item: MJLeftNavItem): void {
         this.SelectTab(item.id);
+    }
+
+    /** @deprecated Use {@link OnNavItemClicked}. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        return this.OnNavItemClicked(item);
     }
 
     public SelectTab(tabId: string): void {
@@ -859,7 +872,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
             this.rawTags = TagEngineBase.Instance.Tags.map(t => t.GetAll());
             this.rawContentItemTags = results[0]?.Success ? results[0].Results : [];
             this.rawContentItems = results[1]?.Success ? results[1].Results : [];
-            this.rawProcessRuns = results[2]?.Success ? results[2].Results : [];
+            this.RawProcessRuns = results[2]?.Success ? results[2].Results : [];
             this.rawContentSources = results[3]?.Success ? results[3].Results : [];
             this.rawContentTypes = results[4]?.Success ? results[4].Results : [];
             this.rawRunDetails = results[5]?.Success ? results[5].Results : [];
@@ -899,7 +912,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     private rebuildAllAggregations(): void {
         const filteredItems = this.getDateFilteredItems(this.rawContentItems);
         const filteredTags = this.getDateFilteredItems(this.rawContentItemTags);
-        const filteredRuns = this.getDateFilteredItems(this.rawProcessRuns);
+        const filteredRuns = this.getDateFilteredItems(this.RawProcessRuns);
 
         this.buildKPIs(filteredTags, filteredItems);
         this.buildTagGrowth();
@@ -1726,7 +1739,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // ================================================================
 
     private buildActiveRuns(): void {
-        const activeRuns = this.rawProcessRuns
+        const activeRuns = this.RawProcessRuns
             .filter(r => {
                 const status = String(r['Status'] || '').toLowerCase();
                 return status === 'running' || status === 'in progress' || status === 'processing';
@@ -2199,7 +2212,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
             case 'dailyThroughput':
                 this.DrillDownColumns = ['Run ID', 'Source', 'Status', 'Items', 'Started'];
                 this.DrillDownHasActions = true;
-                this.DrillDownData = this.rawProcessRuns
+                this.DrillDownData = this.RawProcessRuns
                     .sort((a, b) => new Date(String(b['StartTime'] || 0)).getTime() - new Date(String(a['StartTime'] || 0)).getTime())
                     .slice(0, 30)
                     .map(r => {
@@ -2285,7 +2298,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         }
 
         const sid = String(source['ID']);
-        const sourceRuns = this.rawProcessRuns
+        const sourceRuns = this.RawProcessRuns
             .filter(r => String(r['SourceID']) === sid)
             .sort((a, b) => new Date(String(b['StartTime'] || 0)).getTime() - new Date(String(a['StartTime'] || 0)).getTime())
             .slice(0, 20);
@@ -2318,7 +2331,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         const targetDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (29 - idx));
         const dayStr = targetDate.toISOString().slice(0, 10);
 
-        const dayRuns = this.rawProcessRuns.filter(r => DateCellDayKey(r['StartTime'] as Date | string | null) === dayStr);
+        const dayRuns = this.RawProcessRuns.filter(r => DateCellDayKey(r['StartTime'] as Date | string | null) === dayStr);
 
         this.DrillDownColumns = ['Run ID', 'Source', 'Status', 'Items', 'Start Time'];
         this.DrillDownHasActions = true;

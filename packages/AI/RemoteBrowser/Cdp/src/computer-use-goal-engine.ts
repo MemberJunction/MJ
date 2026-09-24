@@ -64,13 +64,18 @@ export const PROGRESS_MESSAGE_MAX_LENGTH = 160;
  * @param step The completed step record.
  * @returns The progress note to forward to the caller's `OnProgress`.
  */
-export function buildProgressNote(step: StepRecord): ComputerUseGoalProgress {
+export function BuildProgressNote(step: StepRecord): ComputerUseGoalProgress {
   const reasoning = step.ControllerReasoning ?? '';
   return {
     Step: step.StepNumber,
     Message: reasoning.length > PROGRESS_MESSAGE_MAX_LENGTH ? `${reasoning.slice(0, PROGRESS_MESSAGE_MAX_LENGTH)}…` : reasoning,
     Url: step.Url,
   };
+}
+
+/** @deprecated Use {@link BuildProgressNote}. */
+export function buildProgressNote(step: StepRecord): ComputerUseGoalProgress {
+  return BuildProgressNote(step);
 }
 
 /**
@@ -84,9 +89,12 @@ export class ProgressComputerUseEngine extends ComputerUseEngine implements Comp
   public OnProgress?: (progress: ComputerUseGoalProgress) => void;
 
   protected override onStepComplete(step: StepRecord, _params: RunComputerUseParams): void {
-    this.OnProgress?.(buildProgressNote(step));
+    this.OnProgress?.(BuildProgressNote(step));
   }
 }
 
 /** The default factory used unless {@link CdpRemoteBrowserSession.SetGoalEngineFactory} overrides it. */
-export const defaultComputerUseGoalEngineFactory: ComputerUseGoalEngineFactory = () => new ProgressComputerUseEngine();
+export const DefaultComputerUseGoalEngineFactory: ComputerUseGoalEngineFactory = () => new ProgressComputerUseEngine();
+
+/** @deprecated Use {@link DefaultComputerUseGoalEngineFactory}. */
+export const defaultComputerUseGoalEngineFactory: ComputerUseGoalEngineFactory = DefaultComputerUseGoalEngineFactory;

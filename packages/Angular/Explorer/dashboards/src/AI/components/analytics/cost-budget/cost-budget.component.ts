@@ -12,7 +12,8 @@ import {
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
-import { CacheRate, CacheTokenTotals, cacheHitRate, hasCacheActivity, netCacheSavings } from '../../../services/cache-metrics';
+import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
+import { CacheRate, CacheTokenTotals, CacheHitRate, HasCacheActivity, NetCacheSavings } from '../../../services/cache-metrics';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
@@ -88,15 +89,14 @@ interface ModelCostRow {
     OutputPricePerUnit: number | null;
     CacheReadPricePerUnit: number | null;
     CacheWritePricePerUnit: number | null;
-    UnitType: string | null;
+    UnitTypeID: string | null;
 }
 
-// AIModelCost UnitType name -> token divisor, matching the BasePriceUnitType driver classes.
-const UNIT_DIVISORS: Record<string, number> = {
-    'Per Million Tokens': 1_000_000,
-    'Per Hundred Thousand Tokens': 100_000,
-    'Per Thousand Tokens': 1_000
-};
+/** A price unit type, reduced to what the scale lookup needs. */
+interface PriceUnitTypeRow {
+    ID: string;
+    DriverClass: string | null;
+}
 
 const TIME_RANGE_OPTIONS = ['Today', '7d', '30d', 'MTD'];
 
@@ -616,7 +616,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     set TimeRange(value: string) {
         const prev = this._timeRange;
         this._timeRange = value;
-        if (prev !== value && this.initialized) this.LoadData();
+        if (prev !== value && this.initialized) this.loadData();
     }
     get TimeRange(): string { return this._timeRange; }
 
@@ -626,7 +626,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         const next = value ?? { Models: [], Agents: [], Prompts: [], Statuses: [] };
         const changed = !this.shallowFiltersEqual(this._filters, next);
         this._filters = next;
-        if (changed && this.initialized) this.LoadData();
+        if (changed && this.initialized) this.loadData();
     }
     get Filters(): GlobalFilterState { return this._filters; }
 
@@ -661,7 +661,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     ngOnInit(): void {
         this.initialized = true;
-        this.LoadData();
+        this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -674,13 +674,13 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     public OnTimeRangeChange(range: string): void {
         this.TimeRange = range;
         this.TimeRangeChange.emit(range);
-        this.LoadData();
+        this.loadData();
     }
 
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.Filters = filters;
         this.FiltersChange.emit(filters);
-        this.LoadData();
+        this.loadData();
     }
 
     public FormatCurrency(value: number, decimals = 2): string {
@@ -700,7 +700,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     // ── Data Loading ──
 
-    private async LoadData(): Promise<void> {
+    private async loadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 
@@ -712,7 +712,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             const currentFilter = this.combineDateAndModelFilter(currentStart, now, modelFilter);
             const prevFilter = this.combineDateAndModelFilter(previousStart, currentStart, modelFilter);
 
-            const [currentResult, prevResult, rateResult] = await rv.RunViews([
+            const [currentResult, prevResult, rateResult, unitTypeResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: AI Prompt Runs',
                     ExtraFilter: currentFilter,
@@ -730,14 +730,27 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 {
                     EntityName: 'MJ: AI Model Costs',
                     ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
-                    Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitType'],
+                    Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitTypeID'],
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: AI Model Price Unit Types',
+                    Fields: ['ID', 'DriverClass'],
                     ResultType: 'simple'
                 }
             ]);
 
             this.allRuns = (currentResult?.Results ?? []) as PromptRunRecord[];
             this.previousPeriodRuns = (prevResult?.Results ?? []) as PromptRunRecord[];
-            this.buildCacheRateMap(rateResult?.Results ?? []);
+            // A failed unit-type view is NOT the same as "these rows are unpriceable". Without the
+            // driver classes every rate row falls into the `continue` below, and cache savings
+            // render as a confident 0 instead of an error — the figure most likely to be believed.
+            // Say so rather than let the empty map speak for it.
+            if (unitTypeResult && !unitTypeResult.Success) {
+                console.error('Cost & Budget: price unit types failed to load; cache-savings figures will read 0. ' +
+                    unitTypeResult.ErrorMessage);
+            }
+            this.buildCacheRateMap(rateResult?.Results ?? [], unitTypeResult?.Results ?? []);
 
             this.computeKpis();
             this.computeDailyBars();
@@ -763,26 +776,43 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         return this.cacheRates.get(this.rateKey(run.ModelID, run.VendorID));
     }
 
-    /** Build the per-model+vendor rate lookup, normalizing each per-unit price to currency-per-token. */
-    private buildCacheRateMap(rows: ModelCostRow[]): void {
+    /**
+     * Build the per-model+vendor rate lookup, normalizing each per-unit price to currency-per-token.
+     *
+     * The scale comes from the unit type's DriverClass, not its display name — the name is editable
+     * metadata (`Per 1M Tokens`) while the driver class is the contract the pricing drivers register
+     * under, so this cannot drift the way a hardcoded name table does.
+     */
+    private buildCacheRateMap(rows: ModelCostRow[], unitTypes: PriceUnitTypeRow[]): void {
         this.cacheRates.clear();
+        const driverClassByUnitType = new Map<string, string>(
+            unitTypes.filter(u => u.DriverClass).map(u => [NormalizeUUID(u.ID), u.DriverClass!])
+        );
         for (const row of rows) {
-            const divisor = UNIT_DIVISORS[row.UnitType ?? ''] ?? 1_000_000;
+            const driverClass = driverClassByUnitType.get(NormalizeUUID(row.UnitTypeID ?? ''));
+            const divisor = TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass ?? ''];
+            if (divisor === undefined) {
+                // A non-token unit type (per minute/hour/image), or one this build has no driver
+                // for. Defaulting to the per-1M-token divisor would divide an hourly audio rate by
+                // a million and report a savings figure that is pure noise; no rate at all is the
+                // honest answer.
+                continue;
+            }
             const inputRate = (row.InputPricePerUnit ?? 0) / divisor;
             // Cache read/write fall back to the input rate when no distinct rate is recorded — exactly
             // as the server-side cost calculator does — which makes the corresponding savings term 0.
             const cacheReadRate = (row.CacheReadPricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
             const cacheWriteRate = (row.CacheWritePricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
-            this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), { inputRate, cacheReadRate, cacheWriteRate });
+            this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), { InputRate: inputRate, CacheReadRate: cacheReadRate, CacheWriteRate: cacheWriteRate });
         }
     }
 
     /** Sum net cache savings across a set of runs using each run's model+vendor rate. */
     private sumCacheSavings(runs: PromptRunRecord[]): number {
-        return runs.reduce((total, run) => total + netCacheSavings({
-            uncachedInputTokens: 0,
-            cacheReadTokens: run.TokensCacheRead ?? 0,
-            cacheWriteTokens: run.TokensCacheWrite ?? 0
+        return runs.reduce((total, run) => total + NetCacheSavings({
+            UncachedInputTokens: 0,
+            CacheReadTokens: run.TokensCacheRead ?? 0,
+            CacheWriteTokens: run.TokensCacheWrite ?? 0
         }, this.rateFor(run)), 0);
     }
 
@@ -847,18 +877,18 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     /** Append the cache hit-rate and cache-savings KPIs (computed from the current-period runs). */
     private appendCacheKpis(): void {
-        const totals: CacheTokenTotals = { uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+        const totals: CacheTokenTotals = { UncachedInputTokens: 0, CacheReadTokens: 0, CacheWriteTokens: 0 };
         for (const r of this.allRuns) {
-            totals.uncachedInputTokens += r.TokensPrompt ?? 0;
-            totals.cacheReadTokens += r.TokensCacheRead ?? 0;
-            totals.cacheWriteTokens += r.TokensCacheWrite ?? 0;
+            totals.UncachedInputTokens += r.TokensPrompt ?? 0;
+            totals.CacheReadTokens += r.TokensCacheRead ?? 0;
+            totals.CacheWriteTokens += r.TokensCacheWrite ?? 0;
         }
         const savings = this.sumCacheSavings(this.allRuns);
-        const activity = hasCacheActivity(totals);
+        const activity = HasCacheActivity(totals);
 
         this.CostKpis.push({
             Label: 'Cache Hit Rate',
-            Value: (cacheHitRate(totals) * 100).toFixed(1) + '%',
+            Value: (CacheHitRate(totals) * 100).toFixed(1) + '%',
             Delta: null,
             DeltaDirection: 'stable',
             Highlighted: false,
@@ -961,7 +991,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
                 OutputTokens: outputTokens,
                 CacheReadTokens: cacheReadTokens,
                 CacheWriteTokens: cacheWriteTokens,
-                CacheHitRate: cacheHitRate({ uncachedInputTokens: inputTokens, cacheReadTokens, cacheWriteTokens }),
+                CacheHitRate: CacheHitRate({ UncachedInputTokens: inputTokens, CacheReadTokens: cacheReadTokens, CacheWriteTokens: cacheWriteTokens }),
                 CacheSavings: this.sumCacheSavings(modelRuns),
                 InputCost: inputCost,
                 OutputCost: outputCost,

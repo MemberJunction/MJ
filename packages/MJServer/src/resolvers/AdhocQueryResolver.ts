@@ -5,8 +5,9 @@ import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { RunQueryResultType } from './QueryResolver.js';
-import { exactTotalFromPage, resolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
+import { ExactTotalFromPage, ResolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
 import sql from 'mssql';
 
 /**
@@ -36,6 +37,10 @@ class AdhocQueryInput {
  * - Executes on read-only connection pool only (no fallback to read-write)
  * - Configurable timeout (default 30s)
  * - Requires authenticated user (standard GraphQL auth, no @RequireSystemUser)
+ * - Refuses scope-limited principals (see {@link IsScopeLimitedPrincipal}). Raw SQL bypasses
+ *   RunView, entity permissions and row-level security, so the RLS scope tokens that confine a
+ *   magic-link session are never applied on this path — there is no narrower filter to fall back
+ *   to, only refusal.
  *
  * Auto-discovered by MJServer's dynamic resolver import.
  */
@@ -49,14 +54,24 @@ export class AdhocQueryResolver extends ResolverBase {
         const startTime = Date.now();
 
         try {
-            // 1. Security: validate SQL using SQLExpressionValidator
+            // 1. SECURITY: refuse principals whose read authority is narrower than their role
+            // grant. This resolver runs a raw SELECT on the read-only pool — it does NOT go
+            // through RunView, entity permissions or row-level security, so the RLS scope tokens
+            // that confine a magic-link session are never substituted here. There is no filter
+            // to narrow, so the only correct answer for such a principal is no. Checked before
+            // the SQL is even validated: authorization gates the work, it does not race it.
+            if (IsScopeLimitedPrincipal(context.userPayload?.userRecord)) {
+                return this.buildErrorResult('Ad-hoc SQL execution is not permitted for scope-limited sessions.');
+            }
+
+            // 2. Security: validate SQL using SQLExpressionValidator
             const validator = SQLExpressionValidator.Instance;
             const validation = validator.validateFullQuery(input.SQL);
             if (!validation.valid) {
                 return this.buildErrorResult(validation.error || 'SQL validation failed');
             }
 
-            // 2. Get READ-ONLY data source (no fallback to read-write)
+            // 3. Get READ-ONLY data source (no fallback to read-write)
             let readOnlyDS: sql.ConnectionPool;
             try {
                 readOnlyDS = GetReadOnlyDataSource(context.dataSources, { allowFallbackToReadWrite: false });
@@ -64,7 +79,7 @@ export class AdhocQueryResolver extends ResolverBase {
                 return this.buildErrorResult('No read-only data source available for ad-hoc query execution');
             }
 
-            // 3. Resolve platform from the read-only provider for the render pipeline.
+            // 4. Resolve platform from the read-only provider for the render pipeline.
             let platform: DatabasePlatform = 'sqlserver';
             try {
                 const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
@@ -74,7 +89,7 @@ export class AdhocQueryResolver extends ResolverBase {
             }
             const contextUser = context.userPayload?.userRecord;
 
-            // 4. Route the SQL through RenderPipeline so composition tokens
+            // 5. Route the SQL through RenderPipeline so composition tokens
             // resolve, comments and templates are processed, and the row cap
             // is applied at the database (via TOP / LIMIT / OFFSET-FETCH).
             //
@@ -106,7 +121,7 @@ export class AdhocQueryResolver extends ResolverBase {
                 return this.buildErrorResult(`Ad-hoc query rendering failed: ${renderMsg}`);
             }
 
-            // 5. Execute the page (and, only when a full page needs it, the count) under
+            // 6. Execute the page (and, only when a full page needs it, the count) under
             // a shared wall-clock deadline derived from the request's timeout budget.
             const deadline = startTime + (input.TimeoutSeconds ?? 30) * 1000;
             const { recordset, totalRowCount } = await this.executeDataAndCount(
@@ -114,7 +129,7 @@ export class AdhocQueryResolver extends ResolverBase {
             );
             const executionTimeMs = Date.now() - startTime;
 
-            // 6. Return as RunQueryResultType
+            // 7. Return as RunQueryResultType
             return {
                 QueryID: '',
                 QueryName: 'Ad-Hoc Query',
@@ -185,7 +200,7 @@ export class AdhocQueryResolver extends ResolverBase {
         const recordset = (dataResult.recordset ?? []) as Record<string, unknown>[];
 
         // Total already known from the page alone (unpaged, or a short page)? Skip the count.
-        const exact = exactTotalFromPage(startRow, recordset.length, maxRows);
+        const exact = ExactTotalFromPage(startRow, recordset.length, maxRows);
         if (exact != null || !countSQL) {
             return { recordset, totalRowCount: exact ?? recordset.length };
         }
@@ -194,7 +209,7 @@ export class AdhocQueryResolver extends ResolverBase {
         const lowerBound = startRow + recordset.length;
         try {
             const countResult = await this.runSqlWithDeadline<{ TotalRowCount: number }>(ds, countSQL, deadline);
-            return { recordset, totalRowCount: resolveAdhocTotalRowCount(countResult.recordset, lowerBound) };
+            return { recordset, totalRowCount: ResolveAdhocTotalRowCount(countResult.recordset, lowerBound) };
         } catch (countErr) {
             const msg = countErr instanceof Error ? countErr.message : String(countErr);
             LogError(`Ad-hoc query row-count failed; reporting a lower-bound total (${lowerBound}). ${msg}`);

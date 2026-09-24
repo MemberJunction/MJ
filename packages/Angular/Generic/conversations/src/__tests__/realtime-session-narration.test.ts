@@ -1,13 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Subject } from 'rxjs';
 import { IMetadataProvider } from '@memberjunction/core';
-import {
-  RealtimeSessionService,
-  RealtimeConnectionState,
-  RealtimeDelegationNarration,
-  RealtimeDelegationProgress,
-  RealtimeDelegationResult
-} from '../lib/services/realtime-session.service';
+import { RealtimeConnectionState, RealtimeDelegationNarration, RealtimeDelegationProgress, RealtimeDelegationResult } from '@memberjunction/realtime-runtime';
+import { RealtimeSessionService } from '../lib/services/realtime-session.service';
 
 /**
  * The NARRATION PACING / AGGREGATION state machine — the provider-agnostic policy that

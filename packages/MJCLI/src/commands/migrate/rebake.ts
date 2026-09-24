@@ -5,6 +5,7 @@ import path from 'node:path';
 import { IncrementalBaker } from '@memberjunction/sql-converter';
 import type { BakerWorkingDB } from '@memberjunction/sql-converter';
 import { MJPostgresTranspiler } from '@memberjunction/sqlglot-ts';
+import type { BitColumnRef } from '@memberjunction/sqlglot-ts';
 // Type-only: erased at runtime so a non-bake CLI invocation never loads the heavy codegen graph.
 import type { DataSourceResult } from '@memberjunction/codegen-lib';
 
@@ -33,6 +34,11 @@ export default class MigrateRebake extends Command {
     'source-dir': Flags.string({ description: 'Source T-SQL migrations directory', default: './migrations/v5' }),
     'output-dir': Flags.string({ description: 'PG migrations directory (committed files read here + baked output written here)', default: './migrations-pg/v5' }),
     schema: Flags.string({ description: 'Target schema name', default: '__mj' }),
+    'core-schema': Flags.string({
+      description:
+        "MJ core schema substituted for ${mjSchema} (default __mj). Distinct from --schema, which is the app's OWN schema: an Open App migration references core as ${mjSchema} and itself as ${flyway:defaultSchema}, and for every app those differ.",
+      default: '__mj',
+    }),
     'baseline-floor': Flags.string({ description: 'Re-bake migrations strictly AFTER this version key (default: the latest B* in output-dir)' }),
     'dry-run': Flags.boolean({ description: 'Report what would be re-baked without writing files', default: false }),
   };
@@ -55,7 +61,7 @@ export default class MigrateRebake extends Command {
     this.log(`${migrations.length} post-baseline migration(s) to re-bake.\n`);
 
     const transpiler = await this.buildTranspiler(sourceDir);
-    const { baker, dispose } = await this.buildBaker(transpiler, flags.schema);
+    const { baker, dispose } = await this.buildBaker(transpiler, flags.schema, flags['core-schema']);
 
     const summary = { baked: [] as string[], preserved: [] as string[], skipped: [] as string[] };
     try {
@@ -142,7 +148,7 @@ export default class MigrateRebake extends Command {
       this.error(err instanceof Error ? err.message : String(err));
     }
     const baselines = fs.readdirSync(sourceDir).filter((f) => /^B\d.*\.sql$/.test(f) && !f.endsWith('.pg.sql') && !f.endsWith('.pg-only.sql')).sort();
-    const bitColumns: string[] = [];
+    const bitColumns: BitColumnRef[] = [];
     for (const b of baselines) {
       try {
         bitColumns.push(...(await probe.collectBitColumns(fs.readFileSync(path.join(sourceDir, b), 'utf8'))));
@@ -161,6 +167,7 @@ export default class MigrateRebake extends Command {
   private async buildBaker(
     transpiler: MJPostgresTranspiler,
     schema: string,
+    coreSchema: string,
   ): Promise<{ baker: IncrementalBaker; dispose: () => Promise<void> }> {
     const { RunCodeGenBase, SQLCodeGenBase, initializeConfig, dbPlatform, configInfo } = await import('@memberjunction/codegen-lib');
 
@@ -182,9 +189,17 @@ export default class MigrateRebake extends Command {
 
     const sqlGen = new SQLCodeGenBase();
     const db: BakerWorkingDB = {
-      // Committed files may still carry the `${flyway:defaultSchema}` macro (Skyway substitutes it
-      // at deploy); raw pg.query can't, so substitute before applying to advance the working DB.
-      apply: async (sql: string) => { await ds.connection.query(sql.replaceAll('${flyway:defaultSchema}', schema)); },
+      // Committed files may still carry the `${flyway:defaultSchema}` and `${mjSchema}` macros
+      // (Skyway substitutes them at deploy); raw pg.query can't, so substitute before applying to
+      // advance the working DB. BOTH are required: `${mjSchema}` names MJ core rather than the
+      // app's own schema, and leaving it unresolved fails the apply with
+      // `relation "${mjSchema}.Entity" does not exist` (issue #3838). Replacement FUNCTIONS, not
+      // strings, so a '$' in a schema name is inserted rather than expanded (issue #3171).
+      apply: async (sql: string) => {
+        await ds.connection.query(
+          sql.replaceAll('${flyway:defaultSchema}', () => schema).replaceAll('${mjSchema}', () => coreSchema),
+        );
+      },
       refreshMetadata: async () => { await ds.provider.Refresh(); },
       captureEntity: async (name: string) => {
         const entity = ds.provider.EntityByName(name);
@@ -208,6 +223,6 @@ export default class MigrateRebake extends Command {
           .map((e) => e.Name);
       },
     };
-    return { baker: new IncrementalBaker({ transpiler, db, schema }), dispose: async () => {} };
+    return { baker: new IncrementalBaker({ transpiler, db, schema, coreSchema }), dispose: async () => {} };
   }
 }

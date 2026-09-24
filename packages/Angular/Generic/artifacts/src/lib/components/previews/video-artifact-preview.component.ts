@@ -21,6 +21,8 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
                 <i class="fa-solid fa-film"></i>
                 <span>{{ errorMessage }}</span>
             </div>
+        } @else if (isLoading) {
+            <mj-loading text="Loading video..." size="small"></mj-loading>
         } @else if (videoUrl) {
             <mj-media-player
                 class="video-preview__player"
@@ -69,7 +71,17 @@ export class VideoArtifactPreviewComponent extends BaseArtifactPreviewComponent 
     private readonly cdr = inject(ChangeDetectorRef);
 
     /** Resolved URL — data URI (inline) or pre-auth URL (file). Funneled through {@link setVideoUrl}. */
-    public videoUrl = '';
+    public VideoUrl = '';
+
+    /** @deprecated Use {@link VideoUrl}. */
+    public get videoUrl() {
+        return this.VideoUrl;
+    }
+    /** @deprecated Use {@link VideoUrl}. */
+    public set videoUrl(value) {
+        this.VideoUrl = value;
+    }
+
 
     /** Non-empty hides the player and shows a compact error line. */
     public errorMessage = '';
@@ -82,7 +94,7 @@ export class VideoArtifactPreviewComponent extends BaseArtifactPreviewComponent 
 
     /** Set the resolved URL and recompute the single-element {@link MediaTracks} array in lockstep. */
     private setVideoUrl(url: string): void {
-        this.videoUrl = url;
+        this.VideoUrl = url;
         this.MediaTracks = url
             ? [
                   {
@@ -109,14 +121,24 @@ export class VideoArtifactPreviewComponent extends BaseArtifactPreviewComponent 
         this.cdr.markForCheck();
     }
 
-    public onMediaError(): void {
+    public OnMediaError(): void {
         this.errorMessage = 'Video could not be played.';
         this.setVideoUrl('');
         this.cdr.markForCheck();
     }
 
+    /** @deprecated Use {@link OnMediaError}. */
+    public onMediaError(): void {
+        return this.OnMediaError();
+    }
+
     /** Fired when the generic player reaches the end of the track. No-op affordance hook. */
-    public onMediaEnded(): void {
+    public OnMediaEnded(): void {
         // Playback finished — nothing to persist for an inline preview.
+    }
+
+    /** @deprecated Use {@link OnMediaEnded}. */
+    public onMediaEnded(): void {
+        return this.OnMediaEnded();
     }
 }

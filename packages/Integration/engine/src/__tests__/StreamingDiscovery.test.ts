@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { discoverFromStream, pickPrimaryKeyFromStats, type DiscoveredColumnStat } from '../StreamingDiscovery.js';
+import { DiscoverFromStream, PickPrimaryKeyFromStats, type DiscoveredColumnStat } from '../StreamingDiscovery.js';
 
 /** A clock that advances by `step` each call — for deterministic time-budget tests. */
 function steppedClock(step: number): () => number {
@@ -23,7 +23,7 @@ describe('discoverFromStream', () => {
             { id: '2', region: 'East', score: 7 },
             { id: '3', region: 'West' },          // score missing → null
         ];
-        const res = await discoverFromStream(rows);
+        const res = await DiscoverFromStream(rows);
         expect(res.RowsScanned).toBe(3);
         expect(res.StoppedReason).toBe('exhausted');
 
@@ -44,14 +44,14 @@ describe('discoverFromStream', () => {
 
     it('catches a column that appears in only one row (completeness, not sampling)', async () => {
         const rows = [{ a: 1 }, { a: 2 }, { a: 3, rareCustom: 'x' }];
-        const res = await discoverFromStream(rows);
+        const res = await DiscoverFromStream(rows);
         expect(res.Columns.map(c => c.Key).sort()).toEqual(['a', 'rareCustom']);
     });
 
     it('stops at the time budget and reports it, using what it gathered', async () => {
         const rows = Array.from({ length: 1000 }, (_, i) => ({ id: String(i) }));
         // clock steps 10ms/call; budget 25ms → stops after ~3 rows
-        const res = await discoverFromStream(rows, { TimeBudgetMs: 25, Now: steppedClock(10) });
+        const res = await DiscoverFromStream(rows, { TimeBudgetMs: 25, Now: steppedClock(10) });
         expect(res.StoppedReason).toBe('time-budget');
         expect(res.RowsScanned).toBeLessThan(1000);
         expect(res.RowsScanned).toBeGreaterThan(0);
@@ -59,14 +59,14 @@ describe('discoverFromStream', () => {
 
     it('caps retained sample values per column (bounded memory)', async () => {
         const rows = Array.from({ length: 50 }, (_, i) => ({ k: i }));
-        const res = await discoverFromStream(rows, { SampleValueCap: 5 });
+        const res = await DiscoverFromStream(rows, { SampleValueCap: 5 });
         expect(res.Columns[0].SampleValues).toHaveLength(5);
         expect(res.Columns[0].Occurrences).toBe(50);
     });
 
     it('flags DistinctCapped when distinct values exceed the cap (uniqueness unprovable)', async () => {
         const rows = Array.from({ length: 20 }, (_, i) => ({ k: `v${i}` }));
-        const res = await discoverFromStream(rows, { MaxDistinctTracked: 5 });
+        const res = await DiscoverFromStream(rows, { MaxDistinctTracked: 5 });
         expect(res.Columns[0].DistinctCapped).toBe(true);
     });
 
@@ -75,7 +75,7 @@ describe('discoverFromStream', () => {
         // alone would under-size the column. The true-max accumulator must still catch it.
         const wide = 'w'.repeat(600);
         const rows = Array.from({ length: 50 }, (_, i) => ({ note: i === 29 ? wide : `short-${i}` }));
-        const res = await discoverFromStream(rows, { SampleValueCap: 5 });
+        const res = await DiscoverFromStream(rows, { SampleValueCap: 5 });
         const note = res.Columns.find(c => c.Key === 'note')!;
         // The sample provably missed the wide value…
         expect(note.SampleValues).toHaveLength(5);
@@ -89,7 +89,7 @@ describe('discoverFromStream', () => {
 
 describe('pickPrimaryKeyFromStats', () => {
     it('picks the single unique + non-null column (statistically the key)', () => {
-        const v = pickPrimaryKeyFromStats([
+        const v = PickPrimaryKeyFromStats([
             col({ Key: 'id', Occurrences: 100, TotalRows: 100, DistinctNonNull: 100 }),
             col({ Key: 'region', Occurrences: 100, TotalRows: 100, DistinctNonNull: 4 }), // not unique
         ]);
@@ -98,7 +98,7 @@ describe('pickPrimaryKeyFromStats', () => {
     });
 
     it('returns no PK when nothing is provably unique+non-null (no fabrication)', () => {
-        const v = pickPrimaryKeyFromStats([
+        const v = PickPrimaryKeyFromStats([
             col({ Key: 'region', DistinctNonNull: 4 }),
             col({ Key: 'note', Occurrences: 40, TotalRows: 100 }), // nullable
         ]);
@@ -108,7 +108,7 @@ describe('pickPrimaryKeyFromStats', () => {
     it('picks a thin-sample near-unique convention column as a SOFT best-available key (no hard significance gate)', () => {
         // Soft policy: a small sample no longer blocks the pick — a PK-less object stalls CodeGen, and
         // the key is soft (can't reject a row). `id` here is all-distinct + non-null + convention-named.
-        const v = pickPrimaryKeyFromStats([col({ Key: 'id', Occurrences: 5, TotalRows: 5, DistinctNonNull: 5 })], { MinRowsForSignificance: 50 });
+        const v = PickPrimaryKeyFromStats([col({ Key: 'id', Occurrences: 5, TotalRows: 5, DistinctNonNull: 5 })], { MinRowsForSignificance: 50 });
         expect(v.Field).toBe('id');
         expect(v.AmbiguousForLLM).toBe(false);
     });
@@ -117,30 +117,30 @@ describe('pickPrimaryKeyFromStats', () => {
         // `id` is convention-named, non-null on every scanned row, 92% distinct (near-unique > 0.9 but < 1.0).
         const nearUnique = [col({ Key: 'id', Occurrences: 100, TotalRows: 100, DistinctNonNull: 92 })];
         // Complete scan (default): the soft near-unique key is accepted.
-        expect(pickPrimaryKeyFromStats(nearUnique, { MinRowsForSignificance: 50 }).Field).toBe('id');
+        expect(PickPrimaryKeyFromStats(nearUnique, { MinRowsForSignificance: 50 }).Field).toBe('id');
         // Truncated scan: a prefix-only 92% could be null/dup in the unscanned tail → demand 1.0 → no soft key.
-        expect(pickPrimaryKeyFromStats(nearUnique, { MinRowsForSignificance: 50, ScanComplete: false }).Field).toBeNull();
+        expect(PickPrimaryKeyFromStats(nearUnique, { MinRowsForSignificance: 50, ScanComplete: false }).Field).toBeNull();
         // A high-cardinality (distinct-capped) convention column still earns a SOFT key on a truncated scan,
         // but the verdict is annotated as partial-scan so it gets re-verified on full data.
-        const capped = pickPrimaryKeyFromStats([col({ Key: 'id', Occurrences: 100, TotalRows: 100, DistinctCapped: true })], { ScanComplete: false });
+        const capped = PickPrimaryKeyFromStats([col({ Key: 'id', Occurrences: 100, TotalRows: 100, DistinctCapped: true })], { ScanComplete: false });
         expect(capped.Field).toBe('id');
         expect(capped.Reason).toMatch(/partial scan/i);
     });
 
     it('does NOT pick a distinct-capped column with no convention name (uniqueness unprovable, no signal)', () => {
-        const v = pickPrimaryKeyFromStats([col({ Key: 'payload', DistinctCapped: true })]);
+        const v = PickPrimaryKeyFromStats([col({ Key: 'payload', DistinctCapped: true })]);
         expect(v.Field).toBeNull();
     });
 
     it('picks a distinct-capped HIGH-cardinality column when its name matches the convention (soft)', () => {
         // capped `id` = more distinct values than the cap, literally named id → overwhelmingly the key.
-        const v = pickPrimaryKeyFromStats([col({ Key: 'id', DistinctCapped: true })]);
+        const v = PickPrimaryKeyFromStats([col({ Key: 'id', DistinctCapped: true })]);
         expect(v.Field).toBe('id');
     });
 
     it('takes a near-unique (not perfectly unique) convention column as a soft key when none is confident', () => {
         // 99/100 distinct — a couple of dup/edge rows, no confident candidate, but plainly the identity.
-        const v = pickPrimaryKeyFromStats([
+        const v = PickPrimaryKeyFromStats([
             col({ Key: 'id', Occurrences: 100, TotalRows: 100, DistinctNonNull: 99 }),
             col({ Key: 'status', Occurrences: 100, TotalRows: 100, DistinctNonNull: 3 }),
         ]);
@@ -148,7 +148,7 @@ describe('pickPrimaryKeyFromStats', () => {
     });
 
     it('still returns no PK when nothing is plausibly identifying (no fabrication)', () => {
-        const v = pickPrimaryKeyFromStats([
+        const v = PickPrimaryKeyFromStats([
             col({ Key: 'status', DistinctNonNull: 3 }),
             col({ Key: 'note', Occurrences: 30, TotalRows: 100, DistinctNonNull: 30 }), // mostly null, unnamed
         ]);
@@ -156,7 +156,7 @@ describe('pickPrimaryKeyFromStats', () => {
     });
 
     it('breaks a multi-unique tie by naming when it can', () => {
-        const v = pickPrimaryKeyFromStats(
+        const v = PickPrimaryKeyFromStats(
             [col({ Key: 'id' }), col({ Key: 'email' })],
             { NameRank: (n) => (n === 'id' ? 10 : 1) },
         );
@@ -165,7 +165,7 @@ describe('pickPrimaryKeyFromStats', () => {
     });
 
     it('defers to the LLM tiebreaker when multiple unique columns rank equally', () => {
-        const v = pickPrimaryKeyFromStats([col({ Key: 'id' }), col({ Key: 'uuid' })]); // no NameRank → equal
+        const v = PickPrimaryKeyFromStats([col({ Key: 'id' }), col({ Key: 'uuid' })]); // no NameRank → equal
         expect(v.Field).toBeNull();
         expect(v.AmbiguousForLLM).toBe(true);
         expect(v.UniqueCandidates.sort()).toEqual(['id', 'uuid']);

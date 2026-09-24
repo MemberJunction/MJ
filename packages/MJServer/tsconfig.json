@@ -3,7 +3,9 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "module": "es2022"
+    "module": "es2022",
+    "incremental": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts", "**/__tests__/**", "src/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts", "vitest.config.ts"],
   "include": ["./src/**/*.ts"]

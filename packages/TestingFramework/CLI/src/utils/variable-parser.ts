@@ -13,7 +13,7 @@ import { TestVariableValue } from '@memberjunction/testing-engine-base';
  * @param testTypeVariablesSchema - Optional type schema for type conversion
  * @returns Parsed variables object
  */
-export function parseVariableFlags(
+export function ParseVariableFlags(
     varFlags: string[] | undefined,
     testTypeVariablesSchema?: string | null
 ): Record<string, TestVariableValue> | undefined {
@@ -25,6 +25,14 @@ export function parseVariableFlags(
     return resolver.parseCliVariables(varFlags, testTypeVariablesSchema);
 }
 
+/** @deprecated Use {@link ParseVariableFlags}. */
+export function parseVariableFlags(
+    varFlags: string[] | undefined,
+    testTypeVariablesSchema?: string | null
+): Record<string, TestVariableValue> | undefined {
+    return ParseVariableFlags(varFlags, testTypeVariablesSchema);
+}
+
 /**
  * Get the variables schema for a test (from its test type).
  *
@@ -32,7 +40,7 @@ export function parseVariableFlags(
  * @param testId - Test ID
  * @returns Variables schema JSON string or null
  */
-export function getTestVariablesSchema(
+export function GetTestVariablesSchema(
     engine: TestEngine,
     testId: string
 ): string | null {
@@ -47,4 +55,12 @@ export function getTestVariablesSchema(
     }
 
     return testType.VariablesSchema;
+}
+
+/** @deprecated Use {@link GetTestVariablesSchema}. */
+export function getTestVariablesSchema(
+    engine: TestEngine,
+    testId: string
+): string | null {
+    return GetTestVariablesSchema(engine, testId);
 }

@@ -128,7 +128,7 @@ function wireEngine(tests: MJTestEntity[], statuses?: Array<string | null>): Tes
         ({ ID: 'testrun-x', StartedAt: new Date(), CompletedAt: new Date(), Status: 'Running' } as unknown as MJTestRunEntity));
     vi.spyOn(priv, 'updateSuiteRun').mockResolvedValue(undefined);
     vi.spyOn(priv, 'updateTestRun').mockResolvedValue(undefined);
-    vi.spyOn(priv._variableResolver, 'resolveVariables').mockReturnValue({ values: {}, sources: {} } as unknown as ResolvedTestVariables);
+    vi.spyOn(priv._variableResolver, 'ResolveVariables').mockReturnValue({ values: {}, sources: {} } as unknown as ResolvedTestVariables);
 
     return engine;
 }

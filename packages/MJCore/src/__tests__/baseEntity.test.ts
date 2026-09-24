@@ -18,6 +18,12 @@ function createMockFieldInfo(overrides: Partial<EntityFieldInfo> = {}): EntityFi
         DefaultValue: null,
         Entity: 'MJTestEntity',
         IsSpecialDateField: false,
+        // The validation ladder calls this for value-list fields. Borrow the REAL implementation
+        // rather than stubbing it true: it only reads ValueListTypeEnum / EntityFieldValues off
+        // `this`, so a duck-typed mock gets genuine behaviour (and, with neither set, the
+        // not-a-value-list path). Value-list coverage itself lives in
+        // baseEntity.valueListValidation.test.ts, against real EntityFieldInfo instances.
+        ValueIsPermittedByValueList: EntityFieldInfo.prototype.ValueIsPermittedByValueList,
         ...overrides
     };
     return base as unknown as EntityFieldInfo;
@@ -192,6 +198,32 @@ describe('EntityField', () => {
             const result = field.Validate();
 
             expect(result.Success).toBe(true);
+        });
+
+        it('JSON ExtendedType fails on invalid JSON and passes on valid JSON', () => {
+            const fieldInfo = createMockFieldInfo({ ExtendedType: 'JSON' });
+            const bad = new EntityField(fieldInfo, '{nope}');
+            expect(bad.Validate().Success).toBe(false);
+            const good = new EntityField(fieldInfo, '{"ok":true}');
+            expect(good.Validate().Success).toBe(true);
+        });
+
+        it('Color ExtendedType fails on non-colors and passes on hex', () => {
+            const fieldInfo = createMockFieldInfo({ ExtendedType: 'Color' });
+            const bad = new EntityField(fieldInfo, 'not-a-color');
+            expect(bad.Validate().Success).toBe(false);
+            const good = new EntityField(fieldInfo, '#aabbcc');
+            expect(good.Validate().Success).toBe(true);
+        });
+
+        it('Image ExtendedType rejects javascript: URLs and accepts data URIs and https', () => {
+            const fieldInfo = createMockFieldInfo({ ExtendedType: 'Image', MaxLength: 0 });
+            const bad = new EntityField(fieldInfo, 'javascript:alert(1)');
+            expect(bad.Validate().Success).toBe(false);
+            const url = new EntityField(fieldInfo, 'https://cdn.example.com/a.png');
+            expect(url.Validate().Success).toBe(true);
+            const data = new EntityField(fieldInfo, 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+            expect(data.Validate().Success).toBe(true);
         });
 
         // Active-status (deprecated/disabled) enforcement lives at BaseEntity.Get/Set/SetMany — NOT on

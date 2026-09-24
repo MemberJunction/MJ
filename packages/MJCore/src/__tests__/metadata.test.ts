@@ -76,6 +76,16 @@ describe('Metadata', () => {
             expect(md.Entities).toEqual(mockEntities);
         });
 
+        it('projects the catalog by schema without sharding it', () => {
+            Metadata.Provider = mockProvider as never;
+            const md = new Metadata();
+
+            expect(md.SchemaNames()).toEqual(['admin']);
+            expect(md.EntitiesInSchema('ADMIN').map((e) => e.Name)).toEqual(['Users', 'Roles']);
+            expect(md.EntitiesInSchema('')).toEqual([]);
+            expect(md.Entities).toHaveLength(2);
+        });
+
         it('should access CurrentUser from the provider', () => {
             Metadata.Provider = mockProvider as never;
             const md = new Metadata();

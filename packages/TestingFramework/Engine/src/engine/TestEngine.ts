@@ -27,6 +27,8 @@ import { BaseTestDriver } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
 import { SchemaValidatorOracle } from '../oracles/SchemaValidatorOracle';
 import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
+import { TraceSubAgentValidatorOracle } from '../oracles/TraceSubAgentValidatorOracle';
+import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentDecisionOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
@@ -42,9 +44,9 @@ import {
     SuiteFixtureContext
 } from '../types';
 import {
-    gatherExecutionContext,
-    getMachineName,
-    getMachineIdentifier
+    GatherExecutionContext,
+    GetMachineName,
+    GetMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 
@@ -380,11 +382,15 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 await this.updateSuiteRun(suiteRun, testResults, startTime);
             }
 
-            // Calculate suite-level metrics
+            // Calculate suite-level metrics. Skipped tests are neither passed nor failed:
+            // they count separately, and the average score is computed over EXECUTED tests
+            // only (a skip must not drag the average down, nor pad it up).
             const passedTests = testResults.filter(r => r.status === 'Passed').length;
-            const failedTests = testResults.filter(r => r.status === 'Failed').length;
-            const totalScore = testResults.reduce((sum, r) => sum + r.score, 0);
-            const avgScore = testResults.length > 0 ? totalScore / testResults.length : 0;
+            const failedTests = testResults.filter(r => r.status === 'Failed' || r.status === 'Error' || r.status === 'Timeout').length;
+            const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
+            const executed = testResults.filter(r => r.status !== 'Skipped');
+            const totalScore = executed.reduce((sum, r) => sum + r.score, 0);
+            const avgScore = executed.length > 0 ? totalScore / executed.length : 0;
 
             const result: TestSuiteRunResult = {
                 suiteRunId: suiteRun.ID,
@@ -393,6 +399,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 status: suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running',
                 passedTests,
                 failedTests,
+                skippedTests,
                 totalTests: testResults.length,
                 averageScore: avgScore,
                 testResults,
@@ -403,7 +410,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             };
 
             this.log(
-                `Suite completed: ${result.status} (${passedTests}/${testResults.length} passed)`,
+                `Suite completed: ${result.status} (${passedTests}/${testResults.length} passed` +
+                (skippedTests > 0 ? `, ${skippedTests} SKIPPED — not executed` : '') + `)`,
                 options.verbose
             );
             return result;
@@ -645,6 +653,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private async registerBuiltInOracles(): Promise<void> {
         this.RegisterOracle(new SchemaValidatorOracle());
         this.RegisterOracle(new TraceValidatorOracle());
+        this.RegisterOracle(new TraceSubAgentValidatorOracle());
+        this.RegisterOracle(new AgentDecisionOracle());
+        this.RegisterOracle(new ResponseWellFormedOracle());
         this.RegisterOracle(new LLMJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());
@@ -842,11 +853,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
 
         // Set execution context fields for cross-server aggregation
-        testRun.MachineName = getMachineName();
-        testRun.MachineID = getMachineIdentifier() || null;
+        testRun.MachineName = GetMachineName();
+        testRun.MachineID = GetMachineIdentifier() || null;
         testRun.RunByUserName = contextUser.Name;
         testRun.RunByUserEmail = contextUser.Email;
-        testRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+        testRun.RunContextDetails = JSON.stringify(GatherExecutionContext());
 
         const saved = await testRun.Save();
         if (!saved) {
@@ -884,11 +895,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
 
         // Set execution context fields for cross-server aggregation
-        suiteRun.MachineName = getMachineName();
-        suiteRun.MachineID = getMachineIdentifier() || null;
+        suiteRun.MachineName = GetMachineName();
+        suiteRun.MachineID = GetMachineIdentifier() || null;
         suiteRun.RunByUserName = contextUser.Name;
         suiteRun.RunByUserEmail = contextUser.Email;
-        suiteRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+        suiteRun.RunContextDetails = JSON.stringify(GatherExecutionContext());
 
         const saved = await suiteRun.Save();
         if (!saved) {
@@ -1045,11 +1056,20 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         startTime: number
     ): Promise<void> {
         const passedTests = testResults.filter(r => r.status === 'Passed').length;
+        const failedTests = testResults.filter(r => r.status === 'Failed').length;
+        const errorTests = testResults.filter(r => r.status === 'Error' || r.status === 'Timeout').length;
+        const skippedTests = testResults.filter(r => r.status === 'Skipped').length;
         const totalTests = testResults.length;
+        const hardFailedTests = failedTests + errorTests;
 
-        suiteRun.Status = passedTests === totalTests ? 'Completed' : 'Failed';
+        // A suite fails only on HARD failures (Failed/Error/Timeout). Skipped tests do not fail the
+        // suite and no longer masquerade as passed — they land in SkippedTests. The four executed/
+        // non-executed buckets are populated so Passed + Failed + Error + Skipped == Total.
+        suiteRun.Status = hardFailedTests === 0 ? 'Completed' : 'Failed';
         suiteRun.PassedTests = passedTests;
-        suiteRun.FailedTests = totalTests - passedTests;
+        suiteRun.FailedTests = failedTests;
+        suiteRun.ErrorTests = errorTests;
+        suiteRun.SkippedTests = skippedTests;
         suiteRun.TotalTests = totalTests;
         suiteRun.TotalCostUSD = testResults.reduce((sum, r) => sum + r.totalCost, 0);
         suiteRun.TotalDurationSeconds = (Date.now() - startTime) / 1000;
@@ -1293,6 +1313,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             passedChecks: driverResult.passedChecks,
             failedChecks: driverResult.failedChecks,
             totalChecks: driverResult.totalChecks,
+            skippedChecks: driverResult.skippedChecks,
             oracleResults: driverResult.oracleResults,
             targetType: driverResult.targetType,
             targetLogEntityId: driverResult.targetLogEntityId,
@@ -1304,6 +1325,17 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             errorMessage: driverResult.errorMessage,
             resolvedVariables
         };
+
+        // Tiering telemetry, when the driver reports it. Without this the fields
+        // exist on TestRunResult and are never populated, so reporting cannot
+        // segment tier mix or replay share and the drift signal survives only
+        // inside TestRun.ActualOutputData.
+        if (driverResult.tier !== undefined) {
+            result.tier = driverResult.tier;
+        }
+        if (driverResult.replay !== undefined) {
+            result.replay = driverResult.replay;
+        }
 
         // Add sequence if this is a repeated test iteration
         if (sequence && sequence > 1) {

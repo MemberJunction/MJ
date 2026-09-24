@@ -23,7 +23,7 @@ import type { TimelineItem } from '../ai-agent-run-timeline.component';
 function flatten(items: TimelineItem[]): TimelineItem[] {
     return items.flatMap((item) => [item, ...flatten(item.children ?? [])]);
 }
-import { buildFlowModelFromTree } from '../flow/run-tree-flow-projection';
+import { BuildFlowModelFromTree } from '../flow/run-tree-flow-projection';
 import fixture from './real-run-trees.fixture.json';
 
 type Fixture = Record<string, { runID: string; rows: AgentRunTreeRow[] }>;
@@ -46,9 +46,22 @@ function treeFor(agent: string) {
 
 describe('real Content Pipeline run', () => {
     it('assembles every captured node into one tree', () => {
+        // One row FEWER than captured nodes, and deliberately so: a dispatched workflow is captured
+        // as two rows — the submit step and the graph it produced — which the timeline now renders
+        // as one (see `collapsibleGraphChild`). The old expectation of one-row-per-node encoded the
+        // duplicate, which is what put "Task Graph: X — Completed" above steps that had not run.
+        //
+        // Derived rather than hardcoded, so this stays honest if the fixture is ever recaptured.
+        const rows = REAL['Content Pipeline'].rows;
+        const collapsedPairs = rows.filter(
+            (r) => r.NodeType === 'Step' && r.SourceKind === 'TaskGraph'
+                && rows.some((c) => c.ParentNodeID === r.NodeID && c.NodeType === 'TaskGraph'),
+        ).length;
+        expect(collapsedPairs, 'the fixture should contain a dispatched workflow').toBeGreaterThan(0);
+
         const root = treeFor('Content Pipeline');
         expect(root).not.toBeNull();
-        expect(flatten(ProjectRunTreeToTimeline(root))).toHaveLength(REAL['Content Pipeline'].rows.length);
+        expect(flatten(ProjectRunTreeToTimeline(root))).toHaveLength(rows.length - collapsedPairs);
     });
 
     it('shows the workflow steps as timeline rows, at their real depth', () => {
@@ -87,17 +100,17 @@ describe('real Content Pipeline run', () => {
     });
 
     it('gives the visualizations a typed node for every step', () => {
-        const model = buildFlowModelFromTree(
+        const model = BuildFlowModelFromTree(
             treeFor('Content Pipeline'), 'Content Pipeline', 'Completed',
             { iconClass: 'fa-robot', logoUrl: null },
         )!;
 
-        expect(model.nodes.length).toBe(REAL['Content Pipeline'].rows.length);
+        expect(model.Nodes.length).toBe(REAL['Content Pipeline'].rows.length);
         // 'other' is the undifferentiated fallback — a node with it is invisible in the renderers.
-        expect(model.nodes.filter((n) => n.type === 'other')).toEqual([]);
-        expect(model.nodes.some((n) => n.type === 'loop')).toBe(true);     // the While
-        expect(model.nodes.some((n) => n.type === 'prompt')).toBe(true);   // the drafting prompts
-        expect(model.nodes.some((n) => n.type === 'action')).toBe(true);   // the research search
+        expect(model.Nodes.filter((n) => n.Type === 'other')).toEqual([]);
+        expect(model.Nodes.some((n) => n.Type === 'loop')).toBe(true);     // the While
+        expect(model.Nodes.some((n) => n.Type === 'prompt')).toBe(true);   // the drafting prompts
+        expect(model.Nodes.some((n) => n.Type === 'action')).toBe(true);   // the research search
     });
 });
 
@@ -111,12 +124,12 @@ describe('real Schema Documentation Sweep run', () => {
     });
 
     it('types the loop as a loop so it renders distinctly', () => {
-        const model = buildFlowModelFromTree(
+        const model = BuildFlowModelFromTree(
             treeFor('Schema Documentation Sweep'), 'Schema Documentation Sweep', 'Completed',
             { iconClass: 'fa-robot', logoUrl: null },
         )!;
-        const loop = model.nodes.find((n) => n.name === 'Propose a description for each field');
+        const loop = model.Nodes.find((n) => n.Name === 'Propose a description for each field');
 
-        expect(loop?.type).toBe('loop');
+        expect(loop?.Type).toBe('loop');
     });
 });

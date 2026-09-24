@@ -146,7 +146,7 @@ export class DatabaseProvisionPhase {
     emitter.Emit('log', {
       Type: 'log',
       Level: 'info',
-      Message: `Database connectivity verified at ${host}:${port} (${connectivity.LatencyMs}ms)`,
+      Message: `SQL Server reachable at ${host}:${port} (${connectivity.LatencyMs}ms). This is a TCP check only — credentials and TLS are first exercised by the migrate phase.`,
     });
 
     return {
@@ -232,6 +232,25 @@ GO`;
     }
     return `GRANT EXECUTE TO [${user}];
 GO`;
+  }
+
+  /**
+   * SQL asserting that `user` exists in the database, or a self-reporting
+   * pass-comment for a built-in sysadmin.
+   *
+   * `sa` maps to `dbo` and never appears in `sys.database_principals`, so the
+   * plain existence check reports `[FAIL] User sa NOT found` on a perfectly
+   * correct setup. The setup emitter already skips sa-specific DDL for the same
+   * reason (Msg 15405); validation has to agree with it.
+   */
+  private validateUserBlock(user: string): string {
+    if (this.isBuiltInSysadmin(user)) {
+      return `PRINT '[PASS] User ${user} is a built-in sysadmin (maps to dbo; no database principal expected)';`;
+    }
+    return `IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${user}')
+    PRINT '[PASS] User ${user} exists';
+ELSE
+    PRINT '[FAIL] User ${user} NOT found';`;
   }
 
   private generateSetupScript(config: PartialInstallConfig): string {
@@ -336,15 +355,9 @@ ELSE
     PRINT '[FAIL] __mj schema NOT found';
 
 -- Check users
-IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${codeGenUser}')
-    PRINT '[PASS] User ${codeGenUser} exists';
-ELSE
-    PRINT '[FAIL] User ${codeGenUser} NOT found';
+${this.validateUserBlock(codeGenUser)}
 
-IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '${apiUser}')
-    PRINT '[PASS] User ${apiUser} exists';
-ELSE
-    PRINT '[FAIL] User ${apiUser} NOT found';
+${this.validateUserBlock(apiUser)}
 
 PRINT '';
 PRINT '=== Validation complete ===';

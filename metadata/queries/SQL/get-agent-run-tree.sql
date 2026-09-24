@@ -355,6 +355,17 @@ SELECT
     -- durations. Whether they ran one after another or all at once is the difference between a loop
     -- that took the sum of its parts and one that took the longest of them.
     CAST(JSON_VALUE(ltk.Configuration, '$.forEach.executionMode') AS NVARCHAR(20)) AS LoopMode,
+    -- WHAT this node runs, as ids a consumer can resolve from a cache instead of another query.
+    --
+    -- Read by joining back, exactly like LoopMode above and for the same reason: every column in
+    -- the CTE must be declared in all six of its members, and these are needed by two of them.
+    --
+    -- `Task.ActionID` beats the execution log for a reason worth keeping: a task carries it whether
+    -- or not the step ever RAN, so a skipped branch can still say which action it would have run.
+    -- The log only exists for work that happened. `al.ActionID` covers the rows whose identity IS a
+    -- log — a loop's passes — which have no task of their own.
+    CAST(COALESCE(ltk.ActionID, al.ActionID) AS NVARCHAR(50)) AS ActionID,
+    CAST(ltk.AgentID AS NVARCHAR(50))                       AS AgentID,
     t.CreatedAt                                             AS CreatedAt,
     -- Sort helper only. A UNION forbids an expression in ORDER BY, so "has this started?" has to be
     -- a real column. Consumers ignore it; the loader projects by name.
@@ -457,6 +468,11 @@ SELECT
     CAST(it.payloadAtStart AS NVARCHAR(MAX))                AS InputPayload,
     CAST(it.payloadAtEnd AS NVARCHAR(MAX))                  AS OutputPayload,
     CAST(NULL AS NVARCHAR(20))                              AS LoopMode,
+    -- A pass IS its log (or its run), so the action comes from the log it expanded from and the
+    -- agent from the run. Same two columns as the branch above, so both halves of a loop — the
+    -- loop row and its passes — answer "what does this run" the same way.
+    CAST(ial.ActionID AS NVARCHAR(50))                      AS ActionID,
+    CAST(iar.AgentID AS NVARCHAR(50))                       AS AgentID,
     t.CreatedAt                                             AS CreatedAt,
     CASE WHEN COALESCE(ipr.RunAt, iar.StartedAt, ial.StartedAt) IS NULL THEN 1 ELSE 0 END AS NotStarted
 FROM Tree t

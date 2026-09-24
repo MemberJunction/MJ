@@ -20,6 +20,7 @@
  * @module @memberjunction/core
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
 import type { BaseEntity } from './baseEntity';
 import { RelatedRecordCollection } from './relatedRecordCollection';
 import type { IRunViewProvider } from './interfaces';
@@ -92,7 +93,7 @@ async function loadOneCollectionBatched(
     const result = await provider.RunView<BaseEntity>(
         {
             EntityName: template.RelatedEntityName,
-            ExtraFilter: `${foreignKey} IN (${parentKeys.map(k => `'${escapeSQLLiteral(k)}'`).join(',')})`,
+            ExtraFilter: `${foreignKey} IN (${parentKeys.map(k => `'${EscapeSQLString(k)}'`).join(',')})`,
             OrderBy: template.OrderByClause,
             ResultType: 'entity_object',
         },
@@ -148,7 +149,7 @@ function distributeChildren(
         if (!(collection instanceof RelatedRecordCollection)) {
             continue;
         }
-        const key = normalizeKey(parent.FirstPrimaryKey?.Value);
+        const key = normalizeKey(parent.FirstPrimaryKey?.Value); // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         collection.SetLoadedItems(byParent.get(key) ?? []);
     }
 }
@@ -162,7 +163,7 @@ function distributeChildren(
 function collectParentKeys(parents: BaseEntity[]): string[] {
     const keys = new Set<string>();
     for (const parent of parents) {
-        const value = parent.FirstPrimaryKey?.Value;
+        const value = parent.FirstPrimaryKey?.Value; // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         if (value !== null && value !== undefined && value !== '') {
             keys.add(String(value));
         }
@@ -178,14 +179,4 @@ function collectParentKeys(parents: BaseEntity[]): string[] {
  */
 function normalizeKey(value: unknown): string {
     return String(value ?? '').trim().toLowerCase();
-}
-
-/**
- * Escapes a value for safe inclusion in a single-quoted SQL literal.
- *
- * @param value - The raw value.
- * @returns The escaped value.
- */
-function escapeSQLLiteral(value: string): string {
-    return value.replace(/'/g, "''");
 }

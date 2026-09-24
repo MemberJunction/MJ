@@ -29,7 +29,7 @@ const cdrStub = {
 type MenuDriver = {
     onNodeContextMenu(event: MouseEvent, node: FlowNode): void;
     onConnectionContextMenu(event: MouseEvent, conn: FlowConnection): void;
-    onContextMenuAction(action: 'edit' | 'remove'): void;
+    onContextMenuAction(action: string): void;
 };
 
 const node = (id: string): FlowNode => ({
@@ -142,5 +142,27 @@ describe('flow canvas context menu', () => {
 
         expect(removed.map((n) => n.ID)).toEqual(['a']);
         expect(component.Nodes.map((n) => n.ID)).toEqual(['b']);
+    });
+
+    it('lets a host replace the items and handle a custom action without mutating the graph', () => {
+        const actions: string[] = [];
+        component.BeforeContextMenu.subscribe((e) => {
+            e.Items = [{ ID: 'toggle-breakpoint', Label: 'Add Breakpoint' }];
+        });
+        component.AfterContextMenuAction.subscribe((e) => actions.push(e.ActionID));
+
+        component.ReadOnly = true;
+        driver.onNodeContextMenu(rightClick(), component.Nodes[0]);
+        driver.onContextMenuAction('toggle-breakpoint');
+
+        expect(actions).toEqual(['toggle-breakpoint']);
+        expect(component.Nodes).toHaveLength(2);
+    });
+
+    it('does not remove a node from a ReadOnly canvas even if remove is chosen', () => {
+        component.ReadOnly = true;
+        driver.onNodeContextMenu(rightClick(), component.Nodes[0]);
+        driver.onContextMenuAction('remove');
+        expect(component.Nodes).toHaveLength(2);
     });
 });

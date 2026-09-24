@@ -507,15 +507,87 @@ import { takeUntil } from 'rxjs/operators';
   `]
 })
 export class TasksDropdownComponent implements OnInit, OnDestroy {
-  @Input() currentUser!: UserInfo;
-  @Input() conversationId: string | null = null;
-  @Output() taskClicked = new EventEmitter<ActiveTask>();
-  @Output() navigateToConversation = new EventEmitter<{conversationId: string; taskId: string}>();
+  @Input() CurrentUser!: UserInfo;
 
-  public isOpen: boolean = false;
-  public allTasks: ActiveTask[] = [];
-  public currentConversationTasks: ActiveTask[] = [];
-  public otherConversationTasks: ActiveTask[] = [];
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() ConversationId: string | null = null;
+
+  /** @deprecated Use {@link ConversationId}. */
+  @Input() set conversationId(value: string | null) {
+    this.ConversationId = value;
+  }
+  /** @deprecated Use {@link ConversationId}. */
+  get conversationId(): string | null {
+    return this.ConversationId;
+  }
+  @Output() TaskClicked = new EventEmitter<ActiveTask>();
+
+  /**
+   * @deprecated Use {@link TaskClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (taskClicked) keeps working. Must stay AFTER TaskClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() taskClicked = this.TaskClicked;
+  @Output() NavigateToConversation = new EventEmitter<{conversationId: string; taskId: string}>();
+
+  /**
+   * @deprecated Use {@link NavigateToConversation}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigateToConversation) keeps working. Must stay AFTER NavigateToConversation: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigateToConversation = this.NavigateToConversation;
+
+  public IsOpen: boolean = false;
+
+  /** @deprecated Use {@link IsOpen}. */
+  public get isOpen(): boolean {
+    return this.IsOpen;
+  }
+  /** @deprecated Use {@link IsOpen}. */
+  public set isOpen(value: boolean) {
+    this.IsOpen = value;
+  }
+  public AllTasks: ActiveTask[] = [];
+
+  /** @deprecated Use {@link AllTasks}. */
+  public get allTasks(): ActiveTask[] {
+    return this.AllTasks;
+  }
+  /** @deprecated Use {@link AllTasks}. */
+  public set allTasks(value: ActiveTask[]) {
+    this.AllTasks = value;
+  }
+  public CurrentConversationTasks: ActiveTask[] = [];
+
+  /** @deprecated Use {@link CurrentConversationTasks}. */
+  public get currentConversationTasks(): ActiveTask[] {
+    return this.CurrentConversationTasks;
+  }
+  /** @deprecated Use {@link CurrentConversationTasks}. */
+  public set currentConversationTasks(value: ActiveTask[]) {
+    this.CurrentConversationTasks = value;
+  }
+  public OtherConversationTasks: ActiveTask[] = [];
+
+  /** @deprecated Use {@link OtherConversationTasks}. */
+  public get otherConversationTasks(): ActiveTask[] {
+    return this.OtherConversationTasks;
+  }
+  /** @deprecated Use {@link OtherConversationTasks}. */
+  public set otherConversationTasks(value: ActiveTask[]) {
+    this.OtherConversationTasks = value;
+  }
 
   private destroy$ = new Subject<void>();
 
@@ -545,7 +617,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
     this.activeTasksService.tasks$
       .pipe(takeUntil(this.destroy$))
       .subscribe(tasks => {
-        this.allTasks = tasks;
+        this.AllTasks = tasks;
         this.groupTasks();
       });
   }
@@ -557,27 +629,37 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
   }
 
   private groupTasks(): void {
-    this.currentConversationTasks = this.allTasks.filter(
-      task => task.conversationId === this.conversationId
+    this.CurrentConversationTasks = this.AllTasks.filter(
+      task => task.conversationId === this.ConversationId
     );
 
-    this.otherConversationTasks = this.allTasks.filter(
-      task => task.conversationId && task.conversationId !== this.conversationId
+    this.OtherConversationTasks = this.AllTasks.filter(
+      task => task.conversationId && task.conversationId !== this.ConversationId
     );
   }
 
-  toggleDropdown(): void {
-    this.isOpen = !this.isOpen;
-    if (this.isOpen) {
+  ToggleDropdown(): void {
+    this.IsOpen = !this.IsOpen;
+    if (this.IsOpen) {
       this.startElapsedTimer();
     } else {
       this.stopElapsedTimer();
     }
   }
 
-  closeDropdown(): void {
-    this.isOpen = false;
+  /** @deprecated Use {@link ToggleDropdown}. */
+  toggleDropdown(): void {
+    return this.ToggleDropdown();
+  }
+
+  CloseDropdown(): void {
+    this.IsOpen = false;
     this.stopElapsedTimer();
+  }
+
+  /** @deprecated Use {@link CloseDropdown}. */
+  closeDropdown(): void {
+    return this.CloseDropdown();
   }
 
   private startElapsedTimer(): void {
@@ -599,20 +681,25 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
     }
   }
 
-  onTaskClick(task: ActiveTask): void {
+  OnTaskClick(task: ActiveTask): void {
     // If task is from another conversation, emit navigation event
-    if (task.conversationId && task.conversationId !== this.conversationId) {
-      this.navigateToConversation.emit({
+    if (task.conversationId && task.conversationId !== this.ConversationId) {
+      this.NavigateToConversation.emit({
         conversationId: task.conversationId,
         taskId: task.id
       });
     }
 
-    this.taskClicked.emit(task);
-    this.closeDropdown();
+    this.TaskClicked.emit(task);
+    this.CloseDropdown();
   }
 
-  getElapsedTime(task: ActiveTask): string {
+  /** @deprecated Use {@link OnTaskClick}. */
+  onTaskClick(task: ActiveTask): void {
+    return this.OnTaskClick(task);
+  }
+
+  GetElapsedTime(task: ActiveTask): string {
     // Reads the CD-stable snapshot, never Date.now() — see _now for why (NG0100).
     const elapsed = Math.max(0, this._now - task.startTime);
     const seconds = Math.floor(elapsed / 1000);
@@ -626,7 +713,12 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   }
 
-  getTrimmedStatus(status: string): string {
+  /** @deprecated Use {@link GetElapsedTime}. */
+  getElapsedTime(task: ActiveTask): string {
+    return this.GetElapsedTime(task);
+  }
+
+  GetTrimmedStatus(status: string): string {
     const maxLength = 50;
     if (status.length <= maxLength) {
       return status;
@@ -634,11 +726,16 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
     return status.substring(0, maxLength) + '...';
   }
 
+  /** @deprecated Use {@link GetTrimmedStatus}. */
+  getTrimmedStatus(status: string): string {
+    return this.GetTrimmedStatus(status);
+  }
+
   /**
    * Get agent icon class by looking up agent in AIEngineBase cache
    * Similar to message-item component's aiAgentInfo getter
    */
-  getAgentIconClass(agentName: string): string {
+  GetAgentIconClass(agentName: string): string {
     // Look up agent from AIEngineBase cache by name
     if (AIEngineBase.Instance?.Agents) {
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
@@ -651,11 +748,16 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
     return 'fas fa-robot';
   }
 
+  /** @deprecated Use {@link GetAgentIconClass}. */
+  getAgentIconClass(agentName: string): string {
+    return this.GetAgentIconClass(agentName);
+  }
+
   /**
    * Get agent logo URL by looking up agent in AIEngineBase cache
    * Returns null if no logo URL is available
    */
-  getAgentLogoUrl(agentName: string): string | null {
+  GetAgentLogoUrl(agentName: string): string | null {
     // Look up agent from AIEngineBase cache by name
     if (AIEngineBase.Instance?.Agents) {
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
@@ -665,5 +767,10 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
     }
 
     return null;
+  }
+
+  /** @deprecated Use {@link GetAgentLogoUrl}. */
+  getAgentLogoUrl(agentName: string): string | null {
+    return this.GetAgentLogoUrl(agentName);
   }
 }

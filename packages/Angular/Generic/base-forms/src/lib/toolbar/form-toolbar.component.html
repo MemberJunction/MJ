@@ -16,6 +16,30 @@
     }
     <div class="mj-forms-toolbar-spacer"></div>
     <div class="mj-forms-edit-banner-actions">
+      @for (item of ResolvedEditBeforeSaveItems; track item.Key) {
+        <button class="mj-forms-btn"
+          [class.mj-forms-btn--primary]="item.Variant === 'primary'"
+          [class.mj-forms-btn--secondary]="item.Variant === 'secondary'"
+          [class.mj-forms-btn--accent]="item.Variant === 'accent'"
+          [class.mj-forms-btn--danger]="item.Variant === 'danger'"
+          [class.mj-forms-btn--ghost]="item.Variant === 'ghost'"
+          [class]="item.CssClass"
+          [disabled]="item.Disabled || item.IsLoading || IsSaving"
+          [title]="item.Description"
+          (click)="OnToolbarItemClick(item, $event)">
+          @if (item.IsLoading) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else if (item.Icon) {
+            <i [class]="item.Icon"></i>
+          }
+          @if (item.Text) {
+            <span class="mj-forms-btn-text">{{ item.Text }}</span>
+          }
+          @if (item.Badge != null) {
+            <span class="mj-list-count-badge">{{ item.Badge }}</span>
+          }
+        </button>
+      }
       <button class="mj-forms-btn mj-forms-btn--primary" (click)="OnSave()" [disabled]="IsSaving" title="Save Changes">
         <i class="fa-solid fa-floppy-disk"></i>
         <span class="mj-forms-btn-text">Save Changes</span>
@@ -24,6 +48,30 @@
         <i class="fa-solid fa-rotate-left"></i>
         <span class="mj-forms-btn-text">Discard</span>
       </button>
+      @for (item of ResolvedEditAfterSaveItems; track item.Key) {
+        <button class="mj-forms-btn"
+          [class.mj-forms-btn--primary]="item.Variant === 'primary'"
+          [class.mj-forms-btn--secondary]="item.Variant === 'secondary'"
+          [class.mj-forms-btn--accent]="item.Variant === 'accent'"
+          [class.mj-forms-btn--danger]="item.Variant === 'danger'"
+          [class.mj-forms-btn--ghost]="item.Variant === 'ghost'"
+          [class]="item.CssClass"
+          [disabled]="item.Disabled || item.IsLoading || IsSaving"
+          [title]="item.Description"
+          (click)="OnToolbarItemClick(item, $event)">
+          @if (item.IsLoading) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else if (item.Icon) {
+            <i [class]="item.Icon"></i>
+          }
+          @if (item.Text) {
+            <span class="mj-forms-btn-text">{{ item.Text }}</span>
+          }
+          @if (item.Badge != null) {
+            <span class="mj-list-count-badge">{{ item.Badge }}</span>
+          }
+        </button>
+      }
     </div>
   </div>
 }
@@ -36,60 +84,33 @@
 
     <!-- Action buttons -->
     <div class="mj-forms-toolbar-group">
-      @if (Config.ShowEditButton && UserCanEdit) {
-        <button class="mj-forms-btn" (click)="OnEdit()" title="Edit this Record">
-          <i class="fa-solid fa-pen-to-square"></i>
-        </button>
-      }
-      @if (Config.ShowDeleteButton && UserCanDelete) {
-        <button class="mj-forms-btn" (click)="OnDeleteClick()" title="Delete this Record">
-          <i class="fa-regular fa-trash-can"></i>
-        </button>
-      }
-      @if (Config.ShowFavoriteButton && FavoriteInitDone) {
-        <button class="mj-forms-btn" (click)="OnFavoriteToggle()" [title]="IsFavorite ? 'Remove Favorite' : 'Make Favorite'">
-          <i [class]="IsFavorite ? 'fa-solid fa-star mj-icon--favorite' : 'fa-regular fa-star'"></i>
-        </button>
-      }
-      @if (Config.ShowHistoryButton && TracksChanges) {
-        <button class="mj-forms-btn mj-forms-btn--history" (click)="OnHistory()"
-          [title]="VersionCount > 0 ? VersionCount + ' version(s) tracked' : 'Record Changes'">
-          <i class="fa-regular fa-clock"></i>
-          @if (VersionCount > 0) {
-            <span class="mj-version-count-badge">v{{ VersionCount }}</span>
+      @for (item of ResolvedActionItems; track item.Key) {
+        <button class="mj-forms-btn"
+          [class.mj-forms-btn--primary]="item.Variant === 'primary'"
+          [class.mj-forms-btn--secondary]="item.Variant === 'secondary'"
+          [class.mj-forms-btn--accent]="item.Variant === 'accent'"
+          [class.mj-forms-btn--danger]="item.Variant === 'danger'"
+          [class.mj-forms-btn--ghost]="item.Variant === 'ghost'"
+          [class.mj-forms-btn--history]="item.Key === 'history'"
+          [class.mj-forms-btn--list]="item.Key === 'list'"
+          [class.mj-forms-btn--tags]="item.Key === 'tags'"
+          [class.mj-forms-btn--attachments]="item.Key === 'attachments'"
+          [class]="item.CssClass"
+          [disabled]="item.Disabled || item.IsLoading"
+          [title]="item.Description"
+          (click)="OnToolbarItemClick(item, $event)">
+          @if (item.IsLoading) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else if (item.Icon) {
+            <i [class]="item.Icon"></i>
+          }
+          @if (item.Text) {
+            <span class="mj-forms-btn-text">{{ item.Text }}</span>
+          }
+          @if (item.Badge != null) {
+            <span [class]="item.Key === 'history' ? 'mj-version-count-badge' : 'mj-list-count-badge'">{{ item.Badge }}</span>
           }
         </button>
-      }
-      @if (Config.ShowListButton) {
-        <button class="mj-forms-btn mj-forms-btn--list" (click)="OnListManagement()"
-          [title]="ListCount > 0 ? 'Member of ' + ListCount + ' list(s)' : 'Add to a list'">
-          <i class="fa-regular fa-bookmark"></i>
-          @if (ListCount > 0) {
-            <span class="mj-list-count-badge">{{ ListCount }}</span>
-          }
-        </button>
-      }
-      @if (Config.ShowTagsButton) {
-        <button class="mj-forms-btn" (click)="OnTagsPanel()"
-          [title]="TagCount > 0 ? TagCount + ' tag(s)' : 'View tags'">
-          <i class="fa-solid fa-tags"></i>
-          @if (TagCount > 0) {
-            <span class="mj-list-count-badge">{{ TagCount }}</span>
-          }
-        </button>
-      }
-
-      <!-- Custom toolbar buttons -->
-      @for (button of Config.CustomButtons; track button.Key) {
-        @if (button.Visible !== false) {
-          <button class="mj-forms-btn"
-            [class]="button.CssClass || ''"
-            [disabled]="button.Disabled || false"
-            [title]="button.Description"
-            (click)="OnCustomButtonClick(button)">
-            <i [class]="button.Icon"></i>
-          </button>
-        }
       }
     </div>
 
@@ -198,7 +219,7 @@
             }
           </div>
         }
-        @if (Config.ShowExpandCollapseAllButtons) {
+        @if (ShowExpandCollapseAll) {
           <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
             [disabled]="ExpandedSectionCount >= VisibleSectionCount"
             (click)="OnExpandAll()" title="Expand all sections">

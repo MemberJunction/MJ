@@ -21,9 +21,67 @@
  *
  * @module @memberjunction/task-graph
  */
-import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { TERMINAL_TASK_GRAPH_STATUSES, type TerminalTaskGraphStatus } from '@memberjunction/ai-core-plus';
+import { MachineTaskSQL } from './task-predicates';
 import { ReconciliationEvent } from './types';
+
+/**
+ * A value one debug-bag field is being set to.
+ *
+ * Discriminated so the statement renders each with the right JSON type — a boolean stored as the
+ * string `"true"` reads back as truthy-but-wrong, and an object stored as a string reads back as a
+ * string. `null` deletes the key.
+ */
+export type TaskGraphDebugFieldValue =
+    | { Kind: 'null' }
+    | { Kind: 'bool'; Value: boolean }
+    | { Kind: 'string'; Value: string }
+    /** Pre-serialized JSON for an object or array. */
+    | { Kind: 'json'; Value: string };
+
+/** One field of the debug bag, addressed by its JSON path. */
+export type TaskGraphDebugFieldWrite = {
+    Path: string;
+    Value: TaskGraphDebugFieldValue;
+};
+
+/**
+ * Every object path that must exist for a JSON path to be writable — i.e. its proper prefixes,
+ * excluding the root and the leaf itself.
+ *
+ * `$.debug.edgeOverrides."abc"` → `['$.debug', '$.debug.edgeOverrides']`.
+ *
+ * Exported and pure because the rule ("JSON_MODIFY does not create intermediate objects") is the
+ * kind of database behaviour that is easy to assume wrongly and cheap to pin with a test.
+ */
+export function ContainingPaths(path: string): string[] {
+    const segments: string[] = [];
+    let current = '';
+    let quoted = false;
+    for (const char of path) {
+        if (char === '"') { quoted = !quoted; current += char; continue; }
+        if (char === '.' && !quoted) { segments.push(current); current = ''; continue; }
+        current += char;
+    }
+    segments.push(current);
+
+    // Drop the root ('$') and the leaf: neither needs creating — the root is the document, and the
+    // leaf is what the caller is about to write.
+    const containers: string[] = [];
+    for (let i = 2; i < segments.length; i++) {
+        containers.push(segments.slice(0, i).join('.'));
+    }
+    return containers;
+}
+
+/**
+ * One argument to a task-graph procedure.
+ *
+ * Named because SQL Server binds by name, and carrying the name alongside the value keeps a call
+ * site from silently shifting every argument by one when a parameter is inserted.
+ */
+type GuardedProcParam = { Name: string; Value: unknown };
 
 /** Fields the claim protocol needs from a candidate task. */
 export type ClaimableTask = {
@@ -76,14 +134,83 @@ export class TaskClaimStore {
         private readonly claimTTLSeconds: number,
     ) {}
 
+    /** The last guarded write's failure, or null when the last one actually ran. */
+    private _lastWriteError: string | null = null;
+    private _consecutiveWriteFailures = 0;
+
+    /**
+     * Whether the most recent guarded write FAILED, as opposed to losing its race.
+     *
+     * The dispatcher reads this after a false return: "another instance won" and "this process
+     * cannot write to the database at all" produce the same `false`, and treating the second as the
+     * first is what let a dispatcher skip every task in the table, forever, in silence.
+     */
+    public get LastWriteFailed(): boolean {
+        return this._lastWriteError !== null;
+    }
+
+    /** The last failure's message, for a caller that wants to say why it is stuck. */
+    public get LastWriteError(): string | null {
+        return this._lastWriteError;
+    }
+
+    /** How many guarded writes have failed in a row. Reset by the first one that runs. */
+    public get ConsecutiveWriteFailures(): number {
+        return this._consecutiveWriteFailures;
+    }
+
     private sql(provider: IMetadataProvider): DatabaseProviderBase {
         return provider as unknown as DatabaseProviderBase;
     }
 
-    /** Schema-qualified `Task` table for the provider's configured core schema. */
-    private taskTable(provider: IMetadataProvider): string {
-        const db = this.sql(provider);
-        return `${db.QuoteIdentifier(db.MJCoreSchemaName)}.${db.QuoteIdentifier('Task')}`;
+    /** The claim TTL as whole seconds, which is what the procedures take. */
+    private ttlSeconds(): number {
+        return Math.max(0, Math.round(this.claimTTLSeconds));
+    }
+
+    /**
+     * Writes a graph's cost rollup onto the submitting run, those four columns and no others.
+     *
+     * **The full-row `Save()` this replaces could revert a peer's settle** (C4). Two instances
+     * entering the settled branch for one graph is by design, so instance B's rollup — loaded before
+     * A settled the run — would write back `Paused` over A's `Completed`, along with every other
+     * column it had read. And a crash between this write and the same pass's lifecycle write left
+     * the run `Paused` under a claimed marker, which no sweep re-enters.
+     */
+    public async TrySetRunCostRollup(
+        provider: IMetadataProvider,
+        runID: string,
+        totals: { Cost: number | null; Tokens: number | null; PromptTokens: number | null; CompletionTokens: number | null },
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphSetRunCostRollup', [
+            { Name: 'AgentRunID', Value: runID },
+            { Name: 'TotalCostRollup', Value: totals.Cost },
+            { Name: 'TotalTokensUsedRollup', Value: totals.Tokens },
+            { Name: 'TotalPromptTokensUsedRollup', Value: totals.PromptTokens },
+            { Name: 'TotalCompletionTokensUsedRollup', Value: totals.CompletionTokens },
+        ], contextUser);
+    }
+
+    /**
+     * Settles a parked agent run, guarded on it still being parked.
+     *
+     * Same reasoning as the rollup above and as every parent write since Round 1: a full-row save
+     * carries a whole stale snapshot, and the `Paused` predicate makes the transition once-only
+     * across instances rather than last-write-wins.
+     */
+    public async TrySettleRun(
+        provider: IMetadataProvider,
+        runID: string,
+        succeeded: boolean,
+        errorMessage: string | null,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphSettleRun', [
+            { Name: 'AgentRunID', Value: runID },
+            { Name: 'Succeeded', Value: succeeded },
+            { Name: 'ErrorMessage', Value: errorMessage },
+        ], contextUser);
     }
 
     /**
@@ -97,20 +224,15 @@ export class TaskClaimStore {
      * @returns true when this instance now owns the task
      */
     public async TryClaim(provider: IMetadataProvider, taskID: string, contextUser: UserInfo): Promise<boolean> {
-        const db = this.sql(provider);
-        const expires = new Date(Date.now() + this.claimTTLSeconds * 1000);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = 'In Progress',
-                ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}',
-                ${db.QuoteIdentifier('ClaimExpiresAt')} = '${expires.toISOString()}',
-                ${db.QuoteIdentifier('StartedAt')} = '${new Date().toISOString()}'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'Pending'
-              AND (${db.QuoteIdentifier('ClaimedBy')} IS NULL
-                   OR ${db.QuoteIdentifier('ClaimExpiresAt')} IS NULL
-                   OR ${db.QuoteIdentifier('ClaimExpiresAt')} < '${new Date().toISOString()}')`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        // The lease is written AND compared on the database's clock (SYSUTCDATETIME), never this
+        // process's. The claim protocol is multi-instance: a lease written from one host's clock and
+        // judged expired against another's turns ordinary NTP skew into premature reclamation — the
+        // task runs twice — or into a lease that outlives its worker. One clock, the only shared one.
+        return this.guardedWrite(provider, 'spTaskGraphClaimTask', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'ClaimedBy', Value: this.instanceID },
+            { Name: 'ClaimTTLSeconds', Value: this.ttlSeconds() },
+        ], contextUser);
     }
 
     /**
@@ -123,15 +245,12 @@ export class TaskClaimStore {
      * @returns true when the claim was extended; false means this instance no longer owns the task
      */
     public async Heartbeat(provider: IMetadataProvider, taskID: string, contextUser: UserInfo): Promise<boolean> {
-        const db = this.sql(provider);
-        const expires = new Date(Date.now() + this.claimTTLSeconds * 1000);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('ClaimExpiresAt')} = '${expires.toISOString()}'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'In Progress'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        // Same single-clock rule as TryClaim: the renewal is computed on the database's clock.
+        return this.guardedWrite(provider, 'spTaskGraphHeartbeat', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'ClaimedBy', Value: this.instanceID },
+            { Name: 'ClaimTTLSeconds', Value: this.ttlSeconds() },
+        ], contextUser);
     }
 
     /**
@@ -165,83 +284,91 @@ export class TaskClaimStore {
         },
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sets: string[] = [
-            `${db.QuoteIdentifier('Status')} = '${outcome.Status}'`,
-            `${db.QuoteIdentifier('CompletedAt')} = '${new Date().toISOString()}'`,
-            `${db.QuoteIdentifier('PercentComplete')} = ${outcome.Status === 'Complete' ? 100 : 0}`,
-            // Release the claim as part of the same atomic write — a separate release could be
-            // interrupted, leaving a terminal task holding a claim that the sweep would then flag.
-            `${db.QuoteIdentifier('ClaimedBy')} = NULL`,
-            `${db.QuoteIdentifier('ClaimExpiresAt')} = NULL`,
-        ];
-        sets.push(`${db.QuoteIdentifier('OutputPayload')} = ${this.literalOrNull(outcome.OutputPayload)}`);
-        sets.push(`${db.QuoteIdentifier('ErrorMessage')} = ${this.literalOrNull(outcome.ErrorMessage)}`);
-        sets.push(`${db.QuoteIdentifier('AgentRunID')} = ${outcome.AgentRunID ? `'${this.escape(outcome.AgentRunID)}'` : 'NULL'}`);
-        // Only when supplied — see the note on the parameter. `undefined` means "leave it alone",
-        // which is not the same as an explicit null.
-        if (outcome.Configuration !== undefined) {
-            sets.push(`${db.QuoteIdentifier('Configuration')} = ${this.literalOrNull(outcome.Configuration)}`);
-        }
-
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${sets.join(', ')}
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(taskID)}'
-              AND ${db.QuoteIdentifier('Status')} = 'In Progress'
-              AND ${db.QuoteIdentifier('ClaimedBy')} = '${this.escape(this.instanceID)}'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphCompleteClaimed', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'ClaimedBy', Value: this.instanceID },
+            { Name: 'Status', Value: outcome.Status },
+            { Name: 'OutputPayload', Value: outcome.OutputPayload ?? null },
+            { Name: 'ErrorMessage', Value: outcome.ErrorMessage ?? null },
+            { Name: 'AgentRunID', Value: outcome.AgentRunID ?? null },
+            // `undefined` means "leave it alone", which is not the same as an explicit null — so the
+            // flag, not the value, decides whether the column is written.
+            { Name: 'Configuration', Value: outcome.Configuration ?? null },
+            { Name: 'SetConfiguration', Value: outcome.Configuration !== undefined },
+        ], contextUser);
     }
 
     /**
      * Reclaims tasks whose claims have lapsed, returning them to `Pending` so any instance can pick
      * them up.
      *
-     * **Human tasks are exempt** (review round 2). A task assigned to a person (`UserID` set) never
-     * carries a claim, so `In Progress` with no claim is its *legitimate* parked shape — an approval
-     * waiting on someone. Normalizing it would reset that approval out from under the user. Their
-     * lifecycle is driven by `DueAt` notification and escalation, never by claim expiry.
+     * **Scoped to tasks a dispatcher executes**, via the one shared predicate — see `task-predicates`.
+     * Expressed that way rather than as a list of the runner columns that happened to exist when this
+     * was written: the earlier form named `AgentID` and `ActionID` only, and the day `PromptID`
+     * arrived, a crashed prompt task became unrecoverable and undiagnosable in the same stroke.
+     *
+     * **Tasks a person completes are exempt.** One never carries a claim, so `In Progress` with no
+     * claim is its *legitimate* parked shape — an approval waiting on someone. Normalizing it would
+     * reset that approval out from under the user. Their lifecycle is driven by `DueAt` notification
+     * and escalation, never by claim expiry.
      *
      * Only expired claims are reclaimed; a live claim is left strictly alone, which is what keeps a
      * slow-but-healthy task from being executed twice.
      */
     public async ReleaseExpiredClaims(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReconciliationEvent[]> {
         const db = this.sql(provider);
-        const now = new Date().toISOString();
 
-        // Capture what will be reclaimed BEFORE reclaiming, so the log names the tasks. The
-        // subsequent UPDATE re-states the same predicate, so a task whose claim was refreshed in
-        // between is correctly skipped rather than reclaimed on stale information.
-        const candidates = await db.ExecuteSQL<{ ID: string; Name: string; ClaimedBy: string }>(
-            `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}, ${db.QuoteIdentifier('ClaimedBy')}
-             FROM ${this.taskTable(provider)}
-             WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
-               AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
-               AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
-               AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`,
-            undefined, undefined, contextUser,
+        // Read from the base VIEW, which is what the runtime roles are granted (#4575) — and which
+        // also keeps the "a dispatcher completes this task" definition in the one module that owns
+        // it, rather than restating it inside a procedure where it would drift.
+        //
+        // Capture what will be reclaimed BEFORE reclaiming, so the log can name the tasks. The
+        // procedure re-states the LEASE predicate, which is the part that has to be evaluated at
+        // write time: a claim refreshed in between is correctly skipped rather than reclaimed on
+        // stale information.
+        const candidates = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; Name: string; ClaimedBy: string }>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter:
+                    `Status='In Progress' AND ${MachineTaskSQL()} AND ClaimedBy IS NOT NULL ` +
+                    `AND ClaimExpiresAt IS NOT NULL AND ClaimExpiresAt < ${db.Dialect.CurrentTimestampUTC()}`,
+                Fields: ['ID', 'Name', 'ClaimedBy'],
+                ResultType: 'simple',
+                // The statement this replaced was an unbounded SELECT. Without this, `MJ: Tasks`
+                // contributes its UserViewMaxRows (1000) as a TOP clause, and the sweep would
+                // silently reclaim only the first 1000 expired claims per pass — a backlog that
+                // never drains, reported as a completed sweep.
+                IgnoreMaxRows: true,
+                // The claim protocol mutates these rows out from under any cache; a stale read here
+                // would reclaim a task somebody is still running.
+                BypassCache: true,
+            },
+            contextUser,
         );
+        if (!candidates.Success) {
+            LogError(`[TaskGraph reconciliation] could not read expired-claim candidates: ${candidates.ErrorMessage}`);
+            return [];
+        }
 
-        if (!candidates || candidates.length === 0) return [];
+        const rows = candidates.Results ?? [];
+        if (rows.length === 0) return [];
 
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = 'Pending',
-                ${db.QuoteIdentifier('ClaimedBy')} = NULL,
-                ${db.QuoteIdentifier('ClaimExpiresAt')} = NULL
-            WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-              AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
-              AND ${db.QuoteIdentifier('ClaimedBy')} IS NOT NULL
-              AND ${db.QuoteIdentifier('ClaimExpiresAt')} IS NOT NULL
-              AND ${db.QuoteIdentifier('ClaimExpiresAt')} < '${now}'`;
-        const released = await this.affectedRows(db, sql, contextUser);
+        // The procedure reports which ids it actually released, so the events name the tasks that
+        // were reclaimed rather than assuming they were the first N candidates.
+        const released = await this.callProc<{ ID: string }>(provider, 'spTaskGraphReleaseExpiredClaims', [
+            { Name: 'TaskIDs', Value: JSON.stringify(rows.map((r) => r.ID)) },
+        ], contextUser);
+        if (released === null) return [];
 
-        const events: ReconciliationEvent[] = candidates.slice(0, released).map((c) => ({
-            TaskID: c.ID,
-            Action: 'ExpiredClaimReleased',
-            Detail: `Claim held by '${c.ClaimedBy}' expired; task '${c.Name}' returned to Pending.`,
-        }));
+        const byID = new Map(rows.map((r) => [r.ID.toLowerCase(), r]));
+        const events: ReconciliationEvent[] = released.map((r) => {
+            const candidate = byID.get(String(r.ID).toLowerCase());
+            return {
+                TaskID: String(r.ID),
+                Action: 'ExpiredClaimReleased' as const,
+                Detail: `Claim held by '${candidate?.ClaimedBy ?? 'unknown'}' expired; task '${candidate?.Name ?? r.ID}' returned to Pending.`,
+            };
+        });
         for (const e of events) {
             LogStatus(`[TaskGraph reconciliation] ${e.Action}: ${e.Detail}`);
         }
@@ -257,16 +384,26 @@ export class TaskClaimStore {
      * excluded because for them this shape is legitimate, not anomalous.
      */
     public async FindOrphanedInProgress(provider: IMetadataProvider, contextUser: UserInfo): Promise<ReconciliationEvent[]> {
-        const db = this.sql(provider);
-        const rows = await db.ExecuteSQL<{ ID: string; Name: string }>(
-            `SELECT ${db.QuoteIdentifier('ID')}, ${db.QuoteIdentifier('Name')}
-             FROM ${this.taskTable(provider)}
-             WHERE ${db.QuoteIdentifier('Status')} = 'In Progress'
-               AND (${db.QuoteIdentifier('AgentID')} IS NOT NULL OR ${db.QuoteIdentifier('ActionID')} IS NOT NULL)
-               AND ${db.QuoteIdentifier('ClaimedBy')} IS NULL`,
-            undefined, undefined, contextUser,
+        // From the view, for the same reason as the sweep above (#4575).
+        const result = await RunView.FromMetadataProvider(provider).RunView<{ ID: string; Name: string }>(
+            {
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `Status='In Progress' AND ${MachineTaskSQL()} AND ClaimedBy IS NULL`,
+                Fields: ['ID', 'Name'],
+                ResultType: 'simple',
+                // Unbounded for the same reason as the sweep above: this is a reconciliation
+                // report, where a quietly truncated answer is worse than a slow one.
+                IgnoreMaxRows: true,
+                BypassCache: true,
+            },
+            contextUser,
         );
-        const events = (rows ?? []).map((r) => ({
+        if (!result.Success) {
+            LogError(`[TaskGraph reconciliation] could not read orphaned In Progress tasks: ${result.ErrorMessage}`);
+            return [];
+        }
+
+        const events = (result.Results ?? []).map((r) => ({
             TaskID: r.ID,
             Action: 'OrphanedInProgressReleased' as const,
             Detail: `Agent task '${r.Name}' is In Progress with no claim — no dispatcher owns it.`,
@@ -303,15 +440,11 @@ export class TaskClaimStore {
         percentComplete: number,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = '${this.escape(status)}',
-                ${db.QuoteIdentifier('PercentComplete')} = ${Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0},
-                ${db.QuoteIdentifier('CompletedAt')} = '${new Date().toISOString()}'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphSettleParent', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'Status', Value: status },
+            { Name: 'PercentComplete', Value: Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0 },
+        ], contextUser);
     }
 
     /**
@@ -335,14 +468,11 @@ export class TaskClaimStore {
         percentComplete: number,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('Status')} = '${this.escape(status)}',
-                ${db.QuoteIdentifier('PercentComplete')} = ${Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0}
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('Status')} NOT IN (${TERMINAL_PARENT_STATUS_SQL})`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphUpdateParentProgress', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'Status', Value: status },
+            { Name: 'PercentComplete', Value: Number.isFinite(percentComplete) ? Math.round(percentComplete) : 0 },
+        ], contextUser);
     }
 
     /**
@@ -359,13 +489,10 @@ export class TaskClaimStore {
         startedAt: Date,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('StartedAt')} = '${startedAt.toISOString()}'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('StartedAt')} IS NULL`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphStampParentStart', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'StartedAt', Value: startedAt },
+        ], contextUser);
     }
 
     /**
@@ -401,23 +528,134 @@ export class TaskClaimStore {
     public async TryClaimContinuation(
         provider: IMetadataProvider,
         parentTaskID: string,
-        deliveredAs: 'delivered' | 'expired',
+        deliveredAs: 'delivered' | 'expired' | 'cancelled',
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const nowIso = new Date().toISOString();
-        const payload = db.QuoteIdentifier('InputPayload');
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${payload} = JSON_MODIFY(
-                    JSON_MODIFY(${payload}, '$.continuationDeliveredAt', '${this.escape(nowIso)}'),
-                    '$.continuationDeliveredAs', '${this.escape(deliveredAs)}')
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'
-              AND ISJSON(${payload}) = 1
-              AND JSON_VALUE(${payload}, '$.continuationDeliveredAt') IS NULL`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphClaimContinuation', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'DeliveredAs', Value: deliveredAs },
+            { Name: 'DeliveredAt', Value: new Date().toISOString() },
+        ], contextUser);
+    }
+
+    /**
+     * Skips one task, refusing if anything has taken it since the caller looked.
+     *
+     * **Why this cannot be a `Save()`** — and R3-1 is the proof that the earlier reasoning was wrong.
+     * The early-finish path skipped siblings with a full-row `BaseEntity.Save()` against a snapshot
+     * taken before the loop began, justified by "the siblings are Pending and unclaimed until the
+     * skip lands". They are not: `executeClaimed` is not awaited, so this instance's own next poll
+     * tick runs concurrently with the loop, and a sibling can be claimed and STARTED between the
+     * snapshot and its own write. The full-row save then overwrote `In Progress` back to `Skipped`
+     * and cleared `ClaimedBy` mid-execution — the agent's real side effects had already fired, its
+     * completion was refused by the claim guard, and its output was discarded. The graph settled
+     * `Complete` with no record anywhere that the step ran.
+     *
+     * **The status predicate is `Status='Pending'` alone, deliberately.** `TryClaim` moves a task
+     * to `In Progress` in the same statement that stamps `ClaimedBy`, so a task an executor holds is
+     * never `Pending` — the status IS the claim test. Adding `ClaimedBy IS NULL` would look like
+     * defence in depth and would instead break a real case: a notified human task carries a marker
+     * in `ClaimedBy` while still `Pending`, and those must stay skippable.
+     *
+     * **Type-scoped, like every other write in this store that a caller-supplied ID can reach.**
+     * `MJ: Tasks` also holds conversation tasks and users' personal to-dos; without the
+     * discriminator an operator verb pointed at a mis-derived (or hostile) ID could write `Skipped`
+     * onto somebody's to-do. The engine-internal caller (`endGraphEarly`) derives its IDs from a
+     * workflow parent's own children, but it pays the same predicate — one statement, one contract.
+     *
+     * @returns true when this call is the one that skipped it; false means something else got there
+     */
+    public async TrySkipPending(
+        provider: IMetadataProvider,
+        taskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphSkipPending', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+        ], contextUser);
+    }
+
+    /**
+     * Stamps the human-notified marker, once, without touching anything else.
+     *
+     * The marker lives in `ClaimedBy` because a human task has no executor claim, and it exists to
+     * stop the notify path re-raising on every poll. It was written with a full-row `Save()` against
+     * a snapshot — so it could revert a status the row had reached since, and two instances could
+     * both write it after both having seen it absent. Guarded on the marker being unset, it is
+     * naturally once-only and the rowcount says which instance did it.
+     */
+    public async TryMarkHumanNotified(
+        provider: IMetadataProvider,
+        taskID: string,
+        marker: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphMarkHumanNotified', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'Marker', Value: marker },
+        ], contextUser);
+    }
+
+    /**
+     * Cancels one task, refusing if it settled while the caller was looking elsewhere.
+     *
+     * **The terminal check has to be IN the statement.** `Cancel` loaded every child, tested the
+     * terminal set against that in-memory snapshot, and wrote `Status='Cancelled'` with a full-row
+     * `BaseEntity.Save()` — an unconditional UPDATE sending every updateable column against a
+     * PK-only predicate. A child whose executor's guarded `CompleteClaimed` landed between the load
+     * and its save had its entire outcome overwritten: `Complete` back to `Cancelled`,
+     * `OutputPayload` to NULL (the null-clear companions make those explicit clears),
+     * `AgentRunID`/`CompletedAt`/runtime `Configuration` reverted, and stale claim columns
+     * re-instated on a terminal row.
+     *
+     * The moment users cancel is exactly the moment tasks are running, so this is not a narrow
+     * window. The reverse ordering was always safe — `CompleteClaimed`'s own predicate refuses a
+     * cancelled row — so the hazard lived entirely in this write.
+     *
+     * @returns true when this call cancelled it; false means it had already settled
+     */
+    public async TryCancelTask(
+        provider: IMetadataProvider,
+        taskID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphCancelTask', [
+            { Name: 'TaskID', Value: taskID },
+        ], contextUser);
+    }
+
+    /**
+     * Records, durably and once, that a graph is finishing early.
+     *
+     * **The declaration has to outlive the deciding instance's memory.** An early finish is decided
+     * by one task's result (`result.ChatMessage`) and nothing else in the system knows: skip seeds
+     * are derived from durable condition and exclusive-group state, so no claim filter on any
+     * instance — including the deciding one, whose poll loop runs concurrently — can tell that the
+     * remaining steps are about to be skipped. Writing it here first is what lets
+     * `loadGraphState` fold those steps into the claim filter, closing the window for everyone
+     * rather than narrowing it for one.
+     *
+     * Guarded and once-only for the same reason the continuation marker is: two tasks can end the
+     * same flow, and the first declaration is the one that counts. Type-scoped like every other
+     * statement here that writes into a payload column.
+     *
+     * @returns true when this call is the one that declared it
+     */
+    public async TryDeclareEarlyFinish(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphDeclareEarlyFinish', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'FinishedAt', Value: new Date().toISOString() },
+        ], contextUser);
     }
 
     /**
@@ -444,37 +682,281 @@ export class TaskClaimStore {
         workflowTaskTypeID: string,
         contextUser: UserInfo,
     ): Promise<boolean> {
-        const db = this.sql(provider);
-        const sql = `
-            UPDATE ${this.taskTable(provider)}
-            SET ${db.QuoteIdentifier('OutputPayload')} = '${this.escape(outputPayload)}'
-            WHERE ${db.QuoteIdentifier('ID')} = '${this.escape(parentTaskID)}'
-              AND ${db.QuoteIdentifier('TypeID')} = '${this.escape(workflowTaskTypeID)}'`;
-        return (await this.affectedRows(db, sql, contextUser)) === 1;
+        return this.guardedWrite(provider, 'spTaskGraphSetParentOutput', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'OutputPayload', Value: outputPayload },
+        ], contextUser);
     }
 
-    /** Runs the affected-rows statement, returning 0 on error rather than throwing into the loop. */
-    private async affectedRows(db: DatabaseProviderBase, sql: string, contextUser: UserInfo): Promise<number> {
+    /**
+     * Clears a graph's debug state entirely — the "stop debugging this run" write.
+     *
+     * Whole-bag, and safe to be: deleting `$.debug` is the one operation that genuinely owns every
+     * field in it. Every PARTIAL change goes through {@link TryWriteDebugFields}, because a
+     * read-merge-write of the whole bag puts back whatever the fields a verb does not own held at
+     * read time — most sharply resurrecting a step allowance the dispatcher consumed in between.
+     */
+    public async TryClearDebugState(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphClearDebugState', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+        ], contextUser);
+    }
+
+    /**
+     * One field of the debug bag, as a value the statement can write.
+     *
+     * Typed rather than a raw SQL fragment so a caller cannot inject one: the shape decides how the
+     * value is rendered, and every string goes through {@link escape}.
+     */
+    public static DebugField(path: string, value: TaskGraphDebugFieldValue): TaskGraphDebugFieldWrite {
+        return { Path: path, Value: value };
+    }
+
+    /**
+     * Writes named fields of a graph's debug bag, leaving every other field alone.
+     *
+     * **Why field-scoped rather than rewriting `$.debug`.** A read-merge-write of the whole bag is
+     * the same stale-snapshot hazard as a full-row save, one level down: a verb that reads the bag,
+     * merges its own change, and writes the result puts back whatever the fields it does NOT own
+     * held at read time. The sharp case is the step allowance — if the dispatcher consumes it
+     * between a `SetBreakpoints` read and its write, the rewrite *resurrects* the consumed
+     * allowance and one press of Step releases two waves, straight through the CAS that exists to
+     * prevent exactly that. Writing only the paths a verb owns removes the class rather than
+     * narrowing the window.
+     *
+     * Paths are nested `JSON_MODIFY` calls, so the whole set lands in one statement.
+     */
+    public async TryWriteDebugFields(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        fields: readonly TaskGraphDebugFieldWrite[],
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        if (fields.length === 0) return true;
+
+        // Containing objects are computed here rather than in SQL: `ContainingPaths` is pure, tested,
+        // and the rule it encodes (JSON_MODIFY does not create intermediate objects) is the kind of
+        // database behaviour that is easy to assume wrongly.
+        const containers = [...new Set(fields.flatMap((f) => ContainingPaths(f.Path)))]
+            // Shallowest first: `$.debug` must exist before `$.debug.edgeOverrides` can be added to it.
+            .sort((a, b) => a.length - b.length);
+
+        return this.guardedWrite(provider, 'spTaskGraphWriteDebugFields', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'Containers', Value: JSON.stringify(containers) },
+            { Name: 'Fields', Value: JSON.stringify(fields.map((f) => this.renderDebugField(f))) },
+        ], contextUser);
+    }
+
+    /**
+     * Consumes a paused graph's one-shot step allowance — exactly once, across every instance.
+     *
+     * The predicate `$.debug.step IS NOT NULL` is the whole contract: two dispatchers polling the
+     * same paused graph inside one interval both see the allowance, but only one statement clears it
+     * and sees rowcount 1. The loser claims nothing and waits for the next allowance, so "step" can
+     * never release two waves.
+     */
+    public async TryConsumeStepMarker(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphConsumeStepMarker', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+        ], contextUser);
+    }
+
+    /**
+     * Pauses a graph because an eligible task hit a breakpoint — once, whichever instance sees it
+     * first.
+     *
+     * Guarded on "not already paused" so two instances arriving at the same breakpoint in the same
+     * interval produce one `BreakpointHit` announcement, not two. The graph's existing breakpoint
+     * list and edge overrides are untouched — only the pause fields are written.
+     *
+     * The `$.debug` object is created when absent, for the same reason the field-scoped writes need
+     * it: `JSON_MODIFY` will not create a missing container, so without this the pause would report
+     * success and the workflow would run straight through its breakpoint. Reachable here only since
+     * the writes became field-scoped — the whole-bag write this replaced created `$.debug` on the
+     * way past, so a breakpoint could not exist without its container already being there.
+     */
+    public async TryPauseAtBreakpoint(
+        provider: IMetadataProvider,
+        parentTaskID: string,
+        breakpointTaskID: string,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphPauseAtBreakpoint', [
+            { Name: 'ParentTaskID', Value: parentTaskID },
+            { Name: 'BreakpointTaskID', Value: breakpointTaskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+        ], contextUser);
+    }
+
+
+    /**
+     * Replaces a task's input, guarded on the status the caller believes it is in.
+     *
+     * **Why this is a guarded statement and not `task.Save()`.** The obvious shape — load, check
+     * `Status === 'Pending'` in memory, save — is an unconditional full-row UPDATE carrying the
+     * whole loaded snapshot. A task claimed between the load and the save has its `Status`,
+     * `ClaimedBy` and `ClaimExpiresAt` reverted to that snapshot *while its body executes*, after
+     * which a second instance claims it again and the step runs twice. That is the stale-snapshot
+     * class this file's header exists to prevent, and it does not become safe because the window is
+     * small — the dispatcher polls every few seconds.
+     *
+     * `expectedStatus` is a parameter because two verbs need it: editing the brief of a step that
+     * has not started (`Pending`) and correcting the brief of one that failed, on the way into a
+     * retry (`Failed`).
+     */
+    public async TryUpdateInputPayload(
+        provider: IMetadataProvider,
+        taskID: string,
+        inputPayload: string | null,
+        expectedStatus: 'Pending' | 'Failed',
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphUpdateInputPayload', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'InputPayload', Value: inputPayload },
+            { Name: 'ExpectedStatus', Value: expectedStatus },
+        ], contextUser);
+    }
+
+    /**
+     * Marks a task Complete with an operator-supplied output — the escape hatch for a wedged or
+     * externally-resolved step.
+     *
+     * The guard is deliberately narrow: `Pending`, `Failed`, `Blocked`, or `In Progress` **with a
+     * lapsed claim**. A live claim means an executor is genuinely working, and force-completing
+     * underneath it would hand dependents an output the still-running body is about to contradict —
+     * that case must go through Cancel or wait for the claim to lapse. Downstream edges evaluate
+     * against the supplied output exactly as they would a runner's.
+     *
+     * **The lapsed-claim test uses the DATABASE clock, not this process's.** With app/DB skew — or
+     * skew between two app servers — a claim that is live on the clock that wrote it can read as
+     * expired on the clock that judges it, and this verb would then complete a task underneath a
+     * running executor. That interleaving is the entire reason the gate is narrow, so the gate must
+     * not be the thing that gets it wrong. The database is the one reference every instance shares.
+     * (This verb once carried a residual asymmetry — it *judged* on the database clock while
+     * `TryClaim` still *wrote* the lease from the claiming process's clock, trading app-vs-app skew
+     * for app-vs-DB skew. The claim protocol has since moved its write to `SYSUTCDATETIME()` as
+     * well, so both ends of the comparison now come from the one shared clock and the window is
+     * closed rather than relocated.)
+     */
+    public async TryForceComplete(
+        provider: IMetadataProvider,
+        taskID: string,
+        outputPayload: string | null,
+        workflowTaskTypeID: string,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        return this.guardedWrite(provider, 'spTaskGraphForceComplete', [
+            { Name: 'TaskID', Value: taskID },
+            { Name: 'TaskTypeID', Value: workflowTaskTypeID },
+            { Name: 'OutputPayload', Value: outputPayload },
+        ], contextUser);
+    }
+
+    /**
+     * Runs one guarded procedure and returns whether THIS instance won.
+     *
+     * A false here means the guard did not match — someone else won the race, or the row had already
+     * moved on. It does NOT mean the write failed; a failure returns false too, but records itself
+     * (see {@link LastWriteFailed}) so the caller can tell the two apart.
+     */
+    private async guardedWrite(
+        provider: IMetadataProvider,
+        procName: string,
+        params: ReadonlyArray<GuardedProcParam>,
+        contextUser: UserInfo,
+    ): Promise<boolean> {
+        const rows = await this.callProc<{ AffectedRows: number }>(provider, procName, params, contextUser);
+        if (rows === null) return false;
+        return Number(rows[0]?.AffectedRows ?? 0) === 1;
+    }
+
+    /**
+     * Calls one of the task-graph procedures, returning its rows — or `null` when the call FAILED.
+     *
+     * **Why procedures and not raw SQL** (#4575). These statements used to be sent as direct DML
+     * against the `Task` and `AIAgentRun` base tables. MJ grants its runtime roles SELECT on views
+     * and EXECUTE on procedures and never table-level DML, so under a least-privilege login every
+     * write was refused — and, because a refusal was reported as rowcount 0, the dispatcher read it
+     * as a lost race and skipped every task forever. The guards themselves are unchanged; they moved
+     * into procedures the runtime roles can actually execute.
+     *
+     * **Why `null` and not 0.** A statement that never ran is not a lost race, and collapsing the two
+     * is what kept that defect invisible. Callers still get `false` from {@link guardedWrite} — the
+     * dispatch loop must not fault on one bad write — but the failure is recorded and logged as a
+     * failure, so an inert dispatcher can say so.
+     */
+    private async callProc<T extends Record<string, unknown>>(
+        provider: IMetadataProvider,
+        procName: string,
+        params: ReadonlyArray<GuardedProcParam>,
+        contextUser: UserInfo,
+    ): Promise<T[] | null> {
+        const db = this.sql(provider);
+        // Named arguments on SQL Server, positional on PostgreSQL — the call wrapper itself belongs
+        // to the dialect, so neither form is spelled out here.
+        const placeholders = params.map((param, i) =>
+            db.PlatformKey === 'postgresql'
+                ? db.BuildParameterPlaceholder(i)
+                : `@${param.Name}=${db.BuildParameterPlaceholder(i)}`);
+        const call = db.Dialect.ProcedureCallSyntax(db.MJCoreSchemaName, procName, placeholders);
+
         try {
-            // Trailing SELECT is how the row count comes back as data across both dialects, rather
-            // than depending on a driver-specific rowsAffected field.
-            const rows = await db.ExecuteSQL<{ AffectedRows: number }>(
-                `${sql};\nSELECT @@ROWCOUNT AS ${db.QuoteIdentifier('AffectedRows')}`,
-                undefined, undefined, contextUser,
+            const rows = await db.ExecuteSQL<T>(
+                call,
+                params.map((param) => param.Value),
+                { isMutation: true, description: `TaskGraph ${procName}` },
+                contextUser,
             );
-            return Number(rows?.[0]?.AffectedRows ?? 0);
+            this._lastWriteError = null;
+            this._consecutiveWriteFailures = 0;
+            return rows ?? [];
         } catch (e) {
-            LogError(`[TaskGraph] guarded write failed: ${e instanceof Error ? e.message : String(e)}`);
-            return 0;
+            const message = e instanceof Error ? e.message : String(e);
+            this._lastWriteError = `${procName}: ${message}`;
+            this._consecutiveWriteFailures++;
+            LogError(
+                `[TaskGraph] guarded write ${procName} FAILED — the statement never ran, so this is NOT ` +
+                `a lost race (${this._consecutiveWriteFailures} consecutive). ${message}`,
+            );
+            return null;
         }
     }
 
-    private literalOrNull(value: string | null | undefined): string {
-        return value == null ? 'NULL' : `'${this.escape(value)}'`;
-    }
-
-    /** Single-quote escaping. Inputs here are UUIDs and JSON the dispatcher itself produced. */
-    private escape(value: string): string {
-        return value.replace(/'/g, "''");
+    /**
+     * Renders one debug-bag field for the procedure's `@Fields` argument.
+     *
+     * The `Kind` travels with the value because it decides the JSON type written: a boolean stored as
+     * the string `"true"` reads back as truthy-but-wrong, and an object stored as a string reads back
+     * as a string.
+     */
+    private renderDebugField(field: TaskGraphDebugFieldWrite): { Path: string; Kind: TaskGraphDebugFieldValue['Kind']; Value: unknown } {
+        const value = field.Value;
+        switch (value.Kind) {
+            case 'null': return { Path: field.Path, Kind: 'null', Value: null };
+            case 'bool': return { Path: field.Path, Kind: 'bool', Value: value.Value };
+            case 'string': return { Path: field.Path, Kind: 'string', Value: value.Value };
+            // Embedded as real JSON, not as a string, so the procedure's JSON_QUERY sees an object.
+            case 'json': return { Path: field.Path, Kind: 'json', Value: JSON.parse(value.Value) };
+        }
     }
 }

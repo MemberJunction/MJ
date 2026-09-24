@@ -1,0 +1,40 @@
+{
+  "id": "sage-disambig-internal-vs-web-01",
+  "agent": "Sage",
+  "tags": [
+    "disambiguation"
+  ],
+  "description": "Sage offers four search-shaped actions. A question about OUR records is Scoped Search over internal data, not a web search — the classic near-duplicate confusion.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Find the customer records we have for Northwind Traders."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Scoped Search"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Get Record"
+          }
+        ],
+        "allowAdditionalActions": true
+      }
+    ]
+  }
+}

@@ -8,13 +8,20 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus } from '@memberjunction/core';
-import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
+import { CompositeKey, EntityInfo, LogError, Metadata, SetProductionStatus, type PublicAuthProviderInfo } from '@memberjunction/core';
+import {
+  MJAuthBase,
+  StandardUserInfo,
+  AuthErrorType,
+  AuthProviderCatalog,
+  MJ_AUTH_PROVIDER_RESOLUTION,
+  type AuthProviderResolution
+} from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
 import { SystemValidationService, ServerConnectivityService } from '@memberjunction/ng-explorer-core';
@@ -29,6 +36,8 @@ import { InstanceConfigEngine } from '@memberjunction/core-entities';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
+import { MJLoginSlotDirective, type MJLoginSlotName } from './login-slot.directive';
+import type { MJLoginCard, MJLoginLayout } from './login-screen.types';
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -45,18 +54,160 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   private static readonly THEME_STORAGE_KEY = 'mj-theme';
 
+  /**
+   * The heading above the sign-in options, or `null` for none.
+   *
+   * Explorer's own login column already labels the action on the button itself, so an embedding app
+   * whose single provider renders one CTA sees the word twice ("Log in" over a "Log in" button).
+   * Passing `null` drops the heading. Default matches {@link MJLoginPickerComponent.Heading}.
+   * @since 6.2.0
+   */
+  @Input() LoginHeading: string | null = 'Log in';
+
+  /**
+   * Whether the sign-in panel carries MemberJunction's "Powered by" attribution. A white-labelled
+   * deployment turns it off here instead of hiding it with a CSS rule against the picker's internals.
+   * Default matches {@link MJLoginPickerComponent.ShowPoweredBy}.
+   * @since 6.2.0
+   */
+  @Input() LoginShowPoweredBy = true;
+
+  /**
+   * Where the story panel's brand block sits: `'start'` (Login C's editorial split, the default) or
+   * `'center'`. Centering is what a logo-led brand usually wants, and it is what the stacked (≤900px)
+   * layout already does — this makes the same choice available on the wide layout without a host
+   * reaching into `.main-banner`.
+   * @since 6.2.0
+   */
+  @Input() LoginBannerAlignment: 'start' | 'center' = 'start';
+
+  /**
+   * The story panel's headline, or `null` for none. It was hardcoded ("Welcome back"), which made
+   * the one prominent line of copy on the page the one thing a host could not change. `null`
+   * collapses the element, so a logo-only banner is a binding, not a CSS hide.
+   * @since 6.2.0
+   */
+  @Input() LoginBannerTitle: string | null = 'Welcome back';
+
+  /**
+   * The supporting line under {@link LoginBannerTitle}, or `null` for none.
+   * @since 6.2.0
+   */
+  @Input() LoginBannerSubtitle: string | null = 'Sign in to continue.';
+
+  /**
+   * Accessible name for the banner's brand image. The artwork itself comes from the
+   * `--mj-login-banner-logo` token, which the component cannot read — so a deployment that swaps
+   * the logo sets the matching name here, or a screen reader keeps announcing the default brand.
+   * @since 6.2.0
+   */
+  @Input() LoginBannerLogoLabel = 'MemberJunction Logo';
+
+  /**
+   * How the story panel and the sign-in column are arranged — see {@link MJLoginLayout}.
+   *
+   * The stock `'split'` is the editorial layout; `'split-reverse'` mirrors it; `'centered'` is the
+   * single-column sign-in page, where the story content sits on a full-bleed banner background and
+   * the sign-in column becomes a card on top of it. Every slot and every input still applies in
+   * each layout — a layout decides where the regions go, never whether they exist.
+   * @since 6.2.0
+   */
+  @Input() LoginLayout: MJLoginLayout = 'split';
+
+  /**
+   * Extra content for the login screen expressed as data rather than markup — a support route, a
+   * trust mark, a policy link. Each card names the region it belongs to (see {@link MJLoginCard}).
+   *
+   * This is the channel a *configured* deployment uses: nothing about the login screen can come
+   * from MJ metadata, because the screen renders before any authenticated call is possible (the
+   * only pre-auth server surface is the allow-listed public provider catalog). A host that keeps
+   * per-tenant branding somewhere resolves it itself — as Explorer already resolves the provider
+   * catalog before bootstrap — and binds it here.
+   *
+   * A host that needs richer content than a card projects a template into the region's slot
+   * instead, which takes over from the cards there.
+   * @since 6.2.0
+   */
+  @Input() LoginCards: MJLoginCard[] = [];
+
+  /**
+   * Templates projected by the host through the `mjLoginSlot` directive, resolved by
+   * {@link LoginSlotTemplate}.
+   */
+  @ContentChildren(MJLoginSlotDirective) private loginSlotChildren!: QueryList<MJLoginSlotDirective>;
+
+  /**
+   * Resolves a slot name to the host's `TemplateRef`, or `null` when nothing was projected for it
+   * — in which case the template renders that region's default (the stock brand block, the
+   * configured cards, or nothing, per {@link MJLoginSlotName}).
+   */
+  public LoginSlotTemplate(name: MJLoginSlotName): TemplateRef<unknown> | null {
+    return this.loginSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
+  }
+
+  /** Cards configured for the story panel. */
+  public get LoginBannerCards(): MJLoginCard[] {
+    return this.LoginCards.filter((c) => c.region === 'banner');
+  }
+
+  /** Cards configured for the sign-in column — the default region. */
+  public get LoginPanelCards(): MJLoginCard[] {
+    return this.LoginCards.filter((c) => c.region !== 'banner');
+  }
+
   public title = 'MJ Explorer';
   public initialPath = '/';
   public HasError = false;
   public ErrorMessage: string = '';
-  public subHeaderText: string = "Welcome back! Please log in to your account.";
-  public showValidationOnly = false;
+  /**
+   * The neutral greeting shown when there is no auth status to report. Kept as a constant so
+   * {@link ProviderPickerLede} can tell "nothing happened yet" apart from a real status message.
+   */
+  private static readonly defaultSubHeaderText = 'Welcome back! Please log in to your account.';
+  public SubHeaderText: string = MJExplorerAppComponent.defaultSubHeaderText;
+
+  /** @deprecated Use {@link SubHeaderText}. */
+  public get subHeaderText(): string {
+    return this.SubHeaderText;
+  }
+  /** @deprecated Use {@link SubHeaderText}. */
+  public set subHeaderText(value: string) {
+    this.SubHeaderText = value;
+  }
+  public ShowValidationOnly = false;
+
+  /** @deprecated Use {@link ShowValidationOnly}. */
+  public get showValidationOnly() {
+    return this.ShowValidationOnly;
+  }
+  /** @deprecated Use {@link ShowValidationOnly}. */
+  public set showValidationOnly(value) {
+    this.ShowValidationOnly = value;
+  }
   /** True when the current URL is the OAuth callback route - used for conditional rendering */
-  public isOAuthCallback = false;
+  public IsOAuthCallback = false;
+
+  /** @deprecated Use {@link IsOAuthCallback}. */
+  public get isOAuthCallback() {
+    return this.IsOAuthCallback;
+  }
+  /** @deprecated Use {@link IsOAuthCallback}. */
+  public set isOAuthCallback(value) {
+    this.IsOAuthCallback = value;
+  }
   /** Tracks whether the login page is in dark mode */
   public IsDarkMode = false;
   /** True when the current route is the full Conversations/Chat workspace — hides the chat overlay */
-  public isChatRoute = false;
+  public IsChatRoute = false;
+
+  /** @deprecated Use {@link IsChatRoute}. */
+  public get isChatRoute() {
+    return this.IsChatRoute;
+  }
+  /** @deprecated Use {@link IsChatRoute}. */
+  public set isChatRoute(value) {
+    this.IsChatRoute = value;
+  }
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
 
@@ -99,7 +250,16 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Component rendered by PreShellGuard (blocks the shell until dismissed) */
   private _preShellOverlayRef: ComponentRef<unknown> | null = null;
   /** Whether a pre-shell guard overlay is blocking the shell */
-  preShellBlocked = false;
+  PreShellBlocked = false;
+
+  /** @deprecated Use {@link PreShellBlocked}. */
+  get preShellBlocked() {
+    return this.PreShellBlocked;
+  }
+  /** @deprecated Use {@link PreShellBlocked}. */
+  set preShellBlocked(value) {
+    this.PreShellBlocked = value;
+  }
 
   /** Application context snapshot for AI agent awareness — updated on every app/tab transition */
   public AppContextSnapshot: AppContextSnapshot | null = null;
@@ -126,9 +286,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   constructor(
     private router: Router,
-    @Inject(DOCUMENT) public document: Document,
+    @Inject(DOCUMENT) public Document: Document,
     @Inject(MJ_ENVIRONMENT) private environment: MJEnvironmentConfig,
-    public authBase: MJAuthBase,
+    public AuthBase: MJAuthBase,
     private workspaceInit: WorkspaceInitializerService,
     private validationService: SystemValidationService,
     private connectivityService: ServerConnectivityService,
@@ -148,15 +308,114 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     @Optional() @Inject(MJ_PRE_SHELL_GUARD) private preShellGuard: PreShellGuard | null,
     private environmentInjector: EnvironmentInjector,
     private viewContainerRef: ViewContainerRef,
+    @Optional() @Inject(MJ_AUTH_PROVIDER_RESOLUTION) private authResolution: AuthProviderResolution | null,
   ) {
     super();
     this.registerClientTools();
   }
 
+  /** @deprecated Use {@link Document} instead. */
+  get document(): Document {
+    return this.Document;
+  }
+
+  /** @deprecated Use {@link AuthBase}. */
+  public get authBase(): MJAuthBase {
+    return this.AuthBase;
+  }
+  /** @deprecated Use {@link AuthBase}. */
+  public set authBase(value: MJAuthBase) {
+    this.AuthBase = value;
+  }
+
+  // ── Multi-provider login ──────────────────────────────────────────────────
+  // The catalog is resolved once, before bootstrap, by AuthServicesModule.forRoot. This
+  // component only renders the outcome; it never fetches or decides.
+
+  /** True while a sign-in is being initiated, so the picker cannot start two at once. */
+  public SigningIn = false;
+
+  /** Providers offered by the server catalog. Empty for a single-provider deployment. */
+  public get AuthProviderChoices(): PublicAuthProviderInfo[] {
+    return this.authResolution?.choices ?? [];
+  }
+
+  /**
+   * Whether to render the picker instead of the single "Log in" button. Only ever true when
+   * the server published 2+ client-visible providers — one option is not a choice.
+   */
+  public get ShowProviderPicker(): boolean {
+    return this.authResolution?.showPicker === true;
+  }
+
+
+  /**
+   * Lede rendered above the provider picker.
+   *
+   * A real auth status message (expired session, provider error) always wins — a failure the user
+   * needs to see must never be displaced by static copy.
+   *
+   * Absent one, this is Login C's lede, which C marks `multi-only`: it explains that there is a
+   * choice to make, so it is suppressed when there is exactly one provider and nothing to choose.
+   */
+  public get ProviderPickerLede(): string | null {
+    if (this.SubHeaderText !== MJExplorerAppComponent.defaultSubHeaderText) {
+      return this.SubHeaderText;
+    }
+    return this.ShowProviderPicker ? "Continue with one of your organization's sign-in options." : null;
+  }
+
+  /**
+   * Starts sign-in with the provider the user picked.
+   *
+   * Choosing the provider already wired into DI logs in immediately. Choosing a different one
+   * requires a reload: each browser SDK contributes its Angular providers (interceptors, guards,
+   * config tokens) at module-definition time, so the injector cannot be re-composed in place.
+   * The choice is persisted first, and the reloaded app both bootstraps that provider and starts
+   * its login flow automatically — so the user experiences one click, not two.
+   */
+  public OnAuthProviderSelected(provider: PublicAuthProviderInfo): void {
+    if (this.SigningIn) {
+      return;
+    }
+    this.SigningIn = true;
+
+    const { requiresReload } = AuthProviderCatalog.Select(provider, this.authResolution?.active?.name ?? null);
+    if (requiresReload) {
+      this.Document.defaultView?.location.reload();
+      return;
+    }
+
+    this.AuthBase.login().subscribe({
+      error: (error: unknown) => {
+        this.SigningIn = false;
+        LogError(`[Auth] Sign-in with provider '${provider.name}' failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.cdr.detectChanges();
+      }
+    });
+  }
+
+  /**
+   * Resumes the login flow after a picker choice forced a reload, so switching providers reads
+   * as a single action. The flag is consumed during resolution, so this fires exactly once.
+   */
+  private startAutoLoginIfPending(): void {
+    if (this.authResolution?.autoLogin) {
+      this.SigningIn = true;
+      this.AuthBase.login().subscribe({
+        error: (error: unknown) => {
+          this.SigningIn = false;
+          LogError(`[Auth] Automatic sign-in after provider switch failed: ${error instanceof Error ? error.message : String(error)}`);
+          this.cdr.detectChanges();
+        }
+      });
+    }
+  }
+
   /**
    * Handle successful login and initialize the application
    */
-  async handleLogin(token: string, userInfo: StandardUserInfo) {
+  async HandleLogin(token: string, userInfo: StandardUserInfo) {
     if (!token) return;
 
     try {
@@ -180,7 +439,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           const convoId = statusObj['conversationId'] as string;
           if (!convoId) return false;
           const isViewingConvo = this.bridge.ActiveConversationID$.value === convoId
-            && (this.bridge.OverlayActive$.value || this.isChatRoute);
+            && (this.bridge.OverlayActive$.value || this.IsChatRoute);
           return isViewingConvo;
         };
 
@@ -195,7 +454,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         if (this.preShellGuard) {
           const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
           if (blockComponent) {
-            this.preShellBlocked = true;
+            this.PreShellBlocked = true;
             this.cdr.detectChanges();
             this.renderPreShellOverlay(blockComponent);
             return;
@@ -207,7 +466,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           // use first nav item url instead
           setTimeout(() => {
             // Find the KendoDrawer element, and simulate a click for the first item
-            const drawerElement = this.document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
+            const drawerElement = this.Document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
             if (drawerElement) drawerElement.click();
           }, 10); // wait for the drawer to finish rerender and then do this
         } else {
@@ -220,13 +479,13 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           if (this.preShellGuard) {
             const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
             if (blockComponent) {
-              this.preShellBlocked = true;
+              this.PreShellBlocked = true;
               this.renderPreShellOverlay(blockComponent);
               return;
             }
           }
           // Show validation banner instead of generic error
-          this.showValidationOnly = true;
+          this.ShowValidationOnly = true;
           this.HasError = true;
           return; // Don't throw, just return to show validation banner
         }
@@ -250,33 +509,38 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     }
   }
 
-  async setupAuth() {
+  /** @deprecated Use {@link HandleLogin}. */
+  async handleLogin(token: string, userInfo: StandardUserInfo) {
+    return this.HandleLogin(token, userInfo);
+  }
+
+  async SetupAuth() {
     // Auth provider already initialized by APP_INITIALIZER
 
     // v3.0 API - Clean abstraction using observables
-    this.authBase.getUserInfo()
+    this.AuthBase.getUserInfo()
       .pipe(take(1))
       .subscribe({
         next: async (userInfo) => {
           if (userInfo) {
             // v3.0 API - No more provider-specific logic!
-            const token = await this.authBase.getIdToken();
+            const token = await this.AuthBase.getIdToken();
 
             if (token) {
-              await this.handleLogin(token, userInfo);
+              await this.HandleLogin(token, userInfo);
             } else {
               // Token expired or missing — attempt a full refresh which will
               // redirect to the identity provider if interaction is required.
               console.warn('User info available but no token found, attempting refresh...');
               try {
-                const refreshedToken = await this.authBase.refreshToken();
-                await this.handleLogin(refreshedToken.idToken, userInfo);
+                const refreshedToken = await this.AuthBase.refreshToken();
+                await this.HandleLogin(refreshedToken.idToken, userInfo);
               } catch (e) {
                 console.error('Token refresh failed, redirecting to login:', e);
                 // refreshToken() normally redirects (and never returns) when
                 // interaction is required.  If we reach here, force login as
                 // a last-resort safety net.
-                this.authBase.login().subscribe();
+                this.AuthBase.login().subscribe();
               }
             }
           }
@@ -285,18 +549,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           LogError('Error Logging In: ' + err);
 
           // v3.0 API - Use semantic error classification
-          const authError = this.authBase.classifyError(err);
+          const authError = this.AuthBase.classifyError(err);
 
           switch (authError.type) {
             case AuthErrorType.NO_ACTIVE_SESSION:
-              this.subHeaderText = "Welcome back! Please log in to your account.";
+              this.SubHeaderText = MJExplorerAppComponent.defaultSubHeaderText;
               break;
             case AuthErrorType.INTERACTION_REQUIRED:
             case AuthErrorType.TOKEN_EXPIRED:
-              this.subHeaderText = "Your session has expired. Please log in to your account.";
+              this.SubHeaderText = "Your session has expired. Please log in to your account.";
               break;
             default:
-              this.subHeaderText = authError.userMessage || "Welcome back! Please log in to your account.";
+              this.SubHeaderText = authError.userMessage || MJExplorerAppComponent.defaultSubHeaderText;
           }
 
           // Auth state is managed by the provider itself via observables
@@ -304,7 +568,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       });
 
     // Check auth state - the provider manages this internally now
-    this.authBase.isAuthenticated()
+    this.AuthBase.isAuthenticated()
       .pipe(take(1))
       .subscribe((loggedIn: boolean) => {
         if (!loggedIn) {
@@ -317,12 +581,21 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.initialPath = window.location.pathname + (window.location.search ? window.location.search : '');
   }
 
+  /** @deprecated Use {@link SetupAuth}. */
+  async setupAuth() {
+    return this.SetupAuth();
+  }
+
   ngOnInit() {
     SetProductionStatus(this.environment.production);
 
     // Check if this is the OAuth callback route - used for conditional rendering in template
     // Note: We still run setupAuth() to restore the user's session
-    this.isOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+    this.IsOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+
+    // Resume sign-in when a picker choice required a provider switch (and therefore a reload),
+    // so switching providers stays a single user action.
+    this.startAutoLoginIfPending();
 
     // Track route changes to hide chat overlay on Conversations workspace
     this.router.events
@@ -337,17 +610,17 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         // Symmetric conversation handoff across the chat-route boundary, so a live call / chat
         // never dies on navigation — it just moves to whichever surface is visible. Fired for ANY
         // navigation (nav click, deep link, back/forward), not only the agent's NavigateToApp tool.
-        if (this.isChatRoute && !nowChatRoute && activeConvoId) {
+        if (this.IsChatRoute && !nowChatRoute && activeConvoId) {
           // Leaving the full chat workspace → hand the conversation to the floating overlay so it
           // pops up there and persists.
           this.bridge.SwitchToOverlay(activeConvoId);
-        } else if (!this.isChatRoute && nowChatRoute && activeConvoId) {
+        } else if (!this.IsChatRoute && nowChatRoute && activeConvoId) {
           // Entering the full chat workspace while the overlay holds a live conversation → hand it
           // to the workspace (BEFORE the overlay collapses) so the session continues there instead
           // of being stranded in a collapsed bubble.
           this.bridge.SwitchToWorkspace(activeConvoId);
         }
-        this.isChatRoute = nowChatRoute;
+        this.IsChatRoute = nowChatRoute;
       });
 
     // Track active app changes for AI agent context awareness
@@ -369,7 +642,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.applyLoginTheme();
 
     // Re-apply login theme when the user logs out (ThemeService.Reset() clears data-theme)
-    this.authBase.isAuthenticated()
+    this.AuthBase.isAuthenticated()
       .pipe(takeUntil(this.destroy$))
       .subscribe((authenticated: boolean) => {
         if (!authenticated) {
@@ -387,7 +660,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
     // Always run auth setup - this restores the user's session
     // For OAuth callback, once authenticated, the OAuthCallbackComponent handles the code exchange
-    this.setupAuth();
+    this.SetupAuth();
   }
 
   ngOnDestroy() {
@@ -713,12 +986,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         if (invalid) {
           return { Success: false, ErrorMessage: invalid };
         }
-        const pkey = new CompositeKey();
-        if (entityInfo) {
-          pkey.LoadFromURLSegment(entityInfo, recordId);
-        } else {
-          pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordId }];
-        }
+        const pkey = CompositeKey.FromURLSegment(entityInfo, recordId);
         // The AGENT opened this, from the chat — same origin as overlay
         // clicks, never the page the user happens to be standing on.
         this.navigationService.OpenEntityRecord(entityName, pkey, {
@@ -744,7 +1012,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         const navItemName = this.readToolParam(params, 'NavItemName', 'navItem', 'tab', 'section');
 
         // If currently in full chat workspace, hand conversation to overlay for continuity
-        if (this.isChatRoute) {
+        if (this.IsChatRoute) {
           const activeConvoId = this.bridge.ActiveConversationID$.value;
           if (activeConvoId) {
             this.bridge.SwitchToOverlay(activeConvoId);
@@ -995,9 +1263,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   private applyThemeToDOM(): void {
     if (this.IsDarkMode) {
-      this.document.documentElement.setAttribute('data-theme', 'dark');
+      this.Document.documentElement.setAttribute('data-theme', 'dark');
     } else {
-      this.document.documentElement.removeAttribute('data-theme');
+      this.Document.documentElement.removeAttribute('data-theme');
     }
   }
 

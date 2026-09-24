@@ -60,14 +60,19 @@ export class RealtimeRtpSender {
     }
 
     /** Starts the 20 ms send clock (idempotent). No-op frames are skipped when the queue is short. */
-    public start(): void {
+    public Start(): void {
         if (this.timer === null) {
-            this.timer = setInterval(() => this.tick(), RTP_FRAME_MS);
+            this.timer = setInterval(() => this.Tick(), RTP_FRAME_MS);
         }
     }
 
+    /** @deprecated Use {@link Start}. */
+    public start(): void {
+        return this.Start();
+    }
+
     /** Appends one outbound PCM16 frame (the model's voice, already at the codec rate) to the send queue. */
-    public enqueue(pcm: ArrayBuffer): void {
+    public Enqueue(pcm: ArrayBuffer): void {
         if (pcm.byteLength === 0) {
             return;
         }
@@ -75,17 +80,27 @@ export class RealtimeRtpSender {
         this.pending = this.pending.length === 0 ? incoming : concatBytes(this.pending, incoming);
     }
 
+    /** @deprecated Use {@link Enqueue}. */
+    public enqueue(pcm: ArrayBuffer): void {
+        return this.Enqueue(pcm);
+    }
+
     /**
      * Barge-in: drop all queued (not-yet-sent) audio so the agent goes silent immediately. The softphone
      * has no internal outbound buffer to clear — once {@link tick} has sent a frame it's on the wire — so
      * dropping the local queue is the whole flush.
      */
-    public flush(): void {
+    public Flush(): void {
         this.pending = new Uint8Array(0);
     }
 
+    /** @deprecated Use {@link Flush}. */
+    public flush(): void {
+        return this.Flush();
+    }
+
     /** Stops the clock and drops any queued audio. Called on hangup / call end. */
-    public stop(): void {
+    public Stop(): void {
         if (this.timer !== null) {
             clearInterval(this.timer);
             this.timer = null;
@@ -93,18 +108,28 @@ export class RealtimeRtpSender {
         this.pending = new Uint8Array(0);
     }
 
+    /** @deprecated Use {@link Stop}. */
+    public stop(): void {
+        return this.Stop();
+    }
+
     /**
      * Sends exactly one frame if a whole `packetSize` chunk is queued and the call is live; otherwise a
      * no-op (silence is simply the absence of packets — RTP needs no filler). Public so tests drive the
      * clock deterministically.
      */
-    public tick(): void {
+    public Tick(): void {
         if (this.session.disposed || this.pending.length < this.packetSize) {
             return;
         }
         const frame = this.pending.subarray(0, this.packetSize);
         this.pending = this.pending.subarray(this.packetSize);
         this.sendFrame(frame);
+    }
+
+    /** @deprecated Use {@link Tick}. */
+    public tick(): void {
+        return this.Tick();
     }
 
     /** Encodes + packetizes one PCM frame and advances the session's RTP counters (verbatim Streamer body). */

@@ -100,9 +100,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Application Scopes','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Application Scopes')"
+                [NewRecordValues]="NewRecordValues('MJ: API Application Scopes','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJAPIApplicationScopes')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIApplicationScopes', $event.totalRowCount)"
                 >
@@ -125,9 +125,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Usage Logs','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Key Usage Logs')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Usage Logs','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJAPIKeyUsageLogs')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyUsageLogs', $event.totalRowCount)"
                 >
@@ -150,9 +150,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Applications','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Key Applications')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Applications','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJAPIKeyApplications')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyApplications', $event.totalRowCount)"
                 >

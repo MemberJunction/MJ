@@ -378,4 +378,4 @@ This package requires the following database objects:
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

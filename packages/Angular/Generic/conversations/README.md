@@ -140,6 +140,15 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `showSuggestedPrompts` | The empty-state's built-in suggested-prompt chips |
 | `showDateNavigation` | The message list's sticky date header + jump-to-date navigation |
 
+#### Behaviour switches
+
+Unlike the gates above, these change *how* the surface behaves and default to today's behaviour:
+
+| Input | Default | Effect when set |
+|---|---|---|
+| `readReplyFromTop` | `false` | A finished turn — the reader's message plus the reply — is scrolled to the top of the pane if it is taller than the pane, so the run ends at the start of the answer instead of its end. A turn that fits stays where it is; a reader who scrolled up during the run is never moved. (Independent of this switch, an in-place message update — progress, status, streamed text — only follows the tail for a reader who is already at the bottom.) |
+
+
 ```html
 <!-- e.g. a minimal, single-agent end-user surface -->
 <mj-conversation-chat-area
@@ -321,7 +330,7 @@ The package hosts the full client UX for MJ's real-time co-agent sessions — li
 
 **Audio-reactive visuals** (`realtime-audio-visuals.ts`): when the active driver meters its audio planes (`BaseRealtimeClient.GetAudioActivity()` — all four current drivers do, both directions), the overlay samples it on a requestAnimationFrame loop *outside Angular* and writes CSS variables directly: the hero orb scales with the smoothed output envelope (speaker-cone attack/decay), the EQ bars render the true 9-bin spectrum, and the visuals recolor by speaking direction (agent = brand, user = green) with hysteresis so syllable gaps never flicker. Un-metered drivers gracefully keep the turn-state-driven animations. See the guide's §11 for the full pipeline.
 
-**Interactive channels are plugins** — the shell is channel-agnostic. `BaseRealtimeChannelClient` (`components/realtime/channels/base-realtime-channel-client.ts`) is the contract: a client-executed tool set declared to the realtime model at session mint, a perception serializer feeding coalesced state deltas into the model as context notes, a dynamically-created Angular surface component the plugin binds itself, a persisted state of record, prior-session restore (`RestoreState`), artifact snapshots (`SaveAsArtifact`), and focus-mode layout requests. Plugins resolve at session start from the `MJ: AI Agent Channels` registry by `ClientPluginClass` key.
+**Interactive channels are plugins** — the shell is channel-agnostic. `BaseRealtimeChannelClient` (`@memberjunction/realtime-runtime`, `src/channels/base-realtime-channel-client.ts`) is the contract: a client-executed tool set declared to the realtime model at session mint, a perception serializer feeding coalesced state deltas into the model as context notes, a dynamically-created Angular surface component the plugin binds itself, a persisted state of record, prior-session restore (`RestoreState`), artifact snapshots (`SaveAsArtifact`), and focus-mode layout requests. Plugins resolve at session start from the `MJ: AI Agent Channels` registry by `ClientPluginClass` key.
 
 **The live Whiteboard is a thin consumer of [`@memberjunction/ng-whiteboard`](../whiteboard/README.md)** — the board itself (the `WhiteboardState` engine, the `Whiteboard_*` tool API, the host/board/toolbar/zoom/popover/snapshot components, exports, the sandboxed-HTML-widget input bridge, the context menu) lives in that generic package; read its README for whiteboard details. This package contributes only the integration glue (`components/realtime/whiteboard/`): `RealtimeWhiteboardChannel`, the ~200-line channel plugin that declares `WHITEBOARD_TOOL_DEFINITIONS` to the model, routes `Whiteboard_*` calls to the bound host (or the pure engine call when the pane is collapsed), pipes the coalesced `SceneDelta` stream into the model as `[whiteboard]` context notes (with do-not-narrate-minor-edits etiquette inline), forwards widget submissions (`MJWhiteboard.submit` — the tutoring loop) and agent-undo events, persists/restores the board as the channel's state of record, and snapshots it to versioned `MJ: Artifacts`; plus `WhiteboardArtifactViewerPlugin` (`mj-whiteboard-artifact-viewer`), the saved-board artifact viewer rendered through the package's read-only snapshot component.
 
@@ -451,6 +460,37 @@ This package never navigates (no Router): developer links emit a `RealtimeNaviga
 
 Message components use dynamic component creation (`ViewContainerRef.createComponent`) instead of Angular template binding to minimize render cycles and improve performance with large message lists.
 
+### Windowed transcript
+
+Opening a conversation loads only the **most recent page** of the transcript — roughly ten
+display items — rather than every `MJ: Conversation Details` row. Everything older is
+represented by an "Earlier messages" sentinel at the top; scrolling it into view prepends the
+previous page and holds the reader's scroll position. Items far from the viewport are
+unmounted and replaced by height-holding spacers, so the DOM stays bounded no matter how far
+back someone pages.
+
+**Hosts do not opt in.** It is on by default and requires no configuration. The one thing a
+host should provide is its scrolling element:
+
+```html
+<mj-conversation-message-list [ScrollRoot]="myScrollContainer"> </mj-conversation-message-list>
+```
+
+The list's own container does not scroll — consumers typically wrap it in their own scroller,
+and that element is what the sentinel's `IntersectionObserver` needs as its root. When
+`ScrollRoot` is omitted the component walks its ancestors to find one, which works but depends
+on layout having settled.
+
+**`ConversationEngine.LoadConversationDetails` is no longer what this widget calls on open.**
+It now calls the additive `LoadDetailWindow`, which pages on the `Sequence` column and loads
+peripherals (agent runs, ratings, artifacts, avatars) scoped to the returned rows.
+`LoadConversationDetails` remains the full-history API and is unchanged — agents and
+server-side callers depend on it returning a complete set, so the windowed path deliberately
+never writes into the engine's detail cache.
+
+Paging is measured in **display items**, not database rows: a realtime session collapses many
+rows into one timeline card, and a session is never split across pages.
+
 ### MJ Entity Integration
 
 All data operations use the MemberJunction entity system:
@@ -501,4 +541,4 @@ npm run build
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

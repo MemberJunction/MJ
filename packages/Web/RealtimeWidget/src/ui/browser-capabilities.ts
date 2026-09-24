@@ -17,13 +17,13 @@
 /** The minimal slice of `navigator` the voice capability probe inspects. */
 export interface VoiceCapabilityNavigator {
     /** Present (with `getUserMedia`) only when the browser supports media capture. */
-    mediaDevices?: { getUserMedia?: unknown };
+    mediaDevices?: { getUserMedia?: unknown };  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** The minimal slice of `window` the probe inspects (secure-context flag). */
 export interface VoiceCapabilityWindow {
     /** `true` on https / localhost; `false` (or absent) on insecure origins. */
-    isSecureContext?: boolean;
+    isSecureContext?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**

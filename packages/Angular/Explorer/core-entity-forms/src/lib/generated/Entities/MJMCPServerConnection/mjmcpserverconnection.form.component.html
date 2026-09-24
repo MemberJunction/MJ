@@ -217,9 +217,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connection Tools','MCPServerConnectionID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Tools')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Tools','MCPServerConnectionID')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnectionTools')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnectionTools', $event.totalRowCount)"
                 >
@@ -242,9 +242,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Tool Execution Logs','MCPServerConnectionID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Tool Execution Logs')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Tool Execution Logs','MCPServerConnectionID')"
                 [AllowLoad]="IsSectionExpanded('mJMCPToolExecutionLogs')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPToolExecutionLogs', $event.totalRowCount)"
                 >
@@ -267,9 +267,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Authorization States','MCPServerConnectionID')"
-                [NewRecordValues]="NewRecordValues('MJ: O Auth Authorization States')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Authorization States','MCPServerConnectionID')"
                 [AllowLoad]="IsSectionExpanded('mJOAuthAuthorizationStates')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOAuthAuthorizationStates', $event.totalRowCount)"
                 >
@@ -292,9 +292,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Client Registrations','MCPServerConnectionID')"
-                [NewRecordValues]="NewRecordValues('MJ: O Auth Client Registrations')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Client Registrations','MCPServerConnectionID')"
                 [AllowLoad]="IsSectionExpanded('mJOAuthClientRegistrations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOAuthClientRegistrations', $event.totalRowCount)"
                 >
@@ -317,9 +317,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Tokens','MCPServerConnectionID')"
-                [NewRecordValues]="NewRecordValues('MJ: O Auth Tokens')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Tokens','MCPServerConnectionID')"
                 [AllowLoad]="IsSectionExpanded('mJOAuthTokens')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOAuthTokens', $event.totalRowCount)"
                 >
@@ -342,9 +342,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: MCP Server Connection Permissions','MCPServerConnectionID')"
-                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: MCP Server Connection Permissions','MCPServerConnectionID')"
                 [AllowLoad]="IsSectionExpanded('mJMCPServerConnectionPermissions')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMCPServerConnectionPermissions', $event.totalRowCount)"
                 >

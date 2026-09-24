@@ -44,3 +44,4 @@ export * from './lib/left-nav/left-nav-content.component';
 export * from './lib/page-header-interior/page-header-interior.component';
 export * from './lib/page-body-interior/page-body-interior.component';
 export * from './lib/empty-state/empty-state.component';
+export * from './lib/card-grid/card-grid.component';
