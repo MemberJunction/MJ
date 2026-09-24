@@ -88,20 +88,20 @@ export {
 
 export {
   SetupStyles,
-  createDefaultComponentStyles,
+  CreateDefaultComponentStyles, createDefaultComponentStyles,
   BuildStylesFromTheme,
   ApplyStyleOverrides
 } from './utilities/component-styles';
 
 export {
-  buildAntdThemeConfig,
-  wrapWithLibraryThemeProviders
+  BuildAntdThemeConfig, buildAntdThemeConfig,
+  WrapWithLibraryThemeProviders, wrapWithLibraryThemeProviders
 } from './utilities/component-library-theming';
 
 export {
   StandardLibraries,
   StandardLibraryManager,
-  createStandardLibraries
+  CreateStandardLibraries, createStandardLibraries
 } from './utilities/standard-libraries';
 
 export {
@@ -111,21 +111,21 @@ export {
 } from './utilities/library-loader';
 
 export {
-  getCoreRuntimeLibraries,
-  isCoreRuntimeLibrary
+  GetCoreRuntimeLibraries, getCoreRuntimeLibraries,
+  IsCoreRuntimeLibrary, isCoreRuntimeLibrary
 } from './utilities/core-libraries';
 
 export {
-  generateComponentHierarchyHash
+  GenerateComponentHierarchyHash, generateComponentHierarchyHash
 } from './utilities/component-hash';
 
 export {
   RuntimeUtilities,
-  createRuntimeUtilities
+  CreateRuntimeUtilities, createRuntimeUtilities
 } from './utilities/runtime-utilities';
 
 export {
-  resolveEntityRecordKey,
+  ResolveEntityRecordKey, resolveEntityRecordKey,
   EntityRecordKeyInput
 } from './utilities/entity-record-key';
 
@@ -152,22 +152,22 @@ export {
 } from './utilities/cache-manager';
 
 export {
-  unwrapLibraryComponent,
-  unwrapLibraryComponents,
-  unwrapAllLibraryComponents,
+  UnwrapLibraryComponent, unwrapLibraryComponent,
+  UnwrapLibraryComponents, unwrapLibraryComponents,
+  UnwrapAllLibraryComponents, unwrapAllLibraryComponents,
   // Legacy exports for backward compatibility
-  unwrapComponent,
-  unwrapComponents,
-  unwrapAllComponents
+  UnwrapComponent, unwrapComponent,
+  UnwrapComponents, unwrapComponents,
+  UnwrapAllComponents, unwrapAllComponents
 } from './utilities/component-unwrapper';
 
 export {
   USER_STATE_KEY_PREFIX,
-  resolveUserStateScope,
-  userStateStorageKey,
-  parseStoredUserSettings,
-  mergeUserSettings,
-  applyUserSettingsUpdate
+  ResolveUserStateScope, resolveUserStateScope,
+  UserStateStorageKey, userStateStorageKey,
+  ParseStoredUserSettings, parseStoredUserSettings,
+  MergeUserSettings, mergeUserSettings,
+  ApplyUserSettingsUpdate, applyUserSettingsUpdate
 } from './utilities/user-state';
 
 // Version information
@@ -201,7 +201,7 @@ export const DEFAULT_CONFIGS = {
  * @param debug - Enable debug logging (defaults to false)
  * @returns Object containing compiler, registry, and resolver instances
  */
-export function createReactRuntime(
+export function CreateReactRuntime(
   babelInstance: any,
   config?: {
     compiler?: Partial<import('./types').CompilerConfig>;
@@ -249,4 +249,18 @@ export function createReactRuntime(
     version: VERSION,
     debug
   };
+}
+
+/** @deprecated Use {@link CreateReactRuntime}. */
+export function createReactRuntime(
+  babelInstance: any,
+  config?: {
+    compiler?: Partial<import('./types').CompilerConfig>;
+    registry?: Partial<import('./types').RegistryConfig>;
+    manager?: Partial<import('./component-manager').ComponentManagerConfig>;
+  },
+  runtimeContext?: import('./types').RuntimeContext,
+  debug: boolean = false
+) {
+  return CreateReactRuntime(babelInstance, config, runtimeContext, debug);
 }

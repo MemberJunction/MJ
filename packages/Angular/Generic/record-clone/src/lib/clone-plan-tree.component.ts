@@ -471,7 +471,7 @@ export class ClonePlanTreeComponent {
     @Input()
     set Plan(value: RecordClonePlanDetails | null) {
         this._plan = value;
-        this.RebuildTree();
+        this.rebuildTree();
     }
     get Plan(): RecordClonePlanDetails | null {
         return this._plan;
@@ -498,7 +498,7 @@ export class ClonePlanTreeComponent {
 
     public OnSearchTermChange(term: string): void {
         this.SearchTerm = term;
-        this.UpdateVisibleNodes();
+        this.updateVisibleNodes();
         this.cdr.markForCheck();
     }
 
@@ -511,19 +511,19 @@ export class ClonePlanTreeComponent {
     public OnToggleExpand(item: CloneTreeNodeViewModel, event: MouseEvent): void {
         event.stopPropagation();
         item.Expanded = !item.Expanded;
-        this.UpdateVisibleNodes();
+        this.updateVisibleNodes();
         this.cdr.markForCheck();
     }
 
     public ExpandAll(): void {
-        this.SetAllExpanded(this.TreeNodes, true);
-        this.UpdateVisibleNodes();
+        this.setAllExpanded(this.TreeNodes, true);
+        this.updateVisibleNodes();
         this.cdr.markForCheck();
     }
 
     public CollapseAll(): void {
-        this.SetAllExpanded(this.TreeNodes, false);
-        this.UpdateVisibleNodes();
+        this.setAllExpanded(this.TreeNodes, false);
+        this.updateVisibleNodes();
         this.cdr.markForCheck();
     }
 
@@ -534,16 +534,16 @@ export class ClonePlanTreeComponent {
         return `Relationship policy: ${edge.Policy} (${edge.PolicySource || 'default'})`;
     }
 
-    private SetAllExpanded(nodes: CloneTreeNodeViewModel[], expanded: boolean): void {
+    private setAllExpanded(nodes: CloneTreeNodeViewModel[], expanded: boolean): void {
         for (const node of nodes) {
             node.Expanded = expanded;
             if (node.Children.length > 0) {
-                this.SetAllExpanded(node.Children, expanded);
+                this.setAllExpanded(node.Children, expanded);
             }
         }
     }
 
-    private RebuildTree(): void {
+    private rebuildTree(): void {
         if (!this._plan || !this._plan.Nodes || this._plan.Nodes.length === 0) {
             this.TreeNodes = [];
             this.FlatVisibleNodes = [];
@@ -582,11 +582,11 @@ export class ClonePlanTreeComponent {
         }
 
         this.TreeNodes = roots;
-        this.UpdateVisibleNodes();
+        this.updateVisibleNodes();
         this.cdr.markForCheck();
     }
 
-    private UpdateVisibleNodes(): void {
+    private updateVisibleNodes(): void {
         const flat: CloneTreeNodeViewModel[] = [];
         const term = this.SearchTerm.trim().toLowerCase();
 
@@ -595,7 +595,7 @@ export class ClonePlanTreeComponent {
                 node.Node.EntityName.toLowerCase().includes(term) ||
                 (node.Node.DisplayName && node.Node.DisplayName.toLowerCase().includes(term));
 
-            if (matchesSearch || this.SubtreeMatches(node, term)) {
+            if (matchesSearch || this.subtreeMatches(node, term)) {
                 flat.push(node);
                 if (node.Expanded || term) { // auto-expand matching paths on search
                     for (const child of node.Children) {
@@ -612,13 +612,13 @@ export class ClonePlanTreeComponent {
         this.FlatVisibleNodes = flat;
     }
 
-    private SubtreeMatches(node: CloneTreeNodeViewModel, term: string): boolean {
+    private subtreeMatches(node: CloneTreeNodeViewModel, term: string): boolean {
         if (!term) return true;
         for (const child of node.Children) {
             if (
                 child.Node.EntityName.toLowerCase().includes(term) ||
                 (child.Node.DisplayName && child.Node.DisplayName.toLowerCase().includes(term)) ||
-                this.SubtreeMatches(child, term)
+                this.subtreeMatches(child, term)
             ) {
                 return true;
             }

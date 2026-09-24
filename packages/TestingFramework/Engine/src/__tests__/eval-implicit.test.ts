@@ -3,8 +3,8 @@
  * text with no call is task completion, and the two new counters (narration, placeholder calls).
  */
 import { describe, expect, it } from 'vitest';
-import { normalizeDecision, isPlaceholderCall, type RawTurn, type ObservedDecision } from '../eval/decision';
-import { evaluateWellFormed } from '../eval/wellFormed';
+import { NormalizeDecision, IsPlaceholderCall, type RawTurn, type ObservedDecision } from '../eval/decision';
+import { EvaluateWellFormed } from '../eval/wellFormed';
 
 const controlToolMap = {
     delegate_to_query_strategist: { kind: 'subAgent' as const, name: 'Query Strategist' },
@@ -12,7 +12,7 @@ const controlToolMap = {
     ask_user: { kind: 'chat' as const }
 };
 const toolNameMap = { run_ad_hoc_query: 'Run Ad-hoc Query' };
-const turn = (text: string, toolCalls: RawTurn['toolCalls']) => normalizeDecision({ text, toolCalls, toolNameMap, controlToolMap, protocol: 'implicit' });
+const turn = (text: string, toolCalls: RawTurn['toolCalls']) => NormalizeDecision({ text, toolCalls, toolNameMap, controlToolMap, protocol: 'implicit' });
 
 describe('normalizeDecision — implicit control flow', () => {
     it('ask_user → chat with its message', () => {
@@ -41,10 +41,10 @@ describe('normalizeDecision — implicit control flow', () => {
         expect(turn('{"taskComplete":false,"nextStep":{"type":"Chat"},"message":"hi"}', null).kind).toBe('chat');
     });
     it('under the hybrid protocol plain text is still unparseable', () => {
-        expect(normalizeDecision({ text: 'Revenue grew.', toolCalls: null, protocol: 'hybrid' }).kind).toBe('unparseable');
+        expect(NormalizeDecision({ text: 'Revenue grew.', toolCalls: null, protocol: 'hybrid' }).kind).toBe('unparseable');
     });
     it('a control tool call under the hybrid protocol (no control map) reads as an action under its wire name', () => {
-        const d = normalizeDecision({ text: '', toolCalls: [{ name: 'ask_user', arguments: { message: 'x' } }], toolNameMap, protocol: 'hybrid' });
+        const d = NormalizeDecision({ text: '', toolCalls: [{ name: 'ask_user', arguments: { message: 'x' } }], toolNameMap, protocol: 'hybrid' });
         expect(d.kind).toBe('action');
         expect(d.actions[0].name).toBe('ask_user');
     });
@@ -62,27 +62,27 @@ describe('normalizeDecision — implicit control flow', () => {
 
 describe('isPlaceholderCall', () => {
     it('is false without prose', () => {
-        expect(isPlaceholderCall([{ name: 'x', arguments: {} }], '')).toBe(false);
+        expect(IsPlaceholderCall([{ name: 'x', arguments: {} }], '')).toBe(false);
     });
     it('is false when any argument is a real value', () => {
-        expect(isPlaceholderCall([{ name: 'x', arguments: { Query: 'placeholder', Limit: 5 } }], 'hi')).toBe(false);
+        expect(IsPlaceholderCall([{ name: 'x', arguments: { Query: 'placeholder', Limit: 5 } }], 'hi')).toBe(false);
     });
     it('recognises the phrases seen in run 7', () => {
-        expect(isPlaceholderCall([{ name: 'x', arguments: { TaskDescription: 'none needed, clarifying first' } }], 'hi')).toBe(true);
+        expect(IsPlaceholderCall([{ name: 'x', arguments: { TaskDescription: 'none needed, clarifying first' } }], 'hi')).toBe(true);
     });
 });
 
 describe('evaluateWellFormed — a plain-text terminal is usable under implicit', () => {
     it('passes a text-encoded taskComplete', () => {
         const decision: ObservedDecision = { kind: 'taskComplete', encoding: 'text', actions: [], subAgents: [], taskComplete: true, message: 'Done.', envelopeParsed: null };
-        const r = evaluateWellFormed({ decision });
+        const r = EvaluateWellFormed({ decision });
         expect(r.passed).toBe(true);
         expect(r.message).toMatch(/usable text response/);
     });
 });
 
-import { evaluateDecision } from '../eval/expectation';
-import { toDecisionExpectation, parseCorpusCase } from '../eval/corpus';
+import { EvaluateDecision } from '../eval/expectation';
+import { ToDecisionExpectation, ParseCorpusCase } from '../eval/corpus';
 
 describe('payloadChange expectations', () => {
     const observedPayload = (kind: 'payloadChange' | 'action', payloadChange: Record<string, unknown>): ObservedDecision => ({
@@ -90,32 +90,32 @@ describe('payloadChange expectations', () => {
     });
 
     it('kind payloadChange matches a mixed action+payload turn too', () => {
-        const e = evaluateDecision({ kind: 'payloadChange' }, observedPayload('action', { updateElements: { iterations: 2 } }));
+        const e = EvaluateDecision({ kind: 'payloadChange' }, observedPayload('action', { updateElements: { iterations: 2 } }));
         expect(e.decisionKindMatch).toBe(true);
     });
     it('payload matchers address dotted paths into the change request', () => {
-        const e = evaluateDecision(
+        const e = EvaluateDecision(
             { kind: 'payloadChange', payload: [{ param: 'newElements.findings', matcher: { kind: 'nonEmpty' } }] },
             observedPayload('payloadChange', { newElements: { findings: [{ content: 'x' }] } }));
         expect(e.passed).toBe(true);
         expect(e.paramFidelity).toBe(1);
     });
     it('a missing path fails its matcher and names it', () => {
-        const e = evaluateDecision(
+        const e = EvaluateDecision(
             { kind: 'payloadChange', payload: [{ param: 'newElements.findings', matcher: { kind: 'nonEmpty' } }] },
             observedPayload('payloadChange', { updateElements: { iterations: 2 } }));
         expect(e.passed).toBe(false);
         expect(e.messages.join(' ')).toMatch(/payload newElements\.findings/);
     });
     it('forbiddenPayloadPaths fail when written', () => {
-        const e = evaluateDecision(
+        const e = EvaluateDecision(
             { kind: 'payloadChange', forbiddenPayloadPaths: ['newElements.brand', 'updateElements.brand'] },
             observedPayload('payloadChange', { updateElements: { brand: { voice: 'x' } } }));
         expect(e.passed).toBe(false);
         expect(e.forbiddenViolations).toEqual(['payload:updateElements.brand']);
     });
     it('the corpus loader accepts payload matchers and forbidden paths', () => {
-        const exp = toDecisionExpectation('c', { kind: 'payloadChange', payload: { 'newElements.findings': { matcher: 'nonEmpty' } }, forbiddenPayloadPaths: ['newElements.brand'] });
+        const exp = ToDecisionExpectation('c', { kind: 'payloadChange', payload: { 'newElements.findings': { matcher: 'nonEmpty' } }, forbiddenPayloadPaths: ['newElements.brand'] });
         expect(exp.payload?.[0].param).toBe('newElements.findings');
         expect(exp.forbiddenPayloadPaths).toEqual(['newElements.brand']);
     });
@@ -124,14 +124,14 @@ describe('payloadChange expectations', () => {
 describe('per-case toolChoice (Plan B, Task 1)', () => {
     const base = { id: 'x', agent: 'Sage', description: 'd', input: {}, expect: { kind: 'taskComplete' } };
     it('accepts none/auto/required on input', () => {
-        expect(parseCorpusCase({ ...base, input: { toolChoice: 'none' } }).input.toolChoice).toBe('none');
+        expect(ParseCorpusCase({ ...base, input: { toolChoice: 'none' } }).input.toolChoice).toBe('none');
     });
     it('rejects an unknown value at load time, naming the case', () => {
-        expect(() => parseCorpusCase({ ...base, input: { toolChoice: 'sometimes' } })).toThrow(/toolChoice/);
+        expect(() => ParseCorpusCase({ ...base, input: { toolChoice: 'sometimes' } })).toThrow(/toolChoice/);
     });
 });
 
-import { encodeHistoryForArm } from '../eval/history';
+import { EncodeHistoryForArm } from '../eval/history';
 describe('encodeHistoryForArm', () => {
     const history = [
         { role: 'user', content: 'Count active agents.' },
@@ -139,19 +139,19 @@ describe('encodeHistoryForArm', () => {
         { role: 'tool', content: [{ type: 'tool_result', toolCallId: 'call_0', toolName: 'run_ad_hoc_query', content: '| n |\n| 12 |', isError: false }] }
     ] as never[];
     it('passes tool-form history through for a native-results arm', () => {
-        expect(encodeHistoryForArm(history, true)).toEqual(history);
+        expect(EncodeHistoryForArm(history, true)).toEqual(history);
     });
     it('renders the corpus prose form otherwise: the call turn is dropped, each result becomes an [Action Result] user message', () => {
-        const out = encodeHistoryForArm(history, false);
+        const out = EncodeHistoryForArm(history, false);
         expect(out.map((m) => m.role)).toEqual(['user', 'user']);
         expect(out[1].content).toBe('[Action Result] run_ad_hoc_query succeeded. | n |\n| 12 |');
     });
     it('keeps an assistant turn that carried narration, minus its calls', () => {
-        const out = encodeHistoryForArm([{ ...(history[1] as object), content: 'Let me count.' }, history[2]] as never[], false);
+        const out = EncodeHistoryForArm([{ ...(history[1] as object), content: 'Let me count.' }, history[2]] as never[], false);
         expect(out[0]).toEqual({ role: 'assistant', content: 'Let me count.' });
     });
     it('marks a failed result', () => {
         const failed = [history[1], { role: 'tool', content: [{ type: 'tool_result', toolCallId: 'call_0', toolName: 'run_ad_hoc_query', content: 'Invalid column', isError: true }] }] as never[];
-        expect(encodeHistoryForArm(failed, false)[0].content).toBe('[Action Result] run_ad_hoc_query failed. Invalid column');
+        expect(EncodeHistoryForArm(failed, false)[0].content).toBe('[Action Result] run_ad_hoc_query failed. Invalid column');
     });
 });

@@ -2,7 +2,6 @@
  * Shared constants and utilities for the version-history package.
  */
 
-import { EscapeSQLString } from '@memberjunction/global';
 
 // ---------------------------------------------------------------------------
 // Entity name constants
@@ -25,27 +24,24 @@ export const ENTITY_RECORD_CHANGES = 'MJ: Record Changes';
 // NOTE: Moved to @memberjunction/record-graph. Re-exported here for backward compatibility.
 // ---------------------------------------------------------------------------
 
-import {
-    escapeSqlString,
-    sqlEquals,
-    sqlContains,
-    sqlIn,
-    sqlNotIn,
-    buildCompositeKeyFromRecord,
-    buildPrimaryKeyForLoad,
-    buildIdKey,
-} from '@memberjunction/record-graph';
-
 export {
     escapeSqlString,
+    SqlEquals,
     sqlEquals,
+    SqlContains,
     sqlContains,
+    SqlIn,
     sqlIn,
+    SqlNotIn,
     sqlNotIn,
+    BuildCompositeKeyFromRecord,
     buildCompositeKeyFromRecord,
+    BuildPrimaryKeyForLoad,
     buildPrimaryKeyForLoad,
+    BuildIdKey,
     buildIdKey,
-};
+} from '@memberjunction/record-graph';
+import { SqlEquals, BuildPrimaryKeyForLoad } from '@memberjunction/record-graph';
 
 // ---------------------------------------------------------------------------
 // Record change utilities
@@ -58,14 +54,14 @@ import { BaseEntity, IMetadataProvider, Metadata, RunView, UserInfo, LogError } 
  * Returns parsed JSON or null on failure.
  * Shared by DiffEngine and RestoreEngine.
  */
-export async function loadRecordChangeSnapshot(
+export async function LoadRecordChangeSnapshot(
     recordChangeId: string,
     contextUser: UserInfo
 ): Promise<Record<string, unknown> | null> {
     const rv = new RunView();
     const result = await rv.RunView<Record<string, unknown>>({
         EntityName: ENTITY_RECORD_CHANGES,
-        ExtraFilter: sqlEquals('ID', recordChangeId),
+        ExtraFilter: SqlEquals('ID', recordChangeId),
         // 'EntityID' is required, not decorative: field-level security projects a Record Change's
         // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot be
         // resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
@@ -98,11 +94,19 @@ export async function loadRecordChangeSnapshot(
     }
 }
 
+/** @deprecated Use {@link LoadRecordChangeSnapshot}. */
+export async function loadRecordChangeSnapshot(
+    recordChangeId: string,
+    contextUser: UserInfo
+): Promise<Record<string, unknown> | null> {
+    return LoadRecordChangeSnapshot(recordChangeId, contextUser);
+}
+
 /**
  * Load a strongly-typed entity by its ID using InnerLoad with the entity's actual PK name.
  * Returns null if not found or on error.
  */
-export async function loadEntityById<T extends BaseEntity = BaseEntity>(
+export async function LoadEntityById<T extends BaseEntity = BaseEntity>(
     entityName: string,
     id: string,
     contextUser: UserInfo,
@@ -116,8 +120,18 @@ export async function loadEntityById<T extends BaseEntity = BaseEntity>(
     }
 
     const entity = await md.GetEntityObject<T>(entityName, contextUser);
-    const key = buildPrimaryKeyForLoad(entityInfo, id);
+    const key = BuildPrimaryKeyForLoad(entityInfo, id);
     const loaded = await entity.InnerLoad(key);
     if (!loaded) return null;
     return entity;
+}
+
+/** @deprecated Use {@link LoadEntityById}. */
+export async function loadEntityById<T extends BaseEntity = BaseEntity>(
+    entityName: string,
+    id: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider
+): Promise<T | null> {
+    return LoadEntityById(entityName, id, contextUser, provider);
 }

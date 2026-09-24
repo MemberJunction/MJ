@@ -17,7 +17,7 @@ import {
  * Pure TypeScript SHA-256 hash function.
  * Runs synchronously in Node, browsers, and workers without external dependencies.
  */
-export function sha256(ascii: string): string {
+export function Sha256(ascii: string): string {
     const mathPow = Math.pow;
     const maxWord = mathPow(2, 32);
     const lengthProperty = 'length';
@@ -207,7 +207,7 @@ export function ComputePlanHash(plan: ClonePlanHashInput): string {
         Edges: sortedEdges,
     });
 
-    return sha256(canonicalPayload);
+    return Sha256(canonicalPayload);
 }
 
 export const ComputeClonePlanHash = ComputePlanHash;

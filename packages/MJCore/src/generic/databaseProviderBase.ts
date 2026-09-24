@@ -3,7 +3,7 @@ import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
-import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
+import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
@@ -140,7 +140,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         } catch {
             // CurrentUser is unavailable until the provider is configured — rely on options.user instead.
         }
-        return dispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
+        return DispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
     }
 
     /**

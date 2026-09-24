@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-    muLawToPcm16,
-    pcm16ToMuLaw,
-    muLawToPcm16Buffer,
-    pcm16ToMuLawBuffer,
+    MuLawToPcm16,
+    Pcm16ToMuLaw,
+    MuLawToPcm16Buffer,
+    Pcm16ToMuLawBuffer,
 } from '../audio/g711';
 
 /**
@@ -19,43 +19,43 @@ describe('g711 μ-law codec', () => {
     describe('known ITU-T vectors', () => {
         it('decodes 0xFF to the positive-zero region (digital silence ≈ 0)', () => {
             // 0xFF is the μ-law code for the smallest positive magnitude — "positive zero".
-            const [decoded] = muLawToPcm16(new Uint8Array([0xff]));
+            const [decoded] = MuLawToPcm16(new Uint8Array([0xff]));
             expect(decoded).toBeGreaterThanOrEqual(0);
             expect(decoded).toBeLessThanOrEqual(8); // within the first quantization step of zero
         });
 
         it('decodes 0x7F to the negative-zero region (≈ 0, sign-flipped)', () => {
             // 0x7F has the sign bit clear in the *complemented* code → represents negative-zero side.
-            const [decoded] = muLawToPcm16(new Uint8Array([0x7f]));
+            const [decoded] = MuLawToPcm16(new Uint8Array([0x7f]));
             expect(decoded).toBeLessThanOrEqual(0);
             expect(decoded).toBeGreaterThanOrEqual(-8);
         });
 
         it('encodes a near-zero positive sample to 0xFF', () => {
-            const encoded = pcm16ToMuLaw(Int16Array.from([0]));
+            const encoded = Pcm16ToMuLaw(Int16Array.from([0]));
             expect(encoded[0]).toBe(0xff);
         });
 
         it('encodes a near-zero negative sample to 0x7F', () => {
-            const encoded = pcm16ToMuLaw(Int16Array.from([-1]));
+            const encoded = Pcm16ToMuLaw(Int16Array.from([-1]));
             expect(encoded[0]).toBe(0x7f);
         });
     });
 
     describe('round-trip fidelity (encode → decode within μ-law tolerance)', () => {
         it('keeps silence (0) at ≈ 0', () => {
-            const roundTrip = muLawToPcm16(pcm16ToMuLaw(Int16Array.from([0])));
+            const roundTrip = MuLawToPcm16(Pcm16ToMuLaw(Int16Array.from([0])));
             expect(Math.abs(roundTrip[0])).toBeLessThanOrEqual(8);
         });
 
         it('keeps the maximum positive sample (+32767) within tolerance', () => {
-            const roundTrip = muLawToPcm16(pcm16ToMuLaw(Int16Array.from([32767])));
+            const roundTrip = MuLawToPcm16(Pcm16ToMuLaw(Int16Array.from([32767])));
             expect(roundTrip[0]).toBeGreaterThan(0);
             expect(Math.abs(32767 - roundTrip[0])).toBeLessThanOrEqual(MAX_LOUD_QUANTIZATION_ERROR);
         });
 
         it('keeps the minimum negative sample (-32768) within tolerance', () => {
-            const roundTrip = muLawToPcm16(pcm16ToMuLaw(Int16Array.from([-32768])));
+            const roundTrip = MuLawToPcm16(Pcm16ToMuLaw(Int16Array.from([-32768])));
             expect(roundTrip[0]).toBeLessThan(0);
             expect(Math.abs(-32768 - roundTrip[0])).toBeLessThanOrEqual(MAX_LOUD_QUANTIZATION_ERROR);
         });
@@ -67,7 +67,7 @@ describe('g711 μ-law codec', () => {
                 values.push(v);
             }
             const input = Int16Array.from(values);
-            const roundTrip = muLawToPcm16(pcm16ToMuLaw(input));
+            const roundTrip = MuLawToPcm16(Pcm16ToMuLaw(input));
 
             for (let i = 0; i < input.length; i++) {
                 const magnitude = Math.abs(input[i]);
@@ -84,7 +84,7 @@ describe('g711 μ-law codec', () => {
                 // 440 Hz tone at 8 kHz, half-scale amplitude.
                 input[i] = Math.round(Math.sin((2 * Math.PI * 440 * i) / 8000) * 16000);
             }
-            const roundTrip = muLawToPcm16(pcm16ToMuLaw(input));
+            const roundTrip = MuLawToPcm16(Pcm16ToMuLaw(input));
 
             for (let i = 0; i < sampleCount; i++) {
                 expect(Math.abs(input[i] - roundTrip[i])).toBeLessThanOrEqual(MAX_LOUD_QUANTIZATION_ERROR);
@@ -98,8 +98,8 @@ describe('g711 μ-law codec', () => {
         it('is stable across a second encode→decode pass (idempotent on the μ-law grid)', () => {
             // Once a sample has been snapped to the μ-law grid, re-encoding must reproduce it exactly.
             const input = Int16Array.from([12345, -9876, 50, -50, 32000]);
-            const firstPass = muLawToPcm16(pcm16ToMuLaw(input));
-            const secondPass = muLawToPcm16(pcm16ToMuLaw(firstPass));
+            const firstPass = MuLawToPcm16(Pcm16ToMuLaw(input));
+            const secondPass = MuLawToPcm16(Pcm16ToMuLaw(firstPass));
             expect(Array.from(secondPass)).toEqual(Array.from(firstPass));
         });
     });
@@ -109,10 +109,10 @@ describe('g711 μ-law codec', () => {
             const samples = Int16Array.from([0, 1000, -1000, 16000, -16000, 32000, -32000]);
             const pcmBuffer = pcm16ToLeBuffer(samples);
 
-            const mulawBuffer = pcm16ToMuLawBuffer(pcmBuffer);
+            const mulawBuffer = Pcm16ToMuLawBuffer(pcmBuffer);
             expect(mulawBuffer.byteLength).toBe(samples.length); // 1 μ-law byte per sample
 
-            const backToPcm = muLawToPcm16Buffer(mulawBuffer);
+            const backToPcm = MuLawToPcm16Buffer(mulawBuffer);
             const out = leBufferToPcm16(backToPcm);
             expect(out.length).toBe(samples.length);
             for (let i = 0; i < samples.length; i++) {
@@ -123,9 +123,9 @@ describe('g711 μ-law codec', () => {
 
         it('produces little-endian bytes from muLawToPcm16Buffer', () => {
             // 0xFF decodes to a small positive value; verify it lands in the low byte (little-endian).
-            const pcm = muLawToPcm16Buffer(new Uint8Array([0xff]).buffer);
+            const pcm = MuLawToPcm16Buffer(new Uint8Array([0xff]).buffer);
             const view = new DataView(pcm);
-            expect(view.getInt16(0, true)).toBe(muLawToPcm16(new Uint8Array([0xff]))[0]);
+            expect(view.getInt16(0, true)).toBe(MuLawToPcm16(new Uint8Array([0xff]))[0]);
         });
     });
 
@@ -141,8 +141,8 @@ describe('g711 μ-law codec', () => {
                 syntheticMuLaw[code] = code; // every possible μ-law code
             }
 
-            const pcm = muLawToPcm16(syntheticMuLaw);
-            const reEncoded = pcm16ToMuLaw(pcm);
+            const pcm = MuLawToPcm16(syntheticMuLaw);
+            const reEncoded = Pcm16ToMuLaw(pcm);
 
             for (let code = 0; code < 256; code++) {
                 const expected = code === 0x7f ? 0xff : code; // negative-zero collapses to positive-zero
@@ -161,10 +161,10 @@ describe('g711 μ-law codec', () => {
                 frame[i] = code;
             }
 
-            const pcmBuffer = muLawToPcm16Buffer(frame.buffer);
+            const pcmBuffer = MuLawToPcm16Buffer(frame.buffer);
             expect(pcmBuffer.byteLength).toBe(frame.length * 2); // PCM16 = 2 bytes/sample
 
-            const backToMuLaw = pcm16ToMuLawBuffer(pcmBuffer);
+            const backToMuLaw = Pcm16ToMuLawBuffer(pcmBuffer);
             expect(Array.from(new Uint8Array(backToMuLaw))).toEqual(Array.from(frame));
         });
     });

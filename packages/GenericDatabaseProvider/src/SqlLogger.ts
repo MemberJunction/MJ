@@ -88,7 +88,7 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * @param isMutation - Whether this is a data mutation operation
    * @param simpleSQLFallback - Optional simple SQL to use if logRecordChangeMetadata=false
    */
-  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+  public async LogSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
     const verbose = this.options.verboseOutput === true;
 
     if (verbose) {
@@ -270,6 +270,11 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
       console.error(`Session ${this.id}: Error writing to file:`, error);
       throw error;
     }
+  }
+
+  /** @deprecated Use {@link LogSqlStatement}. */
+  public async logSqlStatement(query: string, parameters?: unknown, description?: string, isMutation: boolean = false, simpleSQLFallback?: string): Promise<void> {
+    return this.LogSqlStatement(query, parameters, description, isMutation, simpleSQLFallback);
   }
 
   /**

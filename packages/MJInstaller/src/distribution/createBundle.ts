@@ -10,7 +10,7 @@
  */
 
 import { RepoFetcher } from '../adapters/RepoFetcher.js';
-import { DistributionAssembler, distributionSourcePaths, type DbPlatform } from './DistributionAssembler.js';
+import { DistributionAssembler, DistributionSourcePaths, type DbPlatform } from './DistributionAssembler.js';
 
 /** Default canonical MemberJunction clone URL used when bundling from a ref. */
 const DEFAULT_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
@@ -62,7 +62,7 @@ export interface CreateBundleResult {
  *
  * @throws If neither `SourceDir` nor `Ref` is provided, or if fetch/assembly fails.
  */
-export async function createDistributionBundle(opts: CreateBundleOptions): Promise<CreateBundleResult> {
+export async function CreateDistributionBundle(opts: CreateBundleOptions): Promise<CreateBundleResult> {
   const assembler = new DistributionAssembler();
   const includeMigrations = opts.IncludeMigrations ?? false;
   const migrationPlatform = opts.MigrationPlatform;
@@ -81,7 +81,7 @@ export async function createDistributionBundle(opts: CreateBundleOptions): Promi
   const fetched = await new RepoFetcher().FetchPaths({
     RepoUrl: opts.RepoUrl ?? DEFAULT_REPO_URL,
     Ref: opts.Ref,
-    Paths: distributionSourcePaths(includeMigrations, migrationPlatform, includeClaudePack),
+    Paths: DistributionSourcePaths(includeMigrations, migrationPlatform, includeClaudePack),
   });
 
   try {
@@ -90,4 +90,9 @@ export async function createDistributionBundle(opts: CreateBundleOptions): Promi
   } finally {
     await fetched.Cleanup();
   }
+}
+
+/** @deprecated Use {@link CreateDistributionBundle}. */
+export async function createDistributionBundle(opts: CreateBundleOptions): Promise<CreateBundleResult> {
+  return CreateDistributionBundle(opts);
 }

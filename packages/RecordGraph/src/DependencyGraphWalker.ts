@@ -19,8 +19,8 @@ import {
     WalkOptions,
     WalkStats,
 } from './types';
-import { escapeSqlString, sqlIn } from './sql';
-import { buildCompositeKeyFromRecord } from './keys';
+import { escapeSqlString, SqlIn } from './sql';
+import { BuildCompositeKeyFromRecord } from './keys';
 import { SortNodesTopologically } from './sort';
 import { SYSTEM_FK_SKIP_PATTERNS } from './constants';
 
@@ -271,7 +271,7 @@ export class DependencyGraphWalker {
             const childRecords = await this.loadChildRecords(parentNode, rel, options, contextUser);
 
             for (const childData of childRecords) {
-                const childKey = buildCompositeKeyFromRecord(rel.ChildEntityInfo, childData);
+                const childKey = BuildCompositeKeyFromRecord(rel.ChildEntityInfo, childData);
                 const discoveringEdge: GraphEdge = {
                     Kind: edgeKind,
                     FromKey: this.visitKey(parentNode.EntityName, parentNode.RecordID),
@@ -390,7 +390,7 @@ export class DependencyGraphWalker {
                     if (!result.Success) continue;
 
                     for (const row of result.Results) {
-                        const rowKey = buildCompositeKeyFromRecord(entity, row);
+                        const rowKey = BuildCompositeKeyFromRecord(entity, row);
                         const discoveringEdge: GraphEdge = {
                             Kind: 'InboundFK',
                             FromKey: this.visitKey(parentNode.EntityName, parentNode.RecordID),
@@ -481,7 +481,7 @@ export class DependencyGraphWalker {
                     if (!result.Success) continue;
 
                     for (const row of result.Results) {
-                        const rowKey = buildCompositeKeyFromRecord(entity, row);
+                        const rowKey = BuildCompositeKeyFromRecord(entity, row);
                         const discoveringEdge: GraphEdge = {
                             Kind: 'SoftLink',
                             FromKey: this.visitKey(parentNode.EntityName, parentNode.RecordID),
@@ -930,7 +930,7 @@ export class DependencyGraphWalker {
         discoveringEdge?: GraphEdge | null,
         isSubtypeRow?: boolean
     ): DependencyNode | null {
-        const key = buildCompositeKeyFromRecord(entityInfo, recordData);
+        const key = BuildCompositeKeyFromRecord(entityInfo, recordData);
         const vKey = this.visitKey(entityInfo.Name, key.ToConcatenatedString());
 
         if (visited.has(vKey)) {

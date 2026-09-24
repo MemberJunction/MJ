@@ -387,12 +387,17 @@ export class ReportGenerator {
    * Scan text for high-entropy token shapes (e.g. sk-..., Bearer tokens, GitHub tokens)
    * and replace them with redaction placeholders.
    */
-  public sanitizeValuePatterns(text: string): string {
+  public SanitizeValuePatterns(text: string): string {
     return text
       .replace(/\bsk-[a-zA-Z0-9_\-]{20,}\b/g, '[REDACTED_API_KEY]')
       .replace(/\bgh[pousr]_[a-zA-Z0-9]{36,}\b/g, '[REDACTED_GH_TOKEN]')
       .replace(/Bearer\s+[a-zA-Z0-9_\-\.]{20,}/gi, 'Bearer [REDACTED_TOKEN]')
       .replace(/\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b/g, '[REDACTED_JWT]');
+  }
+
+  /** @deprecated Use {@link SanitizeValuePatterns}. */
+  public sanitizeValuePatterns(text: string): string {
+    return this.SanitizeValuePatterns(text);
   }
 
   // -------------------------------------------------------------------------
@@ -440,7 +445,7 @@ export class ReportGenerator {
       sections.push(this.renderEventLog(data.EventLog));
     }
 
-    return this.sanitizeValuePatterns(sections.join('\n\n'));
+    return this.SanitizeValuePatterns(sections.join('\n\n'));
   }
 
   private renderHeader(data: ReportData): string {
@@ -646,7 +651,7 @@ export class ReportGenerator {
       }
 
       if (log.Output.length > 0) {
-        const sanitizedLines = log.Output.slice(-100).map((l) => this.sanitizeValuePatterns(l));
+        const sanitizedLines = log.Output.slice(-100).map((l) => this.SanitizeValuePatterns(l));
         lines.push(
           '',
           '<details>',

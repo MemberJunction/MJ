@@ -90,14 +90,14 @@ export interface CloneProgressUpdate {
 }
 
 /** Helper to build a single-field RecordCloneKey from field name and value */
-export function stringToRecordCloneKey(fieldName: string, value: string): RecordCloneKey {
+export function StringToRecordCloneKey(fieldName: string, value: string): RecordCloneKey {
     return {
         KeyValuePairs: [{ FieldName: fieldName, Value: value }],
     };
 }
 
 /** Helper to extract a RecordCloneKey from an active BaseEntity record */
-export function entityToRecordCloneKey(record: BaseEntity): RecordCloneKey {
+export function EntityToRecordCloneKey(record: BaseEntity): RecordCloneKey {
     const pairs = record.PrimaryKey?.KeyValuePairs || [];
     return {
         KeyValuePairs: pairs.map((p) => ({
@@ -108,7 +108,7 @@ export function entityToRecordCloneKey(record: BaseEntity): RecordCloneKey {
 }
 
 /** Convert a RecordCloneKey to a pipe-delimited string representation */
-export function recordCloneKeyToString(key?: RecordCloneKey | null): string {
+export function RecordCloneKeyToString(key?: RecordCloneKey | null): string {
     if (!key || !key.KeyValuePairs || key.KeyValuePairs.length === 0) return '';
     return key.KeyValuePairs.map((kvp) => kvp.Value).join('|');
 }

@@ -21,15 +21,15 @@ import { describe, it, expect } from 'vitest';
 import {
     INTEGRATION_SURFACES,
     INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP,
-    resolveIntegrationSurface,
-    navLabelForSurface,
-    capIntegrationNames,
-    resolveIntegrationRecord,
-    buildIntegrationNotFoundError,
-    buildOverviewAgentContext,
-    buildConnectionsAgentContext,
-    buildActivityAgentContext,
-    buildSchedulesAgentContext,
+    ResolveIntegrationSurface,
+    NavLabelForSurface,
+    CapIntegrationNames,
+    ResolveIntegrationRecord,
+    BuildIntegrationNotFoundError,
+    BuildOverviewAgentContext,
+    BuildConnectionsAgentContext,
+    BuildActivityAgentContext,
+    BuildSchedulesAgentContext,
     IntegrationContextKPIs,
     NamedIntegrationRecord,
 } from '../Integration/integration-agent-context';
@@ -55,50 +55,50 @@ function expectKPIs(ctx: Record<string, unknown>): void {
 describe('resolveIntegrationSurface', () => {
     it('resolves each canonical surface name (exact case)', () => {
         for (const s of INTEGRATION_SURFACES) {
-            expect(resolveIntegrationSurface(s)).toBe(s);
+            expect(ResolveIntegrationSurface(s)).toBe(s);
         }
     });
 
     it('is case-insensitive and trims whitespace', () => {
-        expect(resolveIntegrationSurface('  overview ')).toBe('Overview');
-        expect(resolveIntegrationSurface('ACTIVITY')).toBe('Activity');
-        expect(resolveIntegrationSurface('Schedules')).toBe('Schedules');
+        expect(ResolveIntegrationSurface('  overview ')).toBe('Overview');
+        expect(ResolveIntegrationSurface('ACTIVITY')).toBe('Activity');
+        expect(ResolveIntegrationSurface('Schedules')).toBe('Schedules');
     });
 
     it('maps the metadata alias "Integrations" to "Connections"', () => {
-        expect(resolveIntegrationSurface('Integrations')).toBe('Connections');
-        expect(resolveIntegrationSurface('integrations')).toBe('Connections');
+        expect(ResolveIntegrationSurface('Integrations')).toBe('Connections');
+        expect(ResolveIntegrationSurface('integrations')).toBe('Connections');
     });
 
     it('returns null for unknown or non-string input', () => {
-        expect(resolveIntegrationSurface('Pipelines')).toBeNull();
-        expect(resolveIntegrationSurface('')).toBeNull();
-        expect(resolveIntegrationSurface(undefined)).toBeNull();
-        expect(resolveIntegrationSurface(42)).toBeNull();
-        expect(resolveIntegrationSurface(null)).toBeNull();
+        expect(ResolveIntegrationSurface('Pipelines')).toBeNull();
+        expect(ResolveIntegrationSurface('')).toBeNull();
+        expect(ResolveIntegrationSurface(undefined)).toBeNull();
+        expect(ResolveIntegrationSurface(42)).toBeNull();
+        expect(ResolveIntegrationSurface(null)).toBeNull();
     });
 });
 
 describe('navLabelForSurface', () => {
     it('returns the metadata nav label for each surface', () => {
-        expect(navLabelForSurface('Overview')).toBe('Overview');
+        expect(NavLabelForSurface('Overview')).toBe('Overview');
         // Connections is exposed to the agent under that name but its real
         // nav-item label in metadata is "Integrations".
-        expect(navLabelForSurface('Connections')).toBe('Integrations');
-        expect(navLabelForSurface('Activity')).toBe('Activity');
-        expect(navLabelForSurface('Schedules')).toBe('Schedules');
+        expect(NavLabelForSurface('Connections')).toBe('Integrations');
+        expect(NavLabelForSurface('Activity')).toBe('Activity');
+        expect(NavLabelForSurface('Schedules')).toBe('Schedules');
     });
 });
 
 describe('capIntegrationNames', () => {
     it('returns the list unchanged when under the cap', () => {
         const names = ['a', 'b', 'c'];
-        expect(capIntegrationNames(names)).toEqual(names);
+        expect(CapIntegrationNames(names)).toEqual(names);
     });
 
     it('caps at INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP and never mutates the input', () => {
         const names = Array.from({ length: 40 }, (_, i) => `n${i}`);
-        const capped = capIntegrationNames(names);
+        const capped = CapIntegrationNames(names);
         expect(capped).toHaveLength(INTEGRATION_AGENT_CONTEXT_NAME_LIST_CAP);
         expect(names).toHaveLength(40); // input untouched
         expect(capped[0]).toBe('n0');
@@ -113,22 +113,22 @@ describe('resolveIntegrationRecord', () => {
     ];
 
     it('matches by exact ID (case-insensitive)', () => {
-        expect(resolveIntegrationRecord('abcd-2222', candidates)?.Name).toBe('Salesforce Sandbox');
+        expect(ResolveIntegrationRecord('abcd-2222', candidates)?.Name).toBe('Salesforce Sandbox');
     });
 
     it('matches by exact name (case-insensitive, trimmed)', () => {
-        expect(resolveIntegrationRecord('  stripe billing ', candidates)?.ID).toBe('ABCD-3333');
+        expect(ResolveIntegrationRecord('  stripe billing ', candidates)?.ID).toBe('ABCD-3333');
     });
 
     it('falls back to first contains match on the name', () => {
-        expect(resolveIntegrationRecord('hub', candidates)?.ID).toBe('ABCD-1111');
-        expect(resolveIntegrationRecord('sand', candidates)?.Name).toBe('Salesforce Sandbox');
+        expect(ResolveIntegrationRecord('hub', candidates)?.ID).toBe('ABCD-1111');
+        expect(ResolveIntegrationRecord('sand', candidates)?.Name).toBe('Salesforce Sandbox');
     });
 
     it('returns null for an empty needle or no match', () => {
-        expect(resolveIntegrationRecord('', candidates)).toBeNull();
-        expect(resolveIntegrationRecord('   ', candidates)).toBeNull();
-        expect(resolveIntegrationRecord('nonexistent', candidates)).toBeNull();
+        expect(ResolveIntegrationRecord('', candidates)).toBeNull();
+        expect(ResolveIntegrationRecord('   ', candidates)).toBeNull();
+        expect(ResolveIntegrationRecord('nonexistent', candidates)).toBeNull();
     });
 
     it('prefers an exact ID over a name-contains match', () => {
@@ -137,7 +137,7 @@ describe('resolveIntegrationRecord', () => {
             { ID: 'other', Name: 'Stripe contains needle' },
         ];
         // "stripe" is an exact ID on the first record AND a contains on the second.
-        expect(resolveIntegrationRecord('stripe', recs)?.ID).toBe('stripe');
+        expect(ResolveIntegrationRecord('stripe', recs)?.ID).toBe('stripe');
     });
 });
 
@@ -147,7 +147,7 @@ describe('buildIntegrationNotFoundError', () => {
             ID: `${i}`,
             Name: `Conn${i}`,
         }));
-        const msg = buildIntegrationNotFoundError('zzz', candidates, 'connection');
+        const msg = BuildIntegrationNotFoundError('zzz', candidates, 'connection');
         expect(msg).toContain('No connection matching "zzz"');
         expect(msg).toContain('Conn0');
         expect(msg).toContain('Conn5');
@@ -155,13 +155,13 @@ describe('buildIntegrationNotFoundError', () => {
     });
 
     it('handles an empty candidate list gracefully', () => {
-        expect(buildIntegrationNotFoundError('x', [], 'run')).toContain('(none)');
+        expect(BuildIntegrationNotFoundError('x', [], 'run')).toContain('(none)');
     });
 });
 
 describe('buildOverviewAgentContext', () => {
     it('emits the surface, KPI strip, and deep overview fields', () => {
-        const ctx = buildOverviewAgentContext({
+        const ctx = BuildOverviewAgentContext({
             KPIs: baseKPIs,
             IsLoading: false,
             SuccessRate: 87.5,
@@ -190,7 +190,7 @@ describe('buildOverviewAgentContext', () => {
 
     it('bounds the visible-name list and surfaces a companion count when truncated', () => {
         const names = Array.from({ length: 30 }, (_, i) => `i${i}`);
-        const ctx = buildOverviewAgentContext({
+        const ctx = BuildOverviewAgentContext({
             KPIs: baseKPIs, IsLoading: false, SuccessRate: 100,
             HealthyCount: 30, WarningCount: 0, ErrorCount: 0, InactiveCount: 0,
             AverageSyncDurationMs: null,
@@ -205,7 +205,7 @@ describe('buildOverviewAgentContext', () => {
 
 describe('buildConnectionsAgentContext', () => {
     it('emits counts + visible names and omits detail fields when nothing is selected', () => {
-        const ctx = buildConnectionsAgentContext({
+        const ctx = BuildConnectionsAgentContext({
             KPIs: baseKPIs, IsLoading: false,
             ConnectionCount: 5, ActiveConnectionCount: 4,
             VisibleConnectionNames: ['HubSpot', 'Stripe'],
@@ -224,7 +224,7 @@ describe('buildConnectionsAgentContext', () => {
     });
 
     it('includes detail fields when a connection is selected', () => {
-        const ctx = buildConnectionsAgentContext({
+        const ctx = BuildConnectionsAgentContext({
             KPIs: baseKPIs, IsLoading: false,
             ConnectionCount: 5, ActiveConnectionCount: 4,
             VisibleConnectionNames: [],
@@ -241,7 +241,7 @@ describe('buildConnectionsAgentContext', () => {
 
 describe('buildActivityAgentContext', () => {
     it('emits filters, run counts, status breakdown, selection, and bounded run list', () => {
-        const ctx = buildActivityAgentContext({
+        const ctx = BuildActivityAgentContext({
             KPIs: baseKPIs, IsLoading: false,
             StatusFilter: 'Failed', DateFilter: '7d',
             IntegrationFilterName: 'HubSpot (Acme)', SearchQuery: 'hub',
@@ -275,7 +275,7 @@ describe('buildActivityAgentContext', () => {
         const runs = Array.from({ length: 30 }, (_, i) => ({
             ID: `R${i}`, Name: `Run ${i}`, Status: 'Success', TotalRecords: i, When: 'now',
         }));
-        const ctx = buildActivityAgentContext({
+        const ctx = BuildActivityAgentContext({
             KPIs: baseKPIs, IsLoading: false,
             StatusFilter: 'All', DateFilter: 'all', IntegrationFilterName: null, SearchQuery: '',
             FilteredRunCount: 30, TotalRunCount: 30, SuccessfulRunCount: 30, FailedRunCount: 0,
@@ -290,7 +290,7 @@ describe('buildActivityAgentContext', () => {
 
 describe('buildSchedulesAgentContext', () => {
     it('emits the schedule counts, cadence breakdown, and bounded schedule list', () => {
-        const ctx = buildSchedulesAgentContext({
+        const ctx = BuildSchedulesAgentContext({
             KPIs: baseKPIs, IsLoading: false,
             ScheduleCount: 4, EnabledCount: 3, LockedCount: 1,
             IntervalCount: 2, CronCount: 1, ManualCount: 1,
@@ -310,7 +310,7 @@ describe('buildSchedulesAgentContext', () => {
     });
 
     it('omits the schedule list when empty', () => {
-        const ctx = buildSchedulesAgentContext({
+        const ctx = BuildSchedulesAgentContext({
             KPIs: baseKPIs, IsLoading: true,
             ScheduleCount: 0, EnabledCount: 0, LockedCount: 0,
             IntervalCount: 0, CronCount: 0, ManualCount: 0,

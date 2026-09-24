@@ -26,7 +26,7 @@ import { RecordClonePanelComponent } from './record-clone-panel.component';
 import {
     type CloneCompletedEvent,
     type FormNavigationEvent,
-    entityToRecordCloneKey,
+    EntityToRecordCloneKey,
 } from './record-clone-types';
 
 @RegisterClassEx(BaseFormPanel, {
@@ -91,7 +91,7 @@ export class RecordCloneToolbarPanel extends BaseFormPanel implements OnInit, On
         try {
             const describe = await this.cloneService.DescribeRecord({
                 EntityName: this.Record.EntityInfo.Name,
-                Key: entityToRecordCloneKey(this.Record),
+                Key: EntityToRecordCloneKey(this.Record),
             });
 
             this.CanClone = describe.CanClone;

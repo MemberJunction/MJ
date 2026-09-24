@@ -71,7 +71,7 @@ const configInfoSchema = z.object({
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
-export const configInfo: ConfigInfo = loadConfig();
+export const configInfo: ConfigInfo = LoadConfig();  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
 
 export const {
   dbUsername,
@@ -87,7 +87,7 @@ export const {
   dbReadOnlyPassword,
 } = configInfo;
 
-export function loadConfig(): ConfigInfo {
+export function LoadConfig(): ConfigInfo {
   const configSearchResult = explorer.search(process.cwd());
 
   // Start with DEFAULT_SERVER_CONFIG as base
@@ -110,4 +110,9 @@ export function loadConfig(): ConfigInfo {
     throw new Error('Configuration validation failed');
   }
   return configParsing.data;
+}
+
+/** @deprecated Use {@link LoadConfig}. */
+export function loadConfig(): ConfigInfo {
+  return LoadConfig();
 }

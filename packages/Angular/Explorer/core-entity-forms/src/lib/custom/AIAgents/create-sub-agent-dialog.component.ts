@@ -10,30 +10,30 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface CreateSubAgentConfig {
   /** Title for the dialog */
-  title?: string;
+  title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Initial name for the sub-agent */
-  initialName?: string;
+  InitialName?: string;
   /** Pre-selected agent type ID */
-  initialTypeID?: string;
+  InitialTypeID?: string;
   /** Parent agent ID for relationship */
-  parentAgentId: string;
+  ParentAgentId: string;
   /** Parent agent name for display */
-  parentAgentName?: string;
+  ParentAgentName?: string;
 }
 
 export interface CreateSubAgentResult {
   /** Created sub-agent entity (not saved to database) */
-  subAgent: MJAIAgentEntityExtended;
+  SubAgent: MJAIAgentEntityExtended;
   /** Agent prompt link entities (not saved to database) */
-  agentPrompts?: MJAIAgentPromptEntity[];
+  AgentPrompts?: MJAIAgentPromptEntity[];
   /** Agent action link entities (not saved to database) */
-  agentActions?: MJAIAgentActionEntity[];
+  AgentActions?: MJAIAgentActionEntity[];
   /** Any new prompts created within the dialog */
-  newPrompts?: MJAIPromptEntityExtended[];
+  NewPrompts?: MJAIPromptEntityExtended[];
   /** Any new prompt templates created within the dialog */
-  newPromptTemplates?: any[];
+  NewPromptTemplates?: any[];
   /** Any new template contents created within the dialog */
-  newTemplateContents?: any[];
+  NewTemplateContents?: any[];
 }
 
 /**
@@ -54,31 +54,166 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
   
   // State management
   private destroy$ = new Subject<void>();
-  public result = new Subject<CreateSubAgentResult | null>();
+  public Result = new Subject<CreateSubAgentResult | null>();
+
+  /** @deprecated Use {@link Result}. */
+  public get result() {
+    return this.Result;
+  }
+  /** @deprecated Use {@link Result}. */
+  public set result(value) {
+    this.Result = value;
+  }
   
   // Form and validation
-  subAgentForm: FormGroup;
-  isLoading$ = new BehaviorSubject<boolean>(false);
-  isSaving$ = new BehaviorSubject<boolean>(false);
+  SubAgentForm: FormGroup;
+
+  /** @deprecated Use {@link SubAgentForm}. */
+  get subAgentForm(): FormGroup {
+    return this.SubAgentForm;
+  }
+  /** @deprecated Use {@link SubAgentForm}. */
+  set subAgentForm(value: FormGroup) {
+    this.SubAgentForm = value;
+  }
+  IsLoading$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
+  /** @deprecated Use {@link IsLoading$}. */
+  set isLoading$(value) {
+    this.IsLoading$ = value;
+  }
+  IsSaving$ = new BehaviorSubject<boolean>(false);
+
+  /** @deprecated Use {@link IsSaving$}. */
+  get isSaving$() {
+    return this.IsSaving$;
+  }
+  /** @deprecated Use {@link IsSaving$}. */
+  set isSaving$(value) {
+    this.IsSaving$ = value;
+  }
   
   // Data
-  availableAgentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
-  availablePrompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
-  availableActions$ = new BehaviorSubject<MJActionEntity[]>([]);
+  AvailableAgentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
+
+  /** @deprecated Use {@link AvailableAgentTypes$}. */
+  get availableAgentTypes$() {
+    return this.AvailableAgentTypes$;
+  }
+  /** @deprecated Use {@link AvailableAgentTypes$}. */
+  set availableAgentTypes$(value) {
+    this.AvailableAgentTypes$ = value;
+  }
+  AvailablePrompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
+
+  /** @deprecated Use {@link AvailablePrompts$}. */
+  get availablePrompts$() {
+    return this.AvailablePrompts$;
+  }
+  /** @deprecated Use {@link AvailablePrompts$}. */
+  set availablePrompts$(value) {
+    this.AvailablePrompts$ = value;
+  }
+  AvailableActions$ = new BehaviorSubject<MJActionEntity[]>([]);
+
+  /** @deprecated Use {@link AvailableActions$}. */
+  get availableActions$() {
+    return this.AvailableActions$;
+  }
+  /** @deprecated Use {@link AvailableActions$}. */
+  set availableActions$(value) {
+    this.AvailableActions$ = value;
+  }
   
   // Entities (not saved to database)
-  subAgentEntity: MJAIAgentEntityExtended | null = null;
-  linkedPrompts: MJAIPromptEntityExtended[] = [];
-  linkedActions: MJActionEntity[] = [];
+  SubAgentEntity: MJAIAgentEntityExtended | null = null;
+
+  /** @deprecated Use {@link SubAgentEntity}. */
+  get subAgentEntity(): MJAIAgentEntityExtended | null {
+    return this.SubAgentEntity;
+  }
+  /** @deprecated Use {@link SubAgentEntity}. */
+  set subAgentEntity(value: MJAIAgentEntityExtended | null) {
+    this.SubAgentEntity = value;
+  }
+  LinkedPrompts: MJAIPromptEntityExtended[] = [];
+
+  /** @deprecated Use {@link LinkedPrompts}. */
+  get linkedPrompts(): MJAIPromptEntityExtended[] {
+    return this.LinkedPrompts;
+  }
+  /** @deprecated Use {@link LinkedPrompts}. */
+  set linkedPrompts(value: MJAIPromptEntityExtended[]) {
+    this.LinkedPrompts = value;
+  }
+  LinkedActions: MJActionEntity[] = [];
+
+  /** @deprecated Use {@link LinkedActions}. */
+  get linkedActions(): MJActionEntity[] {
+    return this.LinkedActions;
+  }
+  /** @deprecated Use {@link LinkedActions}. */
+  set linkedActions(value: MJActionEntity[]) {
+    this.LinkedActions = value;
+  }
   
   // Link entities for database relationships
-  agentPromptLinks: MJAIAgentPromptEntity[] = [];
-  agentActionLinks: MJAIAgentActionEntity[] = [];
+  AgentPromptLinks: MJAIAgentPromptEntity[] = [];
+
+  /** @deprecated Use {@link AgentPromptLinks}. */
+  get agentPromptLinks(): MJAIAgentPromptEntity[] {
+    return this.AgentPromptLinks;
+  }
+  /** @deprecated Use {@link AgentPromptLinks}. */
+  set agentPromptLinks(value: MJAIAgentPromptEntity[]) {
+    this.AgentPromptLinks = value;
+  }
+  AgentActionLinks: MJAIAgentActionEntity[] = [];
+
+  /** @deprecated Use {@link AgentActionLinks}. */
+  get agentActionLinks(): MJAIAgentActionEntity[] {
+    return this.AgentActionLinks;
+  }
+  /** @deprecated Use {@link AgentActionLinks}. */
+  set agentActionLinks(value: MJAIAgentActionEntity[]) {
+    this.AgentActionLinks = value;
+  }
   
   // Storage for new entities created within dialog
-  newlyCreatedPrompts: MJAIPromptEntityExtended[] = [];
-  newlyCreatedPromptTemplates: any[] = [];
-  newlyCreatedTemplateContents: any[] = [];
+  NewlyCreatedPrompts: MJAIPromptEntityExtended[] = [];
+
+  /** @deprecated Use {@link NewlyCreatedPrompts}. */
+  get newlyCreatedPrompts(): MJAIPromptEntityExtended[] {
+    return this.NewlyCreatedPrompts;
+  }
+  /** @deprecated Use {@link NewlyCreatedPrompts}. */
+  set newlyCreatedPrompts(value: MJAIPromptEntityExtended[]) {
+    this.NewlyCreatedPrompts = value;
+  }
+  NewlyCreatedPromptTemplates: any[] = [];
+
+  /** @deprecated Use {@link NewlyCreatedPromptTemplates}. */
+  get newlyCreatedPromptTemplates(): any[] {
+    return this.NewlyCreatedPromptTemplates;
+  }
+  /** @deprecated Use {@link NewlyCreatedPromptTemplates}. */
+  set newlyCreatedPromptTemplates(value: any[]) {
+    this.NewlyCreatedPromptTemplates = value;
+  }
+  NewlyCreatedTemplateContents: any[] = [];
+
+  /** @deprecated Use {@link NewlyCreatedTemplateContents}. */
+  get newlyCreatedTemplateContents(): any[] {
+    return this.NewlyCreatedTemplateContents;
+  }
+  /** @deprecated Use {@link NewlyCreatedTemplateContents}. */
+  set newlyCreatedTemplateContents(value: any[]) {
+    this.NewlyCreatedTemplateContents = value;
+  }
 
   @Output() DialogClose = new EventEmitter<void>();
 
@@ -88,7 +223,7 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
     private viewContainerRef: ViewContainerRef
   ) {
     super();
-    this.subAgentForm = this.createForm();
+    this.SubAgentForm = this.createForm();
   }
 
   ngOnInit() {
@@ -103,9 +238,9 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
 
   private createForm(): FormGroup {
     return new FormGroup({
-      name: new FormControl(this.config.initialName || '', [Validators.required]),
+      name: new FormControl(this.config.InitialName || '', [Validators.required]),
       description: new FormControl(''),
-      typeID: new FormControl(this.config.initialTypeID || '', [Validators.required]),
+      typeID: new FormControl(this.config.InitialTypeID || '', [Validators.required]),
       status: new FormControl('Pending'),
       executionMode: new FormControl('Sequential'),
       purpose: new FormControl(''),
@@ -123,7 +258,7 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
 
   private setupFormWatching() {
     // Watch for form changes to update entity
-    this.subAgentForm.valueChanges
+    this.SubAgentForm.valueChanges
       .pipe(takeUntil(this.destroy$))
       .subscribe(formValue => {
         this.updateSubAgentEntity(formValue);
@@ -131,7 +266,7 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
   }
 
   private async loadInitialData() {
-    this.isLoading$.next(true);
+    this.IsLoading$.next(true);
     
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -164,46 +299,46 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
 
       // Process agent types (index 0)
       if (results[0].Success && results[0].Results) {
-        this.availableAgentTypes$.next(results[0].Results as MJAIAgentTypeEntity[]);
+        this.AvailableAgentTypes$.next(results[0].Results as MJAIAgentTypeEntity[]);
         
         // Set default type if not specified
-        if (!this.config.initialTypeID && results[0].Results.length > 0) {
-          this.subAgentForm.patchValue({ typeID: results[0].Results[0].ID });
+        if (!this.config.InitialTypeID && results[0].Results.length > 0) {
+          this.SubAgentForm.patchValue({ typeID: results[0].Results[0].ID });
         }
       }
 
       // Process available prompts (index 1)
       if (results[1].Success && results[1].Results) {
-        this.availablePrompts$.next(results[1].Results as MJAIPromptEntityExtended[]);
+        this.AvailablePrompts$.next(results[1].Results as MJAIPromptEntityExtended[]);
       }
 
       // Process available actions (index 2)
       const actionsResult = results[2];
 
       if (actionsResult.Success && actionsResult.Results) {
-        this.availableActions$.next(actionsResult.Results);
+        this.AvailableActions$.next(actionsResult.Results);
       }
 
       // Create the sub-agent entity
       const md = this.ProviderToUse;
-      this.subAgentEntity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
-      this.subAgentEntity.NewRecord();
+      this.SubAgentEntity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
+      this.SubAgentEntity.NewRecord();
       
       // Set default values
-      this.subAgentEntity.Status = 'Pending';
-      this.subAgentEntity.ExecutionMode = 'Sequential';
-      this.subAgentEntity.ExposeAsAction = false; // Database constraint for sub-agents
-      this.subAgentEntity.ParentID = this.config.parentAgentId;
-      this.subAgentEntity.ModelSelectionMode = 'Agent Type';
-      this.subAgentEntity.Set('Temperature', 0.1);
-      this.subAgentEntity.Set('TopP', 0.1);
-      this.subAgentEntity.Set('TopK', 40);
-      this.subAgentEntity.Set('MaxTokensPerRun', 4000);
-      this.subAgentEntity.Set('EnableCaching', false);
-      this.subAgentEntity.Set('CacheTTLSeconds', 3600);
+      this.SubAgentEntity.Status = 'Pending';
+      this.SubAgentEntity.ExecutionMode = 'Sequential';
+      this.SubAgentEntity.ExposeAsAction = false; // Database constraint for sub-agents
+      this.SubAgentEntity.ParentID = this.config.ParentAgentId;
+      this.SubAgentEntity.ModelSelectionMode = 'Agent Type';
+      this.SubAgentEntity.Set('Temperature', 0.1);
+      this.SubAgentEntity.Set('TopP', 0.1);
+      this.SubAgentEntity.Set('TopK', 40);
+      this.SubAgentEntity.Set('MaxTokensPerRun', 4000);
+      this.SubAgentEntity.Set('EnableCaching', false);
+      this.SubAgentEntity.Set('CacheTTLSeconds', 3600);
 
       // Update form with initial values
-      this.updateSubAgentEntity(this.subAgentForm.value);
+      this.updateSubAgentEntity(this.SubAgentForm.value);
 
     } catch (error) {
       console.error('Error loading sub-agent creation data:', error);
@@ -213,34 +348,34 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
         3000
       );
     } finally {
-      this.isLoading$.next(false);
+      this.IsLoading$.next(false);
     }
   }
 
   private updateSubAgentEntity(formValue: any) {
-    if (!this.subAgentEntity) return;
+    if (!this.SubAgentEntity) return;
 
     // Update entity with form values
-    this.subAgentEntity.Name = formValue.name;
-    this.subAgentEntity.Description = formValue.description || '';
-    this.subAgentEntity.TypeID = formValue.typeID;
-    this.subAgentEntity.Status = formValue.status;
-    this.subAgentEntity.ExecutionMode = formValue.executionMode;
-    this.subAgentEntity.Set('Purpose', formValue.purpose || '');
-    this.subAgentEntity.Set('UserMessage', formValue.userMessage || '');
+    this.SubAgentEntity.Name = formValue.name;
+    this.SubAgentEntity.Description = formValue.description || '';
+    this.SubAgentEntity.TypeID = formValue.typeID;
+    this.SubAgentEntity.Status = formValue.status;
+    this.SubAgentEntity.ExecutionMode = formValue.executionMode;
+    this.SubAgentEntity.Set('Purpose', formValue.purpose || '');
+    this.SubAgentEntity.Set('UserMessage', formValue.userMessage || '');
     // Note: SystemMessage does not exist on MJAIAgentEntityExtended, removing this line
-    this.subAgentEntity.ModelSelectionMode = formValue.modelSelectionMode;
-    this.subAgentEntity.Set('Temperature', formValue.temperature);
-    this.subAgentEntity.Set('TopP', formValue.topP);
-    this.subAgentEntity.Set('TopK', formValue.topK);
-    this.subAgentEntity.Set('MaxTokensPerRun', formValue.maxTokens);
-    this.subAgentEntity.Set('EnableCaching', formValue.enableCaching);
-    this.subAgentEntity.Set('CacheTTLSeconds', formValue.cacheTTL);
+    this.SubAgentEntity.ModelSelectionMode = formValue.modelSelectionMode;
+    this.SubAgentEntity.Set('Temperature', formValue.temperature);
+    this.SubAgentEntity.Set('TopP', formValue.topP);
+    this.SubAgentEntity.Set('TopK', formValue.topK);
+    this.SubAgentEntity.Set('MaxTokensPerRun', formValue.maxTokens);
+    this.SubAgentEntity.Set('EnableCaching', formValue.enableCaching);
+    this.SubAgentEntity.Set('CacheTTLSeconds', formValue.cacheTTL);
   }
 
-  public async addPrompt() {
+  public async AddPrompt() {
     // Get currently linked prompt IDs
-    const linkedPromptIds = this.linkedPrompts.map(p => p.ID);
+    const linkedPromptIds = this.LinkedPrompts.map(p => p.ID);
     
     try {
       this.agentManagementService.openPromptSelectorDialog({
@@ -252,27 +387,27 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
         viewContainerRef: this.viewContainerRef
       }).subscribe({
         next: async (result) => {
-          if (result && result.selectedPrompts.length > 0) {
+          if (result && result.SelectedPrompts.length > 0) {
             // Filter out already linked prompts
-            const newPrompts = result.selectedPrompts.filter(prompt =>
+            const newPrompts = result.SelectedPrompts.filter(prompt =>
               !linkedPromptIds.some(id => UUIDsEqual(id, prompt.ID))
             );
             
             if (newPrompts.length > 0) {
               // Add to UI
-              this.linkedPrompts.push(...newPrompts);
+              this.LinkedPrompts.push(...newPrompts);
               
               // Create agent prompt link entities
               const md = this.ProviderToUse;
               for (const prompt of newPrompts) {
                 const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                 agentPrompt.NewRecord();
-                agentPrompt.AgentID = this.subAgentEntity!.ID;
+                agentPrompt.AgentID = this.SubAgentEntity!.ID;
                 agentPrompt.PromptID = prompt.ID;
                 agentPrompt.Status = 'Active';
-                agentPrompt.ExecutionOrder = this.agentPromptLinks.length + 1;
+                agentPrompt.ExecutionOrder = this.AgentPromptLinks.length + 1;
                 
-                this.agentPromptLinks.push(agentPrompt);
+                this.AgentPromptLinks.push(agentPrompt);
               }
               
               // Trigger change detection
@@ -286,7 +421,7 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
             }
           } else if (result && result.createNew) {
             // User wants to create a new prompt
-            await this.createNewPrompt();
+            await this.CreateNewPrompt();
           }
         },
         error: (error) => {
@@ -308,10 +443,15 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
     }
   }
 
-  public async createNewPrompt() {
+  /** @deprecated Use {@link AddPrompt}. */
+  public async addPrompt() {
+    return this.AddPrompt();
+  }
+
+  public async CreateNewPrompt() {
     try {
       this.agentManagementService.openCreatePromptDialog({
-        title: `Create New Prompt for ${this.subAgentEntity?.Name || 'Sub-Agent'}`,
+        title: `Create New Prompt for ${this.SubAgentEntity?.Name || 'Sub-Agent'}`,
         initialName: '',
         viewContainerRef: this.viewContainerRef
       }).subscribe({
@@ -319,29 +459,29 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
           if (result && result.prompt) {
             try {
               // Store the newly created entities
-              this.newlyCreatedPrompts.push(result.prompt);
+              this.NewlyCreatedPrompts.push(result.prompt);
               
-              if (result.template) {
-                this.newlyCreatedPromptTemplates.push(result.template);
+              if (result.Template) {
+                this.NewlyCreatedPromptTemplates.push(result.Template);
               }
               
               if (result.templateContents && result.templateContents.length > 0) {
-                this.newlyCreatedTemplateContents.push(...result.templateContents);
+                this.NewlyCreatedTemplateContents.push(...result.templateContents);
               }
 
               // Add to UI
-              this.linkedPrompts.push(result.prompt);
+              this.LinkedPrompts.push(result.prompt);
               
               // Create agent prompt link entity
               const md = this.ProviderToUse;
               const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
               agentPrompt.NewRecord();
-              agentPrompt.AgentID = this.subAgentEntity!.ID;
+              agentPrompt.AgentID = this.SubAgentEntity!.ID;
               agentPrompt.PromptID = result.prompt.ID;
               agentPrompt.Status = 'Active';
-              agentPrompt.ExecutionOrder = this.agentPromptLinks.length + 1;
+              agentPrompt.ExecutionOrder = this.AgentPromptLinks.length + 1;
               
-              this.agentPromptLinks.push(agentPrompt);
+              this.AgentPromptLinks.push(agentPrompt);
 
               // Trigger change detection
               this.cdr.detectChanges();
@@ -380,14 +520,19 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
     }
   }
 
-  public async addAction() {
+  /** @deprecated Use {@link CreateNewPrompt}. */
+  public async createNewPrompt() {
+    return this.CreateNewPrompt();
+  }
+
+  public async AddAction() {
     // Get currently linked action IDs
-    const linkedActionIds = this.linkedActions.map(a => a.ID);
+    const linkedActionIds = this.LinkedActions.map(a => a.ID);
     
     try {
       this.agentManagementService.openAddActionDialog({
-        agentId: this.subAgentEntity?.ID || '',
-        agentName: this.subAgentEntity?.Name || 'Sub-Agent',
+        agentId: this.SubAgentEntity?.ID || '',
+        agentName: this.SubAgentEntity?.Name || 'Sub-Agent',
         existingActionIds: linkedActionIds,
         viewContainerRef: this.viewContainerRef
       }).subscribe({
@@ -400,18 +545,18 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
             
             if (newActions.length > 0) {
               // Add to UI
-              this.linkedActions.push(...newActions);
+              this.LinkedActions.push(...newActions);
               
               // Create agent action link entities
               const md = this.ProviderToUse;
               for (const action of newActions) {
                 const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
                 agentAction.NewRecord();
-                agentAction.AgentID = this.subAgentEntity!.ID;
+                agentAction.AgentID = this.SubAgentEntity!.ID;
                 agentAction.ActionID = action.ID;
                 agentAction.Status = 'Active';
                 
-                this.agentActionLinks.push(agentAction);
+                this.AgentActionLinks.push(agentAction);
               }
               
               // Trigger change detection
@@ -444,23 +589,28 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
     }
   }
 
-  public removePrompt(prompt: MJAIPromptEntityExtended) {
+  /** @deprecated Use {@link AddAction}. */
+  public async addAction() {
+    return this.AddAction();
+  }
+
+  public RemovePrompt(prompt: MJAIPromptEntityExtended) {
     // Remove from UI
-    const promptIndex = this.linkedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
+    const promptIndex = this.LinkedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
     if (promptIndex >= 0) {
-      this.linkedPrompts.splice(promptIndex, 1);
+      this.LinkedPrompts.splice(promptIndex, 1);
     }
     
     // Remove from link entities
-    const linkIndex = this.agentPromptLinks.findIndex(ap => UUIDsEqual(ap.PromptID, prompt.ID));
+    const linkIndex = this.AgentPromptLinks.findIndex(ap => UUIDsEqual(ap.PromptID, prompt.ID));
     if (linkIndex >= 0) {
-      this.agentPromptLinks.splice(linkIndex, 1);
+      this.AgentPromptLinks.splice(linkIndex, 1);
     }
     
     // Remove from newly created prompts if it was created in this dialog
-    const newPromptIndex = this.newlyCreatedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
+    const newPromptIndex = this.NewlyCreatedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
     if (newPromptIndex >= 0) {
-      this.newlyCreatedPrompts.splice(newPromptIndex, 1);
+      this.NewlyCreatedPrompts.splice(newPromptIndex, 1);
     }
     
     this.cdr.detectChanges();
@@ -472,17 +622,22 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
     );
   }
 
-  public removeAction(action: MJActionEntity) {
+  /** @deprecated Use {@link RemovePrompt}. */
+  public removePrompt(prompt: MJAIPromptEntityExtended) {
+    return this.RemovePrompt(prompt);
+  }
+
+  public RemoveAction(action: MJActionEntity) {
     // Remove from UI
-    const actionIndex = this.linkedActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
+    const actionIndex = this.LinkedActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
     if (actionIndex >= 0) {
-      this.linkedActions.splice(actionIndex, 1);
+      this.LinkedActions.splice(actionIndex, 1);
     }
     
     // Remove from link entities
-    const linkIndex = this.agentActionLinks.findIndex(aa => UUIDsEqual(aa.ActionID, action.ID));
+    const linkIndex = this.AgentActionLinks.findIndex(aa => UUIDsEqual(aa.ActionID, action.ID));
     if (linkIndex >= 0) {
-      this.agentActionLinks.splice(linkIndex, 1);
+      this.AgentActionLinks.splice(linkIndex, 1);
     }
     
     this.cdr.detectChanges();
@@ -494,8 +649,13 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
     );
   }
 
+  /** @deprecated Use {@link RemoveAction}. */
+  public removeAction(action: MJActionEntity) {
+    return this.RemoveAction(action);
+  }
+
   public async save() {
-    if (!this.subAgentForm.valid || !this.subAgentEntity) {
+    if (!this.SubAgentForm.valid || !this.SubAgentEntity) {
       MJNotificationService.Instance.CreateSimpleNotification(
         'Please fill in all required fields',
         'warning',
@@ -504,23 +664,23 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
       return;
     }
 
-    this.isSaving$.next(true);
+    this.IsSaving$.next(true);
 
     try {
       // Update entity with final form values
-      this.updateSubAgentEntity(this.subAgentForm.value);
+      this.updateSubAgentEntity(this.SubAgentForm.value);
 
       // Return the created entities (not saved to database)
       const result: CreateSubAgentResult = {
-        subAgent: this.subAgentEntity,
-        agentPrompts: this.agentPromptLinks,
-        agentActions: this.agentActionLinks,
-        newPrompts: this.newlyCreatedPrompts.length > 0 ? this.newlyCreatedPrompts : undefined,
-        newPromptTemplates: this.newlyCreatedPromptTemplates.length > 0 ? this.newlyCreatedPromptTemplates : undefined,
-        newTemplateContents: this.newlyCreatedTemplateContents.length > 0 ? this.newlyCreatedTemplateContents : undefined
+        SubAgent: this.SubAgentEntity,
+        AgentPrompts: this.AgentPromptLinks,
+        AgentActions: this.AgentActionLinks,
+        NewPrompts: this.NewlyCreatedPrompts.length > 0 ? this.NewlyCreatedPrompts : undefined,
+        NewPromptTemplates: this.NewlyCreatedPromptTemplates.length > 0 ? this.NewlyCreatedPromptTemplates : undefined,
+        NewTemplateContents: this.NewlyCreatedTemplateContents.length > 0 ? this.NewlyCreatedTemplateContents : undefined
       };
 
-      this.result.next(result);
+      this.Result.next(result);
       this.DialogClose.emit();
 
     } catch (error) {
@@ -531,33 +691,58 @@ export class CreateSubAgentDialogComponent extends BaseAngularComponent implemen
         3000
       );
     } finally {
-      this.isSaving$.next(false);
+      this.IsSaving$.next(false);
     }
   }
 
   public cancel() {
-    this.result.next(null);
+    this.Result.next(null);
     this.DialogClose.emit();
   }
 
   // Helper methods for UI
-  public getAgentIcon(): string {
-    return this.subAgentEntity?.IconClass || 'fa-solid fa-robot';
+  public GetAgentIcon(): string {
+    return this.SubAgentEntity?.IconClass || 'fa-solid fa-robot';
   }
 
-  public getPromptIcon(): string {
+  /** @deprecated Use {@link GetAgentIcon}. */
+  public getAgentIcon(): string {
+    return this.GetAgentIcon();
+  }
+
+  public GetPromptIcon(): string {
     return 'fa-solid fa-comments';
   }
 
-  public getActionIcon(): string {
+  /** @deprecated Use {@link GetPromptIcon}. */
+  public getPromptIcon(): string {
+    return this.GetPromptIcon();
+  }
+
+  public GetActionIcon(): string {
     return 'fa-solid fa-bolt';
   }
 
-  public get linkedPromptCount(): number {
-    return this.linkedPrompts.length;
+  /** @deprecated Use {@link GetActionIcon}. */
+  public getActionIcon(): string {
+    return this.GetActionIcon();
   }
 
+  public get LinkedPromptCount(): number {
+    return this.LinkedPrompts.length;
+  }
+
+  /** @deprecated Use {@link LinkedPromptCount}. */
+  public get linkedPromptCount(): number {
+    return this.LinkedPromptCount;
+  }
+
+  public get LinkedActionCount(): number {
+    return this.LinkedActions.length;
+  }
+
+  /** @deprecated Use {@link LinkedActionCount}. */
   public get linkedActionCount(): number {
-    return this.linkedActions.length;
+    return this.LinkedActionCount;
   }
 }

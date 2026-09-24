@@ -53,8 +53,8 @@ import type {
     CloneRetargetFieldItem,
 } from './record-clone-types';
 import {
-    entityToRecordCloneKey,
-    stringToRecordCloneKey,
+    EntityToRecordCloneKey,
+    StringToRecordCloneKey,
 } from './record-clone-types';
 
 @Component({
@@ -447,11 +447,11 @@ export class RecordClonePanelComponent implements OnInit, OnChanges {
     public get EffectiveRecordKey(): RecordCloneKey | undefined {
         if (this.RecordKey) {
             return typeof this.RecordKey === 'string'
-                ? stringToRecordCloneKey('ID', this.RecordKey)
+                ? StringToRecordCloneKey('ID', this.RecordKey)
                 : this.RecordKey;
         }
         if (this.Record) {
-            return entityToRecordCloneKey(this.Record);
+            return EntityToRecordCloneKey(this.Record);
         }
         return undefined;
     }

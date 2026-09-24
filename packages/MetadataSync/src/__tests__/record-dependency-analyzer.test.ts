@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RecordDependencyAnalyzer, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
+import { RecordDependencyAnalyzer, GroupRecordsByGraphId } from '../lib/record-dependency-analyzer';
 import type { RecordData } from '../lib/sync-engine';
 
 /**
@@ -80,7 +80,7 @@ describe('RecordDependencyAnalyzer.flattenFileRecords', () => {
     const graphB = actions[1].graphId;
     expect(params.filter(p => p.graphId === graphA)).toHaveLength(2);
     expect(params.filter(p => p.graphId === graphB)).toHaveLength(1);
-    const grouped = groupRecordsByGraphId(flattened);
+    const grouped = GroupRecordsByGraphId(flattened);
     expect(grouped.size).toBe(2);
     expect(grouped.get(graphA)?.map(r => r.entityName)).toEqual([
       'MJ: Actions',

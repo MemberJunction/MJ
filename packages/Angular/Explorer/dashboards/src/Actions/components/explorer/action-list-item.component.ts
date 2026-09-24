@@ -24,33 +24,58 @@ export class ActionListItemComponent {
   @Output() RunClick = new EventEmitter<MJActionEntityExtended>();
   @Output() CategoryClick = new EventEmitter<string>();
 
-  public onRowClick(): void {
+  public OnRowClick(): void {
     this.ActionClick.emit(this.Action);
   }
 
-  public onEditClick(event: MouseEvent): void {
+  /** @deprecated Use {@link OnRowClick}. */
+  public onRowClick(): void {
+    return this.OnRowClick();
+  }
+
+  public OnEditClick(event: MouseEvent): void {
     event.stopPropagation();
     this.EditClick.emit(this.Action);
   }
 
-  public onRunClick(event: MouseEvent): void {
+  /** @deprecated Use {@link OnEditClick}. */
+  public onEditClick(event: MouseEvent): void {
+    return this.OnEditClick(event);
+  }
+
+  public OnRunClick(event: MouseEvent): void {
     event.stopPropagation();
     this.RunClick.emit(this.Action);
   }
 
-  public onCategoryClick(event: MouseEvent): void {
+  /** @deprecated Use {@link OnRunClick}. */
+  public onRunClick(event: MouseEvent): void {
+    return this.OnRunClick(event);
+  }
+
+  public OnCategoryClick(event: MouseEvent): void {
     event.stopPropagation();
     if (this.Action.CategoryID) {
       this.CategoryClick.emit(this.Action.CategoryID);
     }
   }
 
-  public getCategoryName(): string {
+  /** @deprecated Use {@link OnCategoryClick}. */
+  public onCategoryClick(event: MouseEvent): void {
+    return this.OnCategoryClick(event);
+  }
+
+  public GetCategoryName(): string {
     if (!this.Action.CategoryID) return 'Uncategorized';
     return this.Categories.get(this.Action.CategoryID)?.Name || 'Unknown';
   }
 
-  public getStatusColor(): 'success' | 'warning' | 'error' | 'info' {
+  /** @deprecated Use {@link GetCategoryName}. */
+  public getCategoryName(): string {
+    return this.GetCategoryName();
+  }
+
+  public GetStatusColor(): 'success' | 'warning' | 'error' | 'info' {
     switch (this.Action.Status) {
       case 'Active': return 'success';
       case 'Pending': return 'warning';
@@ -59,7 +84,12 @@ export class ActionListItemComponent {
     }
   }
 
-  public getActionIcon(): string {
+  /** @deprecated Use {@link GetStatusColor}. */
+  public getStatusColor(): 'success' | 'warning' | 'error' | 'info' {
+    return this.GetStatusColor();
+  }
+
+  public GetActionIcon(): string {
     if (this.Action.IconClass) {
       return this.Action.IconClass;
     }
@@ -70,7 +100,12 @@ export class ActionListItemComponent {
     }
   }
 
-  public formatDate(date: Date | null | undefined): string {
+  /** @deprecated Use {@link GetActionIcon}. */
+  public getActionIcon(): string {
+    return this.GetActionIcon();
+  }
+
+  public FormatDate(date: Date | null | undefined): string {
     if (!date) return '-';
     const now = new Date();
     const d = new Date(date);
@@ -84,5 +119,10 @@ export class ActionListItemComponent {
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
     return d.toLocaleDateString();
+  }
+
+  /** @deprecated Use {@link FormatDate}. */
+  public formatDate(date: Date | null | undefined): string {
+    return this.FormatDate(date);
   }
 }

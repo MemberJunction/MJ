@@ -32,24 +32,34 @@ export interface PromptParamViewModel {
 /**
  * Pure helper function to format raw JSON.
  */
-export function formatRawPipelineJson(configuration?: string | null): string {
+export function FormatRawPipelineJson(configuration?: string | null): string {
     if (!configuration) return '';
     const parsed = SafeJSONParse<DataFeatureSpec>(configuration);
     return parsed ? JSON.stringify(parsed, null, 2) : configuration;
 }
 
+/** @deprecated Use {@link FormatRawPipelineJson}. */
+export function formatRawPipelineJson(configuration?: string | null): string {
+    return FormatRawPipelineJson(configuration);
+}
+
 /**
  * Pure helper function to parse DataFeatureSpec safely.
  */
-export function parsePipelineSpec(configuration?: string | null): DataFeatureSpec | null {
+export function ParsePipelineSpec(configuration?: string | null): DataFeatureSpec | null {
     if (!configuration) return null;
     return SafeJSONParse<DataFeatureSpec>(configuration);
+}
+
+/** @deprecated Use {@link ParsePipelineSpec}. */
+export function parsePipelineSpec(configuration?: string | null): DataFeatureSpec | null {
+    return ParsePipelineSpec(configuration);
 }
 
 /**
  * Pure helper function to validate pipeline spec against entity stub.
  */
-export function validatePipelineSpec(
+export function ValidatePipelineSpec(
     spec: DataFeatureSpec | null,
     entityStub?: EntityMetadataStub
 ): SpecValidationIssue[] {
@@ -57,10 +67,18 @@ export function validatePipelineSpec(
     return validateSpec(spec, entityStub);
 }
 
+/** @deprecated Use {@link ValidatePipelineSpec}. */
+export function validatePipelineSpec(
+    spec: DataFeatureSpec | null,
+    entityStub?: EntityMetadataStub
+): SpecValidationIssue[] {
+    return ValidatePipelineSpec(spec, entityStub);
+}
+
 /**
  * Pure helper to build feature output view-models from spec or output mapping.
  */
-export function buildFeatureOutputViewModels(
+export function BuildFeatureOutputViewModels(
     spec: DataFeatureSpec | null,
     entityInfo?: EntityInfo | null,
     outputMapping?: string | null
@@ -162,10 +180,19 @@ export function buildFeatureOutputViewModels(
     return outputs;
 }
 
+/** @deprecated Use {@link BuildFeatureOutputViewModels}. */
+export function buildFeatureOutputViewModels(
+    spec: DataFeatureSpec | null,
+    entityInfo?: EntityInfo | null,
+    outputMapping?: string | null
+): FeatureOutputViewModel[] {
+    return BuildFeatureOutputViewModels(spec, entityInfo, outputMapping);
+}
+
 /**
  * Pure helper to build prompt parameter resolution mappings.
  */
-export function buildPromptParamViewModels(
+export function BuildPromptParamViewModels(
     spec: DataFeatureSpec | null,
     inputMapping?: string | null
 ): PromptParamViewModel[] {
@@ -189,6 +216,14 @@ export function buildPromptParamViewModels(
     return mappings;
 }
 
+/** @deprecated Use {@link BuildPromptParamViewModels}. */
+export function buildPromptParamViewModels(
+    spec: DataFeatureSpec | null,
+    inputMapping?: string | null
+): PromptParamViewModel[] {
+    return BuildPromptParamViewModels(spec, inputMapping);
+}
+
 /**
  * Custom form override for `MJ: Record Processes` (priority 100).
  * Presents the Record Process / Feature Pipeline in a first-class MJ form with:
@@ -210,10 +245,46 @@ export function buildPromptParamViewModels(
     styleUrls: ['./record-process-form.component.css'],
 })
 export class RecordProcessFormComponentExtended extends MJRecordProcessFormComponent implements OnInit {
-    public pipelineValid = true;
-    public rawJsonExpanded = false;
-    public rawJsonCopied = false;
-    public loadedQuery: { ID: string; Name: string; SQL: string } | null = null;
+    public PipelineValid = true;
+
+    /** @deprecated Use {@link PipelineValid}. */
+    public get pipelineValid() {
+        return this.PipelineValid;
+    }
+    /** @deprecated Use {@link PipelineValid}. */
+    public set pipelineValid(value) {
+        this.PipelineValid = value;
+    }
+    public RawJsonExpanded = false;
+
+    /** @deprecated Use {@link RawJsonExpanded}. */
+    public get rawJsonExpanded() {
+        return this.RawJsonExpanded;
+    }
+    /** @deprecated Use {@link RawJsonExpanded}. */
+    public set rawJsonExpanded(value) {
+        this.RawJsonExpanded = value;
+    }
+    public RawJsonCopied = false;
+
+    /** @deprecated Use {@link RawJsonCopied}. */
+    public get rawJsonCopied() {
+        return this.RawJsonCopied;
+    }
+    /** @deprecated Use {@link RawJsonCopied}. */
+    public set rawJsonCopied(value) {
+        this.RawJsonCopied = value;
+    }
+    public LoadedQuery: { ID: string; Name: string; SQL: string } | null = null;
+
+    /** @deprecated Use {@link LoadedQuery}. */
+    public get loadedQuery(): { ID: string; Name: string; SQL: string } | null {
+        return this.LoadedQuery;
+    }
+    /** @deprecated Use {@link LoadedQuery}. */
+    public set loadedQuery(value: { ID: string; Name: string; SQL: string } | null) {
+        this.LoadedQuery = value;
+    }
 
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
@@ -249,7 +320,7 @@ export class RecordProcessFormComponentExtended extends MJRecordProcessFormCompo
                 ResultType: 'simple',
             });
             if (res.Success && res.Results && res.Results.length > 0) {
-                this.loadedQuery = res.Results[0];
+                this.LoadedQuery = res.Results[0];
                 this.cdr.markForCheck();
             } else if (!res.Success) {
                 LogError(`[RecordProcessForm] Failed to load context query ${queryId}: ${res.ErrorMessage}`);
@@ -305,23 +376,28 @@ export class RecordProcessFormComponentExtended extends MJRecordProcessFormCompo
     }
 
     public OnPipelineValidChange(valid: boolean): void {
-        this.pipelineValid = valid;
+        this.PipelineValid = valid;
         this.cdr.markForCheck();
     }
 
+    public ToggleRawJson(): void {
+        this.RawJsonExpanded = !this.RawJsonExpanded;
+        this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link ToggleRawJson}. */
     public toggleRawJson(): void {
-        this.rawJsonExpanded = !this.rawJsonExpanded;
-        this.cdr.markForCheck();
+        return this.ToggleRawJson();
     }
 
-    public async copyRawJson(): Promise<void> {
+    public async CopyRawJson(): Promise<void> {
         try {
             if (navigator?.clipboard && this.FormattedRawJson) {
                 await navigator.clipboard.writeText(this.FormattedRawJson);
-                this.rawJsonCopied = true;
+                this.RawJsonCopied = true;
                 this.cdr.markForCheck();
                 setTimeout(() => {
-                    this.rawJsonCopied = false;
+                    this.RawJsonCopied = false;
                     this.cdr.markForCheck();
                 }, 2000);
             }
@@ -330,12 +406,17 @@ export class RecordProcessFormComponentExtended extends MJRecordProcessFormCompo
         }
     }
 
+    /** @deprecated Use {@link CopyRawJson}. */
+    public async copyRawJson(): Promise<void> {
+        return this.CopyRawJson();
+    }
+
     public get FormattedRawJson(): string {
-        return formatRawPipelineJson(this.record?.Configuration);
+        return FormatRawPipelineJson(this.record?.Configuration);
     }
 
     public get ParsedSpec(): DataFeatureSpec | null {
-        return parsePipelineSpec(this.record?.Configuration);
+        return ParsePipelineSpec(this.record?.Configuration);
     }
 
     public get EntityStub(): EntityMetadataStub | undefined {
@@ -358,7 +439,7 @@ export class RecordProcessFormComponentExtended extends MJRecordProcessFormCompo
     }
 
     public get SpecIssues(): SpecValidationIssue[] {
-        return validatePipelineSpec(this.ParsedSpec, this.EntityStub);
+        return ValidatePipelineSpec(this.ParsedSpec, this.EntityStub);
     }
 
     public get IsSpecValid(): boolean {
@@ -366,7 +447,7 @@ export class RecordProcessFormComponentExtended extends MJRecordProcessFormCompo
     }
 
     public get FeatureOutputs(): FeatureOutputViewModel[] {
-        return buildFeatureOutputViewModels(this.ParsedSpec, this.TargetEntityInfo, this.record?.OutputMapping);
+        return BuildFeatureOutputViewModels(this.ParsedSpec, this.TargetEntityInfo, this.record?.OutputMapping);
     }
 
     public get TotalFeaturesCount(): number {
@@ -378,14 +459,14 @@ export class RecordProcessFormComponentExtended extends MJRecordProcessFormCompo
     }
 
     public get ParameterMappings(): PromptParamViewModel[] {
-        return buildPromptParamViewModels(this.ParsedSpec, this.record?.InputMapping);
+        return BuildPromptParamViewModels(this.ParsedSpec, this.record?.InputMapping);
     }
 
     public get ContextModeText(): string {
         const spec = this.ParsedSpec;
         if (spec?.Context?.EntityDocumentID) return 'Entity Document Template';
         if (spec?.Context?.QueryID) {
-            return this.loadedQuery?.Name ? `Query: ${this.loadedQuery.Name}` : `Saved Query (${spec.Context.QueryID.substring(0, 8)}...)`;
+            return this.LoadedQuery?.Name ? `Query: ${this.LoadedQuery.Name}` : `Saved Query (${spec.Context.QueryID.substring(0, 8)}...)`;
         }
         if (spec?.Context?.Fields && spec.Context.Fields.length > 0) return `Fields (${spec.Context.Fields.join(', ')})`;
         return 'Record Fields (Automatic)';
@@ -394,8 +475,8 @@ export class RecordProcessFormComponentExtended extends MJRecordProcessFormCompo
     public get ContextQueryDisplay(): string {
         const spec = this.ParsedSpec;
         if (spec?.Context?.QueryID) {
-            if (this.loadedQuery?.SQL) {
-                return `-- Saved Query: ${this.loadedQuery.Name}\n${this.loadedQuery.SQL}`;
+            if (this.LoadedQuery?.SQL) {
+                return `-- Saved Query: ${this.LoadedQuery.Name}\n${this.LoadedQuery.SQL}`;
             }
             const paramName = spec.Context.QueryParams ? Object.keys(spec.Context.QueryParams)[0] || 'RecordID' : 'RecordID';
             return `-- Saved Query: ${spec.Context.QueryID}\nSELECT a.* FROM ${this.TargetEntityName || 'TargetEntity'} a WHERE a.ID = @${paramName}`;

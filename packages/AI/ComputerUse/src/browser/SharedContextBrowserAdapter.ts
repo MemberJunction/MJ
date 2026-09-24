@@ -26,23 +26,23 @@ import {
     ContextSeed,
 } from '../types/browser.js';
 import {
-    getVisibleText,
-    getSelectionText,
-    getTitle,
-    waitForLoadState,
-    getAccessibilitySnapshot,
-    queryElement,
+    GetVisibleText,
+    GetSelectionText,
+    GetTitle,
+    WaitForLoadState,
+    GetAccessibilitySnapshot,
+    QueryElement,
 } from './page-perception.js';
-import { retryPastDismissableOverlay } from './overlay-dismiss.js';
+import { RetryPastDismissableOverlay } from './overlay-dismiss.js';
 import {
-    extractInteractiveElements,
-    clickInteractiveElement,
-    typeIntoInteractiveElement,
+    ExtractInteractiveElements,
+    ClickInteractiveElement,
+    TypeIntoInteractiveElement,
 } from './element-extraction.js';
 // ambiguous-selector narrowing, shared with PlaywrightBrowserAdapter.
-import { resolveActionLocator } from './selector-resolution.js';
+import { ResolveActionLocator } from './selector-resolution.js';
 // warm-seed in-page storage helpers, shared with PlaywrightBrowserAdapter.
-import { StorageSnapshot, captureStorageInPage, restoreStorageInPage } from './page-storage.js';
+import { StorageSnapshot, CaptureStorageInPage, RestoreStorageInPage } from './page-storage.js';
 
 export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
     private sharedContext: BrowserContext;
@@ -230,36 +230,36 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
     // diagnostic feature silently got nothing in suite mode.
 
     public override async GetVisibleText(): Promise<string> {
-        return getVisibleText(this.page);
+        return GetVisibleText(this.page);
     }
 
     public override async GetSelectionText(): Promise<string> {
-        return getSelectionText(this.page);
+        return GetSelectionText(this.page);
     }
 
     public override async GetTitle(): Promise<string> {
-        return getTitle(this.page);
+        return GetTitle(this.page);
     }
 
     public override async WaitForLoadState(
         state: 'load' | 'domcontentloaded' | 'networkidle'
     ): Promise<void> {
-        return waitForLoadState(this.page, state);
+        return WaitForLoadState(this.page, state);
     }
 
     public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
-        return getAccessibilitySnapshot(this.page);
+        return GetAccessibilitySnapshot(this.page);
     }
 
     public override async QueryElement(selector: string): Promise<ElementInfo> {
-        return queryElement(this.page, selector, this.config.ActionTimeoutMs);
+        return QueryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
     /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index. */
     private lastInteractiveElements: InteractiveElement[] = [];
 
     public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
-        this.lastInteractiveElements = await extractInteractiveElements(this.page, this.config.ActionTimeoutMs);
+        this.lastInteractiveElements = await ExtractInteractiveElements(this.page, this.config.ActionTimeoutMs);
         return this.lastInteractiveElements;
     }
 
@@ -301,9 +301,9 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 // closes the SCBA parity gap so the suite honors Selector clicks.
                 // Ambiguous selectors are narrowed first.
                 if (action.Selector) {
-                    const target = await resolveActionLocator(page, action.Selector);
+                    const target = await ResolveActionLocator(page, action.Selector);
                     // Waiting out a backdrop is unwinnable — dismiss it and retry.
-                    await retryPastDismissableOverlay(page, timeout => target.click({
+                    await RetryPastDismissableOverlay(page, timeout => target.click({
                         button: action.Button,
                         clickCount: action.ClickCount,
                         timeout,
@@ -337,7 +337,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
             case 'ClickElement':
                 // Element-grounded click: resolve the index to the extracted
                 // element and click its locator with actionability auto-wait.
-                await clickInteractiveElement(
+                await ClickInteractiveElement(
                     page,
                     this.resolveElementByIndex(action.Index),
                     { clickCount: action.ClickCount, button: action.Button, modifiers: action.Modifiers },
@@ -345,7 +345,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
                 );
                 break;
             case 'TypeIntoElement':
-                await typeIntoInteractiveElement(
+                await TypeIntoInteractiveElement(
                     page,
                     this.resolveElementByIndex(action.Index),
                     action.Text,
@@ -356,7 +356,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
             case 'Type': {
                 // Selector path: focus the matched element first, then type.
                 if (action.Selector) {
-                    const target = await resolveActionLocator(page, action.Selector);
+                    const target = await ResolveActionLocator(page, action.Selector);
                     await target.focus({ timeout: this.config.ActionTimeoutMs });
                 }
                 await page.keyboard.type(action.Text);
@@ -385,7 +385,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
             case 'Scroll': {
                 // Selector path: bring the matched element into view.
                 if (action.Selector) {
-                    const target = await resolveActionLocator(page, action.Selector);
+                    const target = await ResolveActionLocator(page, action.Selector);
                     await target.scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
                 } else {
                     // point the wheel at a container (open dropdown, inner
@@ -689,7 +689,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
     public override async CaptureContextSeed(origin: string): Promise<ContextSeed | null> {
         this.requirePage();
         try {
-            const snap = await this.page!.evaluate(captureStorageInPage);
+            const snap = await this.page!.evaluate(CaptureStorageInPage);
             const seed = new ContextSeed();
             seed.Origin = origin;
             seed.LocalStorage = snap.localStorage;
@@ -714,7 +714,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         // addInitScript so the restore runs BEFORE the app's scripts on the next
         // navigation to the seed origin — the app then finds a warm cache instead
         // of cold-booting it. Restore is cold-boot-safe (deletes a DB on failure).
-        await this.page!.addInitScript(restoreStorageInPage, snap);
+        await this.page!.addInitScript(RestoreStorageInPage, snap);
     }
 
     // ─── Internal ──────────────────────────────────────────

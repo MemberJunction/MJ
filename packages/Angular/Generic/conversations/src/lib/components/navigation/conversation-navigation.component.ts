@@ -166,13 +166,94 @@ import { UserInfo } from '@memberjunction/core';
   `]
 })
 export class ConversationNavigationComponent {
-  @Input() activeTab: NavigationTab = 'conversations';
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
-  @Input() conversationId: string | null = null;
-  @Output() tabChanged = new EventEmitter<NavigationTab>();
-  @Output() sidebarToggled = new EventEmitter<void>();
-  @Output() searchTriggered = new EventEmitter<void>();
-  @Output() refreshTriggered = new EventEmitter<void>();
-  @Output() navigateToConversation = new EventEmitter<{conversationId: string; taskId: string}>();
+  @Input() ActiveTab: NavigationTab = 'conversations';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  @Input() set activeTab(value: NavigationTab) {
+    this.ActiveTab = value;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  get activeTab(): NavigationTab {
+    return this.ActiveTab;
+  }
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() ConversationId: string | null = null;
+
+  /** @deprecated Use {@link ConversationId}. */
+  @Input() set conversationId(value: string | null) {
+    this.ConversationId = value;
+  }
+  /** @deprecated Use {@link ConversationId}. */
+  get conversationId(): string | null {
+    return this.ConversationId;
+  }
+  @Output() TabChanged = new EventEmitter<NavigationTab>();
+
+  /**
+   * @deprecated Use {@link TabChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (tabChanged) keeps working. Must stay AFTER TabChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() tabChanged = this.TabChanged;
+  @Output() SidebarToggled = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link SidebarToggled}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sidebarToggled) keeps working. Must stay AFTER SidebarToggled: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sidebarToggled = this.SidebarToggled;
+  @Output() SearchTriggered = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link SearchTriggered}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (searchTriggered) keeps working. Must stay AFTER SearchTriggered: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() searchTriggered = this.SearchTriggered;
+  @Output() RefreshTriggered = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link RefreshTriggered}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (refreshTriggered) keeps working. Must stay AFTER RefreshTriggered: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() refreshTriggered = this.RefreshTriggered;
+  @Output() NavigateToConversation = new EventEmitter<{conversationId: string; taskId: string}>();
+
+  /**
+   * @deprecated Use {@link NavigateToConversation}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigateToConversation) keeps working. Must stay AFTER NavigateToConversation: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigateToConversation = this.NavigateToConversation;
 }

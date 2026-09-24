@@ -108,7 +108,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
      * Job titles to exclude when processing contacts
      * These are typically not business decision-makers
      */
-    private readonly ExcludeTitles: string[] = ['member', 'student member', 'student','volunteer'];
+    private readonly excludeTitles: string[] = ['member', 'student member', 'student','volunteer'];
 
     /**
      * Main entry point for the Apollo contact enrichment action
@@ -898,7 +898,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
             if (response.Status === 429) {
                 if (retryAttempts > 0) {
                     LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
-                    await this.Timeout(60000); // wait 1 minute
+                    await this.timeout(60000); // wait 1 minute
                     return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else{
@@ -925,7 +925,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                 }
                 if (retryAttempts > 0) {
                     LogStatus(`   >>> Too many requests to Apollo.io API, waiting ${waitTime / 60000} minute(s) and trying again...`)
-                    await this.Timeout(waitTime); // wait 1 minute
+                    await this.timeout(waitTime); // wait 1 minute
                     return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else {
@@ -945,7 +945,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
      * @param ms - Number of milliseconds to wait
      * @returns Promise that resolves after the specified delay
      */
-    private async Timeout(ms: number) {
+    private async timeout(ms: number) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
@@ -961,6 +961,6 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
             return false;
         }
 
-        return this.ExcludeTitles.includes(title.trim().toLowerCase());
+        return this.excludeTitles.includes(title.trim().toLowerCase());
     }
 }

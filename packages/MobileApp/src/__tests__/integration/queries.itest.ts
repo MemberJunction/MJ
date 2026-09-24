@@ -41,13 +41,13 @@ describe.skipIf(!hasToken())('integration: queries', () => {
         expect(typeof result.success).toBe('boolean');
 
         if (result.success) {
-            expect(Array.isArray(result.columns)).toBe(true);
-            expect(Array.isArray(result.rows)).toBe(true);
-            expect(result.rowCount).toBeGreaterThanOrEqual(0);
+            expect(Array.isArray(result.Columns)).toBe(true);
+            expect(Array.isArray(result.Rows)).toBe(true);
+            expect(result.RowCount).toBeGreaterThanOrEqual(0);
             // Columns are derived from the first row; consistency check.
-            if (result.rows.length > 0) {
-                expect(result.columns.length).toBeGreaterThan(0);
-                expect(Object.keys(result.rows[0])).toEqual(result.columns);
+            if (result.Rows.length > 0) {
+                expect(result.Columns.length).toBeGreaterThan(0);
+                expect(Object.keys(result.Rows[0])).toEqual(result.Columns);
             }
         } else {
             // A failure must carry an error message (e.g. required parameters).

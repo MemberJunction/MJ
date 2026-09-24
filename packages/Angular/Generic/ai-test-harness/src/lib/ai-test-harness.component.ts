@@ -226,33 +226,78 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     }
     
     /** The mode of operation - either 'agent' or 'prompt' */
-    @Input() mode: TestHarnessMode = 'agent';
+    @Input() Mode: TestHarnessMode = 'agent';
+
+    /** @deprecated Use {@link Mode}. */
+    @Input() set mode(value: TestHarnessMode) {
+      this.Mode = value;
+    }
+    /** @deprecated Use {@link Mode}. */
+    get mode(): TestHarnessMode {
+      return this.Mode;
+    }
     
     /** The entity to test - either an AI Agent or AI Prompt */
     @Input() entity: MJAIAgentEntityExtended | MJAIPromptEntityExtended | null = null;
     
     /** The original prompt run ID when re-running a previous prompt execution */
-    @Input() originalPromptRunId: string | null = null;
+    @Input() OriginalPromptRunId: string | null = null;
+
+    /** @deprecated Use {@link OriginalPromptRunId}. */
+    @Input() set originalPromptRunId(value: string | null) {
+      this.OriginalPromptRunId = value;
+    }
+    /** @deprecated Use {@link OriginalPromptRunId}. */
+    get originalPromptRunId(): string | null {
+      return this.OriginalPromptRunId;
+    }
     
     /** The system prompt override to use instead of rendering from template */
-    @Input() systemPromptOverride: string | null = null;
+    @Input() SystemPromptOverride: string | null = null;
+
+    /** @deprecated Use {@link SystemPromptOverride}. */
+    @Input() set systemPromptOverride(value: string | null) {
+      this.SystemPromptOverride = value;
+    }
+    /** @deprecated Use {@link SystemPromptOverride}. */
+    get systemPromptOverride(): string | null {
+      return this.SystemPromptOverride;
+    }
     
     /** Whether a re-run has been executed (shows Reset button instead of Re-Run) */
-    public hasExecutedRerun: boolean = false;
+    public HasExecutedRerun: boolean = false;
+
+    /** @deprecated Use {@link HasExecutedRerun}. */
+    public get hasExecutedRerun(): boolean {
+      return this.HasExecutedRerun;
+    }
+    /** @deprecated Use {@link HasExecutedRerun}. */
+    public set hasExecutedRerun(value: boolean) {
+      this.HasExecutedRerun = value;
+    }
     
     /** Original messages from the prompt run for reset functionality */
     private originalPromptRunMessages: ConversationMessage[] = [];
     
     /** @deprecated Use 'entity' instead. Kept for backward compatibility. */
     @Input() 
-    get aiAgent(): MJAIAgentEntityExtended | null {
+    get AiAgent(): MJAIAgentEntityExtended | null {
         return this.isAgentEntity(this.entity) ? this.entity : null;
     }
-    set aiAgent(value: MJAIAgentEntityExtended | null) {
+    set AiAgent(value: MJAIAgentEntityExtended | null) {
         this.entity = value;
         if (value) {
-            this.mode = 'agent';
+            this.Mode = 'agent';
         }
+    }
+
+    /** @deprecated Use {@link AiAgent}. */
+    get aiAgent(): MJAIAgentEntityExtended | null {
+      return this.AiAgent;
+    }
+    /** @deprecated Use {@link AiAgent}. */
+    @Input() set aiAgent(value: MJAIAgentEntityExtended | null) {
+      this.AiAgent = value;
     }
     
     /**
@@ -267,7 +312,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
 
     /** The effective mode, with a Flow agent selecting `'workflow'` whatever the caller asked for. */
     public get EffectiveMode(): TestHarnessMode {
-        return this.mode === 'agent' && this.IsWorkflowAgent ? 'workflow' : this.mode;
+        return this.Mode === 'agent' && this.IsWorkflowAgent ? 'workflow' : this.Mode;
     }
 
     /**
@@ -277,7 +322,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * graph instead of reasoning. Widening the monitor's own contract would imply otherwise.
      */
     public get MonitorRunType(): 'agent' | 'prompt' {
-        return this.mode === 'prompt' ? 'prompt' : 'agent';
+        return this.Mode === 'prompt' ? 'prompt' : 'agent';
     }
 
     /** Optional starting payload for a workflow run, as JSON the user can edit. */
@@ -353,8 +398,8 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         // Reuse the existing send path: it already owns streaming, the execution monitor, run
         // capture and error handling. A second invocation path here would be a second thing to keep
         // correct, and the two would drift.
-        this.currentUserMessage = 'Run the workflow.';
-        await this.sendMessage();
+        this.CurrentUserMessage = 'Run the workflow.';
+        await this.SendMessage();
         this.startWorkflowPaused = false;
     }
 
@@ -381,29 +426,65 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * This property is typically controlled by parent components or dialog wrappers.
      */
     @Input() 
-    get isVisible(): boolean {
+    get IsVisible(): boolean {
         return this._isVisible;
     }
-    set isVisible(value: boolean) {
+    set IsVisible(value: boolean) {
         const wasVisible = this._isVisible;
         this._isVisible = value;
         if (value && !wasVisible) {
-            this.resetHarness();
+            this.ResetHarness();
         }
     }
 
+    /** @deprecated Use {@link IsVisible}. */
+    get isVisible(): boolean {
+      return this.IsVisible;
+    }
+    /** @deprecated Use {@link IsVisible}. */
+    @Input() set isVisible(value: boolean) {
+      this.IsVisible = value;
+    }
+
     /** Event emitted when the visibility state changes, allowing parent components to react */
-    @Output() visibilityChange = new EventEmitter<boolean>();
+    @Output() VisibilityChange = new EventEmitter<boolean>();
+
+    /**
+     * @deprecated Use {@link VisibilityChange}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (visibilityChange) keeps working. Must stay AFTER VisibilityChange: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() visibilityChange = this.VisibilityChange;
     
     /**
      * Emitted when the user navigates to view a run (agent or prompt)
      */
-    @Output() runOpened = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
+    @Output() RunOpened = new EventEmitter<{ runId: string; runType: 'agent' | 'prompt' }>();
+
+    /**
+     * @deprecated Use {@link RunOpened}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (runOpened) keeps working. Must stay AFTER RunOpened: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() runOpened = this.RunOpened;
     
     /**
      * Event emitted when the component requests to be minimized (e.g., when navigating to a run)
      */
-    @Output() minimizeRequested = new EventEmitter<void>();
+    @Output() MinimizeRequested = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link MinimizeRequested}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (minimizeRequested) keeps working. Must stay AFTER MinimizeRequested: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() minimizeRequested = this.MinimizeRequested;
     
     /** Reference to the scrollable messages container for auto-scrolling functionality */
     @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
@@ -419,51 +500,168 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
 
     // === Conversation State ===
     /** Complete array of all messages in the current conversation session */
-    public conversationMessages: ConversationMessage[] = [];
+    public ConversationMessages: ConversationMessage[] = [];
+
+    /** @deprecated Use {@link ConversationMessages}. */
+    public get conversationMessages(): ConversationMessage[] {
+      return this.ConversationMessages;
+    }
+    /** @deprecated Use {@link ConversationMessages}. */
+    public set conversationMessages(value: ConversationMessage[]) {
+      this.ConversationMessages = value;
+    }
     
     /** Current text input by the user (bound to textarea) */
-    public currentUserMessage: string = '';
+    public CurrentUserMessage: string = '';
+
+    /** @deprecated Use {@link CurrentUserMessage}. */
+    public get currentUserMessage(): string {
+      return this.CurrentUserMessage;
+    }
+    /** @deprecated Use {@link CurrentUserMessage}. */
+    public set currentUserMessage(value: string) {
+      this.CurrentUserMessage = value;
+    }
     
     /** Whether an agent execution is currently in progress */
-    public isExecuting = false;
+    public IsExecuting = false;
+
+    /** @deprecated Use {@link IsExecuting}. */
+    public get isExecuting() {
+      return this.IsExecuting;
+    }
+    /** @deprecated Use {@link IsExecuting}. */
+    public set isExecuting(value) {
+      this.IsExecuting = value;
+    }
     
     // === Data Context Management ===
     /** Unified variables for agent execution (combines data context and template data) */
-    public agentVariables: DataContextVariable[] = [];
+    public AgentVariables: DataContextVariable[] = [];
+
+    /** @deprecated Use {@link AgentVariables}. */
+    public get agentVariables(): DataContextVariable[] {
+      return this.AgentVariables;
+    }
+    /** @deprecated Use {@link AgentVariables}. */
+    public set agentVariables(value: DataContextVariable[]) {
+      this.AgentVariables = value;
+    }
     
     // === Prompt-specific properties ===
     /** Variables for prompt template rendering */
-    public templateVariables: DataContextVariable[] = [];
+    public TemplateVariables: DataContextVariable[] = [];
+
+    /** @deprecated Use {@link TemplateVariables}. */
+    public get templateVariables(): DataContextVariable[] {
+      return this.TemplateVariables;
+    }
+    /** @deprecated Use {@link TemplateVariables}. */
+    public set templateVariables(value: DataContextVariable[]) {
+      this.TemplateVariables = value;
+    }
     
     /** Selected AI model for prompt execution */
-    public selectedModelId: string = '';
+    public SelectedModelId: string = '';
+
+    /** @deprecated Use {@link SelectedModelId}. */
+    public get selectedModelId(): string {
+      return this.SelectedModelId;
+    }
+    /** @deprecated Use {@link SelectedModelId}. */
+    public set selectedModelId(value: string) {
+      this.SelectedModelId = value;
+    }
     
     /** Selected AI vendor for prompt execution */
-    public selectedVendorId: string = '';
+    public SelectedVendorId: string = '';
+
+    /** @deprecated Use {@link SelectedVendorId}. */
+    public get selectedVendorId(): string {
+      return this.SelectedVendorId;
+    }
+    /** @deprecated Use {@link SelectedVendorId}. */
+    public set selectedVendorId(value: string) {
+      this.SelectedVendorId = value;
+    }
     
     /** Available AI vendors for the selected model */
-    public availableVendors: any[] = [];
+    public AvailableVendors: any[] = [];
+
+    /** @deprecated Use {@link AvailableVendors}. */
+    public get availableVendors(): any[] {
+      return this.AvailableVendors;
+    }
+    /** @deprecated Use {@link AvailableVendors}. */
+    public set availableVendors(value: any[]) {
+      this.AvailableVendors = value;
+    }
     
     /** Selected AI configuration for prompt execution */
-    public selectedConfigurationId: string = '';
+    public SelectedConfigurationId: string = '';
+
+    /** @deprecated Use {@link SelectedConfigurationId}. */
+    public get selectedConfigurationId(): string {
+      return this.SelectedConfigurationId;
+    }
+    /** @deprecated Use {@link SelectedConfigurationId}. */
+    public set selectedConfigurationId(value: string) {
+      this.SelectedConfigurationId = value;
+    }
     
     /** Available AI configurations */
-    public availableConfigurations: MJAIConfigurationEntity[] = [];
+    public AvailableConfigurations: MJAIConfigurationEntity[] = [];
+
+    /** @deprecated Use {@link AvailableConfigurations}. */
+    public get availableConfigurations(): MJAIConfigurationEntity[] {
+      return this.AvailableConfigurations;
+    }
+    /** @deprecated Use {@link AvailableConfigurations}. */
+    public set availableConfigurations(value: MJAIConfigurationEntity[]) {
+      this.AvailableConfigurations = value;
+    }
     
     /** Default model for the prompt (cached for display) */
     private defaultModelName: string = '';
     
     /** Maximum tokens for prompt execution */
-    public maxTokens: number | null = null;
+    public MaxTokens: number | null = null;
+
+    /** @deprecated Use {@link MaxTokens}. */
+    public get maxTokens(): number | null {
+      return this.MaxTokens;
+    }
+    /** @deprecated Use {@link MaxTokens}. */
+    public set maxTokens(value: number | null) {
+      this.MaxTokens = value;
+    }
     
     /** Whether to skip validation when running prompts */
-    public skipValidation: boolean = false;
+    public SkipValidation: boolean = false;
+
+    /** @deprecated Use {@link SkipValidation}. */
+    public get skipValidation(): boolean {
+      return this.SkipValidation;
+    }
+    /** @deprecated Use {@link SkipValidation}. */
+    public set skipValidation(value: boolean) {
+      this.SkipValidation = value;
+    }
     
     /** Selected AI configuration for agent execution */
-    public agentConfigurationId: string = '';
+    public AgentConfigurationId: string = '';
+
+    /** @deprecated Use {@link AgentConfigurationId}. */
+    public get agentConfigurationId(): string {
+      return this.AgentConfigurationId;
+    }
+    /** @deprecated Use {@link AgentConfigurationId}. */
+    public set agentConfigurationId(value: string) {
+      this.AgentConfigurationId = value;
+    }
     
     /** Advanced LLM Parameters */
-    public advancedParams = {
+    public AdvancedParams = {
         temperature: null as number | null,
         topP: null as number | null,
         topK: null as number | null,
@@ -475,15 +673,51 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         includeLogProbs: false,
         topLogProbs: 2
     };
+
+    /** @deprecated Use {@link AdvancedParams}. */
+    public get advancedParams() {
+      return this.AdvancedParams;
+    }
+    /** @deprecated Use {@link AdvancedParams}. */
+    public set advancedParams(value) {
+      this.AdvancedParams = value;
+    }
     
     /** Raw stop sequences input for textarea */
-    public stopSequencesText: string = '';
+    public StopSequencesText: string = '';
+
+    /** @deprecated Use {@link StopSequencesText}. */
+    public get stopSequencesText(): string {
+      return this.StopSequencesText;
+    }
+    /** @deprecated Use {@link StopSequencesText}. */
+    public set stopSequencesText(value: string) {
+      this.StopSequencesText = value;
+    }
     
     /** Whether advanced parameters panel is expanded */
-    public advancedParamsExpanded: boolean = false;
+    public AdvancedParamsExpanded: boolean = false;
+
+    /** @deprecated Use {@link AdvancedParamsExpanded}. */
+    public get advancedParamsExpanded(): boolean {
+      return this.AdvancedParamsExpanded;
+    }
+    /** @deprecated Use {@link AdvancedParamsExpanded}. */
+    public set advancedParamsExpanded(value: boolean) {
+      this.AdvancedParamsExpanded = value;
+    }
     
     /** Available AI models for prompt execution */
-    public availableModels: any[] = [];
+    public AvailableModels: any[] = [];
+
+    /** @deprecated Use {@link AvailableModels}. */
+    public get availableModels(): any[] {
+      return this.AvailableModels;
+    }
+    /** @deprecated Use {@link AvailableModels}. */
+    public set availableModels(value: any[]) {
+      this.AvailableModels = value;
+    }
     
     /** Available response format options */
     protected responseFormatOptions = [
@@ -495,41 +729,140 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     ];
 
     /** Selected response format for prompt execution */
-    public selectedResponseFormat = this.responseFormatOptions[0];
+    public SelectedResponseFormat = this.responseFormatOptions[0];
+
+    /** @deprecated Use {@link SelectedResponseFormat}. */
+    public get selectedResponseFormat() {
+      return this.SelectedResponseFormat;
+    }
+    /** @deprecated Use {@link SelectedResponseFormat}. */
+    public set selectedResponseFormat(value) {
+      this.SelectedResponseFormat = value;
+    }
     
     // === UI State Management ===
     /** Whether the configuration sidebar is currently visible */
-    public showSidebar = true;
+    public ShowSidebar = true;
+
+    /** @deprecated Use {@link ShowSidebar}. */
+    public get showSidebar() {
+      return this.ShowSidebar;
+    }
+    /** @deprecated Use {@link ShowSidebar}. */
+    public set showSidebar(value) {
+      this.ShowSidebar = value;
+    }
     
     /** Currently active tab in the sidebar */
-    public activeTab: 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations' = 'agentVariables';
+    public ActiveTab: 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations' = 'agentVariables';
+
+    /** @deprecated Use {@link ActiveTab}. */
+    public get activeTab(): 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations' {
+      return this.ActiveTab;
+    }
+    /** @deprecated Use {@link ActiveTab}. */
+    public set activeTab(value: 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+      this.ActiveTab = value;
+    }
     
     /** Array of saved conversation sessions loaded from localStorage */
-    public savedConversations: SavedConversation[] = [];
+    public SavedConversations: SavedConversation[] = [];
+
+    /** @deprecated Use {@link SavedConversations}. */
+    public get savedConversations(): SavedConversation[] {
+      return this.SavedConversations;
+    }
+    /** @deprecated Use {@link SavedConversations}. */
+    public set savedConversations(value: SavedConversation[]) {
+      this.SavedConversations = value;
+    }
     
     /** ID of the currently active/loaded conversation, if any */
-    public currentConversationId: string | null = null;
+    public CurrentConversationId: string | null = null;
+
+    /** @deprecated Use {@link CurrentConversationId}. */
+    public get currentConversationId(): string | null {
+      return this.CurrentConversationId;
+    }
+    /** @deprecated Use {@link CurrentConversationId}. */
+    public set currentConversationId(value: string | null) {
+      this.CurrentConversationId = value;
+    }
     
     /** Flag to control JSON dialog visibility */
-    public showJsonDialog: boolean = false;
+    public ShowJsonDialog: boolean = false;
+
+    /** @deprecated Use {@link ShowJsonDialog}. */
+    public get showJsonDialog(): boolean {
+      return this.ShowJsonDialog;
+    }
+    /** @deprecated Use {@link ShowJsonDialog}. */
+    public set showJsonDialog(value: boolean) {
+      this.ShowJsonDialog = value;
+    }
     
     /** Current JSON content to display in the dialog */
-    public currentJsonContent: string = '';
+    public CurrentJsonContent: string = '';
+
+    /** @deprecated Use {@link CurrentJsonContent}. */
+    public get currentJsonContent(): string {
+      return this.CurrentJsonContent;
+    }
+    /** @deprecated Use {@link CurrentJsonContent}. */
+    public set currentJsonContent(value: string) {
+      this.CurrentJsonContent = value;
+    }
     
     /** Whether the JSON viewer window is visible */
-    public showJsonWindow = false;
+    public ShowJsonWindow = false;
+
+    /** @deprecated Use {@link ShowJsonWindow}. */
+    public get showJsonWindow() {
+      return this.ShowJsonWindow;
+    }
+    /** @deprecated Use {@link ShowJsonWindow}. */
+    public set showJsonWindow(value) {
+      this.ShowJsonWindow = value;
+    }
     
     // === Execution Monitor Properties ===
     /** Mode for the execution monitor component */
-    public executionMonitorMode: 'live' | 'historical' = 'historical';
+    public ExecutionMonitorMode: 'live' | 'historical' = 'historical';
+
+    /** @deprecated Use {@link ExecutionMonitorMode}. */
+    public get executionMonitorMode(): 'live' | 'historical' {
+      return this.ExecutionMonitorMode;
+    }
+    /** @deprecated Use {@link ExecutionMonitorMode}. */
+    public set executionMonitorMode(value: 'live' | 'historical') {
+      this.ExecutionMonitorMode = value;
+    }
     
     /** Current agent run being displayed in execution monitor */
-    public currentAgentRun: MJAIAgentRunEntityExtended | null = null;
+    public CurrentAgentRun: MJAIAgentRunEntityExtended | null = null;
+
+    /** @deprecated Use {@link CurrentAgentRun}. */
+    public get currentAgentRun(): MJAIAgentRunEntityExtended | null {
+      return this.CurrentAgentRun;
+    }
+    /** @deprecated Use {@link CurrentAgentRun}. */
+    public set currentAgentRun(value: MJAIAgentRunEntityExtended | null) {
+      this.CurrentAgentRun = value;
+    }
     
     /**
      * Tracks agent steps during live execution (deprecated - now using agent run's Steps directly)
      */
-    public liveAgentSteps: MJAIAgentRunStepEntityExtended[] = [];
+    public LiveAgentSteps: MJAIAgentRunStepEntityExtended[] = [];
+
+    /** @deprecated Use {@link LiveAgentSteps}. */
+    public get liveAgentSteps(): MJAIAgentRunStepEntityExtended[] {
+      return this.LiveAgentSteps;
+    }
+    /** @deprecated Use {@link LiveAgentSteps}. */
+    public set liveAgentSteps(value: MJAIAgentRunStepEntityExtended[]) {
+      this.LiveAgentSteps = value;
+    }
     
     /** Track the last processed run ID to avoid reprocessing same data */
     private lastProcessedRunId: string | null = null;
@@ -543,16 +876,52 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private subAgentHistory: any[] = [];
     
     /** Whether to show the save conversation dialog */
-    public showSaveDialog: boolean = false;
+    public ShowSaveDialog: boolean = false;
+
+    /** @deprecated Use {@link ShowSaveDialog}. */
+    public get showSaveDialog(): boolean {
+      return this.ShowSaveDialog;
+    }
+    /** @deprecated Use {@link ShowSaveDialog}. */
+    public set showSaveDialog(value: boolean) {
+      this.ShowSaveDialog = value;
+    }
     
     /** Name for the new conversation being saved */
-    public newConversationName: string = '';
+    public NewConversationName: string = '';
+
+    /** @deprecated Use {@link NewConversationName}. */
+    public get newConversationName(): string {
+      return this.NewConversationName;
+    }
+    /** @deprecated Use {@link NewConversationName}. */
+    public set newConversationName(value: string) {
+      this.NewConversationName = value;
+    }
     
     /** Temporary name for the dialog input to avoid binding conflicts */
-    public tempConversationName: string = '';
+    public TempConversationName: string = '';
+
+    /** @deprecated Use {@link TempConversationName}. */
+    public get tempConversationName(): string {
+      return this.TempConversationName;
+    }
+    /** @deprecated Use {@link TempConversationName}. */
+    public set tempConversationName(value: string) {
+      this.TempConversationName = value;
+    }
     
     /** Whether to show the load confirmation dialog */
-    public showLoadConfirmDialog: boolean = false;
+    public ShowLoadConfirmDialog: boolean = false;
+
+    /** @deprecated Use {@link ShowLoadConfirmDialog}. */
+    public get showLoadConfirmDialog(): boolean {
+      return this.ShowLoadConfirmDialog;
+    }
+    /** @deprecated Use {@link ShowLoadConfirmDialog}. */
+    public set showLoadConfirmDialog(value: boolean) {
+      this.ShowLoadConfirmDialog = value;
+    }
     
     /** Conversation pending to be loaded */
     private pendingLoadConversation: SavedConversation | null = null;
@@ -589,32 +958,32 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      */
     async ngOnInit() {
         console.log('🚀 AITestHarnessComponent.ngOnInit');
-        console.log('📌 originalPromptRunId:', this.originalPromptRunId);
+        console.log('📌 originalPromptRunId:', this.OriginalPromptRunId);
         console.log('🎯 entity:', this.entity);
-        console.log('📊 mode:', this.mode);
+        console.log('📊 mode:', this.Mode);
         
         // Ensure we have an entity
-        if (!this.entity && this.aiAgent) {
+        if (!this.entity && this.AiAgent) {
             // Handle backward compatibility
-            this.entity = this.aiAgent;
-            this.mode = 'agent';
+            this.entity = this.AiAgent;
+            this.Mode = 'agent';
         }
         
         this.loadSavedConversations();
         this.subscribeToEvents();
-        this.resetHarness();
+        this.ResetHarness();
         
         // Load configurations for both modes
         this.loadAvailableConfigurations();
         
         // If we have a prompt run ID, load the conversation history
-        if (this.originalPromptRunId && this.mode === 'prompt') {
+        if (this.OriginalPromptRunId && this.Mode === 'prompt') {
             console.log('🔄 Loading from prompt run in ngOnInit');
-            await this.loadFromPromptRun(this.originalPromptRunId);
+            await this.loadFromPromptRun(this.OriginalPromptRunId);
         }
         
         // Load models if in prompt mode
-        if (this.mode === 'prompt') {
+        if (this.Mode === 'prompt') {
             this.loadAvailableModels();
             this.loadPromptDefaults();
             this.loadTemplateParameters(); // Load template parameters for pre-population
@@ -632,9 +1001,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
         
         if (changes['aiAgent']) {
-            if (!this.entity && this.aiAgent) {
-                this.entity = this.aiAgent;
-                this.mode = 'agent';
+            if (!this.entity && this.AiAgent) {
+                this.entity = this.AiAgent;
+                this.Mode = 'agent';
                 this.loadSavedConversations();
             }
         }
@@ -678,7 +1047,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         
         // Auto-focus message input when dialog first becomes visible
         // Use Promise.resolve to schedule this after current change detection cycle
-        if (this.isVisible && !this._hasFocused && this.messageInput) {
+        if (this.IsVisible && !this._hasFocused && this.messageInput) {
             this._hasFocused = true;
             Promise.resolve().then(() => {
                 this.messageInput?.nativeElement?.focus();
@@ -699,7 +1068,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                     
                     // Update streaming message content if available
                     if (message.data.progress?.message) {
-                        const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
+                        const streamingMessage = this.ConversationMessages.find(m => m.isStreaming);
                         if (streamingMessage) {
                             // Clear any typing animation interval
                             const typingInterval = (streamingMessage as any)._typingInterval;
@@ -715,38 +1084,38 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                     }
                     
                     // Update or create the agent run entity from the serialized data
-                    if (!this.currentAgentRun) {
+                    if (!this.CurrentAgentRun) {
                         // First time - create the entity
                         const md = this.ProviderToUse;
-                        this.currentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
+                        this.CurrentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
                     }
                     
                     // Load the serialized data into our entity
-                    await this.currentAgentRun.LoadFromData(serializedAgentRun);
+                    await this.CurrentAgentRun.LoadFromData(serializedAgentRun);
                     
                     // Update assistant message with agent run ID if available
-                    const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
-                    if (streamingMessage && this.currentAgentRun.ID) {
-                        streamingMessage.agentRunId = this.currentAgentRun.ID;
+                    const streamingMessage = this.ConversationMessages.find(m => m.isStreaming);
+                    if (streamingMessage && this.CurrentAgentRun.ID) {
+                        streamingMessage.agentRunId = this.CurrentAgentRun.ID;
                     }
                     
                     // We're in live mode during streaming
-                    this.executionMonitorMode = 'live';
+                    this.ExecutionMonitorMode = 'live';
                     
                     // Pass the steps from the agent run to the execution monitor for live display
-                    this.liveAgentSteps = this.currentAgentRun.Steps || [];
+                    this.LiveAgentSteps = this.CurrentAgentRun.Steps || [];
                     // Flow agents park on the graph. Attach the canvas from the TaskGraph step
                     // the moment it lands — waiting for RunAIAgent to return deadlocks Debug.
                     if (this.EffectiveMode === 'workflow') {
-                        this.tryAttachWorkflowFromStream(serializedAgentRun, this.liveAgentSteps);
+                        this.tryAttachWorkflowFromStream(serializedAgentRun, this.LiveAgentSteps);
                     }
                     
                     console.log('📊 Agent run update:', {
-                        id: this.currentAgentRun.ID,
-                        status: this.currentAgentRun.Status,
-                        stepCount: this.currentAgentRun.Steps?.length || 0,
-                        executionMonitorMode: this.executionMonitorMode,
-                        steps: this.currentAgentRun.Steps?.map(s => ({
+                        id: this.CurrentAgentRun.ID,
+                        status: this.CurrentAgentRun.Status,
+                        stepCount: this.CurrentAgentRun.Steps?.length || 0,
+                        executionMonitorMode: this.ExecutionMonitorMode,
+                        steps: this.CurrentAgentRun.Steps?.map(s => ({
                             id: s.ID,
                             type: s.StepType,
                             status: s.Status,
@@ -760,7 +1129,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 }
                 else if (message?.type === 'StreamingContent' && message.data?.streaming) {
                     
-                    const streamingMessage = this.conversationMessages.find(m => m.isStreaming);
+                    const streamingMessage = this.ConversationMessages.find(m => m.isStreaming);
                     if (streamingMessage) {
                         // Append streaming content
                         if (!streamingMessage.streamingContent) {
@@ -775,7 +1144,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 }
                 else if (message?.type === 'complete') {
                     // Switch execution monitor to historical mode with final data
-                    this.executionMonitorMode = 'historical';
+                    this.ExecutionMonitorMode = 'historical';
                 }
             }
         });
@@ -806,10 +1175,10 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             setTimeout(() => {
                 const format = this.responseFormatOptions.find(f => f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase());
                 if (format) {
-                    this.selectedResponseFormat = format;
+                    this.SelectedResponseFormat = format;
                 }
                 else {
-                    this.selectedResponseFormat = this.responseFormatOptions[0]; // Default to 'Any'
+                    this.SelectedResponseFormat = this.responseFormatOptions[0]; // Default to 'Any'
                 }
             }, 0);
         } else {
@@ -827,20 +1196,20 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
         
         // Add a blank option at the beginning with the default model name
-        this.availableModels = [
+        this.AvailableModels = [
             { ID: '', Name: this.defaultModelName ? `-- Default: ${this.defaultModelName} --` : '-- Use Default Model --' },
             ...filteredModels
         ];
         
         // Don't auto-select a model - let the dropdown show the blank option
-        this.selectedModelId = '';
+        this.SelectedModelId = '';
         
         // If we have a default model, load its default vendor
         if (this.defaultModelName) {
             await this.loadDefaultVendor();
         } else {
-            this.selectedVendorId = '';
-            this.availableVendors = [];
+            this.SelectedVendorId = '';
+            this.AvailableVendors = [];
         }
     }
     
@@ -915,7 +1284,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private async loadDefaultVendor() {
         try {
             if (!this.defaultModel) {
-                this.availableVendors = [];
+                this.AvailableVendors = [];
                 return;
             }
             
@@ -942,15 +1311,15 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             // Sort by priority (lower number = higher priority)
             vendorObjects.sort((a, b) => a.Priority - b.Priority);
 
-            this.availableVendors = vendorObjects;
+            this.AvailableVendors = vendorObjects;
             
             // Select the highest priority vendor
             if (vendorObjects.length > 0) {
-                this.selectedVendorId = vendorObjects[0].ID;
+                this.SelectedVendorId = vendorObjects[0].ID;
             }
         } catch (error) {
             console.error('Error loading default vendor:', error);
-            this.availableVendors = [];
+            this.AvailableVendors = [];
         }
     }
     
@@ -969,31 +1338,31 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             });
             
             if (result.Success && result.Results) {
-                this.availableConfigurations = result.Results;
+                this.AvailableConfigurations = result.Results;
                 
                 // Auto-select the default configuration if one exists
-                const defaultConfig = this.availableConfigurations.find(c => c.IsDefault);
+                const defaultConfig = this.AvailableConfigurations.find(c => c.IsDefault);
                 if (defaultConfig) {
-                    this.selectedConfigurationId = defaultConfig.ID;
+                    this.SelectedConfigurationId = defaultConfig.ID;
                 }
             } else {
                 console.error('Failed to load AI configurations:', result.ErrorMessage);
-                this.availableConfigurations = [];
+                this.AvailableConfigurations = [];
             }
         } catch (error) {
             console.error('Error loading AI configurations:', error);
-            this.availableConfigurations = [];
+            this.AvailableConfigurations = [];
         }
     }
     
     /**
      * Handles model selection change and loads available vendors for the selected model
      */
-    public onModelSelectionChange() {
-        this.selectedVendorId = '';
-        this.availableVendors = [];
+    public OnModelSelectionChange() {
+        this.SelectedVendorId = '';
+        this.AvailableVendors = [];
         
-        if (!this.selectedModelId) {
+        if (!this.SelectedModelId) {
             // When default model is selected, load default vendor
             if (this.defaultModelName) {
                 this.loadDefaultVendor();
@@ -1010,18 +1379,23 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             this.loadVendorsForModel();
         }
     }
+
+    /** @deprecated Use {@link OnModelSelectionChange}. */
+    public onModelSelectionChange() {
+      return this.OnModelSelectionChange();
+    }
     
     /**
      * Loads available vendors for the selected model
      */
     private loadVendorsForModel() {
-        if (!this.selectedModelId) {
+        if (!this.SelectedModelId) {
             return;
         }
         
         // Get model-specific vendors
         const modelVendors = AIEngineBase.Instance.ModelVendors.filter(
-            mv => UUIDsEqual(mv.ModelID, this.selectedModelId) &&
+            mv => UUIDsEqual(mv.ModelID, this.SelectedModelId) &&
                   mv.Status === 'Active' &&
                   mv.Type?.trim().toLowerCase() === 'inference provider'
         );
@@ -1043,14 +1417,14 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         // Sort by priority (lower number = higher priority)
         vendorObjects.sort((a, b) => a.Priority - b.Priority);
         
-        this.availableVendors = vendorObjects;
+        this.AvailableVendors = vendorObjects;
         
         // Auto-select the highest priority vendor if only one or set default
         if (vendorObjects.length === 1) {
-            this.selectedVendorId = vendorObjects[0].ID;
+            this.SelectedVendorId = vendorObjects[0].ID;
         } else if (vendorObjects.length > 1) {
             // Select the highest priority (lowest priority number)
-            this.selectedVendorId = vendorObjects[0].ID;
+            this.SelectedVendorId = vendorObjects[0].ID;
         }
     }
     
@@ -1058,23 +1432,23 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Loads default parameter values from the AI prompt entity
      */
     private loadPromptDefaults() {
-        if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
+        if (this.Mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
             const prompt = this.entity as MJAIPromptEntityExtended;
             
             // Load default values from prompt entity
-            if (prompt.Temperature != null) this.advancedParams.temperature = prompt.Temperature;
-            if (prompt.TopP != null) this.advancedParams.topP = prompt.TopP;
-            if (prompt.TopK != null) this.advancedParams.topK = prompt.TopK;
-            if (prompt.MinP != null) this.advancedParams.minP = prompt.MinP;
-            if (prompt.FrequencyPenalty != null) this.advancedParams.frequencyPenalty = prompt.FrequencyPenalty;
-            if (prompt.PresencePenalty != null) this.advancedParams.presencePenalty = prompt.PresencePenalty;
-            if (prompt.Seed != null) this.advancedParams.seed = prompt.Seed;
+            if (prompt.Temperature != null) this.AdvancedParams.temperature = prompt.Temperature;
+            if (prompt.TopP != null) this.AdvancedParams.topP = prompt.TopP;
+            if (prompt.TopK != null) this.AdvancedParams.topK = prompt.TopK;
+            if (prompt.MinP != null) this.AdvancedParams.minP = prompt.MinP;
+            if (prompt.FrequencyPenalty != null) this.AdvancedParams.frequencyPenalty = prompt.FrequencyPenalty;
+            if (prompt.PresencePenalty != null) this.AdvancedParams.presencePenalty = prompt.PresencePenalty;
+            if (prompt.Seed != null) this.AdvancedParams.seed = prompt.Seed;
             if (prompt.StopSequences) {
-                this.stopSequencesText = prompt.StopSequences;
-                this.advancedParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+                this.StopSequencesText = prompt.StopSequences;
+                this.AdvancedParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
             }
-            if (prompt.IncludeLogProbs != null) this.advancedParams.includeLogProbs = prompt.IncludeLogProbs;
-            if (prompt.TopLogProbs != null) this.advancedParams.topLogProbs = prompt.TopLogProbs;
+            if (prompt.IncludeLogProbs != null) this.AdvancedParams.includeLogProbs = prompt.IncludeLogProbs;
+            if (prompt.TopLogProbs != null) this.AdvancedParams.topLogProbs = prompt.TopLogProbs;
         }
     }
 
@@ -1083,7 +1457,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * the template variables with their default values
      */
     private async loadTemplateParameters() {
-        if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
+        if (this.Mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
             const prompt = this.entity as MJAIPromptEntityExtended;
             
             if (!prompt.TemplateID) {
@@ -1101,11 +1475,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
 
                 if (result.Success && result.Results && result.Results.length > 0) {
                     // Clear existing template variables
-                    this.templateVariables = [];
+                    this.TemplateVariables = [];
                     
                     // Add each template parameter as a variable with its default value
                     for (const param of result.Results) {
-                        this.templateVariables.push({
+                        this.TemplateVariables.push({
                             name: param.Name,
                             value: param.DefaultValue || '',
                             type: this.getVariableTypeFromParamType(param.Type)
@@ -1113,14 +1487,14 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                     }
                     
                     // If no parameters found, add one empty variable to start
-                    if (this.templateVariables.length === 0) {
-                        this.templateVariables.push({ name: '', value: '', type: 'string' });
+                    if (this.TemplateVariables.length === 0) {
+                        this.TemplateVariables.push({ name: '', value: '', type: 'string' });
                     }
                 }
             } catch (error) {
                 console.error('Error loading template parameters:', error);
                 // Add one empty variable on error
-                this.templateVariables = [{ name: '', value: '', type: 'string' }];
+                this.TemplateVariables = [{ name: '', value: '', type: 'string' }];
             }
         }
     }
@@ -1151,38 +1525,38 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     /**
      * Resets all model settings to the prompt defaults
      */
-    public resetToPromptDefaults() {
-        if (this.mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
+    public ResetToPromptDefaults() {
+        if (this.Mode === 'prompt' && this.entity && this.isPromptEntity(this.entity)) {
             const prompt = this.entity as MJAIPromptEntityExtended;
             
             // Reset model selection to default
-            this.selectedModelId = '';
+            this.SelectedModelId = '';
             
             // Reset vendor - will be loaded by loadDefaultVendor
-            this.selectedVendorId = '';
+            this.SelectedVendorId = '';
             
             // Reset response format to prompt's setting
             const format = this.responseFormatOptions.find(f => 
                 f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase()
             );
-            this.selectedResponseFormat = format || this.responseFormatOptions[0];
+            this.SelectedResponseFormat = format || this.responseFormatOptions[0];
             
             // Reset max tokens
-            this.maxTokens = null;
+            this.MaxTokens = null;
             
             // Reset skip validation
-            this.skipValidation = false;
+            this.SkipValidation = false;
             
             // Reset configuration to default
-            const defaultConfig = this.availableConfigurations.find(c => c.IsDefault);
+            const defaultConfig = this.AvailableConfigurations.find(c => c.IsDefault);
             if (defaultConfig) {
-                this.selectedConfigurationId = defaultConfig.ID;
+                this.SelectedConfigurationId = defaultConfig.ID;
             } else {
-                this.selectedConfigurationId = '';
+                this.SelectedConfigurationId = '';
             }
             
             // Reset advanced parameters
-            this.advancedParams = {
+            this.AdvancedParams = {
                 temperature: null,
                 topP: null,
                 topK: null,
@@ -1194,7 +1568,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 includeLogProbs: false,
                 topLogProbs: 2
             };
-            this.stopSequencesText = '';
+            this.StopSequencesText = '';
             
             // Reload prompt defaults for advanced params
             this.loadPromptDefaults();
@@ -1206,31 +1580,36 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
 
+    /** @deprecated Use {@link ResetToPromptDefaults}. */
+    public resetToPromptDefaults() {
+      return this.ResetToPromptDefaults();
+    }
+
     /**
      * Resets the test harness to its initial state, clearing all conversations,
      * variables, and UI state. Called automatically when the harness becomes visible.
      */
-    public resetHarness() {
-        this.conversationMessages = [];
-        this.currentUserMessage = '';
-        this.isExecuting = false;
-        this.agentVariables = [{ name: '', value: '', type: 'string' }];
-        this.templateVariables = [];
-        this.currentConversationId = null;
-        this.showSidebar = true;
+    public ResetHarness() {
+        this.ConversationMessages = [];
+        this.CurrentUserMessage = '';
+        this.IsExecuting = false;
+        this.AgentVariables = [{ name: '', value: '', type: 'string' }];
+        this.TemplateVariables = [];
+        this.CurrentConversationId = null;
+        this.ShowSidebar = true;
         // Clear execution data and tracking when explicitly resetting
-        this.currentAgentRun = null;
+        this.CurrentAgentRun = null;
         this.lastProcessedRunId = null;
         this.lastAgentRunId = null; // Clear run chaining
-        this.executionMonitorMode = 'historical';
+        this.ExecutionMonitorMode = 'historical';
         // Reset conversation state
         this.agentConversationState = null;
         this.lastAgentPayload = null;
         this.subAgentHistory = [];
         // Set default tab based on mode
-        this.activeTab = this.mode === 'agent' ? 'agentVariables' : 'modelSettings';
+        this.ActiveTab = this.Mode === 'agent' ? 'agentVariables' : 'modelSettings';
         // Reset advanced parameters
-        this.advancedParams = {
+        this.AdvancedParams = {
             temperature: null,
             topP: null,
             topK: null,
@@ -1242,13 +1621,13 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             includeLogProbs: false,
             topLogProbs: 2
         };
-        this.stopSequencesText = '';
-        this.advancedParamsExpanded = false;
-        this.skipValidation = false;
+        this.StopSequencesText = '';
+        this.AdvancedParamsExpanded = false;
+        this.SkipValidation = false;
         // Reset agent configuration to default
-        if (this.mode === 'agent') {
-            const defaultConfig = this.availableConfigurations.find(c => c.IsDefault);
-            this.agentConfigurationId = defaultConfig?.ID || '';
+        if (this.Mode === 'agent') {
+            const defaultConfig = this.AvailableConfigurations.find(c => c.IsDefault);
+            this.AgentConfigurationId = defaultConfig?.ID || '';
         }
         this.stopWorkflowAttachPoll();
         this.WorkflowParentTaskID = null;
@@ -1256,30 +1635,40 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         this.startWorkflowPaused = false;
         this.WorkflowSettled = false;
     }
+
+    /** @deprecated Use {@link ResetHarness}. */
+    public resetHarness() {
+      return this.ResetHarness();
+    }
     
     /**
      * Starts a new conversation
      */
-    public async newConversation() {
-        if (this.conversationMessages.length > 0 && !this.currentConversationId) {
+    public async NewConversation() {
+        if (this.ConversationMessages.length > 0 && !this.CurrentConversationId) {
             // Unsaved conversation exists - use our custom dialog
             if (await this.confirmService.Confirm({ title: 'Unsaved conversation', message: 'You have an unsaved conversation. Would you like to save it first?', confirmText: 'Save' })) {
-                this.saveConversation();
+                this.SaveConversation();
                 return;
             }
         }
         
         // Clear execution data when explicitly starting a new conversation
-        this.currentAgentRun = null;
+        this.CurrentAgentRun = null;
         this.lastProcessedRunId = null;
         this.lastAgentRunId = null; // Clear run chaining
         
-        this.resetHarness();
+        this.ResetHarness();
         MJNotificationService.Instance.CreateSimpleNotification(
             'Started new conversation',
             'info',
             2000
         );
+    }
+
+    /** @deprecated Use {@link NewConversation}. */
+    public async newConversation() {
+      return this.NewConversation();
     }
 
     /**
@@ -1288,38 +1677,43 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      */
     public close() {
         this._isVisible = false;
-        this.visibilityChange.emit(false);
+        this.VisibilityChange.emit(false);
     }
 
     /**
      * Toggles the visibility of the configuration sidebar.
      * Allows users to show/hide the data context and conversation management panels.
      */
+    public ToggleSidebar() {
+        this.ShowSidebar = !this.ShowSidebar;
+    }
+
+    /** @deprecated Use {@link ToggleSidebar}. */
     public toggleSidebar() {
-        this.showSidebar = !this.showSidebar;
+      return this.ToggleSidebar();
     }
 
     /**
      * Switches to the specified tab in the configuration sidebar.
      * @param tab - The tab to activate
      */
-    public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+    public SelectTab(tab: 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
         console.log('🔄 Switching to tab:', tab, {
-            currentAgentRun: !!this.currentAgentRun,
-            agentRunStatus: this.currentAgentRun?.Status || 'none',
-            conversationMessages: this.conversationMessages.length,
-            executionMonitorMode: this.executionMonitorMode
+            currentAgentRun: !!this.CurrentAgentRun,
+            agentRunStatus: this.CurrentAgentRun?.Status || 'none',
+            conversationMessages: this.ConversationMessages.length,
+            executionMonitorMode: this.ExecutionMonitorMode
         });
         
-        this.activeTab = tab;
+        this.ActiveTab = tab;
         
         // If switching to execution monitor tab, ensure it has the latest data
         if (tab === 'executionMonitor') {
             console.log('📊 Switching to execution monitor tab');
             
             // Always ensure we have the latest execution data when switching to monitor
-            if (this.conversationMessages.length > 0) {
-                const lastAssistantMessage = this.conversationMessages
+            if (this.ConversationMessages.length > 0) {
+                const lastAssistantMessage = this.ConversationMessages
                     .filter(m => m.role === 'assistant' && m.agentRunId)
                     .pop();
                     
@@ -1335,11 +1729,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                     
                     // Load the agent run
                     this.loadAgentRun(messageRunId);
-                    this.executionMonitorMode = 'historical';
+                    this.ExecutionMonitorMode = 'historical';
                     this.lastProcessedRunId = messageRunId;
                     
                     console.log('✅ Loading agent run:', {
-                        mode: this.executionMonitorMode,
+                        mode: this.ExecutionMonitorMode,
                         runId: this.lastProcessedRunId
                     });
                     
@@ -1355,27 +1749,37 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             }
         } else {
             console.log('📄 Switching away from execution monitor, preserving data:', {
-                currentAgentRunExists: !!this.currentAgentRun
+                currentAgentRunExists: !!this.CurrentAgentRun
             });
             // Don't clear currentAgentRun when switching away from execution monitor
             // This preserves the state for when the user switches back
         }
     }
 
+    /** @deprecated Use {@link SelectTab}. */
+    public selectTab(tab: 'agentVariables' | 'executionMonitor' | 'agentSettings' | 'templateVariables' | 'modelSettings' | 'savedConversations') {
+      return this.SelectTab(tab);
+    }
+
     /**
      * Shows the execution history for a specific message
      * @param message - The message to show execution history for
      */
-    public async showMessageExecutionHistory(message: ConversationMessage) {
-        if (message.agentRunId && this.mode === 'agent') {
+    public async ShowMessageExecutionHistory(message: ConversationMessage) {
+        if (message.agentRunId && this.Mode === 'agent') {
             // Load the agent run entity
             await this.loadAgentRun(message.agentRunId);
-            this.executionMonitorMode = 'historical';
+            this.ExecutionMonitorMode = 'historical';
             // Switch to execution monitor tab if not already there
-            if (this.activeTab !== 'executionMonitor') {
-                this.selectTab('executionMonitor');
+            if (this.ActiveTab !== 'executionMonitor') {
+                this.SelectTab('executionMonitor');
             }
         }
+    }
+
+    /** @deprecated Use {@link ShowMessageExecutionHistory}. */
+    public async showMessageExecutionHistory(message: ConversationMessage) {
+      return this.ShowMessageExecutionHistory(message);
     }
     
     /**
@@ -1398,23 +1802,23 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
 
     private async internalLoadAgenRun(agentRunEntity: MJAIAgentRunEntityExtended): Promise<void> {
         try {
-            this.currentAgentRun = agentRunEntity;
+            this.CurrentAgentRun = agentRunEntity;
             // The Load method automatically loads related steps through InnerLoad override
             // No need to call LoadRelatedData explicitly as it's protected
             
             // Set execution monitor mode
-            this.executionMonitorMode = 'historical';
+            this.ExecutionMonitorMode = 'historical';
             
             console.log('✅ Loaded agent run:', {
                 id: agentRunEntity.ID,
-                stepCount: this.currentAgentRun.Steps?.length || 0
+                stepCount: this.CurrentAgentRun.Steps?.length || 0
             });
             
             // Force change detection to update the execution monitor
             this.cdr.detectChanges();
         } catch (error) {
             console.error('❌ Failed to load agent run:', error);
-            this.currentAgentRun = null;
+            this.CurrentAgentRun = null;
         }
     }
     
@@ -1434,33 +1838,43 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Executes a re-run of a previously loaded prompt run.
      * This bypasses the need for a new user message since we're re-running with existing messages.
      */
-    public async executeRerun() {
-        if (this.mode === 'prompt' && this.conversationMessages.length > 0) {
+    public async ExecuteRerun() {
+        if (this.Mode === 'prompt' && this.ConversationMessages.length > 0) {
             // Mark that we've executed a re-run
-            this.hasExecutedRerun = true;
+            this.HasExecutedRerun = true;
             
             // For prompt re-runs, we need to execute the prompt with the loaded messages
             await this.executePrompt('');  // Empty message since we're using loaded conversation
         }
+    }
+
+    /** @deprecated Use {@link ExecuteRerun}. */
+    public async executeRerun() {
+      return this.ExecuteRerun();
     }
     
     /**
      * Resets the conversation back to the original messages from the prompt run.
      * This is available after a re-run has been executed.
      */
-    public resetToOriginalMessages() {
+    public ResetToOriginalMessages() {
         if (this.originalPromptRunMessages.length > 0) {
             // Reset messages to the original state
-            this.conversationMessages = [...this.originalPromptRunMessages];
+            this.ConversationMessages = [...this.originalPromptRunMessages];
             
             // Reset the execution flag so Re-Run button shows again
-            this.hasExecutedRerun = false;
+            this.HasExecutedRerun = false;
             
             // Trigger change detection
             this.cdr.detectChanges();
             
             console.log('🔄 Reset to original messages from prompt run');
         }
+    }
+
+    /** @deprecated Use {@link ResetToOriginalMessages}. */
+    public resetToOriginalMessages() {
+      return this.ResetToOriginalMessages();
     }
     
     /**
@@ -1492,7 +1906,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         if (this.tryAttachWorkflowFromSteps(streamed) || this.tryAttachWorkflowFromSteps(hydratedSteps)) {
             return;
         }
-        const runID = streamedRunID(serialized) ?? this.currentAgentRun?.ID;
+        const runID = streamedRunID(serialized) ?? this.CurrentAgentRun?.ID;
         if (runID && !runID.startsWith('temp-')) {
             this.startWorkflowAttachPoll(runID);
             void this.tryAttachWorkflowFromAgentRun(runID);
@@ -1553,8 +1967,8 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
 
-    public async sendMessage() {
-        if (!this.currentUserMessage.trim() || !this.entity) {
+    public async SendMessage() {
+        if (!this.CurrentUserMessage.trim() || !this.entity) {
             return;
         }
 
@@ -1562,14 +1976,14 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         const userMessage: ConversationMessage = {
             id: this.generateMessageId(),
             role: 'user',
-            content: this.currentUserMessage.trim(),
+            content: this.CurrentUserMessage.trim(),
             timestamp: new Date()
         };
-        this.conversationMessages.push(userMessage);
+        this.ConversationMessages.push(userMessage);
         
         // Clear input and update change detection
-        const messageToSend = this.currentUserMessage;
-        this.currentUserMessage = '';
+        const messageToSend = this.CurrentUserMessage;
+        this.CurrentUserMessage = '';
         
         // Use Promise.resolve to defer the change detection to the next microtask
         // This prevents ExpressionChangedAfterItHasBeenCheckedError
@@ -1581,37 +1995,42 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         this.scrollNeeded = true;
 
         // Auto-switch to execution monitor tab if in agent mode
-        if (this.mode === 'agent' && this.activeTab !== 'executionMonitor') {
-            this.selectTab('executionMonitor');
+        if (this.Mode === 'agent' && this.ActiveTab !== 'executionMonitor') {
+            this.SelectTab('executionMonitor');
         }
         
         // Clear previous execution data when starting a new execution
-        this.currentAgentRun = null;
+        this.CurrentAgentRun = null;
         this.lastProcessedRunId = null;
         
         // Execute based on mode
-        if (this.mode === 'agent') {
+        if (this.Mode === 'agent') {
             await this.executeAgent(messageToSend);
         } else {
             await this.executePrompt(messageToSend);
         }
     }
 
+    /** @deprecated Use {@link SendMessage}. */
+    public async sendMessage() {
+      return this.SendMessage();
+    }
+
     private async executeAgent(userMessage: string) {
         if (!this.entity || !this.isAgentEntity(this.entity)) return;
 
-        this.isExecuting = true;
+        this.IsExecuting = true;
 
         // Clear previous execution data when starting a new run
         // Create a proper agent run entity for live tracking
         const md = this.ProviderToUse;
-        this.currentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
-        this.currentAgentRun.ID = `temp-${Date.now()}`;
-        this.currentAgentRun.Status = 'Running';
-        this.currentAgentRun.StartedAt = new Date();
+        this.CurrentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        this.CurrentAgentRun.ID = `temp-${Date.now()}`;
+        this.CurrentAgentRun.Status = 'Running';
+        this.CurrentAgentRun.StartedAt = new Date();
         // Steps will be populated by the agent updates
-        this.liveAgentSteps = [];
-        this.executionMonitorMode = 'live';
+        this.LiveAgentSteps = [];
+        this.ExecutionMonitorMode = 'live';
 
         // Add placeholder assistant message for streaming
         const assistantMessage: ConversationMessage = {
@@ -1620,12 +2039,12 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             content: '',
             timestamp: new Date(),
             isStreaming: true,
-            streamingContent: this.mode === 'agent' ? 'Running agent...' : 'Running prompt...',
+            streamingContent: this.Mode === 'agent' ? 'Running agent...' : 'Running prompt...',
             agentRunId: '',
             streamingStartTime: Date.now(),
             elapsedTime: 0
         };
-        this.conversationMessages.push(assistantMessage);
+        this.ConversationMessages.push(assistantMessage);
         this.scrollNeeded = true;
         
         // Start elapsed time counter
@@ -1664,11 +2083,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
 
             const executionResult = await dataProvider.AI.RunAIAgent({
                 agent: this.entity as MJAIAgentEntityExtended,
-                conversationMessages: this.conversationMessages, 
+                conversationMessages: this.ConversationMessages, 
                 data: Object.keys(dataContext).length > 0 ? dataContext : undefined, 
                 lastRunId: this.lastAgentRunId || undefined,
                 autoPopulateLastRunPayload: this.lastAgentRunId ? true : false,
-                configurationId: this.agentConfigurationId || undefined,
+                configurationId: this.AgentConfigurationId || undefined,
                 taskGraphDebug: this.startWorkflowPaused ? { paused: true } : undefined,
             });
 
@@ -1702,9 +2121,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 if (fullResult && fullResult.agentRun) {
                     await this.loadAgentRunFromData(fullResult.agentRun);
                     // Only switch to historical mode after successfully loading
-                    this.executionMonitorMode = 'historical';
+                    this.ExecutionMonitorMode = 'historical';
                     // Clear live steps only after we have the historical data
-                    this.liveAgentSteps = [];
+                    this.LiveAgentSteps = [];
                 } else {
                     // If no agent run ID, keep showing live steps
                     console.log('⚠️ No agent run ID in result, keeping live mode');
@@ -1770,9 +2189,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 assistantMessage.error = executionResult?.agentRun?.ErrorMessage || 'Unknown error occurred';
 
                 // On failure, clear live steps and switch to historical mode
-                if (this.currentAgentRun) {
-                    this.executionMonitorMode = 'historical';
-                    this.liveAgentSteps = [];
+                if (this.CurrentAgentRun) {
+                    this.ExecutionMonitorMode = 'historical';
+                    this.LiveAgentSteps = [];
                 }
 
                 // Store the error result as raw content
@@ -1788,7 +2207,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             this.autoSaveConversation();
             
             // Auto-expand all monitoring nodes once execution is complete (for prompt mode)
-            if (this.mode === 'prompt') {
+            if (this.Mode === 'prompt') {
                 setTimeout(() => {
                     this.expandAllMonitoringNodes();
                 }, 100);
@@ -1803,7 +2222,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             });
             
             // Update assistant message with error
-            const lastMessage = this.conversationMessages[this.conversationMessages.length - 1];
+            const lastMessage = this.ConversationMessages[this.ConversationMessages.length - 1];
             if (lastMessage && lastMessage.role === 'assistant') {
                 lastMessage.isStreaming = false;
                 lastMessage.content = 'I encountered an error processing your request.';
@@ -1812,9 +2231,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             }
             
             // On error, clear live steps and switch to historical mode
-            if (this.currentAgentRun) {
-                this.executionMonitorMode = 'historical';
-                this.liveAgentSteps = [];
+            if (this.CurrentAgentRun) {
+                this.ExecutionMonitorMode = 'historical';
+                this.LiveAgentSteps = [];
             }
             
             MJNotificationService.Instance.CreateSimpleNotification(
@@ -1823,7 +2242,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 6000
             );
         } finally {
-            this.isExecuting = false;
+            this.IsExecuting = false;
             if (this.elapsedTimeInterval) {
                 clearInterval(this.elapsedTimeInterval);
                 this.elapsedTimeInterval = null;
@@ -1837,7 +2256,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private async executePrompt(userMessage: string) {
         if (!this.entity || !this.isPromptEntity(this.entity)) return;
 
-        this.isExecuting = true;
+        this.IsExecuting = true;
 
         // Add placeholder assistant message for streaming
         const assistantMessage: ConversationMessage = {
@@ -1846,12 +2265,12 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             content: '',
             timestamp: new Date(),
             isStreaming: true,
-            streamingContent: this.mode === 'agent' ? 'Running agent...' : 'Running prompt...',
+            streamingContent: this.Mode === 'agent' ? 'Running agent...' : 'Running prompt...',
             agentRunId: '',
             streamingStartTime: Date.now(),
             elapsedTime: 0
         };
-        this.conversationMessages.push(assistantMessage);
+        this.ConversationMessages.push(assistantMessage);
         this.scrollNeeded = true;
         
         // Start elapsed time counter
@@ -1871,7 +2290,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             };
             
             // Build conversation messages
-            const messages = this.conversationMessages
+            const messages = this.ConversationMessages
                 .filter(m => !m.isStreaming && m.content) // Only include non-streaming messages with content
                 .map(m => ({
                     role: m.role as string,
@@ -1882,25 +2301,25 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             const executionResult = await dataProvider.AI.RunAIPrompt({
                 promptId: (this.entity as MJAIPromptEntityExtended).ID,
                 data: dataContext,
-                overrideModelId: this.selectedModelId || undefined,
-                overrideVendorId: this.selectedVendorId || undefined,
-                configurationId: this.selectedConfigurationId || undefined,
-                skipValidation: this.skipValidation,
+                overrideModelId: this.SelectedModelId || undefined,
+                overrideVendorId: this.SelectedVendorId || undefined,
+                configurationId: this.SelectedConfigurationId || undefined,
+                skipValidation: this.SkipValidation,
                 templateData: undefined, // Additional template context if needed
-                responseFormat: this.selectedResponseFormat?.value,
-                temperature: this.advancedParams.temperature ?? undefined,
-                topP: this.advancedParams.topP ?? undefined,
-                topK: this.advancedParams.topK ?? undefined,
-                minP: this.advancedParams.minP ?? undefined,
-                frequencyPenalty: this.advancedParams.frequencyPenalty ?? undefined,
-                presencePenalty: this.advancedParams.presencePenalty ?? undefined,
-                seed: this.advancedParams.seed ?? undefined,
-                stopSequences: this.advancedParams.stopSequences.length > 0 ? this.advancedParams.stopSequences : undefined,
-                includeLogProbs: this.advancedParams.includeLogProbs,
-                topLogProbs: this.advancedParams.includeLogProbs ? this.advancedParams.topLogProbs : undefined,
+                responseFormat: this.SelectedResponseFormat?.value,
+                temperature: this.AdvancedParams.temperature ?? undefined,
+                topP: this.AdvancedParams.topP ?? undefined,
+                topK: this.AdvancedParams.topK ?? undefined,
+                minP: this.AdvancedParams.minP ?? undefined,
+                frequencyPenalty: this.AdvancedParams.frequencyPenalty ?? undefined,
+                presencePenalty: this.AdvancedParams.presencePenalty ?? undefined,
+                seed: this.AdvancedParams.seed ?? undefined,
+                stopSequences: this.AdvancedParams.stopSequences.length > 0 ? this.AdvancedParams.stopSequences : undefined,
+                includeLogProbs: this.AdvancedParams.includeLogProbs,
+                topLogProbs: this.AdvancedParams.includeLogProbs ? this.AdvancedParams.topLogProbs : undefined,
                 messages: messages.length > 0 ? messages : undefined,
-                rerunFromPromptRunID: this.originalPromptRunId || undefined,
-                systemPromptOverride: this.systemPromptOverride || undefined
+                rerunFromPromptRunID: this.OriginalPromptRunId || undefined,
+                systemPromptOverride: this.SystemPromptOverride || undefined
             });
 
             // Stop elapsed time counter
@@ -1983,7 +2402,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
 
         } catch (error) {
             // Update assistant message with error
-            const lastMessage = this.conversationMessages[this.conversationMessages.length - 1];
+            const lastMessage = this.ConversationMessages[this.ConversationMessages.length - 1];
             if (lastMessage && lastMessage.role === 'assistant') {
                 lastMessage.isStreaming = false;
                 lastMessage.content = 'I encountered an error processing your request.';
@@ -1997,7 +2416,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 6000
             );
         } finally {
-            this.isExecuting = false;
+            this.IsExecuting = false;
             if (this.elapsedTimeInterval) {
                 clearInterval(this.elapsedTimeInterval);
                 this.elapsedTimeInterval = null;
@@ -2040,7 +2459,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         const context: Record<string, any> = {};
         
         // Use unified agent variables
-        for (const variable of this.agentVariables) {
+        for (const variable of this.AgentVariables) {
             if (variable.name.trim()) {
                 context[variable.name] = this.convertVariableValue(variable.value, variable.type);
             }
@@ -2058,7 +2477,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private buildTemplateVariables(): Record<string, any> {
         const variables: Record<string, any> = {};
         
-        for (const variable of this.templateVariables) {
+        for (const variable of this.TemplateVariables) {
             if (variable.name.trim()) {
                 variables[variable.name] = this.convertVariableValue(variable.value, variable.type);
             }
@@ -2088,53 +2507,78 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Adds a new empty agent variable to the collection.
      * Agent variables are passed to the agent during execution for dynamic content and template rendering.
      */
-    public addAgentVariable() {
-        this.agentVariables.push({
+    public AddAgentVariable() {
+        this.AgentVariables.push({
             name: '',
             value: '',
             type: 'string'
         });
+    }
+
+    /** @deprecated Use {@link AddAgentVariable}. */
+    public addAgentVariable() {
+      return this.AddAgentVariable();
     }
 
     /**
      * Removes an agent variable at the specified index.
      * @param index - Zero-based index of the variable to remove
      */
+    public RemoveAgentVariable(index: number) {
+        this.AgentVariables.splice(index, 1);
+    }
+
+    /** @deprecated Use {@link RemoveAgentVariable}. */
     public removeAgentVariable(index: number) {
-        this.agentVariables.splice(index, 1);
+      return this.RemoveAgentVariable(index);
     }
 
     /**
      * Adds a new empty template variable to the collection (prompt mode only).
      * Template variables are used for prompt template rendering.
      */
-    public addTemplateVariable() {
-        this.templateVariables.push({
+    public AddTemplateVariable() {
+        this.TemplateVariables.push({
             name: '',
             value: '',
             type: 'string'
         });
     }
 
+    /** @deprecated Use {@link AddTemplateVariable}. */
+    public addTemplateVariable() {
+      return this.AddTemplateVariable();
+    }
+
     /**
      * Removes a template variable at the specified index (prompt mode only).
      * @param index - Zero-based index of the variable to remove
      */
+    public RemoveTemplateVariable(index: number) {
+        this.TemplateVariables.splice(index, 1);
+    }
+
+    /** @deprecated Use {@link RemoveTemplateVariable}. */
     public removeTemplateVariable(index: number) {
-        this.templateVariables.splice(index, 1);
+      return this.RemoveTemplateVariable(index);
     }
 
     /**
      * Clears the current conversation after user confirmation.
      * Resets both the message history and the current conversation ID.
      */
-    public async clearConversation() {
-        if (this.conversationMessages.length > 0) {
+    public async ClearConversation() {
+        if (this.ConversationMessages.length > 0) {
             if (await this.confirmService.Confirm({ title: 'Clear conversation', message: 'Are you sure you want to clear the conversation?' })) {
-                this.conversationMessages = [];
-                this.currentConversationId = null;
+                this.ConversationMessages = [];
+                this.CurrentConversationId = null;
             }
         }
+    }
+
+    /** @deprecated Use {@link ClearConversation}. */
+    public async clearConversation() {
+      return this.ClearConversation();
     }
 
     private scrollToBottom(): void {
@@ -2159,10 +2603,10 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             
             if (saved) {
                 const parsedData = JSON.parse(saved);
-                this.savedConversations = parsedData || [];
+                this.SavedConversations = parsedData || [];
                 
                 // Convert date strings back to Date objects
-                this.savedConversations.forEach(conv => {
+                this.SavedConversations.forEach(conv => {
                     conv.createdAt = new Date(conv.createdAt);
                     conv.updatedAt = new Date(conv.updatedAt);
                     conv.messages.forEach(msg => {
@@ -2170,11 +2614,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                     });
                 });
             } else {
-                this.savedConversations = [];
+                this.SavedConversations = [];
             }
         } catch (error) {
             // Error loading saved conversations
-            this.savedConversations = [];
+            this.SavedConversations = [];
         }
     }
     
@@ -2186,7 +2630,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             return '';
         }
         
-        const entityType = this.mode === 'agent' ? 'agent' : 'prompt';
+        const entityType = this.Mode === 'agent' ? 'agent' : 'prompt';
         const entityId = this.entity.ID || 'unknown';
         return `mj_test_harness_${entityType}_${entityId}_conversations`;
     }
@@ -2202,8 +2646,8 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * this.saveConversation(); // Prompts for name and saves
      * ```
      */
-    public saveConversation() {
-        if (this.conversationMessages.length === 0) {
+    public SaveConversation() {
+        if (this.ConversationMessages.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'No messages to save',
                 'warning',
@@ -2213,14 +2657,14 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
 
         // If updating existing conversation, pre-fill the name
-        if (this.currentConversationId) {
-            const currentConv = this.savedConversations.find(c => c.id === this.currentConversationId);
-            this.tempConversationName = currentConv ? currentConv.name : '';
+        if (this.CurrentConversationId) {
+            const currentConv = this.SavedConversations.find(c => c.id === this.CurrentConversationId);
+            this.TempConversationName = currentConv ? currentConv.name : '';
         } else {
-            this.tempConversationName = '';
+            this.TempConversationName = '';
         }
         
-        this.showSaveDialog = true;
+        this.ShowSaveDialog = true;
         // Focus on input after dialog renders
         setTimeout(() => {
             if (this.saveDialogInput && this.saveDialogInput.nativeElement) {
@@ -2230,16 +2674,26 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             }
         }, 100);
     }
+
+    /** @deprecated Use {@link SaveConversation}. */
+    public saveConversation() {
+      return this.SaveConversation();
+    }
     
 
+    public UpdateTempConversation() {
+        this.TempConversationName = this.saveDialogInput?.nativeElement.value.trim() || '';        
+    }
+
+    /** @deprecated Use {@link UpdateTempConversation}. */
     public updateTempConversation() {
-        this.tempConversationName = this.saveDialogInput?.nativeElement.value.trim() || '';        
+      return this.UpdateTempConversation();
     }
 
     /**
      * Handles the save dialog confirmation
      */
-    public confirmSaveConversation() {
+    public ConfirmSaveConversation() {
         // Use the temp name from the input
         const convoName = this.saveDialogInput?.nativeElement.value;
         const trimmedName = convoName?.trim() || '';
@@ -2248,49 +2702,49 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             return;
         }
         
-        this.newConversationName = trimmedName;
+        this.NewConversationName = trimmedName;
         
         const conversation: SavedConversation = {
             id: this.generateMessageId(),
-            name: this.newConversationName.trim(),
+            name: this.NewConversationName.trim(),
             agentId: this.entity?.ID || '',
             agentName: this.getEntityName() || '',
-            messages: [...this.conversationMessages],
+            messages: [...this.ConversationMessages],
             dataContext: this.buildDataContext(),
-            templateData: this.mode === 'agent' ? this.buildTemplateData() : {},
-            templateVariables: this.mode === 'prompt' ? this.buildTemplateVariables() : {},
-            advancedParams: this.mode === 'prompt' ? this.advancedParams : undefined,
-            selectedModelId: this.mode === 'prompt' ? this.selectedModelId : undefined,
-            selectedVendorId: this.mode === 'prompt' ? this.selectedVendorId : undefined,
-            selectedConfigurationId: this.mode === 'prompt' ? this.selectedConfigurationId : undefined,
-            skipValidation: this.mode === 'prompt' ? this.skipValidation : undefined,
-            agentConfigurationId: this.mode === 'agent' ? this.agentConfigurationId : undefined,
+            templateData: this.Mode === 'agent' ? this.buildTemplateData() : {},
+            templateVariables: this.Mode === 'prompt' ? this.buildTemplateVariables() : {},
+            advancedParams: this.Mode === 'prompt' ? this.AdvancedParams : undefined,
+            selectedModelId: this.Mode === 'prompt' ? this.SelectedModelId : undefined,
+            selectedVendorId: this.Mode === 'prompt' ? this.SelectedVendorId : undefined,
+            selectedConfigurationId: this.Mode === 'prompt' ? this.SelectedConfigurationId : undefined,
+            skipValidation: this.Mode === 'prompt' ? this.SkipValidation : undefined,
+            agentConfigurationId: this.Mode === 'agent' ? this.AgentConfigurationId : undefined,
             createdAt: new Date(),
             updatedAt: new Date()
         };
 
-        if (this.currentConversationId) {
+        if (this.CurrentConversationId) {
             // Update existing conversation
-            const index = this.savedConversations.findIndex(c => c.id === this.currentConversationId);
+            const index = this.SavedConversations.findIndex(c => c.id === this.CurrentConversationId);
             if (index >= 0) {
-                conversation.id = this.currentConversationId;
-                conversation.createdAt = this.savedConversations[index].createdAt;
-                conversation.name = this.newConversationName.trim(); // Use the edited name
-                this.savedConversations[index] = conversation;
+                conversation.id = this.CurrentConversationId;
+                conversation.createdAt = this.SavedConversations[index].createdAt;
+                conversation.name = this.NewConversationName.trim(); // Use the edited name
+                this.SavedConversations[index] = conversation;
             } else {
                 // Current ID not found, treat as new
-                this.savedConversations.unshift(conversation);
-                this.currentConversationId = conversation.id;
+                this.SavedConversations.unshift(conversation);
+                this.CurrentConversationId = conversation.id;
             }
         } else {
             // Add new conversation
-            this.savedConversations.unshift(conversation);
-            this.currentConversationId = conversation.id;
+            this.SavedConversations.unshift(conversation);
+            this.CurrentConversationId = conversation.id;
         }
 
         // Limit to 50 saved conversations
-        if (this.savedConversations.length > 50) {
-            this.savedConversations = this.savedConversations.slice(0, 50);
+        if (this.SavedConversations.length > 50) {
+            this.SavedConversations = this.SavedConversations.slice(0, 50);
         }
 
         // Save to localStorage
@@ -2302,18 +2756,28 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             3000
         );
         
-        this.showSaveDialog = false;
-        this.newConversationName = '';
-        this.tempConversationName = '';
+        this.ShowSaveDialog = false;
+        this.NewConversationName = '';
+        this.TempConversationName = '';
+    }
+
+    /** @deprecated Use {@link ConfirmSaveConversation}. */
+    public confirmSaveConversation() {
+      return this.ConfirmSaveConversation();
     }
     
     /**
      * Cancels the save dialog
      */
+    public CancelSaveDialog() {
+        this.ShowSaveDialog = false;
+        this.NewConversationName = '';
+        this.TempConversationName = '';
+    }
+
+    /** @deprecated Use {@link CancelSaveDialog}. */
     public cancelSaveDialog() {
-        this.showSaveDialog = false;
-        this.newConversationName = '';
-        this.tempConversationName = '';
+      return this.CancelSaveDialog();
     }
     
     // Removed debug methods - no longer needed with ngModel binding
@@ -2324,7 +2788,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private saveConversationsToStorage() {
         try {
             const storageKey = this.getStorageKey();
-            localStorage.setItem(storageKey, JSON.stringify(this.savedConversations));
+            localStorage.setItem(storageKey, JSON.stringify(this.SavedConversations));
         } catch (error) {
             // Error saving conversations
             throw error;
@@ -2332,23 +2796,23 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     }
 
     private autoSaveConversation() {
-        if (this.currentConversationId && this.conversationMessages.length > 0) {
-            const index = this.savedConversations.findIndex(c => c.id === this.currentConversationId);
+        if (this.CurrentConversationId && this.ConversationMessages.length > 0) {
+            const index = this.SavedConversations.findIndex(c => c.id === this.CurrentConversationId);
             if (index >= 0) {
-                this.savedConversations[index].messages = [...this.conversationMessages];
-                this.savedConversations[index].dataContext = this.buildDataContext();
-                if (this.mode === 'agent') {
-                    this.savedConversations[index].templateData = this.buildTemplateData();
-                    this.savedConversations[index].agentConfigurationId = this.agentConfigurationId;
+                this.SavedConversations[index].messages = [...this.ConversationMessages];
+                this.SavedConversations[index].dataContext = this.buildDataContext();
+                if (this.Mode === 'agent') {
+                    this.SavedConversations[index].templateData = this.buildTemplateData();
+                    this.SavedConversations[index].agentConfigurationId = this.AgentConfigurationId;
                 } else {
-                    this.savedConversations[index].templateVariables = this.buildTemplateVariables();
-                    this.savedConversations[index].advancedParams = this.advancedParams;
-                    this.savedConversations[index].selectedModelId = this.selectedModelId;
-                    this.savedConversations[index].selectedVendorId = this.selectedVendorId;
-                    this.savedConversations[index].selectedConfigurationId = this.selectedConfigurationId;
-                    this.savedConversations[index].skipValidation = this.skipValidation;
+                    this.SavedConversations[index].templateVariables = this.buildTemplateVariables();
+                    this.SavedConversations[index].advancedParams = this.AdvancedParams;
+                    this.SavedConversations[index].selectedModelId = this.SelectedModelId;
+                    this.SavedConversations[index].selectedVendorId = this.SelectedVendorId;
+                    this.SavedConversations[index].selectedConfigurationId = this.SelectedConfigurationId;
+                    this.SavedConversations[index].skipValidation = this.SkipValidation;
                 }
-                this.savedConversations[index].updatedAt = new Date();
+                this.SavedConversations[index].updatedAt = new Date();
                 
                 // Save to localStorage
                 try {
@@ -2360,47 +2824,62 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
 
-    public loadConversation(conversation: SavedConversation) {
-        if (this.conversationMessages.length > 0) {
+    public LoadConversation(conversation: SavedConversation) {
+        if (this.ConversationMessages.length > 0) {
             this.pendingLoadConversation = conversation;
-            this.showLoadConfirmDialog = true;
+            this.ShowLoadConfirmDialog = true;
             return;
         }
 
         this.doLoadConversation(conversation);
     }
+
+    /** @deprecated Use {@link LoadConversation}. */
+    public loadConversation(conversation: SavedConversation) {
+      return this.LoadConversation(conversation);
+    }
     
     /**
      * Confirms loading a conversation after dialog confirmation
      */
-    public confirmLoadConversation() {
+    public ConfirmLoadConversation() {
         if (this.pendingLoadConversation) {
             this.doLoadConversation(this.pendingLoadConversation);
-            this.showLoadConfirmDialog = false;
+            this.ShowLoadConfirmDialog = false;
             this.pendingLoadConversation = null;
         }
+    }
+
+    /** @deprecated Use {@link ConfirmLoadConversation}. */
+    public confirmLoadConversation() {
+      return this.ConfirmLoadConversation();
     }
     
     /**
      * Cancels loading a conversation
      */
-    public cancelLoadConversation() {
-        this.showLoadConfirmDialog = false;
+    public CancelLoadConversation() {
+        this.ShowLoadConfirmDialog = false;
         this.pendingLoadConversation = null;
+    }
+
+    /** @deprecated Use {@link CancelLoadConversation}. */
+    public cancelLoadConversation() {
+      return this.CancelLoadConversation();
     }
     
     /**
      * Actually loads the conversation
      */
     private doLoadConversation(conversation: SavedConversation) {
-        this.conversationMessages = [...conversation.messages];
-        this.currentConversationId = conversation.id;
+        this.ConversationMessages = [...conversation.messages];
+        this.CurrentConversationId = conversation.id;
         
         // Restore agent variables (unified from dataContext and templateData)
-        this.agentVariables = [];
+        this.AgentVariables = [];
         const allVariables = { ...conversation.dataContext, ...(conversation.templateData || {}) };
         for (const [key, value] of Object.entries(allVariables)) {
-            this.agentVariables.push({
+            this.AgentVariables.push({
                 name: key,
                 value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                 type: typeof value === 'boolean' ? 'boolean' : 
@@ -2410,17 +2889,17 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
         
         // Restore configuration for agent mode
-        if (this.mode === 'agent') {
+        if (this.Mode === 'agent') {
             if (conversation.agentConfigurationId !== undefined) {
-                this.agentConfigurationId = conversation.agentConfigurationId;
+                this.AgentConfigurationId = conversation.agentConfigurationId;
             }
         }
         
         // Restore template variables for prompt mode
-        if (this.mode === 'prompt') {
-            this.templateVariables = [];
+        if (this.Mode === 'prompt') {
+            this.TemplateVariables = [];
             for (const [key, value] of Object.entries(conversation.templateVariables || {})) {
-                this.templateVariables.push({
+                this.TemplateVariables.push({
                     name: key,
                     value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                     type: typeof value === 'boolean' ? 'boolean' : 
@@ -2431,55 +2910,55 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             
             // Restore advanced parameters
             if (conversation.advancedParams) {
-                this.advancedParams = { ...this.advancedParams, ...conversation.advancedParams };
+                this.AdvancedParams = { ...this.AdvancedParams, ...conversation.advancedParams };
                 // Restore stop sequences text
-                this.stopSequencesText = this.advancedParams.stopSequences?.join(', ') || '';
+                this.StopSequencesText = this.AdvancedParams.stopSequences?.join(', ') || '';
             }
             
             // Restore model and vendor selection
             if (conversation.selectedModelId !== undefined) {
-                this.selectedModelId = conversation.selectedModelId;
+                this.SelectedModelId = conversation.selectedModelId;
                 // Trigger vendor loading if model is selected
-                if (this.selectedModelId) {
-                    this.onModelSelectionChange();
+                if (this.SelectedModelId) {
+                    this.OnModelSelectionChange();
                     // After vendors load, restore vendor selection
                     setTimeout(() => {
                         if (conversation.selectedVendorId !== undefined) {
-                            this.selectedVendorId = conversation.selectedVendorId;
+                            this.SelectedVendorId = conversation.selectedVendorId;
                         }
                     }, 100);
                 }
             }
-            if (conversation.selectedVendorId !== undefined && !this.selectedModelId) {
-                this.selectedVendorId = conversation.selectedVendorId;
+            if (conversation.selectedVendorId !== undefined && !this.SelectedModelId) {
+                this.SelectedVendorId = conversation.selectedVendorId;
             }
             
             // Restore configuration selection
             if (conversation.selectedConfigurationId !== undefined) {
-                this.selectedConfigurationId = conversation.selectedConfigurationId;
+                this.SelectedConfigurationId = conversation.selectedConfigurationId;
             }
             
             // Restore skip validation setting
             if (conversation.skipValidation !== undefined) {
-                this.skipValidation = conversation.skipValidation;
+                this.SkipValidation = conversation.skipValidation;
             }
         }
         
         // Load agent run from the last assistant message if available
-        const lastAssistantMessage = this.conversationMessages
+        const lastAssistantMessage = this.ConversationMessages
             .filter(m => m.role === 'assistant' && m.agentRunId)
             .pop();
             
         if (lastAssistantMessage && lastAssistantMessage.agentRunId) {
             
             this.loadAgentRun(lastAssistantMessage.agentRunId);
-            this.executionMonitorMode = 'historical';
+            this.ExecutionMonitorMode = 'historical';
             this.lastProcessedRunId = lastAssistantMessage.agentRunId;
             
         } else {
             // Clear agent run if no execution found
-            this.currentAgentRun = null;
-            this.executionMonitorMode = 'historical';
+            this.CurrentAgentRun = null;
+            this.ExecutionMonitorMode = 'historical';
             this.lastProcessedRunId = null;
         }
 
@@ -2492,19 +2971,19 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         );
     }
 
-    public async deleteConversation(conversation: SavedConversation, event: Event) {
+    public async DeleteConversation(conversation: SavedConversation, event: Event) {
         event.stopPropagation();
         
         if (await this.confirmService.ConfirmDelete({ title: 'Delete Conversation', message: `Delete conversation "${conversation.name}"?` })) {
-            const index = this.savedConversations.findIndex(c => c.id === conversation.id);
+            const index = this.SavedConversations.findIndex(c => c.id === conversation.id);
             if (index >= 0) {
-                this.savedConversations.splice(index, 1);
+                this.SavedConversations.splice(index, 1);
                 
                 // Save to localStorage
                 this.saveConversationsToStorage();
                 
-                if (this.currentConversationId === conversation.id) {
-                    this.currentConversationId = null;
+                if (this.CurrentConversationId === conversation.id) {
+                    this.CurrentConversationId = null;
                 }
                 
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -2516,8 +2995,13 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
 
-    public exportConversation() {
-        if (this.conversationMessages.length === 0) {
+    /** @deprecated Use {@link DeleteConversation}. */
+    public async deleteConversation(conversation: SavedConversation, event: Event) {
+      return this.DeleteConversation(conversation, event);
+    }
+
+    public ExportConversation() {
+        if (this.ConversationMessages.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'No messages to export',
                 'warning',
@@ -2530,29 +3014,29 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             entity: {
                 id: this.entity?.ID,
                 name: this.getEntityName(),
-                type: this.mode
+                type: this.Mode
             },
-            messages: this.conversationMessages,
+            messages: this.ConversationMessages,
             dataContext: this.buildDataContext(),
             exportedAt: new Date().toISOString()
         };
         
         // Add mode-specific data
-        if (this.mode === 'agent') {
+        if (this.Mode === 'agent') {
             exportData.templateData = this.buildTemplateData();
             exportData.agentSettings = {
-                configurationId: this.agentConfigurationId
+                configurationId: this.AgentConfigurationId
             };
         } else {
             exportData.templateVariables = this.buildTemplateVariables();
             exportData.modelSettings = {
-                modelId: this.selectedModelId,
-                vendorId: this.selectedVendorId,
-                configurationId: this.selectedConfigurationId,
-                maxTokens: this.maxTokens,
-                skipValidation: this.skipValidation
+                modelId: this.SelectedModelId,
+                vendorId: this.SelectedVendorId,
+                configurationId: this.SelectedConfigurationId,
+                maxTokens: this.MaxTokens,
+                skipValidation: this.SkipValidation
             };
-            exportData.advancedParams = this.advancedParams;
+            exportData.advancedParams = this.AdvancedParams;
         }
 
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
@@ -2560,16 +3044,26 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         const link = document.createElement('a');
         link.href = url;
         const entityName = this.getEntityName()?.replace(/[^a-zA-Z0-9]/g, '-') || 'conversation';
-        link.download = `${this.mode}-conversation-${entityName}-${new Date().toISOString().slice(0, 10)}.json`;
+        link.download = `${this.Mode}-conversation-${entityName}-${new Date().toISOString().slice(0, 10)}.json`;
         link.click();
         window.URL.revokeObjectURL(url);
     }
 
-    public importConversation() {
+    /** @deprecated Use {@link ExportConversation}. */
+    public exportConversation() {
+      return this.ExportConversation();
+    }
+
+    public ImportConversation() {
         this.fileInput.nativeElement.click();
     }
 
-    public onFileSelected(event: Event) {
+    /** @deprecated Use {@link ImportConversation}. */
+    public importConversation() {
+      return this.ImportConversation();
+    }
+
+    public OnFileSelected(event: Event) {
         const input = event.target as HTMLInputElement;
         if (input.files && input.files[0]) {
             const file = input.files[0];
@@ -2581,22 +3075,22 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
 
                     // Validate and import
                     if (data.messages && Array.isArray(data.messages)) {
-                        if (this.conversationMessages.length > 0) {
+                        if (this.ConversationMessages.length > 0) {
                             if (!(await this.confirmService.Confirm({ title: 'Import conversation', message: 'Importing will replace the current conversation. Continue?' }))) {
                                 return;
                             }
                         }
                         
-                        this.conversationMessages = data.messages.map((msg: any) => ({
+                        this.ConversationMessages = data.messages.map((msg: any) => ({
                             ...msg,
                             timestamp: new Date(msg.timestamp)
                         }));
                         
                         // Import agent variables (unified from dataContext and templateData)
-                        this.agentVariables = [];
+                        this.AgentVariables = [];
                         const importedVariables = { ...(data.dataContext || {}), ...(data.templateData || {}) };
                         for (const [key, value] of Object.entries(importedVariables)) {
-                            this.agentVariables.push({
+                            this.AgentVariables.push({
                                 name: key,
                                 value: typeof value === 'object' ? JSON.stringify(value) : String(value),
                                 type: typeof value === 'boolean' ? 'boolean' : 
@@ -2608,48 +3102,48 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                         // Template data is already imported into agentVariables above
                         
                         // Import advanced parameters if in prompt mode
-                        if (this.mode === 'prompt' && data.advancedParams) {
-                            this.advancedParams = { ...this.advancedParams, ...data.advancedParams };
-                            this.stopSequencesText = this.advancedParams.stopSequences?.join(', ') || '';
+                        if (this.Mode === 'prompt' && data.advancedParams) {
+                            this.AdvancedParams = { ...this.AdvancedParams, ...data.advancedParams };
+                            this.StopSequencesText = this.AdvancedParams.stopSequences?.join(', ') || '';
                         }
                         
                         // Import agent settings if in agent mode
-                        if (this.mode === 'agent' && data.agentSettings) {
+                        if (this.Mode === 'agent' && data.agentSettings) {
                             if (data.agentSettings.configurationId !== undefined) {
-                                this.agentConfigurationId = data.agentSettings.configurationId;
+                                this.AgentConfigurationId = data.agentSettings.configurationId;
                             }
                         }
                         
                         // Import model settings if in prompt mode
-                        if (this.mode === 'prompt' && data.modelSettings) {
+                        if (this.Mode === 'prompt' && data.modelSettings) {
                             if (data.modelSettings.modelId !== undefined) {
-                                this.selectedModelId = data.modelSettings.modelId;
+                                this.SelectedModelId = data.modelSettings.modelId;
                                 // Trigger vendor loading if model is selected
-                                if (this.selectedModelId) {
-                                    this.onModelSelectionChange();
+                                if (this.SelectedModelId) {
+                                    this.OnModelSelectionChange();
                                     // After vendors load, restore vendor selection
                                     setTimeout(() => {
                                         if (data.modelSettings.vendorId !== undefined) {
-                                            this.selectedVendorId = data.modelSettings.vendorId;
+                                            this.SelectedVendorId = data.modelSettings.vendorId;
                                         }
                                     }, 100);
                                 }
                             }
-                            if (data.modelSettings.vendorId !== undefined && !this.selectedModelId) {
-                                this.selectedVendorId = data.modelSettings.vendorId;
+                            if (data.modelSettings.vendorId !== undefined && !this.SelectedModelId) {
+                                this.SelectedVendorId = data.modelSettings.vendorId;
                             }
                             if (data.modelSettings.configurationId !== undefined) {
-                                this.selectedConfigurationId = data.modelSettings.configurationId;
+                                this.SelectedConfigurationId = data.modelSettings.configurationId;
                             }
                             if (data.modelSettings.maxTokens !== undefined) {
-                                this.maxTokens = data.modelSettings.maxTokens;
+                                this.MaxTokens = data.modelSettings.maxTokens;
                             }
                             if (data.modelSettings.skipValidation !== undefined) {
-                                this.skipValidation = data.modelSettings.skipValidation;
+                                this.SkipValidation = data.modelSettings.skipValidation;
                             }
                         }
                         
-                        this.currentConversationId = null;
+                        this.CurrentConversationId = null;
                         this.scrollNeeded = true;
                         
                         MJNotificationService.Instance.CreateSimpleNotification(
@@ -2676,16 +3170,26 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
 
+    /** @deprecated Use {@link OnFileSelected}. */
+    public onFileSelected(event: Event) {
+      return this.OnFileSelected(event);
+    }
+
     /**
      * Handles keyboard input in the message textarea.
      * Sends message on Enter (without Shift) and allows multi-line input with Shift+Enter.
      * @param event - Keyboard event from the textarea
      */
-    public handleKeyPress(event: KeyboardEvent) {
+    public HandleKeyPress(event: KeyboardEvent) {
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
-            this.sendMessage();
+            this.SendMessage();
         }
+    }
+
+    /** @deprecated Use {@link HandleKeyPress}. */
+    public handleKeyPress(event: KeyboardEvent) {
+      return this.HandleKeyPress(event);
     }
 
     /**
@@ -2693,8 +3197,13 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param message - The conversation message to generate classes for
      * @returns Space-separated CSS class string for styling
      */
-    public getMessageClass(message: ConversationMessage): string {
+    public GetMessageClass(message: ConversationMessage): string {
         return `message message-${message.role}${message.isStreaming ? ' streaming' : ''}${message.error ? ' error' : ''}`;
+    }
+
+    /** @deprecated Use {@link GetMessageClass}. */
+    public getMessageClass(message: ConversationMessage): string {
+      return this.GetMessageClass(message);
     }
 
     /**
@@ -2702,11 +3211,16 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param date - Date object to format
      * @returns Formatted time string in HH:MM format
      */
-    public formatTimestamp(date: Date): string {
+    public FormatTimestamp(date: Date): string {
         return date.toLocaleTimeString('en-US', { 
             hour: '2-digit', 
             minute: '2-digit' 
         });
+    }
+
+    /** @deprecated Use {@link FormatTimestamp}. */
+    public formatTimestamp(date: Date): string {
+      return this.FormatTimestamp(date);
     }
 
     /**
@@ -2715,7 +3229,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param milliseconds - Execution time in milliseconds
      * @returns Formatted time string (e.g., "2m 30.5s", "1.23s", "500ms")
      */
-    public formatExecutionTime(milliseconds: number): string {
+    public FormatExecutionTime(milliseconds: number): string {
         if (milliseconds >= 60000) {
             const minutes = Math.floor(milliseconds / 60000);
             const seconds = ((milliseconds % 60000) / 1000).toFixed(2);
@@ -2727,7 +3241,12 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
 
-    public formatElapsedTime(milliseconds: number): string {
+    /** @deprecated Use {@link FormatExecutionTime}. */
+    public formatExecutionTime(milliseconds: number): string {
+      return this.FormatExecutionTime(milliseconds);
+    }
+
+    public FormatElapsedTime(milliseconds: number): string {
         const seconds = Math.floor(milliseconds / 1000);
         const ms = milliseconds % 1000;
         if (seconds > 0) {
@@ -2735,6 +3254,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         } else {
             return `${ms}ms`;
         }
+    }
+
+    /** @deprecated Use {@link FormatElapsedTime}. */
+    public formatElapsedTime(milliseconds: number): string {
+      return this.FormatElapsedTime(milliseconds);
     }
 
     private startElapsedTimeCounter(message: ConversationMessage) {
@@ -2756,37 +3280,52 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Shows the raw JSON dialog for a specific message
      * @param message - The message to show raw JSON for
      */
-    public showRawJsonDialog(message: ConversationMessage) {
+    public ShowRawJsonDialog(message: ConversationMessage) {
         if (message.rawContent) {
             try {
                 const parsed = JSON.parse(message.rawContent);
                 if (parsed.agentRunID) {
                     const enhancedParsed = { ...parsed, _agentRunID: parsed.agentRunID };
-                    this.currentJsonContent = this.formatJson(enhancedParsed);
+                    this.CurrentJsonContent = this.FormatJson(enhancedParsed);
                 } else {
-                    this.currentJsonContent = this.formatJson(parsed);
+                    this.CurrentJsonContent = this.FormatJson(parsed);
                 }
             } catch {
-                this.currentJsonContent = message.rawContent;
+                this.CurrentJsonContent = message.rawContent;
             }
-            this.showJsonWindow = true;
+            this.ShowJsonWindow = true;
         }
     }
 
+    /** @deprecated Use {@link ShowRawJsonDialog}. */
+    public showRawJsonDialog(message: ConversationMessage) {
+      return this.ShowRawJsonDialog(message);
+    }
+
     /** Closes the JSON viewer window */
+    public CloseJsonWindow(): void {
+        this.ShowJsonWindow = false;
+        this.CurrentJsonContent = '';
+    }
+
+    /** @deprecated Use {@link CloseJsonWindow}. */
     public closeJsonWindow(): void {
-        this.showJsonWindow = false;
-        this.currentJsonContent = '';
+      return this.CloseJsonWindow();
     }
     
     /**
      * Get the last run ID from conversation messages
      */
-    getLastRunId(): string | null {
-        const lastAssistantMessage = this.conversationMessages
+    GetLastRunId(): string | null {
+        const lastAssistantMessage = this.ConversationMessages
             .filter(m => m.role === 'assistant' && m.agentRunId)
             .pop();
         return lastAssistantMessage?.agentRunId || null;
+    }
+
+    /** @deprecated Use {@link GetLastRunId}. */
+    getLastRunId(): string | null {
+      return this.GetLastRunId();
     }
     
     /**
@@ -2794,9 +3333,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Called automatically when execution completes
      */
     private expandAllMonitoringNodes(): void {
-        if (this.currentAgentRun && this.executionMonitorMode === 'historical') {
+        if (this.CurrentAgentRun && this.ExecutionMonitorMode === 'historical') {
             // Force refresh the execution monitor by reassigning the entity
-            this.currentAgentRun = this.currentAgentRun;
+            this.CurrentAgentRun = this.CurrentAgentRun;
             // Note: The execution monitor component should handle auto-expansion internally
         }
     }
@@ -2805,7 +3344,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     /**
      * Navigate to the run details form
      */
-    navigateToRun(event: { runId: string; runType: 'agent' | 'prompt' }) {
+    NavigateToRun(event: { runId: string; runType: 'agent' | 'prompt' }) {
         if (event.runType === 'agent') {
             RecordNavigationAdapter.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(event.runId));
         } else {
@@ -2813,14 +3352,19 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
         
         // Emit event so parent window can minimize
-        this.runOpened.emit(event);
+        this.RunOpened.emit(event);
+    }
+
+    /** @deprecated Use {@link NavigateToRun}. */
+    navigateToRun(event: { runId: string; runType: 'agent' | 'prompt' }) {
+      return this.NavigateToRun(event);
     }
     
     /**
      * Copies the message content to clipboard.
      * @param message - The message to copy
      */
-    public async copyMessage(message: ConversationMessage) {
+    public async CopyMessage(message: ConversationMessage) {
         try {
             // Convert content to string if needed
             const content = typeof message.content === 'string' 
@@ -2842,6 +3386,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             );
         }
     }
+
+    /** @deprecated Use {@link CopyMessage}. */
+    public async copyMessage(message: ConversationMessage) {
+      return this.CopyMessage(message);
+    }
     
 
     /**
@@ -2860,7 +3409,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param content - String content to test
      * @returns True if content can be parsed as JSON, false otherwise
      */
-    public isJsonContent(content: string): boolean {
+    public IsJsonContent(content: string): boolean {
         if (!content) return false;
         try {
             JSON.parse(content);
@@ -2870,13 +3419,18 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
     }
 
+    /** @deprecated Use {@link IsJsonContent}. */
+    public isJsonContent(content: string): boolean {
+      return this.IsJsonContent(content);
+    }
+
     /**
      * Formats JSON content with proper indentation for display.
      * Also recursively parses any nested JSON strings.
      * @param content - JSON string to format
      * @returns Formatted JSON string or original content if parsing fails
      */
-    public formatJson(content: any): string {
+    public FormatJson(content: any): string {
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,
             maxDepth: 100,
@@ -2897,6 +3451,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         } catch {
             return typeof content === 'string' ? content : JSON.stringify(content);
         }
+    }
+
+    /** @deprecated Use {@link FormatJson}. */
+    public formatJson(content: any): string {
+      return this.FormatJson(content);
     }
 
     /**
@@ -2921,8 +3480,13 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * Toggles the collapsed state of a message's payload section
      * @param message - The message to toggle payload visibility for
      */
-    public togglePayloadCollapse(message: ConversationMessage): void {
+    public TogglePayloadCollapse(message: ConversationMessage): void {
         message.payloadCollapsed = !message.payloadCollapsed;
+    }
+
+    /** @deprecated Use {@link TogglePayloadCollapse}. */
+    public togglePayloadCollapse(message: ConversationMessage): void {
+      return this.TogglePayloadCollapse(message);
     }
 
     /**
@@ -2930,7 +3494,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param message - The message containing streaming content
      * @returns SafeHtml formatted content
      */
-    public getFormattedStreamingContent(message: ConversationMessage): SafeHtml {
+    public GetFormattedStreamingContent(message: ConversationMessage): SafeHtml {
         if (!message.streamingContent) {
             return this.sanitizer.sanitize(SecurityContext.HTML, '') || '';
         }
@@ -2938,13 +3502,18 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         const trimmedContent = message.streamingContent.trim();
         
         // Check if content type is markdown before applying markdown rendering
-        const contentType = this.detectContentType(trimmedContent);
+        const contentType = this.DetectContentType(trimmedContent);
         if (contentType === 'markdown') {
-            return this.renderMarkdown(trimmedContent);
+            return this.RenderMarkdown(trimmedContent);
         } else {
             // For plain text, just sanitize and return without extra processing
             return this.sanitizer.sanitize(SecurityContext.HTML, trimmedContent) || '';
         }
+    }
+
+    /** @deprecated Use {@link GetFormattedStreamingContent}. */
+    public getFormattedStreamingContent(message: ConversationMessage): SafeHtml {
+      return this.GetFormattedStreamingContent(message);
     }
 
     /**
@@ -2953,11 +3522,11 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param content - Content string to analyze
      * @returns Detected content type ('markdown', 'json', or 'text')
      */
-    public detectContentType(content: string): 'markdown' | 'json' | 'text' {
+    public DetectContentType(content: string): 'markdown' | 'json' | 'text' {
         if (!content) return 'text';
         
         // Check if it's JSON
-        if (this.isJsonContent(content)) {
+        if (this.IsJsonContent(content)) {
             return 'json';
         }
         
@@ -2980,7 +3549,12 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         return 'text';
     }
 
-    public renderMarkdown(content: string): SafeHtml {
+    /** @deprecated Use {@link DetectContentType}. */
+    public detectContentType(content: string): 'markdown' | 'json' | 'text' {
+      return this.DetectContentType(content);
+    }
+
+    public RenderMarkdown(content: string): SafeHtml {
         // Basic markdown to HTML conversion with improved formatting
         let html = content;
         
@@ -3033,27 +3607,37 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         return this.sanitizer.bypassSecurityTrustHtml(`<div class="markdown-content">${html}</div>`);
     }
 
-    public getFormattedContent(message: ConversationMessage): SafeHtml {
+    /** @deprecated Use {@link RenderMarkdown}. */
+    public renderMarkdown(content: string): SafeHtml {
+      return this.RenderMarkdown(content);
+    }
+
+    public GetFormattedContent(message: ConversationMessage): SafeHtml {
         const content = message.content;
         const contentStr = typeof content === 'string' ? content : String(content);
-        const contentType = this.detectContentType(contentStr);
+        const contentType = this.DetectContentType(contentStr);
         
         if (contentType === 'json') {
             // Try to extract human-readable content from JSON
             const extractedContent = this.extractHumanReadableContent(contentStr);
             if (extractedContent) {
                 // Just render the extracted content
-                return this.renderMarkdown(extractedContent);
+                return this.RenderMarkdown(extractedContent);
             } else {
                 // Fallback to inline code editor for JSON display
                 return this.renderJsonWithCodeEditor(contentStr);
             }
         } else if (contentType === 'markdown') {
-            return this.renderMarkdown(contentStr);
+            return this.RenderMarkdown(contentStr);
         } else {
             // Convert plain text to markdown for consistent formatting
-            return this.renderMarkdown(contentStr);
+            return this.RenderMarkdown(contentStr);
         }
+    }
+
+    /** @deprecated Use {@link GetFormattedContent}. */
+    public getFormattedContent(message: ConversationMessage): SafeHtml {
+      return this.GetFormattedContent(message);
     }
 
     /**
@@ -3062,7 +3646,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private renderJsonWithCodeEditor(jsonStr: string): SafeHtml {
         try {
             // Format the JSON for display
-            const formattedJson = this.formatJson(jsonStr);
+            const formattedJson = this.FormatJson(jsonStr);
             
             // Generate a unique ID for this editor instance
             const editorId = `json-editor-${this.generateMessageId()}`;
@@ -3103,7 +3687,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param message - The message to get execution summary for
      * @returns A brief summary of the execution steps
      */
-    public getExecutionSummary(message: ConversationMessage): string {
+    public GetExecutionSummary(message: ConversationMessage): string {
         if (!message.rawContent) return '';
         
         try {
@@ -3118,25 +3702,40 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         return '';
     }
 
+    /** @deprecated Use {@link GetExecutionSummary}. */
+    public getExecutionSummary(message: ConversationMessage): string {
+      return this.GetExecutionSummary(message);
+    }
+
     /**
      * Closes the JSON dialog
      */
+    public CloseJsonDialog() {
+        this.ShowJsonWindow = false;
+        this.CurrentJsonContent = '';
+    }
+
+    /** @deprecated Use {@link CloseJsonDialog}. */
     public closeJsonDialog() {
-        this.showJsonWindow = false;
-        this.currentJsonContent = '';
+      return this.CloseJsonDialog();
     }
     
     /**
      * Copies the JSON content to clipboard
      */
-    public copyJsonContent() {
-        if (this.currentJsonContent) {
-            navigator.clipboard.writeText(this.currentJsonContent).then(() => {
+    public CopyJsonContent() {
+        if (this.CurrentJsonContent) {
+            navigator.clipboard.writeText(this.CurrentJsonContent).then(() => {
                 // Success - JSON copied
             }).catch((err) => {
                 // Error copying
             });
         }
+    }
+
+    /** @deprecated Use {@link CopyJsonContent}. */
+    public copyJsonContent() {
+      return this.CopyJsonContent();
     }
 
     /**
@@ -3206,18 +3805,23 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param message - The conversation message to check
      * @returns True if the message has extractable content different from raw JSON
      */
-    public hasExtractableContent(message: ConversationMessage): boolean {
+    public HasExtractableContent(message: ConversationMessage): boolean {
         if (!message.content || message.role === 'user') {
             return false;
         }
         
         const contentStr = typeof message.content === 'string' ? message.content : String(message.content);
-        if (!this.isJsonContent(contentStr)) {
+        if (!this.IsJsonContent(contentStr)) {
             return false;
         }
         
         const extractedContent = this.extractHumanReadableContent(contentStr);
         return extractedContent !== null && extractedContent !== contentStr;
+    }
+
+    /** @deprecated Use {@link HasExtractableContent}. */
+    public hasExtractableContent(message: ConversationMessage): boolean {
+      return this.HasExtractableContent(message);
     }
 
     /**
@@ -3226,8 +3830,13 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * @param message - The conversation message to check
      * @returns True if the raw toggle should be displayed
      */
+    public ShowRawToggle(message: ConversationMessage): boolean {
+        return (message.rawContent && !message.isStreaming) || this.HasExtractableContent(message);
+    }
+
+    /** @deprecated Use {@link ShowRawToggle}. */
     public showRawToggle(message: ConversationMessage): boolean {
-        return (message.rawContent && !message.isStreaming) || this.hasExtractableContent(message);
+      return this.ShowRawToggle(message);
     }
 
     private escapeHtml(text: string): string {
@@ -3318,9 +3927,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     /**
      * Gets the icon class for the current entity
      */
-    public getEntityIconClass(): string {
+    public GetEntityIconClass(): string {
         if (!this.entity) {
-            return this.mode === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-comment-dots';
+            return this.Mode === 'agent' ? 'fa-solid fa-robot' : 'fa-solid fa-comment-dots';
         }
         
         if (this.isAgentEntity(this.entity)) {
@@ -3331,58 +3940,83 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         // Prompt entity - use default prompt icon
         return 'fa-solid fa-comment-dots';
     }
+
+    /** @deprecated Use {@link GetEntityIconClass}. */
+    public getEntityIconClass(): string {
+      return this.GetEntityIconClass();
+    }
     
     /**
      * Checks if the entity has a logo URL
      */
-    public hasEntityLogo(): boolean {
+    public HasEntityLogo(): boolean {
         if (!this.entity || !this.isAgentEntity(this.entity)) {
             return false;
         }
         return !!(this.entity as any).LogoURL;
     }
+
+    /** @deprecated Use {@link HasEntityLogo}. */
+    public hasEntityLogo(): boolean {
+      return this.HasEntityLogo();
+    }
     
     /**
      * Gets the logo URL for the entity (agent only)
      */
-    public getEntityLogoURL(): string {
+    public GetEntityLogoURL(): string {
         if (!this.entity || !this.isAgentEntity(this.entity)) {
             return '';
         }
         return (this.entity as any).LogoURL || '';
     }
+
+    /** @deprecated Use {@link GetEntityLogoURL}. */
+    public getEntityLogoURL(): string {
+      return this.GetEntityLogoURL();
+    }
     
     /**
      * Updates stop sequences from the textarea input
      */
-    public updateStopSequences() {
-        if (this.stopSequencesText.trim() === '') {
-            this.advancedParams.stopSequences = [];
+    public UpdateStopSequences() {
+        if (this.StopSequencesText.trim() === '') {
+            this.AdvancedParams.stopSequences = [];
         } else {
             // Split by comma and trim each sequence
-            this.advancedParams.stopSequences = this.stopSequencesText
+            this.AdvancedParams.stopSequences = this.StopSequencesText
                 .split(',')
                 .map(s => s.trim())
                 .filter(s => s.length > 0);
         }
     }
+
+    /** @deprecated Use {@link UpdateStopSequences}. */
+    public updateStopSequences() {
+      return this.UpdateStopSequences();
+    }
     
     /**
      * Toggles the advanced parameters expansion panel
      */
+    public ToggleAdvancedParams() {
+        this.AdvancedParamsExpanded = !this.AdvancedParamsExpanded;
+    }
+
+    /** @deprecated Use {@link ToggleAdvancedParams}. */
     public toggleAdvancedParams() {
-        this.advancedParamsExpanded = !this.advancedParamsExpanded;
+      return this.ToggleAdvancedParams();
     }
     
     /**
      * Navigates to the AI Agent Run form to view detailed execution information
      * @param agentRunId - The ID of the agent run to view
      */
-    public navigateToAgentRun({runId, runType}: {runId: string, runType: 'agent' | 'prompt'}) {
+    public navigateToAgentRun({runId, runType}: {runId: string, runType: 'agent' | 'prompt'}) {  // case-violation-ok-legacy-back-compat: destructured parameter — a stub cannot forward it by name
         if (runId && runType==='agent') {
             RecordNavigationAdapter.OpenEntityRecord('MJ: AI Agent Runs', CompositeKey.FromID(runId));
             // Request minimization from our container
-            this.minimizeRequested.emit();
+            this.MinimizeRequested.emit();
         }
     }
     
@@ -3401,36 +4035,36 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             
             // Set the model/vendor/configuration
             if (promptRun.ModelID) {
-                this.selectedModelId = promptRun.ModelID;
+                this.SelectedModelId = promptRun.ModelID;
             }
             if (promptRun.VendorID) {
-                this.selectedVendorId = promptRun.VendorID;
+                this.SelectedVendorId = promptRun.VendorID;
             }
             if (promptRun.ConfigurationID) {
-                this.selectedConfigurationId = promptRun.ConfigurationID;
+                this.SelectedConfigurationId = promptRun.ConfigurationID;
             }
             
             // Set advanced parameters
             if (promptRun.Temperature != null) {
-                this.advancedParams.temperature = promptRun.Temperature;
+                this.AdvancedParams.temperature = promptRun.Temperature;
             }
             if (promptRun.TopP != null) {
-                this.advancedParams.topP = promptRun.TopP;
+                this.AdvancedParams.topP = promptRun.TopP;
             }
             if (promptRun.TopK != null) {
-                this.advancedParams.topK = promptRun.TopK;
+                this.AdvancedParams.topK = promptRun.TopK;
             }
             if (promptRun.MinP != null) {
-                this.advancedParams.minP = promptRun.MinP;
+                this.AdvancedParams.minP = promptRun.MinP;
             }
             if (promptRun.FrequencyPenalty != null) {
-                this.advancedParams.frequencyPenalty = promptRun.FrequencyPenalty;
+                this.AdvancedParams.frequencyPenalty = promptRun.FrequencyPenalty;
             }
             if (promptRun.PresencePenalty != null) {
-                this.advancedParams.presencePenalty = promptRun.PresencePenalty;
+                this.AdvancedParams.presencePenalty = promptRun.PresencePenalty;
             }
             if (promptRun.Seed != null) {
-                this.advancedParams.seed = promptRun.Seed;
+                this.AdvancedParams.seed = promptRun.Seed;
             }
             
             // Use the extended entity methods to get conversation messages
@@ -3454,15 +4088,15 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 }));
                 
                 console.log('🎯 Converted messages for test harness:', convertedMessages);
-                this.conversationMessages = convertedMessages;
+                this.ConversationMessages = convertedMessages;
                 
                 // Store original messages for reset functionality
                 this.originalPromptRunMessages = [...convertedMessages];
                 
                 // Reset re-run execution state
-                this.hasExecutedRerun = false;
+                this.HasExecutedRerun = false;
                 
-                console.log('✅ conversationMessages set:', this.conversationMessages);
+                console.log('✅ conversationMessages set:', this.ConversationMessages);
                 
                 // Trigger change detection
                 this.cdr.detectChanges();
@@ -3473,13 +4107,13 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
             // Extract and store the system prompt for re-run
             const systemPrompt = promptRun.GetSystemPrompt();
             if (systemPrompt) {
-                this.systemPromptOverride = systemPrompt;
+                this.SystemPromptOverride = systemPrompt;
                 console.log('📋 System prompt override set');
             }
             
             // Switch to model settings tab for prompt re-runs
-            if (this.activeTab !== 'modelSettings') {
-                this.selectTab('modelSettings');
+            if (this.ActiveTab !== 'modelSettings') {
+                this.SelectTab('modelSettings');
             }
         } else {
             console.error('❌ Failed to load prompt run:', promptRunId);

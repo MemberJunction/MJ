@@ -21,7 +21,7 @@ export interface ResolvedCollectionInfo {
  * Guaranteed contract: Returns non-null ONLY when a relationship exists AND
  * has a valid RelatedEntityJoinField.
  */
-export function resolveCollectionRelationship(
+export function ResolveCollectionRelationship(
   entityInfo: EntityInfo | null | undefined,
   colName: string
 ): ResolvedCollectionInfo | null {
@@ -140,4 +140,12 @@ export function resolveCollectionRelationship(
     orderBy: typeof parsedConfig?.["OrderBy"] === "string" ? parsedConfig["OrderBy"] : undefined,
     relationship: matchedRel,
   };
+}
+
+/** @deprecated Use {@link ResolveCollectionRelationship}. */
+export function resolveCollectionRelationship(
+  entityInfo: EntityInfo | null | undefined,
+  colName: string
+): ResolvedCollectionInfo | null {
+  return ResolveCollectionRelationship(entityInfo, colName);
 }

@@ -13,29 +13,44 @@
  */
 
 export interface HealSchemaRoutineParams {
-    values: string[];
-    names: string[];
+    Values: string[];
+    Names: string[];
 }
 
 let authoredExcludeSchemas: string[] | null = null;
 
 /** Capture the config exclude list before `applyIncludeSchemaScope` mutates it. Idempotent. */
-export function snapshotAuthoredExcludeSchemas(excludeSchemas: string[] | undefined): void {
+export function SnapshotAuthoredExcludeSchemas(excludeSchemas: string[] | undefined): void {
     if (authoredExcludeSchemas === null) {
         authoredExcludeSchemas = [...(excludeSchemas ?? [])];
     }
 }
 
+/** @deprecated Use {@link SnapshotAuthoredExcludeSchemas}. */
+export function snapshotAuthoredExcludeSchemas(excludeSchemas: string[] | undefined): void {
+    return SnapshotAuthoredExcludeSchemas(excludeSchemas);
+}
+
 /** Test-only: reset the snapshot between cases. */
-export function resetAuthoredExcludeSnapshot(): void {
+export function ResetAuthoredExcludeSnapshot(): void {
     authoredExcludeSchemas = null;
 }
 
-export function getAuthoredExcludeSchemas(fallback?: string[]): string[] {
+/** @deprecated Use {@link ResetAuthoredExcludeSnapshot}. */
+export function resetAuthoredExcludeSnapshot(): void {
+    return ResetAuthoredExcludeSnapshot();
+}
+
+export function GetAuthoredExcludeSchemas(fallback?: string[]): string[] {
     if (authoredExcludeSchemas !== null) {
         return authoredExcludeSchemas;
     }
     return [...(fallback ?? [])];
+}
+
+/** @deprecated Use {@link GetAuthoredExcludeSchemas}. */
+export function getAuthoredExcludeSchemas(fallback?: string[]): string[] {
+    return GetAuthoredExcludeSchemas(fallback);
 }
 
 /**
@@ -43,7 +58,7 @@ export function getAuthoredExcludeSchemas(fallback?: string[]): string[] {
  * `@IncludedSchemaNames` is omitted when `includeSchemas` is empty so classic
  * MJ (no include list) keeps the historical EXEC shape.
  */
-export function buildHealSchemaRoutineParams(options: {
+export function BuildHealSchemaRoutineParams(options: {
     authoredExclude: string[];
     includeSchemas?: string[] | null;
     entityIDs?: string[];
@@ -63,5 +78,14 @@ export function buildHealSchemaRoutineParams(options: {
         names.push('IncludedSchemaNames');
     }
 
-    return { values, names };
+    return { Values: values, Names: names };
+}
+
+/** @deprecated Use {@link BuildHealSchemaRoutineParams}. */
+export function buildHealSchemaRoutineParams(options: {
+    authoredExclude: string[];
+    includeSchemas?: string[] | null;
+    entityIDs?: string[];
+}): HealSchemaRoutineParams {
+    return BuildHealSchemaRoutineParams(options);
 }

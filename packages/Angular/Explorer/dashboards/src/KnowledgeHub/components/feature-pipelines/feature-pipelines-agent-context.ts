@@ -11,7 +11,7 @@
  * mutation, no side effects.
  */
 
-import { boundNameList, AGENT_CONTEXT_NAME_LIST_CAP } from '../../../shared/agent-tool-validation';
+import { BoundNameList, AGENT_CONTEXT_NAME_LIST_CAP } from '../../../shared/agent-tool-validation';
 import type { FeaturePipelineSummary, FeaturePipelineRunStatus } from './feature-pipeline.engine';
 
 /**
@@ -38,7 +38,7 @@ export interface FeaturePipelineCandidate {
  *
  * @returns the matched pipeline, or null on a miss.
  */
-export function resolvePipeline<T extends { ID: string; Name: string }>(
+export function ResolvePipeline<T extends { ID: string; Name: string }>(
     input: string,
     pipelines: readonly T[],
 ): T | null {
@@ -51,11 +51,24 @@ export function resolvePipeline<T extends { ID: string; Name: string }>(
     return pipelines.find(p => p.Name.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolvePipeline}. */
+export function resolvePipeline<T extends { ID: string; Name: string }>(
+    input: string,
+    pipelines: readonly T[],
+): T | null {
+    return ResolvePipeline(input, pipelines);
+}
+
 /** Build a tolerant "no pipeline matches" error listing a bounded sample of names. */
-export function buildPipelineNotFoundError(input: string, available: readonly string[]): string {
-    const sample = boundNameList(available, 10).join(', ');
+export function BuildPipelineNotFoundError(input: string, available: readonly string[]): string {
+    const sample = BoundNameList(available, 10).join(', ');
     const more = available.length > 10 ? ` (+${available.length - 10} more)` : '';
     return `No feature pipeline matches "${input}". Available pipelines: ${sample}${more}.`;
+}
+
+/** @deprecated Use {@link BuildPipelineNotFoundError}. */
+export function buildPipelineNotFoundError(input: string, available: readonly string[]): string {
+    return BuildPipelineNotFoundError(input, available);
 }
 
 /** Component-supplied snapshot for the Feature Pipelines agent context. */
@@ -85,7 +98,7 @@ function countByRunStatus(pipelines: readonly FeaturePipelineSummary[], status: 
  * agent can pick one to run or open. A companion truncation flag tells it when
  * the list is capped.
  */
-export function buildFeaturePipelinesAgentContext(
+export function BuildFeaturePipelinesAgentContext(
     input: FeaturePipelinesAgentContextInput,
 ): Record<string, unknown> {
     const all = input.AllPipelines;
@@ -112,10 +125,10 @@ export function buildFeaturePipelinesAgentContext(
 
         // In-flight runs (this session)
         RunningCount: runningNames.length,
-        RunningPipelineNames: boundNameList(runningNames),
+        RunningPipelineNames: BoundNameList(runningNames),
 
         // Bounded structured view of what's on screen
-        VisiblePipelineNames: boundNameList(filtered.map(p => p.Name)),
+        VisiblePipelineNames: BoundNameList(filtered.map(p => p.Name)),
         Pipelines: filtered.slice(0, AGENT_CONTEXT_NAME_LIST_CAP).map(p => ({
             Name: p.Name,
             TargetEntity: p.TargetEntity,
@@ -131,4 +144,11 @@ export function buildFeaturePipelinesAgentContext(
     }
 
     return ctx;
+}
+
+/** @deprecated Use {@link BuildFeaturePipelinesAgentContext}. */
+export function buildFeaturePipelinesAgentContext(
+    input: FeaturePipelinesAgentContextInput,
+): Record<string, unknown> {
+    return BuildFeaturePipelinesAgentContext(input);
 }

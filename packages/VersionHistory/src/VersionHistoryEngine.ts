@@ -59,11 +59,11 @@ import { RestoreEngine } from './RestoreEngine';
  * ```
  */
 export class VersionHistoryEngine {
-    private LabelMgr = new LabelManager();
-    private SnapshotBldr = new SnapshotBuilder();
-    private GraphWalker = new DependencyGraphWalker();
-    private Differ = new DiffEngine();
-    private Restorer = new RestoreEngine();
+    private labelMgr = new LabelManager();
+    private snapshotBldr = new SnapshotBuilder();
+    private graphWalker = new DependencyGraphWalker();
+    private differ = new DiffEngine();
+    private restorer = new RestoreEngine();
 
     // =======================================================================
     // Label operations
@@ -91,7 +91,7 @@ export class VersionHistoryEngine {
         });
 
         // Create the label record
-        const label = await this.LabelMgr.CreateLabel(params, contextUser);
+        const label = await this.labelMgr.CreateLabel(params, contextUser);
         const labelId = label.ID;
         const scope = params.Scope ?? 'Record';
 
@@ -109,7 +109,7 @@ export class VersionHistoryEngine {
                     MaxDepth: params.MaxDepth ?? 10,
                     ExcludeEntities: params.ExcludeEntities ?? [],
                 };
-                captureResult = await this.SnapshotBldr.CaptureRecord(
+                captureResult = await this.snapshotBldr.CaptureRecord(
                     labelId,
                     params.EntityName!,
                     params.RecordKey!,
@@ -121,7 +121,7 @@ export class VersionHistoryEngine {
                 break;
             }
             case 'Entity': {
-                captureResult = await this.SnapshotBldr.CaptureEntity(
+                captureResult = await this.snapshotBldr.CaptureEntity(
                     labelId,
                     params.EntityName!,
                     contextUser
@@ -129,7 +129,7 @@ export class VersionHistoryEngine {
                 break;
             }
             case 'System': {
-                captureResult = await this.SnapshotBldr.CaptureSystem(labelId, contextUser);
+                captureResult = await this.snapshotBldr.CaptureSystem(labelId, contextUser);
                 break;
             }
             default:
@@ -183,21 +183,21 @@ export class VersionHistoryEngine {
      * Archive a label, marking it as no longer active.
      */
     public async ArchiveLabel(labelId: string, contextUser: UserInfo): Promise<boolean> {
-        return this.LabelMgr.ArchiveLabel(labelId, contextUser);
+        return this.labelMgr.ArchiveLabel(labelId, contextUser);
     }
 
     /**
      * Load a single version label by ID.
      */
     public async GetLabel(labelId: string, contextUser: UserInfo): Promise<MJVersionLabelEntity> {
-        return this.LabelMgr.GetLabel(labelId, contextUser);
+        return this.labelMgr.GetLabel(labelId, contextUser);
     }
 
     /**
      * Query version labels with optional filters.
      */
     public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<MJVersionLabelEntity[]> {
-        return this.LabelMgr.GetLabels(filter, contextUser);
+        return this.labelMgr.GetLabels(filter, contextUser);
     }
 
     // =======================================================================
@@ -213,7 +213,7 @@ export class VersionHistoryEngine {
         toLabelId: string,
         contextUser: UserInfo
     ): Promise<DiffResult> {
-        return this.Differ.DiffLabels(fromLabelId, toLabelId, contextUser);
+        return this.differ.DiffLabels(fromLabelId, toLabelId, contextUser);
     }
 
     /**
@@ -224,7 +224,7 @@ export class VersionHistoryEngine {
         labelId: string,
         contextUser: UserInfo
     ): Promise<DiffResult> {
-        return this.Differ.DiffLabelToCurrentState(labelId, contextUser);
+        return this.differ.DiffLabelToCurrentState(labelId, contextUser);
     }
 
     /**
@@ -236,7 +236,7 @@ export class VersionHistoryEngine {
         labelId: string,
         contextUser: UserInfo
     ): Promise<RecordSnapshot | null> {
-        return this.Differ.GetRecordSnapshotAtLabel(entityName, recordId, labelId, contextUser);
+        return this.differ.GetRecordSnapshotAtLabel(entityName, recordId, labelId, contextUser);
     }
 
     // =======================================================================
@@ -254,7 +254,7 @@ export class VersionHistoryEngine {
         options: RestoreOptions,
         contextUser: UserInfo
     ): Promise<RestoreResult> {
-        return this.Restorer.RestoreToLabel(labelId, options, contextUser);
+        return this.restorer.RestoreToLabel(labelId, options, contextUser);
     }
 
     // =======================================================================
@@ -271,6 +271,6 @@ export class VersionHistoryEngine {
         options: WalkOptions,
         contextUser: UserInfo
     ): Promise<DependencyNode> {
-        return this.GraphWalker.WalkDependents(entityName, recordKey, options, contextUser);
+        return this.graphWalker.WalkDependents(entityName, recordKey, options, contextUser);
     }
 }

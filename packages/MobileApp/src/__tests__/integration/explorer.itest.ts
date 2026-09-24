@@ -61,9 +61,9 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
         const load = await LoadEntityRecords(name, undefined, 10);
         expect(load).not.toBeNull();
         expect(load!.entity.Name).toBe(name);
-        expect(load!.rows.length).toBeGreaterThan(0);
+        expect(load!.Rows.length).toBeGreaterThan(0);
 
-        const first = load!.rows[0];
+        const first = load!.Rows[0];
         expect(first.id).toBeTruthy();
         expect(typeof first.title).toBe('string');
         expect(first.raw).toBeTypeOf('object');
@@ -73,7 +73,7 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
         const name = readableAgentsEntityName();
         const load = await LoadEntityRecords(name, undefined, 5);
         expect(load).not.toBeNull();
-        const someId = load!.rows[0]?.id;
+        const someId = load!.Rows[0]?.id;
         expect(someId).toBeTruthy();
 
         const detail = await LoadRecordDetail(name, someId!);
@@ -91,7 +91,7 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
         const load = await LoadEntityRecords(readableAgentsEntityName(), undefined, 10);
         expect(load).not.toBeNull();
         // Seed data includes agents; expect at least one row.
-        expect(load!.rows.length).toBeGreaterThan(0);
+        expect(load!.Rows.length).toBeGreaterThan(0);
     });
 
     it('loads the dashboards this deployment ships', async () => {

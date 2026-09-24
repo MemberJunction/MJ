@@ -114,25 +114,25 @@ export interface IViewTypeDescriptor {
  */
 export interface IViewRenderer<TConfig = unknown> {
   /** The entity whose records are being rendered. */
-  entity: EntityInfo | null;
+  entity: EntityInfo | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** The records to render (already loaded/filtered by the host). */
-  records: Record<string, unknown>[];
+  records: Record<string, unknown>[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** Primary-key string of the currently selected record, if any. */
-  selectedRecordId: string | null;
+  selectedRecordId: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** Active filter text (for highlighting / client-side concerns). */
-  filterText: string | null;
+  filterText: string | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** View-type-specific configuration. */
-  config: TConfig;
+  config: TConfig;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Optional: the metadata provider, handed to plug-ins that issue their own data calls
    * (multi-provider safety). Generic — not specific to any one view type.
    */
-  provider?: IMetadataProvider | null;
+  provider?: IMetadataProvider | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Optional generic data-context the host supplies alongside {@link records}. These are
@@ -140,16 +140,16 @@ export interface IViewRenderer<TConfig = unknown> {
    * view type — so a renderer that paginates or shows a total can read them, and one that doesn't
    * simply ignores them. The host owns the actual data fetch; these describe its current result.
    */
-  totalRecordCount?: number;
+  totalRecordCount?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** One-based current page of {@link records} when the host is paginating. */
-  page?: number;
+  page?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Page size the host is using. */
-  pageSize?: number;
+  pageSize?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether the host is currently (re)loading the record set. */
-  isLoading?: boolean;
+  isLoading?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** Emitted when a record is selected (single click). Payload is the raw record object. */
-  recordSelected: EventEmitter<unknown>;
+  recordSelected: EventEmitter<unknown>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Emitted when THIS entity's record should be opened (double-click / open). Payload is the raw
@@ -157,21 +157,21 @@ export interface IViewRenderer<TConfig = unknown> {
    * to the outer app (routing lives there). Everything else a view does (export, add-to-list,
    * delete, …) is self-contained in the plug-in via Generic dialogs and never bubbles up.
    */
-  recordOpened: EventEmitter<unknown>;
+  recordOpened: EventEmitter<unknown>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Optional: NAVIGATION request to open a *related* record on a DIFFERENT entity (e.g. a
    * foreign-key drill-through in a grid cell). Bubbles to the outer app for routing. Generic —
    * the container forwards it without acting on it.
    */
-  openRelatedRecordRequested?: EventEmitter<ViewRelatedRecordNavigation>;
+  openRelatedRecordRequested?: EventEmitter<ViewRelatedRecordNavigation>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Optional: NAVIGATION request to create a new record of the current entity (e.g. a grid's
    * "New" button) — opening the create form is a routing concern owned by the outer app. Bubbles
    * up; the container forwards it without acting on it.
    */
-  createRecordRequested?: EventEmitter<void>;
+  createRecordRequested?: EventEmitter<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Emitted when the renderer mutates its own opaque {@link config} (e.g. timeline date field,
@@ -179,7 +179,7 @@ export interface IViewRenderer<TConfig = unknown> {
    * the active `ViewTypeID` and never inspects it. (Container ↔ plug-in coordination inside the
    * Generic layer — NOT a signal that drives the outer app.)
    */
-  configChanged: EventEmitter<TConfig>;
+  configChanged: EventEmitter<TConfig>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Optional: ask the container to (re)load the record set differently. The ONLY data-access
@@ -189,7 +189,7 @@ export interface IViewRenderer<TConfig = unknown> {
    * owns the actual `RunView`; no per-view-type branching. (Container ↔ plug-in coordination —
    * NOT a signal that drives the outer app.)
    */
-  dataRequest?: EventEmitter<ViewDataRequest>;
+  dataRequest?: EventEmitter<ViewDataRequest>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Optional: ask the host to open this view's configuration UI (e.g. the workspace's config
@@ -199,7 +199,7 @@ export interface IViewRenderer<TConfig = unknown> {
    * container forwards it to the host, which owns the config UI; no per-view-type branching.
    * (Container ↔ plug-in coordination — NOT a signal that drives the outer app.)
    */
-  configureRequested?: EventEmitter<void>;
+  configureRequested?: EventEmitter<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /**
    * Optional IMPERATIVE export entry point. A renderer that owns a self-contained export
@@ -215,7 +215,7 @@ export interface IViewRenderer<TConfig = unknown> {
    *   default (typically 'excel') when omitted.
    * @returns true when the export was initiated, false when it couldn't be (no data / unsupported).
    */
-  exportRecords?(format?: 'csv' | 'excel' | 'json'): Promise<boolean>;
+  exportRecords?(format?: 'csv' | 'excel' | 'json'): Promise<boolean>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -253,13 +253,13 @@ export interface ViewRelatedRecordNavigation {
  */
 export interface IViewPropSheet<TConfig = unknown> {
   /** The entity the configuration applies to. */
-  entity: EntityInfo | null;
+  entity: EntityInfo | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** The current configuration being edited. */
-  config: TConfig;
+  config: TConfig;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
   /** Emitted when the user changes the configuration. */
-  configChange: EventEmitter<TConfig>;
+  configChange: EventEmitter<TConfig>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
