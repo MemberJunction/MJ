@@ -9,3 +9,4 @@ export * from './sql/ProcedureCallBuilder';
 export * from './sql/WorkQueuePublishSql';
 export * from './sql/WorkQueueConsumeSql';
 export * from './sql/WorkQueueOperatorSql';
+export * from './sql/CreateWorkQueueSqlBuilder';
