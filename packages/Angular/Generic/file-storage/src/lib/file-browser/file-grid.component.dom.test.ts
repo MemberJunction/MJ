@@ -25,9 +25,9 @@ function render(setup?: (c: FileGridComponent) => void): ComponentFixture<FileGr
   return renderComponentFixture(FileGridComponent, { ...MOD, setup });
 }
 
-const FOLDER: FileGridItem = { key: 'docs/', name: 'docs', type: 'folder', size: 0, lastModified: new Date('2024-01-01') };
-const PDF: FileGridItem = { key: 'a.pdf', name: 'a.pdf', type: 'file', size: 2048, lastModified: new Date('2024-01-02') };
-const TXT: FileGridItem = { key: 'b.txt', name: 'b.txt', type: 'file', size: 10, lastModified: new Date('2024-01-03') };
+const FOLDER: FileGridItem = { Key: 'docs/', name: 'docs', Type: 'folder', Size: 0, LastModified: new Date('2024-01-01') };
+const PDF: FileGridItem = { Key: 'a.pdf', name: 'a.pdf', Type: 'file', Size: 2048, LastModified: new Date('2024-01-02') };
+const TXT: FileGridItem = { Key: 'b.txt', name: 'b.txt', Type: 'file', Size: 10, LastModified: new Date('2024-01-03') };
 
 describe('FileGridComponent (DOM)', () => {
   it('shows the loading indicator and hides the breadcrumb bar while isLoading', () => {
@@ -96,7 +96,7 @@ describe('FileGridComponent (DOM)', () => {
       c.viewMode = 'list';
       c.items = [PDF, TXT];
       c.filteredItems = [PDF, TXT];
-      c.selectedItems = [TXT.key];
+      c.selectedItems = [TXT.Key];
     });
     const rows = queryAll(f, '.file-row');
     expect(rows[0].classList.contains('selected')).toBe(false);
@@ -116,7 +116,7 @@ describe('FileGridComponent (DOM)', () => {
     const f = render((c) => {
       c.items = [PDF];
       c.filteredItems = [PDF];
-      c.selectedItems = [PDF.key];
+      c.selectedItems = [PDF.Key];
     });
     expect(query(f, '.selection-bar')).not.toBeNull();
     const download = queryAll(f, '.sel-action-btn').find((b) => b.textContent?.includes('Download')) as HTMLButtonElement;

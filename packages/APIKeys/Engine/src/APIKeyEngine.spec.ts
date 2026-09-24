@@ -5,7 +5,7 @@
 
 import { vi } from 'vitest';
 import { APIKeyEngine, GetAPIKeyEngine, ResetAPIKeyEngine } from './APIKeyEngine';
-import { UserInfo, setMockRunViewResult, clearMockRunViewResults, setMockEntity, clearMockEntities } from './__mocks__/core';
+import { UserInfo, SetMockRunViewResult, ClearMockRunViewResults, SetMockEntity, ClearMockEntities } from './__mocks__/core';
 import { MJAPIKeyEntity, MJAPIApplicationEntity, MJUserEntity } from './__mocks__/core-entities';
 
 // Note: Mocking is handled by resolve.alias in vitest.config.ts
@@ -24,8 +24,8 @@ describe('APIKeyEngine', () => {
         ResetAPIKeyEngine();
         engine = GetAPIKeyEngine();
         contextUser = new UserInfo({ ID: 'test-user', Name: 'Test User', Email: 'test@example.com' });
-        clearMockRunViewResults();
-        clearMockEntities();
+        ClearMockRunViewResults();
+        ClearMockEntities();
     });
 
     describe('GenerateAPIKey()', () => {
@@ -113,7 +113,7 @@ describe('APIKeyEngine', () => {
                 ExpiresAt: null
             });
 
-            setMockRunViewResult('MJ: API Keys', {
+            SetMockRunViewResult('MJ: API Keys', {
                 Success: true,
                 Results: [mockApiKey]
             });
@@ -126,7 +126,7 @@ describe('APIKeyEngine', () => {
                 IsActive: true
             });
 
-            setMockRunViewResult('Users', {
+            SetMockRunViewResult('Users', {
                 Success: true,
                 Results: [mockUser]
             });
@@ -162,7 +162,7 @@ describe('APIKeyEngine', () => {
                 Status: 'Revoked'
             });
 
-            setMockRunViewResult('MJ: API Keys', {
+            SetMockRunViewResult('MJ: API Keys', {
                 Success: true,
                 Results: [revokedKey]
             });
@@ -185,7 +185,7 @@ describe('APIKeyEngine', () => {
                 ExpiresAt: new Date('2020-01-01')  // Past date
             });
 
-            setMockRunViewResult('MJ: API Keys', {
+            SetMockRunViewResult('MJ: API Keys', {
                 Success: true,
                 Results: [expiredKey]
             });
@@ -200,7 +200,7 @@ describe('APIKeyEngine', () => {
         });
 
         it('should reject key not found', async () => {
-            setMockRunViewResult('MJ: API Keys', {
+            SetMockRunViewResult('MJ: API Keys', {
                 Success: true,
                 Results: []
             });
@@ -222,7 +222,7 @@ describe('APIKeyEngine', () => {
                 IsActive: false
             });
 
-            setMockRunViewResult('Users', {
+            SetMockRunViewResult('Users', {
                 Success: true,
                 Results: [inactiveUser]
             });
@@ -245,7 +245,7 @@ describe('APIKeyEngine', () => {
                     IsActive: true
                 });
 
-                setMockRunViewResult('MJ: API Applications', {
+                SetMockRunViewResult('MJ: API Applications', {
                     Success: true,
                     Results: [mockApp]
                 });
@@ -253,7 +253,7 @@ describe('APIKeyEngine', () => {
 
             it('should allow global key for any application', async () => {
                 // Key has no bindings
-                setMockRunViewResult('MJ: API Key Applications', {
+                SetMockRunViewResult('MJ: API Key Applications', {
                     Success: true,
                     Results: []
                 });
@@ -267,7 +267,7 @@ describe('APIKeyEngine', () => {
             });
 
             it('should allow key bound to requested application', async () => {
-                setMockRunViewResult('MJ: API Key Applications', {
+                SetMockRunViewResult('MJ: API Key Applications', {
                     Success: true,
                     Results: [{ APIKeyID: 'key-id', ApplicationID: 'app-id' }]
                 });
@@ -281,7 +281,7 @@ describe('APIKeyEngine', () => {
             });
 
             it('should reject key bound to different application', async () => {
-                setMockRunViewResult('MJ: API Key Applications', {
+                SetMockRunViewResult('MJ: API Key Applications', {
                     Success: true,
                     Results: [{ APIKeyID: 'key-id', ApplicationID: 'other-app-id' }]
                 });
@@ -296,7 +296,7 @@ describe('APIKeyEngine', () => {
             });
 
             it('should reject unknown application', async () => {
-                setMockRunViewResult('MJ: API Applications', {
+                SetMockRunViewResult('MJ: API Applications', {
                     Success: true,
                     Results: []
                 });
@@ -333,7 +333,7 @@ describe('APIKeyEngine', () => {
                 Status: 'Active'
             });
 
-            setMockRunViewResult('MJ: API Keys', {
+            SetMockRunViewResult('MJ: API Keys', {
                 Success: true,
                 Results: [mockApiKey]
             });
@@ -345,26 +345,26 @@ describe('APIKeyEngine', () => {
                 IsActive: true
             });
 
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: [mockApp]
             });
 
             // Mock global key (no bindings)
-            setMockRunViewResult('MJ: API Key Applications', {
+            SetMockRunViewResult('MJ: API Key Applications', {
                 Success: true,
                 Results: []
             });
 
             // Mock scope
-            setMockRunViewResult('MJ: API Scopes', {
+            SetMockRunViewResult('MJ: API Scopes', {
                 Success: true,
                 Results: [{ ID: 'scope-id', FullPath: 'entity:read', IsActive: true }]
             });
         });
 
         it('should reject invalid API key', async () => {
-            setMockRunViewResult('MJ: API Keys', {
+            SetMockRunViewResult('MJ: API Keys', {
                 Success: true,
                 Results: []
             });
@@ -382,7 +382,7 @@ describe('APIKeyEngine', () => {
         });
 
         it('should reject unknown application', async () => {
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: []
             });
@@ -406,7 +406,7 @@ describe('APIKeyEngine', () => {
                 IsActive: false
             });
 
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: [inactiveApp]
             });
@@ -440,7 +440,7 @@ describe('APIKeyEngine', () => {
 
         it('should evaluate scope rules and allow', async () => {
             // App ceiling allows entity:read
-            setMockRunViewResult('MJ: API Application Scopes', {
+            SetMockRunViewResult('MJ: API Application Scopes', {
                 Success: true,
                 Results: [{
                     ID: 'app-scope-id',
@@ -453,7 +453,7 @@ describe('APIKeyEngine', () => {
             });
 
             // API key has entity:read scope assigned (required with default deny behavior)
-            setMockRunViewResult('MJ: API Key Scopes', {
+            SetMockRunViewResult('MJ: API Key Scopes', {
                 Success: true,
                 Results: [{
                     ID: 'key-scope-id',
@@ -480,7 +480,7 @@ describe('APIKeyEngine', () => {
 
         it('should include log ID in result', async () => {
             // App ceiling allows entity:read
-            setMockRunViewResult('MJ: API Application Scopes', {
+            SetMockRunViewResult('MJ: API Application Scopes', {
                 Success: true,
                 Results: [{
                     ID: 'app-scope-id',
@@ -493,7 +493,7 @@ describe('APIKeyEngine', () => {
             });
 
             // API key has entity:read scope assigned (required with default deny behavior)
-            setMockRunViewResult('MJ: API Key Scopes', {
+            SetMockRunViewResult('MJ: API Key Scopes', {
                 Success: true,
                 Results: [{
                     ID: 'key-scope-id',
@@ -512,7 +512,7 @@ describe('APIKeyEngine', () => {
                 ID: 'log-id',
                 Save: vi.fn().mockResolvedValue(true)
             };
-            setMockEntity('MJ: API Key Usage Logs', mockLogEntity);
+            SetMockEntity('MJ: API Key Usage Logs', mockLogEntity);
 
             const result = await engine.Authorize(
                 validHash,
@@ -536,7 +536,7 @@ describe('APIKeyEngine', () => {
                 IsActive: true
             });
 
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: [mockApp]
             });
@@ -548,7 +548,7 @@ describe('APIKeyEngine', () => {
         });
 
         it('should return null for unknown application', async () => {
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: []
             });
@@ -565,7 +565,7 @@ describe('APIKeyEngine', () => {
                 IsActive: true
             });
 
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: [mockApp]
             });
@@ -574,7 +574,7 @@ describe('APIKeyEngine', () => {
             await engine.GetApplicationByName('MCPServer', asUserInfo(contextUser));
 
             // Clear mock results
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: []
             });
@@ -594,7 +594,7 @@ describe('APIKeyEngine', () => {
                 IsActive: true
             });
 
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: [mockApp]
             });
@@ -606,7 +606,7 @@ describe('APIKeyEngine', () => {
             engine.ClearCache();
 
             // Clear mock results
-            setMockRunViewResult('MJ: API Applications', {
+            SetMockRunViewResult('MJ: API Applications', {
                 Success: true,
                 Results: []
             });

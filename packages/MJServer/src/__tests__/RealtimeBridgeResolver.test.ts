@@ -50,8 +50,10 @@ vi.mock('@memberjunction/ai-agents', () => ({
 // Mock the meeting-recording registration so the thin resolver is tested in isolation (no MJStorage /
 // core-entities graph). Its own behavior is covered by meetingRecordingRegistration.test.ts.
 vi.mock('../resolvers/meetingRecordingRegistration', () => ({
-  registerMeetingRecordingFile: vi.fn(async () => ({ Success: true, RecordingFileID: 'file-1', ConversationID: 'conv-1' })),
-  correlateRecordingStart: vi.fn(async () => true),
+  RegisterMeetingRecordingFile: vi.fn(async () => ({ Success: true, RecordingFileID: 'file-1', ConversationID: 'conv-1' })),
+    get registerMeetingRecordingFile() { return this.RegisterMeetingRecordingFile; },
+  CorrelateRecordingStart: vi.fn(async () => true),
+    get correlateRecordingStart() { return this.CorrelateRecordingStart; },
 }));
 
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';

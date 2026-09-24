@@ -130,116 +130,224 @@ export class SimpleRecordListComponent extends BaseAngularComponent implements O
     this.isLoading = false
   }
 
-  public selectRecord(event: MouseEvent | undefined, r: BaseEntity) {
+  public SelectRecord(event: MouseEvent | undefined, r: BaseEntity) {
     if (event)
       event.stopPropagation(); // prevent row from getting click
 
     this.RecordSelected.emit(r);
   }
 
-  public deleteRecordDialogVisible: boolean = false;
-  public customActionDialogVisible: boolean = false;
-  public deleteRecordItem!: BaseEntity | null;
-  public customActionItem!: BaseEntity | undefined;
+  /** @deprecated Use {@link SelectRecord}. */
+  public selectRecord(event: MouseEvent | undefined, r: BaseEntity) {
+    return this.SelectRecord(event, r);
+  }
+
+  public DeleteRecordDialogVisible: boolean = false;
+
+  /** @deprecated Use {@link DeleteRecordDialogVisible}. */
+  public get deleteRecordDialogVisible(): boolean {
+    return this.DeleteRecordDialogVisible;
+  }
+  /** @deprecated Use {@link DeleteRecordDialogVisible}. */
+  public set deleteRecordDialogVisible(value: boolean) {
+    this.DeleteRecordDialogVisible = value;
+  }
+  public CustomActionDialogVisible: boolean = false;
+
+  /** @deprecated Use {@link CustomActionDialogVisible}. */
+  public get customActionDialogVisible(): boolean {
+    return this.CustomActionDialogVisible;
+  }
+  /** @deprecated Use {@link CustomActionDialogVisible}. */
+  public set customActionDialogVisible(value: boolean) {
+    this.CustomActionDialogVisible = value;
+  }
+  public DeleteRecordItem!: BaseEntity | null;
+
+  /** @deprecated Use {@link DeleteRecordItem}. */
+  public get deleteRecordItem(): BaseEntity | null {
+    return this.DeleteRecordItem;
+  }
+  /** @deprecated Use {@link DeleteRecordItem}. */
+  public set deleteRecordItem(value: BaseEntity | null) {
+    this.DeleteRecordItem = value;
+  }
+  public CustomActionItem!: BaseEntity | undefined;
+
+  /** @deprecated Use {@link CustomActionItem}. */
+  public get customActionItem(): BaseEntity | undefined {
+    return this.CustomActionItem;
+  }
+  /** @deprecated Use {@link CustomActionItem}. */
+  public set customActionItem(value: BaseEntity | undefined) {
+    this.CustomActionItem = value;
+  }
   
-  public async deleteRecord(event: MouseEvent, r: BaseEntity) {
+  public async DeleteRecord(event: MouseEvent, r: BaseEntity) {
     // confirm with the user first
-    this.deleteRecordItem = r;
-    this.deleteRecordDialogVisible = true;
+    this.DeleteRecordItem = r;
+    this.DeleteRecordDialogVisible = true;
     if (event)
       event.stopPropagation(); // prevent row from getting click
   }
 
-  public async performCustomAction(event: MouseEvent, r: BaseEntity) {
+  /** @deprecated Use {@link DeleteRecord}. */
+  public async deleteRecord(event: MouseEvent, r: BaseEntity) {
+    return this.DeleteRecord(event, r);
+  }
+
+  public async PerformCustomAction(event: MouseEvent, r: BaseEntity) {
     // first emit the clicked event to allow the parent to react
     this.CustomActionClicked.emit(r);
     
     // confirm with the user
-    this.customActionItem = r;
-    this.customActionDialogVisible = true;
+    this.CustomActionItem = r;
+    this.CustomActionDialogVisible = true;
     if (event)
       event.stopPropagation(); // prevent row from getting click
+  }
+
+  /** @deprecated Use {@link PerformCustomAction}. */
+  public async performCustomAction(event: MouseEvent, r: BaseEntity) {
+    return this.PerformCustomAction(event, r);
   }
   
   /**
    * Gets the custom action icon for a record, using the function if provided, otherwise the static icon
    */
-  public getCustomActionIcon(record: BaseEntity): string {
+  public GetCustomActionIcon(record: BaseEntity): string {
     if (this.CustomActionIconFunction) {
       return this.CustomActionIconFunction(record);
     }
     return this.CustomActionIcon;
   }
+
+  /** @deprecated Use {@link GetCustomActionIcon}. */
+  public getCustomActionIcon(record: BaseEntity): string {
+    return this.GetCustomActionIcon(record);
+  }
   
   /**
    * Gets the custom action tooltip for a record, using the function if provided, otherwise the static tooltip
    */
-  public getCustomActionTooltip(record: BaseEntity): string {
+  public GetCustomActionTooltip(record: BaseEntity): string {
     if (this.CustomActionTooltipFunction) {
       return this.CustomActionTooltipFunction(record);
     }
     return this.CustomActionTooltip;
   }
 
-  public async closeCustomActionDialog(result: 'Yes' | 'No') {
-    this.customActionDialogVisible = false;
-    if (result === 'Yes') {
-      // emit the event so the parent can handle the action
-      this.CustomActionConfirmed.emit(this.customActionItem);
-    }
-    this.customActionItem = undefined;
+  /** @deprecated Use {@link GetCustomActionTooltip}. */
+  public getCustomActionTooltip(record: BaseEntity): string {
+    return this.GetCustomActionTooltip(record);
   }
 
-  public async closeDeleteDialog(result: 'Yes' | 'No') {
-    // if the user confirms, delete the record
-    this.deleteRecordDialogVisible = false;
+  public async CloseCustomActionDialog(result: 'Yes' | 'No') {
+    this.CustomActionDialogVisible = false;
     if (result === 'Yes') {
-      if (!await this.deleteRecordItem!.Delete()) {
+      // emit the event so the parent can handle the action
+      this.CustomActionConfirmed.emit(this.CustomActionItem);
+    }
+    this.CustomActionItem = undefined;
+  }
+
+  /** @deprecated Use {@link CloseCustomActionDialog}. */
+  public async closeCustomActionDialog(result: 'Yes' | 'No') {
+    return this.CloseCustomActionDialog(result);
+  }
+
+  public async CloseDeleteDialog(result: 'Yes' | 'No') {
+    // if the user confirms, delete the record
+    this.DeleteRecordDialogVisible = false;
+    if (result === 'Yes') {
+      if (!await this.DeleteRecordItem!.Delete()) {
         // show an error message
-        const errorMessage = this.deleteRecordItem!.LatestResult.CompleteMessage;
+        const errorMessage = this.DeleteRecordItem!.LatestResult.CompleteMessage;
         MJNotificationService.Instance.CreateSimpleNotification('Error deleting record: ' + errorMessage, 'error', 3000);
       }
       else 
         this.Refresh(); // refresh the list
     }
-    this.deleteRecordItem = null;
+    this.DeleteRecordItem = null;
   }
 
-  public editOrNewRecord!: BaseEntity;
-  public showEditOrNewRecordForm: boolean = false;
-  public recordMode: 'new' | 'edit' = 'new';
-  public async createNewRecord() {
+  /** @deprecated Use {@link CloseDeleteDialog}. */
+  public async closeDeleteDialog(result: 'Yes' | 'No') {
+    return this.CloseDeleteDialog(result);
+  }
+
+  public EditOrNewRecord!: BaseEntity;
+
+  /** @deprecated Use {@link EditOrNewRecord}. */
+  public get editOrNewRecord(): BaseEntity {
+    return this.EditOrNewRecord;
+  }
+  /** @deprecated Use {@link EditOrNewRecord}. */
+  public set editOrNewRecord(value: BaseEntity) {
+    this.EditOrNewRecord = value;
+  }
+  public ShowEditOrNewRecordForm: boolean = false;
+
+  /** @deprecated Use {@link ShowEditOrNewRecordForm}. */
+  public get showEditOrNewRecordForm(): boolean {
+    return this.ShowEditOrNewRecordForm;
+  }
+  /** @deprecated Use {@link ShowEditOrNewRecordForm}. */
+  public set showEditOrNewRecordForm(value: boolean) {
+    this.ShowEditOrNewRecordForm = value;
+  }
+  public RecordMode: 'new' | 'edit' = 'new';
+
+  /** @deprecated Use {@link RecordMode}. */
+  public get recordMode(): 'new' | 'edit' {
+    return this.RecordMode;
+  }
+  /** @deprecated Use {@link RecordMode}. */
+  public set recordMode(value: 'new' | 'edit') {
+    this.RecordMode = value;
+  }
+  public async CreateNewRecord() {
     // attempt to create a new record and if success, navigate to the new record
     const md = this.ProviderToUse;
-    this.editOrNewRecord = await md.GetEntityObject(this.EntityName);
-    if (this.editOrNewRecord) {
-      this.editOrNewRecord.NewRecord();
-      this.recordMode = 'new';
-      this.showEditOrNewRecordForm = true;
+    this.EditOrNewRecord = await md.GetEntityObject(this.EntityName);
+    if (this.EditOrNewRecord) {
+      this.EditOrNewRecord.NewRecord();
+      this.RecordMode = 'new';
+      this.ShowEditOrNewRecordForm = true;
     }
   }
 
-  public async editRecord(event: MouseEvent, r: BaseEntity) {
-    this.editOrNewRecord = r;
-    this.recordMode = 'edit';
-    this.showEditOrNewRecordForm = true;
+  /** @deprecated Use {@link CreateNewRecord}. */
+  public async createNewRecord() {
+    return this.CreateNewRecord();
+  }
+
+  public async EditRecord(event: MouseEvent, r: BaseEntity) {
+    this.EditOrNewRecord = r;
+    this.RecordMode = 'edit';
+    this.ShowEditOrNewRecordForm = true;
     if (event)
       event.stopPropagation(); // prevent row from getting click
   }
 
-  public async onEditOrNewRecordFormClosed(result: 'Save' | 'Cancel') {
-    if (!this.editOrNewRecord)
+  /** @deprecated Use {@link EditRecord}. */
+  public async editRecord(event: MouseEvent, r: BaseEntity) {
+    return this.EditRecord(event, r);
+  }
+
+  public async OnEditOrNewRecordFormClosed(result: 'Save' | 'Cancel') {
+    if (!this.EditOrNewRecord)
       return; // this can happen if the user closes the form before the record is loaded
 
-    this.showEditOrNewRecordForm = false;
+    this.ShowEditOrNewRecordForm = false;
    
     if (result === 'Save') {
       // the dialog already saved the record, just check to make sure it was saved and if so, navigate
-      if (this.editOrNewRecord.IsSaved) {
-        if (this.recordMode === 'edit')
-          this.RecordEdited.emit(this.editOrNewRecord);
+      if (this.EditOrNewRecord.IsSaved) {
+        if (this.RecordMode === 'edit')
+          this.RecordEdited.emit(this.EditOrNewRecord);
         else
-          this.RecordCreated.emit(this.editOrNewRecord);
+          this.RecordCreated.emit(this.EditOrNewRecord);
 
         // refresh our grid now
         await this.Refresh();
@@ -249,7 +357,12 @@ export class SimpleRecordListComponent extends BaseAngularComponent implements O
     }
   }
 
-  public getRecordName(r: BaseEntity): string {
+  /** @deprecated Use {@link OnEditOrNewRecordFormClosed}. */
+  public async onEditOrNewRecordFormClosed(result: 'Save' | 'Cancel') {
+    return this.OnEditOrNewRecordFormClosed(result);
+  }
+
+  public GetRecordName(r: BaseEntity): string {
     // check to see if we have any columns in the entity that have IsNameField = 1, the fall back from there is to look for a column named "Name", and if that doesn't work we return the primary key(s)
     const md = this.ProviderToUse;
     const e = md.Entities.find(e => e.Name === this.EntityName);
@@ -269,5 +382,10 @@ export class SimpleRecordListComponent extends BaseAngularComponent implements O
         return "Record: " + pkString;
       }
     }
+  }
+
+  /** @deprecated Use {@link GetRecordName}. */
+  public getRecordName(r: BaseEntity): string {
+    return this.GetRecordName(r);
   }
 }

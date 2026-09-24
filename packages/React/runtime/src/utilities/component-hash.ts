@@ -24,7 +24,7 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
  * @param spec The root component spec.
  * @returns A short version string of the form `v1a2b3c4d`.
  */
-export function generateComponentHierarchyHash(spec: ComponentSpec): string {
+export function GenerateComponentHierarchyHash(spec: ComponentSpec): string {
   const codeStrings: string[] = [];
 
   const collectCode = (s: ComponentSpec): void => {
@@ -51,4 +51,9 @@ export function generateComponentHierarchyHash(spec: ComponentSpec): string {
 
   const hexHash = Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
   return `v${hexHash}`;
+}
+
+/** @deprecated Use {@link GenerateComponentHierarchyHash}. */
+export function generateComponentHierarchyHash(spec: ComponentSpec): string {
+  return GenerateComponentHierarchyHash(spec);
 }

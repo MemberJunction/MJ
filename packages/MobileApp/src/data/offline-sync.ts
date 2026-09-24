@@ -26,9 +26,9 @@ import { list, remove, RecordError, type OfflineMutation } from '@/data/offline-
 /** The tally returned by a replay pass. */
 export type ReplayResult = {
     /** Number of mutations successfully written to the server this pass. */
-    synced: number;
+    synced: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Number of mutations dropped due to unrecoverable business failures this pass. */
-    failed: number;
+    failed: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /** The in-flight replay promise, used to collapse concurrent {@link ReplayQueue} calls. */

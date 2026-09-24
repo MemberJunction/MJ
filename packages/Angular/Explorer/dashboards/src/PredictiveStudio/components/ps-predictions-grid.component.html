@@ -438,16 +438,16 @@
               <tbody>
                 @for (pt of historyPoints; track pt.runId) {
                   <tr>
-                    <td>{{ pt.runDate | date:'short' }}</td>
+                    <td>{{ pt.RunDate | date:'short' }}</td>
                     <td><span class="ps-badge" [class]="pt.status === 'Succeeded' ? 'green' : 'gray'">{{ pt.status }}</span></td>
-                    <td><strong class="ps-mono">{{ pt.scoreFormatted }}</strong></td>
+                    <td><strong class="ps-mono">{{ pt.ScoreFormatted }}</strong></td>
                     <td>
-                      @if (pt.delta == null) {
+                      @if (pt.Delta == null) {
                         <span class="pg-delta-pill neutral">Baseline</span>
-                      } @else if (pt.delta > 0.005) {
-                        <span class="pg-delta-pill up"><i class="fa-solid fa-arrow-up"></i> +{{ (pt.delta * 100).toFixed(1) }}%</span>
-                      } @else if (pt.delta < -0.005) {
-                        <span class="pg-delta-pill down"><i class="fa-solid fa-arrow-down"></i> {{ (pt.delta * 100).toFixed(1) }}%</span>
+                      } @else if (pt.Delta > 0.005) {
+                        <span class="pg-delta-pill up"><i class="fa-solid fa-arrow-up"></i> +{{ (pt.Delta * 100).toFixed(1) }}%</span>
+                      } @else if (pt.Delta < -0.005) {
+                        <span class="pg-delta-pill down"><i class="fa-solid fa-arrow-down"></i> {{ (pt.Delta * 100).toFixed(1) }}%</span>
                       } @else {
                         <span class="pg-delta-pill neutral">0%</span>
                       }
@@ -459,7 +459,7 @@
             </table>
           } @else if (historyPoints.length === 1) {
             <div class="ps-small ps-muted">
-              This record has been scored once so far ({{ historyPoints[0].runDate | date:'medium' }}). As more runs occur over time, the score trendline will track changes here.
+              This record has been scored once so far ({{ historyPoints[0].RunDate | date:'medium' }}). As more runs occur over time, the score trendline will track changes here.
             </div>
           } @else {
             <div class="ps-small ps-muted">No historical runs found for this record.</div>

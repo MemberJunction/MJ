@@ -65,13 +65,18 @@ const DESCRIPTION_DETAIL_LEVELS: readonly number[] = [160, 110, 70, 40, 0];
  * the Action that produced it; the collision check lives in {@link buildActionToolSet} rather than
  * here, so this stays a pure function of the name.
  */
-export function sanitizeToolName(actionName: string): string {
+export function SanitizeToolName(actionName: string): string {
     return actionName
         .trim()
         .replace(/[^a-zA-Z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '')
         .toLowerCase()
         .slice(0, MAX_TOOL_NAME_LENGTH);
+}
+
+/** @deprecated Use {@link SanitizeToolName}. */
+export function sanitizeToolName(actionName: string): string {
+    return SanitizeToolName(actionName);
 }
 
 /**
@@ -198,7 +203,7 @@ function describeTool(action: MJActionEntityExtended, params: readonly MJActionP
  * Only `Input` and `Both` params are declared: an `Output` param is something the Action returns,
  * and declaring it would invite the model to supply it.
  */
-export function buildToolFromAction(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): ChatTool {
+export function BuildToolFromAction(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): ChatTool {
     const properties: Record<string, unknown> = {};
     const required: string[] = [];
 
@@ -222,10 +227,15 @@ export function buildToolFromAction(action: MJActionEntityExtended, params: read
     }
 
     return {
-        name: sanitizeToolName(action.Name),
+        name: SanitizeToolName(action.Name),
         description: describeTool(action, params),
         inputSchema
     };
+}
+
+/** @deprecated Use {@link BuildToolFromAction}. */
+export function buildToolFromAction(action: MJActionEntityExtended, params: readonly MJActionParamEntity[]): ChatTool {
+    return BuildToolFromAction(action, params);
 }
 
 /**
@@ -237,7 +247,7 @@ export function buildToolFromAction(action: MJActionEntityExtended, params: read
  * looks like a model error and would be found, if at all, by someone reading eval failures.
  * Failing at build time turns it into a metadata problem with a name attached.
  */
-export function buildActionToolSet(
+export function BuildActionToolSet(
     actions: readonly MJActionEntityExtended[],
     paramsByActionId: ReadonlyMap<string, readonly MJActionParamEntity[]>
 ): ActionToolSet {
@@ -245,7 +255,7 @@ export function buildActionToolSet(
     const tools: ChatTool[] = [];
 
     for (const action of actions) {
-        const tool = buildToolFromAction(action, paramsByActionId.get(action.ID) ?? []);
+        const tool = BuildToolFromAction(action, paramsByActionId.get(action.ID) ?? []);
         const existing = byToolName.get(tool.name);
         if (existing) {
             throw new Error(
@@ -261,6 +271,14 @@ export function buildActionToolSet(
     }
 
     return { tools, byToolName };
+}
+
+/** @deprecated Use {@link BuildActionToolSet}. */
+export function buildActionToolSet(
+    actions: readonly MJActionEntityExtended[],
+    paramsByActionId: ReadonlyMap<string, readonly MJActionParamEntity[]>
+): ActionToolSet {
+    return BuildActionToolSet(actions, paramsByActionId);
 }
 
 /** The two fields of an `MJ: AI Agent Actions` row that declaration control reads. */
@@ -280,7 +298,7 @@ export interface AgentActionDeclarationRow {
  * Note the consequence the design accepts: in native mode the prose catalog is not rendered, so an
  * action removed here is unreachable on that turn, not merely de-emphasised.
  */
-export function filterDeclarableActions(
+export function FilterDeclarableActions(
     actions: readonly MJActionEntityExtended[],
     agentActionRows: ReadonlyArray<AgentActionDeclarationRow>
 ): MJActionEntityExtended[] {
@@ -290,4 +308,12 @@ export function filterDeclarableActions(
             .map((row) => (row.ActionID as string).toLowerCase())
     );
     return actions.filter((action) => !excluded.has(action.ID.toLowerCase()));
+}
+
+/** @deprecated Use {@link FilterDeclarableActions}. */
+export function filterDeclarableActions(
+    actions: readonly MJActionEntityExtended[],
+    agentActionRows: ReadonlyArray<AgentActionDeclarationRow>
+): MJActionEntityExtended[] {
+    return FilterDeclarableActions(actions, agentActionRows);
 }

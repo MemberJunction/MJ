@@ -64,7 +64,7 @@ export class RuntimeActionExecutor extends BaseSingleton<RuntimeActionExecutor> 
      * Executes a single Runtime action. Returns a result shape that
      * `ActionEngineServer.InternalRunAction()` can fold into an `ActionResult`.
      */
-    public async execute(
+    public async Execute(
         params: RuntimeActionExecutionParams
     ): Promise<RuntimeActionExecutionResult> {
         const { action } = params;
@@ -147,6 +147,13 @@ export class RuntimeActionExecutor extends BaseSingleton<RuntimeActionExecutor> 
         }
 
         return this.mapExecutionResult(params.params, execResult);
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    public async execute(
+        params: RuntimeActionExecutionParams
+    ): Promise<RuntimeActionExecutionResult> {
+        return this.Execute(params);
     }
 
     /**

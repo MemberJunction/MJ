@@ -88,7 +88,7 @@ export interface TeamsMeetingCoordinates {
  * @param joinUrl The Teams meeting join URL.
  * @returns The parsed coordinates, or `null` when no thread id can be extracted.
  */
-export function parseTeamsJoinUrl(joinUrl: string): TeamsMeetingCoordinates | null {
+export function ParseTeamsJoinUrl(joinUrl: string): TeamsMeetingCoordinates | null {
     const threadId = extractThreadId(joinUrl);
     if (!threadId) {
         return null;
@@ -101,6 +101,11 @@ export function parseTeamsJoinUrl(joinUrl: string): TeamsMeetingCoordinates | nu
         ...(context.TenantId ? { TenantId: context.TenantId } : {}),
         ...(messageId ? { MessageId: messageId } : {}),
     };
+}
+
+/** @deprecated Use {@link ParseTeamsJoinUrl}. */
+export function parseTeamsJoinUrl(joinUrl: string): TeamsMeetingCoordinates | null {
+    return ParseTeamsJoinUrl(joinUrl);
 }
 
 /** The Graph `POST /communications/calls` request body (the subset we construct for a join-by-URL bot call). */
@@ -133,8 +138,8 @@ export interface GraphCreateCallRequest {
  * @returns The Graph create-call request body.
  * @throws When no thread id can be resolved (neither explicit nor from the URL).
  */
-export function buildGraphCreateCallRequest(args: TeamsJoinArgs): GraphCreateCallRequest {
-    const parsed = parseTeamsJoinUrl(args.JoinUrl);
+export function BuildGraphCreateCallRequest(args: TeamsJoinArgs): GraphCreateCallRequest {
+    const parsed = ParseTeamsJoinUrl(args.JoinUrl);
     const threadId = args.ThreadId ?? parsed?.ThreadId;
     if (!threadId) {
         throw new Error(
@@ -155,6 +160,11 @@ export function buildGraphCreateCallRequest(args: TeamsJoinArgs): GraphCreateCal
     };
 }
 
+/** @deprecated Use {@link BuildGraphCreateCallRequest}. */
+export function buildGraphCreateCallRequest(args: TeamsJoinArgs): GraphCreateCallRequest {
+    return BuildGraphCreateCallRequest(args);
+}
+
 /** One Graph call participant as the participants collection / `participantsUpdated` notification reports it. */
 export interface GraphCallParticipant {
     /** The Graph participant id (`participant.id`) — stable for the participant's presence in the call. */
@@ -168,7 +178,7 @@ export interface GraphCallParticipant {
 }
 
 /** Normalizes a Graph meeting role string onto the bridge's {@link TeamsParticipantRole}. */
-export function mapGraphRole(role?: string): TeamsParticipantRole {
+export function MapGraphRole(role?: string): TeamsParticipantRole {
     switch ((role ?? '').trim().toLowerCase()) {
         case 'organizer':
             return 'Organizer';
@@ -181,22 +191,37 @@ export function mapGraphRole(role?: string): TeamsParticipantRole {
     }
 }
 
+/** @deprecated Use {@link MapGraphRole}. */
+export function mapGraphRole(role?: string): TeamsParticipantRole {
+    return MapGraphRole(role);
+}
+
 /**
  * **Pure** normalization of one Graph call participant onto the bridge's {@link TeamsParticipant}. Isolated
  * from the Graph SDK and from I/O so it unit-tests directly.
  */
-export function normalizeGraphParticipant(p: GraphCallParticipant): TeamsParticipant {
+export function NormalizeGraphParticipant(p: GraphCallParticipant): TeamsParticipant {
     return {
         ParticipantId: p.id,
         DisplayName: p.displayName,
-        Role: mapGraphRole(p.role),
+        Role: MapGraphRole(p.role),
         IsSelf: p.isSelf,
     };
 }
 
+/** @deprecated Use {@link NormalizeGraphParticipant}. */
+export function normalizeGraphParticipant(p: GraphCallParticipant): TeamsParticipant {
+    return NormalizeGraphParticipant(p);
+}
+
 /** **Pure** normalization of a full Graph participants collection onto the bridge roster. */
+export function NormalizeGraphRoster(participants: GraphCallParticipant[]): TeamsParticipant[] {
+    return participants.map(NormalizeGraphParticipant);
+}
+
+/** @deprecated Use {@link NormalizeGraphRoster}. */
 export function normalizeGraphRoster(participants: GraphCallParticipant[]): TeamsParticipant[] {
-    return participants.map(normalizeGraphParticipant);
+    return NormalizeGraphRoster(participants);
 }
 
 /** One raw per-participant audio frame the ACS inbound socket surfaces (PCM at the socket's sample rate). */
@@ -221,7 +246,7 @@ export interface AcsInboundAudioFrame {
  * @param modelRate The realtime model's expected inbound sample rate (Hz).
  * @returns The diarized PCM16 frame at the model rate.
  */
-export function transcodeInboundAudio(
+export function TranscodeInboundAudio(
     frame: AcsInboundAudioFrame,
     acsRate: number,
     modelRate: number,
@@ -235,6 +260,15 @@ export function transcodeInboundAudio(
     };
 }
 
+/** @deprecated Use {@link TranscodeInboundAudio}. */
+export function transcodeInboundAudio(
+    frame: AcsInboundAudioFrame,
+    acsRate: number,
+    modelRate: number,
+): TeamsAudioFrame {
+    return TranscodeInboundAudio(frame, acsRate, modelRate);
+}
+
 /**
  * **Pure** transcode of one outbound PCM16 frame (the agent's voice, at the model rate) to the ACS outbound
  * socket rate via the T0 codec when they differ. Returns a fresh buffer the caller can hand straight to the
@@ -245,8 +279,13 @@ export function transcodeInboundAudio(
  * @param acsRate The ACS audio-socket sample rate (Hz).
  * @returns The PCM16 audio at the ACS socket rate.
  */
-export function transcodeOutboundAudio(pcm: ArrayBuffer, modelRate: number, acsRate: number): ArrayBuffer {
+export function TranscodeOutboundAudio(pcm: ArrayBuffer, modelRate: number, acsRate: number): ArrayBuffer {
     return modelRate === acsRate ? pcm.slice(0) : resamplePcm16Buffer(pcm, modelRate, acsRate);
+}
+
+/** @deprecated Use {@link TranscodeOutboundAudio}. */
+export function transcodeOutboundAudio(pcm: ArrayBuffer, modelRate: number, acsRate: number): ArrayBuffer {
+    return TranscodeOutboundAudio(pcm, modelRate, acsRate);
 }
 
 /** Extracts and URL-decodes the `19:meeting_…@thread.v2` thread id from a Teams `meetup-join` URL path. */
@@ -418,7 +457,7 @@ export class RealTeamsBindings implements ITeamsMeetingSdk {
 
     /** @inheritdoc */
     public async join(args: TeamsJoinArgs): Promise<TeamsJoinResult> {
-        const request = buildGraphCreateCallRequest(args);
+        const request = BuildGraphCreateCallRequest(args);
         const result = await this.graph.CreateCall(request);
         this.callId = result.CallId;
         this.threadId = request.ThreadId;
@@ -442,7 +481,7 @@ export class RealTeamsBindings implements ITeamsMeetingSdk {
         if (!this.callId) {
             return;
         }
-        const out = transcodeOutboundAudio(pcm, this.modelSampleRate, this.media.SampleRate);
+        const out = TranscodeOutboundAudio(pcm, this.modelSampleRate, this.media.SampleRate);
         this.media.SendAudioFrame(this.callId, out);
     }
 
@@ -471,7 +510,7 @@ export class RealTeamsBindings implements ITeamsMeetingSdk {
         if (!this.callId) {
             return [];
         }
-        const roster = normalizeGraphRoster(await this.graph.GetParticipants(this.callId));
+        const roster = NormalizeGraphRoster(await this.graph.GetParticipants(this.callId));
         this.lastRoster = roster;
         return roster;
     }
@@ -500,10 +539,10 @@ export class RealTeamsBindings implements ITeamsMeetingSdk {
     /** Wires the Graph + ACS callbacks for the joined call to this binding's seam handlers. */
     private wireCallbacks(callId: string): void {
         this.media.OnAudioFrame(callId, (frame) =>
-            this.audioHandler?.(transcodeInboundAudio(frame, this.media.SampleRate, this.modelSampleRate)),
+            this.audioHandler?.(TranscodeInboundAudio(frame, this.media.SampleRate, this.modelSampleRate)),
         );
         this.graph.OnParticipantsUpdated(callId, (participants) =>
-            this.handleRosterUpdate(normalizeGraphRoster(participants)),
+            this.handleRosterUpdate(NormalizeGraphRoster(participants)),
         );
         this.graph.OnCallEnded(callId, () => this.endedHandler?.());
         // Hand-raise is partial on Teams — only wire it when the ACS plane exposes the optional method. Its

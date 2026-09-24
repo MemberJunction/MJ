@@ -6,7 +6,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { mjAppManifestSchema, type MJAppManifest } from './manifest-schema.js';
+import { MjAppManifestSchema, type MJAppManifest } from './manifest-schema.js';
 
 /**
  * Result of loading and validating a manifest.
@@ -57,7 +57,7 @@ export function ParseAndValidateManifest(jsonString: string): ManifestLoadResult
  * @returns Validated manifest or error details
  */
 export function ValidateManifestObject(obj: unknown): ManifestLoadResult {
-    const result = mjAppManifestSchema.safeParse(obj);
+    const result = MjAppManifestSchema.safeParse(obj);
 
     if (result.success) {
         return { Success: true, Manifest: result.data };

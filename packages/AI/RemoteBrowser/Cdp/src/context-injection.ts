@@ -30,7 +30,7 @@ const TEMPLATE_TOKEN = /\{\{\s*([\w.[\]]+)\s*\}\}/g;
  * @param path The dotted path.
  * @returns The value at the path, or `undefined`.
  */
-export function getValueFromPath(obj: unknown, path: string): unknown {
+export function GetValueFromPath(obj: unknown, path: string): unknown {
     if (obj == null || !path) {
         return undefined;
     }
@@ -54,6 +54,11 @@ export function getValueFromPath(obj: unknown, path: string): unknown {
     return current;
 }
 
+/** @deprecated Use {@link GetValueFromPath}. */
+export function getValueFromPath(obj: unknown, path: string): unknown {
+    return GetValueFromPath(obj, path);
+}
+
 /**
  * Substitutes every `{{path}}` token in a string with its resolved context value. Unresolved tokens are
  * left intact (rather than emitting `'undefined'`), surfacing a clear authoring error.
@@ -62,14 +67,19 @@ export function getValueFromPath(obj: unknown, path: string): unknown {
  * @param context The context object values resolve against.
  * @returns The resolved string.
  */
-export function resolveTemplateString(value: string, context: Record<string, unknown>): string {
+export function ResolveTemplateString(value: string, context: Record<string, unknown>): string {
     if (!value || value.indexOf('{{') === -1) {
         return value;
     }
     return value.replace(TEMPLATE_TOKEN, (match, path: string) => {
-        const resolved = getValueFromPath(context, path);
+        const resolved = GetValueFromPath(context, path);
         return resolved == null ? match : String(resolved);
     });
+}
+
+/** @deprecated Use {@link ResolveTemplateString}. */
+export function resolveTemplateString(value: string, context: Record<string, unknown>): string {
+    return ResolveTemplateString(value, context);
 }
 
 /**
@@ -81,7 +91,7 @@ export function resolveTemplateString(value: string, context: Record<string, unk
  * @param context The context object values resolve against.
  * @returns A resolved clone (or the original when there is nothing to resolve).
  */
-export function resolveActionTemplates(action: BrowserAction, context: Record<string, unknown>): BrowserAction {
+export function ResolveActionTemplates(action: BrowserAction, context: Record<string, unknown>): BrowserAction {
     const a = action as BrowserAction & { Text?: string; Url?: string };
     const needsText = typeof a.Text === 'string' && a.Text.indexOf('{{') !== -1;
     const needsUrl = typeof a.Url === 'string' && a.Url.indexOf('{{') !== -1;
@@ -90,12 +100,17 @@ export function resolveActionTemplates(action: BrowserAction, context: Record<st
     }
     const clone = Object.assign(Object.create(Object.getPrototypeOf(action)), action) as typeof a;
     if (needsText) {
-        clone.Text = resolveTemplateString(a.Text as string, context);
+        clone.Text = ResolveTemplateString(a.Text as string, context);
     }
     if (needsUrl) {
-        clone.Url = resolveTemplateString(a.Url as string, context);
+        clone.Url = ResolveTemplateString(a.Url as string, context);
     }
     return clone as BrowserAction;
+}
+
+/** @deprecated Use {@link ResolveActionTemplates}. */
+export function resolveActionTemplates(action: BrowserAction, context: Record<string, unknown>): BrowserAction {
+    return ResolveActionTemplates(action, context);
 }
 
 /**
@@ -108,11 +123,11 @@ export function resolveActionTemplates(action: BrowserAction, context: Record<st
  * @param context The model-blind context object.
  * @returns A proxy adapter that injects context values at the action boundary.
  */
-export function wrapAdapterWithContext(inner: BaseBrowserAdapter, context: Record<string, unknown>): BaseBrowserAdapter {
+export function WrapAdapterWithContext(inner: BaseBrowserAdapter, context: Record<string, unknown>): BaseBrowserAdapter {
     return new Proxy(inner, {
         get(target, prop) {
             if (prop === 'ExecuteAction') {
-                return (action: BrowserAction) => target.ExecuteAction(resolveActionTemplates(action, context));
+                return (action: BrowserAction) => target.ExecuteAction(ResolveActionTemplates(action, context));
             }
             // Bind methods to the real target and read getters with the target as receiver, so the inner
             // adapter's private state is accessed correctly through the proxy.
@@ -120,4 +135,9 @@ export function wrapAdapterWithContext(inner: BaseBrowserAdapter, context: Recor
             return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
         },
     });
+}
+
+/** @deprecated Use {@link WrapAdapterWithContext}. */
+export function wrapAdapterWithContext(inner: BaseBrowserAdapter, context: Record<string, unknown>): BaseBrowserAdapter {
+    return WrapAdapterWithContext(inner, context);
 }

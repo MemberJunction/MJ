@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { IntegrationEngine } from '../IntegrationEngine.js';
-import { CONTENT_HASH_COLUMN, computeContentHash } from '../ContentHash.js';
+import { CONTENT_HASH_COLUMN, ComputeContentHash } from '../ContentHash.js';
 
 /**
  * A row whose stored content hash no longer matches must be repaired, not skipped forever.
@@ -33,7 +33,7 @@ const MISSING_COLUMN = { id: 'ext-1', name: 'Ada' };   // source stopped sending
 
 describe('needsSyncStateRepair — a stale content hash re-converges', () => {
     it('repairs a row whose stored hash no longer matches what we now map', () => {
-        const stored = computeContentHash(FULL);
+        const stored = ComputeContentHash(FULL);
         const h = host();
         expect(
             h.needsSyncStateRepair(
@@ -45,7 +45,7 @@ describe('needsSyncStateRepair — a stale content hash re-converges', () => {
     });
 
     it('leaves a matching row alone — the skip is the whole point of hashing', () => {
-        const stored = computeContentHash(FULL);
+        const stored = ComputeContentHash(FULL);
         const h = host();
         expect(
             h.needsSyncStateRepair(
@@ -80,7 +80,7 @@ describe('needsSyncStateRepair — a stale content hash re-converges', () => {
         const h = host();
         expect(
             h.needsSyncStateRepair(
-                entityWith({ [CONTENT_HASH_COLUMN]: computeContentHash(FULL) }),
+                entityWith({ [CONTENT_HASH_COLUMN]: ComputeContentHash(FULL) }),
                 info(CONTENT_HASH_COLUMN),
             ),
         ).toBe(false);
@@ -89,7 +89,7 @@ describe('needsSyncStateRepair — a stale content hash re-converges', () => {
     it('still repairs the pre-existing sync-state cases, hash or no hash', () => {
         // Regression guard: folding hash staleness in must not weaken tombstone / error recovery.
         const h = host();
-        const matching = { [CONTENT_HASH_COLUMN]: computeContentHash(FULL) };
+        const matching = { [CONTENT_HASH_COLUMN]: ComputeContentHash(FULL) };
         expect(h.needsSyncStateRepair(
             entityWith({ ...matching, __mj_integration_IsTombstoned: true }),
             info(CONTENT_HASH_COLUMN, '__mj_integration_IsTombstoned'), { MappedFields: FULL })).toBe(true);
@@ -105,7 +105,7 @@ describe('needsSyncStateRepair — a stale content hash re-converges', () => {
         // SetStandardIntegrationFields stamps CONTENT_HASH_COLUMN from record.MappedFields, so the
         // write this triggers stores the hash of what we now map. The NEXT sync then matches and
         // skips: the repair happens once, not every run.
-        const afterRepair = computeContentHash(MISSING_COLUMN);
+        const afterRepair = ComputeContentHash(MISSING_COLUMN);
         const h = host();
         expect(
             h.needsSyncStateRepair(

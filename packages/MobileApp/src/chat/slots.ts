@@ -153,12 +153,12 @@ export type MJChatRealtimeSessionCardProps = {
  * replace.
  */
 export type MJChatSlots = {
-    emptyState?: ComponentType<MJChatEmptyStateProps>;
-    agentPresence?: ComponentType<MJChatAgentPresenceProps>;
-    header?: ComponentType<MJChatHeaderProps>;
-    headerActions?: ComponentType<MJChatHeaderActionsProps>;
-    messageExtra?: ComponentType<MJChatMessageExtraProps>;
-    demonstrationSurface?: ComponentType<MJChatDemonstrationSurfaceProps>;
-    messageRenderer?: ComponentType<MJChatMessageRendererProps>;
-    realtimeSessionCard?: ComponentType<MJChatRealtimeSessionCardProps>;
+    emptyState?: ComponentType<MJChatEmptyStateProps>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    agentPresence?: ComponentType<MJChatAgentPresenceProps>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    header?: ComponentType<MJChatHeaderProps>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    headerActions?: ComponentType<MJChatHeaderActionsProps>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    messageExtra?: ComponentType<MJChatMessageExtraProps>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    demonstrationSurface?: ComponentType<MJChatDemonstrationSurfaceProps>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    messageRenderer?: ComponentType<MJChatMessageRendererProps>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    realtimeSessionCard?: ComponentType<MJChatRealtimeSessionCardProps>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };

@@ -7,8 +7,8 @@ import {
    TYPE_REOPEN_REASONS,
    TRACKED_FIELD_COLUMNS,
    EntityFieldSnapshotRow,
-   diffEntityFieldSnapshots,
-   normalizeSnapshotValue,
+   DiffEntityFieldSnapshots,
+   NormalizeSnapshotValue,
 } from '../../Database/entity-field-change-tracking';
 import { CodeGenConnection, CodeGenQueryResult } from '../../Database/codeGenDatabaseProvider';
 import { SQLLogging } from '../../Misc/sql_logging';
@@ -110,7 +110,7 @@ describe('T1 — Field Change Tracking (C1)', () => {
          const before = new Map([[row.ID, row]]);
          const after = new Map([[row.ID, { ...row }]]);
 
-         const changes = diffEntityFieldSnapshots(before, after, () => false);
+         const changes = DiffEntityFieldSnapshots(before, after, () => false);
          expect(changes).toEqual([]);
       });
 
@@ -120,7 +120,7 @@ describe('T1 — Field Change Tracking (C1)', () => {
          const before = new Map([[rowBefore.ID, rowBefore]]);
          const after = new Map([[rowAfter.ID, rowAfter]]);
 
-         const changes = diffEntityFieldSnapshots(before, after, () => false);
+         const changes = DiffEntityFieldSnapshots(before, after, () => false);
          expect(changes).toHaveLength(1);
          expect(changes[0].reasons).toEqual(['Length']);
          expect(changes[0].fieldName).toBe('Field1');
@@ -135,7 +135,7 @@ describe('T1 — Field Change Tracking (C1)', () => {
          const before = new Map([[rowBefore.ID, rowBefore]]);
          const after = new Map([[rowAfter.ID, rowAfter]]);
 
-         const changes = diffEntityFieldSnapshots(before, after, () => false);
+         const changes = DiffEntityFieldSnapshots(before, after, () => false);
          expect(changes).toEqual([]);
       });
 
@@ -148,7 +148,7 @@ describe('T1 — Field Change Tracking (C1)', () => {
             [rowAfterNew.ID, rowAfterNew],
          ]);
 
-         const changes = diffEntityFieldSnapshots(before, after, () => false);
+         const changes = DiffEntityFieldSnapshots(before, after, () => false);
          expect(changes).toEqual([]);
       });
 
@@ -157,7 +157,7 @@ describe('T1 — Field Change Tracking (C1)', () => {
          const before = new Map([[rowBefore.ID, rowBefore]]);
          const after = new Map<string, EntityFieldSnapshotRow>();
 
-         const changes = diffEntityFieldSnapshots(before, after, () => false);
+         const changes = DiffEntityFieldSnapshots(before, after, () => false);
          expect(changes).toEqual([]);
       });
 
@@ -167,7 +167,7 @@ describe('T1 — Field Change Tracking (C1)', () => {
          const before = new Map([[rowBefore.ID, rowBefore]]);
          const after = new Map([[rowAfter.ID, rowAfter]]);
 
-         const changes = diffEntityFieldSnapshots(before, after, (eid, name) => {
+         const changes = DiffEntityFieldSnapshots(before, after, (eid, name) => {
             return eid === rowBefore.EntityID && name === rowBefore.Name;
          });
          expect(changes).toEqual([]);
@@ -175,15 +175,15 @@ describe('T1 — Field Change Tracking (C1)', () => {
 
       describe('the normalization table', () => {
          it('trims strings and treats null ≡ empty string for Description, DefaultValue, RelatedEntityFieldName', () => {
-            expect(normalizeSnapshotValue('Description', null)).toBe('');
-            expect(normalizeSnapshotValue('Description', '  hello  ')).toBe('hello');
-            expect(normalizeSnapshotValue('Description', '')).toBe('');
+            expect(NormalizeSnapshotValue('Description', null)).toBe('');
+            expect(NormalizeSnapshotValue('Description', '  hello  ')).toBe('hello');
+            expect(NormalizeSnapshotValue('Description', '')).toBe('');
 
-            expect(normalizeSnapshotValue('DefaultValue', null)).toBe('');
-            expect(normalizeSnapshotValue('DefaultValue', '  (1)  ')).toBe('(1)');
+            expect(NormalizeSnapshotValue('DefaultValue', null)).toBe('');
+            expect(NormalizeSnapshotValue('DefaultValue', '  (1)  ')).toBe('(1)');
 
-            expect(normalizeSnapshotValue('RelatedEntityFieldName', null)).toBe('');
-            expect(normalizeSnapshotValue('RelatedEntityFieldName', '  ID  ')).toBe('ID');
+            expect(NormalizeSnapshotValue('RelatedEntityFieldName', null)).toBe('');
+            expect(NormalizeSnapshotValue('RelatedEntityFieldName', '  ID  ')).toBe('ID');
 
             // Snapshot rows with null vs '' do not report a change
             const rowBefore = makeSnapshotRow({ Description: null });
@@ -191,21 +191,21 @@ describe('T1 — Field Change Tracking (C1)', () => {
             const before = new Map([[rowBefore.ID, rowBefore]]);
             const after = new Map([[rowAfter.ID, rowAfter]]);
 
-            expect(diffEntityFieldSnapshots(before, after, () => false)).toEqual([]);
+            expect(DiffEntityFieldSnapshots(before, after, () => false)).toEqual([]);
          });
 
          it('compares RelatedEntityID case-insensitively and trimmed', () => {
-            expect(normalizeSnapshotValue('RelatedEntityID', '  C70448F9-9792-41D7-A82C-784B66429D54  ')).toBe(
+            expect(NormalizeSnapshotValue('RelatedEntityID', '  C70448F9-9792-41D7-A82C-784B66429D54  ')).toBe(
                'c70448f9-9792-41d7-a82c-784b66429d54'
             );
-            expect(normalizeSnapshotValue('RelatedEntityID', null)).toBe('');
+            expect(NormalizeSnapshotValue('RelatedEntityID', null)).toBe('');
 
             const rowBefore = makeSnapshotRow({ RelatedEntityID: 'C70448F9-9792-41D7-A82C-784B66429D54' });
             const rowAfter = makeSnapshotRow({ RelatedEntityID: 'c70448f9-9792-41d7-a82c-784b66429d54' });
             const before = new Map([[rowBefore.ID, rowBefore]]);
             const after = new Map([[rowAfter.ID, rowAfter]]);
 
-            expect(diffEntityFieldSnapshots(before, after, () => false)).toEqual([]);
+            expect(DiffEntityFieldSnapshots(before, after, () => false)).toEqual([]);
          });
 
          it('coerces 0/1 vs true/false for every bit column', () => {
@@ -219,22 +219,22 @@ describe('T1 — Field Change Tracking (C1)', () => {
                'AllowUpdateAPI',
             ];
             for (const col of bitCols) {
-               expect(normalizeSnapshotValue(col, 1)).toBe(true);
-               expect(normalizeSnapshotValue(col, 0)).toBe(false);
-               expect(normalizeSnapshotValue(col, '1')).toBe(true);
-               expect(normalizeSnapshotValue(col, '0')).toBe(false);
-               expect(normalizeSnapshotValue(col, true)).toBe(true);
-               expect(normalizeSnapshotValue(col, false)).toBe(false);
-               expect(normalizeSnapshotValue(col, null)).toBe(false);
+               expect(NormalizeSnapshotValue(col, 1)).toBe(true);
+               expect(NormalizeSnapshotValue(col, 0)).toBe(false);
+               expect(NormalizeSnapshotValue(col, '1')).toBe(true);
+               expect(NormalizeSnapshotValue(col, '0')).toBe(false);
+               expect(NormalizeSnapshotValue(col, true)).toBe(true);
+               expect(NormalizeSnapshotValue(col, false)).toBe(false);
+               expect(NormalizeSnapshotValue(col, null)).toBe(false);
             }
          });
 
          it('preserves numeric null as null', () => {
-            expect(normalizeSnapshotValue('Length', null)).toBeNull();
-            expect(normalizeSnapshotValue('Length', '')).toBeNull();
-            expect(normalizeSnapshotValue('Length', 100)).toBe(100);
-            expect(normalizeSnapshotValue('Precision', null)).toBeNull();
-            expect(normalizeSnapshotValue('Scale', null)).toBeNull();
+            expect(NormalizeSnapshotValue('Length', null)).toBeNull();
+            expect(NormalizeSnapshotValue('Length', '')).toBeNull();
+            expect(NormalizeSnapshotValue('Length', 100)).toBe(100);
+            expect(NormalizeSnapshotValue('Precision', null)).toBeNull();
+            expect(NormalizeSnapshotValue('Scale', null)).toBeNull();
          });
       });
 
@@ -257,7 +257,7 @@ describe('T1 — Field Change Tracking (C1)', () => {
             ['3', rowA1_after],
          ]);
 
-         const changes = diffEntityFieldSnapshots(before, after, () => false);
+         const changes = DiffEntityFieldSnapshots(before, after, () => false);
          expect(changes).toHaveLength(3);
          expect(changes[0].entityName).toBe('AEntity');
          expect(changes[0].fieldName).toBe('FieldA');

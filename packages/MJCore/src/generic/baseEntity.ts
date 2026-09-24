@@ -1,10 +1,10 @@
-import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager, ComputeContentHashAsync } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
-import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
+import { ComputeContentHashOptions, EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
@@ -53,10 +53,10 @@ export class EntityField {
     }
 
     private _entityFieldInfo: EntityFieldInfo;
-    private _OldValue: any;
-    private _Value: any;
-    private _NeverSet: boolean = true;
-    private _NotLoaded: boolean = false;
+    private _oldValue: any;
+    private _value: any;
+    private _neverSet: boolean = true;
+    private _notLoaded: boolean = false;
 
     /**
      * True when the source this entity was hydrated from OMITTED this field's key — most
@@ -76,7 +76,7 @@ export class EntityField {
      * entities — their fields legitimately hold metadata defaults for INSERT.
      */
     public get NotLoaded(): boolean {
-        return this._NotLoaded;
+        return this._notLoaded;
     }
 
     /**
@@ -85,10 +85,10 @@ export class EntityField {
      * clears the flag.
      */
     public MarkNotLoaded(): void {
-        this._NotLoaded = true;
+        this._notLoaded = true;
     }
 
-    private _CreateSuppressed: boolean = false;
+    private _createSuppressed: boolean = false;
 
     /**
      * True when field-level security bars this user from supplying the field's value on INSERT,
@@ -107,12 +107,12 @@ export class EntityField {
      * users over its lifetime.
      */
     public get CreateSuppressed(): boolean {
-        return this._CreateSuppressed;
+        return this._createSuppressed;
     }
 
     /** Framework-internal: set by the save path's field-security create gate. */
     public SetCreateSuppressed(suppressed: boolean): void {
-        this._CreateSuppressed = suppressed;
+        this._createSuppressed = suppressed;
     }
 
     get Name(): string {
@@ -156,7 +156,7 @@ export class EntityField {
      * serialization, hydration, SQL build) reads this directly and must stay assertion-free.
      */
     get Value(): any {
-        return this._Value;
+        return this._value;
     }
 
     get ReadOnly(): boolean {
@@ -189,7 +189,7 @@ export class EntityField {
         // are enforced at BaseEntity.Get/Set/SetMany, not at this low-level accessor.
         if (
               !this.ReadOnly ||
-              this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
+              this._neverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
                                  after that load for a given INSTANCE of an EntityField object we never set a ReadOnly Field*/
             ) {
             // Strip trailing space-padding on fixed-width string columns
@@ -202,24 +202,24 @@ export class EntityField {
             if (typeof value === 'string' && this._entityFieldInfo.FixedWidthColumn) {
                 value = value.replace(/ +$/, '');
             }
-            this._Value = value;
+            this._value = value;
             // Any explicit set means the field now holds REAL data — including a blind write to
             // a read-denied field (the write-only case), which must flow to the save. Captured
             // BEFORE clearing so the OldValue branch below can see it: a set onto a not-loaded
             // field is an EDIT (must become dirty and reach the save), never the "initial value
             // set" of record setup — the record's setup moment was the hydration that omitted
             // this field.
-            const wasNotLoaded = this._NotLoaded;
-            this._NotLoaded = false;
+            const wasNotLoaded = this._notLoaded;
+            this._notLoaded = false;
 
             // in the below, we set the OldValue, but only if (a) we have never set the value before, or (b) the value or the old value is not null - which means that we are in a record setup scenario
-            if (this._NeverSet && !wasNotLoaded &&
-                (value !== null || this._OldValue !== null)) {
+            if (this._neverSet && !wasNotLoaded &&
+                (value !== null || this._oldValue !== null)) {
                 // initial value set
-                this._OldValue = value;
+                this._oldValue = value;
             }
 
-            this._NeverSet = false;
+            this._neverSet = false;
         }
     }
 
@@ -229,7 +229,7 @@ export class EntityField {
      * after the object is created, but only once. This is typically used in the BaseEntity class when loading an entity from an array of values or the DB and reusing an existing object.
      */
     public ResetNeverSetFlag() {
-        this._NeverSet = true;
+        this._neverSet = true;
     }
 
     /**
@@ -238,20 +238,20 @@ export class EntityField {
      * artifact, not data, and nothing that was never loaded can have been changed.
      */
     get Dirty(): boolean {
-        if (this.ReadOnly || this._NotLoaded)
+        if (this.ReadOnly || this._notLoaded)
             return false
         else {
-            const oldNull = this._OldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
+            const oldNull = this._oldValue === null || this.OldValue === undefined || Number.isNaN(this.OldValue); // check for NaN because sometimes we have old values that are NaN and we need to account for that
             const curNull = this.Value === null || this.Value === undefined || Number.isNaN(this.OldValue);
             if (oldNull && curNull)
                 return false; // BOTH are null or undefined, not dirty
             else {
-                let oldCompare = this._OldValue;
+                let oldCompare = this._oldValue;
                 let newCompare = this.Value;
 
-                if (this._OldValue instanceof Date) {
+                if (this._oldValue instanceof Date) {
                     // sometimes we have old values that are date objects, convert to UTC timestamp for comparison
-                    oldCompare = this._OldValue.getTime();
+                    oldCompare = this._oldValue.getTime();
                 }
                 if (this.Value instanceof Date) {
                     // and sometimes the new values are date objects, convert to UTC timestamp for comparison
@@ -389,7 +389,7 @@ export class EntityField {
             // unsaveable for unrelated edits (the exact NOT-NULL breakage mode the not-loaded
             // design exists to remove). Length/type checks below still apply to whatever the
             // constructor state is; only the required/null check is meaningless for it.
-            if (!ef.AllowsNull && !this._NotLoaded && (this.Value === null || this.Value === undefined)) {
+            if (!ef.AllowsNull && !this._notLoaded && (this.Value === null || this.Value === undefined)) {
                 // make sure this isn't a field that has a default value and we are inside a new record
                 if (ef.DefaultValue === null || ef.DefaultValue === undefined || ef.DefaultValue.trim().length === 0) {
                     // we have no default value, so this is an error
@@ -398,7 +398,7 @@ export class EntityField {
                 }
                 else {
                     // we do have a default value, but our current value is null. If we are in an EXISTING record, this is an error, check the OldValue to determine this
-                    if (this._OldValue !== null && this._OldValue !== undefined) {
+                    if (this._oldValue !== null && this._oldValue !== undefined) {
                         result.Success = false;
                         result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} cannot be null`, null));
                     }
@@ -567,11 +567,11 @@ export class EntityField {
                     this.Value = fieldInfo.DefaultValue;
                 }
             }
-            this._NeverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
+            this._neverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
         }
         else {
             this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
-            this._NeverSet = true; // set this back to true because we are setting the value to null;
+            this._neverSet = true; // set this back to true because we are setting the value to null;
         }
     }
 
@@ -579,7 +579,7 @@ export class EntityField {
      * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
      */
     public ResetOldValue() {
-        this._OldValue = this.Value;
+        this._oldValue = this.Value;
     }
 
     /**
@@ -587,7 +587,7 @@ export class EntityField {
      * Used by graph rollback so a retried save still sees the pre-attempt dirty set.
      */
     public RestoreOldValue(value: unknown): void {
-        this._OldValue = value;
+        this._oldValue = value;
     }
 
     /**
@@ -609,7 +609,7 @@ export class EntityField {
      * Returns the old value of the field. This is the value that was set when the field was last loaded from the database.
      */
     public get OldValue(): any {
-        return this._OldValue;
+        return this._oldValue;
     }
 }
 
@@ -706,18 +706,18 @@ export interface RecordChangePayload {
 }
 
 export class DataObjectRelatedEntityParam {
-    relatedEntityName: string
-    filter?: string
-    maxRecords?: number
+    relatedEntityName: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    filter?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    maxRecords?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 export class DataObjectParams {
-    oldValues: boolean;
-    omitNullValues: boolean;
-    omitEmptyStrings: boolean;
-    excludeFields: string[];
-    includeRelatedEntityData: boolean;
-    relatedEntityList: DataObjectRelatedEntityParam[];
+    oldValues: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    omitNullValues: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    omitEmptyStrings: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    excludeFields: string[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    includeRelatedEntityData: boolean;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    relatedEntityList: DataObjectRelatedEntityParam[];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     constructor(
         oldValues: boolean = false,
@@ -737,12 +737,12 @@ export class DataObjectParams {
 }
 
 export class BaseEntityAIActionParams {
-    name: string
-    actionId: string
-    modelId: string
-    systemPrompt: string
-    userMessage: string
-    result: any
+    name: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    actionId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    modelId: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    systemPrompt: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    userMessage: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    result: any  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -927,29 +927,29 @@ export class BaseEntityEvent {
      *   Payload: `{ Success, NodeCount, Error? }` on `graph_save`; `{ NodeCount }` on
      *   `graph_save_started`.
      */
-    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'graph_save_started' | 'graph_save' | 'other';
+    type: 'new_record' | 'save' | 'delete' | 'load_complete' | 'transaction_ready' | 'save_started' | 'delete_started' | 'load_started' | 'remote-invalidate' | 'graph_save_started' | 'graph_save' | 'other';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * If type === 'save' this property can either be 'create' or 'update' to indicate the type of save operation that was performed.
      */
-    saveSubType?: 'create' | 'update';
+    saveSubType?: 'create' | 'update';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Any payload that is associated with the event. This can be any type of object and is used to pass additional information about the event.
      */
-    payload: unknown;
+    payload: unknown;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The BaseEntity object that is raising the event.
      * Null for remote-invalidate events where no local BaseEntity instance is available.
      */
-    baseEntity: BaseEntity | null;
+    baseEntity: BaseEntity | null;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * The entity name for the event. Used primarily for remote-invalidate events
      * where baseEntity is null but the entity name is known from the remote notification.
      */
-    entityName?: string;
+    entityName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * The metadata provider associated with the entity that raised this event. Required for
@@ -959,7 +959,7 @@ export class BaseEntityEvent {
      * field can be omitted; listeners should fall back to `baseEntity?.ProviderToUse` and finally
      * to `Metadata.Provider` when no provider is available.
      */
-    provider?: IMetadataProvider;
+    provider?: IMetadataProvider;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
@@ -978,7 +978,7 @@ export abstract class BaseEntity<T = unknown> {
      * `SetEntityName()` from `Metadata.EntityByName` and used as the source of truth for
      * field definitions and schema details throughout this class.
      */
-    private _EntityInfo: EntityInfo;
+    private _entityInfo: EntityInfo;
 
     /**
      * Runtime field instances for this record — one `EntityField` per column in `_EntityInfo.Fields`.
@@ -995,7 +995,7 @@ export abstract class BaseEntity<T = unknown> {
      * `BaseEntity` are reserved for paths that have already triggered hydration or paths that
      * deliberately want to inspect hydration state (e.g., `Dirty` getter).
      */
-    private _Fields: EntityField[] = [];
+    private _fields: EntityField[] = [];
 
     /**
      * Tracks whether `_Fields` has been populated. `false` while in "raw mode" (data accessible
@@ -1290,7 +1290,7 @@ export abstract class BaseEntity<T = unknown> {
 
     constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
         this._eventSubject = new Subject<BaseEntityEvent>();
-        this._EntityInfo = Entity;
+        this._entityInfo = Entity;
         EntityInfo.AssertEntityActiveStatus(Entity, 'BaseEntity::constructor');
         this._provider = Provider;
         this.init();
@@ -1461,7 +1461,7 @@ export abstract class BaseEntity<T = unknown> {
         if (!this.GetFieldByName(name)) {
             return;
         }
-        this.SetLocal(name, value);
+        this.setLocal(name, value);
         this.GetFieldByName(name)?.ResetNeverSetFlag();
     }
 
@@ -2716,14 +2716,14 @@ export abstract class BaseEntity<T = unknown> {
      * binds this via {@link ExecuteEntitySavePlan}'s `SaveSelfOnly` callback.
      */
     private saveAsGraphNode(options?: EntitySaveOptions): Promise<boolean> {
-        return this._InnerSave(options);
+        return this._innerSave(options);
     }
 
     /**
      * Delete-path counterpart of {@link saveAsGraphNode}.
      */
     private deleteAsGraphNode(options?: EntityDeleteOptions): Promise<boolean> {
-        return this._InnerDelete(options);
+        return this._innerDelete(options);
     }
 
     /**
@@ -3092,13 +3092,13 @@ export abstract class BaseEntity<T = unknown> {
      * Access to the underlying metadata for the entity object.
      */
     get EntityInfo(): EntityInfo {
-        return this._EntityInfo;
+        return this._entityInfo;
     }
 
     get Fields(): EntityField[] {
         // Caller wants to walk Fields — promote raw data into real EntityField instances now.
         this.hydrateFieldsIfNeeded();
-        return this._Fields;
+        return this._fields;
     }
 
     /**
@@ -3118,7 +3118,7 @@ export abstract class BaseEntity<T = unknown> {
 
         if (this._fieldCache === null) {
             this._fieldCache = new Map<string, EntityField>();
-            for (const f of this._Fields) {
+            for (const f of this._fields) {
                 if (!this._fieldCache.has(f.Name.trim().toLowerCase())) {
                     this._fieldCache.set(f.Name.trim().toLowerCase(), f);
                 }
@@ -3187,7 +3187,7 @@ export abstract class BaseEntity<T = unknown> {
         if (this._codeNameCache === null) {
             this._codeNameCache = new Map<string, EntityField>();
             // First-write-wins on duplicate code names — matches prior Array.find() behavior
-            for (const f of this._Fields) {
+            for (const f of this._fields) {
                 const codeKey = f.CodeName.trim().toLowerCase();
                 if (!this._codeNameCache.has(codeKey)) {
                     this._codeNameCache.set(codeKey, f);
@@ -3218,7 +3218,7 @@ export abstract class BaseEntity<T = unknown> {
             // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
             // dirty. Avoid hydrating just to check.
             if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
-            return this._Fields.some(f => f.Dirty) ||
+            return this._fields.some(f => f.Dirty) ||
                    (this._parentEntity?.Dirty ?? false);
         } finally {
             this._isCheckingDirty = false;
@@ -3288,17 +3288,17 @@ export abstract class BaseEntity<T = unknown> {
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
             this._parentEntity.Set(FieldName, Value); // recursive for N-level chains (parent asserts its own field)
             // Also mirror the value on our own virtual EntityField for UI compatibility
-            this.SetLocal(FieldName, Value);
+            this.setLocal(FieldName, Value);
         }
         else {
             // Active-status enforcement choke point for own-field writes. Fast-path gated on the
             // memoized EntityInfo.HasInactiveFields so all-Active entities (the overwhelming majority)
             // pay only a single cached boolean check.
             if (this.EntityInfo?.HasInactiveFields) {
-                this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Set');
+                this.assertFieldActiveStatus(FieldName, 'BaseEntity.Set');
             }
-            this.AssertFieldReadable(FieldName);
-            this.SetLocal(FieldName, Value);
+            this.assertFieldReadable(FieldName);
+            this.setLocal(FieldName, Value);
         }
     }
 
@@ -3312,7 +3312,7 @@ export abstract class BaseEntity<T = unknown> {
      * Callers should gate this behind `EntityInfo.HasInactiveFields` so the common all-Active entity
      * skips the field lookup entirely.
      */
-    private AssertFieldActiveStatus(fieldName: string, caller: string): void {
+    private assertFieldActiveStatus(fieldName: string, caller: string): void {
         const fi = this.EntityInfo?.FieldByName(fieldName);
         if (fi) {
             EntityFieldInfo.AssertEntityFieldActiveStatus(fi, caller);
@@ -3340,7 +3340,7 @@ export abstract class BaseEntity<T = unknown> {
      * build) reads `EntityField.Value` directly and never routes through here — that exemption
      * is load-bearing, not an oversight. Do not "fix" it.
      */
-    private AssertFieldReadable(fieldName: string): void {
+    private assertFieldReadable(fieldName: string): void {
         const denied = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
         if (denied?.has(fieldName?.trim().toLowerCase())) {
             throw new FieldSecurityError(fieldName, this.EntityInfo.Name);
@@ -3351,7 +3351,7 @@ export abstract class BaseEntity<T = unknown> {
      * Internal helper that sets a field value directly on THIS entity's own Fields array
      * without IS-A routing. Used by Set() for own-fields and for mirroring parent field values.
      */
-    private SetLocal(FieldName: string, Value: any) {
+    private setLocal(FieldName: string, Value: any) {
         const field = this.GetFieldByName(FieldName);
         if (field != null) {
             if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof Value === 'string' || typeof Value === 'number') ) {
@@ -3410,13 +3410,13 @@ export abstract class BaseEntity<T = unknown> {
         // EntityInfo.HasInactiveFields so all-Active entities pay only a single cached boolean check
         // before the hot read paths below.
         if (this.EntityInfo?.HasInactiveFields) {
-            this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Get');
+            this.assertFieldActiveStatus(FieldName, 'BaseEntity.Get');
         }
 
         // Field security sits BEFORE the raw-mode fast path below, not after: an entity whose
         // fields are not yet hydrated would otherwise return denied values straight out of _raw
         // without the gate ever running.
-        this.AssertFieldReadable(FieldName);
+        this.assertFieldReadable(FieldName);
 
         // Raw mode fast path: read directly from the cached data without building EntityField
         // instances. This is the dominant cost in engine warm-loads — generated typed getters
@@ -3430,7 +3430,7 @@ export abstract class BaseEntity<T = unknown> {
             // back into `_raw` — the row may be shared, frozen cache state. Fields needing no
             // conversion (the vast majority) never touch the memo at all, so the fast path stays
             // a single property read.
-            const fi = this._EntityInfo?.FieldByName(FieldName);
+            const fi = this._entityInfo?.FieldByName(FieldName);
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                 const memo = this._rawConverted?.get(FieldName);
                 if (memo !== undefined) return memo;
@@ -3493,7 +3493,7 @@ export abstract class BaseEntity<T = unknown> {
                     EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                 }
                 // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                this.SetLocal(key, object[key]);
+                this.setLocal(key, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
                 }
@@ -3507,7 +3507,7 @@ export abstract class BaseEntity<T = unknown> {
                         EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                     }
                     // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
-                    this.SetLocal(field.Name, object[key]);
+                    this.setLocal(field.Name, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
                     }
@@ -3554,7 +3554,7 @@ export abstract class BaseEntity<T = unknown> {
         // load — without this, the parent would think it's a new record and attempt CREATE
         // instead of UPDATE on save.
         if (replaceOldValues) {
-            this.UpdateSavedStateFromPrimaryKeys();
+            this.updateSavedStateFromPrimaryKeys();
         }
     }
 
@@ -3563,7 +3563,7 @@ export abstract class BaseEntity<T = unknown> {
      * a saved/loaded record. This enables entities populated via SetMany (e.g., IS-A parent
      * entities) to correctly recognize themselves as existing records.
      */
-    private UpdateSavedStateFromPrimaryKeys(): void {
+    private updateSavedStateFromPrimaryKeys(): void {
         if (!this.PrimaryKeys || this.PrimaryKeys.length === 0) return;
 
         const allPKsSet = this.PrimaryKeys.every(
@@ -3635,6 +3635,53 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Computes a deterministic SHA-256 content hash of the entity's field values using
+     * the canonicalizer and Web Crypto API from `@memberjunction/global`.
+     *
+     * By default, hashes all loaded non-system fields (excluding `__mj_*` columns).
+     * The result is byte-for-byte identical across client and server tiers.
+     *
+     * @param options Optional configuration specifying subset of fields and/or whether to exclude system fields.
+     */
+    public async ComputeContentHash(options?: ComputeContentHashOptions): Promise<string> {
+        const excludeSystem = options?.ExcludeSystemFields ?? true;
+        const allData = this.GetAll(false, false) as Record<string, unknown>;
+
+        // If specific fields are requested, validate each exists (case-insensitively) and resolve canonical name
+        let targetFieldNames: string[];
+        if (options?.Fields && options.Fields.length > 0) {
+            targetFieldNames = options.Fields.map((req) => {
+                const fieldInfo = this.GetFieldByName(req);
+                if (!fieldInfo) {
+                    throw new Error(`ComputeContentHash: field '${req}' does not exist on entity '${this.EntityInfo.Name}'`);
+                }
+                return fieldInfo.Name;
+            });
+        } else {
+            targetFieldNames = Object.keys(allData);
+        }
+
+        const excludeSet = new Set((options?.ExcludeFields ?? []).map((f) => f.trim().toLowerCase()));
+
+        const data: Record<string, unknown> = {};
+        for (const name of targetFieldNames) {
+            if (excludeSystem && name.startsWith('__mj_')) continue;
+            if (excludeSet.has(name.toLowerCase())) continue;
+
+            const val = allData[name];
+            if (val !== undefined) {
+                data[name] = val;
+            }
+        }
+
+        if (Object.keys(data).length === 0) {
+            throw new Error(`ComputeContentHash: cannot compute content hash on empty basis for entity '${this.EntityInfo.Name}'`);
+        }
+
+        return ComputeContentHashAsync(data);
+    }
+
+    /**
      * This utility method calls GetDataObject() internally and formats the result as a JSON string. If you want to get the data as an object instead of a string, call GetDataObject() directly.
      * @param params
      * @param minifyJSON
@@ -3674,8 +3721,8 @@ export abstract class BaseEntity<T = unknown> {
 
         if (params.includeRelatedEntityData) {
             // now, get the related entity data
-            for (let i = 0; i < this._EntityInfo.RelatedEntities.length; i++) {
-                const re = this._EntityInfo.RelatedEntities[i];
+            for (let i = 0; i < this._entityInfo.RelatedEntities.length; i++) {
+                const re = this._entityInfo.RelatedEntities[i];
                 const pre = params.relatedEntityList ? params.relatedEntityList.find(r => r.relatedEntityName === re.RelatedEntity) : null;
                 if (pre) {
                     // pre now has the param that matches the related entity (re) that we are looking at
@@ -3739,7 +3786,7 @@ export abstract class BaseEntity<T = unknown> {
         this._compositeKey = null;
         this._resultHistory = [];
         this._recordLoaded = false;
-        this._Fields = [];
+        this._fields = [];
         this._fieldsHydrated = false;
         this._raw = null;
         this._rawConverted = null;
@@ -3776,7 +3823,7 @@ export abstract class BaseEntity<T = unknown> {
         for (const rawField of this.EntityInfo.Fields) {
             const key = this.EntityInfo.Name + '.' + rawField.Name;
             const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
-            this._Fields.push(newField);
+            this._fields.push(newField);
         }
 
         // 2. If we have raw data from LoadFromData, populate Fields. The first set of each Field
@@ -3784,7 +3831,7 @@ export abstract class BaseEntity<T = unknown> {
         //    Value AND OldValue (so the field is not marked dirty). This matches the old
         //    SetMany(replaceOldValues=true) semantics on initial load.
         if (this._raw) {
-            for (const field of this._Fields) {
+            for (const field of this._fields) {
                 const value = this._raw[field.Name];
                 if (value !== undefined) {
                     // Populating fields from the loaded row writes EntityField.Value directly, which does
@@ -3901,7 +3948,7 @@ export abstract class BaseEntity<T = unknown> {
             for (const pk of this.EntityInfo.PrimaryKeys) {
                 const parentValue = this._parentEntity.Get(pk.Name);
                 if (parentValue != null) {
-                    this.SetLocal(pk.Name, parentValue);
+                    this.setLocal(pk.Name, parentValue);
                     // The shared PK is ReadOnly, so SetLocal above consumed its
                     // one-time write (_NeverSet -> false). Restore _NeverSet so the
                     // child's OWN mirror can be re-written if the shared key is set
@@ -4080,7 +4127,7 @@ export abstract class BaseEntity<T = unknown> {
         // Root.Save() would wait on the first _pendingSave$ (which is itself waiting
         // for the leaf chain), creating a circular wait that hangs forever.
         if (options?.IsParentEntitySave) {
-            return this._InnerSave(options);
+            return this._innerSave(options);
         }
 
         // If a save is already in progress, return its promise. This check MUST run before graph
@@ -4130,7 +4177,7 @@ export abstract class BaseEntity<T = unknown> {
         // Create a new observable that debounces duplicative calls, and executes the save.
         this._pendingSave$ = of(options).pipe(
             // Execute the actual save logic.
-            switchMap(opts => from(this._InnerSave(opts))),
+            switchMap(opts => from(this._innerSave(opts))),
             // When the save completes (whether successfully or not), clear the pending save observable.
             finalize(() => { this._pendingSave$ = null; }),
             // Ensure that all subscribers get the same result.
@@ -4146,7 +4193,7 @@ export abstract class BaseEntity<T = unknown> {
      * @param options
      * @returns
      */
-    private async _InnerSave(options?: EntitySaveOptions) : Promise<boolean> {
+    private async _innerSave(options?: EntitySaveOptions) : Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
@@ -4313,7 +4360,7 @@ export abstract class BaseEntity<T = unknown> {
                     }
                     if (valResult.Success) {
                         // Run registered PreSave hooks (e.g., tenant validation)
-                        await this.RunPreSaveHooks();
+                        await this.runPreSaveHooks();
 
                         // Optimistic-UI hook: every pre-flight check (Validate, ValidateAsync,
                         // PreSave hooks) has passed and the DB write is imminent. Fire the optional
@@ -4422,7 +4469,7 @@ export abstract class BaseEntity<T = unknown> {
      * Runs all registered PreSave hooks. If any hook returns false or a string
      * (error message), the save is rejected by throwing an Error.
      */
-    private async RunPreSaveHooks(): Promise<void> {
+    private async runPreSaveHooks(): Promise<void> {
         const preSaveHooks = GetDataHooks<PreSaveHook>('PreSave');
         for (const hook of preSaveHooks) {
             const hookResult = await hook(this, this.ActiveUser);
@@ -4490,7 +4537,7 @@ export abstract class BaseEntity<T = unknown> {
                 result.NewValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} }); // set the latest values here
 
             // Cache the record name for faster lookups (updates cache with potentially new name)
-            this.CacheRecordName();
+            this.cacheRecordName();
 
             this.RaiseEvent('save', null, saveSubType);
 
@@ -4514,7 +4561,7 @@ export abstract class BaseEntity<T = unknown> {
      * Caches the entity record name in the provider's EntityRecordNameCache for faster lookups.
      * Called automatically after successful Load(), LoadFromData(), and Save() operations.
      */
-    private CacheRecordName(): void {
+    private cacheRecordName(): void {
         // Only cache if we have a valid primary key
         if (!this.PrimaryKey || !this.PrimaryKey.HasValue) {
             return;
@@ -4868,7 +4915,7 @@ export abstract class BaseEntity<T = unknown> {
             this._compositeKey = CompositeKey; // set the composite key to the one we just loaded
 
             // Cache the record name for faster lookups
-            this.CacheRecordName();
+            this.cacheRecordName();
 
             // IS-A: discover child entity records after load completes.
             // This populates _childEntity so Save/Delete can delegate to the leaf.
@@ -4986,7 +5033,7 @@ export abstract class BaseEntity<T = unknown> {
         const canTakeFastPath =
             isPlainObject &&
             !this._fieldsHydrated &&
-            this._Fields.length === 0 &&
+            this._fields.length === 0 &&
             !this._parentEntity &&
             !this.EntityInfo?.IsParentType;
 
@@ -5046,7 +5093,7 @@ export abstract class BaseEntity<T = unknown> {
 
             // Cache the record name for faster lookups if successfully loaded
             if (this._recordLoaded) {
-                this.CacheRecordName();
+                this.cacheRecordName();
 
                 // IS-A: discover child entity records after data load completes.
                 await this.InitializeChildEntity();
@@ -5252,7 +5299,7 @@ export abstract class BaseEntity<T = unknown> {
         // Create a new observable that debounces duplicative calls, and executes the delete.
         this._pendingDelete$ = of(options).pipe(
             // Execute the actual delete logic.
-            switchMap(opts => from(this._InnerDelete(opts))),
+            switchMap(opts => from(this._innerDelete(opts))),
             // When the delete completes (whether successfully or not), clear the pending delete observable.
             finalize(() => { this._pendingDelete$ = null; }),
             // Ensure that all subscribers get the same result.
@@ -5268,7 +5315,7 @@ export abstract class BaseEntity<T = unknown> {
      * @param options
      * @returns
      */
-    private async _InnerDelete(options?: EntityDeleteOptions) : Promise<boolean> {
+    private async _innerDelete(options?: EntityDeleteOptions) : Promise<boolean> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
@@ -5569,14 +5616,14 @@ export abstract class BaseEntity<T = unknown> {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
 
-        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser, md);
+        return BaseEntity.resolveLeafEntityRecursive(entityInfo, primaryKey, contextUser, md);
     }
 
     /**
      * Internal recursive helper for leaf entity resolution.
      * Walks down the child hierarchy until no more children are found.
      */
-    private static async ResolveLeafEntityRecursive(
+    private static async resolveLeafEntityRecursive(
         entityInfo: EntityInfo,
         primaryKey: CompositeKey,
         contextUser?: UserInfo,
@@ -5604,7 +5651,7 @@ export abstract class BaseEntity<T = unknown> {
 
             if (result?.Success && result.Results?.length > 0) {
                 // Found a child — recurse to see if there's an even more specific leaf
-                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser, provider);
+                return BaseEntity.resolveLeafEntityRecursive(child, primaryKey, contextUser, provider);
             }
         }
 

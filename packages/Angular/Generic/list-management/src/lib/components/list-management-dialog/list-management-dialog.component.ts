@@ -65,15 +65,24 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
    * Controls dialog visibility
    */
   @Input()
-  get visible(): boolean {
+  get Visible(): boolean {
     return this._visible;
   }
-  set visible(value: boolean) {
+  set Visible(value: boolean) {
     if (value && !this._visible) {
       this._pendingInit = true;
     }
     this._visible = value;
     this.tryInitialize();
+  }
+
+  /** @deprecated Use {@link Visible}. */
+  get visible(): boolean {
+    return this.Visible;
+  }
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: boolean) {
+    this.Visible = value;
   }
   private _visible = false;
 
@@ -91,7 +100,16 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
   /**
    * Emitted when dialog is closed with results
    */
-  @Output() complete = new EventEmitter<ListManagementResult>();
+  @Output() Complete = new EventEmitter<ListManagementResult>();
+
+  /**
+   * @deprecated Use {@link Complete}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (complete) keeps working. Must stay AFTER Complete: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() complete = this.Complete;
 
   /**
    * Emitted when dialog is cancelled
@@ -99,28 +117,154 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
   @Output() cancel = new EventEmitter<void>();
 
   // State
-  loading = false;
+  Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  set loading(value) {
+    this.Loading = value;
+  }
   saving = false;
-  searchText = '';
-  activeTab: ListFilterTab = 'all';
-  sortOption: ListSortOption = 'name';
-  showCreateForm = false;
+  SearchText = '';
+
+  /** @deprecated Use {@link SearchText}. */
+  get searchText() {
+    return this.SearchText;
+  }
+  /** @deprecated Use {@link SearchText}. */
+  set searchText(value) {
+    this.SearchText = value;
+  }
+  ActiveTab: ListFilterTab = 'all';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  get activeTab(): ListFilterTab {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  set activeTab(value: ListFilterTab) {
+    this.ActiveTab = value;
+  }
+  SortOption: ListSortOption = 'name';
+
+  /** @deprecated Use {@link SortOption}. */
+  get sortOption(): ListSortOption {
+    return this.SortOption;
+  }
+  /** @deprecated Use {@link SortOption}. */
+  set sortOption(value: ListSortOption) {
+    this.SortOption = value;
+  }
+  ShowCreateForm = false;
+
+  /** @deprecated Use {@link ShowCreateForm}. */
+  get showCreateForm() {
+    return this.ShowCreateForm;
+  }
+  /** @deprecated Use {@link ShowCreateForm}. */
+  set showCreateForm(value) {
+    this.ShowCreateForm = value;
+  }
 
   // Data
-  allLists: ListItemViewModel[] = [];
-  filteredLists: ListItemViewModel[] = [];
-  categories: MJListCategoryEntity[] = [];
+  AllLists: ListItemViewModel[] = [];
+
+  /** @deprecated Use {@link AllLists}. */
+  get allLists(): ListItemViewModel[] {
+    return this.AllLists;
+  }
+  /** @deprecated Use {@link AllLists}. */
+  set allLists(value: ListItemViewModel[]) {
+    this.AllLists = value;
+  }
+  FilteredLists: ListItemViewModel[] = [];
+
+  /** @deprecated Use {@link FilteredLists}. */
+  get filteredLists(): ListItemViewModel[] {
+    return this.FilteredLists;
+  }
+  /** @deprecated Use {@link FilteredLists}. */
+  set filteredLists(value: ListItemViewModel[]) {
+    this.FilteredLists = value;
+  }
+  Categories: MJListCategoryEntity[] = [];
+
+  /** @deprecated Use {@link Categories}. */
+  get categories(): MJListCategoryEntity[] {
+    return this.Categories;
+  }
+  /** @deprecated Use {@link Categories}. */
+  set categories(value: MJListCategoryEntity[]) {
+    this.Categories = value;
+  }
 
   // Create form state
-  newListName = '';
-  newListDescription = '';
-  newListCategoryId: string | null = null;
+  NewListName = '';
+
+  /** @deprecated Use {@link NewListName}. */
+  get newListName() {
+    return this.NewListName;
+  }
+  /** @deprecated Use {@link NewListName}. */
+  set newListName(value) {
+    this.NewListName = value;
+  }
+  NewListDescription = '';
+
+  /** @deprecated Use {@link NewListDescription}. */
+  get newListDescription() {
+    return this.NewListDescription;
+  }
+  /** @deprecated Use {@link NewListDescription}. */
+  set newListDescription(value) {
+    this.NewListDescription = value;
+  }
+  NewListCategoryId: string | null = null;
+
+  /** @deprecated Use {@link NewListCategoryId}. */
+  get newListCategoryId(): string | null {
+    return this.NewListCategoryId;
+  }
+  /** @deprecated Use {@link NewListCategoryId}. */
+  set newListCategoryId(value: string | null) {
+    this.NewListCategoryId = value;
+  }
 
   // Track changes
   private originalMembership = new Map<string, boolean>();
-  public addedToLists: Set<string> = new Set();
-  public removedFromLists: Set<string> = new Set();
-  public newlyCreatedLists: MJListEntity[] = [];
+  public AddedToLists: Set<string> = new Set();
+
+  /** @deprecated Use {@link AddedToLists}. */
+  public get addedToLists(): Set<string> {
+    return this.AddedToLists;
+  }
+  /** @deprecated Use {@link AddedToLists}. */
+  public set addedToLists(value: Set<string>) {
+    this.AddedToLists = value;
+  }
+  public RemovedFromLists: Set<string> = new Set();
+
+  /** @deprecated Use {@link RemovedFromLists}. */
+  public get removedFromLists(): Set<string> {
+    return this.RemovedFromLists;
+  }
+  /** @deprecated Use {@link RemovedFromLists}. */
+  public set removedFromLists(value: Set<string>) {
+    this.RemovedFromLists = value;
+  }
+  public NewlyCreatedLists: MJListEntity[] = [];
+
+  /** @deprecated Use {@link NewlyCreatedLists}. */
+  public get newlyCreatedLists(): MJListEntity[] {
+    return this.NewlyCreatedLists;
+  }
+  /** @deprecated Use {@link NewlyCreatedLists}. */
+  public set newlyCreatedLists(value: MJListEntity[]) {
+    this.NewlyCreatedLists = value;
+  }
 
   // Cleanup
   private destroy$ = new Subject<void>();
@@ -144,7 +288,7 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
   /**
    * Get dialog title based on config
    */
-  get dialogTitle(): string {
+  get DialogTitle(): string {
     if (this.config?.dialogTitle) {
       return this.config.dialogTitle;
     }
@@ -162,10 +306,15 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link DialogTitle}. */
+  get dialogTitle(): string {
+    return this.DialogTitle;
+  }
+
   /**
    * Get subtitle showing context
    */
-  get dialogSubtitle(): string {
+  get DialogSubtitle(): string {
     const recordCount = this.config?.recordIds?.length || 0;
     const entityName = this.config?.entityName || 'records';
 
@@ -176,25 +325,45 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
     return `${recordCount} ${entityName} record${recordCount !== 1 ? 's' : ''}`;
   }
 
+  /** @deprecated Use {@link DialogSubtitle}. */
+  get dialogSubtitle(): string {
+    return this.DialogSubtitle;
+  }
+
   /**
    * Check if there are pending changes
    */
+  get HasChanges(): boolean {
+    return this.AddedToLists.size > 0 || this.RemovedFromLists.size > 0;
+  }
+
+  /** @deprecated Use {@link HasChanges}. */
   get hasChanges(): boolean {
-    return this.addedToLists.size > 0 || this.removedFromLists.size > 0;
+    return this.HasChanges;
   }
 
   /**
    * Get count of lists to add to
    */
+  get AddCount(): number {
+    return this.AddedToLists.size;
+  }
+
+  /** @deprecated Use {@link AddCount}. */
   get addCount(): number {
-    return this.addedToLists.size;
+    return this.AddCount;
   }
 
   /**
    * Get count of lists to remove from
    */
+  get RemoveCount(): number {
+    return this.RemovedFromLists.size;
+  }
+
+  /** @deprecated Use {@link RemoveCount}. */
   get removeCount(): number {
-    return this.removedFromLists.size;
+    return this.RemoveCount;
   }
 
   /**
@@ -205,7 +374,7 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
       debounceTime(300),
       takeUntil(this.destroy$)
     ).subscribe((searchText: string) => {
-      this.searchText = searchText;
+      this.SearchText = searchText;
       this.applyFilters();
     });
   }
@@ -226,16 +395,16 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
    * Reset all state
    */
   private resetState(): void {
-    this.searchText = '';
-    this.activeTab = 'all';
-    this.sortOption = 'name';
-    this.showCreateForm = false;
-    this.newListName = '';
-    this.newListDescription = '';
-    this.newListCategoryId = null;
-    this.addedToLists.clear();
-    this.removedFromLists.clear();
-    this.newlyCreatedLists = [];
+    this.SearchText = '';
+    this.ActiveTab = 'all';
+    this.SortOption = 'name';
+    this.ShowCreateForm = false;
+    this.NewListName = '';
+    this.NewListDescription = '';
+    this.NewListCategoryId = null;
+    this.AddedToLists.clear();
+    this.RemovedFromLists.clear();
+    this.NewlyCreatedLists = [];
     this.originalMembership.clear();
   }
 
@@ -245,7 +414,7 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
   private async loadData(): Promise<void> {
     if (!this.config) return;
 
-    this.loading = true;
+    this.Loading = true;
     this.cdr.detectChanges();
 
     try {
@@ -265,27 +434,27 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
         this.listService.getListCategories()
       ]);
 
-      this.categories = categories;
+      this.Categories = categories;
 
       // Build view models
-      this.allLists = await this.listService.buildListViewModels(
+      this.AllLists = await this.listService.buildListViewModels(
         lists,
         this.config.recordIds,
         membership
       );
 
       // Store original membership state
-      for (const vm of this.allLists) {
+      for (const vm of this.AllLists) {
         this.originalMembership.set(vm.list.ID, vm.isFullMember || vm.isPartialMember);
       }
 
       // Pre-select lists if configured
       if (this.config.preSelectedListIds) {
         for (const listId of this.config.preSelectedListIds) {
-          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
+          const vm = this.AllLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             vm.isSelectedForAdd = true;
-            this.addedToLists.add(listId);
+            this.AddedToLists.add(listId);
           }
         }
       }
@@ -294,7 +463,7 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
     } catch (error) {
       console.error('Error loading list data:', error);
     } finally {
-      this.loading = false;
+      this.Loading = false;
       this.cdr.detectChanges();
     }
   }
@@ -302,44 +471,64 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
   /**
    * Handle search input
    */
-  onSearchInput(event: Event): void {
+  OnSearchInput(event: Event): void {
     const value = (event.target as HTMLInputElement).value;
     this.searchSubject.next(value);
+  }
+
+  /** @deprecated Use {@link OnSearchInput}. */
+  onSearchInput(event: Event): void {
+    return this.OnSearchInput(event);
   }
 
   /**
    * Clear search
    */
-  clearSearch(): void {
-    this.searchText = '';
+  ClearSearch(): void {
+    this.SearchText = '';
     this.searchSubject.next('');
+  }
+
+  /** @deprecated Use {@link ClearSearch}. */
+  clearSearch(): void {
+    return this.ClearSearch();
   }
 
   /**
    * Change active tab
    */
-  setActiveTab(tab: ListFilterTab): void {
-    this.activeTab = tab;
+  SetActiveTab(tab: ListFilterTab): void {
+    this.ActiveTab = tab;
     this.applyFilters();
+  }
+
+  /** @deprecated Use {@link SetActiveTab}. */
+  setActiveTab(tab: ListFilterTab): void {
+    return this.SetActiveTab(tab);
   }
 
   /**
    * Change sort option
    */
-  setSortOption(option: ListSortOption): void {
-    this.sortOption = option;
+  SetSortOption(option: ListSortOption): void {
+    this.SortOption = option;
     this.applyFilters();
+  }
+
+  /** @deprecated Use {@link SetSortOption}. */
+  setSortOption(option: ListSortOption): void {
+    return this.SetSortOption(option);
   }
 
   /**
    * Apply all filters and sorting
    */
   private applyFilters(): void {
-    let result = [...this.allLists];
+    let result = [...this.AllLists];
 
     // Apply search filter
-    if (this.searchText.trim()) {
-      const search = this.searchText.toLowerCase();
+    if (this.SearchText.trim()) {
+      const search = this.SearchText.toLowerCase();
       result = result.filter(vm =>
         vm.list.Name.toLowerCase().includes(search) ||
         (vm.list.Description?.toLowerCase().includes(search))
@@ -347,7 +536,7 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
     }
 
     // Apply tab filter
-    switch (this.activeTab) {
+    switch (this.ActiveTab) {
       case 'my-lists':
         // Already filtered by user in loadData
         break;
@@ -361,7 +550,7 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
     }
 
     // Apply sorting
-    switch (this.sortOption) {
+    switch (this.SortOption) {
       case 'name':
         result.sort((a, b) => a.list.Name.localeCompare(b.list.Name));
         break;
@@ -373,70 +562,85 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
         break;
     }
 
-    this.filteredLists = result;
+    this.FilteredLists = result;
     this.cdr.detectChanges();
   }
 
   /**
    * Toggle list selection for adding
    */
-  toggleListForAdd(vm: ListItemViewModel): void {
+  ToggleListForAdd(vm: ListItemViewModel): void {
     if (this.config?.mode === 'remove') return;
 
     const listId = vm.list.ID;
 
-    if (vm.isSelectedForAdd || this.addedToLists.has(listId)) {
+    if (vm.isSelectedForAdd || this.AddedToLists.has(listId)) {
       // Deselect
       vm.isSelectedForAdd = false;
-      this.addedToLists.delete(listId);
+      this.AddedToLists.delete(listId);
     } else {
       // Select for add
       vm.isSelectedForAdd = true;
       vm.isSelectedForRemove = false;
-      this.addedToLists.add(listId);
-      this.removedFromLists.delete(listId);
+      this.AddedToLists.add(listId);
+      this.RemovedFromLists.delete(listId);
     }
 
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link ToggleListForAdd}. */
+  toggleListForAdd(vm: ListItemViewModel): void {
+    return this.ToggleListForAdd(vm);
   }
 
   /**
    * Toggle list selection for removal
    */
-  toggleListForRemove(vm: ListItemViewModel): void {
+  ToggleListForRemove(vm: ListItemViewModel): void {
     if (this.config?.mode === 'add') return;
     if (!this.config?.allowRemove && this.config?.mode !== 'manage') return;
 
     const listId = vm.list.ID;
 
-    if (vm.isSelectedForRemove || this.removedFromLists.has(listId)) {
+    if (vm.isSelectedForRemove || this.RemovedFromLists.has(listId)) {
       // Deselect
       vm.isSelectedForRemove = false;
-      this.removedFromLists.delete(listId);
+      this.RemovedFromLists.delete(listId);
     } else {
       // Select for remove
       vm.isSelectedForRemove = true;
       vm.isSelectedForAdd = false;
-      this.removedFromLists.add(listId);
-      this.addedToLists.delete(listId);
+      this.RemovedFromLists.add(listId);
+      this.AddedToLists.delete(listId);
     }
 
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link ToggleListForRemove}. */
+  toggleListForRemove(vm: ListItemViewModel): void {
+    return this.ToggleListForRemove(vm);
+  }
+
   /**
    * Get membership indicator class
    */
-  getMembershipClass(vm: ListItemViewModel): string {
+  GetMembershipClass(vm: ListItemViewModel): string {
     if (vm.isFullMember) return 'full-member';
     if (vm.isPartialMember) return 'partial-member';
     return 'not-member';
   }
 
+  /** @deprecated Use {@link GetMembershipClass}. */
+  getMembershipClass(vm: ListItemViewModel): string {
+    return this.GetMembershipClass(vm);
+  }
+
   /**
    * Get membership indicator text
    */
-  getMembershipText(vm: ListItemViewModel): string {
+  GetMembershipText(vm: ListItemViewModel): string {
     if (vm.isFullMember) {
       return `${vm.membershipCount}/${vm.totalSelectedRecords}`;
     }
@@ -446,55 +650,75 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
     return `0/${vm.totalSelectedRecords}`;
   }
 
+  /** @deprecated Use {@link GetMembershipText}. */
+  getMembershipText(vm: ListItemViewModel): string {
+    return this.GetMembershipText(vm);
+  }
+
   /**
    * Get membership icon
    */
-  getMembershipIcon(vm: ListItemViewModel): string {
+  GetMembershipIcon(vm: ListItemViewModel): string {
     if (vm.isFullMember) return 'fa-solid fa-check-circle';
     if (vm.isPartialMember) return 'fa-solid fa-circle-half-stroke';
     return 'fa-regular fa-circle';
   }
 
+  /** @deprecated Use {@link GetMembershipIcon}. */
+  getMembershipIcon(vm: ListItemViewModel): string {
+    return this.GetMembershipIcon(vm);
+  }
+
   /**
    * Show create list form
    */
+  ShowCreateListForm(): void {
+    this.ShowCreateForm = true;
+    this.NewListName = '';
+    this.NewListDescription = '';
+    this.NewListCategoryId = null;
+  }
+
+  /** @deprecated Use {@link ShowCreateListForm}. */
   showCreateListForm(): void {
-    this.showCreateForm = true;
-    this.newListName = '';
-    this.newListDescription = '';
-    this.newListCategoryId = null;
+    return this.ShowCreateListForm();
   }
 
   /**
    * Cancel create list form
    */
+  CancelCreateList(): void {
+    this.ShowCreateForm = false;
+    this.NewListName = '';
+    this.NewListDescription = '';
+    this.NewListCategoryId = null;
+  }
+
+  /** @deprecated Use {@link CancelCreateList}. */
   cancelCreateList(): void {
-    this.showCreateForm = false;
-    this.newListName = '';
-    this.newListDescription = '';
-    this.newListCategoryId = null;
+    return this.CancelCreateList();
   }
 
   /**
    * Create a new list
    */
-  async createList(): Promise<void> {
-    if (!this.newListName.trim() || !this.config) return;
+  async CreateList(): Promise<void> {
+    if (!this.NewListName.trim() || !this.config) return;
 
     this.saving = true;
 
     try {
       const createConfig: CreateListConfig = {
-        name: this.newListName.trim(),
-        description: this.newListDescription.trim() || undefined,
-        categoryId: this.newListCategoryId || undefined,
+        name: this.NewListName.trim(),
+        description: this.NewListDescription.trim() || undefined,
+        categoryId: this.NewListCategoryId || undefined,
         entityId: this.config.entityId
       };
 
       const newList = await this.listService.createList(createConfig);
 
       if (newList) {
-        this.newlyCreatedLists.push(newList);
+        this.NewlyCreatedLists.push(newList);
 
         // Add to view models and select for add
         const vm: ListItemViewModel = {
@@ -510,13 +734,13 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
           isSelectedForRemove: false
         };
 
-        this.allLists.unshift(vm);
-        this.addedToLists.add(newList.ID);
+        this.AllLists.unshift(vm);
+        this.AddedToLists.add(newList.ID);
 
-        this.showCreateForm = false;
-        this.newListName = '';
-        this.newListDescription = '';
-        this.newListCategoryId = null;
+        this.ShowCreateForm = false;
+        this.NewListName = '';
+        this.NewListDescription = '';
+        this.NewListCategoryId = null;
 
         this.applyFilters();
       }
@@ -528,10 +752,15 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link CreateList}. */
+  async createList(): Promise<void> {
+    return this.CreateList();
+  }
+
   /**
    * Apply changes and close dialog
    */
-  async applyChanges(): Promise<void> {
+  async ApplyChanges(): Promise<void> {
     if (!this.config) return;
 
     this.saving = true;
@@ -540,15 +769,15 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
       action: 'apply',
       added: [],
       removed: [],
-      newListsCreated: this.newlyCreatedLists,
+      newListsCreated: this.NewlyCreatedLists,
       summary: { added: 0, removed: 0, skipped: 0, failed: 0 }
     };
 
     try {
       // Process additions
-      if (this.addedToLists.size > 0) {
+      if (this.AddedToLists.size > 0) {
         const addResult = await this.listService.addRecordsToLists(
-          [...this.addedToLists],
+          [...this.AddedToLists],
           this.config.recordIds,
           true // Skip duplicates
         );
@@ -556,8 +785,8 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
         result.summary!.skipped += addResult.skipped;
         result.summary!.failed += addResult.failed;
 
-        for (const listId of this.addedToLists) {
-          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
+        for (const listId of this.AddedToLists) {
+          const vm = this.AllLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             result.added.push({
               listId,
@@ -569,16 +798,16 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
       }
 
       // Process removals
-      if (this.removedFromLists.size > 0) {
+      if (this.RemovedFromLists.size > 0) {
         const removeResult = await this.listService.removeRecordsFromLists(
-          [...this.removedFromLists],
+          [...this.RemovedFromLists],
           this.config.recordIds
         );
         result.summary!.removed += removeResult.success;
         result.summary!.failed += removeResult.failed;
 
-        for (const listId of this.removedFromLists) {
-          const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));
+        for (const listId of this.RemovedFromLists) {
+          const vm = this.AllLists.find(l => UUIDsEqual(l.list.ID, listId));
           if (vm) {
             result.removed.push({
               listId,
@@ -589,7 +818,7 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
         }
       }
 
-      this.complete.emit(result);
+      this.Complete.emit(result);
     } catch (error) {
       console.error('Error applying changes:', error);
     } finally {
@@ -597,6 +826,11 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
       this._visible = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link ApplyChanges}. */
+  async applyChanges(): Promise<void> {
+    return this.ApplyChanges();
   }
 
   /**
@@ -635,17 +869,27 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
   /**
    * Check if we should show the add button for a list
    */
-  showAddButton(vm: ListItemViewModel): boolean {
+  ShowAddButton(vm: ListItemViewModel): boolean {
     if (this.config?.mode === 'remove') return false;
     return !vm.isFullMember || !this.originalMembership.get(vm.list.ID);
+  }
+
+  /** @deprecated Use {@link ShowAddButton}. */
+  showAddButton(vm: ListItemViewModel): boolean {
+    return this.ShowAddButton(vm);
   }
 
   /**
    * Check if we should show the remove button for a list
    */
-  showRemoveButton(vm: ListItemViewModel): boolean {
+  ShowRemoveButton(vm: ListItemViewModel): boolean {
     if (this.config?.mode === 'add') return false;
     if (!this.config?.allowRemove && this.config?.mode !== 'manage') return false;
     return vm.isFullMember || vm.isPartialMember || this.originalMembership.get(vm.list.ID) === true;
+  }
+
+  /** @deprecated Use {@link ShowRemoveButton}. */
+  showRemoveButton(vm: ListItemViewModel): boolean {
+    return this.ShowRemoveButton(vm);
   }
 }

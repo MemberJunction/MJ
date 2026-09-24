@@ -27,8 +27,13 @@ export interface StartRecordingParams {
 export type EgressClientLike = Pick<EgressClient, 'startRoomCompositeEgress' | 'stopEgress' | 'listEgress'>;
 
 /** Converts a `ws(s)://` server URL to its `http(s)://` form for the egress client. */
-export function wsToHttpUrl(url: string): string {
+export function WsToHttpUrl(url: string): string {
   return url.replace(/^ws/i, 'http');
+}
+
+/** @deprecated Use {@link WsToHttpUrl}. */
+export function wsToHttpUrl(url: string): string {
+  return WsToHttpUrl(url);
 }
 
 /** A normalized recording (egress) status. */
@@ -63,7 +68,7 @@ export class LiveKitEgressService {
    */
   constructor(config?: Partial<LiveKitServerConfig>, client?: EgressClientLike) {
     const token = new LiveKitTokenService(config);
-    const httpUrl = wsToHttpUrl(token.ServerUrl);
+    const httpUrl = WsToHttpUrl(token.ServerUrl);
     this.client = client ?? new EgressClient(httpUrl, config?.ApiKey ?? process.env.LIVEKIT_API_KEY, config?.ApiSecret ?? process.env.LIVEKIT_API_SECRET);
   }
 

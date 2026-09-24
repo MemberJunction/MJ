@@ -130,7 +130,7 @@ export class TeamsMeetingsService {
             Address: args.joinUrl,
             Direction: 'Outbound',
             Configuration: this.buildSessionConfiguration(),
-            BindSdk: this.buildBindSdk(graphClient),
+            BindSdk: this.BuildBindSdk(graphClient),
             ContextUser: args.contextUser,
             MetadataProvider: args.provider,
         };
@@ -172,7 +172,7 @@ export class TeamsMeetingsService {
             Address: args.joinUrl,
             Direction: 'Outbound',
             Configuration: this.buildSessionConfiguration(),
-            BindSdk: this.buildBindSdk(graphClient),
+            BindSdk: this.BuildBindSdk(graphClient),
             ContextUser: args.contextUser,
             MetadataProvider: args.provider,
         });
@@ -193,7 +193,7 @@ export class TeamsMeetingsService {
         return provider;
     }
 
-    public buildBindSdk(graphClient: RealGraphCallsClient): BridgeNativeSdkBinding {
+    public BuildBindSdk(graphClient: RealGraphCallsClient): BridgeNativeSdkBinding {
         return (driver: BaseRealtimeBridge) => {
             const teams = driver as TeamsBridge;
             teams.SetSdkFactory(
@@ -205,6 +205,11 @@ export class TeamsMeetingsService {
                     }),
             );
         };
+    }
+
+    /** @deprecated Use {@link BuildBindSdk}. */
+    public buildBindSdk(graphClient: RealGraphCallsClient): BridgeNativeSdkBinding {
+        return this.BuildBindSdk(graphClient);
     }
 
     private buildSessionConfiguration(): Record<string, unknown> {

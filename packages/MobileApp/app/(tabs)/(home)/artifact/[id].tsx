@@ -53,7 +53,7 @@ export default function ArtifactDetailScreen() {
                 <View style={styles.headerCenter}>
                     <Text numberOfLines={1} style={styles.headerTitle}>{artifact?.name ?? 'Artifact'}</Text>
                     <Text style={styles.headerSub}>
-                        {artifact ? `${artifact.typeName} · v${artifact.version}${artifact.versionCount > 1 ? ` of ${artifact.versionCount}` : ''}` : 'Loading…'}
+                        {artifact ? `${artifact.TypeName} · v${artifact.Version}${artifact.VersionCount > 1 ? ` of ${artifact.VersionCount}` : ''}` : 'Loading…'}
                     </Text>
                 </View>
                 <View style={styles.iconBtn} />

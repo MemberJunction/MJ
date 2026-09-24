@@ -6,8 +6,13 @@
 import { RunDetailRow } from './classify.types';
 
 /** Locale-formatted integer (e.g. 12345 → "12,345"). */
-export function formatNumber(n: number): string {
+export function FormatNumber(n: number): string {
     return n.toLocaleString();
+}
+
+/** @deprecated Use {@link FormatNumber}. */
+export function formatNumber(n: number): string {
+    return FormatNumber(n);
 }
 
 /**
@@ -21,7 +26,7 @@ export function formatNumber(n: number): string {
  *
  * Pure/stateless — safe to call from any render site.
  */
-export function deriveDisplayName(item: { Name?: string | null; Description?: string | null }): string {
+export function DeriveDisplayName(item: { Name?: string | null; Description?: string | null }): string {
     const name = item?.Name?.trim();
     if (name) {
         return name.length > DISPLAY_NAME_MAX_LEN
@@ -33,6 +38,11 @@ export function deriveDisplayName(item: { Name?: string | null; Description?: st
     if (fromDescription) return fromDescription;
 
     return '(Untitled)';
+}
+
+/** @deprecated Use {@link DeriveDisplayName}. */
+export function deriveDisplayName(item: { Name?: string | null; Description?: string | null }): string {
+    return DeriveDisplayName(item);
 }
 
 /** Max length of a derived display name before it is truncated with an ellipsis. */
@@ -66,26 +76,41 @@ function stripMarkdown(line: string): string {
 }
 
 /** Compact token count (e.g. 1500 → "2K", 2_400_000 → "2.4M"). */
-export function formatTokenCount(tokens: number): string {
+export function FormatTokenCount(tokens: number): string {
     if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
     if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
     return String(tokens);
 }
 
+/** @deprecated Use {@link FormatTokenCount}. */
+export function formatTokenCount(tokens: number): string {
+    return FormatTokenCount(tokens);
+}
+
 /** Weight (0.0–1.0) as a percentage string (e.g. 0.42 → "42%"). */
-export function formatWeight(weight: number): string {
+export function FormatWeight(weight: number): string {
     return `${Math.round(weight * 100)}%`;
 }
 
+/** @deprecated Use {@link FormatWeight}. */
+export function formatWeight(weight: number): string {
+    return FormatWeight(weight);
+}
+
 /** Font size in rem for a tag chip based on weight (0.0–1.0), clamped to 0.7–1.0rem. */
-export function tagFontSize(weight: number): string {
+export function TagFontSize(weight: number): string {
     const min = 0.7;
     const max = 1.0;
     return `${min + (max - min) * Math.min(1, Math.max(0, weight))}rem`;
 }
 
+/** @deprecated Use {@link TagFontSize}. */
+export function tagFontSize(weight: number): string {
+    return TagFontSize(weight);
+}
+
 /** Short date (e.g. "Mar 5"). Returns '' on parse failure. */
-export function formatShortDate(dateStr: string): string {
+export function FormatShortDate(dateStr: string): string {
     try {
         return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     } catch {
@@ -93,8 +118,13 @@ export function formatShortDate(dateStr: string): string {
     }
 }
 
+/** @deprecated Use {@link FormatShortDate}. */
+export function formatShortDate(dateStr: string): string {
+    return FormatShortDate(dateStr);
+}
+
 /** Date + time (e.g. "Mar 5, 2:05 PM"). Echoes the input on parse failure. */
-export function formatDate(dateStr: Date | string): string {
+export function FormatDate(dateStr: Date | string): string {
     try {
         return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     } catch {
@@ -102,8 +132,13 @@ export function formatDate(dateStr: Date | string): string {
     }
 }
 
+/** @deprecated Use {@link FormatDate}. */
+export function formatDate(dateStr: Date | string): string {
+    return FormatDate(dateStr);
+}
+
 /** Human-friendly elapsed duration between two ISO timestamps; open-ended if `end` is null. */
-export function computeDuration(start: string | null, end: string | null): string {
+export function ComputeDuration(start: string | null, end: string | null): string {
     if (!start) return '—';
     const s = new Date(start);
     const e = end ? new Date(end) : new Date();
@@ -115,8 +150,13 @@ export function computeDuration(start: string | null, end: string | null): strin
     return `${mins}m ${secs}s`;
 }
 
+/** @deprecated Use {@link ComputeDuration}. */
+export function computeDuration(start: string | null, end: string | null): string {
+    return ComputeDuration(start, end);
+}
+
 /** Normalize a raw run status to one of the canonical display labels. */
-export function displayStatus(status: string): string {
+export function DisplayStatus(status: string): string {
     const lower = status.toLowerCase();
     if (lower === 'complete' || lower === 'completed' || lower === 'done') return 'Complete';
     if (lower === 'error' || lower === 'failed') return 'Failed';
@@ -124,8 +164,13 @@ export function displayStatus(status: string): string {
     return status;
 }
 
+/** @deprecated Use {@link DisplayStatus}. */
+export function displayStatus(status: string): string {
+    return DisplayStatus(status);
+}
+
 /** Font Awesome icon class for a content source type name. */
-export function getSourceTypeIcon(typeName: string): string {
+export function GetSourceTypeIcon(typeName: string): string {
     const iconMap: Record<string, string> = {
         'Web': 'fa-solid fa-globe', 'Web Crawler': 'fa-solid fa-globe',
         'API': 'fa-solid fa-plug', 'Database': 'fa-solid fa-database',
@@ -136,8 +181,13 @@ export function getSourceTypeIcon(typeName: string): string {
     return iconMap[typeName] ?? 'fa-solid fa-folder';
 }
 
+/** @deprecated Use {@link GetSourceTypeIcon}. */
+export function getSourceTypeIcon(typeName: string): string {
+    return GetSourceTypeIcon(typeName);
+}
+
 /** Map raw `MJ: Content Process Run Details` rows to typed RunDetailRow view models. */
-export function mapRunDetailRecords(records: Record<string, unknown>[]): RunDetailRow[] {
+export function MapRunDetailRecords(records: Record<string, unknown>[]): RunDetailRow[] {
     return records.map(d => {
         const status = String(d['Status'] || 'Pending');
         const statusLower = status.toLowerCase();
@@ -151,7 +201,7 @@ export function mapRunDetailRecords(records: Record<string, unknown>[]): RunDeta
         return {
             SourceName: String(d['ContentSource'] || 'Unknown'),
             SourceType: String(d['ContentSourceType'] || ''),
-            Status: displayStatus(status),
+            Status: DisplayStatus(status),
             StatusClass: isFailed ? 'failed' : isRunning ? 'running' : 'complete',
             ItemsProcessed: Number(d['ItemsProcessed'] || 0),
             ItemsTagged: Number(d['ItemsTagged'] || 0),
@@ -162,6 +212,11 @@ export function mapRunDetailRecords(records: Record<string, unknown>[]): RunDeta
             Duration: durationStr,
         };
     });
+}
+
+/** @deprecated Use {@link MapRunDetailRecords}. */
+export function mapRunDetailRecords(records: Record<string, unknown>[]): RunDetailRow[] {
+    return MapRunDetailRecords(records);
 }
 
 // ================================================================

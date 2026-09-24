@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Option B: Master-Detail Inspector — Feature Pipeline Details</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      color-scheme: light;
+      --mj-color-brand-50: #e6f3f9;
+      --mj-color-brand-100: #b3dbed;
+      --mj-color-brand-200: #80c3e1;
+      --mj-color-brand-300: #4dabd5;
+      --mj-color-brand-400: #2699cc;
+      --mj-color-brand-500: #0076b6;
+      --mj-color-brand-600: #006aa3;
+      --mj-color-brand-700: #005a8a;
+      --mj-color-brand-900: #092340;
+
+      --mj-color-neutral-0: #ffffff;
+      --mj-color-neutral-50: #f8fafc;
+      --mj-color-neutral-100: #f1f5f9;
+      --mj-color-neutral-200: #e2e8f0;
+      --mj-color-neutral-300: #cbd5e1;
+      --mj-color-neutral-400: #94a3b8;
+      --mj-color-neutral-500: #64748b;
+      --mj-color-neutral-600: #475569;
+      --mj-color-neutral-700: #334155;
+      --mj-color-neutral-800: #1e293b;
+      --mj-color-neutral-900: #0f172a;
+      --mj-color-neutral-950: #020617;
+
+      --mj-color-success-50: #f0fdf4;
+      --mj-color-success-500: #22c55e;
+      --mj-color-success-700: #15803d;
+
+      --mj-color-warning-50: #fffbeb;
+      --mj-color-warning-500: #f59e0b;
+      --mj-color-warning-700: #b45309;
+
+      --mj-color-error-50: #fef2f2;
+      --mj-color-error-500: #ef4444;
+
+      --mj-color-info-50: #eff6ff;
+      --mj-color-info-500: #3b82f6;
+
+      --mj-bg-page: var(--mj-color-neutral-50);
+      --mj-bg-surface: var(--mj-color-neutral-0);
+      --mj-bg-surface-card: var(--mj-color-neutral-0);
+      --mj-bg-surface-sunken: var(--mj-color-neutral-100);
+      --mj-bg-surface-hover: var(--mj-color-neutral-100);
+      --mj-bg-surface-active: var(--mj-color-neutral-200);
+
+      --mj-text-primary: var(--mj-color-neutral-800);
+      --mj-text-secondary: var(--mj-color-neutral-600);
+      --mj-text-muted: var(--mj-color-neutral-500);
+      --mj-text-link: var(--mj-color-brand-500);
+
+      --mj-border-default: var(--mj-color-neutral-200);
+      --mj-border-subtle: var(--mj-color-neutral-100);
+      --mj-border-strong: var(--mj-color-neutral-300);
+
+      --mj-brand-primary: var(--mj-color-brand-500);
+      --mj-brand-primary-hover: var(--mj-color-brand-600);
+      --mj-brand-primary-subtle: var(--mj-color-brand-50);
+
+      --mj-status-success-bg: var(--mj-color-success-50);
+      --mj-status-success-text: var(--mj-color-success-700);
+      --mj-status-success: var(--mj-color-success-500);
+
+      --mj-font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --mj-font-family-mono: 'JetBrains Mono', monospace;
+
+      --mj-radius-sm: 4px;
+      --mj-radius-md: 8px;
+      --mj-radius-lg: 12px;
+      --mj-radius-full: 9999px;
+
+      --mj-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --mj-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+    }
+
+    [data-theme="dark"] {
+      color-scheme: dark;
+      --mj-bg-page: var(--mj-color-neutral-900);
+      --mj-bg-surface: var(--mj-color-neutral-800);
+      --mj-bg-surface-card: #253347;
+      --mj-bg-surface-sunken: var(--mj-color-neutral-950);
+      --mj-bg-surface-hover: var(--mj-color-neutral-700);
+      --mj-bg-surface-active: var(--mj-color-neutral-600);
+
+      --mj-text-primary: var(--mj-color-neutral-100);
+      --mj-text-secondary: var(--mj-color-neutral-300);
+      --mj-text-muted: var(--mj-color-neutral-400);
+      --mj-text-link: var(--mj-color-brand-300);
+
+      --mj-border-default: var(--mj-color-neutral-700);
+      --mj-border-subtle: var(--mj-color-neutral-800);
+      --mj-border-strong: var(--mj-color-neutral-600);
+
+      --mj-brand-primary: var(--mj-color-brand-400);
+      --mj-brand-primary-hover: var(--mj-color-brand-300);
+      --mj-brand-primary-subtle: rgba(77, 171, 213, 0.15);
+
+      --mj-status-success-bg: rgba(34, 197, 94, 0.15);
+      --mj-status-success-text: var(--mj-color-success-300);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--mj-font-family);
+      background-color: var(--mj-bg-page);
+      color: var(--mj-text-primary);
+      line-height: 1.5;
+      font-size: 0.875rem;
+    }
+
+    .thesis-banner {
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+      color: #ffffff;
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8125rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .thesis-badge {
+      background: #8b5cf6;
+      color: #ffffff;
+      padding: 2px 8px;
+      border-radius: var(--mj-radius-sm);
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      margin-right: 12px;
+    }
+    .thesis-links a {
+      color: #ddd6fe;
+      text-decoration: none;
+      margin-left: 16px;
+      font-weight: 500;
+    }
+    .thesis-links a:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+    .theme-toggle-btn {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #ffffff;
+      padding: 4px 10px;
+      border-radius: var(--mj-radius-sm);
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+
+    .mj-chrome-header {
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
+      height: 52px;
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+    }
+    .mj-chrome-title {
+      font-weight: 600;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .mj-entity-type-badge {
+      font-size: 0.75rem;
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      padding: 2px 8px;
+      border-radius: var(--mj-radius-full);
+      font-weight: 600;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      border-radius: var(--mj-radius-full);
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .status-active {
+      background: var(--mj-status-success-bg);
+      color: var(--mj-status-success-text);
+    }
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--mj-status-success);
+    }
+
+    .mj-btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
+      border-radius: var(--mj-radius-sm); font-size: 0.8125rem; font-weight: 500;
+      cursor: pointer; transition: all 0.15s ease; border: 1px solid transparent;
+    }
+    .mj-btn-primary { background: var(--mj-brand-primary); color: #fff; }
+    .mj-btn-secondary { background: var(--mj-bg-surface-sunken); border-color: var(--mj-border-default); color: var(--mj-text-primary); }
+
+    /* Layout */
+    .mj-form-layout {
+      display: flex;
+      height: calc(100vh - 95px);
+      overflow: hidden;
+    }
+
+    /* Left Nav Rail */
+    .mj-nav-rail {
+      width: 210px;
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
+      padding: 16px 0;
+      flex-shrink: 0;
+    }
+    .mj-rail-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+      color: var(--mj-text-secondary); font-size: 0.8125rem; cursor: pointer;
+      border-left: 3px solid transparent; text-decoration: none;
+    }
+    .mj-rail-item.active {
+      background: var(--mj-brand-primary-subtle);
+      color: var(--mj-brand-primary);
+      font-weight: 600;
+      border-left-color: var(--mj-brand-primary);
+    }
+    .mj-rail-group-title {
+      font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+      color: var(--mj-text-muted); padding: 8px 16px 4px 16px;
+    }
+
+    /* Master-Detail Split Container */
+    .master-detail-container {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      background: var(--mj-bg-page);
+    }
+
+    /* Column 1: Sub-Sections & Feature Tree (Master) */
+    .master-col {
+      width: 320px;
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+    .master-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--mj-border-default);
+      font-weight: 600;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .master-item {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--mj-border-subtle);
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .master-item:hover {
+      background: var(--mj-bg-surface-hover);
+    }
+    .master-item.active {
+      background: var(--mj-brand-primary-subtle);
+      border-left: 3px solid var(--mj-brand-primary);
+    }
+    .master-item-title {
+      font-weight: 600;
+      font-size: 0.8125rem;
+      color: var(--mj-text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .master-item-desc {
+      font-size: 0.75rem;
+      color: var(--mj-text-muted);
+      margin-top: 3px;
+    }
+
+    /* Column 2: Deep Inspector Panel (Detail) */
+    .detail-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 24px 32px;
+    }
+
+    /* Configuration Audit / Health Banner */
+    .audit-bar {
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-left: 4px solid var(--mj-status-success);
+      border-radius: var(--mj-radius-sm);
+      padding: 10px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8125rem;
+    }
+    .audit-badges {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .audit-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: var(--mj-text-secondary);
+    }
+
+    /* Inspector Card */
+    .inspector-card {
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-md);
+      box-shadow: var(--mj-shadow-sm);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .inspector-title {
+      font-size: 1.0625rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .inspector-subtitle {
+      font-size: 0.8125rem;
+      color: var(--mj-text-muted);
+      margin-bottom: 20px;
+    }
+
+    .form-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .form-field {
+      margin-bottom: 16px;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--mj-text-secondary);
+      margin-bottom: 6px;
+    }
+    .form-input-text, .form-select, .form-textarea {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-sm);
+      font-family: inherit;
+      font-size: 0.8125rem;
+      color: var(--mj-text-primary);
+      outline: none;
+    }
+    .form-input-text:focus, .form-select:focus {
+      border-color: var(--mj-brand-primary);
+    }
+
+    .code-preview-card {
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-sm);
+      padding: 12px 14px;
+      font-family: var(--mj-font-family-mono);
+      font-size: 0.8125rem;
+      color: var(--mj-text-primary);
+      line-height: 1.5;
+    }
+
+    /* Simulation Test Box */
+    .sim-box {
+      border: 1px solid var(--mj-border-default);
+      border-radius: var(--mj-radius-sm);
+      background: var(--mj-bg-surface-sunken);
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .sim-header {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--mj-text-muted);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .pill-chip {
+      display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px;
+      border-radius: var(--mj-radius-sm); font-size: 0.75rem; background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-secondary); border: 1px solid var(--mj-border-default);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =============================================================================
+       TOP THESIS BANNER
+       ============================================================================= -->
+  <div class="thesis-banner">
+    <div style="display:flex; align-items:center;">
+      <span class="thesis-badge">Option B</span>
+      <strong>Master-Detail Inspector</strong>: Dual-pane split view where left rail lists pipeline sub-components &amp; features, and right pane provides a focused, high-density schema &amp; constraint inspector.
+    </div>
+    <div style="display:flex; align-items:center; gap: 12px;">
+      <button class="theme-toggle-btn" onclick="toggleTheme()">
+        <i class="fa-solid fa-moon"></i> Toggle Dark/Light
+      </button>
+      <div class="thesis-links">
+        <a href="option-a-structured-cards.html"><i class="fa-solid fa-arrow-left"></i> Option A (Cards)</a>
+        <a href="option-c-visual-dataflow-canvas.html"><i class="fa-solid fa-arrow-right"></i> Option C (Dataflow)</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="mj-chrome-header">
+    <div class="mj-chrome-title">
+      <i class="fa-solid fa-wand-magic-sparkles"></i>
+      <span>Activity Tagging and Sentiment</span>
+      <span class="mj-entity-type-badge">MJ: Record Processes</span>
+      <span class="status-pill status-active"><span class="status-dot"></span> Active</span>
+    </div>
+    <div style="margin-left: auto; display: flex; gap: 8px;">
+      <button class="mj-btn mj-btn-secondary"><i class="fa-solid fa-code"></i> JSON View</button>
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Inspector</button>
+    </div>
+  </header>
+
+  <div class="mj-form-layout">
+    <!-- BaseForm Left Rail -->
+    <nav class="mj-nav-rail">
+      <div class="mj-rail-group-title">Navigation</div>
+      <a class="mj-rail-item" href="#"><i class="fa-solid fa-gauge-high"></i> Overview &amp; Status</a>
+      <a class="mj-rail-item active" href="#"><i class="fa-solid fa-sliders"></i> Details</a>
+      <a class="mj-rail-item" href="#"><i class="fa-solid fa-wand-magic-sparkles"></i> Pipeline Configuration</a>
+      <a class="mj-rail-item" href="#"><i class="fa-solid fa-clock-rotate-left"></i> Prior Runs</a>
+    </nav>
+
+    <!-- Master-Detail Container -->
+    <div class="master-detail-container">
+      <!-- Master Navigation Column -->
+      <div class="master-col">
+        <div class="master-header">
+          <span>Configuration Sections</span>
+        </div>
+
+        <div class="master-item" onclick="selectSection('identity')">
+          <div class="master-item-title">
+            <span><i class="fa-solid fa-fingerprint"></i> Process Identity &amp; Scope</span>
+            <span class="pill-chip" style="font-size: 0.6875rem;">Activities</span>
+          </div>
+          <div class="master-item-desc">Target entity, SQL filter, 14.8k scope rows</div>
+        </div>
+
+        <div class="master-item" onclick="selectSection('ai-context')">
+          <div class="master-item-title">
+            <span><i class="fa-solid fa-brain"></i> AI Context &amp; Prompt</span>
+            <span class="pill-chip" style="font-size: 0.6875rem;">Claude 3.5</span>
+          </div>
+          <div class="master-item-desc">Prompt template, context SQL, 3 params</div>
+        </div>
+
+        <div style="padding: 10px 16px 4px 16px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: var(--mj-text-muted);">
+          Extracted Features (2)
+        </div>
+
+        <div class="master-item active" onclick="selectSection('feature-sentiment')">
+          <div class="master-item-title">
+            <span style="color: var(--mj-brand-primary);"><i class="fa-solid fa-chart-line"></i> SentimentScore</span>
+            <span class="pill-chip" style="background:#fef3c7; color:#92400e;">Float</span>
+          </div>
+          <div class="master-item-desc">Range [-1.0, 1.0] &bull; Binds to SentimentScore</div>
+        </div>
+
+        <div class="master-item" onclick="selectSection('feature-tags')">
+          <div class="master-item-title">
+            <span><i class="fa-solid fa-tags"></i> ActivityTags</span>
+            <span class="pill-chip" style="background:#ede9fe; color:#5b21b6;">Tags</span>
+          </div>
+          <div class="master-item-desc">Taxonomy constrained &bull; Binds to Tags</div>
+        </div>
+
+        <div style="padding: 10px 16px 4px 16px; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: var(--mj-text-muted);">
+          Runtime Engine
+        </div>
+
+        <div class="master-item" onclick="selectSection('optimization')">
+          <div class="master-item-title">
+            <span><i class="fa-solid fa-gauge-high"></i> Ingestion &amp; Caching</span>
+            <span class="pill-chip" style="font-size: 0.6875rem;">Checksum</span>
+          </div>
+          <div class="master-item-desc">Batch: 100 &bull; Concurrency: 4x</div>
+        </div>
+      </div>
+
+      <!-- Detail Inspector Column -->
+      <div class="detail-col">
+        <!-- Configuration Health Banner -->
+        <div class="audit-bar">
+          <div class="audit-badges">
+            <div class="audit-chip" style="font-weight: 600; color: var(--mj-status-success);">
+              <i class="fa-solid fa-shield-check"></i> Configuration Valid
+            </div>
+            <div class="audit-chip">
+              <i class="fa-solid fa-check"></i> 2 of 2 Features Bound to Schema
+            </div>
+            <div class="audit-chip">
+              <i class="fa-solid fa-database"></i> Context Query Validated
+            </div>
+          </div>
+          <div class="audit-chip">
+            <i class="fa-solid fa-bolt"></i> Est. Cost: ~$0.0014 / record
+          </div>
+        </div>
+
+        <!-- Focused Detail Inspector for Selected Item (Feature: SentimentScore) -->
+        <div class="inspector-card">
+          <div class="inspector-title">
+            <i class="fa-solid fa-chart-line" style="color: #f59e0b;"></i>
+            <span>Feature Inspector: <strong>SentimentScore</strong></span>
+            <span class="pill-chip" style="background: #fef3c7; color: #92400e; font-size: 0.75rem;">Numeric (Float)</span>
+          </div>
+          <div class="inspector-subtitle">
+            Configure extraction semantics, mathematical constraints, and physical column storage in entity Activities.
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-field">
+              <label class="form-label">Feature Name (Prompt Output Key)</label>
+              <input type="text" class="form-input-text" value="SentimentScore">
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">Target Entity Column</label>
+              <select class="form-select">
+                <option selected>SentimentScore (decimal(3,2)) — Match</option>
+                <option>SatisfactionRating (int)</option>
+                <option>CustomField1 (nvarchar)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-field">
+              <label class="form-label">Constraint Boundary (Min / Max)</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="number" class="form-input-text" value="-1.0" step="0.1" style="width: 50%;">
+                <input type="number" class="form-input-text" value="1.0" step="0.1" style="width: 50%;">
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label class="form-label">On Constraint Violation Action</label>
+              <select class="form-select">
+                <option selected>Set column to NULL &amp; log warning</option>
+                <option>Clamp to nearest boundary value (-1.0 / 1.0)</option>
+                <option>Fail record inference and mark error</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label">Reasoning Extraction Target</label>
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <select class="form-select" style="flex: 1;">
+                <option selected>AIReasoningNotes (nvarchar(max))</option>
+                <option>None (Do not store reasoning trace)</option>
+              </select>
+              <span class="pill-chip" style="font-size: 0.75rem;"><i class="fa-solid fa-brain"></i> Stores LLM Chain-of-Thought</span>
+            </div>
+          </div>
+
+          <!-- Live Evaluation Simulation Preview -->
+          <div class="sim-box">
+            <div class="sim-header">
+              <span><i class="fa-solid fa-flask"></i> Interactive Sample Extraction Test</span>
+              <span style="color: var(--mj-brand-primary); cursor: pointer;"><i class="fa-solid fa-arrows-rotate"></i> Test Next Sample</span>
+            </div>
+            <div style="font-size: 0.8125rem; margin-bottom: 8px;">
+              <strong>Sample Input Context</strong> (Activity #1042):
+              <div style="color: var(--mj-text-secondary); margin-top: 2px;">
+                <em>"Customer was initially confused about pricing tier upgrades, but after we walked through the ROI calculator, they expressed enthusiasm and asked for contract renewal."</em>
+              </div>
+            </div>
+            <div class="code-preview-card" style="font-size: 0.75rem;">
+              <strong>Extracted Output:</strong> <code>{ "SentimentScore": 0.72 }</code><br>
+              <strong>Constraint Check:</strong> <span style="color: var(--mj-status-success);">&check; Within bounds [-1.0 &le; 0.72 &le; 1.0]</span><br>
+              <strong>Reasoning Trace:</strong> "Initial hesitation resolved with strong positive buying signal."
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      const current = html.getAttribute('data-theme');
+      html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    }
+    function selectSection(name) {
+      document.querySelectorAll('.master-item').forEach(el => el.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+    }
+  </script>
+</body>
+</html>

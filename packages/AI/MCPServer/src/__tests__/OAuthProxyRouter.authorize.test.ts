@@ -15,12 +15,14 @@ import type { Application, Request, Response, Router } from 'express';
 // ScopeService reaches @memberjunction/server, whose config loader validates database settings
 // at import time. The authorize endpoint under test never consults scopes on its error paths.
 vi.mock('../auth/ScopeService.js', () => ({
-  loadActiveScopes: async () => [],
-  getDefaultScopes: () => [],
+  LoadActiveScopes: async () => [],
+    get loadActiveScopes() { return this.LoadActiveScopes; },
+  GetDefaultScopes: () => [],
+    get getDefaultScopes() { return this.GetDefaultScopes; },
 }));
 
-import { createOAuthProxyRouter } from '../auth/OAuthProxyRouter.js';
-import { getClientRegistry } from '../auth/ClientRegistry.js';
+import { CreateOAuthProxyRouter } from '../auth/OAuthProxyRouter.js';
+import { GetClientRegistry } from '../auth/ClientRegistry.js';
 import type { OAuthProxyConfig } from '../auth/OAuthProxyTypes.js';
 
 const REGISTERED_REDIRECT = 'https://client.example.test/callback';
@@ -96,8 +98,8 @@ describe('OAuth proxy /oauth/authorize', () => {
   let clientId: string;
 
   beforeAll(() => {
-    router = createOAuthProxyRouter(config);
-    clientId = getClientRegistry().registerClient({
+    router = CreateOAuthProxyRouter(config);
+    clientId = GetClientRegistry().registerClient({
       redirect_uris: [REGISTERED_REDIRECT],
       client_name: 'authorize-endpoint test client',
     }).client_id;
@@ -198,7 +200,7 @@ describe('OAuth proxy /oauth/authorize', () => {
 
   describe('rate limiting', () => {
     it('answers 429 once a client IP exceeds the configured limit', async () => {
-      const limited = createOAuthProxyRouter({ ...config, rateLimit: { windowMs: 60_000, limit: 2 } });
+      const limited = CreateOAuthProxyRouter({ ...config, rateLimit: { windowMs: 60_000, limit: 2 } });
       const query = { client_id: 'no-such-client', redirect_uri: EVIL_REDIRECT, response_type: 'code' };
       const ip = '198.51.100.7';
 

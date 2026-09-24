@@ -29,8 +29,13 @@ export class LMStudioLLM extends BaseLLM {
     /**
      * Read only getter method to get the LM Studio client instance
      */
-    public get client(): LMStudioClient {
+    public get Client(): LMStudioClient {
         return this.LMStudioClient;
+    }
+
+    /** @deprecated Use {@link Client}. */
+    public get client(): LMStudioClient {
+        return this.Client;
     }
     
     /**
@@ -161,7 +166,7 @@ export class LMStudioLLM extends BaseLLM {
 
         try {
             // Get the model instance — the signal also cancels a pending model load
-            const model = await this.client.llm.model(params.model, { signal: params.cancellationToken });
+            const model = await this.Client.llm.model(params.model, { signal: params.cancellationToken });
 
             // Convert MJ messages to LM Studio format
             const messages = params.messages.map(m => ({
@@ -314,7 +319,7 @@ export class LMStudioLLM extends BaseLLM {
         }
 
         // Get the model instance — the signal also cancels a pending model load
-        const model = await this.client.llm.model(params.model, { signal: params.cancellationToken });
+        const model = await this.Client.llm.model(params.model, { signal: params.cancellationToken });
 
         // Convert MJ messages to LM Studio format
         const messages = params.messages.map(m => ({

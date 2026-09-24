@@ -67,23 +67,73 @@ export class GoldenLayoutWrapperService {
     private _loadedPanels = new Set<string>();
 
     /** Emitted when layout configuration changes */
-    public onLayoutChanged = new Subject<LayoutChangedEvent>();
+    public OnLayoutChanged = new Subject<LayoutChangedEvent>();
+
+    /** @deprecated Use {@link OnLayoutChanged}. */
+    public get onLayoutChanged() {
+        return this.OnLayoutChanged;
+    }
+    /** @deprecated Use {@link OnLayoutChanged}. */
+    public set onLayoutChanged(value) {
+        this.OnLayoutChanged = value;
+    }
 
     /** Emitted when a panel is closed */
-    public onPanelClosed = new Subject<string>();
+    public OnPanelClosed = new Subject<string>();
+
+    /** @deprecated Use {@link OnPanelClosed}. */
+    public get onPanelClosed() {
+        return this.OnPanelClosed;
+    }
+    /** @deprecated Use {@link OnPanelClosed}. */
+    public set onPanelClosed(value) {
+        this.OnPanelClosed = value;
+    }
 
     /** Emitted when a panel is maximized/restored */
-    public onPanelMaximized = new Subject<{ panelId: string; maximized: boolean }>();
+    public OnPanelMaximized = new Subject<{ panelId: string; maximized: boolean }>();
+
+    /** @deprecated Use {@link OnPanelMaximized}. */
+    public get onPanelMaximized() {
+        return this.OnPanelMaximized;
+    }
+    /** @deprecated Use {@link OnPanelMaximized}. */
+    public set onPanelMaximized(value) {
+        this.OnPanelMaximized = value;
+    }
 
     /** Emitted when a panel is selected (in a stack) */
-    public onPanelSelected = new Subject<string>();
+    public OnPanelSelected = new Subject<string>();
+
+    /** @deprecated Use {@link OnPanelSelected}. */
+    public get onPanelSelected() {
+        return this.OnPanelSelected;
+    }
+    /** @deprecated Use {@link OnPanelSelected}. */
+    public set onPanelSelected(value) {
+        this.OnPanelSelected = value;
+    }
 
     /** Current panels in layout */
-    public panels$ = new BehaviorSubject<string[]>([]);
+    public Panels$ = new BehaviorSubject<string[]>([]);
+
+    /** @deprecated Use {@link Panels$}. */
+    public get panels$() {
+        return this.Panels$;
+    }
+    /** @deprecated Use {@link Panels$}. */
+    public set panels$(value) {
+        this.Panels$ = value;
+    }
 
     /** Whether layout editing (drag/drop/resize/close) is enabled */
-    public get isEditing(): boolean {
+    public get IsEditing(): boolean {
         return this._isEditing;
+    }
+
+    /** @deprecated Use {@link IsEditing}. */
+    public get isEditing(): boolean {
+        return this.IsEditing;
     }
 
     /**
@@ -93,7 +143,7 @@ export class GoldenLayoutWrapperService {
      * @param componentFactory Factory function to create panel content
      * @param isEditing Whether editing (drag/drop/resize/close) is enabled
      */
-    public initialize(
+    public Initialize(
         container: HTMLElement,
         savedLayout: ResolvedLayoutConfig | null,
         componentFactory: PanelComponentFactory,
@@ -132,6 +182,16 @@ export class GoldenLayoutWrapperService {
 
         this._initialized = true;
         this.updatePanelsList();
+    }
+
+    /** @deprecated Use {@link Initialize}. */
+    public initialize(
+        container: HTMLElement,
+        savedLayout: ResolvedLayoutConfig | null,
+        componentFactory: PanelComponentFactory,
+        isEditing = false
+    ): void {
+        return this.Initialize(container, savedLayout, componentFactory, isEditing);
     }
 
     /**
@@ -237,13 +297,18 @@ export class GoldenLayoutWrapperService {
     /**
      * Update layout size to match container.
      */
-    public updateSize(): void {
+    public UpdateSize(): void {
         if (this._layout && this._containerElement) {
             const rect = this._containerElement.getBoundingClientRect();
             if (rect.width > 0 && rect.height > 0) {
                 this._layout.setSize(rect.width, rect.height);
             }
         }
+    }
+
+    /** @deprecated Use {@link UpdateSize}. */
+    public updateSize(): void {
+        return this.UpdateSize();
     }
 
     /**
@@ -293,7 +358,7 @@ export class GoldenLayoutWrapperService {
             container.on('beforeComponentRelease', () => {
                 this._containerMap.delete(panel.id);
                 this._loadedPanels.delete(panel.id);
-                this.onPanelClosed.next(panel.id);
+                this.OnPanelClosed.next(panel.id);
                 this.updatePanelsList();
             });
 
@@ -308,7 +373,7 @@ export class GoldenLayoutWrapperService {
                     }
                     this._loadedPanels.add(panel.id);
                 }
-                this.onPanelSelected.next(panel.id);
+                this.OnPanelSelected.next(panel.id);
             });
 
             this.updatePanelsList();
@@ -334,14 +399,19 @@ export class GoldenLayoutWrapperService {
     /**
      * Check if Golden Layout is initialized
      */
-    public isInitialized(): boolean {
+    public IsInitialized(): boolean {
         return this._initialized;
+    }
+
+    /** @deprecated Use {@link IsInitialized}. */
+    public isInitialized(): boolean {
+        return this.IsInitialized();
     }
 
     /**
      * Destroy Golden Layout and clean up
      */
-    public destroy(): void {
+    public Destroy(): void {
         if (this._layout) {
             this._layout.destroy();
             this._layout = null;
@@ -354,11 +424,16 @@ export class GoldenLayoutWrapperService {
         this._containerElement = null;
     }
 
+    /** @deprecated Use {@link Destroy}. */
+    public destroy(): void {
+        return this.Destroy();
+    }
+
     /**
      * Add a panel to the layout.
      * The full DashboardPanel is stored in componentState.
      */
-    public addPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
+    public AddPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
         if (!this._layout) {
             return;
         }
@@ -386,6 +461,11 @@ export class GoldenLayoutWrapperService {
         this.emitLayoutChanged('resize');
     }
 
+    /** @deprecated Use {@link AddPanel}. */
+    public addPanel(panel: DashboardPanel, _location?: LayoutLocation): void {
+        return this.AddPanel(panel, _location);
+    }
+
     /**
      * Find first stack in layout
      */
@@ -411,63 +491,98 @@ export class GoldenLayoutWrapperService {
     /**
      * Remove a panel from the layout
      */
-    public removePanel(panelId: string): void {
+    public RemovePanel(panelId: string): void {
         const container = this._containerMap.get(panelId);
         if (container) {
             container.close();
         }
     }
 
+    /** @deprecated Use {@link RemovePanel}. */
+    public removePanel(panelId: string): void {
+        return this.RemovePanel(panelId);
+    }
+
     /**
      * Split a panel horizontally (add panel to the right)
      */
+    public SplitHorizontal(panelId: string, newPanel: DashboardPanel): void {
+        this.AddPanel(newPanel, { targetPanelId: panelId, position: 'right' });
+    }
+
+    /** @deprecated Use {@link SplitHorizontal}. */
     public splitHorizontal(panelId: string, newPanel: DashboardPanel): void {
-        this.addPanel(newPanel, { targetPanelId: panelId, position: 'right' });
+        return this.SplitHorizontal(panelId, newPanel);
     }
 
     /**
      * Split a panel vertically (add panel below)
      */
+    public SplitVertical(panelId: string, newPanel: DashboardPanel): void {
+        this.AddPanel(newPanel, { targetPanelId: panelId, position: 'bottom' });
+    }
+
+    /** @deprecated Use {@link SplitVertical}. */
     public splitVertical(panelId: string, newPanel: DashboardPanel): void {
-        this.addPanel(newPanel, { targetPanelId: panelId, position: 'bottom' });
+        return this.SplitVertical(panelId, newPanel);
     }
 
     /**
      * Add a panel as a tab to an existing stack
      */
+    public AddToStack(panelId: string, newPanel: DashboardPanel): void {
+        this.AddPanel(newPanel, { targetPanelId: panelId, position: 'tab' });
+    }
+
+    /** @deprecated Use {@link AddToStack}. */
     public addToStack(panelId: string, newPanel: DashboardPanel): void {
-        this.addPanel(newPanel, { targetPanelId: panelId, position: 'tab' });
+        return this.AddToStack(panelId, newPanel);
     }
 
     /**
      * Maximize a panel
      */
+    public MaximizePanel(panelId: string): void {
+        this.OnPanelMaximized.next({ panelId, maximized: true });
+    }
+
+    /** @deprecated Use {@link MaximizePanel}. */
     public maximizePanel(panelId: string): void {
-        this.onPanelMaximized.next({ panelId, maximized: true });
+        return this.MaximizePanel(panelId);
     }
 
     /**
      * Restore a maximized panel
      */
+    public RestorePanel(panelId: string): void {
+        this.OnPanelMaximized.next({ panelId, maximized: false });
+    }
+
+    /** @deprecated Use {@link RestorePanel}. */
     public restorePanel(panelId: string): void {
-        this.onPanelMaximized.next({ panelId, maximized: false });
+        return this.RestorePanel(panelId);
     }
 
     /**
      * Focus a panel by ID
      */
-    public focusPanel(panelId: string): void {
+    public FocusPanel(panelId: string): void {
         const container = this._containerMap.get(panelId);
         if (container) {
             container.focus();
         }
     }
 
+    /** @deprecated Use {@link FocusPanel}. */
+    public focusPanel(panelId: string): void {
+        return this.FocusPanel(panelId);
+    }
+
     /**
      * Get the current layout configuration.
      * Returns GL's native ResolvedLayoutConfig - no conversion.
      */
-    public getLayoutConfig(): ResolvedLayoutConfig | null {
+    public GetLayoutConfig(): ResolvedLayoutConfig | null {
         if (!this._layout) return null;
 
         try {
@@ -478,19 +593,34 @@ export class GoldenLayoutWrapperService {
         }
     }
 
+    /** @deprecated Use {@link GetLayoutConfig}. */
+    public getLayoutConfig(): ResolvedLayoutConfig | null {
+        return this.GetLayoutConfig();
+    }
+
     /**
      * Get the container element for a panel
      */
-    public getPanelContainer(panelId: string): HTMLElement | null {
+    public GetPanelContainer(panelId: string): HTMLElement | null {
         const container = this._containerMap.get(panelId);
         return container?.element || null;
+    }
+
+    /** @deprecated Use {@link GetPanelContainer}. */
+    public getPanelContainer(panelId: string): HTMLElement | null {
+        return this.GetPanelContainer(panelId);
     }
 
     /**
      * Get all panel IDs in the current layout
      */
-    public getPanelIds(): string[] {
+    public GetPanelIds(): string[] {
         return Array.from(this._containerMap.keys());
+    }
+
+    /** @deprecated Use {@link GetPanelIds}. */
+    public getPanelIds(): string[] {
+        return this.GetPanelIds();
     }
 
     /**
@@ -498,18 +628,23 @@ export class GoldenLayoutWrapperService {
      * Note: Golden Layout 2 doesn't support changing settings after initialization.
      * The layout must be reinitialized to apply new settings.
      */
-    public setEditingMode(isEditing: boolean): void {
+    public SetEditingMode(isEditing: boolean): void {
         this._isEditing = isEditing;
     }
 
+    /** @deprecated Use {@link SetEditingMode}. */
+    public setEditingMode(isEditing: boolean): void {
+        return this.SetEditingMode(isEditing);
+    }
+
     private updatePanelsList(): void {
-        this.panels$.next(Array.from(this._containerMap.keys()));
+        this.Panels$.next(Array.from(this._containerMap.keys()));
     }
 
     private emitLayoutChanged(changeType: LayoutChangedEvent['changeType']): void {
-        const layoutConfig = this.getLayoutConfig();
+        const layoutConfig = this.GetLayoutConfig();
         if (layoutConfig) {
-            this.onLayoutChanged.next({
+            this.OnLayoutChanged.next({
                 layout: layoutConfig,
                 changeType
             });

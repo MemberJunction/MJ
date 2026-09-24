@@ -12,9 +12,9 @@
 
 import { Command } from 'commander';
 import { createRequire } from 'node:module';
-import { generateCommand } from './commands/generate';
-import { validateCommand } from './commands/validate';
-import { exportCommand } from './commands/export';
+import { GenerateCommand } from './commands/generate';
+import { ValidateCommand } from './commands/validate';
+import { ExportCommand } from './commands/export';
 
 // Use createRequire to import JSON (compatible with ESM)
 const require = createRequire(import.meta.url);
@@ -41,21 +41,21 @@ program
   .option('-o, --output <path>', 'Output directory')
   .option('--mode <mode>', 'Output mode: metadata|database|both')
   .option('-v, --verbose', 'Verbose output')
-  .action(generateCommand);
+  .action(GenerateCommand);
 
 program
   .command('validate')
   .description('Validate existing query templates')
   .option('-p, --path <path>', 'Path to queries metadata file', './metadata/queries')
   .option('-v, --verbose', 'Verbose output')
-  .action(validateCommand);
+  .action(ValidateCommand);
 
 program
   .command('export')
   .description('Export queries from database to metadata files')
   .option('-o, --output <path>', 'Output directory')
   .option('-v, --verbose', 'Verbose output')
-  .action(exportCommand);
+  .action(ExportCommand);
 
 // Parse command line arguments
 program.parse();

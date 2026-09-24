@@ -16,7 +16,7 @@ import {
 import { ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { LibraryRegistry } from '../utilities/library-registry';
 import { LibraryLoader } from '../utilities/library-loader';
-import { unwrapLibraryComponent, unwrapLibraryComponents, unwrapAllLibraryComponents } from '../utilities/component-unwrapper';
+import { UnwrapLibraryComponent, UnwrapLibraryComponents, UnwrapAllLibraryComponents } from '../utilities/component-unwrapper';
 import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
@@ -57,8 +57,13 @@ export class ComponentCompiler {
    * Sets the Babel instance to use for compilation
    * @param babel - The Babel standalone instance
    */
-  setBabelInstance(babel: any): void {
+  SetBabelInstance(babel: any): void {
     this.babelInstance = babel;
+  }
+
+  /** @deprecated Use {@link SetBabelInstance}. */
+  setBabelInstance(babel: any): void {
+    return this.SetBabelInstance(babel);
   }
 
   /**
@@ -66,7 +71,7 @@ export class ComponentCompiler {
    * @param options - Compilation options
    * @returns Promise resolving to compilation result
    */
-  async compile(options: CompileOptions): Promise<CompilationResult> {
+  async Compile(options: CompileOptions): Promise<CompilationResult> {
     const startTime = Date.now();
 
     try {
@@ -133,6 +138,11 @@ export class ComponentCompiler {
         duration: Date.now() - startTime
       };
     }
+  }
+
+  /** @deprecated Use {@link Compile}. */
+  async compile(options: CompileOptions): Promise<CompilationResult> {
+    return this.Compile(options);
   }
 
   /**
@@ -792,9 +802,9 @@ export class ComponentCompiler {
         });
 
         // Create bound versions of unwrap functions with debug flag
-        const boundUnwrapLibraryComponent = (lib: any, name: string) => unwrapLibraryComponent(lib, name, this.config.debug);
-        const boundUnwrapLibraryComponents = (lib: any, ...names: string[]) => unwrapLibraryComponents(lib, ...names, this.config.debug as any);
-        const boundUnwrapAllLibraryComponents = (lib: any) => unwrapAllLibraryComponents(lib, this.config.debug);
+        const boundUnwrapLibraryComponent = (lib: any, name: string) => UnwrapLibraryComponent(lib, name, this.config.debug);
+        const boundUnwrapLibraryComponents = (lib: any, ...names: string[]) => UnwrapLibraryComponents(lib, ...names, this.config.debug as any);
+        const boundUnwrapAllLibraryComponents = (lib: any) => UnwrapAllLibraryComponents(lib, this.config.debug);
 
         // Execute the factory creator to get the createComponent function
         let createComponentFn;
@@ -1000,23 +1010,38 @@ export class ComponentCompiler {
   /**
    * Clears the compilation cache
    */
-  clearCache(): void {
+  ClearCache(): void {
     this.compilationCache.clear();
+  }
+
+  /** @deprecated Use {@link ClearCache}. */
+  clearCache(): void {
+    return this.ClearCache();
   }
 
   /**
    * Gets current cache size
    * @returns Number of cached components
    */
-  getCacheSize(): number {
+  GetCacheSize(): number {
     return this.compilationCache.size;
+  }
+
+  /** @deprecated Use {@link GetCacheSize}. */
+  getCacheSize(): number {
+    return this.GetCacheSize();
   }
 
   /**
    * Updates compiler configuration
    * @param config - New configuration options
    */
-  updateConfig(config: Partial<CompilerConfig>): void {
+  UpdateConfig(config: Partial<CompilerConfig>): void {
     this.config = { ...this.config, ...config };
+  }
+
+  /** @deprecated Use {@link UpdateConfig}. */
+  updateConfig(config: Partial<CompilerConfig>): void {
+    return this.UpdateConfig(config);
   }
 }

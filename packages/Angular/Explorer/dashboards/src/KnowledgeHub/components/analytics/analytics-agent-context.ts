@@ -24,8 +24,13 @@ export const ANALYTICS_TABS = ['overview', 'tags', 'sources', 'pipeline', 'quali
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
 
 /** Type-guard for an Analytics tab id; keeps the switch tool tolerant of bad input. */
-export function isValidAnalyticsTab(tab: unknown): tab is AnalyticsTab {
+export function IsValidAnalyticsTab(tab: unknown): tab is AnalyticsTab {
     return typeof tab === 'string' && (ANALYTICS_TABS as readonly string[]).includes(tab);
+}
+
+/** @deprecated Use {@link IsValidAnalyticsTab}. */
+export function isValidAnalyticsTab(tab: unknown): tab is AnalyticsTab {
+    return IsValidAnalyticsTab(tab);
 }
 
 /** The date-range filter labels the surface offers. */
@@ -35,16 +40,26 @@ export const ANALYTICS_DATE_RANGES = ['7D', '30D', '90D', 'YTD', 'All'] as const
 export type AnalyticsDateRange = (typeof ANALYTICS_DATE_RANGES)[number];
 
 /** Type-guard for a date-range label; keeps the date-range tool tolerant. */
-export function isValidAnalyticsDateRange(range: unknown): range is AnalyticsDateRange {
+export function IsValidAnalyticsDateRange(range: unknown): range is AnalyticsDateRange {
     return typeof range === 'string' && (ANALYTICS_DATE_RANGES as readonly string[]).includes(range);
+}
+
+/** @deprecated Use {@link IsValidAnalyticsDateRange}. */
+export function isValidAnalyticsDateRange(range: unknown): range is AnalyticsDateRange {
+    return IsValidAnalyticsDateRange(range);
 }
 
 /** Upper bound on how many list entries we publish in any one context field. */
 export const ANALYTICS_CONTEXT_LIST_CAP = 25;
 
 /** Cap an array to {@link ANALYTICS_CONTEXT_LIST_CAP} entries. Pure; never mutates input. */
-export function capAnalyticsList<T>(items: readonly T[]): T[] {
+export function CapAnalyticsList<T>(items: readonly T[]): T[] {
     return items.slice(0, ANALYTICS_CONTEXT_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapAnalyticsList}. */
+export function capAnalyticsList<T>(items: readonly T[]): T[] {
+    return CapAnalyticsList(items);
 }
 
 /**
@@ -55,7 +70,7 @@ export function capAnalyticsList<T>(items: readonly T[]): T[] {
  * @param input - whatever the agent passed (a source name, an entity-filter label)
  * @param names - the names available on the surface
  */
-export function resolveAnalyticsName(input: string, names: readonly string[]): string | null {
+export function ResolveAnalyticsName(input: string, names: readonly string[]): string | null {
     const needle = (input ?? '').trim().toLowerCase();
     if (!needle) {
         return null;
@@ -67,22 +82,36 @@ export function resolveAnalyticsName(input: string, names: readonly string[]): s
     return names.find(n => n.toLowerCase().includes(needle)) ?? null;
 }
 
+/** @deprecated Use {@link ResolveAnalyticsName}. */
+export function resolveAnalyticsName(input: string, names: readonly string[]): string | null {
+    return ResolveAnalyticsName(input, names);
+}
+
 /**
  * A "no match" tolerant error for a name lookup. Lists the available names
  * (bounded) so the agent can retry. Never throws.
  */
-export function buildAnalyticsNotFoundError(
+export function BuildAnalyticsNotFoundError(
     input: string,
     availableNames: readonly string[],
     noun: string,
 ): { Success: false; ErrorMessage: string } {
-    const sample = capAnalyticsList(availableNames);
+    const sample = CapAnalyticsList(availableNames);
     const listed = sample.length > 0 ? sample.join(', ') : '(none available)';
     const more = availableNames.length > sample.length ? `, … (${availableNames.length} total)` : '';
     return {
         Success: false,
         ErrorMessage: `No ${noun} matches "${input}". Available ${noun}s: ${listed}${more}.`,
     };
+}
+
+/** @deprecated Use {@link BuildAnalyticsNotFoundError}. */
+export function buildAnalyticsNotFoundError(
+    input: string,
+    availableNames: readonly string[],
+    noun: string,
+): { Success: false; ErrorMessage: string } {
+    return BuildAnalyticsNotFoundError(input, availableNames, noun);
 }
 
 /** A KPI summary (label + value) shown on the overview tab. */
@@ -170,11 +199,11 @@ function buildCommonSlice(input: AnalyticsAgentContextInput): Record<string, unk
         ActiveTab: input.ActiveTab,
         DateRange: input.DateRange,
         EntityFilter: input.EntityFilter,
-        AvailableEntityFilters: capAnalyticsList(input.EntityFilterOptions),
+        AvailableEntityFilters: CapAnalyticsList(input.EntityFilterOptions),
         IsLoading: input.IsLoading,
         DrillDownOpen: input.DrillDownTarget != null,
         DrillDownTarget: input.DrillDownTarget,
-        KPIs: capAnalyticsList(input.KPIs.map(k => ({ Label: k.Label, Value: k.Value, Delta: k.Delta }))),
+        KPIs: CapAnalyticsList(input.KPIs.map(k => ({ Label: k.Label, Value: k.Value, Delta: k.Delta }))),
         PipelineStatusText: input.PipelineStatusText,
         PipelineStatusOk: input.PipelineStatusOk,
     };
@@ -183,11 +212,11 @@ function buildCommonSlice(input: AnalyticsAgentContextInput): Record<string, unk
 /** Build the tags-tab deep slice. */
 function buildTagsSlice(input: AnalyticsAgentContextInput): Record<string, unknown> {
     const slice: Record<string, unknown> = {
-        TopTags: capAnalyticsList(input.TopTags),
+        TopTags: CapAnalyticsList(input.TopTags),
         TopTagCount: input.TopTags.length,
     };
     if (input.CoOccurrencePairs.length > 0) {
-        slice['CoOccurrencePairs'] = capAnalyticsList(input.CoOccurrencePairs);
+        slice['CoOccurrencePairs'] = CapAnalyticsList(input.CoOccurrencePairs);
         slice['CoOccurrenceLastComputed'] = input.CoOccurrenceLastComputed;
     }
     return slice;
@@ -196,10 +225,10 @@ function buildTagsSlice(input: AnalyticsAgentContextInput): Record<string, unkno
 /** Build the sources-tab deep slice. */
 function buildSourcesSlice(input: AnalyticsAgentContextInput): Record<string, unknown> {
     return {
-        SourceComparison: capAnalyticsList(input.SourceComparison),
+        SourceComparison: CapAnalyticsList(input.SourceComparison),
         SourceCount: input.SourceComparison.length,
         SelectedSourceName: input.SelectedSourceName || null,
-        AvailableSourceNames: capAnalyticsList(input.SourceComparison.map(s => s.Name)),
+        AvailableSourceNames: CapAnalyticsList(input.SourceComparison.map(s => s.Name)),
     };
 }
 
@@ -207,14 +236,14 @@ function buildSourcesSlice(input: AnalyticsAgentContextInput): Record<string, un
 function buildQualitySlice(input: AnalyticsAgentContextInput): Record<string, unknown> {
     return {
         QualityScore: input.QualityScore,
-        ConfidenceStats: capAnalyticsList(input.ConfidenceStats),
+        ConfidenceStats: CapAnalyticsList(input.ConfidenceStats),
     };
 }
 
 /** Build the cost-tab deep slice. */
 function buildCostSlice(input: AnalyticsAgentContextInput): Record<string, unknown> {
     return {
-        CostKPIs: capAnalyticsList(input.CostKPIs),
+        CostKPIs: CapAnalyticsList(input.CostKPIs),
     };
 }
 
@@ -226,7 +255,7 @@ function buildCostSlice(input: AnalyticsAgentContextInput): Record<string, unkno
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildAnalyticsAgentContext(input: AnalyticsAgentContextInput): Record<string, unknown> {
+export function BuildAnalyticsAgentContext(input: AnalyticsAgentContextInput): Record<string, unknown> {
     const context = buildCommonSlice(input);
 
     switch (input.ActiveTab) {
@@ -243,4 +272,9 @@ export function buildAnalyticsAgentContext(input: AnalyticsAgentContextInput): R
         default:
             return context;
     }
+}
+
+/** @deprecated Use {@link BuildAnalyticsAgentContext}. */
+export function buildAnalyticsAgentContext(input: AnalyticsAgentContextInput): Record<string, unknown> {
+    return BuildAnalyticsAgentContext(input);
 }

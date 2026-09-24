@@ -15,9 +15,9 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogError } from '@memberjunction/core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity } from '@memberjunction/core-entities';
-import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict } from '@memberjunction/predictive-studio-core';
+import { type ModelingPlanSpec, deriveTrustVerdict, type TrustVerdict, type FeatureStepWarning } from '@memberjunction/predictive-studio-core';
 
-import { modelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
+import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
 import { trainModelViaEngine, wasTrainingLeakageFlagged } from '../operations/delegation';
 
 /** Inputs for {@link PredictiveStudioPipelineBuilder.build}. */
@@ -72,6 +72,8 @@ export interface BuildPredictionResult {
   pipeline?: MJMLTrainingPipelineEntity;
   /** Leaderboard iterations produced during the tournament. */
   leaderboard?: MLLeaderboardEntryPayload[];
+  /** Structured warnings emitted during plan translation or training (e.g. dropped candidate features). */
+  warnings?: FeatureStepWarning[];
 }
 
 /** Extract a representative score for tournament comparison (R² for regression, AUC/accuracy for classification). */
@@ -124,15 +126,29 @@ export class PredictiveStudioPipelineBuilder {
    * across up to 3 candidates, ranks them on holdout performance, and selects/publishes the winning model.
    * Never throws — returns a typed result with `success`/`errorMessage`.
    */
-  public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
+  public async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
     const { spec, provider, user, autoPublish = true, sidecarVersion = 'predictive-studio-agent' } = input;
+    const collectedWarnings: FeatureStepWarning[] = [];
+    const seenWarningKeys = new Set<string>();
+
+    const recordWarnings = (warnings: FeatureStepWarning[]) => {
+      for (const w of warnings) {
+        const key = `${w.FeatureName}:${w.Kind}`;
+        if (!seenWarningKeys.has(key)) {
+          seenWarningKeys.add(key);
+          collectedWarnings.push(w);
+        }
+      }
+    };
+
     try {
       const experiments = (spec.ProposedExperiments && spec.ProposedExperiments.length > 0)
         ? [...spec.ProposedExperiments].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0))
         : [];
 
       if (experiments.length <= 1) {
-        const config = modelingPlanToPipelineConfig(spec);
+        const config = ModelingPlanToPipelineConfig(spec);
+        recordWarnings(config.warnings);
         const pipeline = await this.createPipeline(config, provider, user);
         const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
         const model = trainResult.model;
@@ -164,6 +180,7 @@ export class PredictiveStudioPipelineBuilder {
           heldReason,
           errorMessage: null,
           leaderboard: [singleRow],
+          warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
         };
       }
 
@@ -183,7 +200,8 @@ export class PredictiveStudioPipelineBuilder {
       for (let i = 0; i < candidatesToRun.length; i++) {
         const exp = candidatesToRun[i];
         try {
-          const config = modelingPlanToPipelineConfig(spec, i);
+          const config = ModelingPlanToPipelineConfig(spec, i);
+          recordWarnings(config.warnings);
           const pipeline = await this.createPipeline(config, provider, user);
           const trainResult = await trainModelViaEngine({ pipelineId: pipeline.ID, sidecarVersion }, provider, user);
           const model = trainResult.model;
@@ -240,12 +258,25 @@ export class PredictiveStudioPipelineBuilder {
         heldReason,
         errorMessage: null,
         leaderboard,
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       LogError(`PredictiveStudioPipelineBuilder.build failed: ${errorMessage}`);
-      return { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
+      return {
+        success: false,
+        published: false,
+        leakageFlagged: false,
+        heldReason: null,
+        errorMessage,
+        warnings: collectedWarnings.length > 0 ? collectedWarnings : undefined,
+      };
     }
+  }
+
+  /** @deprecated Use {@link Build}. */
+  public async build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
+    return this.Build(input);
   }
 
   /** Create + save the `MJ: ML Training Pipelines` row from the resolved config. */
@@ -253,7 +284,7 @@ export class PredictiveStudioPipelineBuilder {
     // Validate the whole plan against real metadata BEFORE creating any rows or training — so an invalid
     // plan (bad entity / target / feature / algorithm) fails fast with an actionable message and leaves
     // no orphan pipeline/run rows behind, instead of erroring mid-train.
-    const entity = resolveEntity(config.targetEntityName, provider);
+    const entity = ResolveEntity(config.targetEntityName, provider);
     if (!entity) {
       throw new Error(`Target entity '${config.targetEntityName}' was not found in metadata. The plan must reference a real entity.`);
     }
@@ -262,7 +293,7 @@ export class PredictiveStudioPipelineBuilder {
 
     // Canonicalize any source bindings referencing target entity view or aliases
     for (const sb of config.sourceBindings ?? []) {
-      if (UUIDsEqual(resolveEntity(sb.Ref, provider)?.ID, entity.ID)) {
+      if (UUIDsEqual(ResolveEntity(sb.Ref, provider)?.ID, entity.ID)) {
         sb.Ref = entity.Name;
       }
     }
@@ -324,7 +355,7 @@ export class PredictiveStudioPipelineBuilder {
         let foundOnBoundSource = false;
         for (const sb of config.sourceBindings ?? []) {
           if (sb.Kind === 'Entity') {
-            const srcEntity = resolveEntity(sb.Ref, provider);
+            const srcEntity = ResolveEntity(sb.Ref, provider);
             if (srcEntity?.Fields.some((f) => f.Name.toLowerCase() === lower)) {
               foundOnBoundSource = true;
               break;
@@ -459,7 +490,7 @@ export class PredictiveStudioPipelineBuilder {
  * BaseTable ('AIPromptRun'), schema prefixes ('__mj.vwAIPromptRuns'), and name without
  * app prefix ('AI Prompt Runs').
  */
-export function resolveEntity(nameOrView: string, provider: IMetadataProvider): EntityInfo | undefined {
+export function ResolveEntity(nameOrView: string, provider: IMetadataProvider): EntityInfo | undefined {
   if (!nameOrView) return undefined;
   const direct = provider.EntityByName(nameOrView);
   if (direct) return direct;
@@ -484,5 +515,10 @@ export function resolveEntity(nameOrView: string, provider: IMetadataProvider): 
     if (strippedPrefix === trimmed || normalize(strippedPrefix) === normalizedTarget) return e;
   }
   return undefined;
+}
+
+/** @deprecated Use {@link ResolveEntity}. */
+export function resolveEntity(nameOrView: string, provider: IMetadataProvider): EntityInfo | undefined {
+  return ResolveEntity(nameOrView, provider);
 }
 

@@ -1,5 +1,60 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- e1fd4c1: fix: a date-only column renders as its stored calendar day in grids, cards, the record detail panel, aggregates, the aggregate panel, the view-config preview, the IS-A related card and the FK dropdown, not the previous day
+
+  A SQL `date` column arrives as UTC midnight, and every display path except the form field (fixed in #4177) formatted it in the reader's local zone, so a stored 2026-11-20 read as Nov 19 for everyone west of Greenwich and 2026-01-01 read as the previous year. The form and the list disagreed on the same row. `@memberjunction/core` now exports `IsDateOnlySQLType` and `FormatDateOnly`, its own `FormatValue` uses them for `date` types, and the grid, cards, detail panel, entity card and view-config preview branch on the field's declared SQL type. A `datetime` or `datetimeoffset` column is an instant and keeps local rendering with its time. `ng-entity-viewer` also exports `AggregateFieldName` and `AggregateField`, which read the column out of a single-field aggregate such as `MIN(IntakeDate)`, and the aggregate panel gains an optional `Entity` input: with it bound, a date aggregate renders as its day instead of the raw ISO string the wire carries, while a `COUNT` over a date column still renders as the count. A timestamp aggregate that arrives as that ISO string now renders in local time in grid cards rather than as the wire text. In `ng-base-forms`, the IS-A related card and the FK dropdown cells branch on the column's SQL type the same way. Closes MJ#4210.
+
+- 50241c8: fix(ng-entity-viewer): the entity grid's Merge button does something.
+
+  `MergeRecordsRequested` had no subscriber anywhere and the record-merge panel never called `MergeRecords`, so merging was reachable only from Knowledge Hub's duplicate review. The grid view renderer now hosts the panel in `mj-dialog`, lets the user choose which record survives, previews how many linked records would move to it, and merges two selected rows — offered only where the entity allows merge and the user can both update and delete. Fields the ORM will not write (keys, `AllowUpdateAPI = 0`, timestamps) are read-only in the comparison. IS-A records are refused with an explanation, on the client and in `MergeRecords` itself: the merge re-points only the keys that target the merged entity, and the loser's delete would follow the shared key into subtype or parent rows whose references never moved.
+
+  `mj-explorer-entity-data-grid` re-emits the same event rather than leaving a button that does nothing.
+
+- 6207578: Fix `mj-entity-data-grid` rendering **zero columns** when a stale grid state names none of the current entity's fields (MemberJunction/MJ#4244). One `<mj-entity-viewer>` rebound from entity A to entity B carried A's `columnSettings` into B's grid; `buildAgColumnDefsFromGridState()` drops every setting whose field the entity lacks, and `buildAgColumnDefs()` took the resulting empty array as the answer — so the grid loaded its rows and reported the right row count while rendering no header and no cells, with no error and no console warning. A grid-state result of zero columns is now treated as _no usable state_ and falls through to the column model and then to generation from entity metadata, the same floor `generateAgColumnDefs()` already applies to an entity with no `DefaultInView` fields. A state that matches at least one field is still honoured in full, so a saved view's column order and visibility continue to win. `EntityViewerComponent` also stops being the source of such a state: its `Entity` setter already dropped the per-view-type config map, the sort state, the loaded view record and the cached renderer instances on an entity change, but not the canonical `_gridState` that `resolveCanonicalGridState()` prefers over the new entity's own saved view. A grid state the viewer CAPTURED from the renderer is now dropped with the rest, which also closes the partial-overlap case the grid cannot detect — two entities sharing some field names previously rendered a silently truncated column set. A host-supplied `[GridState]` is deliberately left alone.
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [e225ece]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-entity-action-ux@6.2.0-edge.0
+  - @memberjunction/ng-list-management@6.2.0-edge.0
+  - @memberjunction/ng-map-view@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ng-record-changes@6.2.0-edge.0
+  - @memberjunction/ng-record-merge@6.2.0-edge.0
+  - @memberjunction/ng-filter-builder@6.2.0-edge.0
+  - @memberjunction/ng-timeline@6.2.0-edge.0
+  - @memberjunction/ng-export-service@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/ng-pagination@6.2.0-edge.0
+  - @memberjunction/export-engine@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

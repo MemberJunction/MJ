@@ -52,7 +52,7 @@ const MAX_TRANSCRIPT_TURNS = 60;
  *   `ExpiresAt` that many days out (the Memory Manager's decay phase reaps expired notes). Omit/0
  *   for no expiry (system default retention applies).
  */
-export async function writeReturningVisitorRecap(
+export async function WriteReturningVisitorRecap(
   conversationId: string | null | undefined,
   agentId: string | null | undefined,
   contextUser: UserInfo,
@@ -99,6 +99,17 @@ export async function writeReturningVisitorRecap(
   } catch (e) {
     LogError(`[ReturningVisitorRecap] best-effort recap failed for conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+/** @deprecated Use {@link WriteReturningVisitorRecap}. */
+export async function writeReturningVisitorRecap(
+  conversationId: string | null | undefined,
+  agentId: string | null | undefined,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
+  retentionDays?: number | null,
+): Promise<void> {
+  return WriteReturningVisitorRecap(conversationId, agentId, contextUser, provider, retentionDays);
 }
 
 /** The polymorphic scope a recap note is filed under. */

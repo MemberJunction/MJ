@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { ProcedureToFunctionRule } from '../rules/ProcedureToFunctionRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new ProcedureToFunctionRule();
-const context = createConversionContext('tsql', 'postgres');
+const context = CreateConversionContext('tsql', 'postgres');
 // Populate CreatedViews with views referenced by tests
 context.CreatedViews.add('vwUsers');
 
@@ -626,7 +626,7 @@ END`;
       // so v5.23 Metadata_Sync crashed calling the 13-arg version). Now we emit
       // the sproc — the referenced view lives in the baseline or an earlier
       // migration and will exist by the time this one runs.
-      const ctx = createConversionContext('tsql', 'postgres');
+      const ctx = CreateConversionContext('tsql', 'postgres');
       // Do NOT add vwMissingView to ctx.CreatedViews
       const input = `CREATE PROCEDURE [__mj].[spCreateMissing]
     @Name nvarchar(100)
