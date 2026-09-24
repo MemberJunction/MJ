@@ -10,7 +10,7 @@ import { OwnedExecutor } from '../OwnedExecutor';
 import type { TransportDriverDeps } from '../TransportDriverDeps';
 import { ReadSubscriptionIDs } from './bindingIds';
 import type { DatabaseSubscriptionIDs } from './bindingIds';
-import { MessageFromColumns, SerializeProgress } from './rowMapping';
+import { MessageFromColumns, NormalizeRowID, SerializeProgress } from './rowMapping';
 
 /**
  * The Database transport's consumer (03 §7, §11). It owns one independent executor, never runs a statement on the
@@ -156,8 +156,8 @@ export class DatabaseTransportConsumer<TPayload extends WorkJson = WorkJson> imp
     private toDelivery(row: ClaimedDeliveryRow): ReceivedDelivery<TPayload> {
         return {
             Message: MessageFromColumns<TPayload>(row, this.binding.Policy.TopicName),
-            DeliveryID: row.DeliveryID,
-            LeaseToken: row.LeaseToken,
+            DeliveryID: NormalizeRowID(row.DeliveryID),
+            LeaseToken: NormalizeRowID(row.LeaseToken),
             Attempt: ToNumber(row.AttemptCount) ?? 1,
             IsReplay: ToBoolean(row.IsReplay),
             LeaseExpiresAt: row.LeaseExpiresAt instanceof Date ? row.LeaseExpiresAt : new Date(row.LeaseExpiresAt),

@@ -36,3 +36,4 @@ export * from './publish/WorkQueuePublishCoordinator';
 export * from './engine/driverResolution';
 export * from './engine/PublishListenerSet';
 export * from './WorkQueueEngine';
+export * from './testing/DatabaseConformanceHarness';

@@ -45,7 +45,7 @@ describe('DatabaseTransportConsumer.Receive', () => {
         expect(source.Calls[0].Params).toEqual(['BBBBBBBB-0000-0000-0000-000000000001', 5]);
         expect(source.Calls[1].SQL).toContain('[spWorkQueueClaimUnpartitioned]');
         expect(source.Calls[1].Params).toEqual(['BBBBBBBB-0000-0000-0000-000000000001', 'host:1:abcd', 60, 5]);
-        expect(deliveries[0]).toMatchObject({ DeliveryID: CLAIMED.DeliveryID, Attempt: 1, IsReplay: false, LeaseExpiresAt: CLAIMED.LeaseExpiresAt });
+        expect(deliveries[0]).toMatchObject({ DeliveryID: CLAIMED.DeliveryID.toLowerCase(), LeaseToken: CLAIMED.LeaseToken.toLowerCase(), Attempt: 1, IsReplay: false, LeaseExpiresAt: CLAIMED.LeaseExpiresAt });
         expect(deliveries[0].Message).toMatchObject({ Topic: 'import.ready', PartitionKey: 'venue-42', Payload: { x: 1 } });
     });
 

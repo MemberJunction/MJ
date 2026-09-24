@@ -1,3 +1,4 @@
+import { NormalizeUUID } from '@memberjunction/global';
 import { IsWorkJson } from '@memberjunction/work-queue-base';
 import { WorkQueueConfigurationError } from '@memberjunction/work-queue-core';
 import type { WorkJson, WorkMessage, WorkPayloadRef, WorkProgress } from '@memberjunction/work-queue-core';
@@ -73,9 +74,18 @@ export function ParsePayloadRef(json: string | null): WorkPayloadRef | undefined
     return ref;
 }
 
+/**
+ * Row IDs come back UPPERCASE from SQL Server and lowercase from PostgreSQL (guides/UUID_COMPARISON_GUIDE.md). The
+ * Database transport hands every ID out lowercase so a consumer on either platform gets back the string it published
+ * and can compare with `===`; MJ code compares IDs with `UUIDsEqual` regardless.
+ */
+export function NormalizeRowID(id: string): string {
+    return NormalizeUUID(id);
+}
+
 export function MessageFromColumns<TPayload extends WorkJson = WorkJson>(columns: MessageColumns, topicName: string): WorkMessage<TPayload> {
     const message: WorkMessage<TPayload> = {
-        MessageID: columns.MessageID,
+        MessageID: NormalizeRowID(columns.MessageID),
         Topic: topicName,
         Attributes: ParseAttributes(columns.Attributes),
         PublishedAt: ToIsoString(columns.PublishedAt) ?? new Date(0).toISOString(),

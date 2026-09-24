@@ -34,6 +34,14 @@ describe('MessageFromColumns', () => {
         });
     });
 
+    it('normalises the SQL Server uppercase MessageID to lowercase so it matches what was published', () => {
+        const message = MessageFromColumns({
+            MessageID: 'CCCCCCCC-0000-0000-0000-000000000001', PartitionKey: null, Attributes: null, Payload: null,
+            PayloadRef: null, CorrelationID: null, PublishedAt: '2026-01-01T00:00:00Z',
+        }, 'import.ready');
+        expect(message.MessageID).toBe('cccccccc-0000-0000-0000-000000000001');
+    });
+
     it('carries the optional fields when present', () => {
         const message = MessageFromColumns({
             MessageID: 'm1', PartitionKey: 'venue-42', Attributes: null, Payload: '{"n":1}',

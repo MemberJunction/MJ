@@ -65,8 +65,8 @@ describe('DatabaseTransportOperator.ListDeadLetters', () => {
         const executor = new RecordingExecutor().QueueRows([DeadLetterRowFixture('D1'), DeadLetterRowFixture('D2'), DeadLetterRowFixture('D3')]);
         const page = await new DatabaseTransportOperator(executor, TestDeps(executor))
             .ListDeadLetters(SubscriptionBindingFixture({ PartitionMode: 'Ordered' }), null, 2);
-        expect(page?.Items.map(i => i.DeliveryID)).toEqual(['D1', 'D2']);
-        expect(page?.NextCursor).toBe(EncodeCursor({ DeliveryID: 'D2' }));
+        expect(page?.Items.map(i => i.DeliveryID)).toEqual(['d1', 'd2']);
+        expect(page?.NextCursor).toBe(EncodeCursor({ DeliveryID: 'D2' }));   // the raw row ID keys the keyset
         expect(page?.Items[0]).toMatchObject({ Attempts: 5, Reason: 'MaxAttemptsExceeded', BlocksKey: true, PartitionKey: 'venue-42' });
         expect(page?.Items[0].Message.Payload).toEqual({ a: 1 });
         expect(executor.Calls[0].Params).toEqual(['BBBBBBBB-0000-0000-0000-000000000001', true, null, 3]);
@@ -95,7 +95,7 @@ describe('DatabaseTransportOperator.ListPartitions', () => {
         }]);
         const page = await new DatabaseTransportOperator(executor, TestDeps(executor))
             .ListPartitions(SubscriptionBindingFixture({ PartitionMode: 'Ordered' }), 'Blocked', null, 10);
-        expect(page?.Items).toEqual([{ PartitionKey: 'venue-42', Condition: 'Blocked', HeadDeliveryID: DELIVERY, WaitingItems: 4 }]);
+        expect(page?.Items).toEqual([{ PartitionKey: 'venue-42', Condition: 'Blocked', HeadDeliveryID: DELIVERY.toLowerCase(), WaitingItems: 4 }]);
         expect(executor.Calls[0].Params).toEqual(['BBBBBBBB-0000-0000-0000-000000000001', true, 'Blocked', null, 11]);
     });
 });

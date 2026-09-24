@@ -11,7 +11,7 @@ import type { SqlStatement, WorkQueueExecutorSource } from '../../sql/WorkQueueS
 import { OwnedExecutor } from '../OwnedExecutor';
 import type { TransportDriverDeps } from '../TransportDriverDeps';
 import { ReadSubscriptionIDs } from './bindingIds';
-import { ClampPageSize, DecodeCursorField, EncodeCursor, IsUUID, MessageFromColumns, TruncateNote } from './rowMapping';
+import { ClampPageSize, DecodeCursorField, EncodeCursor, IsUUID, MessageFromColumns, NormalizeRowID, TruncateNote } from './rowMapping';
 
 /** The status can flip between the two guarded statements of a Discard (03 §5.2), so the pair is tried twice. */
 const DISCARD_PASSES = 2;
@@ -85,7 +85,7 @@ export class DatabaseTransportOperator implements ITransportOperator {
             Items: page.map(row => ({
                 PartitionKey: row.PartitionKey,
                 Condition: row.Condition,
-                HeadDeliveryID: row.HeadDeliveryID,
+                HeadDeliveryID: row.HeadDeliveryID === null ? null : NormalizeRowID(row.HeadDeliveryID),
                 WaitingItems: ToNumber(row.WaitingItems) ?? 0,
             })),
             NextCursor: rows.length > size && last ? EncodeCursor({ PartitionKey: last.PartitionKey }) : null,
@@ -177,7 +177,7 @@ export class DatabaseTransportOperator implements ITransportOperator {
 
     private deadLetterFromRow(row: DeadLetterRow, topicName: string): DeadLetterRecord {
         return {
-            DeliveryID: row.DeliveryID,
+            DeliveryID: NormalizeRowID(row.DeliveryID),
             Message: MessageFromColumns(row, topicName),
             PartitionKey: row.DeliveryPartitionKey ?? row.PartitionKey,
             Attempts: ToNumber(row.AttemptCount) ?? 0,

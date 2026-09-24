@@ -2,13 +2,18 @@
   "name": "@memberjunction/work-queue-engine",
   "type": "module",
   "version": "6.1.0",
-  "description": "MemberJunction: durable work queue — engine, Database transport and SQL builders",
+  "description": "MemberJunction: durable work queue \u2014 engine, Database transport and SQL builders",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
   },
-  "files": ["/dist"],
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "watch": "tsc --watch",
@@ -26,7 +31,11 @@
     "@memberjunction/work-queue-core": "6.1.0"
   },
   "devDependencies": {
+    "@memberjunction/generic-database-provider": "6.1.0",
+    "@memberjunction/sqlserver-dataprovider": "6.1.0",
+    "@types/mssql": "^9.1.9",
     "@types/node": "24.10.11",
+    "mssql": "^11.0.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

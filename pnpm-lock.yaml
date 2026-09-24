@@ -15347,9 +15347,21 @@ importers:
         specifier: 6.1.0
         version: link:../core
     devDependencies:
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0
+        version: link:../../GenericDatabaseProvider
+      '@memberjunction/sqlserver-dataprovider':
+        specifier: 6.1.0
+        version: link:../../SQLServerDataProvider
+      '@types/mssql':
+        specifier: ^9.1.9
+        version: 9.1.9
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      mssql:
+        specifier: ^11.0.1
+        version: 11.0.1
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
