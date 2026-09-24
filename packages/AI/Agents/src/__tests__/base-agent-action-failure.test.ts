@@ -370,6 +370,9 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(helper('Authentication failed')).toBe(true); // no status code needed
             expect(helper('Credentials not found in environment')).toBe(true);
             expect(helper('Action is not configured for this tenant')).toBe(true);
+            expect(helper('Integration is not configured')).toBe(true);
+            expect(helper('Search provider not configured in this environment')).toBe(true);
+            expect(helper('Not configured')).toBe(true);
         });
 
         it('treats HTTP authorization statuses as recoverable so they flow into the attempt budget', () => {
@@ -396,6 +399,11 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(helper('Invalid date format for startDate: 2026-99-99')).toBe(false);
             expect(helper('Downstream service timeout after 5000ms')).toBe(false);
             expect(helper('No records found matching criteria')).toBe(false);
+            expect(helper("Parameter 'webhookUrl' is not configured")).toBe(false);
+            expect(helper("Option 'channel' not configured")).toBe(false);
+            expect(helper("Input argument 'destination' is not configured")).toBe(false);
+            expect(helper("Field 'sender' is not configured")).toBe(false);
+            expect(helper("Target column 'status' not configured in schema mapping")).toBe(false);
             expect(helper(null)).toBe(false);
             expect(helper(undefined)).toBe(false);
             expect(helper('')).toBe(false);

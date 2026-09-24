@@ -443,6 +443,13 @@ export class BaseAgent {
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
 
     /**
+     * Index in conversationMessages where this agent run began, used to accurately restore
+     * turn 1's trailing state message in append-only mode without corrupting prior chat turns.
+     * @private
+     */
+    private _turn1InsertionIndex: number = -1;
+
+    /**
      * Actions that have failed fatally (e.g., missing API key, unauthorized, or repeated unrecoverable errors)
      * during the current agent run. Subsequent attempts to execute these actions are short-circuited in 0ms.
      * @private
@@ -505,8 +512,23 @@ export class BaseAgent {
         if (!message) {
             return false;
         }
-        const fatalPattern = /(?:api[\s_-]?key\s+(?:is\s+)?(?:not\s+found|missing|required|invalid)|(?:missing|invalid)\s+api[\s_-]?key|no\s+api[\s_-]?key|not\s+configured|credentials?\s+(?:not\s+found|missing)|authentication\s+failed)/i;
-        return fatalPattern.test(message);
+
+        // 1. Missing or invalid credentials, API keys, or authentication failures are unrecoverable in this run
+        const fatalCredentialPattern = /(?:api[\s_-]?key\s+(?:is\s+)?(?:not\s+found|missing|required|invalid)|(?:missing|invalid)\s+api[\s_-]?key|no\s+api[\s_-]?key|credentials?\s+(?:not\s+found|missing)|authentication\s+failed)/i;
+        if (fatalCredentialPattern.test(message)) {
+            return true;
+        }
+
+        // 2. Parameter/argument/input validation errors are recoverable (the agent can adjust inputs),
+        // so they must never trip the fatal action circuit breaker even if phrased as "not configured".
+        const isParamError = /\b(?:parameter|argument|param|input|field|option|property|value|column|filter|header)\b/i.test(message);
+        if (isParamError) {
+            return false;
+        }
+
+        // 3. Action/service/provider-level configuration problems where the tool itself cannot execute in this environment
+        const fatalConfigPattern = /(?:(?:action|tool|service|provider|integration|driver|client|api|extension|engine|server)\s+(?:is\s+)?not\s+configured|not\s+configured\s+(?:for\s+(?:this\s+)?tenant|in\s+(?:this\s+)?environment|on\s+this\s+server|in\s+(?:config|mj\.config))|^\s*(?:action\s+)?(?:is\s+)?not\s+configured[.!]*\s*$)/i;
+        return fatalConfigPattern.test(message);
     }
 
     /**
@@ -1658,6 +1680,7 @@ export class BaseAgent {
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
+            this._turn1InsertionIndex = -1;
             this._fatalActionFailures.clear();
             this._actionFailureHistory.clear();
 
@@ -4319,16 +4342,7 @@ export class BaseAgent {
         const volatileStateMessage = await this.buildVolatileStateMessage(params, promptParams, payload, childPrompt, agentType, systemPrompt);
         if (volatileStateMessage) {
             const isAppendOnly = this.shouldUseAppendOnlyTrailingState(promptParams);
-            if (isAppendOnly && this._lastVolatileStateMessage && !params.conversationMessages.some(m => (m as AgentChatMessage).metadata?.volatileState)) {
-                // If append-only was resolved after turn 1 (via _lastModelSelectionInfo),
-                // restore turn 1's fragment before the first assistant response to ensure exact prefix match.
-                const firstAssistantIdx = params.conversationMessages.findIndex(m => m.role === 'assistant');
-                if (firstAssistantIdx >= 0) {
-                    params.conversationMessages.splice(firstAssistantIdx, 0, this._lastVolatileStateMessage);
-                } else {
-                    params.conversationMessages.push(this._lastVolatileStateMessage);
-                }
-            }
+            this.restoreTurn1VolatileStateIfNeeded(params, isAppendOnly);
             promptParams.conversationMessages = this.assembleOutgoingMessages(params.conversationMessages, volatileStateMessage, isAppendOnly);
             if (isAppendOnly) {
                 params.conversationMessages.push(volatileStateMessage);
@@ -4337,6 +4351,29 @@ export class BaseAgent {
         }
 
         return promptParams;
+    }
+
+    /**
+     * In append-only mode, restores turn 1's volatile state fragment if mode resolution
+     * was deferred until after turn 1 (e.g. dynamic model selection).
+     *
+     * Restores the fragment at the exact message boundary where turn 1 executed, ensuring
+     * earlier turns in multi-turn conversations are not corrupted.
+     */
+    protected restoreTurn1VolatileStateIfNeeded(
+        params: ExecuteAgentParams,
+        isAppendOnly: boolean
+    ): void {
+        if (this._turn1InsertionIndex < 0) {
+            // Record the message boundary at Turn 1 before any loop messages are added
+            this._turn1InsertionIndex = params.conversationMessages.length;
+        } else if (isAppendOnly && this._lastVolatileStateMessage && !params.conversationMessages.some(m => (m as AgentChatMessage).metadata?.volatileState)) {
+            // If append-only was resolved after turn 1 (via _lastModelSelectionInfo),
+            // restore turn 1's fragment at the exact position where turn 1 executed it (the turn 1 boundary)
+            // to ensure exact prefix match without corrupting pre-existing conversation history.
+            const insertIdx = Math.min(this._turn1InsertionIndex, params.conversationMessages.length);
+            params.conversationMessages.splice(insertIdx, 0, this._lastVolatileStateMessage);
+        }
     }
 
     /**
@@ -4380,40 +4417,35 @@ export class BaseAgent {
             const n = name?.toLowerCase() ?? '';
             const v = vendor?.toLowerCase() ?? '';
             const d = driver?.toLowerCase() ?? '';
+
+            // If the vendor/driver is explicitly a provider with block-level or sliding caching
+            // (Cerebras, Anthropic, Google/Gemini), never treat it as an OpenAI/xAI prefix cache target,
+            // even if the model name includes substrings like 'gpt' (e.g. Cerebras GPT-OSS-120B).
+            if (v.includes('cerebras') || v.includes('anthropic') || v.includes('google') || v.includes('gemini') ||
+                d.includes('cerebras') || d.includes('anthropic') || d.includes('gemini')) {
+                return false;
+            }
+
             return n.includes('gpt') || n.includes('openai') || n.includes('grok') ||
                    v.includes('openai') || v.includes('x.ai') || v.includes('xai') ||
                    d.includes('openai') || d.includes('xai');
         };
 
         // Check runtime override
-        if (promptParams.override?.vendorId) {
-            const vendor = AIEngine.Instance?.Vendors?.find(v => UUIDsEqual(v.ID, promptParams.override?.vendorId));
-            if (isPrefixCacheTarget(undefined, vendor?.Name)) {
-                return true;
-            }
-        }
-        if (promptParams.override?.modelId) {
-            const model = AIEngine.Instance?.Models?.find(m => UUIDsEqual(m.ID, promptParams.override?.modelId));
-            if (isPrefixCacheTarget(model?.Name, model?.Vendor, model?.DriverClass)) {
-                return true;
-            }
+        if (promptParams.override?.vendorId || promptParams.override?.modelId) {
+            const vendor = promptParams.override?.vendorId ? AIEngine.Instance?.Vendors?.find(v => UUIDsEqual(v.ID, promptParams.override?.vendorId)) : undefined;
+            const model = promptParams.override?.modelId ? AIEngine.Instance?.Models?.find(m => UUIDsEqual(m.ID, promptParams.override?.modelId)) : undefined;
+            return isPrefixCacheTarget(model?.Name, vendor?.Name ?? model?.Vendor, model?.DriverClass);
         }
 
-        // Check previous turn's model selection info
-        if (this._lastModelSelectionInfo?.vendorSelected) {
+        // Check previous turn's model selection info (definitive once at least one turn has run)
+        if (this._lastModelSelectionInfo) {
             const v = this._lastModelSelectionInfo.vendorSelected;
-            if (isPrefixCacheTarget(undefined, v.Name, (v as any).DriverClass)) {
-                return true;
-            }
-        }
-        if (this._lastModelSelectionInfo?.modelSelected) {
             const m = this._lastModelSelectionInfo.modelSelected;
-            if (isPrefixCacheTarget(m.Name, (m as any).Vendor, (m as any).DriverClass)) {
-                return true;
-            }
+            return isPrefixCacheTarget(m?.Name, v?.Name ?? (m as any)?.Vendor, (v as any)?.DriverClass ?? (m as any)?.DriverClass);
         }
 
-        // Check prompt models if available
+        // Check prompt models if available (only on turn 1 before model selection is known)
         const prompt = promptParams.modelSelectionPrompt ?? promptParams.prompt;
         if (prompt?.ID && AIEngine.Instance?.PromptModels) {
             const promptModels = AIEngine.Instance.PromptModels.filter(pm => UUIDsEqual(pm.PromptID, prompt.ID));
@@ -4560,7 +4592,7 @@ export class BaseAgent {
         }
         try {
             await TemplateEngineServer.Instance.Config(false, contextUser);
-            const template = TemplateEngineServer.Instance.FindTemplate(prompt.TemplateID);
+            const template = TemplateEngineServer.Instance.Templates?.find(t => UUIDsEqual(t.ID, prompt.TemplateID));
             return template?.GetHighestPriorityContent()?.TemplateText ?? null;
         } catch (e) {
             this.logError(e instanceof Error ? e : String(e), { category: 'RuntimeStateFragment', severity: 'warning' });

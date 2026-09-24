@@ -11,6 +11,7 @@ import type { ExecuteAgentParams, AIPromptParams, MJAIPromptEntityExtended } fro
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import type { UserInfo } from '@memberjunction/core';
 import type { ChatMessage } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 
 const templates = vi.hoisted(() => ({ byId: new Map<string, string>() }));
 vi.mock('@memberjunction/aiengine', () => ({
@@ -20,7 +21,17 @@ vi.mock('@memberjunction/templates', () => ({
     TemplateEngineServer: {
         Instance: {
             Config: vi.fn().mockResolvedValue(undefined),
-            FindTemplate: (id: string) => (templates.byId.has(id) ? { ID: id, GetHighestPriorityContent: () => ({ TemplateText: templates.byId.get(id) }) } : undefined),
+            get Templates() {
+                return Array.from(templates.byId.entries()).map(([id, text]) => ({
+                    ID: id,
+                    Name: `Template_${id}`,
+                    GetHighestPriorityContent: () => ({ TemplateText: text }),
+                }));
+            },
+            FindTemplate: (name: string) => {
+                const entry = Array.from(templates.byId.entries()).find(([id]) => `Template_${id}`.toLowerCase() === name.trim().toLowerCase());
+                return entry ? { ID: entry[0], Name: `Template_${entry[0]}`, GetHighestPriorityContent: () => ({ TemplateText: entry[1] }) } : undefined;
+            },
         },
     },
 }));
@@ -36,6 +47,8 @@ interface Internals {
     buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended): Promise<VolatileMessage | null>;
     assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage, isAppendOnly?: boolean): ChatMessage[];
     shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
+    restoreTurn1VolatileStateIfNeeded(params: ExecuteAgentParams, isAppendOnly: boolean): void;
+    _turn1InsertionIndex: number;
     _lastModelSelectionInfo?: any;
     _lastVolatileStateMessage?: any;
 }
@@ -200,6 +213,14 @@ describe('BaseAgent.buildVolatileStateMessage', () => {
         const msg = await a.buildVolatileStateMessage(params, promptParams, undefined, CHILD, AGENT_TYPE);
         expect(String(msg!.content)).toContain('```json\n{}\n```');
     });
+
+    it('loadPromptTemplateText finds templates by TemplateID using Templates collection (not FindTemplate by name)', async () => {
+        templates.byId.set('11111111-2222-3333-4444-555555555555', 'Template content for prompt');
+        const a = agentUnderTest();
+        const prompt = { ID: 'p-1', Name: 'My Prompt', TemplateID: '11111111-2222-3333-4444-555555555555' } as unknown as MJAIPromptEntityExtended;
+        const text = await (a as unknown as { loadPromptTemplateText: (p: MJAIPromptEntityExtended, u: UserInfo) => Promise<string | null> }).loadPromptTemplateText(prompt, {} as UserInfo);
+        expect(text).toBe('Template content for prompt');
+    });
 });
 
 describe('BaseAgent.assembleOutgoingMessages', () => {
@@ -326,5 +347,96 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
 
         a._lastModelSelectionInfo = { vendorSelected: { Name: 'Cerebras', DriverClass: 'CerebrasLLM' } };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+
+        // Cerebras model with 'GPT' in the name should still return false (not treated as OpenAI)
+        a._lastModelSelectionInfo = {
+            vendorSelected: { Name: 'Cerebras', DriverClass: 'CerebrasLLM' },
+            modelSelected: { Name: 'GPT-OSS-120B' },
+        };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+    });
+
+    it('does not fall through to PromptModels when _lastModelSelectionInfo is present', () => {
+        const a = agentUnderTest();
+        const { promptParams } = makeInputs({});
+        (AIEngine.Instance as any).PromptModels = [{ PromptID: 'prompt-1', ModelID: 'model-openai' }];
+        (AIEngine.Instance as any).Models = [{ ID: 'model-openai', Name: 'gpt-4o' }];
+        promptParams.prompt = { ID: 'prompt-1' } as any;
+
+        // If _lastModelSelectionInfo is Anthropic, it must return false and not check PromptModels
+        a._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+
+        // But when _lastModelSelectionInfo is absent, PromptModels fallback detects OpenAI
+        a._lastModelSelectionInfo = undefined;
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+
+        delete (AIEngine.Instance as any).PromptModels;
+        delete (AIEngine.Instance as any).Models;
     });
 });
+
+describe('BaseAgent.restoreTurn1VolatileStateIfNeeded', () => {
+    it('records _turn1InsertionIndex on Turn 1 and restores turn 1 fragment at the run boundary, not corrupting prior conversation turns', () => {
+        const a = agentUnderTest();
+        const preExistingHistory: ChatMessage[] = [
+            { role: 'user', content: 'Chat turn 1 question' },
+            { role: 'assistant', content: 'Chat turn 1 answer' },
+            { role: 'user', content: 'Chat turn 2 question' },
+            { role: 'assistant', content: 'Chat turn 2 answer' },
+            { role: 'user', content: 'Agent prompt: solve this task' },
+        ];
+        const params = { conversationMessages: [...preExistingHistory] } as unknown as ExecuteAgentParams;
+
+        // Turn 1: model not yet determined to be OpenAI, isAppendOnly is false
+        a.restoreTurn1VolatileStateIfNeeded(params, false);
+        expect(a._turn1InsertionIndex).toBe(5);
+
+        // Turn 1 executes: assistant replies and tool result is added
+        const turn1Fragment: VolatileMessage = { role: 'user', content: 'Turn 1 Volatile State', metadata: { volatileState: true } };
+        a._lastVolatileStateMessage = turn1Fragment;
+        params.conversationMessages.push({ role: 'assistant', content: 'Turn 1 LLM response' });
+        params.conversationMessages.push({ role: 'user', content: 'Turn 1 tool results' });
+        expect(params.conversationMessages).toHaveLength(7);
+
+        // Turn 2: dynamic model selection resolved to OpenAI (isAppendOnly = true).
+        // It must restore Turn 1's fragment at index 5 (the run boundary), NOT index 1 (the first assistant in history)!
+        a.restoreTurn1VolatileStateIfNeeded(params, true);
+
+        expect(params.conversationMessages).toHaveLength(8);
+        // Pre-existing history must remain strictly intact
+        expect(params.conversationMessages[0].content).toBe('Chat turn 1 question');
+        expect(params.conversationMessages[1].content).toBe('Chat turn 1 answer');
+        expect(params.conversationMessages[2].content).toBe('Chat turn 2 question');
+        expect(params.conversationMessages[3].content).toBe('Chat turn 2 answer');
+        expect(params.conversationMessages[4].content).toBe('Agent prompt: solve this task');
+        // Restored fragment is at index 5 (immediately before Turn 1's assistant reply)
+        expect(params.conversationMessages[5]).toBe(turn1Fragment);
+        expect(params.conversationMessages[6].content).toBe('Turn 1 LLM response');
+        expect(params.conversationMessages[7].content).toBe('Turn 1 tool results');
+
+        // Subsequent call on Turn 3: does not duplicate or re-splice
+        a.restoreTurn1VolatileStateIfNeeded(params, true);
+        expect(params.conversationMessages).toHaveLength(8);
+    });
+
+    it('does nothing when isAppendOnly is false', () => {
+        const a = agentUnderTest();
+        const preExistingHistory: ChatMessage[] = [
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: 'Hi' },
+        ];
+        const params = { conversationMessages: [...preExistingHistory] } as unknown as ExecuteAgentParams;
+
+        a.restoreTurn1VolatileStateIfNeeded(params, false);
+        expect(a._turn1InsertionIndex).toBe(2);
+
+        a._lastVolatileStateMessage = { role: 'user', content: 'Volatile', metadata: { volatileState: true } };
+        params.conversationMessages.push({ role: 'assistant', content: 'Reply' });
+
+        a.restoreTurn1VolatileStateIfNeeded(params, false);
+        expect(params.conversationMessages).toHaveLength(3);
+        expect(params.conversationMessages.some(m => (m as VolatileMessage).metadata?.volatileState)).toBe(false);
+    });
+});
+
