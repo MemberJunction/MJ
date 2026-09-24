@@ -299,7 +299,7 @@ export class WatermarkService {
                 existing.LastSyncAt = new Date();
                 if (await existing.Save()) return;
             }
-            const err = watermark.LatestResult?.Message || 'Unknown error';
+            const err = watermark.LatestResult?.CompleteMessage || 'Unknown error';
             throw new Error(`Failed to create watermark for EntityMapID=${entityMapID}: ${err}`);
         }
     }

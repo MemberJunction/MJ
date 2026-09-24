@@ -168,7 +168,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
 
         const saved = await run.Save();
         if (!saved) {
-            throw new Error(`Failed to create ArchiveRun record: ${run.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`Failed to create ArchiveRun record: ${run.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
 
         LogStatus(`ArchiveEngine: Created ArchiveRun ${run.Get('ID')}`);
@@ -193,7 +193,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
 
         const saved = await archiveRun.Save();
         if (!saved) {
-            LogError(`Failed to finalize ArchiveRun ${archiveRun.Get('ID')}: ${archiveRun.LatestResult?.Message ?? 'Unknown error'}`);
+            LogError(`Failed to finalize ArchiveRun ${archiveRun.Get('ID')}: ${archiveRun.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
     }
 

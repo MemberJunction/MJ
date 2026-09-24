@@ -222,7 +222,7 @@ export class ThreadPanelComponent extends BaseAngularComponent implements OnInit
 
         this.cdRef.detectChanges();
       } else {
-        console.error('Failed to save reply:', reply.LatestResult?.Message);
+        console.error('Failed to save reply:', reply.LatestResult?.CompleteMessage);
         this.errorMessage = 'Failed to send reply. Please try again.';
       }
     } catch (error) {

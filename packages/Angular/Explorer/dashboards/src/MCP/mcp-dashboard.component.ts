@@ -2310,7 +2310,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
             const deleted = await entity.Delete();
             if (!deleted) {
-                const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Unknown error';
+                const errorMsg = entity.LatestResult?.CompleteMessage || 'Unknown error';
                 this.ErrorMessage = `Failed to delete server: ${errorMsg}`;
                 this.cdr.detectChanges();
                 return;
@@ -2340,7 +2340,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
         const deleted = await entity.Delete();
         if (!deleted) {
-            const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Delete failed';
+            const errorMsg = entity.LatestResult?.CompleteMessage || 'Delete failed';
             throw new Error(errorMsg);
         }
     }
@@ -2450,7 +2450,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
         // Submit everything atomically — if anything fails, the whole cascade rolls back
         if (!await tg.Submit()) {
-            const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Delete failed';
+            const errorMsg = entity.LatestResult?.CompleteMessage || 'Delete failed';
             throw new Error(`Failed to delete connection and related records: ${errorMsg}`);
         }
         console.log('[MCPDashboard] Connection and all related records deleted atomically');

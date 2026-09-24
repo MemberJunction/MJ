@@ -479,7 +479,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
       // Delete the application
       const deleteResult = await this.SelectedApp.Delete();
       if (!deleteResult) {
-        throw new Error(this.SelectedApp.LatestResult?.Message || 'Failed to delete application');
+        throw new Error(this.SelectedApp.LatestResult?.CompleteMessage || 'Failed to delete application');
       }
 
       this.ShowDeleteConfirm = false;

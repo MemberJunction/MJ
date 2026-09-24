@@ -296,7 +296,7 @@ export class StorageAdminDialogComponent implements OnInit {
 
       const saved = await accountEntity.Save();
       if (!saved) {
-        throw new Error(accountEntity.LatestResult?.Message || 'Failed to save storage account.');
+        throw new Error(accountEntity.LatestResult?.CompleteMessage || 'Failed to save storage account.');
       }
 
       // Sync Role Permissions
@@ -415,7 +415,7 @@ export class StorageAdminDialogComponent implements OnInit {
       const saved = await provider.Save();
       if (!saved) {
         provider.IsActive = !newState; // rollback
-        throw new Error(provider.LatestResult?.Message || 'Failed to update provider status.');
+        throw new Error(provider.LatestResult?.CompleteMessage || 'Failed to update provider status.');
       }
       await FileStorageEngineBase.Instance.Config(true);
       this.AccountsChanged.emit();

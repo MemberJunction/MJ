@@ -480,7 +480,7 @@ export class TemplateEditorComponent extends BaseAngularComponent implements OnI
                     
                     this.ContentChange.emit(this.TemplateContents);
                 } else {
-                    MJNotificationService.Instance.CreateSimpleNotification(`Failed to delete template content. ${contentToDelete.LatestResult?.Message}`, 'error');
+                    MJNotificationService.Instance.CreateSimpleNotification(`Failed to delete template content. ${contentToDelete.LatestResult?.CompleteMessage}`, 'error');
                 }
             } catch (error) {
                 console.error('Error deleting template content:', error);

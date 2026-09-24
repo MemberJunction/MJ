@@ -710,7 +710,7 @@ export class TestFeedbackDialogComponent extends BaseAngularComponent implements
       if (result) {
         this.Closed.emit({ success: true, feedbackId: feedback.ID });
       } else {
-        this.errorMessage = feedback.LatestResult?.Message || 'Failed to save feedback';
+        this.errorMessage = feedback.LatestResult?.CompleteMessage || 'Failed to save feedback';
         this.IsSaving = false;
       }
     } catch (error) {

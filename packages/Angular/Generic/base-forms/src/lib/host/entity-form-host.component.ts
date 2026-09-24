@@ -391,8 +391,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       const loadOk = await record.InnerLoad(this._primaryKey);
       if (!loadOk) {
         this.fail(`Could not load ${entityName} record.`,
-          record.LatestResult?.Message
-            ? `Server error: ${record.LatestResult.Message}`
+          record.LatestResult?.CompleteMessage
+            ? `Server error: ${record.LatestResult.CompleteMessage}`
             : `InnerLoad returned false for key ${this._primaryKey.ToString()}.`);
         return null;
       }

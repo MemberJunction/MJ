@@ -2744,7 +2744,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       if (ok) {
         SharedService.Instance.CreateSimpleNotification('Suite saved', 'success', 2000);
       } else {
-        const detail = this.record?.LatestResult?.CompleteMessage || this.record?.LatestResult?.Message || 'Save failed';
+        const detail = this.record?.LatestResult?.CompleteMessage || 'Save failed';
         SharedService.Instance.CreateSimpleNotification(detail, 'error', 4000);
       }
     } catch (err) {

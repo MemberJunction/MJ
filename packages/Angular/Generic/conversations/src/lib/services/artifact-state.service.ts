@@ -470,7 +470,7 @@ export class ArtifactStateService {
       this.CacheArtifact(artifact);
       return artifact;
     } else {
-      throw new Error(artifact.LatestResult?.Message || 'Failed to create artifact');
+      throw new Error(artifact.LatestResult?.CompleteMessage || 'Failed to create artifact');
     }
   }
 
@@ -508,7 +508,7 @@ export class ArtifactStateService {
       this.CacheArtifact(artifact);
       return true;
     } else {
-      throw new Error(artifact.LatestResult?.Message || 'Failed to update artifact');
+      throw new Error(artifact.LatestResult?.CompleteMessage || 'Failed to update artifact');
     }
   }
 
@@ -546,7 +546,7 @@ export class ArtifactStateService {
       }
       return true;
     } else {
-      throw new Error(artifact.LatestResult?.Message || 'Failed to delete artifact');
+      throw new Error(artifact.LatestResult?.CompleteMessage || 'Failed to delete artifact');
     }
   }
 
@@ -646,7 +646,7 @@ export class ArtifactStateService {
     for (const collectionArtifact of result.Results) {
       const deleted = await collectionArtifact.Delete();
       if (!deleted) {
-        const errorMsg = collectionArtifact.LatestResult?.Message || 'Failed to remove artifact from collection';
+        const errorMsg = collectionArtifact.LatestResult?.CompleteMessage || 'Failed to remove artifact from collection';
         throw new Error(errorMsg);
       }
     }

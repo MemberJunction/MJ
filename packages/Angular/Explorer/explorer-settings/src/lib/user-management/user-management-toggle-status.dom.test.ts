@@ -12,7 +12,7 @@
  * primary function — so for every non-Owner admin the toggle silently lies.
  *
  * The sibling `deleteUser` in the same component already handles this correctly (checks the
- * result, throws with `LatestResult?.Message`, catch sets `this.error`); these tests pin
+ * result, throws with `LatestResult?.CompleteMessage`, catch sets `this.error`); these tests pin
  * `toggleUserStatus` to that same in-file convention.
  *
  * The component is exercised through its prototype with minimal stubs for the two things the
@@ -20,6 +20,7 @@
  * method's own control flow, and a full Angular harness would add setup without adding coverage.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { BaseEntityResult } from '@memberjunction/core';
 import { UserManagementComponent } from './user-management.component';
 
 interface ToggleHost {
@@ -41,7 +42,7 @@ function makeComponent(): ToggleHost {
 function makeUser(saveReturns: boolean, message?: string) {
     return {
         IsActive: true,
-        LatestResult: message ? { Message: message } : undefined,
+        LatestResult: message ? Object.assign(new BaseEntityResult(), { Success: false, Message: message }) : undefined,
         Save: vi.fn().mockResolvedValue(saveReturns),
     };
 }

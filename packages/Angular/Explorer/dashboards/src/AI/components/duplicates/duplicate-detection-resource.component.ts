@@ -700,9 +700,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
             const saved = await dupeRun.Save();
             if (!saved) {
-                console.error('Failed to create duplicate run:', dupeRun.LatestResult?.Message || 'unknown error');
+                console.error('Failed to create duplicate run:', dupeRun.LatestResult?.CompleteMessage || 'unknown error');
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to start detection: ${dupeRun.LatestResult?.Message || 'unknown error'}`,
+                    `Failed to start detection: ${dupeRun.LatestResult?.CompleteMessage || 'unknown error'}`,
                     'error', 5000
                 );
                 this.IsDetecting = false;

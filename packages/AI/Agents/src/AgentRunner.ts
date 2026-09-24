@@ -1346,7 +1346,7 @@ export class AgentRunner {
             // Surface WHY. A bare message here sent every cause — a validation failure on a
             // model-supplied name, a permission denial, a transient DB fault — to the same
             // indistinguishable log line.
-            throw new Error(`Failed to save artifact: ${artifact.LatestResult?.Message || 'no error message reported'}`);
+            throw new Error(`Failed to save artifact: ${artifact.LatestResult?.CompleteMessage || 'no error message reported'}`);
         }
         return artifact;
     }
@@ -1519,7 +1519,7 @@ export class AgentRunner {
                         savedIds.push(mediaEntity.ID);
                         LogStatus(`Saved AIAgentRunMedia: ${mediaEntity.ID} (${mediaOutput.modality})`);
                     } else {
-                        LogError(`Failed to save AIAgentRunMedia: ${mediaEntity.LatestResult?.Message}`);
+                        LogError(`Failed to save AIAgentRunMedia: ${mediaEntity.LatestResult?.CompleteMessage}`);
                     }
                 } catch (mediaError) {
                     LogError(`Error saving media output ${i}: ${(mediaError as Error).message}`);

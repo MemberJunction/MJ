@@ -271,15 +271,8 @@ export class WatchService {
     // Save the record
     const saved = await entity.Save();
     if (!saved) {
-      const message = entity.LatestResult?.Message;
-      if (message) {
-        throw new Error(`Failed to save record: ${message}`);
-      }
-      
-      const errors = entity.LatestResult?.Errors?.map(err => 
-        typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
-      )?.join(', ') || 'Unknown error';
-      throw new Error(`Failed to save record: ${errors}`);
+      const message = entity.LatestResult?.CompleteMessage || 'Unknown error';
+      throw new Error(`Failed to save record: ${message}`);
     }
     
     if (wasActuallyUpdated) {

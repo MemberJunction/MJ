@@ -274,7 +274,7 @@ export class UserDialogComponent extends BaseAngularComponent implements OnInit,
       // Save user
       const saveResult = await user.Save();
       if (!saveResult) {
-        throw new Error(user.LatestResult?.Message || 'Failed to save user');
+        throw new Error(user.LatestResult?.CompleteMessage || 'Failed to save user');
       }
 
       // Handle role assignments

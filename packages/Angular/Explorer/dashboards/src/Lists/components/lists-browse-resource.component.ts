@@ -3590,7 +3590,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         this.buildCategoryTree();
         this.cdr.detectChanges();
       } else {
-        const errorMessage = listToDelete.LatestResult?.Message || 'Unknown error occurred';
+        const errorMessage = listToDelete.LatestResult?.CompleteMessage || 'Unknown error occurred';
         console.error('Failed to delete list:', listToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
@@ -3688,7 +3688,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         this.CloseCreateDialog();
         await this.loadData();
       } else {
-        const errorMessage = list.LatestResult?.Message || 'Unknown error occurred';
+        const errorMessage = list.LatestResult?.CompleteMessage || 'Unknown error occurred';
         const action = isEditing ? 'update' : 'create';
         console.error(`Failed to ${action} list:`, list.LatestResult);
         this.notificationService.CreateSimpleNotification(

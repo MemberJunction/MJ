@@ -195,7 +195,7 @@ export class RoleDialogComponent extends BaseAngularComponent implements OnInit,
       // Save role
       const saveResult = await role.Save();
       if (!saveResult) {
-        throw new Error(role.LatestResult?.Message || 'Failed to save role');
+        throw new Error(role.LatestResult?.CompleteMessage || 'Failed to save role');
       }
 
       this.Result.emit({ action: 'save', role });

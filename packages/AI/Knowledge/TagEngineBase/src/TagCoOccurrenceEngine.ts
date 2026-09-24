@@ -442,7 +442,7 @@ export class TagCoOccurrenceEngine extends BaseSingleton<TagCoOccurrenceEngine> 
         entity.LastComputedAt = new Date();
         const saved = await entity.Save();
         if (!saved) {
-            LogError(`TagCoOccurrenceEngine: Failed to update co-occurrence record ${recordID}: ${entity.LatestResult?.Message ?? 'Unknown error'}`);
+            LogError(`TagCoOccurrenceEngine: Failed to update co-occurrence record ${recordID}: ${entity.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
             return false;
         }
         return true;
@@ -464,7 +464,7 @@ export class TagCoOccurrenceEngine extends BaseSingleton<TagCoOccurrenceEngine> 
 
         const saved = await entity.Save();
         if (!saved) {
-            LogError(`TagCoOccurrenceEngine: Failed to create co-occurrence pair (${tagAID}, ${tagBID}): ${entity.LatestResult?.Message ?? 'Unknown error'}`);
+            LogError(`TagCoOccurrenceEngine: Failed to create co-occurrence pair (${tagAID}, ${tagBID}): ${entity.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
             return false;
         }
         return true;
@@ -484,7 +484,7 @@ export class TagCoOccurrenceEngine extends BaseSingleton<TagCoOccurrenceEngine> 
 
         const deleted = await entity.Delete();
         if (!deleted) {
-            LogError(`TagCoOccurrenceEngine: Failed to delete stale co-occurrence record ${recordID}: ${entity.LatestResult?.Message ?? 'Unknown error'}`);
+            LogError(`TagCoOccurrenceEngine: Failed to delete stale co-occurrence record ${recordID}: ${entity.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
             return false;
         }
         return true;

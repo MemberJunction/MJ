@@ -2184,7 +2184,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
                 await this.refreshSourcesTab();
             } else {
                 // CP-4: Show detailed error from LatestResult
-                const errorDetail = entity.LatestResult?.Message ?? 'Unknown error';
+                const errorDetail = entity.LatestResult?.CompleteMessage ?? 'Unknown error';
                 console.error('[Classify] Save source failed:', entity.LatestResult);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to save source: ${errorDetail}`, 'error', 5000
@@ -2421,7 +2421,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         entity.ScheduledJobID = scheduledJobID;
         const saved = await entity.Save();
         if (!saved) {
-            throw new Error(entity.LatestResult?.Message ?? 'Failed to update content source');
+            throw new Error(entity.LatestResult?.CompleteMessage ?? 'Failed to update content source');
         }
     }
 

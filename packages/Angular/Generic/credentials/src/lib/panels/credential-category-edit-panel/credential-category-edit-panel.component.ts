@@ -291,7 +291,7 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
                 this.Saved.emit(entity);
                 this.ClosePanel();
             } else {
-                const errorMessage = entity.LatestResult?.Message || 'Unknown error';
+                const errorMessage = entity.LatestResult?.CompleteMessage || 'Unknown error';
                 console.error('Save failed:', errorMessage);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to save category: ${errorMessage}`,
@@ -332,7 +332,7 @@ export class CredentialCategoryEditPanelComponent extends BaseAngularComponent i
                 this.Deleted.emit(this.category.ID);
                 this.ClosePanel();
             } else {
-                const errorMessage = this.category.LatestResult?.Message || 'Unknown error';
+                const errorMessage = this.category.LatestResult?.CompleteMessage || 'Unknown error';
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to delete category: ${errorMessage}`,
                     'error',

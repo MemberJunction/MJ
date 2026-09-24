@@ -380,7 +380,7 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
       entity.Set(this.RatingCommentField, comments || null);
       const saveResult = await entity.Save();
       if (!saveResult) {
-        throw new Error(`Save failed: ${(entity as any).LatestResult?.Message ?? 'unknown'}`);
+        throw new Error(`Save failed: ${(entity as any).LatestResult?.CompleteMessage ?? 'unknown'}`);
       }
       const conversationID = entity.Get('ConversationID');
       return typeof conversationID === 'string' ? conversationID : null;

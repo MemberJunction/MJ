@@ -406,7 +406,7 @@ export async function CreateConfigDashboard(
     dashboard.UIConfigDetails = BuildDashboardConfig(panels);
 
     if (!(await dashboard.Save())) {
-        return { Error: dashboard.LatestResult?.Message ?? 'The dashboard could not be saved.' };
+        return { Error: dashboard.LatestResult?.CompleteMessage ?? 'The dashboard could not be saved.' };
     }
     return { ID: dashboard.ID };
 }

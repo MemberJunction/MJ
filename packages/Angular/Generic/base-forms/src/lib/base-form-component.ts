@@ -476,7 +476,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         return true;
       }
 
-      const serverMsg = this.record.LatestResult?.Message || '';
+      const serverMsg = this.record.LatestResult?.CompleteMessage || '';
       const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
       // A server-side Validate()/ValidateAsync() refusal comes back with its field-named
       // reasons in LatestResult.Errors (rehydrated by the provider). When any of them names a

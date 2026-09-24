@@ -3,6 +3,8 @@ import * as fsExtra from 'fs-extra';
 import * as os from 'os';
 import * as path from 'path';
 
+const { BaseEntityResult: ActualBaseEntityResult } = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+
 // -----------------------------------------------------------------------------
 // Unit tests for the REAL reference-resolution core in SyncEngine:
 // processFieldValue + resolveLookup. Only the provider boundary is mocked —
@@ -66,14 +68,17 @@ class FakeCreatedEntity {
   public Status: string | null = null;
   public NewRecordCallCount = 0;
   public SaveCallCount = 0;
-  public LatestResult: { Message?: string } | null = null;
+  public LatestResult: BaseEntityResult | null = null;
   private readonly saveSucceeds: boolean;
 
   constructor(id: string, saveSucceeds: boolean = true, failureMessage?: string) {
     this.ID = id;
     this.saveSucceeds = saveSucceeds;
     if (!saveSucceeds && failureMessage) {
-      this.LatestResult = { Message: failureMessage };
+      // A real BaseEntityResult: the engine reads CompleteMessage, which a plain { Message } lacks.
+      this.LatestResult = new ActualBaseEntityResult();
+      this.LatestResult.Success = false;
+      this.LatestResult.Message = failureMessage;
     }
   }
 
@@ -126,7 +131,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 
 import { SyncEngine, DeferrableLookupError } from '../lib/sync-engine';
 import type { SyncResolutionCollector } from '../lib/sync-engine';
-import type { BaseEntity, UserInfo } from '@memberjunction/core';
+import type { BaseEntity, BaseEntityResult, UserInfo } from '@memberjunction/core';
 import type { BatchContextStub } from '../lib/batch-context-index';
 
 // -----------------------------------------------------------------------------

@@ -247,7 +247,7 @@ export class IdentityClaimEngineServer extends BaseSingleton<IdentityClaimEngine
 
         const saved = await claim.Save();
         if (!saved) {
-            throw new Error(`Failed to save IdentityClaim: ${claim.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`Failed to save IdentityClaim: ${claim.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
 
         // Send email notification via MJ Communications Framework if enabled

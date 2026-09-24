@@ -1035,7 +1035,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        const error = `Failed to save child AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`;
+        const error = `Failed to save child AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`;
         LogError(error);
         throw new Error(error);
       }
@@ -1077,7 +1077,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        LogError(`Failed to update child AIPromptRun with results: ${promptRun.LatestResult?.Message || 'Unknown error'}`);
+        LogError(`Failed to update child AIPromptRun with results: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`);
       }
     } catch (error) {
       LogError(`Error updating child prompt run: ${error.message}`);
@@ -1120,7 +1120,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        const error = `Failed to save ResultSelector AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`;
+        const error = `Failed to save ResultSelector AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`;
         LogError(error);
         throw new Error(error);
       }

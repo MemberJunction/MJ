@@ -654,7 +654,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
           this.SelectedRole = null;
           await this.LoadInitialData();
         } else {
-          throw new Error(role.LatestResult?.Message || 'Failed to delete role');
+          throw new Error(role.LatestResult?.CompleteMessage || 'Failed to delete role');
         }
       } else {
         throw new Error('Role not found or permission denied');

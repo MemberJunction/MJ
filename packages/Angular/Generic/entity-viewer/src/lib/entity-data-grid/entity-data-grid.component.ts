@@ -4398,7 +4398,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // Save the view entity
       const success = await this._viewEntity.Save();
       if (!success) {
-        console.warn('[entity-data-grid] Failed to save view state:', this._viewEntity.LatestResult?.Message);
+        console.warn('[entity-data-grid] Failed to save view state:', this._viewEntity.LatestResult?.CompleteMessage);
       } else {
         // Clear pending state and reset dirty flag after successful save
         this._pendingViewStateToPersist = null;

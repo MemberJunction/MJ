@@ -285,7 +285,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
         await entity.InnerLoad(CompositeKey.FromID(deleteId));
         const deleteResult = await entity.Delete();
         if (!deleteResult) {
-          this.ErrorMessage = `Failed to delete role assignment: ${entity.LatestResult?.Message || 'Unknown error'}`;
+          this.ErrorMessage = `Failed to delete role assignment: ${entity.LatestResult?.CompleteMessage || 'Unknown error'}`;
           this.IsSaving = false;
           this.cdr.detectChanges();
           return;
@@ -306,7 +306,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
             entity.Set('CanAdmin', row.CanAdmin);
             const saveResult = await entity.Save();
             if (!saveResult) {
-              this.ErrorMessage = `Failed to save new role assignment for ${row.RoleName}: ${entity.LatestResult?.Message || 'Unknown error'}`;
+              this.ErrorMessage = `Failed to save new role assignment for ${row.RoleName}: ${entity.LatestResult?.CompleteMessage || 'Unknown error'}`;
               this.IsSaving = false;
               this.cdr.detectChanges();
               return;
@@ -319,7 +319,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
             entity.Set('CanAdmin', row.CanAdmin);
             const saveResult = await entity.Save();
             if (!saveResult) {
-              this.ErrorMessage = `Failed to update role assignment for ${row.RoleName}: ${entity.LatestResult?.Message || 'Unknown error'}`;
+              this.ErrorMessage = `Failed to update role assignment for ${row.RoleName}: ${entity.LatestResult?.CompleteMessage || 'Unknown error'}`;
               this.IsSaving = false;
               this.cdr.detectChanges();
               return;

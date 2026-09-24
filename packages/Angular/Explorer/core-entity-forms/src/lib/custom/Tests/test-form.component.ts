@@ -1358,7 +1358,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
         // Re-parse JSON fields since editor content may have changed
         this.parseJsonFields();
       } else {
-        const detail = this.record?.LatestResult?.CompleteMessage || this.record?.LatestResult?.Message || 'Save failed';
+        const detail = this.record?.LatestResult?.CompleteMessage || 'Save failed';
         SharedService.Instance.CreateSimpleNotification(detail, 'error', 4000);
       }
     } catch (err) {

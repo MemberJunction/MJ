@@ -51,6 +51,9 @@ class RefusingEntity extends BaseEntity {
       result.Success = false;
       result.Message = this.refusalMessage;
       result.Errors = this.refuseWith;
+      // What GraphQLDataProvider sets when it rehydrates a server refusal: the server states on the
+      // wire (messageIncludesValidationErrors) that its message already renders these errors.
+      result.MessageIncludesErrors = this.refuseWith.length > 0;
       this.RegisterResultHistoryEntry(result);
       return false;
     }

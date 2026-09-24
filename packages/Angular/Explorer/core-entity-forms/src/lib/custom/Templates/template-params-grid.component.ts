@@ -341,7 +341,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                     this.TemplateParams = this.TemplateParams.filter(p => p !== rowData);
                 } else {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `Failed to delete parameter: ${entity.LatestResult?.Message || 'Unknown error'}`,
+                        `Failed to delete parameter: ${entity.LatestResult?.CompleteMessage || 'Unknown error'}`,
                         'error'
                     );
                 }
@@ -428,7 +428,7 @@ export class TemplateParamsGridComponent extends BaseAngularComponent implements
                 this.TemplateParams = [...this.TemplateParams];
             } else {
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to save parameter: ${entity.LatestResult?.Message || 'Unknown error'}`,
+                    `Failed to save parameter: ${entity.LatestResult?.CompleteMessage || 'Unknown error'}`,
                     'error'
                 );
                 await this.LoadTemplateParams();

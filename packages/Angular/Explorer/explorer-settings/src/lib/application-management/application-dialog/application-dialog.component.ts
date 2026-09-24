@@ -500,7 +500,7 @@ export class ApplicationDialogComponent extends BaseAngularComponent implements 
       // Save application
       const saveResult = await application.Save();
       if (!saveResult) {
-        throw new Error(application.LatestResult?.Message || 'Failed to save application');
+        throw new Error(application.LatestResult?.CompleteMessage || 'Failed to save application');
       }
 
       // Save application entities if there are changes
@@ -553,7 +553,7 @@ export class ApplicationDialogComponent extends BaseAngularComponent implements 
 
         const saveResult = await appEntity.Save();
         if (!saveResult) {
-          console.warn(`Failed to save MJApplicationEntity for ${config.entity.Name}:`, appEntity.LatestResult?.Message);
+          console.warn(`Failed to save MJApplicationEntity for ${config.entity.Name}:`, appEntity.LatestResult?.CompleteMessage);
         }
       }
     }

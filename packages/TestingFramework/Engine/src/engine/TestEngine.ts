@@ -861,7 +861,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         const saved = await testRun.Save();
         if (!saved) {
-            const errorMsg = testRun.LatestResult?.Message || 'Unknown error';
+            const errorMsg = testRun.LatestResult?.CompleteMessage || 'Unknown error';
             throw new Error(`Failed to create TestRun entity: ${errorMsg}`);
         }
 
@@ -903,7 +903,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         const saved = await suiteRun.Save();
         if (!saved) {
-            const errorMsg = suiteRun.LatestResult?.Message || 'Unknown error';
+            const errorMsg = suiteRun.LatestResult?.CompleteMessage || 'Unknown error';
             throw new Error(`Failed to create TestSuiteRun entity: ${errorMsg}`);
         }
 
@@ -952,7 +952,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         const saved = await testRun.Save();
         if (!saved) {
-            this.logError('Failed to update TestRun entity', new Error(testRun.LatestResult?.Message));
+            this.logError('Failed to update TestRun entity', new Error(testRun.LatestResult?.CompleteMessage));
         }
 
         // Persist structured outputs if the driver emitted any
@@ -1041,7 +1041,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         const saved = await entity.Save();
         if (!saved) {
-            const reason = entity.LatestResult?.Message || 'unknown error';
+            const reason = entity.LatestResult?.CompleteMessage || 'unknown error';
             this.logError(`Failed to save test run output "${output.name || output.outputTypeName}": ${reason}`);
         }
     }
@@ -1077,7 +1077,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         const saved = await suiteRun.Save();
         if (!saved) {
-            this.logError('Failed to update TestSuiteRun entity', new Error(suiteRun.LatestResult?.Message));
+            this.logError('Failed to update TestSuiteRun entity', new Error(suiteRun.LatestResult?.CompleteMessage));
         }
     }
 

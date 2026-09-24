@@ -1378,7 +1378,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         this.notificationService.CreateSimpleNotification(`"${categoryName}" deleted`, 'success', 3000);
       } else {
         // Get the detailed error message from LatestResult
-        const errorMessage = categoryToDelete.LatestResult?.Message || 'Unknown error occurred';
+        const errorMessage = categoryToDelete.LatestResult?.CompleteMessage || 'Unknown error occurred';
         console.error('Failed to delete category:', categoryToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete category: ${errorMessage}`, 'error', 6000);
       }
@@ -1449,7 +1449,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         }
       } else {
         // Get the detailed error message from LatestResult
-        const errorMessage = category.LatestResult?.Message || 'Unknown error occurred';
+        const errorMessage = category.LatestResult?.CompleteMessage || 'Unknown error occurred';
         const action = isEditing ? 'update' : 'create';
         console.error(`Failed to ${action} category:`, category.LatestResult);
         this.notificationService.CreateSimpleNotification(
