@@ -183,6 +183,10 @@ vi.mock('@memberjunction/ai-vectors', () => {
                     ID: 'entity-1', Name: 'Contacts',
                     FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
                 }),
+                // ProcessAutoMerges consults the entity's merge policy by NAME.
+                EntityByName: vi.fn().mockReturnValue({
+                    ID: 'entity-1', Name: 'Contacts', AllowRecordMerge: true,
+                }),
                 GetEntityObject: vi.fn().mockResolvedValue({
                     Load: vi.fn().mockResolvedValue(true),
                     Save: vi.fn().mockResolvedValue(true),
@@ -975,5 +979,127 @@ describe('DuplicateRecordDetector', () => {
             expect(filtered[0].ProbabilityScore).toBe(0.95);
             expect(filtered[1].ProbabilityScore).toBe(0.80);
         });
+    });
+});
+
+// ─────────────────────────────────────────────
+// Bounded result retention (whole-entity runs)
+// ─────────────────────────────────────────────
+
+/**
+ * A whole-entity run batches its WORK (500 records at a time) but used to accumulate its RESULTS
+ * for the entire run — O(records), not O(batch). On a 61,671-record entity that alone exhausted an
+ * 8 GB heap: the process died before the run could finish, so whole-entity detection could not
+ * complete at all.
+ *
+ * Retaining them was never load-bearing. ProcessBatch already persists every result as
+ * `Duplicate Run Detail` / `Duplicate Run Detail Match` rows, so the array was a second copy of
+ * durable data, kept only to feed the post-pass auto-merge and one `.length` read.
+ *
+ * These drive the REAL batch loop with the expensive setup stubbed, and assert the two properties
+ * that matter: retention is bounded while the reported total stays honest, and auto-merge still
+ * sees exactly the candidates it saw before — once, after the whole pass.
+ */
+describe('GetDuplicateRecords — bounded result retention', () => {
+    /** Mirrors MAX_RETAINED_RESULTS in the detector; a change there should fail here loudly. */
+    const MAX_RETAINED_RESULTS = 1000;
+    const BATCH_SIZE = 500;
+
+    function makeResult(i: number, score: number) {
+        return {
+            RecordCompositeKey: { ToString: () => `rec-${i}`, Values: () => `rec-${i}`, KeyValuePairs: [] },
+            Duplicates: [{ ProbabilityScore: score, ToString: () => `dup-${i}` }],
+            DuplicateRunDetailMatchRecordIDs: [`match-${i}`],
+            EntityID: 'entity-1',
+        };
+    }
+
+    /** Stub only the seams the loop depends on; retention and auto-merge wiring stay real. */
+    function makeDetector(totalRecords: number, score: number, allowMerge = true) {
+        const d = new DuplicateRecordDetector() as unknown as Record<string, any>;
+        d.ValidateEntityDocument = vi.fn().mockResolvedValue({
+            ID: 'doc-1', Entity: 'Contacts', EntityID: 'entity-1',
+            AbsoluteMatchThreshold: 0.95, PotentialMatchThreshold: 0.9,
+            EnableLLMReasoning: false, AutomationLevel: 'AutoMergeAboveAbsolute',
+        });
+        d.InitializeProviders = vi.fn().mockResolvedValue(undefined);
+        d.ResolveOrCreateDuplicateRun = vi.fn().mockResolvedValue({
+            ID: 'run-1', LastProcessedOffset: 0, CancellationRequested: false,
+            Load: vi.fn().mockResolvedValue(true),
+        });
+        d.LoadRecordIDsToCheck = vi.fn().mockResolvedValue(
+            Array.from({ length: totalRecords }, (_, i) => `rec-${i}`));
+        d.SaveEntity = vi.fn().mockResolvedValue(true);
+        d.Metadata.EntityByName = vi.fn().mockReturnValue({
+            ID: 'entity-1', Name: 'Contacts', AllowRecordMerge: allowMerge,
+        });
+        d.Metadata.MergeRecords = vi.fn().mockResolvedValue({ Success: true });
+
+        const order: string[] = [];
+        let seq = 0;
+        d.ProcessBatch = vi.fn(async (batchIDs: string[]) => {
+            order.push('batch');
+            return { Results: batchIDs.map(() => makeResult(seq++, score)), MatchesFound: batchIDs.length };
+        });
+        const realAutoMerge = d.ProcessAutoMerges.bind(d);
+        d.ProcessAutoMerges = vi.fn(async (...a: unknown[]) => { order.push('automerge'); return realAutoMerge(...a); });
+
+        return { d, order, merge: d.Metadata.MergeRecords as ReturnType<typeof vi.fn> };
+    }
+
+    const params = { EntityID: 'entity-1', EntityDocumentID: 'doc-1', ListID: '', RecordIDs: [], Options: {} };
+    const user = { ID: 'user-1' };
+    const run = (d: Record<string, any>) => (d as never as DuplicateRecordDetector)
+        .GetDuplicateRecords(params as never, user as never);
+
+    it('caps retained results and still reports the honest total', async () => {
+        const { d } = makeDetector(2500, 0.5);
+        const res = await run(d);
+        expect(res.PotentialDuplicateResult.length).toBe(MAX_RETAINED_RESULTS);
+        expect((res as never as { ResultsTruncated?: boolean }).ResultsTruncated).toBe(true);
+        expect((res as never as { TotalRecordsWithDuplicates?: number }).TotalRecordsWithDuplicates).toBe(2500);
+    });
+
+    it('retained footprint does not grow with the size of the run', async () => {
+        const a = await run(makeDetector(2500, 0.5).d);
+        const b = await run(makeDetector(10000, 0.5).d);
+        // 4x the records, identical retained size — the property the OOM violated.
+        expect(a.PotentialDuplicateResult.length).toBe(b.PotentialDuplicateResult.length);
+        expect((b as never as { TotalRecordsWithDuplicates?: number }).TotalRecordsWithDuplicates).toBe(10000);
+    });
+
+    it('leaves a small run exactly as it was', async () => {
+        const res = await run(makeDetector(300, 0.5).d);
+        expect(res.PotentialDuplicateResult.length).toBe(300);
+        expect((res as never as { ResultsTruncated?: boolean }).ResultsTruncated).toBeUndefined();
+    });
+
+    it('still merges every eligible candidate even when results were truncated', async () => {
+        // Eligibility must not depend on whether a result fitted under the retention cap.
+        const { d, merge } = makeDetector(2500, 0.99);
+        await run(d);
+        expect(merge).toHaveBeenCalledTimes(2500);
+    });
+
+    it('merges nothing when no candidate clears the absolute threshold', async () => {
+        const { d, merge } = makeDetector(2500, 0.5);
+        await run(d);
+        expect(merge).not.toHaveBeenCalled();
+    });
+
+    it('runs auto-merge ONCE, after every batch — never interleaved', async () => {
+        // Interleaving would let later batches detect against a partly-merged dataset.
+        const { d, order } = makeDetector(1500, 0.99);
+        await run(d);
+        const batches = Math.ceil(1500 / BATCH_SIZE);
+        expect(order.filter((c) => c === 'automerge')).toHaveLength(1);
+        expect(order.slice(0, batches).every((c) => c === 'batch')).toBe(true);
+        expect(order[order.length - 1]).toBe('automerge');
+    });
+
+    it('carries nothing for auto-merge when the entity forbids merging', async () => {
+        const { d, merge } = makeDetector(2500, 0.99, false);
+        await run(d);
+        expect(merge).not.toHaveBeenCalled();
     });
 });
