@@ -3,13 +3,17 @@
   "type": "module",
   "version": "6.2.0-edge.0",
   "description": "Engine for MemberJunction record cloning: planning, materialization, and composite execution",
-  "license": "BUSL-1.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias -f",
     "test": "vitest run"
   },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
   "dependencies": {
     "@memberjunction/core": "6.2.0-edge.0",
     "@memberjunction/core-entities": "6.2.0-edge.0",
@@ -22,5 +26,9 @@
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.16",
     "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }
