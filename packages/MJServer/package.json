@@ -119,6 +119,7 @@
     "@memberjunction/testing-engine": "6.1.0",
     "@memberjunction/testing-engine-base": "6.1.0",
     "@memberjunction/version-history": "6.1.0",
+    "@memberjunction/work-queue-engine": "6.1.0",
     "@octokit/auth-app": "^7.1.5",
     "@octokit/rest": "^21.1.1",
     "@types/compression": "^1.8.1",

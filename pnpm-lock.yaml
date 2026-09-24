@@ -12474,6 +12474,9 @@ importers:
       '@memberjunction/version-history':
         specifier: 6.1.0
         version: link:../VersionHistory
+      '@memberjunction/work-queue-engine':
+        specifier: 6.1.0
+        version: link:../WorkQueue/engine
       '@octokit/auth-app':
         specifier: ^7.1.5
         version: 7.2.2
