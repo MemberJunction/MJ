@@ -355,6 +355,12 @@ export class AnthropicLLM extends BaseLLM {
         if (typeof message.content === 'string') {
             return /^<mj-(runtime-state|agent-specialization)>/.test(message.content.trimStart());
         }
+        if (Array.isArray(message.content)) {
+            const first = message.content[0];
+            if (first && (first.type === 'text' || first.type === 'tool_result') && typeof first.content === 'string') {
+                return /^<mj-(runtime-state|agent-specialization)>/.test(first.content.trimStart());
+            }
+        }
         return false;
     }
 

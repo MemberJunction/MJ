@@ -4546,6 +4546,8 @@ export class BaseAgent {
         if (!text || text.trim().length === 0) {
             return null;
         }
+        // Cache pre-rendered child templates so AIPromptRunner.ExecutePrompt does not re-render them
+        promptParams.preRenderedChildTemplates = rendered.renderedTemplates;
         // The same data object the parent template renders against — this switches the `## Specialization`
         // block to its stub and extends the Runtime State pointer.
         if (promptParams.data) {
@@ -8607,22 +8609,6 @@ The context is now within limits. Please retry your request with the recovered c
                 lines.push('**Output:**');
                 for (const p of a.params) {
                     lines.push(`• \`${p.Name}\`: ${this.formatParamValueForResult(p.Value)}`);
-                }
-            }
-
-            if (!a.success) {
-                const isFatal = this.isFatalActionError(a.message) || this._fatalActionFailures.has(a.actionName);
-                if (isFatal) {
-                    lines.push(`**Guidance:** Action '${a.actionName}' is unavailable (fatal configuration/credential error). Do NOT retry this action. Choose an alternative action.`);
-                } else {
-                    const record = this._actionFailureHistory.get(a.actionName);
-                    if (record && record.identicalFailures >= 2) {
-                        lines.push(`**Guidance:** Action '${a.actionName}' failed with identical inputs. Do NOT retry with the same arguments.`);
-                    } else if (record && record.totalConsecutiveFailures >= 5) {
-                        lines.push(`**Guidance:** Action '${a.actionName}' retry limit reached (5 attempts). Pivot to an alternative action.`);
-                    } else {
-                        lines.push(`**Guidance:** Action '${a.actionName}' failed. You may adjust inputs to resolve the error.`);
-                    }
                 }
             }
 

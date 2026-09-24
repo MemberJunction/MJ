@@ -418,6 +418,13 @@ export class AIPromptParams {
   templateMessageRole?: TemplateMessageRole;
 
   /**
+   * Optional pre-rendered child templates map (placeholder -> renderedText).
+   * When provided, `AIPromptRunner.ExecutePrompt` bypasses re-rendering `childPrompts`
+   * and uses these pre-rendered templates directly.
+   */
+  preRenderedChildTemplates?: Record<string, string>;
+
+  /**
    * Optional cancellation token to abort the prompt execution
    * When this signal is aborted, the execution will be cancelled and any
    * running operations will be terminated as gracefully as possible

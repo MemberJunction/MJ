@@ -519,6 +519,17 @@ describe('AnthropicLLM', () => {
             expect(result[2].content[0].cache_control).toBeUndefined();
         });
 
+        it('should recognize <mj-runtime-state> inside content block array without explicit metadata flag', () => {
+            const messages = [
+                { role: 'user' as const, content: 'Initial user turn' },
+                { role: 'user' as const, content: [{ type: 'text', content: '<mj-runtime-state>\nSome state\n</mj-runtime-state>' }] }
+            ];
+            const result = callMethod(messages, true);
+            expect(result).toHaveLength(3);
+            expect(result[0].content[0].cache_control).toEqual({ type: 'ephemeral' });
+            expect(result[2].content[0].cache_control).toBeUndefined();
+        });
+
         it('should not add cache_control when enableCaching is false even with volatile state fragment', () => {
             const messages = [
                 { role: 'user' as const, content: 'Initial user turn' },

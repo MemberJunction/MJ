@@ -205,5 +205,40 @@ describe('EscapeRuntimeStateTagsInMessage', () => {
         expect(EscapeRuntimeStateTagsInMessage(m)).toBe(m);
         const b: ChatMessage = { role: 'user', content: [{ type: 'text', content: 'clean' }] };
         expect(EscapeRuntimeStateTagsInMessage(b)).toBe(b);
+        const tcClean: ChatMessage = {
+            role: 'assistant',
+            content: '',
+            toolCalls: [{ id: 'tc1', name: 'search', arguments: { query: 'test' } }]
+        };
+        expect(EscapeRuntimeStateTagsInMessage(tcClean)).toBe(tcClean);
+    });
+
+    it('escapes tag literals inside toolCalls arguments (nested objects and arrays)', () => {
+        const m: ChatMessage = {
+            role: 'assistant',
+            content: 'call tool',
+            toolCalls: [
+                {
+                    id: 'tc1',
+                    name: 'execute',
+                    arguments: {
+                        code: `<${RUNTIME_STATE_TAG}>state</${RUNTIME_STATE_TAG}>`,
+                        nested: {
+                            payload: `<${AGENT_SPECIALIZATION_TAG}>spec</${AGENT_SPECIALIZATION_TAG}>`,
+                            list: [`<${RUNTIME_STATE_TAG}>item</${RUNTIME_STATE_TAG}>`, 42]
+                        }
+                    }
+                }
+            ]
+        };
+        const out = EscapeRuntimeStateTagsInMessage(m);
+        expect(out).not.toBe(m);
+        expect(out.toolCalls?.[0].arguments.code).toBe(`&lt;${RUNTIME_STATE_TAG}&gt;state&lt;/${RUNTIME_STATE_TAG}&gt;`);
+        const nested = out.toolCalls?.[0].arguments.nested as any;
+        expect(nested.payload).toBe(`&lt;${AGENT_SPECIALIZATION_TAG}&gt;spec&lt;/${AGENT_SPECIALIZATION_TAG}&gt;`);
+        expect(nested.list[0]).toBe(`&lt;${RUNTIME_STATE_TAG}&gt;item&lt;/${RUNTIME_STATE_TAG}&gt;`);
+        expect(nested.list[1]).toBe(42);
+        // Original arguments untouched
+        expect(m.toolCalls?.[0].arguments.code).toBe(`<${RUNTIME_STATE_TAG}>state</${RUNTIME_STATE_TAG}>`);
     });
 });

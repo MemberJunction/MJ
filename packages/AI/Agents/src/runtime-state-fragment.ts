@@ -22,7 +22,7 @@
  *
  * @module @memberjunction/ai-agents
  */
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, ChatToolCall } from '@memberjunction/ai';
 
 /** Tag wrapping the runtime-state blocks in the trailing fragment. */
 export const RUNTIME_STATE_TAG = 'mj-runtime-state';
@@ -169,12 +169,64 @@ export function EscapeRuntimeStateTags(text: string): string {
 
 /**
  * Returns a copy of the message with fragment tag literals escaped in its text content (string content,
- * and `text` / `tool_result` blocks). Returns the SAME object when nothing needed escaping, so untouched
- * messages keep their identity.
+ * and `text` / `tool_result` blocks) and toolCalls arguments. Returns the SAME object when nothing
+ * needed escaping, so untouched messages keep their identity.
  */
 export function EscapeRuntimeStateTagsInMessage<M>(message: ChatMessage<M>): ChatMessage<M> {
-    const escaped = escapeContent(message.content);
-    return escaped === message.content ? message : { ...message, content: escaped };
+    const escapedContent = escapeContent(message.content);
+    const escapedCalls = escapeToolCalls(message.toolCalls);
+    if (escapedContent === message.content && !escapedCalls.changed) {
+        return message;
+    }
+    return {
+        ...message,
+        content: escapedContent,
+        ...(message.toolCalls ? { toolCalls: escapedCalls.calls } : {})
+    };
+}
+
+function escapeValue(val: unknown): { value: unknown; changed: boolean } {
+    if (typeof val === 'string') {
+        const escaped = EscapeRuntimeStateTags(val);
+        return { value: escaped, changed: escaped !== val };
+    }
+    if (Array.isArray(val)) {
+        let changed = false;
+        const arr = val.map(item => {
+            const res = escapeValue(item);
+            if (res.changed) changed = true;
+            return res.value;
+        });
+        return { value: changed ? arr : val, changed };
+    }
+    if (val && typeof val === 'object') {
+        let changed = false;
+        const obj: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(val)) {
+            const res = escapeValue(v);
+            if (res.changed) changed = true;
+            obj[k] = res.value;
+        }
+        return { value: changed ? obj : val, changed };
+    }
+    return { value: val, changed: false };
+}
+
+function escapeToolCalls(calls?: ChatToolCall[]): { calls?: ChatToolCall[]; changed: boolean } {
+    if (!calls || calls.length === 0) {
+        return { calls, changed: false };
+    }
+    let anyChanged = false;
+    const nextCalls = calls.map(c => {
+        if (!c.arguments) return c;
+        const res = escapeValue(c.arguments);
+        if (res.changed) {
+            anyChanged = true;
+            return { ...c, arguments: res.value as Record<string, unknown> };
+        }
+        return c;
+    });
+    return { calls: anyChanged ? nextCalls : calls, changed: anyChanged };
 }
 
 function escapeContent(content: ChatMessageContent): ChatMessageContent {

@@ -832,8 +832,10 @@ export class AIPromptRunner {
           renderedPromptText = params.systemPromptOverride;
           this.logStatus(`   Using system prompt override for prompt "${prompt.Name}" (bypassing hierarchical template rendering)`, true, params);
         } else {
-          // Render all child prompt templates recursively
-          childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
+          // Render all child prompt templates recursively (or reuse pre-rendered templates)
+          childTemplateRenderingResult = params.preRenderedChildTemplates
+            ? { renderedTemplates: params.preRenderedChildTemplates }
+            : await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
           // Render the parent prompt with child templates embedded
           renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         }
