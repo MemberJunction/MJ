@@ -9,7 +9,7 @@
  * (`angular-codegen.ts` `camelCase` + related-entity sectionKey). If they drift,
  * hide-baked and skip-baked miss and the user sees a double grid.
  */
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { CountByUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 
 /** Minimum relationship shape the composer reads. Satisfied by EntityRelationshipInfo. */
@@ -141,13 +141,8 @@ function relatedSectionKey(relationship: FormContributionRelationship, sharesRel
 export function CreateRelatedEntitySectionKeyResolver(
     displayInFormPeers: readonly FormContributionRelationship[],
 ): (relationship: FormContributionRelationship) => string {
-    const countByEntityID = new Map<string, number>();
-    for (const peer of displayInFormPeers) {
-        const id = NormalizeUUID(peer.RelatedEntityID);
-        countByEntityID.set(id, (countByEntityID.get(id) ?? 0) + 1);
-    }
-    return (relationship) =>
-        relatedSectionKey(relationship, (countByEntityID.get(NormalizeUUID(relationship.RelatedEntityID)) ?? 0) > 1);
+    const countByEntityID = CountByUUID(displayInFormPeers, (peer) => peer.RelatedEntityID);
+    return (relationship) => relatedSectionKey(relationship, (countByEntityID.Get(relationship.RelatedEntityID) ?? 0) > 1);
 }
 
 export function RelationshipDisplayName(relationship: FormContributionRelationship): string {

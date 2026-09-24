@@ -28,7 +28,7 @@ import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
 } from '../../events/chat-events';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { ExcludeByUUIDs, UUIDsEqual } from '@memberjunction/global';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
 /**
@@ -959,12 +959,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // conversation query, one off a loaded entity — and SQL Server returns upper-case UUIDs where
     // PostgreSQL returns lower-case. A case-sensitive match left a placeholder sitting above the
     // very card it was waiting for. See guides/UUID_COMPARISON_GUIDE.md.
-    // Normalize into a Set rather than a nested `.some(UUIDsEqual(...))`: UUIDsEqual's `===` fast
-    // path misses whenever the two IDs differ, so each miss allocated two lowercased strings, and
-    // the nested scan paid that n*m times. This getter is re-read on every change-detection pass of
-    // a CheckAlways component, once per message.
-    const loadedIds = new Set(this.displayArtifacts.map(a => NormalizeUUID(a.artifact.ID)));
-    return this.pendingArtifacts.filter(p => !loadedIds.has(NormalizeUUID(p.artifactId)));
+    // A set-based exclude, not a nested `.some(UUIDsEqual(...))`: this getter is re-read on every
+    // change-detection pass of a CheckAlways component, once per message.
+    const loadedIds = this.displayArtifacts.map(a => a.artifact.ID);
+    return ExcludeByUUIDs(this.pendingArtifacts, loadedIds, p => p.artifactId);
   }
 
   /**
