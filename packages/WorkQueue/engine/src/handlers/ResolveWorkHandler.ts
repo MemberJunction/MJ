@@ -18,3 +18,12 @@ export function ResolveWorkHandler(handlerKey: string): BaseWorkHandler | null {
     const handler: BaseWorkHandler = new registration.SubClass();
     return handler;
 }
+
+/** Answers "would ResolveWorkHandler return a handler?" without constructing one. */
+export type WorkHandlerProbe = (handlerKey: string) => boolean;
+
+/** True when a BaseWorkHandler subclass is registered under the key. Never instantiates the handler. */
+export function IsWorkHandlerRegistered(handlerKey: string): boolean {
+    const key = handlerKey.trim();
+    return key !== '' && MJGlobal.Instance.ClassFactory.GetRegistration(BaseWorkHandler, key) != null;
+}
