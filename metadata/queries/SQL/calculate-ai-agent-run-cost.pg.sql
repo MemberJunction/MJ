@@ -12,7 +12,7 @@ WITH RECURSIVE "AgentRunHierarchy" AS (
   -- Base case: Start with the specified agent run
   SELECT "ID", "AgentID", "ParentRunID", 1 AS "Level"
   FROM __mj."vwAIAgentRuns"
-  WHERE "ID"::text = {{ AIAgentRunID | sqlString }} -- Replace with the actual Agent Run ID parameter. This is a UUID.
+  WHERE "ID" = {{ AIAgentRunID | sqlString }} -- Replace with the actual Agent Run ID parameter. This is a UUID.
 
   UNION ALL
 

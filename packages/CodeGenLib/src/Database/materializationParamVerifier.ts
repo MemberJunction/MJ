@@ -207,10 +207,10 @@ function walkArray(a: AstNode, b: AstNode, ctx: WalkCtx, sites: VaryingSite[]): 
 }
 
 function walkLiteral(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
-    if (a.type !== b.type && a.type !== 'null' && b.type !== 'null') {
+    if (a.type !== b.type) {
         return false; // literal category changed (string ↔ number) — treat as structural
     }
-    if (a.value !== b.value || a.type !== b.type) {
+    if (a.value !== b.value) {
         sites.push(makeSite(ctx, 'scalar'));
     }
     return true;

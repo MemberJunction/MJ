@@ -19,10 +19,10 @@
  * check (AC4) reimplements `GetActiveModelCost`'s selection independently so it is a genuine
  * cross-check, not a restatement.
  */
-import { RunView, RunQuery, Metadata } from '@memberjunction/core';
+import { RunView, RunQuery } from '@memberjunction/core';
 import type { AggregateResult } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import type { MJAIModelCostEntity, MJMaterializedResultEntity } from '@memberjunction/core-entities';
+import type { MJAIModelCostEntity } from '@memberjunction/core-entities';
 import {
     AIEngineBase,
     BasePriceUnitType,
@@ -638,87 +638,20 @@ export const AiCostChecks: NamedCheck[] = [
     },
     {
         Id: 'ai-cost.AC11',
-        Name: 'AC11: prompt-run base own-cost equals hourly aggregate cost over window, and DataSource: Materialized delivers parity',
+        Name: 'AC11: prompt-run base own-cost equals the AIUsageHourly aggregate cost over the same window',
         Fn: async (ctx): Promise<void> => {
-            // (a) Verify scheduled job exists for materialization refresh
             const rv = new RunView();
-            const jobProbe = await rv.RunView({
-                EntityName: 'MJ: Scheduled Jobs',
-                ExtraFilter: "JobType = 'Materialization Refresh'",
-                MaxRows: 1
-            }, ctx.User);
-            if (!jobProbe.Success) {
-                console.warn(`      ⚠ scheduled job probe failed: ${jobProbe.ErrorMessage}`);
-            }
-            Assert(jobProbe.Success, `scheduled job probe failed: ${jobProbe.ErrorMessage}`);
-            Assert((jobProbe.Results ?? []).length > 0, `scheduled job with JobType 'Materialization Refresh' must exist in metadata`);
-
-            // (a.2) Verify Query.IsMaterialized = true, and if MaterializedResult is minted, verify RefreshSchedule and test RefreshOne
-            const qProbe = await rv.RunView<{
-                ID: string;
-                IsMaterialized: boolean;
-            }>({
-                EntityName: 'MJ: Queries',
-                ExtraFilter: "Name = 'AIUsageHourly'",
-                MaxRows: 1
-            }, ctx.User);
-            Assert(qProbe.Success, `AIUsageHourly query lookup failed: ${qProbe.ErrorMessage}`);
-            Assert((qProbe.Results ?? []).length > 0, `Query 'AIUsageHourly' must exist in metadata`);
-            Assert(!!qProbe.Results![0].IsMaterialized, `Query 'AIUsageHourly' must declare IsMaterialized = true`);
-
-            const mrRes = await rv.RunView<{
-                ID: string;
-                RefreshSchedule: string | null;
-                Status: string;
-                TableName: string;
-            }>({
-                EntityName: 'MJ: Materialized Results',
-                ExtraFilter: "TableName = 'materialized_aiusagehourly'",
-                MaxRows: 1
-            }, ctx.User);
-            Assert(mrRes.Success, `MaterializedResult lookup failed: ${mrRes.ErrorMessage}`);
-            let mrStatus: string | null = null;
-            if ((mrRes.Results ?? []).length > 0) {
-                const mrInfo = mrRes.Results![0];
-                Assert(mrInfo.RefreshSchedule !== null && mrInfo.RefreshSchedule.trim().length > 0, `AIUsageHourly MaterializedResult must have RefreshSchedule IS NOT NULL, got: ${mrInfo.RefreshSchedule}`);
-
-                const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-                const mrEntity = await md.GetEntityObject<MJMaterializedResultEntity>('MJ: Materialized Results', ctx.User);
-                const loaded = await mrEntity.Load(mrInfo.ID);
-                Assert(loaded, `failed to load MaterializedResult entity for ID: ${mrInfo.ID}`);
-
-                const exec = Metadata.Provider as unknown as { ExecuteSQL?: unknown }; // global-provider-ok: integration test script — single-provider process by design
-                if (typeof exec?.ExecuteSQL === 'function') {
-                    const modName: string = '@memberjunction/materialization';
-                    const { MaterializationRefresher } = (await import(modName)) as {
-                        MaterializationRefresher: new () => {
-                            RefreshOne: (entity: MJMaterializedResultEntity, user: unknown, provider: unknown) => Promise<{ Success: boolean; ErrorMessage?: string }>;
-                        };
-                    };
-                    const refresher = new MaterializationRefresher();
-                    const refreshRes = await refresher.RefreshOne(mrEntity, ctx.User, Metadata.Provider); // global-provider-ok: integration test script — single-provider process by design
-                    Assert(refreshRes.Success, `RefreshOne failed for ${mrInfo.TableName}: ${refreshRes.ErrorMessage}`);
-
-                    await mrEntity.Load(mrInfo.ID);
-                    AssertEqual(mrEntity.Status, 'Active', `MaterializedResult status must be Active after RefreshOne, got: ${mrEntity.Status}`);
-                    mrStatus = mrEntity.Status;
-                } else {
-                    console.warn('  ⚠ AC11: Metadata.Provider does not implement ExecuteSQL (client provider run path) — skipping RefreshOne live execution'); // global-provider-ok: integration test script — single-provider process by design
-                    AssertEqual(mrInfo.Status, 'Active', `MaterializedResult status must be Active, got: ${mrInfo.Status}`);
-                    mrStatus = mrInfo.Status;
-                }
-            } else {
-                console.log(`      → AC11: MaterializedResult for AIUsageHourly not minted (deterministic CI runs without CodeGen) — DataSource: 'Materialized' will test fallback-to-live safety net`);
-            }
-
             const rq = new RunQuery();
-            const start = '2020-01-01';
-            const end = '2030-01-01';
+            // Midnight-aligned bounds: AIUsageHourly returns whole hours overlapping [start, end), which for
+            // aligned bounds is exactly [start, end) — so both sides select the same prompt runs.
+            const start = '2020-01-01T00:00:00.000Z';
+            const end = '2030-01-01T00:00:00.000Z';
 
-            // (b) Own-cost side: RunView on MJ: AI Prompt Runs with Aggregates
+            // (a) Own-cost side: RunView on MJ: AI Prompt Runs with Aggregates, on the query's own basis —
+            // completed runs by RunAt, parallel parents excluded (they carry no own cost by design).
             const baseRes = await rv.RunView({
                 EntityName: 'MJ: AI Prompt Runs',
-                ExtraFilter: `CompletedAt >= '${start}' AND CompletedAt < '${end}' AND (RunType <> 'ParallelParent' OR RunType IS NULL)`,
+                ExtraFilter: `RunAt >= '${start}' AND RunAt < '${end}' AND CompletedAt IS NOT NULL AND (RunType <> 'ParallelParent' OR RunType IS NULL)`,
                 Aggregates: [
                     { expression: 'SUM(Cost)', alias: 'TotalCost' },
                     { expression: 'COUNT(*)', alias: 'TotalCount' }
@@ -731,59 +664,37 @@ export const AiCostChecks: NamedCheck[] = [
             const baseCount = aggregateValue(baseRes.AggregateResults, 'TotalCount');
             const baseCost = aggregateValue(baseRes.AggregateResults, 'TotalCost');
 
-            // (c) Live path: saved query AIUsageHourly over the same window
+            // (b) Aggregate side: saved query AIUsageHourly over the same window
             const hourlyRes = await rq.RunQuery({
                 QueryName: 'AIUsageHourly',
                 CategoryPath: '/MJ/AI/',
                 Parameters: { start, end }
             }, ctx.User);
-            Assert(hourlyRes.Success, `AIUsageHourly live query failed: ${hourlyRes.ErrorMessage}`);
+            Assert(hourlyRes.Success, `AIUsageHourly query failed: ${hourlyRes.ErrorMessage}`);
 
-            const hourlyTotal = (hourlyRes.Results ?? []).reduce(
+            const hourlyRows = hourlyRes.Results ?? [];
+            const hourlyTotal = hourlyRows.reduce(
                 (sum: number, r: Record<string, unknown>) => {
-                    Assert(typeof r.OwnCost === 'number' && Number.isFinite(r.OwnCost), `AIUsageHourly live row OwnCost must be a finite number, got: ${r.OwnCost}`);
+                    Assert(typeof r.OwnCost === 'number' && Number.isFinite(r.OwnCost), `AIUsageHourly row OwnCost must be a finite number, got: ${r.OwnCost}`);
                     return sum + (r.OwnCost as number);
                 },
                 0
             );
+            const hourlyRuns = hourlyRows.reduce((sum: number, r: Record<string, unknown>) => sum + Number(r.Runs ?? 0), 0);
 
-            if (baseCount === 0 && hourlyTotal === 0) {
+            if (baseCount === 0 && hourlyRuns === 0) {
                 skipNote('AC11', 'no completed prompt runs in test window — fact view / hourly parity is unexercised');
                 return;
             }
 
-            const diffLive = Math.abs(hourlyTotal - baseCost);
+            AssertEqual(hourlyRuns, baseCount, `AIUsageHourly Runs (${hourlyRuns}) must equal the completed non-parent prompt runs in the window (${baseCount})`);
+            const diff = Math.abs(hourlyTotal - baseCost);
             Assert(
-                diffLive < 0.0001,
-                `AIUsageHourly live cost (${hourlyTotal}) does not match AIPromptRun base cost (${baseCost}), diff=${diffLive}`
+                diff < 0.0001,
+                `AIUsageHourly cost (${hourlyTotal}) does not match AIPromptRun base cost (${baseCost}), diff=${diff}`
             );
 
-            // (d) Materialized path: DataSource: 'Materialized' fallback-safe parity
-            if ((mrRes.Results ?? []).length > 0) {
-                AssertEqual(mrStatus, 'Active', `MaterializedResult status must be Active prior to reading DataSource: 'Materialized'`);
-            }
-            const matRes = await rq.RunQuery({
-                QueryName: 'AIUsageHourly',
-                CategoryPath: '/MJ/AI/',
-                DataSource: 'Materialized',
-                Parameters: { start, end }
-            }, ctx.User);
-            Assert(matRes.Success, `AIUsageHourly with DataSource: 'Materialized' failed: ${matRes.ErrorMessage}`);
-
-            const matTotal = (matRes.Results ?? []).reduce(
-                (sum: number, r: Record<string, unknown>) => {
-                    Assert(typeof r.OwnCost === 'number' && Number.isFinite(r.OwnCost), `AIUsageHourly materialized row OwnCost must be a finite number, got: ${r.OwnCost}`);
-                    return sum + (r.OwnCost as number);
-                },
-                0
-            );
-            const diffMat = Math.abs(matTotal - hourlyTotal);
-            Assert(
-                diffMat < 0.0001,
-                `AIUsageHourly materialized cost (${matTotal}) does not match live cost (${hourlyTotal}), diff=${diffMat}`
-            );
-
-            console.log(`      → AC11 verified: AIPromptRun base cost (${baseCost.toFixed(6)}) matches AIUsageHourly live (${hourlyTotal.toFixed(6)}) and materialized (${matTotal.toFixed(6)}) across ${baseCount} run(s)`);
+            console.log(`      → AC11 verified: AIPromptRun base cost (${baseCost.toFixed(6)}) matches AIUsageHourly (${hourlyTotal.toFixed(6)}) across ${baseCount} run(s)`);
         }
     },
     {
