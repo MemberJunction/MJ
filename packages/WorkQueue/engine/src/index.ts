@@ -18,3 +18,8 @@ export * from './transports/OwnedExecutor';
 export * from './transports/database/bindingIds';
 export * from './transports/database/rowMapping';
 export * from './transports/database/DatabaseTransportOperator';
+export * from './publish/publishResults';
+export * from './transports/database/databaseCapabilities';
+export * from './transports/database/deliveryPlan';
+export * from './transports/database/DatabaseTransportConsumer';
+export * from './transports/database/DatabaseTransportDriver';

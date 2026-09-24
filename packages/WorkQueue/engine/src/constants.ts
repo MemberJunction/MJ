@@ -42,3 +42,6 @@ export const PUBLISH_LOCK_TIMEOUT_MS = 5000;
 
 /** Transaction-owned application lock that lets one sweeper run at a time (03 §7). */
 export const SWEEP_LOCK_RESOURCE = 'mj-wq-sweep';
+
+/** Partition candidates fetched per free slot: Exclusive may return several rows of one key, and some keys are lost to other workers. */
+export const CANDIDATE_OVERSCAN = 4;
