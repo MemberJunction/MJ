@@ -82,6 +82,7 @@ export * from './checks/scoped-anon-elevation.checks';
 export * from './checks/search.checks';
 export * from './checks/storage.checks';
 export * from './checks/queue.checks';
+export * from './checks/work-queue-runtime.checks';
 export * from './checks/auth-validation.checks';
 export * from './checks/agent-loop-live.checks';
 export * from './checks/shipped-agents-live.checks';

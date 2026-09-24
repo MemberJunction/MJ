@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT95 - Work Queue Runtime (native host, operators, REST)",
+    "Description": "Deterministic end-to-end behavior of the durable work queue's MJ runtime on the Database transport — no LLM calls. WR1: a started WorkQueueHost plans fixture subscriptions (registered handler Running, unknown handler HandlerNotRegistered). WR2: publish → host claim → handler → Completed. WR3: one publish settles independently per subscription (Completed / DeadLettered / untouched Pending). WR4: the sweeper expires a lease with attempts left, the stale lease token is fenced out, the retry is attempt 2. WR5: Exclusive single flight across two consumers claiming concurrently. WR6: an Ordered dead-lettered head blocks its key; WorkQueue.ListPartitions reports Blocked; WorkQueue.ReplayDeadLetter unblocks in order. WR7: a lease expiring on the final attempt is dead-lettered by the sweeper and raised through OnDeadLettered. WR8: WorkQueue.DiscardDelivery discards a pending delivery. WR9: DeduplicationKey suppression writes exactly one message row. WR10: REST publish requires an API key with workqueue:publish and honours AllowExternalPublish; a session without an API key is refused. WR11: the Express router reads req.userPayload and publishes over HTTP. WR12: retention purge. WR13: host shutdown contract. WR14: plan 04's transport conformance checks (RunConformanceChecks) pass against plan 05's Database conformance harness and are not all skipped. WR15: a delivery row rejects BaseEntity.Save() and Delete() and is unchanged. WR16: cancelling in-flight work aborts the handler with reason Cancelled, the runtime acknowledges, the row is Discarded well before its lease and the Exclusive key's next delivery runs. WR17: a cancel whose holder is gone reports Cancelled on heartbeat, fences the settle, holds the key and is Discarded at lease expiry. WR18: WorkQueue.GetBacklog counts claimable pending plus in-flight deliveries. WR19: WorkQueueHost.RunOnce with MaxDeliveries 1 completes exactly one delivery and leaves the next Pending. Fixtures are 'mj-it-wq-*' topics, subscriptions and API keys on the seeded Database transport, removed in Setup and Teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The host claims and settles fixture deliveries in long-running and one-shot modes, partition modes enforce single flight and blocking under concurrent claims, operator Remote Operations repair blocked keys and cancel running work, the sweeper expires leases, dead-letters the final attempt and purges retention, duplicates are suppressed, and REST publishing requires an API key, the scope and topic exposure."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "work-queue-runtime"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0E518741-C6B5-44AE-866F-2D3F353318EB"
+  }
+}

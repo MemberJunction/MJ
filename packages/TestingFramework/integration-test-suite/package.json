@@ -3,7 +3,7 @@
   "license": "BUSL-1.1",
   "version": "6.1.0",
   "private": true,
-  "description": "MemberJunction's OWN integration-test content — every check bundle, the special rigs, and their heavy dependencies. Deliberately private/non-published: the shippable framework (registry, contracts, driver, bootstraps) lives in @memberjunction/testing-integration; this package is the repo-local test content loaded into `mj test` at runtime.",
+  "description": "MemberJunction's OWN integration-test content \u2014 every check bundle, the special rigs, and their heavy dependencies. Deliberately private/non-published: the shippable framework (registry, contracts, driver, bootstraps) lives in @memberjunction/testing-integration; this package is the repo-local test content loaded into `mj test` at runtime.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -62,14 +62,19 @@
     "@memberjunction/testing-engine": "6.1.0",
     "@memberjunction/testing-integration": "6.1.0",
     "@memberjunction/unit-testing": "6.1.0",
+    "@memberjunction/work-queue-core": "6.1.0",
+    "@memberjunction/work-queue-engine": "6.1.0",
+    "@memberjunction/work-queue-server": "6.1.0",
     "dotenv": "17.2.4",
+    "express": "^5.2.1",
     "ioredis": "^5.6.1",
     "mssql": "^12.2.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/mssql": "^9.1.9",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18",
-    "@types/mssql": "^9.1.9"
+    "vitest": "^4.0.18"
   },
   "repository": {
     "type": "git",
