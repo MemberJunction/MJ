@@ -171,17 +171,50 @@ export class FieldPathResolver {
     /**
      * Load rows for a set of PK values. Per MJ convention, a loaded engine's full-set cache is
      * consulted first (BaseEngineRegistry) — e.g. ContentSources are already cached by
-     * KnowledgeHubMetadataEngine, so the common hop resolves with zero queries. Falls back to one
-     * `PK IN (...)` RunView. Returns null (not []) on query failure.
+     * KnowledgeHubMetadataEngine, so the common hop resolves with zero queries. Any key the cache
+     * does not hold is then fetched with one `PK IN (...)` RunView. Returns null (not []) on query
+     * failure with nothing cached to fall back on.
+     *
+     * ── A CACHE MISS IS "UNKNOWN", NOT "ABSENT" ─────────────────────────────────────────────────
+     * This used to return the cache's answer whole whenever any engine cached the entity. That
+     * answer is a FILTERED SUBSET, so a key the cache had never heard of came back as an empty
+     * result — indistinguishable from "no such row" — and the RunView that would have found it was
+     * never reached.
+     *
+     * A `BaseEngine` full-set cache is complete only as of the moment it loaded. It refreshes on
+     * local entity saves, and nothing tells it about a row another PROCESS inserted. So on any
+     * deployment that writes through a second process — a worker, an importer, a sibling API
+     * instance — every record created after the reader booted resolves to nothing for the lifetime
+     * of that process.
+     *
+     * That is not a cosmetic miss. This resolver feeds `GetSourceRecordFieldPaths`, whose values
+     * route a record to its tenant partition, and a driver that requires one is entitled to fail
+     * closed when it is missing — so the symptom is a total, silent refusal to write, reported as
+     * if the related record did not exist. Observed in production 2026-09-24: a content source
+     * created after the vectorization worker booted left every one of its items unembeddable, with
+     * a correct row sitting in the database the whole time.
+     *
+     * The fast path is unchanged when the cache genuinely covers the batch; only the keys it did
+     * not produce are queried, so a cold row costs one extra `IN (...)` rather than a full reload.
      */
     private async loadRowsByPK(entity: EntityInfo, pkValues: string[]): Promise<Record<string, unknown>[] | null> {
         if (pkValues.length === 0) return [];
 
-        const cached = this.readRowsFromRegistryCache(entity, pkValues);
-        if (cached !== null) return cached;
-
         const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: entity is an FK target or its IS-A child (see loadRelatedRecords) — single-column key by design
-        const idList = pkValues.map(v => `'${v.replace(/'/g, "''")}'`).join(',');
+        const cached = this.readRowsFromRegistryCache(entity, pkValues) ?? [];
+        // Keyed off what the cache actually PRODUCED, not off how many rows came back: a cached row
+        // whose PK field is unreadable must count as a miss, or it would suppress the query for a
+        // key nothing has resolved.
+        const served = new Set(
+            cached
+                .map(r => this.readField(r, pkName))
+                .filter((v): v is string | number => v !== null && v !== undefined)
+                .map(v => this.cacheKey(String(v)))
+        );
+        const missing = pkValues.filter(v => !served.has(this.cacheKey(v)));
+        if (missing.length === 0) return cached;
+
+        const idList = missing.map(v => `'${v.replace(/'/g, "''")}'`).join(',');
         const rv = this.provider as unknown as IRunViewProvider;
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: entity.Name,
@@ -190,15 +223,22 @@ export class FieldPathResolver {
         }, this.contextUser);
         if (!result.Success) {
             LogError(`FieldPathResolver: failed to load "${entity.Name}" records for path resolution: ${result.ErrorMessage}`);
-            return null;
+            // Whatever the cache did serve still resolves; only the keys this query would have
+            // answered stay unresolved. `null` is reserved for "nothing to offer at all", which is
+            // what the caller turns into a failed load.
+            return cached.length > 0 ? cached : null;
         }
-        return result.Results;
+        return cached.length > 0 ? [...cached, ...result.Results] : result.Results;
     }
 
     /**
      * Serve the requested rows from an already-loaded engine's full-set cache when one exists
      * (read-only — the donor's live array is never mutated). Returns null when no engine caches
      * the entity or the cached rows aren't entity objects, so the caller queries instead.
+     *
+     * The result is a SUBSET, never an answer about the keys it omits — a key absent from it may
+     * simply postdate the cache's load. `loadRowsByPK` owns that distinction; do not treat a short
+     * return here as "those rows do not exist".
      */
     private readRowsFromRegistryCache(entity: EntityInfo, pkValues: string[]): Record<string, unknown>[] | null {
         const rows = BaseEngineRegistry.Instance.TryGetCachedRecords(entity.Name, { unfilteredOnly: true });
