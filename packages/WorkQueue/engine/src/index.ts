@@ -32,3 +32,4 @@ export * from './entities/WorkQueueTopicEntityServer';
 export * from './entities/WorkQueueSubscriptionEntityServer';
 export * from './entities/DriverOwnedEntityServers';
 export * from './entities/partitionModeChange';
+export * from './publish/WorkQueuePublishCoordinator';
