@@ -123,7 +123,7 @@ services:
     environment:
       <<: *db-env
       AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
-      AUTH0_CLIENT_ID: "${AUTH0_CLIENTID:-}"
+      AUTH0_CLIENT_ID: "${AUTH0_CLIENTID:-${AUTH0_CLIENT_ID:-}}"
       AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET:-}"
       GRAPHQL_PORT: "4000"
       NODE_ENV: test
@@ -146,7 +146,7 @@ services:
       dockerfile: docker/regression/Dockerfile.explorer
       args:
         AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
-        AUTH0_CLIENTID: "${AUTH0_CLIENTID:-}"
+        AUTH0_CLIENTID: "${AUTH0_CLIENTID:-${AUTH0_CLIENT_ID:-}}"
     depends_on:
       mjapi:
         condition: service_healthy
@@ -181,7 +181,7 @@ services:
     environment:
       <<: *db-env
       AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
-      AUTH0_CLIENT_ID: "${AUTH0_CLIENTID:-}"
+      AUTH0_CLIENT_ID: "${AUTH0_CLIENTID:-${AUTH0_CLIENT_ID:-}}"
       AUTH0_CLIENT_SECRET: "${AUTH0_CLIENT_SECRET:-}"
       TEST_UID: "${TEST_UID:-}"
       TEST_PWD: "${TEST_PWD:-}"
@@ -249,4 +249,10 @@ services:
       # consumes them, the loader runs on the host).
       - ./targets:/app/docker/regression/targets:ro
       - ../../metadata:/app/metadata
+      # Regression tests + suite live in the opt-in metadata-optional sibling
+      # root; the entrypoint pushes it via
+      # `mj sync push --dir=metadata-optional/regression-test`. Mounted RW (like
+      # ../../metadata above) because mj-sync writes primaryKey/sync state back
+      # into the JSON files after a push.
+      - ../../metadata-optional:/app/metadata-optional
       - ./test-metadata:/app/test-metadata:ro

@@ -580,6 +580,37 @@ describe('StabilizeFirstClassGroupOrder', () => {
             'Orders',
         ]);
     });
+
+    it('does not duplicate Details when Details group has IsLead=true', () => {
+        const previous = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'payments', SectionName: 'Payments', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([['payments', 'Primary']]),
+            { Layout: 'left-nav' },
+        );
+        const next = BuildDefaultChromeSpec(
+            [
+                { SectionKey: 'details', SectionName: 'Details', Variant: 'default' },
+                { SectionKey: 'payments', SectionName: 'Payments', Variant: 'related-entity' },
+            ],
+            new Map<string, FormRole>([['payments', 'Primary']]),
+            { Layout: 'left-nav' },
+        );
+        const details = next.Groups.find((g) => g.Key === DETAILS_SECTION_KEY);
+        if (details) {
+            details.IsLead = true;
+            details.Title = 'Overview';
+        }
+        const stabilized = StabilizeFirstClassGroupOrder(previous, next);
+        const detailsCount = stabilized.Groups.filter((g) => g.Key === DETAILS_SECTION_KEY).length;
+        expect(detailsCount).toBe(1);
+        expect(stabilized.Groups.filter((g) => !g.IsMore).map((g) => g.Title)).toEqual([
+            'Overview',
+            'Payments',
+        ]);
+    });
 });
 
 describe('ApplyUserChromeMembership', () => {
@@ -1055,6 +1086,35 @@ describe('ApplyFormChromeRuleTitles', () => {
             Title: 'Pmts',
         }]);
         expect(spec.Groups[0].Title).toBe('Pmts');
+    });
+
+    it('rewrites group title when rule targets the group key directly (e.g. details)', () => {
+        const spec: FormChromeSpec = {
+            Layout: 'left-nav',
+            Groups: [{
+                Key: DETAILS_SECTION_KEY,
+                Title: 'Details',
+                Icon: 'fa-solid fa-id-card',
+                SectionKeys: ['processOverview', 'processDefinition'],
+                IsMore: false,
+            }],
+            RelatedRoles: new Map(),
+            MoreSectionKeys: [],
+        };
+        const parentId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbc';
+        const entity = new EntityInfo({
+            ID: parentId,
+            Name: 'Record Processes',
+            SchemaName: '__mj',
+        });
+        ApplyFormChromeRuleTitles(spec, entity, [{
+            EntityID: parentId,
+            TargetKind: 'Contribution',
+            ContributionKey: DETAILS_SECTION_KEY,
+            Inclusion: 'Primary',
+            Title: 'Overview',
+        }]);
+        expect(spec.Groups[0].Title).toBe('Overview');
     });
 });
 

@@ -34,7 +34,7 @@ function contribution(over: Partial<FormContributionRegistration> = {}): FormCon
   };
 }
 
-interface State { loadError?: string | null; componentSpec?: unknown; hostProps?: unknown }
+interface State { loadError?: string | null; componentSpec?: unknown; HostProps?: unknown }
 type OnInitProto = { ngOnInit: () => Promise<void> };
 function render(c: FormContributionRegistration, state: State = {}) {
   vi.spyOn(InteractiveFormPanelComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockResolvedValue(undefined);
@@ -46,7 +46,7 @@ function render(c: FormContributionRegistration, state: State = {}) {
     setup: (inst) => {
       if (state.loadError !== undefined) inst.loadError = state.loadError;
       if (state.componentSpec !== undefined) inst.componentSpec = state.componentSpec as never;
-      if (state.hostProps !== undefined) inst.hostProps = state.hostProps as never;
+      if (state.HostProps !== undefined) inst.HostProps = state.HostProps as never;
     },
   });
 }
@@ -76,7 +76,7 @@ describe('InteractiveFormPanelComponent (DOM)', () => {
   });
 
   it('mounts the React component once spec and props exist', () => {
-    const mounted = render(contribution(), { componentSpec: { name: 'X' }, hostProps: { record: {} } });
+    const mounted = render(contribution(), { componentSpec: { name: 'X' }, HostProps: { record: {} } });
     expect(query(mounted, '.react-stub')).not.toBeNull();
     expect(query(mounted, '.mj-loading-state')).toBeNull();
   });

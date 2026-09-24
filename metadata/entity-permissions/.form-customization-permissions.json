@@ -9,7 +9,7 @@
       "CanDelete": true
     },
     "primaryKey": {
-      "ID": "E399483E-F36B-1410-86DF-00691710EC96"
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Form Contributions&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
     }
   },
   {

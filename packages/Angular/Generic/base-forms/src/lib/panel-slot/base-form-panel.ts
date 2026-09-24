@@ -153,7 +153,7 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
  * Lifecycle hooks: standard Angular `ngOnInit` / `ngOnDestroy` work as usual.
  * `Record` is guaranteed to be set before the first change-detection pass.
  *
- * Optional `validate()` returns a synchronous validation result; the parent
+ * Optional `Validate()` returns a synchronous validation result; the parent
  * `BaseFormComponent.Save()` path will surface it via the existing validation
  * pipeline when called. Panels that don't validate anything beyond what the
  * record itself does can leave this method off.
@@ -249,7 +249,7 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
      * synchronous answer. `BaseFormComponent.ValidateAsync()` awaits it, which is
      * what Save() calls.
      */
-    public validate(): ValidationResult | Promise<ValidationResult> {
+    public Validate(): ValidationResult | Promise<ValidationResult> {
         // Inline construction — ValidationResult is a class in @memberjunction/core,
         // not a plain interface, so callers can construct via `new`.
         const result = new ValidationResult();
@@ -257,15 +257,20 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
         return result;
     }
 
+    /** @deprecated Use {@link Validate}. */
+    public validate(): ValidationResult | Promise<ValidationResult> {
+        return this.Validate();
+    }
+
     /**
      * The panel's validity as already known, with no awaiting and no work.
      *
      * Synchronous callers (`BaseFormComponent.Validate()`) use this; it reports valid
      * unless the panel has cached a failing result from an earlier validation. A panel
-     * whose `validate()` is asynchronous should override this to return its last
+     * whose `Validate()` is asynchronous should override this to return its last
      * reported state so synchronous callers are not simply blind to it.
      */
-    public lastKnownValidation(): ValidationResult {
+    public LastKnownValidation(): ValidationResult {
         const result = new ValidationResult();
         result.Success = true;
         return result;

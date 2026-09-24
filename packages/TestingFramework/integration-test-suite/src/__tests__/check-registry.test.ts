@@ -56,6 +56,7 @@ import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
 import { FlsLifecycleChecks } from '../checks/fls-lifecycle.checks';
 import { FlsClientChecks } from '../checks/fls-client.checks';
+import { MetadataSyncPushChecks } from '../checks/metadata-sync-push.checks';
 import { TaskGraphExecutionChecks } from '../checks/task-graph-execution.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
@@ -148,7 +149,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['content-vectorization', ContentVectorizationChecks, 8], // CV1-CV8 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
-        ['form-contributions', FormContributionsChecks, 8], // FC1-FC8 metadata form contributions: schema, actions, clamp, kill switch (IT94)
+        ['form-contributions', FormContributionsChecks, 15], // FC1-FC15 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims (IT95)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
@@ -164,6 +165,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 23], // FLS1-FLS23 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
+        ['metadata-sync-push', MetadataSyncPushChecks, 8], // MSP1-MSP8 sync push atomicity, incl. server-derived child rows, mutation tier (IT94)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -257,13 +259,14 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'fls-enforcement': 23,
         'fls-enforcement-client': 6,
         'fls-lifecycle': 9,
+        'form-contributions': 15,
         'layered-base-views': 6,
         'lists': 3,
         'materialized-entity-read': 2,
-        'form-contributions': 8,
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
+        'metadata-sync-push': 8,
         'nested-transactions': 11,
         'open-app-teardown': 2,
         'permission-engine': 14,
@@ -328,7 +331,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(94);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(95);
     });
 });
 
@@ -436,6 +439,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC7',
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
+        'metadata-sync-push.MSP1',
+        'metadata-sync-push.MSP2',
+        'metadata-sync-push.MSP3',
+        'metadata-sync-push.MSP4',
+        'metadata-sync-push.MSP5',
+        'metadata-sync-push.MSP6',
+        'metadata-sync-push.MSP7',
+        'metadata-sync-push.MSP8',
         'nested-transactions.NT1',
         'nested-transactions.NT10',
         'nested-transactions.NT2',

@@ -12,11 +12,11 @@
          [attr.aria-label]="AriaLabel"
          [placeholder]="Placeholder"
          [disabled]="Disabled"
-         [value]="text"
+         [value]="Text"
          (input)="OnTextChanged($any($event.target).value)"
          (blur)="OnBlur()">
 
-  @if (text) {
+  @if (Text) {
     <button type="button" class="mj-iconpick-clear"
             [disabled]="Disabled"
             aria-label="Clear the icon"

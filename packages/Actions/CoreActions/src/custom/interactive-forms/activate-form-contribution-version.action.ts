@@ -4,8 +4,14 @@ import { Metadata, LogError, RunView, RunInEntityTransaction } from "@memberjunc
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
 import type { MJEntityFormContributionEntity } from "@memberjunction/core-entities";
 import {
-    addOutput, checkScopedOwnership, failure, getStringParam, loadComponent, loadContribution,
-    mapToComponentStatus, CONTRIBUTION_KEY_PATTERN,
+    AddOutput,
+    CheckScopedOwnership,
+    Failure,
+    GetStringParam,
+    LoadComponent,
+    LoadContribution,
+    MapToComponentStatus,
+    CONTRIBUTION_KEY_PATTERN,
 } from "./_shared";
 
 /** The shape `RunInEntityTransaction` needs; providers that lack it run the work untransacted. */
@@ -31,38 +37,38 @@ export class ActivateFormContributionVersionAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const contributionID = getStringParam(params, "ContributionID");
-            if (!contributionID) return failure("MISSING_PARAMETER", "Parameter 'ContributionID' is required.");
+            const contributionID = GetStringParam(params, "ContributionID");
+            if (!contributionID) return Failure("MISSING_PARAMETER", "Parameter 'ContributionID' is required.");
             const provider = params.Provider ?? Metadata.Provider;
-            if (!provider) return failure("NO_PROVIDER", "No metadata provider available.");
+            if (!provider) return Failure("NO_PROVIDER", "No metadata provider available.");
             const user = params.ContextUser;
-            if (!user) return failure("NO_USER", "Action requires a ContextUser.");
+            if (!user) return Failure("NO_USER", "Action requires a ContextUser.");
 
-            const target = await loadContribution(provider, user, contributionID);
-            if (!target) return failure("CONTRIBUTION_NOT_FOUND", `Contribution '${contributionID}' not found.`);
-            const forbidden = checkScopedOwnership(target, user, 'Contribution');
+            const target = await LoadContribution(provider, user, contributionID);
+            if (!target) return Failure("CONTRIBUTION_NOT_FOUND", `Contribution '${contributionID}' not found.`);
+            const forbidden = CheckScopedOwnership(target, user, 'Contribution');
             if (forbidden) return forbidden;
 
             if (target.Status === 'Active') {
-                addOutput(params, "ContributionID", target.ID);
-                addOutput(params, "ComponentID", target.ComponentID);
-                addOutput(params, "PreviousActiveContributionID", null);
+                AddOutput(params, "ContributionID", target.ID);
+                AddOutput(params, "ComponentID", target.ComponentID);
+                AddOutput(params, "PreviousActiveContributionID", null);
                 return {
                     Success: true, ResultCode: "SUCCESS",
                     Message: JSON.stringify({ noop: true, ContributionID: target.ID, ComponentID: target.ComponentID }),
                 };
             }
             if (target.Status === 'Inactive') {
-                return failure("NOT_PENDING",
+                return Failure("NOT_PENDING",
                     `Contribution ${contributionID} is Inactive. Modify it with a version bump to branch a new Pending version first.`);
             }
 
             const priors = await this.findPriorActive(params, target);
             if ('error' in priors) return priors.error;
 
-            const component = await loadComponent(provider, user, target.ComponentID);
+            const component = await LoadComponent(provider, user, target.ComponentID);
             if (!component) {
-                return failure("COMPONENT_NOT_FOUND",
+                return Failure("COMPONENT_NOT_FOUND",
                     `Contribution ${contributionID} points at Component ${target.ComponentID} which no longer exists.`);
             }
 
@@ -76,8 +82,8 @@ export class ActivateFormContributionVersionAction extends BaseAction {
                 await RunInEntityTransaction(provider as TransactableProvider, async () => {
                     for (const prior of priors.rows) {
                         firstPriorID ??= prior.ID;
-                        const priorRow = await loadContribution(provider, user, prior.ID);
-                        const priorComponent = await loadComponent(provider, user, prior.ComponentID);
+                        const priorRow = await LoadContribution(provider, user, prior.ID);
+                        const priorComponent = await LoadComponent(provider, user, prior.ComponentID);
                         if (priorRow) {
                             priorRow.Status = 'Inactive';
                             if (!(await priorRow.Save())) {
@@ -85,11 +91,11 @@ export class ActivateFormContributionVersionAction extends BaseAction {
                             }
                         }
                         if (priorComponent) {
-                            priorComponent.Status = mapToComponentStatus('Inactive');
+                            priorComponent.Status = MapToComponentStatus('Inactive');
                             await priorComponent.Save();
                         }
                     }
-                    component.Status = mapToComponentStatus('Active');
+                    component.Status = MapToComponentStatus('Active');
                     if (!(await component.Save())) {
                         throw new Error(`Could not flip Component to Published: ${component.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                     }
@@ -99,12 +105,12 @@ export class ActivateFormContributionVersionAction extends BaseAction {
                     }
                 });
             } catch (err) {
-                return failure("PERSIST_FAILED", err instanceof Error ? err.message : String(err));
+                return Failure("PERSIST_FAILED", err instanceof Error ? err.message : String(err));
             }
 
-            addOutput(params, "ContributionID", target.ID);
-            addOutput(params, "ComponentID", target.ComponentID);
-            addOutput(params, "PreviousActiveContributionID", firstPriorID);
+            AddOutput(params, "ContributionID", target.ID);
+            AddOutput(params, "ComponentID", target.ComponentID);
+            AddOutput(params, "PreviousActiveContributionID", firstPriorID);
             return {
                 Success: true, ResultCode: "SUCCESS",
                 Message: JSON.stringify({
@@ -115,7 +121,7 @@ export class ActivateFormContributionVersionAction extends BaseAction {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             LogError(`ActivateFormContributionVersionAction: ${message}`);
-            return failure("UNEXPECTED_ERROR", message);
+            return Failure("UNEXPECTED_ERROR", message);
         }
     }
 
@@ -129,7 +135,7 @@ export class ActivateFormContributionVersionAction extends BaseAction {
         // contain a quote. Re-assert it rather than trusting the write path alone: a row that
         // predates the constraint should fail loudly, not build a filter.
         if (!CONTRIBUTION_KEY_PATTERN.test(target.ContributionKey)) {
-            return { error: failure("INVALID_CONTRIBUTION_KEY",
+            return { error: Failure("INVALID_CONTRIBUTION_KEY",
                 `Stored contribution key '${target.ContributionKey}' is not a legal key.`) };
         }
         const scopeClause = target.Scope === 'User'
@@ -144,7 +150,7 @@ export class ActivateFormContributionVersionAction extends BaseAction {
             Fields: ['ID', 'ComponentID'], ResultType: 'simple',
         }, params.ContextUser);
         if (!result.Success) {
-            return { error: failure("QUERY_FAILED",
+            return { error: Failure("QUERY_FAILED",
                 `Prior-active lookup failed: ${result.ErrorMessage ?? 'unknown error'}`) };
         }
         return { rows: result.Results ?? [] };

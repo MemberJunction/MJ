@@ -38,7 +38,7 @@ interface DropboxSignConfig {
  * Dropbox Sign exposes status via booleans on the request (`is_complete`, `is_declined`) and a
  * per-signature `status_code` (`awaiting_signature`, `signed`, `declined`, `on_hold`, `error`).
  */
-export function mapDropboxSignStatus(statusCode: string): EnvelopeStatus {
+export function MapDropboxSignStatus(statusCode: string): EnvelopeStatus {
     switch ((statusCode || '').toLowerCase()) {
         case 'awaiting_signature':
             return 'Sent';
@@ -53,6 +53,11 @@ export function mapDropboxSignStatus(statusCode: string): EnvelopeStatus {
         default:
             return 'Unknown';
     }
+}
+
+/** @deprecated Use {@link MapDropboxSignStatus}. */
+export function mapDropboxSignStatus(statusCode: string): EnvelopeStatus {
+    return MapDropboxSignStatus(statusCode);
 }
 
 /** Header carrying the event payload's HMAC when Dropbox Sign is configured to sign callbacks. */
@@ -397,7 +402,7 @@ export class DropboxSignSignatureProvider extends BaseSignatureProvider {
             return 'Declined';
         }
         const sigStatus = request.signatures?.[0]?.status_code;
-        return sigStatus ? mapDropboxSignStatus(sigStatus) : 'Sent';
+        return sigStatus ? MapDropboxSignStatus(sigStatus) : 'Sent';
     }
 
     private mapRecipients(request: DropboxSignRequest): RecipientStatus[] | undefined {
@@ -407,7 +412,7 @@ export class DropboxSignSignatureProvider extends BaseSignatureProvider {
         return request.signatures.map((s) => ({
             email: s.signer_email_address,
             name: s.signer_name,
-            status: mapDropboxSignStatus(s.status_code || ''),
+            status: MapDropboxSignStatus(s.status_code || ''),
             externalRecipientId: s.signature_id,
             signedAt: s.signed_at ? this.eventTimeToIso(String(s.signed_at)) : undefined,
         }));

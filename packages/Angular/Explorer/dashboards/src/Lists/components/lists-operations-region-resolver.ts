@@ -12,11 +12,11 @@
 /** Minimal shape of a Venn intersection this resolver needs to match on. */
 export interface ResolvableVennRegion {
     /** Display label for the region (e.g. "A ∩ B", "Only A"). */
-    label: string;
+    label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Labels of the operands participating in this region. */
-    setLabels: string[];
+    setLabels: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Number of records in the region. */
-    size: number;
+    size: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -34,7 +34,7 @@ export interface ResolvableVennRegion {
  * @param regions - The currently-available intersections.
  * @param query - The agent-supplied region identifier (label or set-label list).
  */
-export function resolveVennRegion<T extends ResolvableVennRegion>(
+export function ResolveVennRegion<T extends ResolvableVennRegion>(
     regions: readonly T[],
     query: string,
 ): T | null {
@@ -71,4 +71,12 @@ export function resolveVennRegion<T extends ResolvableVennRegion>(
     }
 
     return null;
+}
+
+/** @deprecated Use {@link ResolveVennRegion}. */
+export function resolveVennRegion<T extends ResolvableVennRegion>(
+    regions: readonly T[],
+    query: string,
+): T | null {
+    return ResolveVennRegion(regions, query);
 }

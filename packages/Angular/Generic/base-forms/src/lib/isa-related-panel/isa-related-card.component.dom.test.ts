@@ -108,13 +108,13 @@ describe('a date-only field renders its stored calendar day (MJ#4210)', () => {
       process.env.TZ = original;
     }
   };
-  type Internals = { FormatFieldValue(value: unknown, field: EntityFieldInfo): string };
+  type Internals = { formatFieldValue(value: unknown, field: EntityFieldInfo): string };
   const formatter = (): Internals => render({ EntityName: 'Animals' }).componentInstance as unknown as Internals;
   const field = (name: string, type: string): EntityFieldInfo => ({ Name: name, Type: type } as unknown as EntityFieldInfo);
 
   it('shows the 20th for a stored 2026-11-20, not the 19th', () => {
     AT('America/New_York', () => {
-      const shown = formatter().FormatFieldValue(new Date('2026-11-20T00:00:00.000Z'), field('IntakeDate', 'date'));
+      const shown = formatter().formatFieldValue(new Date('2026-11-20T00:00:00.000Z'), field('IntakeDate', 'date'));
       expect(shown, `got ${shown}`).toContain('20');
       expect(shown).not.toContain('19');
     });
@@ -122,7 +122,7 @@ describe('a date-only field renders its stored calendar day (MJ#4210)', () => {
 
   it('keeps a timestamp field in local time', () => {
     AT('America/New_York', () => {
-      expect(formatter().FormatFieldValue(new Date('2026-11-20T02:00:00.000Z'), field('LaunchAt', 'datetimeoffset'))).toContain('19');
+      expect(formatter().formatFieldValue(new Date('2026-11-20T02:00:00.000Z'), field('LaunchAt', 'datetimeoffset'))).toContain('19');
     });
   });
 });

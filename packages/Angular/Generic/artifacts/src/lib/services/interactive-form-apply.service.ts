@@ -23,7 +23,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
-    getDeclaredFormContribution, isFormPanelRole,
+    GetDeclaredFormContribution, IsFormPanelRole,
     type FormContributionSlot, type FormContributionSpec,
 } from '@memberjunction/interactive-component-types/forms';
 import {
@@ -95,7 +95,7 @@ export class InteractiveFormApplyService {
 
         // A form panel is a contribution, not a whole-form override — a different
         // action family and a different set of confirmations.
-        if (isFormPanelRole(spec)) {
+        if (IsFormPanelRole(spec)) {
             return this.applyContribution(spec, entity.Name, client, p, snapshot);
         }
 
@@ -193,7 +193,7 @@ export class InteractiveFormApplyService {
         provider: IMetadataProvider,
         snapshot: FormCompositionSnapshot | null,
     ): Promise<InteractiveFormApplyResult> {
-        const contribution = getDeclaredFormContribution(spec);
+        const contribution = GetDeclaredFormContribution(spec);
         if (!contribution) {
             return this.fail('This component declares componentRole form-panel but has no readable formContribution block.');
         }

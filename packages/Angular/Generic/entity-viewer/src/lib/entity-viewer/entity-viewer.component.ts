@@ -5,7 +5,7 @@ import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, RunView, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
-import { buildCompositeKey, buildPkString } from '../utils/record.util';
+import { BuildCompositeKey, BuildPkString } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
@@ -198,6 +198,20 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       }
       this.viewTypeConfigById.clear();
       this.InternalSortState = null;
+      // The canonical grid state, when WE captured it from the renderer. It was the other entity's
+      // column list, and `resolveCanonicalGridState()` prefers this field over the new entity's own
+      // saved view — so leaving it set applies the old entity's columnSettings to the new one and
+      // only the fields common to both survive. That is the same "no/too-few columns" symptom the
+      // lines above already guard against; this field was simply missed when the canonical store
+      // was introduced (MemberJunction/MJ#4244). Clearing it lets the new entity's saved view, or
+      // its metadata, supply the columns.
+      //
+      // A host-supplied `[GridState]` is deliberately NOT cleared: it is the host's instruction
+      // about the view it is binding, and a host that rebinds the entity rebinds that too.
+      if (this._gridStateFromRenderer) {
+        this._gridState = null;
+        this._gridStateFromRenderer = false;
+      }
       // Throw out the cached plug-in instances — they belong to the previous entity. The next
       // selection rebuilds them fresh for the new entity (correct columns / date fields / geo).
       this.clearDynamicRendererCache();
@@ -441,6 +455,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   private _gridState: ViewGridState | null = null;
 
   /**
+   * True when {@link _gridState} was CAPTURED FROM THE RENDERER (the user resized, reordered or
+   * hid a column and the grid handed its state back), rather than supplied by the host through
+   * {@link GridState}.
+   *
+   * The distinction decides one thing only: whether an entity change may throw the state away.
+   * A captured state describes the entity that was on screen when it was captured, so it is
+   * meaningless — and actively harmful — against a different entity. A host-supplied one is the
+   * host's instruction about the view it is binding, and is never discarded on our own initiative.
+   */
+  private _gridStateFromRenderer: boolean = false;
+
+  /**
    * Canonical grid state for the current view — the single, framework-wide source of truth for a
    * view's columns (visibility / order / width / formatting), sort, filter and aggregates. It is
    * the `UserView.GridState` column, also read by `MJUserViewEntity.Columns`, the GraphQL data
@@ -455,6 +481,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   set GridState(value: ViewGridState | null) {
     const previous = this._gridState;
     this._gridState = value;
+    // Host-supplied, so it is no longer ours to discard on an entity change.
+    this._gridStateFromRenderer = false;
     if (this._initialized && value !== previous) {
       this.refreshCanonicalGridStateRenderer();
     }
@@ -823,7 +851,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     return records.filter(record => {
       const matchResult = this.recordMatchesFilter(record, filterText, visibleFields);
       if (matchResult.matches && matchResult.matchedField && !matchResult.matchedInVisibleField) {
-        const recordKey = buildPkString(record, this.Entity!);
+        const recordKey = BuildPkString(record, this.Entity!);
         this.HiddenFieldMatches.set(recordKey, matchResult.matchedField);
       }
       return matchResult.matches;
@@ -921,7 +949,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   public HasHiddenFieldMatch(record: Record<string, unknown>): boolean {
     if (!this.DebouncedFilterText || !this.Entity) return false;
-    return this.HiddenFieldMatches.has(buildPkString(record, this.Entity));
+    return this.HiddenFieldMatches.has(BuildPkString(record, this.Entity));
   }
 
   /**
@@ -929,7 +957,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   public GetHiddenMatchFieldName(record: Record<string, unknown>): string {
     if (!this.Entity) return '';
-    const fieldName = this.HiddenFieldMatches.get(buildPkString(record, this.Entity));
+    const fieldName = this.HiddenFieldMatches.get(BuildPkString(record, this.Entity));
     if (!fieldName || !this.Entity) return '';
     const field = this.Entity.Fields.find(f => f.Name === fieldName);
     return field ? field.DisplayNameOrName : fieldName;
@@ -1512,7 +1540,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     if (!entity || !record) {
       return false;
     }
-    const compositeKey = buildCompositeKey(record, entity);
+    const compositeKey = BuildCompositeKey(record, entity);
     // Drive the highlight through the same input the user-click path uses.
     this.SelectedRecordID = compositeKey.ToConcatenatedString();
     this.RecordSelected.emit({ record, entity, compositeKey });
@@ -2131,7 +2159,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     const entity = this.EffectiveEntity;
     if (entity && record) {
       const row = record as Record<string, unknown>;
-      this.RecordSelected.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
+      this.RecordSelected.emit({ record: row, entity, compositeKey: BuildCompositeKey(row, entity) });
     }
   }
 
@@ -2139,7 +2167,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     const entity = this.EffectiveEntity;
     if (entity && record) {
       const row = record as Record<string, unknown>;
-      this.RecordOpened.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
+      this.RecordOpened.emit({ record: row, entity, compositeKey: BuildCompositeKey(row, entity) });
     }
   }
 
@@ -2163,6 +2191,8 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       const newGridState = config['gridState'] as ViewGridState | undefined;
       if (newGridState) {
         this._gridState = newGridState;
+        // Captured from the renderer, so it belongs to the CURRENT entity and must not outlive it.
+        this._gridStateFromRenderer = true;
       }
       if (this.AutoSaveView && this.persistenceTarget() === 'record') {
         void this.persistCanonicalGridState(newGridState);

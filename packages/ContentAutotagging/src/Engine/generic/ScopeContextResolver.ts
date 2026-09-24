@@ -19,7 +19,7 @@ export class ScopeContextResolver {
      * Returns a `TagScopeContext` derived from the source's `TagRootID`, or
      * `null` if no scope is implied (root tag is global, or no root set).
      */
-    public static deriveScopeContext(source: MJContentSourceEntity): TagScopeContext | null {
+    public static DeriveScopeContext(source: MJContentSourceEntity): TagScopeContext | null {
         const config = (source as unknown as { ConfigurationObject?: { TagRootID?: string | null } }).ConfigurationObject;
         const tagRootID = config?.TagRootID ?? null;
         if (!tagRootID) return null;
@@ -39,12 +39,17 @@ export class ScopeContextResolver {
         };
     }
 
+    /** @deprecated Use {@link DeriveScopeContext}. */
+    public static deriveScopeContext(source: MJContentSourceEntity): TagScopeContext | null {
+        return this.DeriveScopeContext(source);
+    }
+
     /**
      * Union two contexts — used when batching content items across sources
      * with divergent scopes. Result includes every scope row from both
      * inputs, deduplicated by (entity, record).
      */
-    public static union(a: TagScopeContext | null, b: TagScopeContext | null): TagScopeContext | null {
+    public static Union(a: TagScopeContext | null, b: TagScopeContext | null): TagScopeContext | null {
         if (!a && !b) return null;
         if (!a) return b;
         if (!b) return a;
@@ -58,5 +63,10 @@ export class ScopeContextResolver {
             }
         }
         return { scopes: merged, globalOnly: a.globalOnly && b.globalOnly };
+    }
+
+    /** @deprecated Use {@link Union}. */
+    public static union(a: TagScopeContext | null, b: TagScopeContext | null): TagScopeContext | null {
+        return this.Union(a, b);
     }
 }

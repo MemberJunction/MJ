@@ -94,13 +94,31 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * NewRecord). Keeping just the form body produces a clean "this is
      * what the form looks like" view.
      */
-    @Input() public previewMode = false;
+    @Input() public PreviewMode = false;
+
+    /** @deprecated Use {@link PreviewMode}. */
+    @Input() public set previewMode(value: InteractiveFormComponent['PreviewMode']) {
+        this.PreviewMode = value;
+    }
+    /** @deprecated Use {@link PreviewMode}. */
+    public get previewMode(): InteractiveFormComponent['PreviewMode'] {
+        return this.PreviewMode;
+    }
 
     /** A full custom entity form replaces the whole form body. */
     public override get OwnsEntireFormBody(): boolean { return true; }
 
     /** FormHostProps passed to the React component. Recomputed when record or mode changes. */
-    public formHostProps: FormHostProps | null = null;
+    public FormHostProps: FormHostProps | null = null;
+
+    /** @deprecated Use {@link FormHostProps}. */
+    public get formHostProps(): FormHostProps | null {
+        return this.FormHostProps;
+    }
+    /** @deprecated Use {@link FormHostProps}. */
+    public set formHostProps(value: FormHostProps | null) {
+        this.FormHostProps = value;
+    }
 
     /** Loaded-spec error (component row missing, JSON parse failure, etc.). */
     private _loadError: string | null = null;
@@ -131,7 +149,16 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * (consistent with every other entity form in MJ) and not duplicated
      * inside the form body.
      */
-    @ViewChild('reactComponent') public reactComponent?: MJReactComponent;
+    @ViewChild('reactComponent') public ReactComponent?: MJReactComponent;
+
+    /** @deprecated Use {@link ReactComponent}. */
+    public get reactComponent(): MJReactComponent | undefined {
+        return this.ReactComponent;
+    }
+    /** @deprecated Use {@link ReactComponent}. */
+    public set reactComponent(value: MJReactComponent | undefined) {
+        this.ReactComponent = value;
+    }
 
     /**
      * Promise resolver populated when `SaveRecord` invokes `RequestSave`
@@ -335,14 +362,14 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * forms that pre-date this contract).
      */
     public override async SaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
-        if (!this.reactComponent?.hasMethod?.(FormMethodNames.RequestSave)) {
+        if (!this.ReactComponent?.hasMethod?.(FormMethodNames.RequestSave)) {
             return super.SaveRecord(StopEditModeAfterSave);
         }
         const completion = new Promise<boolean>(resolve => {
             this.pendingSaveResolver = resolve;
         });
         try {
-            this.reactComponent.invokeMethod(FormMethodNames.RequestSave);
+            this.ReactComponent.invokeMethod(FormMethodNames.RequestSave);
         } catch (err) {
             this.pendingSaveResolver = null;
             LogError(`InteractiveFormComponent.SaveRecord: RequestSave threw: ${err instanceof Error ? err.message : String(err)}`);
@@ -365,9 +392,9 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * leaves the form in a coherent state.
      */
     public override CancelEdit(): void {
-        if (this.reactComponent?.hasMethod?.(FormMethodNames.RequestCancel)) {
+        if (this.ReactComponent?.hasMethod?.(FormMethodNames.RequestCancel)) {
             try {
-                this.reactComponent.invokeMethod(FormMethodNames.RequestCancel);
+                this.ReactComponent.invokeMethod(FormMethodNames.RequestCancel);
             } catch (err) {
                 LogError(`InteractiveFormComponent.CancelEdit: RequestCancel threw: ${err instanceof Error ? err.message : String(err)}`);
             }
@@ -467,7 +494,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      */
     private rebuildFormHostProps(): void {
         if (!this.record) {
-            this.formHostProps = null;
+            this.FormHostProps = null;
             return;
         }
         const fields: SimpleEntityFieldInfo[] = this.record.Fields.map(f =>
@@ -478,7 +505,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             ? this.primaryKeyToPlain(pk)
             : null;
 
-        this.formHostProps = {
+        this.FormHostProps = {
             entityName: this.record.EntityInfo.Name,
             primaryKey,
             record: this.record.GetAll(),

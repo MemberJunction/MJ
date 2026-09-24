@@ -14,9 +14,9 @@ import type { ChartSpec } from './chart-spec';
 /** Props for {@link Chart}. */
 export type ChartProps = {
     /** Normalized chart description (kind + data). */
-    spec: ChartSpec;
+    Spec: ChartSpec;
     /** Available container width in px. */
-    width: number;
+    Width: number;
 };
 
 /**
@@ -31,14 +31,14 @@ export type ChartProps = {
  * @param props See {@link ChartProps} — the spec and container width.
  * @returns The selected react-native-svg chart element.
  */
-export function Chart({ spec, width }: ChartProps) {
-    switch (spec.kind) {
+export function Chart({ Spec: spec, Width: width }: ChartProps) {
+    switch (spec.Kind) {
         case 'line':
-            return <LineChart data={spec.data} width={width} title={spec.title} />;
+            return <LineChart Data={spec.Data} Width={width} title={spec.title} />;
         case 'pie':
-            return <PieChart data={spec.data} width={width} title={spec.title} />;
+            return <PieChart Data={spec.Data} Width={width} title={spec.title} />;
         case 'bar':
         default:
-            return <BarChart data={spec.data} width={width} title={spec.title} />;
+            return <BarChart Data={spec.Data} Width={width} title={spec.title} />;
     }
 }

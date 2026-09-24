@@ -14,5 +14,5 @@ that can be read is still read rather than assumed.
 `FormContributionSpec.slot` is optional. Placement is the user's choice, made in the apply
 dialog against the form in front of them, and the dialog already ignored what a generated
 spec proposed — so a required field only invited specs to disagree with what the user sees.
-`getDeclaredFormContribution` still resolves a concrete slot, returned as
+`GetDeclaredFormContribution` still resolves a concrete slot, returned as
 `NormalizedFormContributionSpec`, so nothing downstream of normalization changes.

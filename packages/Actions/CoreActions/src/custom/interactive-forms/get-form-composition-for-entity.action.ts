@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView, ReadRelationshipInclusion, type EntityInfo, type EntityRelationshipInfo } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { addOutput, failure, getStringParam, ContributionScopeFilter, ParseClaimedFieldNames } from "./_shared";
+import { AddOutput, Failure, GetStringParam, ContributionScopeFilter, ParseClaimedFieldNames } from "./_shared";
 import {
     FORM_VARIANT_EXPLICIT_DEFAULT,
     FormVariantSettingKey,
@@ -95,17 +95,17 @@ export class GetFormCompositionForEntityAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const entityName = getStringParam(params, "EntityName");
-            if (!entityName) return failure("MISSING_PARAMETER", "Parameter 'EntityName' is required.");
+            const entityName = GetStringParam(params, "EntityName");
+            if (!entityName) return Failure("MISSING_PARAMETER", "Parameter 'EntityName' is required.");
 
             const provider = params.Provider ?? Metadata.Provider;
-            if (!provider) return failure("NO_PROVIDER", "No metadata provider available.");
+            if (!provider) return Failure("NO_PROVIDER", "No metadata provider available.");
 
             const user = params.ContextUser;
-            if (!user) return failure("NO_USER", "Action requires a ContextUser — contributions are user-scoped.");
+            if (!user) return Failure("NO_USER", "Action requires a ContextUser — contributions are user-scoped.");
 
             const entity = provider.EntityByName(entityName);
-            if (!entity) return failure("ENTITY_NOT_FOUND", `Entity '${entityName}' is not registered.`);
+            if (!entity) return Failure("ENTITY_NOT_FOUND", `Entity '${entityName}' is not registered.`);
 
             const rv = RunView.FromMetadataProvider(provider);
             const scope = ContributionScopeFilter(entity.ID, user);
@@ -171,12 +171,12 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                 Note: fullCustomForm ? FULL_CUSTOM_FORM_NOTE : SERVER_DERIVATION_NOTE,
             };
 
-            addOutput(params, "Result", payload);
+            AddOutput(params, "Result", payload);
             return { Success: true, ResultCode: "SUCCESS", Message: JSON.stringify(payload) };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             LogError(`GetFormCompositionForEntityAction: ${message}`);
-            return failure("UNEXPECTED_ERROR", message);
+            return Failure("UNEXPECTED_ERROR", message);
         }
     }
 

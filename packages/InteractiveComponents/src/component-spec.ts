@@ -157,19 +157,19 @@ export interface StyleOverrides {
  * Specification for an interactive component
  */
 export class ComponentSpec {
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Optional: Custom type definitions for complex prop types (e.g., ColumnDef, FieldDefinition).
      * Similar to TypeScript interfaces, used for lint-time validation of object literals.
      */
-    typeDefinitions?: Record<string, ComponentTypeDefinition>;
+    typeDefinitions?: Record<string, ComponentTypeDefinition>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Components can be embedded or registry. Registry means we don't have the
      * code directly here nor do we generate the code, we simply use the component from its registry
      */
-    location: "embedded" | "registry";
+    location: "embedded" | "registry";  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Used when location === 'registry' - the unique name of a given registry without the @ sign
@@ -177,7 +177,7 @@ export class ComponentSpec {
      * You would not include @ here. Fully qualified component identifiers would be
      * @Registry/Namespace/Name/Version but in the context of this field it is just the registry name.
      */
-    registry?: string;
+    registry?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Used when location === "registry", a hierarchical namespace such as "crm/analytics/accounts". The combination of the 
@@ -185,7 +185,7 @@ export class ComponentSpec {
      * a root level segment that starts with @ such as "@memberjunction/examples/entities" or if the root
      * segment doesn't have @ that means the component is local to that registry
      */
-    namespace?: string;
+    namespace?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Used when location === "registry", a semantic versioning string such as
@@ -194,35 +194,35 @@ export class ComponentSpec {
      * "~1.0.0"
      * Follows conventions documented here: https://semver.org/ and https://docs.npmjs.com/about-semantic-versioning 
      */
-    version?: string;
+    version?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Only used when location === 'registry', logic explaining why this component is being selected
      * to serve a specific use case or requirement
      */
-    selectionReasoning?: string;
+    selectionReasoning?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * When an architect decides to use an existing component as a base for a new version,
      * they can set this flag to true. This indicates that the new version will be created
      * based on the existing component based on the namespace/name/version specified above
      */
-    createNewVersion?: boolean;
+    createNewVersion?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * End-user friendly description of what the component does
      */
-    description: string;
+    description: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     
     /**
      * User-friendly name
      */
-    title: string;
+    title: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     
     /**
      * Self-declared type - some common options below, can be any string if the standard ones aren't sufficient
      */
-    type: "report" | "dashboard" | "form" | "table" | "chart" | "navigation" | "search" | string;
+    type: "report" | "dashboard" | "form" | "table" | "chart" | "navigation" | "search" | string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Declares the contract this component implements.
@@ -240,25 +240,25 @@ export class ComponentSpec {
      *
      * Unset = a generic component, mounted directly. No behavior change for existing components.
      */
-    componentRole?: ComponentRole;
+    componentRole?: ComponentRole;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Canonical entity name a `form` or `form-panel` component binds to. Hosts resolve
      * the entity from this first, then `dataRequirements.entities[0].name`.
      */
-    entityName?: string;
+    entityName?: string;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format, written by Skip and stored in component specs
 
     /**
      * Registration intent for `componentRole: 'form-panel'` — where the panel mounts and
      * what it claims. Consumers (Skip apply flow, Form Builder, `mj sync`) turn this into a
      * `MJ: Entity Form Contributions` row. Never carries precedence; that is a host decision.
      */
-    formContribution?: FormContributionSpec;
+    formContribution?: FormContributionSpec;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format, written by Skip and stored in component specs
 
     /**
      * JavaScript code
      */
-    code: string;
+    code: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * A functional description of what the component should do in markdown. 
@@ -269,17 +269,17 @@ export class ComponentSpec {
      * - Expected outcomes
      * - UX considerations
      */
-    functionalRequirements: string;
+    functionalRequirements: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     
     /**
      * Describes the entities and queries a component requires to function.
      */
-    dataRequirements?: ComponentDataRequirements;
+    dataRequirements?: ComponentDataRequirements;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     
     /**
      * Technical explanation of the component in markdown.
      */
-    technicalDesign: string;
+    technicalDesign: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Optional array of diagrams that use Mermaid syntax to illustrate component design. 
@@ -289,43 +289,43 @@ export class ComponentSpec {
      * - Entity-relationship diagrams of the data model the component uses
      * - Sequence diagrams illustrating interactions between the components various parts
      */
-    diagrams?: Array<{ title: string; description?: string, content: string; }>;
+    diagrams?: Array<{ title: string; description?: string, content: string; }>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     
     /**
      * Properties the component accepts, if any 
      */
-    properties?: ComponentProperty[];
+    properties?: ComponentProperty[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Events that the component emits, if any
      */
-    events?: ComponentEvent[];
+    events?: ComponentEvent[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Metadata about methods the component supports, if any
      */
-    methods?: ComponentMethodInfo;
+    methods?: ComponentMethodInfo;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Example of the component being used in JSX format. This is used to provide a clear example on the properties and 
      * event handling that the component supports.
      */
-    exampleUsage: string;  
+    exampleUsage: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Describes any other components this one depends on, if any
      */
-    dependencies?: ComponentSpec[];
+    dependencies?: ComponentSpec[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * 3rd party lib dependencies, if any
      */
-    libraries?: ComponentLibraryDependency[];
+    libraries?: ComponentLibraryDependency[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Relevant examples of components intended to inspire this component's creation
      */
-    relevantExamples?: ComponentExample[];
+    relevantExamples?: ComponentExample[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Explicitly user-requested styling, captured by the generation pipeline as data.
@@ -337,7 +337,7 @@ export class ComponentSpec {
      * so components keep reading `styles.chartPalette` / `styles.sequentialScale` /
      * `styles.divergingScale` as usual and the override is resolved above them.
      */
-    styleOverrides?: StyleOverrides;
+    styleOverrides?: StyleOverrides;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Self-declared maturity level of the component. When a component is "in progress" and is not
@@ -346,7 +346,7 @@ export class ComponentSpec {
      * as "production". This is intended to help architects and developers understand the readiness of a component
      * for use in production systems.
      */
-    readinessLevel?: "incomplete" | "beta" | "production";
+    readinessLevel?: "incomplete" | "beta" | "production";  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * If a component isn't complete or encounters problems in testing, this field can be used to
@@ -354,7 +354,7 @@ export class ComponentSpec {
      * a markdown formatted list of tasks to be done with rich explanations to allow developers (human+AI) to
      * collaborate on completing the component.
      */
-    workPlan?: string;
+    workPlan?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Current change request being processed, if any.
@@ -364,7 +364,7 @@ export class ComponentSpec {
      * This field is only present during active modification flows and
      * for embedded components (never on registry components).
      */
-    changeRequest?: ComponentChangeRequest;
+    changeRequest?: ComponentChangeRequest;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Result of the most recent test harness execution.
@@ -373,7 +373,7 @@ export class ComponentSpec {
      * Only populated for embedded components after code generation completes.
      * Registry components do not have test results as they are pre-tested.
      */
-    latestTestResult?: ComponentTestResult;
+    latestTestResult?: ComponentTestResult;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 };
 
 /**

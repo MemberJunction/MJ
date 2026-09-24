@@ -43,7 +43,13 @@ import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../servi
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import type { ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
-import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
+import {
+  CollectRealtimeSessionIDs,
+  MapRealtimeSessionMeta,
+  REALTIME_SESSION_META_FIELDS,
+  RealtimeSessionMetaRow,
+  RealtimeSessionTimelineMeta
+} from '../../utils/realtime-session-timeline';
 import {
   ResolveDateJumpTarget,
   CombineDateJumpOutcome,
@@ -53,7 +59,7 @@ import {
   type DateJumpOutcome
 } from '../../utils/date-jump';
 import { MessageListComponent } from '../message/message-list.component';
-import { decideArtifactPanelAction, snapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
+import { DecideArtifactPanelAction, SnapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
@@ -112,13 +118,31 @@ export const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
   styleUrls: ['./conversation-chat-area.component.css']
 })
 export class ConversationChatAreaComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewChecked  {
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
 
   // LOCAL STATE INPUTS - passed from parent workspace
   private _conversationId: string | null = null;
   @Input()
-  set conversationId(value: string | null) {
+  set ConversationId(value: string | null) {
     if (value !== this._conversationId) {
       // Leaving a conversation is a save point for its in-progress draft.
       // (Optional-chained: harness-constructed instances may skip field initializers.)
@@ -136,12 +160,39 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
   }
-  get conversationId(): string | null {
+  get ConversationId(): string | null {
     return this._conversationId;
   }
 
-  @Input() conversation: MJConversationEntity | null = null;
-  @Input() threadId: string | null = null;
+  /** @deprecated Use {@link ConversationId}. */
+  get conversationId(): string | null {
+    return this.ConversationId;
+  }
+  /** @deprecated Use {@link ConversationId}. */
+  @Input() set conversationId(value: string | null) {
+    this.ConversationId = value;
+  }
+
+  @Input() Conversation: MJConversationEntity | null = null;
+
+  /** @deprecated Use {@link Conversation}. */
+  @Input() set conversation(value: MJConversationEntity | null) {
+    this.Conversation = value;
+  }
+  /** @deprecated Use {@link Conversation}. */
+  get conversation(): MJConversationEntity | null {
+    return this.Conversation;
+  }
+  @Input() ThreadId: string | null = null;
+
+  /** @deprecated Use {@link ThreadId}. */
+  @Input() set threadId(value: string | null) {
+    this.ThreadId = value;
+  }
+  /** @deprecated Use {@link ThreadId}. */
+  get threadId(): string | null {
+    return this.ThreadId;
+  }
 
   /**
    * When true, render the normal message-list + message-input layout even
@@ -151,7 +202,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * pick a mode before typing. The first send still routes through
    * MessageInputComponent and triggers conversationCreated as usual.
    */
-  @Input() suppressNewConversationEmptyState = false;
+  @Input() SuppressNewConversationEmptyState = false;
+
+  /** @deprecated Use {@link SuppressNewConversationEmptyState}. */
+  @Input() set suppressNewConversationEmptyState(value: ConversationChatAreaComponent['SuppressNewConversationEmptyState']) {
+    this.SuppressNewConversationEmptyState = value;
+  }
+  /** @deprecated Use {@link SuppressNewConversationEmptyState}. */
+  get suppressNewConversationEmptyState(): ConversationChatAreaComponent['SuppressNewConversationEmptyState'] {
+    return this.SuppressNewConversationEmptyState;
+  }
 
   /**
    * Host-level MASTER cap for the composer's mention/command triggers.
@@ -159,7 +219,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * are off regardless of the per-type flags below. Hosts addressing a single
    * fixed agent (e.g. Form Builder cockpit) can set false wholesale.
    */
-  @Input() allowMentions = true;
+  @Input() AllowMentions = true;
+
+  /** @deprecated Use {@link AllowMentions}. */
+  @Input() set allowMentions(value: ConversationChatAreaComponent['AllowMentions']) {
+    this.AllowMentions = value;
+  }
+  /** @deprecated Use {@link AllowMentions}. */
+  get allowMentions(): ConversationChatAreaComponent['AllowMentions'] {
+    return this.AllowMentions;
+  }
 
   /**
    * Per-type caps under {@link allowMentions}, all default true. Let a host keep
@@ -168,9 +237,36 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * mentions (an `@` overrides the pinned default agent in message routing).
    * Effective only when `allowMentions` is also true.
    */
-  @Input() allowAgentMentions = true;
-  @Input() allowEntityMentions = true;
-  @Input() allowSkillCommands = true;
+  @Input() AllowAgentMentions = true;
+
+  /** @deprecated Use {@link AllowAgentMentions}. */
+  @Input() set allowAgentMentions(value: ConversationChatAreaComponent['AllowAgentMentions']) {
+    this.AllowAgentMentions = value;
+  }
+  /** @deprecated Use {@link AllowAgentMentions}. */
+  get allowAgentMentions(): ConversationChatAreaComponent['AllowAgentMentions'] {
+    return this.AllowAgentMentions;
+  }
+  @Input() AllowEntityMentions = true;
+
+  /** @deprecated Use {@link AllowEntityMentions}. */
+  @Input() set allowEntityMentions(value: ConversationChatAreaComponent['AllowEntityMentions']) {
+    this.AllowEntityMentions = value;
+  }
+  /** @deprecated Use {@link AllowEntityMentions}. */
+  get allowEntityMentions(): ConversationChatAreaComponent['AllowEntityMentions'] {
+    return this.AllowEntityMentions;
+  }
+  @Input() AllowSkillCommands = true;
+
+  /** @deprecated Use {@link AllowSkillCommands}. */
+  @Input() set allowSkillCommands(value: ConversationChatAreaComponent['AllowSkillCommands']) {
+    this.AllowSkillCommands = value;
+  }
+  /** @deprecated Use {@link AllowSkillCommands}. */
+  get allowSkillCommands(): ConversationChatAreaComponent['AllowSkillCommands'] {
+    return this.AllowSkillCommands;
+  }
 
   /**
    * Host-level cap for attachments. Defaults true. When false, the host
@@ -179,28 +275,64 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * When true (default), attachment availability still depends on the
    * agent's modality support, computed at runtime.
    */
-  @Input() allowAttachments = true;
+  @Input() AllowAttachments = true;
+
+  /** @deprecated Use {@link AllowAttachments}. */
+  @Input() set allowAttachments(value: ConversationChatAreaComponent['AllowAttachments']) {
+    this.AllowAttachments = value;
+  }
+  /** @deprecated Use {@link AllowAttachments}. */
+  get allowAttachments(): ConversationChatAreaComponent['AllowAttachments'] {
+    return this.AllowAttachments;
+  }
 
   /**
    * Host-level cap for the composer's Plan Mode toggle. Defaults true
    * (current behavior). White-labeled / end-user hosts that don't expose
    * plan-mode workflows set false to remove the button entirely.
    */
-  @Input() allowPlanMode = true;
+  @Input() AllowPlanMode = true;
+
+  /** @deprecated Use {@link AllowPlanMode}. */
+  @Input() set allowPlanMode(value: ConversationChatAreaComponent['AllowPlanMode']) {
+    this.AllowPlanMode = value;
+  }
+  /** @deprecated Use {@link AllowPlanMode}. */
+  get allowPlanMode(): ConversationChatAreaComponent['AllowPlanMode'] {
+    return this.AllowPlanMode;
+  }
 
   /**
    * Host-level cap for the composer's realtime voice-call launcher (and its
    * options caret). Defaults true (current behavior). Hosts with no voice
    * experience set false to remove the buttons entirely.
    */
-  @Input() allowRealtime = true;
+  @Input() AllowRealtime = true;
+
+  /** @deprecated Use {@link AllowRealtime}. */
+  @Input() set allowRealtime(value: ConversationChatAreaComponent['AllowRealtime']) {
+    this.AllowRealtime = value;
+  }
+  /** @deprecated Use {@link AllowRealtime}. */
+  get allowRealtime(): ConversationChatAreaComponent['AllowRealtime'] {
+    return this.AllowRealtime;
+  }
 
   /**
    * Whether the message list renders its built-in "No messages yet" filler
    * when a conversation has zero messages. Defaults true. Hosts that render
    * their own empty-state chrome around the chat area set false.
    */
-  @Input() showEmptyFill = true;
+  @Input() ShowEmptyFill = true;
+
+  /** @deprecated Use {@link ShowEmptyFill}. */
+  @Input() set showEmptyFill(value: ConversationChatAreaComponent['ShowEmptyFill']) {
+    this.ShowEmptyFill = value;
+  }
+  /** @deprecated Use {@link ShowEmptyFill}. */
+  get showEmptyFill(): ConversationChatAreaComponent['ShowEmptyFill'] {
+    return this.ShowEmptyFill;
+  }
 
   /**
    * Whether the built-in centered loading indicator renders while a
@@ -209,7 +341,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * no premature empty-state flash). Hosts with their own loading chrome
    * set false.
    */
-  @Input() showLoadingState = true;
+  @Input() ShowLoadingState = true;
+
+  /** @deprecated Use {@link ShowLoadingState}. */
+  @Input() set showLoadingState(value: ConversationChatAreaComponent['ShowLoadingState']) {
+    this.ShowLoadingState = value;
+  }
+  /** @deprecated Use {@link ShowLoadingState}. */
+  get showLoadingState(): ConversationChatAreaComponent['ShowLoadingState'] {
+    return this.ShowLoadingState;
+  }
 
   /**
    * Read each reply from its top instead of its bottom.
@@ -223,28 +364,109 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * turn that fits stays where it is: it is all on screen anyway. A reader who scrolled up
    * during the run is never moved; the scroll-to-bottom button is their way back.
    */
-  @Input() readReplyFromTop = false;
+  @Input() ReadReplyFromTop = false;
+
+  /** @deprecated Use {@link ReadReplyFromTop}. */
+  @Input() set readReplyFromTop(value: ConversationChatAreaComponent['ReadReplyFromTop']) {
+    this.ReadReplyFromTop = value;
+  }
+  /** @deprecated Use {@link ReadReplyFromTop}. */
+  get readReplyFromTop(): ConversationChatAreaComponent['ReadReplyFromTop'] {
+    return this.ReadReplyFromTop;
+  }
 
   // --- Additional host-level feature gates (all default true; false removes the
   //     affordance entirely). Forwarded to the message list / message items / empty
   //     state so white-labeled end-user surfaces can pare the chat down through the
   //     component contract instead of CSS on internal class names. ---
   /** Show the per-message agent run-detail grid (run ID, step/token counts, $ cost). */
-  @Input() showAgentRunDetails = true;
+  @Input() ShowAgentRunDetails = true;
+
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  @Input() set showAgentRunDetails(value: ConversationChatAreaComponent['ShowAgentRunDetails']) {
+    this.ShowAgentRunDetails = value;
+  }
+  /** @deprecated Use {@link ShowAgentRunDetails}. */
+  get showAgentRunDetails(): ConversationChatAreaComponent['ShowAgentRunDetails'] {
+    return this.ShowAgentRunDetails;
+  }
   /** Show the per-message reaction buttons (like / comment). */
-  @Input() showReactions = true;
+  @Input() ShowReactions = true;
+
+  /** @deprecated Use {@link ShowReactions}. */
+  @Input() set showReactions(value: ConversationChatAreaComponent['ShowReactions']) {
+    this.ShowReactions = value;
+  }
+  /** @deprecated Use {@link ShowReactions}. */
+  get showReactions(): ConversationChatAreaComponent['ShowReactions'] {
+    return this.ShowReactions;
+  }
   /** Show the per-message thumbs rating control on completed AI messages. */
-  @Input() showMessageRating = true;
+  @Input() ShowMessageRating = true;
+
+  /** @deprecated Use {@link ShowMessageRating}. */
+  @Input() set showMessageRating(value: ConversationChatAreaComponent['ShowMessageRating']) {
+    this.ShowMessageRating = value;
+  }
+  /** @deprecated Use {@link ShowMessageRating}. */
+  get showMessageRating(): ConversationChatAreaComponent['ShowMessageRating'] {
+    return this.ShowMessageRating;
+  }
   /** Allow pinning messages (per-message pin button, the header pin chip, and the pinned-messages panel). */
-  @Input() allowPinning = true;
+  @Input() AllowPinning = true;
+
+  /** @deprecated Use {@link AllowPinning}. */
+  @Input() set allowPinning(value: ConversationChatAreaComponent['AllowPinning']) {
+    this.AllowPinning = value;
+  }
+  /** @deprecated Use {@link AllowPinning}. */
+  get allowPinning(): ConversationChatAreaComponent['AllowPinning'] {
+    return this.AllowPinning;
+  }
   /** Allow editing the user's own messages (per-message edit button). */
-  @Input() allowMessageEdit = true;
+  @Input() AllowMessageEdit = true;
+
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  @Input() set allowMessageEdit(value: ConversationChatAreaComponent['AllowMessageEdit']) {
+    this.AllowMessageEdit = value;
+  }
+  /** @deprecated Use {@link AllowMessageEdit}. */
+  get allowMessageEdit(): ConversationChatAreaComponent['AllowMessageEdit'] {
+    return this.AllowMessageEdit;
+  }
   /** Allow deleting the user's own messages (per-message delete button). */
-  @Input() allowMessageDelete = true;
+  @Input() AllowMessageDelete = true;
+
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  @Input() set allowMessageDelete(value: ConversationChatAreaComponent['AllowMessageDelete']) {
+    this.AllowMessageDelete = value;
+  }
+  /** @deprecated Use {@link AllowMessageDelete}. */
+  get allowMessageDelete(): ConversationChatAreaComponent['AllowMessageDelete'] {
+    return this.AllowMessageDelete;
+  }
   /** Show the empty-state's built-in suggested-prompt chips (and the @mention tip). */
-  @Input() showSuggestedPrompts = true;
+  @Input() ShowSuggestedPrompts = true;
+
+  /** @deprecated Use {@link ShowSuggestedPrompts}. */
+  @Input() set showSuggestedPrompts(value: ConversationChatAreaComponent['ShowSuggestedPrompts']) {
+    this.ShowSuggestedPrompts = value;
+  }
+  /** @deprecated Use {@link ShowSuggestedPrompts}. */
+  get showSuggestedPrompts(): ConversationChatAreaComponent['ShowSuggestedPrompts'] {
+    return this.ShowSuggestedPrompts;
+  }
   /** Show the message list's sticky date header + jump-to-date navigation. */
-  @Input() showDateNavigation = true;
+  @Input() ShowDateNavigation = true;
+
+  /** @deprecated Use {@link ShowDateNavigation}. */
+  @Input() set showDateNavigation(value: ConversationChatAreaComponent['ShowDateNavigation']) {
+    this.ShowDateNavigation = value;
+  }
+  /** @deprecated Use {@link ShowDateNavigation}. */
+  get showDateNavigation(): ConversationChatAreaComponent['ShowDateNavigation'] {
+    return this.ShowDateNavigation;
+  }
 
   // --- Assistant identity overrides (both default null = engine-resolved agent
   //     identity, today's behavior). White-label hosts brand the AI side of the
@@ -253,26 +475,53 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //     instead of ::ng-deep on .message-sender / .avatar-circle internals.
   //     Complements agentCharacterConfig, which covers only the presence strip. ---
   /** Display name for AI messages (e.g. a per-tenant persona). Null = the agent record's name. */
-  @Input() assistantDisplayName: string | null = null;
+  @Input() AssistantDisplayName: string | null = null;
+
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  @Input() set assistantDisplayName(value: string | null) {
+    this.AssistantDisplayName = value;
+  }
+  /** @deprecated Use {@link AssistantDisplayName}. */
+  get assistantDisplayName(): string | null {
+    return this.AssistantDisplayName;
+  }
   /** Image URL for the AI message avatar. Null = the agent's Font Awesome icon. */
-  @Input() assistantAvatarUrl: string | null = null;
+  @Input() AssistantAvatarUrl: string | null = null;
+
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  @Input() set assistantAvatarUrl(value: string | null) {
+    this.AssistantAvatarUrl = value;
+  }
+  /** @deprecated Use {@link AssistantAvatarUrl}. */
+  get assistantAvatarUrl(): string | null {
+    return this.AssistantAvatarUrl;
+  }
 
   private _isNewConversation: boolean = false;
   @Input()
-  set isNewConversation(value: boolean) {
+  set IsNewConversation(value: boolean) {
     this._isNewConversation = value;
     if (value) {
       this.focusEmptyStateInput();
     }
   }
-  get isNewConversation(): boolean {
+  get IsNewConversation(): boolean {
     return this._isNewConversation;
+  }
+
+  /** @deprecated Use {@link IsNewConversation}. */
+  get isNewConversation(): boolean {
+    return this.IsNewConversation;
+  }
+  /** @deprecated Use {@link IsNewConversation}. */
+  @Input() set isNewConversation(value: boolean) {
+    this.IsNewConversation = value;
   }
 
   // Using getter/setter to ensure correct type handling
   private _pendingMessage: string | null = null;
   @Input()
-  set pendingMessage(value: string | null) {
+  set PendingMessage(value: string | null) {
     const previousPendingMessage = this._pendingMessage;
     // Handle case where an object is incorrectly passed
     if (value && typeof value === 'object' && 'text' in value) {
@@ -289,8 +538,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this._pendingMessageReservedTargetId = null;
     }
   }
-  get pendingMessage(): string | null {
+  get PendingMessage(): string | null {
     return this._pendingMessage;
+  }
+
+  /** @deprecated Use {@link PendingMessage}. */
+  get pendingMessage(): string | null {
+    return this.PendingMessage;
+  }
+  /** @deprecated Use {@link PendingMessage}. */
+  @Input() set pendingMessage(value: string | null) {
+    this.PendingMessage = value;
   }
 
   /**
@@ -303,7 +561,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Hosts MAY set this explicitly; it also self-resolves from {@link _pendingMessageTargetId}
    * (captured in onEmptyStateMessageSent) so the guard works regardless of host wiring.
    */
-  @Input() pendingMessageConversationId: string | null = null;
+  @Input() PendingMessageConversationId: string | null = null;
+
+  /** @deprecated Use {@link PendingMessageConversationId}. */
+  @Input() set pendingMessageConversationId(value: string | null) {
+    this.PendingMessageConversationId = value;
+  }
+  /** @deprecated Use {@link PendingMessageConversationId}. */
+  get pendingMessageConversationId(): string | null {
+    return this.PendingMessageConversationId;
+  }
 
   /** Internally-captured target for {@link pendingMessage}, set when this component creates a
    *  new conversation from the empty state. Host-independent; immune to conversation-swap timing. */
@@ -316,39 +583,116 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * (legacy fallback for single-conversation hosts that never swap).
    */
   public get EffectivePendingMessageTarget(): string | null {
-    return this.pendingMessageConversationId ?? this._pendingMessageTargetId ?? this.conversationId;
+    return this.PendingMessageConversationId ?? this._pendingMessageTargetId ?? this.ConversationId;
   }
 
-  public shouldDeliverPendingMessageTo(conversationId: string): boolean {
+  public ShouldDeliverPendingMessageTo(conversationId: string): boolean {
     const targetId = this.EffectivePendingMessageTarget;
     return UUIDsEqual(conversationId, targetId) && !UUIDsEqual(this._pendingMessageReservedTargetId, targetId);
+  }
+
+  /** @deprecated Use {@link ShouldDeliverPendingMessageTo}. */
+  public shouldDeliverPendingMessageTo(conversationId: string): boolean {
+    return this.ShouldDeliverPendingMessageTo(conversationId);
   }
 
   // Using getter/setter to ensure reactivity
   private _pendingAttachments: PendingAttachment[] | null = null;
   @Input()
-  set pendingAttachments(value: PendingAttachment[] | null) {
+  set PendingAttachments(value: PendingAttachment[] | null) {
     this._pendingAttachments = value;
   }
-  get pendingAttachments(): PendingAttachment[] | null {
+  get PendingAttachments(): PendingAttachment[] | null {
     return this._pendingAttachments;
   }
 
-  @Input() pendingArtifactId: string | null = null;
-  @Input() pendingArtifactVersionNumber: number | null = null;
-  @Input() pendingArtifactConversationId: string | null = null;
+  /** @deprecated Use {@link PendingAttachments}. */
+  get pendingAttachments(): PendingAttachment[] | null {
+    return this.PendingAttachments;
+  }
+  /** @deprecated Use {@link PendingAttachments}. */
+  @Input() set pendingAttachments(value: PendingAttachment[] | null) {
+    this.PendingAttachments = value;
+  }
+
+  @Input() PendingArtifactId: string | null = null;
+
+  /** @deprecated Use {@link PendingArtifactId}. */
+  @Input() set pendingArtifactId(value: string | null) {
+    this.PendingArtifactId = value;
+  }
+  /** @deprecated Use {@link PendingArtifactId}. */
+  get pendingArtifactId(): string | null {
+    return this.PendingArtifactId;
+  }
+  @Input() PendingArtifactVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link PendingArtifactVersionNumber}. */
+  @Input() set pendingArtifactVersionNumber(value: number | null) {
+    this.PendingArtifactVersionNumber = value;
+  }
+  /** @deprecated Use {@link PendingArtifactVersionNumber}. */
+  get pendingArtifactVersionNumber(): number | null {
+    return this.PendingArtifactVersionNumber;
+  }
+  @Input() PendingArtifactConversationId: string | null = null;
+
+  /** @deprecated Use {@link PendingArtifactConversationId}. */
+  @Input() set pendingArtifactConversationId(value: string | null) {
+    this.PendingArtifactConversationId = value;
+  }
+  /** @deprecated Use {@link PendingArtifactConversationId}. */
+  get pendingArtifactConversationId(): string | null {
+    return this.PendingArtifactConversationId;
+  }
 
   /** When true, the component is rendered inside the floating overlay (hides suggested topics, etc.) */
-  @Input() overlayMode: boolean = false;
+  @Input() OverlayMode: boolean = false;
+
+  /** @deprecated Use {@link OverlayMode}. */
+  @Input() set overlayMode(value: boolean) {
+    this.OverlayMode = value;
+  }
+  /** @deprecated Use {@link OverlayMode}. */
+  get overlayMode(): boolean {
+    return this.OverlayMode;
+  }
 
   /** Show the Export button in the conversation header. Default true. */
-  @Input() showExportButton: boolean = true;
+  @Input() ShowExportButton: boolean = true;
+
+  /** @deprecated Use {@link ShowExportButton}. */
+  @Input() set showExportButton(value: boolean) {
+    this.ShowExportButton = value;
+  }
+  /** @deprecated Use {@link ShowExportButton}. */
+  get showExportButton(): boolean {
+    return this.ShowExportButton;
+  }
 
   /** Label for the header Export button (white-label hosts relabel it, e.g. "Download"). */
-  @Input() exportButtonLabel: string = 'Export';
+  @Input() ExportButtonLabel: string = 'Export';
+
+  /** @deprecated Use {@link ExportButtonLabel}. */
+  @Input() set exportButtonLabel(value: string) {
+    this.ExportButtonLabel = value;
+  }
+  /** @deprecated Use {@link ExportButtonLabel}. */
+  get exportButtonLabel(): string {
+    return this.ExportButtonLabel;
+  }
 
   /** Font Awesome class(es) for the header Export button's icon. */
-  @Input() exportButtonIcon: string = 'fas fa-download';
+  @Input() ExportButtonIcon: string = 'fas fa-download';
+
+  /** @deprecated Use {@link ExportButtonIcon}. */
+  @Input() set exportButtonIcon(value: string) {
+    this.ExportButtonIcon = value;
+  }
+  /** @deprecated Use {@link ExportButtonIcon}. */
+  get exportButtonIcon(): string {
+    return this.ExportButtonIcon;
+  }
 
   /**
    * Branding applied to exported files (theme tokens / logo / title) — forwarded
@@ -356,16 +700,52 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * on. See `ExportBranding` in the export service. Null (default) keeps the
    * stock unthemed export.
    */
-  @Input() exportBranding: ExportBranding | null = null;
+  @Input() ExportBranding: ExportBranding | null = null;
+
+  /** @deprecated Use {@link ExportBranding}. */
+  @Input() set exportBranding(value: ExportBranding | null) {
+    this.ExportBranding = value;
+  }
+  /** @deprecated Use {@link ExportBranding}. */
+  get exportBranding(): ExportBranding | null {
+    return this.ExportBranding;
+  }
 
   /** Show the Share button in the conversation header. Default true. */
-  @Input() showShareButton: boolean = true;
+  @Input() ShowShareButton: boolean = true;
+
+  /** @deprecated Use {@link ShowShareButton}. */
+  @Input() set showShareButton(value: boolean) {
+    this.ShowShareButton = value;
+  }
+  /** @deprecated Use {@link ShowShareButton}. */
+  get showShareButton(): boolean {
+    return this.ShowShareButton;
+  }
 
   /** Show the artifact count indicator in the conversation header. Default true. */
-  @Input() showArtifactIndicator: boolean = true;
+  @Input() ShowArtifactIndicator: boolean = true;
+
+  /** @deprecated Use {@link ShowArtifactIndicator}. */
+  @Input() set showArtifactIndicator(value: boolean) {
+    this.ShowArtifactIndicator = value;
+  }
+  /** @deprecated Use {@link ShowArtifactIndicator}. */
+  get showArtifactIndicator(): boolean {
+    return this.ShowArtifactIndicator;
+  }
 
   /** Application context snapshot for AI agent awareness. Included in agent execution data. */
-  @Input() appContext: Record<string, unknown> | null = null;
+  @Input() AppContext: Record<string, unknown> | null = null;
+
+  /** @deprecated Use {@link AppContext}. */
+  @Input() set appContext(value: Record<string, unknown> | null) {
+    this.AppContext = value;
+  }
+  /** @deprecated Use {@link AppContext}. */
+  get appContext(): Record<string, unknown> | null {
+    return this.AppContext;
+  }
 
   /**
    * Optional default agent ID for the conversation. Forwarded to
@@ -378,7 +758,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * set this to the specialist agent's ID; the main Chat app leaves it
    * unset to preserve the Sage-fronted UX.
    */
-  @Input() defaultAgentId: string | null = null;
+  @Input() DefaultAgentId: string | null = null;
+
+  /** @deprecated Use {@link DefaultAgentId}. */
+  @Input() set defaultAgentId(value: string | null) {
+    this.DefaultAgentId = value;
+  }
+  /** @deprecated Use {@link DefaultAgentId}. */
+  get defaultAgentId(): string | null {
+    return this.DefaultAgentId;
+  }
 
   /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
@@ -388,7 +777,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * conversations don't pollute the main Chat app list. Main Chat leaves
    * it as the default `'Global'`. Has no effect on existing conversations.
    */
-  @Input() applicationScope: 'Global' | 'Application' | 'Both' = 'Global';
+  @Input() ApplicationScope: 'Global' | 'Application' | 'Both' = 'Global';
+
+  /** @deprecated Use {@link ApplicationScope}. */
+  @Input() set applicationScope(value: 'Global' | 'Application' | 'Both') {
+    this.ApplicationScope = value;
+  }
+  /** @deprecated Use {@link ApplicationScope}. */
+  get applicationScope(): 'Global' | 'Application' | 'Both' {
+    return this.ApplicationScope;
+  }
 
   /**
    * Application ID to bind a newly-created conversation to. REQUIRED when
@@ -396,7 +794,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * enforces it). Used by embedded chat surfaces to scope their
    * conversations to their owning Application.
    */
-  @Input() applicationId: string | null = null;
+  @Input() ApplicationId: string | null = null;
+
+  /** @deprecated Use {@link ApplicationId}. */
+  @Input() set applicationId(value: string | null) {
+    this.ApplicationId = value;
+  }
+  /** @deprecated Use {@link ApplicationId}. */
+  get applicationId(): string | null {
+    return this.ApplicationId;
+  }
 
   /**
    * "What is this conversation about?" — the Entity ID this conversation
@@ -408,7 +815,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * later list "prior conversations about THIS form/component."
    * Has no effect on existing conversations.
    */
-  @Input() linkedEntityId: string | null = null;
+  @Input() LinkedEntityId: string | null = null;
+
+  /** @deprecated Use {@link LinkedEntityId}. */
+  @Input() set linkedEntityId(value: string | null) {
+    this.LinkedEntityId = value;
+  }
+  /** @deprecated Use {@link LinkedEntityId}. */
+  get linkedEntityId(): string | null {
+    return this.LinkedEntityId;
+  }
 
   /**
    * Primary key of the linked record, serialized as a string. Used with
@@ -416,7 +832,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * form's ComponentID; Component Studio's AI panel passes the
    * currently-selected component's ID.
    */
-  @Input() linkedRecordId: string | null = null;
+  @Input() LinkedRecordId: string | null = null;
+
+  /** @deprecated Use {@link LinkedRecordId}. */
+  @Input() set linkedRecordId(value: string | null) {
+    this.LinkedRecordId = value;
+  }
+  /** @deprecated Use {@link LinkedRecordId}. */
+  get linkedRecordId(): string | null {
+    return this.LinkedRecordId;
+  }
 
   /**
    * Whether the conversation header should render the per-conversation
@@ -426,7 +851,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * to that agent instead of through Sage. Surfaces with no meaningful
    * agent-choice UX can set this to false to hide the widget.
    */
-  @Input() showAgentPicker: boolean = true;
+  @Input() ShowAgentPicker: boolean = true;
+
+  /** @deprecated Use {@link ShowAgentPicker}. */
+  @Input() set showAgentPicker(value: boolean) {
+    this.ShowAgentPicker = value;
+  }
+  /** @deprecated Use {@link ShowAgentPicker}. */
+  get showAgentPicker(): boolean {
+    return this.ShowAgentPicker;
+  }
 
   /**
    * Whether the chat header should render the per-agent mode/quality
@@ -436,7 +870,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * off only when the surface should never expose model-tier choice
    * (kiosks, specialty embeds).
    */
-  @Input() showAgentModePicker: boolean = true;
+  @Input() ShowAgentModePicker: boolean = true;
+
+  /** @deprecated Use {@link ShowAgentModePicker}. */
+  @Input() set showAgentModePicker(value: boolean) {
+    this.ShowAgentModePicker = value;
+  }
+  /** @deprecated Use {@link ShowAgentModePicker}. */
+  get showAgentModePicker(): boolean {
+    return this.ShowAgentModePicker;
+  }
 
   /**
    * The mode/preset picker's selected configuration ID, forwarded to
@@ -464,12 +907,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * instead of waiting for the first message to create a conversation.
    */
   public get HasPreConversationHeader(): boolean {
-    return this.showAgentModePicker && !!this.ModePickerTargetAgentId;
+    return this.ShowAgentModePicker && !!this.ModePickerTargetAgentId;
   }
 
   public get ModePickerTargetAgentId(): string | null {
-    return this.conversation?.DefaultAgentID
-        ?? this.defaultAgentId
+    return this.Conversation?.DefaultAgentID
+        ?? this.DefaultAgentId
         ?? this.conversationManagerAgent?.ID
         ?? null;
   }
@@ -486,10 +929,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /** Greeting message shown in the empty state when no conversation is active */
-  @Input() emptyStateGreeting: string = 'How can I help you?';
+  @Input() EmptyStateGreeting: string = 'How can I help you?';
+
+  /** @deprecated Use {@link EmptyStateGreeting}. */
+  @Input() set emptyStateGreeting(value: string) {
+    this.EmptyStateGreeting = value;
+  }
+  /** @deprecated Use {@link EmptyStateGreeting}. */
+  get emptyStateGreeting(): string {
+    return this.EmptyStateGreeting;
+  }
 
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
-  @Input() showSidebarToggle: boolean = false;
+  @Input() ShowSidebarToggle: boolean = false;
+
+  /** @deprecated Use {@link ShowSidebarToggle}. */
+  @Input() set showSidebarToggle(value: boolean) {
+    this.ShowSidebarToggle = value;
+  }
+  /** @deprecated Use {@link ShowSidebarToggle}. */
+  get showSidebarToggle(): boolean {
+    return this.ShowSidebarToggle;
+  }
 
   // ────────────────────────────────────────────────────────────────────
   // PR 2c — Widget extension surface (additive — no breaking changes)
@@ -501,14 +962,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * so existing embeds (Form Builder, Component Studio AI Assistant, the
    * corner overlay) see no UI change.
    */
-  @Input() showAgentCharacter: boolean = false;
+  @Input() ShowAgentCharacter: boolean = false;
+
+  /** @deprecated Use {@link ShowAgentCharacter}. */
+  @Input() set showAgentCharacter(value: boolean) {
+    this.ShowAgentCharacter = value;
+  }
+  /** @deprecated Use {@link ShowAgentCharacter}. */
+  get showAgentCharacter(): boolean {
+    return this.ShowAgentCharacter;
+  }
 
   /**
    * Visualization data forwarded to the `agentPresence` slot's default
    * component (or to any consumer-projected template via slot context).
    * Includes avatar URL, character name, voice state, and visual intensity.
    */
-  @Input() agentCharacterConfig: AgentCharacterConfig | null = null;
+  @Input() AgentCharacterConfig: AgentCharacterConfig | null = null;
+
+  /** @deprecated Use {@link AgentCharacterConfig}. */
+  @Input() set agentCharacterConfig(value: AgentCharacterConfig | null) {
+    this.AgentCharacterConfig = value;
+  }
+  /** @deprecated Use {@link AgentCharacterConfig}. */
+  get agentCharacterConfig(): AgentCharacterConfig | null {
+    return this.AgentCharacterConfig;
+  }
 
   /**
    * Structured config for the `emptyState` slot's default component —
@@ -516,7 +995,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * with the existing `emptyStateGreeting` input (which still wins when
    * `emptyStateConfig` is null).
    */
-  @Input() emptyStateConfig: EmptyStateConfig | null = null;
+  @Input() EmptyStateConfig: EmptyStateConfig | null = null;
+
+  /** @deprecated Use {@link EmptyStateConfig}. */
+  @Input() set emptyStateConfig(value: EmptyStateConfig | null) {
+    this.EmptyStateConfig = value;
+  }
+  /** @deprecated Use {@link EmptyStateConfig}. */
+  get emptyStateConfig(): EmptyStateConfig | null {
+    return this.EmptyStateConfig;
+  }
 
   /**
    * Activate the `demonstrationSurface` slot layout-mode. Per Matt's 06-10
@@ -530,7 +1018,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent emits a demonstration intent → host sets this true; user dismisses
    * → host sets it false). The widget itself doesn't decide.
    */
-  @Input() showDemonstrationSurface: boolean = false;
+  @Input() ShowDemonstrationSurface: boolean = false;
+
+  /** @deprecated Use {@link ShowDemonstrationSurface}. */
+  @Input() set showDemonstrationSurface(value: boolean) {
+    this.ShowDemonstrationSurface = value;
+  }
+  /** @deprecated Use {@link ShowDemonstrationSurface}. */
+  get showDemonstrationSurface(): boolean {
+    return this.ShowDemonstrationSurface;
+  }
 
   /**
    * Content payload forwarded to the `demonstrationSurface` slot via
@@ -538,15 +1035,29 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * {@link IMJChatDemonstrationSurfaceComponent} interface — the widget
    * doesn't introspect or render it directly, just hands it through.
    */
-  @Input() demonstrationSurfaceContent: unknown = null;
+  @Input() DemonstrationSurfaceContent: unknown = null;
+
+  /** @deprecated Use {@link DemonstrationSurfaceContent}. */
+  @Input() set demonstrationSurfaceContent(value: unknown) {
+    this.DemonstrationSurfaceContent = value;
+  }
+  /** @deprecated Use {@link DemonstrationSurfaceContent}. */
+  get demonstrationSurfaceContent(): unknown {
+    return this.DemonstrationSurfaceContent;
+  }
 
   /**
    * True when the demonstrationSurface layout-mode is BOTH opted-in
    * (`showDemonstrationSurface`) AND has a slot template projected to render
    * into. Both conditions must hold for the layout restructure to kick in.
    */
+  public get IsDemonstrationActive(): boolean {
+    return this.ShowDemonstrationSurface && this.SlotTemplate('demonstrationSurface') !== null;
+  }
+
+  /** @deprecated Use {@link IsDemonstrationActive}. */
   public get isDemonstrationActive(): boolean {
-    return this.showDemonstrationSurface && this.slotTemplate('demonstrationSurface') !== null;
+    return this.IsDemonstrationActive;
   }
 
   // ────────────────────────────────────────────────────────────────────
@@ -580,54 +1091,243 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //     Vue, Node) register their own adapter — the chat-area code is unchanged.
 
   /** Cancelable — fired BEFORE a user message is sent to the agent. */
-  @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+  @Output() BeforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeAgentTurn}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeAgentTurn) keeps working. Must stay AFTER BeforeAgentTurn: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeAgentTurn = this.BeforeAgentTurn;
   /** Fired AFTER a successful agent turn completes. */
-  @Output() afterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+  @Output() AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterAgentTurn}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterAgentTurn) keeps working. Must stay AFTER AfterAgentTurn: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterAgentTurn = this.AfterAgentTurn;
 
   /** Cancelable — fired BEFORE a registered client tool is invoked by the agent. */
-  @Output() beforeToolInvoked = new EventEmitter<BeforeToolInvokedEventArgs>();
+  @Output() BeforeToolInvoked = new EventEmitter<BeforeToolInvokedEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeToolInvoked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeToolInvoked) keeps working. Must stay AFTER BeforeToolInvoked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeToolInvoked = this.BeforeToolInvoked;
   /** Fired AFTER a client tool invocation completes. */
-  @Output() afterToolInvoked = new EventEmitter<AfterToolInvokedEventArgs>();
+  @Output() AfterToolInvoked = new EventEmitter<AfterToolInvokedEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterToolInvoked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterToolInvoked) keeps working. Must stay AFTER AfterToolInvoked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterToolInvoked = this.AfterToolInvoked;
 
   /** Cancelable — fired BEFORE a response form's submitted values are sent. */
-  @Output() beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  @Output() BeforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link BeforeResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeResponseFormSubmitted) keeps working. Must stay AFTER BeforeResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeResponseFormSubmitted = this.BeforeResponseFormSubmitted;
   /** Fired AFTER a response form's values have been sent. */
-  @Output() afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+  @Output() AfterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+  /**
+   * @deprecated Use {@link AfterResponseFormSubmitted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterResponseFormSubmitted) keeps working. Must stay AFTER AfterResponseFormSubmitted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterResponseFormSubmitted = this.AfterResponseFormSubmitted;
 
   /** Informational. */
-  @Output() sessionStarted = new EventEmitter<SessionStartedEventArgs>();
-  /** Informational. */
-  @Output() sessionChannelStateChanged = new EventEmitter<SessionChannelStateChangedEventArgs>();
-  /** Informational. */
-  @Output() sessionEnded = new EventEmitter<SessionEndedEventArgs>();
+  @Output() SessionStarted = new EventEmitter<SessionStartedEventArgs>();
 
-  @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  /**
+   * @deprecated Use {@link SessionStarted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sessionStarted) keeps working. Must stay AFTER SessionStarted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sessionStarted = this.SessionStarted;
+  /** Informational. */
+  @Output() SessionChannelStateChanged = new EventEmitter<SessionChannelStateChangedEventArgs>();
+
+  /**
+   * @deprecated Use {@link SessionChannelStateChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sessionChannelStateChanged) keeps working. Must stay AFTER SessionChannelStateChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sessionChannelStateChanged = this.SessionChannelStateChanged;
+  /** Informational. */
+  @Output() SessionEnded = new EventEmitter<SessionEndedEventArgs>();
+
+  /**
+   * @deprecated Use {@link SessionEnded}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sessionEnded) keeps working. Must stay AFTER SessionEnded: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sessionEnded = this.SessionEnded;
+
+  @Output() ConversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
+
+  /**
+   * @deprecated Use {@link ConversationRenamed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationRenamed) keeps working. Must stay AFTER ConversationRenamed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationRenamed = this.ConversationRenamed;
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
 
   /**
    * A realtime session that CREATED its own conversation has ended — the new
    * conversation is named (background, shared helper) and ready. The workspace folds
    * it into the cached list and selects it when the conversation list is visible.
    */
-  @Output() realtimeConversationReady = new EventEmitter<{conversationId: string; select: boolean}>();
+  @Output() RealtimeConversationReady = new EventEmitter<{conversationId: string; select: boolean}>();
+
+  /**
+   * @deprecated Use {@link RealtimeConversationReady}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (realtimeConversationReady) keeps working. Must stay AFTER RealtimeConversationReady: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() realtimeConversationReady = this.RealtimeConversationReady;
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
-  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
-  @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
-  @Output() sidebarToggleClicked = new EventEmitter<void>();
+  @Output() TaskClicked = new EventEmitter<MJTaskEntity>();
+
+  /**
+   * @deprecated Use {@link TaskClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (taskClicked) keeps working. Must stay AFTER TaskClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() taskClicked = this.TaskClicked;
+  @Output() ArtifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
+
+  /**
+   * @deprecated Use {@link ArtifactLinkClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (artifactLinkClicked) keeps working. Must stay AFTER ArtifactLinkClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() artifactLinkClicked = this.ArtifactLinkClicked;
+  @Output() SidebarToggleClicked = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link SidebarToggleClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (sidebarToggleClicked) keeps working. Must stay AFTER SidebarToggleClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() sidebarToggleClicked = this.SidebarToggleClicked;
 
   // STATE CHANGE OUTPUTS - notify parent of state changes
   // conversationCreated now includes pendingMessage and pendingAttachments to ensure atomic state update
-  @Output() conversationCreated = new EventEmitter<{
+  @Output() ConversationCreated = new EventEmitter<{
     conversation: MJConversationEntity;
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
   }>();
-  @Output() threadOpened = new EventEmitter<string>();
-  @Output() threadClosed = new EventEmitter<void>();
-  @Output() pendingArtifactConsumed = new EventEmitter<void>();
-  @Output() pendingMessageConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ConversationCreated}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationCreated) keeps working. Must stay AFTER ConversationCreated: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationCreated = this.ConversationCreated;
+  @Output() ThreadOpened = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ThreadOpened}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (threadOpened) keeps working. Must stay AFTER ThreadOpened: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() threadOpened = this.ThreadOpened;
+  @Output() ThreadClosed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ThreadClosed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (threadClosed) keeps working. Must stay AFTER ThreadClosed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() threadClosed = this.ThreadClosed;
+  @Output() PendingArtifactConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PendingArtifactConsumed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pendingArtifactConsumed) keeps working. Must stay AFTER PendingArtifactConsumed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pendingArtifactConsumed = this.PendingArtifactConsumed;
+  @Output() PendingMessageConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link PendingMessageConsumed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pendingMessageConsumed) keeps working. Must stay AFTER PendingMessageConsumed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pendingMessageConsumed = this.PendingMessageConsumed;
   // pendingMessageRequested is deprecated - use conversationCreated with pendingMessage instead
-  @Output() pendingMessageRequested = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
+  @Output() PendingMessageRequested = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
+
+  /**
+   * @deprecated Use {@link PendingMessageRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (pendingMessageRequested) keeps working. Must stay AFTER PendingMessageRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() pendingMessageRequested = this.PendingMessageRequested;
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
@@ -639,9 +1339,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * briefly because the target input mounts asynchronously (config params can arrive
    * before the first render).
    */
-  @Input() composerDraft: string | null = null;
+  @Input() ComposerDraft: string | null = null;
 
-  @Output() composerDraftConsumed = new EventEmitter<void>();
+  /** @deprecated Use {@link ComposerDraft}. */
+  @Input() set composerDraft(value: string | null) {
+    this.ComposerDraft = value;
+  }
+  /** @deprecated Use {@link ComposerDraft}. */
+  get composerDraft(): string | null {
+    return this.ComposerDraft;
+  }
+
+  @Output() ComposerDraftConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ComposerDraftConsumed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (composerDraftConsumed) keeps working. Must stay AFTER ComposerDraftConsumed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() composerDraftConsumed = this.ComposerDraftConsumed;
 
   /**
    * Pre-address the composer to an AGENT as a resolved mention pill (+ space +
@@ -649,7 +1367,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent's name. Emits composerAgentMentionConsumed once applied.
    */
   @Input()
-  set composerAgentMention(value: string | null) {
+  set ComposerAgentMention(value: string | null) {
     if (value && value !== this._composerAgentMention) {
       this._composerAgentMention = value;
       this.applyComposerAgentMention(0);
@@ -657,12 +1375,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this._composerAgentMention = null;
     }
   }
-  get composerAgentMention(): string | null {
+  get ComposerAgentMention(): string | null {
     return this._composerAgentMention;
+  }
+
+  /** @deprecated Use {@link ComposerAgentMention}. */
+  get composerAgentMention(): string | null {
+    return this.ComposerAgentMention;
+  }
+  /** @deprecated Use {@link ComposerAgentMention}. */
+  @Input() set composerAgentMention(value: string | null) {
+    this.ComposerAgentMention = value;
   }
   private _composerAgentMention: string | null = null;
 
-  @Output() composerAgentMentionConsumed = new EventEmitter<void>();
+  @Output() ComposerAgentMentionConsumed = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ComposerAgentMentionConsumed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (composerAgentMentionConsumed) keeps working. Must stay AFTER ComposerAgentMentionConsumed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() composerAgentMentionConsumed = this.ComposerAgentMentionConsumed;
 
   /**
    * Per-user persisted composer drafts (UserInfoEngine-backed): restore on mount,
@@ -688,8 +1424,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       let snapshot: string | null;
       if (this._composerAgentMention) {
         snapshot = null; // pre-address wins; never restore over it
-      } else if (!conversationId && this.composerDraft) {
-        snapshot = this.composerDraft;
+      } else if (!conversationId && this.ComposerDraft) {
+        snapshot = this.ComposerDraft;
       } else {
         snapshot = this.draftStore.GetDraft(conversationId);
       }
@@ -734,7 +1470,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (applied) {
           console.log(`[Omnibar→Chat] chat-area apply('${agentName}'): APPLIED on ${target} (attempt ${attempt})`);
           this._composerAgentMention = null;
-          this.composerAgentMentionConsumed.emit();
+          this.ComposerAgentMentionConsumed.emit();
         } else if (attempt < ConversationChatAreaComponent.AGENT_MENTION_MAX_ATTEMPTS) {
           setTimeout(() => this.applyComposerAgentMention(attempt + 1), 150);
         } else {
@@ -752,8 +1488,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** The empty-state input applied the staged draft — clear + inform the host. */
   public OnComposerDraftApplied(): void {
-    this.composerDraft = null;
-    this.composerDraftConsumed.emit();
+    this.ComposerDraft = null;
+    this.ComposerDraftConsumed.emit();
   }
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
   @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
@@ -770,12 +1506,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * projected for that slot. When `null`, the template should render the
    * slot's default standalone component.
    */
-  public slotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
+  public SlotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
     return this.chatSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
   }
 
+  /** @deprecated Use {@link SlotTemplate}. */
+  public slotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
+    return this.SlotTemplate(name);
+  }
+
   public messages: MJConversationDetailEntity[] = [];
-  public showScrollToBottomIcon = false;
+  public ShowScrollToBottomIcon = false;
+
+  /** @deprecated Use {@link ShowScrollToBottomIcon}. */
+  public get showScrollToBottomIcon() {
+    return this.ShowScrollToBottomIcon;
+  }
+  /** @deprecated Use {@link ShowScrollToBottomIcon}. */
+  public set showScrollToBottomIcon(value) {
+    this.ShowScrollToBottomIcon = value;
+  }
   private scrollToBottom = false;
   /**
    * Whether the reader was at (within a few px of) the bottom at the last scroll event.
@@ -798,28 +1548,199 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   private conversationLoadToken = 0; // Monotonic token to discard stale async conversation loads
-  public isProcessing: boolean = false;
+  public IsProcessing: boolean = false;
+
+  /** @deprecated Use {@link IsProcessing}. */
+  public get isProcessing(): boolean {
+    return this.IsProcessing;
+  }
+  /** @deprecated Use {@link IsProcessing}. */
+  public set isProcessing(value: boolean) {
+    this.IsProcessing = value;
+  }
   private intentCheckMessage: MJConversationDetailEntity | null = null; // Temporary message shown during intent checking
-  public isLoadingConversation: boolean = false; // Set to true only when actively loading conversation data
+  public IsLoadingConversation: boolean = false;
+
+  /** @deprecated Use {@link IsLoadingConversation}. */
+  public get isLoadingConversation(): boolean {
+    return this.IsLoadingConversation;
+  }
+  /** @deprecated Use {@link IsLoadingConversation}. */
+  public set isLoadingConversation(value: boolean) {
+    this.IsLoadingConversation = value;
+  } // Set to true only when actively loading conversation data
 
   // User avatar map derived from engine cache
-  public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
-  public memberCount: number = 1;
-  public artifactCount: number = 0;
-  public artifactCountDisplay: number = 0;
-  public isShared: boolean = false;
-  public showExportModal: boolean = false;
-  public showShareModal: boolean = false;
-  public shareContext: ResourceShareContext | null = null;
-  public shareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
-  public showAgentPanel: boolean = false;
-  public showMembersModal: boolean = false;
-  public showProjectSelector: boolean = false;
-  public showArtifactPanel: boolean = false;
-  public showArtifactsModal: boolean = false;
-  public showSystemArtifacts: boolean = false; // Toggle for showing system-only artifacts
-  public selectedArtifactId: string | null = null;
-  public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
+  public UserAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
+
+  /** @deprecated Use {@link UserAvatarMap}. */
+  public get userAvatarMap(): Map<string, {imageUrl: string | null; iconClass: string | null}> {
+    return this.UserAvatarMap;
+  }
+  /** @deprecated Use {@link UserAvatarMap}. */
+  public set userAvatarMap(value: Map<string, {imageUrl: string | null; iconClass: string | null}>) {
+    this.UserAvatarMap = value;
+  }
+  public MemberCount: number = 1;
+
+  /** @deprecated Use {@link MemberCount}. */
+  public get memberCount(): number {
+    return this.MemberCount;
+  }
+  /** @deprecated Use {@link MemberCount}. */
+  public set memberCount(value: number) {
+    this.MemberCount = value;
+  }
+  public ArtifactCount: number = 0;
+
+  /** @deprecated Use {@link ArtifactCount}. */
+  public get artifactCount(): number {
+    return this.ArtifactCount;
+  }
+  /** @deprecated Use {@link ArtifactCount}. */
+  public set artifactCount(value: number) {
+    this.ArtifactCount = value;
+  }
+  public ArtifactCountDisplay: number = 0;
+
+  /** @deprecated Use {@link ArtifactCountDisplay}. */
+  public get artifactCountDisplay(): number {
+    return this.ArtifactCountDisplay;
+  }
+  /** @deprecated Use {@link ArtifactCountDisplay}. */
+  public set artifactCountDisplay(value: number) {
+    this.ArtifactCountDisplay = value;
+  }
+  public IsShared: boolean = false;
+
+  /** @deprecated Use {@link IsShared}. */
+  public get isShared(): boolean {
+    return this.IsShared;
+  }
+  /** @deprecated Use {@link IsShared}. */
+  public set isShared(value: boolean) {
+    this.IsShared = value;
+  }
+  public ShowExportModal: boolean = false;
+
+  /** @deprecated Use {@link ShowExportModal}. */
+  public get showExportModal(): boolean {
+    return this.ShowExportModal;
+  }
+  /** @deprecated Use {@link ShowExportModal}. */
+  public set showExportModal(value: boolean) {
+    this.ShowExportModal = value;
+  }
+  public ShowShareModal: boolean = false;
+
+  /** @deprecated Use {@link ShowShareModal}. */
+  public get showShareModal(): boolean {
+    return this.ShowShareModal;
+  }
+  /** @deprecated Use {@link ShowShareModal}. */
+  public set showShareModal(value: boolean) {
+    this.ShowShareModal = value;
+  }
+  public ShareContext: ResourceShareContext | null = null;
+
+  /** @deprecated Use {@link ShareContext}. */
+  public get shareContext(): ResourceShareContext | null {
+    return this.ShareContext;
+  }
+  /** @deprecated Use {@link ShareContext}. */
+  public set shareContext(value: ResourceShareContext | null) {
+    this.ShareContext = value;
+  }
+  public ShareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
+
+  /** @deprecated Use {@link ShareAdapter}. */
+  public get shareAdapter() {
+    return this.ShareAdapter;
+  }
+  /** @deprecated Use {@link ShareAdapter}. */
+  public set shareAdapter(value) {
+    this.ShareAdapter = value;
+  }
+  public ShowAgentPanel: boolean = false;
+
+  /** @deprecated Use {@link ShowAgentPanel}. */
+  public get showAgentPanel(): boolean {
+    return this.ShowAgentPanel;
+  }
+  /** @deprecated Use {@link ShowAgentPanel}. */
+  public set showAgentPanel(value: boolean) {
+    this.ShowAgentPanel = value;
+  }
+  public ShowMembersModal: boolean = false;
+
+  /** @deprecated Use {@link ShowMembersModal}. */
+  public get showMembersModal(): boolean {
+    return this.ShowMembersModal;
+  }
+  /** @deprecated Use {@link ShowMembersModal}. */
+  public set showMembersModal(value: boolean) {
+    this.ShowMembersModal = value;
+  }
+  public ShowProjectSelector: boolean = false;
+
+  /** @deprecated Use {@link ShowProjectSelector}. */
+  public get showProjectSelector(): boolean {
+    return this.ShowProjectSelector;
+  }
+  /** @deprecated Use {@link ShowProjectSelector}. */
+  public set showProjectSelector(value: boolean) {
+    this.ShowProjectSelector = value;
+  }
+  public ShowArtifactPanel: boolean = false;
+
+  /** @deprecated Use {@link ShowArtifactPanel}. */
+  public get showArtifactPanel(): boolean {
+    return this.ShowArtifactPanel;
+  }
+  /** @deprecated Use {@link ShowArtifactPanel}. */
+  public set showArtifactPanel(value: boolean) {
+    this.ShowArtifactPanel = value;
+  }
+  public ShowArtifactsModal: boolean = false;
+
+  /** @deprecated Use {@link ShowArtifactsModal}. */
+  public get showArtifactsModal(): boolean {
+    return this.ShowArtifactsModal;
+  }
+  /** @deprecated Use {@link ShowArtifactsModal}. */
+  public set showArtifactsModal(value: boolean) {
+    this.ShowArtifactsModal = value;
+  }
+  public ShowSystemArtifacts: boolean = false;
+
+  /** @deprecated Use {@link ShowSystemArtifacts}. */
+  public get showSystemArtifacts(): boolean {
+    return this.ShowSystemArtifacts;
+  }
+  /** @deprecated Use {@link ShowSystemArtifacts}. */
+  public set showSystemArtifacts(value: boolean) {
+    this.ShowSystemArtifacts = value;
+  } // Toggle for showing system-only artifacts
+  public SelectedArtifactId: string | null = null;
+
+  /** @deprecated Use {@link SelectedArtifactId}. */
+  public get selectedArtifactId(): string | null {
+    return this.SelectedArtifactId;
+  }
+  /** @deprecated Use {@link SelectedArtifactId}. */
+  public set selectedArtifactId(value: string | null) {
+    this.SelectedArtifactId = value;
+  }
+  public SelectedVersionNumber: number | undefined = undefined;
+
+  /** @deprecated Use {@link SelectedVersionNumber}. */
+  public get selectedVersionNumber(): number | undefined {
+    return this.SelectedVersionNumber;
+  }
+  /** @deprecated Use {@link SelectedVersionNumber}. */
+  public set selectedVersionNumber(value: number | undefined) {
+    this.SelectedVersionNumber = value;
+  } // Version to show in artifact viewer
 
   /**
    * Bumped whenever artifacts are MERGED into `artifactsByDetailId` by something other than the
@@ -837,58 +1758,229 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * the selection the user just made.
    */
   private artifactSelectionEpoch = 0;
-  public artifactPaneWidth: number = DEFAULT_ARTIFACT_PANE_WIDTH;
-  public isArtifactPaneMaximized: boolean = false; // Track maximize state
+  public ArtifactPaneWidth: number = DEFAULT_ARTIFACT_PANE_WIDTH;
+
+  /** @deprecated Use {@link ArtifactPaneWidth}. */
+  public get artifactPaneWidth(): number {
+    return this.ArtifactPaneWidth;
+  }
+  /** @deprecated Use {@link ArtifactPaneWidth}. */
+  public set artifactPaneWidth(value: number) {
+    this.ArtifactPaneWidth = value;
+  }
+  public IsArtifactPaneMaximized: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactPaneMaximized}. */
+  public get isArtifactPaneMaximized(): boolean {
+    return this.IsArtifactPaneMaximized;
+  }
+  /** @deprecated Use {@link IsArtifactPaneMaximized}. */
+  public set isArtifactPaneMaximized(value: boolean) {
+    this.IsArtifactPaneMaximized = value;
+  } // Track maximize state
   private artifactPaneWidthBeforeMaximize: number = DEFAULT_ARTIFACT_PANE_WIDTH;
-  public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
-  public showCollectionPicker: boolean = false;
-  public collectionPickerArtifactId: string | null = null;
-  public collectionPickerExcludedIds: string[] = [];
-  public collectionPickerVersionId: string | null = null;
-  public collectionPickerArtifactName: string = '';
-  public collectionPickerVersionNumber: number | null = null;
+  public ExpandedArtifactId: string | null = null;
+
+  /** @deprecated Use {@link ExpandedArtifactId}. */
+  public get expandedArtifactId(): string | null {
+    return this.ExpandedArtifactId;
+  }
+  /** @deprecated Use {@link ExpandedArtifactId}. */
+  public set expandedArtifactId(value: string | null) {
+    this.ExpandedArtifactId = value;
+  } // Track which artifact card is expanded in modal
+  public ShowCollectionPicker: boolean = false;
+
+  /** @deprecated Use {@link ShowCollectionPicker}. */
+  public get showCollectionPicker(): boolean {
+    return this.ShowCollectionPicker;
+  }
+  /** @deprecated Use {@link ShowCollectionPicker}. */
+  public set showCollectionPicker(value: boolean) {
+    this.ShowCollectionPicker = value;
+  }
+  public CollectionPickerArtifactId: string | null = null;
+
+  /** @deprecated Use {@link CollectionPickerArtifactId}. */
+  public get collectionPickerArtifactId(): string | null {
+    return this.CollectionPickerArtifactId;
+  }
+  /** @deprecated Use {@link CollectionPickerArtifactId}. */
+  public set collectionPickerArtifactId(value: string | null) {
+    this.CollectionPickerArtifactId = value;
+  }
+  public CollectionPickerExcludedIds: string[] = [];
+
+  /** @deprecated Use {@link CollectionPickerExcludedIds}. */
+  public get collectionPickerExcludedIds(): string[] {
+    return this.CollectionPickerExcludedIds;
+  }
+  /** @deprecated Use {@link CollectionPickerExcludedIds}. */
+  public set collectionPickerExcludedIds(value: string[]) {
+    this.CollectionPickerExcludedIds = value;
+  }
+  public CollectionPickerVersionId: string | null = null;
+
+  /** @deprecated Use {@link CollectionPickerVersionId}. */
+  public get collectionPickerVersionId(): string | null {
+    return this.CollectionPickerVersionId;
+  }
+  /** @deprecated Use {@link CollectionPickerVersionId}. */
+  public set collectionPickerVersionId(value: string | null) {
+    this.CollectionPickerVersionId = value;
+  }
+  public CollectionPickerArtifactName: string = '';
+
+  /** @deprecated Use {@link CollectionPickerArtifactName}. */
+  public get collectionPickerArtifactName(): string {
+    return this.CollectionPickerArtifactName;
+  }
+  /** @deprecated Use {@link CollectionPickerArtifactName}. */
+  public set collectionPickerArtifactName(value: string) {
+    this.CollectionPickerArtifactName = value;
+  }
+  public CollectionPickerVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link CollectionPickerVersionNumber}. */
+  public get collectionPickerVersionNumber(): number | null {
+    return this.CollectionPickerVersionNumber;
+  }
+  /** @deprecated Use {@link CollectionPickerVersionNumber}. */
+  public set collectionPickerVersionNumber(value: number | null) {
+    this.CollectionPickerVersionNumber = value;
+  }
 
   // Artifact permissions
-  public canShareSelectedArtifact: boolean = false;
-  public canEditSelectedArtifact: boolean = false;
+  public CanShareSelectedArtifact: boolean = false;
+
+  /** @deprecated Use {@link CanShareSelectedArtifact}. */
+  public get canShareSelectedArtifact(): boolean {
+    return this.CanShareSelectedArtifact;
+  }
+  /** @deprecated Use {@link CanShareSelectedArtifact}. */
+  public set canShareSelectedArtifact(value: boolean) {
+    this.CanShareSelectedArtifact = value;
+  }
+  public CanEditSelectedArtifact: boolean = false;
+
+  /** @deprecated Use {@link CanEditSelectedArtifact}. */
+  public get canEditSelectedArtifact(): boolean {
+    return this.CanEditSelectedArtifact;
+  }
+  /** @deprecated Use {@link CanEditSelectedArtifact}. */
+  public set canEditSelectedArtifact(value: boolean) {
+    this.CanEditSelectedArtifact = value;
+  }
 
   // Share modal state
-  public isArtifactShareModalOpen: boolean = false;
-  public artifactToShare: MJArtifactEntity | null = null;
+  public IsArtifactShareModalOpen: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactShareModalOpen}. */
+  public get isArtifactShareModalOpen(): boolean {
+    return this.IsArtifactShareModalOpen;
+  }
+  /** @deprecated Use {@link IsArtifactShareModalOpen}. */
+  public set isArtifactShareModalOpen(value: boolean) {
+    this.IsArtifactShareModalOpen = value;
+  }
+  public ArtifactToShare: MJArtifactEntity | null = null;
+
+  /** @deprecated Use {@link ArtifactToShare}. */
+  public get artifactToShare(): MJArtifactEntity | null {
+    return this.ArtifactToShare;
+  }
+  /** @deprecated Use {@link ArtifactToShare}. */
+  public set artifactToShare(value: MJArtifactEntity | null) {
+    this.ArtifactToShare = value;
+  }
 
 
   // Artifact mapping: ConversationDetailID -> Array of LazyArtifactInfo
   // Uses lazy-loading pattern: display data loaded immediately, full entities on-demand
   // Supports multiple artifacts per conversation detail (0-N relationship)
-  public artifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+  public ArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+
+  /** @deprecated Use {@link ArtifactsByDetailId}. */
+  public get artifactsByDetailId() {
+    return this.ArtifactsByDetailId;
+  }
+  /** @deprecated Use {@link ArtifactsByDetailId}. */
+  public set artifactsByDetailId(value) {
+    this.ArtifactsByDetailId = value;
+  }
 
   // System artifacts mapping: ConversationDetailID -> Array of LazyArtifactInfo (Visibility='System Only')
   // Kept separate so we can toggle their display without reloading
   // Made public so it can be passed to MessageInputComponent for payload loading
-  public systemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+  public SystemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+
+  /** @deprecated Use {@link SystemArtifactsByDetailId}. */
+  public get systemArtifactsByDetailId() {
+    return this.SystemArtifactsByDetailId;
+  }
+  /** @deprecated Use {@link SystemArtifactsByDetailId}. */
+  public set systemArtifactsByDetailId(value) {
+    this.SystemArtifactsByDetailId = value;
+  }
 
   // Cached combined artifacts map - updated when toggle changes
   private _combinedArtifactsMap: Map<string, LazyArtifactInfo[]> | null = null;
 
   // Agent run mapping: ConversationDetailID -> MJAIAgentRunEntityExtended
   // Loaded once per conversation and kept in sync as new runs are created
-  public agentRunsByDetailId = new Map<string, MJAIAgentRunEntityExtended>();
+  public AgentRunsByDetailId = new Map<string, MJAIAgentRunEntityExtended>();
+
+  /** @deprecated Use {@link AgentRunsByDetailId}. */
+  public get agentRunsByDetailId() {
+    return this.AgentRunsByDetailId;
+  }
+  /** @deprecated Use {@link AgentRunsByDetailId}. */
+  public set agentRunsByDetailId(value) {
+    this.AgentRunsByDetailId = value;
+  }
 
   /**
    * Ratings by conversation detail ID (parsed from RatingsJSON)
    */
-  public ratingsByDetailId = new Map<string, RatingJSON[]>();
+  public RatingsByDetailId = new Map<string, RatingJSON[]>();
+
+  /** @deprecated Use {@link RatingsByDetailId}. */
+  public get ratingsByDetailId() {
+    return this.RatingsByDetailId;
+  }
+  /** @deprecated Use {@link RatingsByDetailId}. */
+  public set ratingsByDetailId(value) {
+    this.RatingsByDetailId = value;
+  }
 
   /**
    * Attachments by conversation detail ID (loaded from ConversationDetailAttachments)
    */
-  public attachmentsByDetailId = new Map<string, MessageAttachment[]>();
+  public AttachmentsByDetailId = new Map<string, MessageAttachment[]>();
+
+  /** @deprecated Use {@link AttachmentsByDetailId}. */
+  public get attachmentsByDetailId() {
+    return this.AttachmentsByDetailId;
+  }
+  /** @deprecated Use {@link AttachmentsByDetailId}. */
+  public set attachmentsByDetailId(value) {
+    this.AttachmentsByDetailId = value;
+  }
 
   /**
    * In-progress message IDs for streaming reconnection
    * Passed to message-input component to reconnect PubSub updates
    */
-  public inProgressMessageIds: string[] = [];
+  public InProgressMessageIds: string[] = [];
+
+  /** @deprecated Use {@link InProgressMessageIds}. */
+  public get inProgressMessageIds(): string[] {
+    return this.InProgressMessageIds;
+  }
+  /** @deprecated Use {@link InProgressMessageIds}. */
+  public set inProgressMessageIds(value: string[]) {
+    this.InProgressMessageIds = value;
+  }
 
   // Subject for cleanup on destroy
   private destroy$ = new Subject<void>();
@@ -898,15 +1990,48 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private messageInputMetadataCache = new Map<string, {conversationId: string; conversationName: string | null}>();
 
   // Empty collections for hidden message-input components
-  public readonly emptyArtifactsMap = new Map<string, LazyArtifactInfo[]>();
-  public readonly emptyAgentRunsMap = new Map<string, MJAIAgentRunEntityExtended>();
-  public readonly emptyInProgressIds: string[] = [];
+  public readonly EmptyArtifactsMap = new Map<string, LazyArtifactInfo[]>();
+
+  /** @deprecated Use {@link EmptyArtifactsMap}. */
+  public get emptyArtifactsMap() {
+    return this.EmptyArtifactsMap;
+  }
+  public readonly EmptyAgentRunsMap = new Map<string, MJAIAgentRunEntityExtended>();
+
+  /** @deprecated Use {@link EmptyAgentRunsMap}. */
+  public get emptyAgentRunsMap() {
+    return this.EmptyAgentRunsMap;
+  }
+  public readonly EmptyInProgressIds: string[] = [];
+
+  /** @deprecated Use {@link EmptyInProgressIds}. */
+  public get emptyInProgressIds(): string[] {
+    return this.EmptyInProgressIds;
+  }
 
   // Loading state for peripheral data
-  public isLoadingPeripheralData: boolean = false;
+  public IsLoadingPeripheralData: boolean = false;
+
+  /** @deprecated Use {@link IsLoadingPeripheralData}. */
+  public get isLoadingPeripheralData(): boolean {
+    return this.IsLoadingPeripheralData;
+  }
+  /** @deprecated Use {@link IsLoadingPeripheralData}. */
+  public set isLoadingPeripheralData(value: boolean) {
+    this.IsLoadingPeripheralData = value;
+  }
 
   // Subject to trigger artifact viewer refresh when new version is created
-  public artifactViewerRefresh$ = new Subject<{artifactId: string; versionNumber: number}>();
+  public ArtifactViewerRefresh$ = new Subject<{artifactId: string; versionNumber: number}>();
+
+  /** @deprecated Use {@link ArtifactViewerRefresh$}. */
+  public get artifactViewerRefresh$() {
+    return this.ArtifactViewerRefresh$;
+  }
+  /** @deprecated Use {@link ArtifactViewerRefresh$}. */
+  public set artifactViewerRefresh$(value) {
+    this.ArtifactViewerRefresh$ = value;
+  }
 
   // Track initialization state to prevent loading messages before agents are ready
   private isInitialized: boolean = false;
@@ -930,20 +2055,43 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
   // Pinned messages panel state
-  public showPinsPanel: boolean = false;
+  public ShowPinsPanel: boolean = false;
+
+  /** @deprecated Use {@link ShowPinsPanel}. */
+  public get showPinsPanel(): boolean {
+    return this.ShowPinsPanel;
+  }
+  /** @deprecated Use {@link ShowPinsPanel}. */
+  public set showPinsPanel(value: boolean) {
+    this.ShowPinsPanel = value;
+  }
 
   /** True once the pin ENTITIES are loaded. The COUNT is known from conversation open. */
   private pinsHydrated = false;
 
   /** Spinner state for the panel's first open — the rows now arrive after the panel does. */
-  public isLoadingPins = false;
+  public IsLoadingPins = false;
+
+  /** @deprecated Use {@link IsLoadingPins}. */
+  public get isLoadingPins() {
+    return this.IsLoadingPins;
+  }
+  /** @deprecated Use {@link IsLoadingPins}. */
+  public set isLoadingPins(value) {
+    this.IsLoadingPins = value;
+  }
 
   /**
    * TRUE pin count for the chip. Deliberately NOT `pinnedMessages.length`, which is 0 until
    * the panel has been opened and would hide the chip on a conversation full of pins.
    */
-  get pinnedMessageCount(): number {
+  get PinnedMessageCount(): number {
     return this.windowStore.PinnedTotalCount;
+  }
+
+  /** @deprecated Use {@link PinnedMessageCount}. */
+  get pinnedMessageCount(): number {
+    return this.PinnedMessageCount;
   }
 
   /**
@@ -953,14 +2101,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * conversation open costs every user for a panel most never open.
    */
   public async TogglePinsPanel(): Promise<void> {
-    this.showPinsPanel = !this.showPinsPanel;
-    if (this.showPinsPanel && !this.pinsHydrated && this.conversationId) {
-      this.isLoadingPins = true;
+    this.ShowPinsPanel = !this.ShowPinsPanel;
+    if (this.ShowPinsPanel && !this.pinsHydrated && this.ConversationId) {
+      this.IsLoadingPins = true;
       this.cdr.detectChanges();
       try {
-        await this.hydratePinnedMessages(this.conversationId);
+        await this.hydratePinnedMessages(this.ConversationId);
       } finally {
-        this.isLoadingPins = false;
+        this.IsLoadingPins = false;
       }
     }
     this.cdr.detectChanges();
@@ -979,18 +2127,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * cycle, during streaming per token, is exactly the length-proportional work this feature
    * exists to remove.
    */
-  get pinnedMessages(): readonly MJConversationDetailEntity[] {
+  get PinnedMessages(): readonly MJConversationDetailEntity[] {
     return this.windowStore.PinnedDetails;
   }
 
+  /** @deprecated Use {@link PinnedMessages}. */
+  get pinnedMessages(): readonly MJConversationDetailEntity[] {
+    return this.PinnedMessages;
+  }
+
   /** True when older transcript pages remain above the loaded window (drives the sentinel). */
-  get hasMoreMessagesAbove(): boolean {
+  get HasMoreMessagesAbove(): boolean {
     return this.windowStore.HasMoreAbove;
   }
 
+  /** @deprecated Use {@link HasMoreMessagesAbove}. */
+  get hasMoreMessagesAbove(): boolean {
+    return this.HasMoreMessagesAbove;
+  }
+
   /** True while an older transcript page is being fetched. */
-  get isLoadingOlderMessages(): boolean {
+  get IsLoadingOlderMessages(): boolean {
     return this.windowStore.IsLoadingOlder;
+  }
+
+  /** @deprecated Use {@link IsLoadingOlderMessages}. */
+  get isLoadingOlderMessages(): boolean {
+    return this.IsLoadingOlderMessages;
   }
 
   /**
@@ -1007,8 +2170,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `min-height: 0` that make it a real scroller. Passing it down beats having the list
    * discover it, which depends on layout having settled.
    */
-  public get messageScrollRoot(): HTMLElement | null {
+  public get MessageScrollRoot(): HTMLElement | null {
     return this.scrollContainer?.nativeElement ?? null;
+  }
+
+  /** @deprecated Use {@link MessageScrollRoot}. */
+  public get messageScrollRoot(): HTMLElement | null {
+    return this.MessageScrollRoot;
   }
 
   /**
@@ -1019,13 +2187,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * array so the list's ngOnChanges runs; the list then detects the prepend and holds the
    * user's scroll position rather than jumping.
    */
-  public async onOlderMessagesRequested(): Promise<void> {
-    const conversationId = this.conversationId;
-    await this.windowStore.LoadOlder(this.currentUser);
+  public async OnOlderMessagesRequested(): Promise<void> {
+    const conversationId = this.ConversationId;
+    await this.windowStore.LoadOlder(this.CurrentUser);
     if (!this.isActiveConversation(conversationId)) {
       return;
     }
     await this.refreshAfterPaging(conversationId!);
+  }
+
+  /** @deprecated Use {@link OnOlderMessagesRequested}. */
+  public async onOlderMessagesRequested(): Promise<void> {
+    return this.OnOlderMessagesRequested();
   }
 
   /**
@@ -1067,8 +2240,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * pages until the target is in the loaded set, history runs out, or the page cap is hit —
    * and always reports the outcome, because the plan forbids a silent no-op here.
    */
-  public async onDateJumpRequested(period: DateJumpPeriod): Promise<void> {
-    const conversationId = this.conversationId;
+  public async OnDateJumpRequested(period: DateJumpPeriod): Promise<void> {
+    const conversationId = this.ConversationId;
     let pagesLoaded = 0;
 
     // The loop's ONLY job is to load enough history for the jump to be answerable. It does
@@ -1082,7 +2255,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Store-level paging: the per-page peripheral rebuild is deferred to a single
       // refresh below, so a deep jump costs one rebuild instead of one per page.
-      await this.windowStore.LoadOlder(this.currentUser);
+      await this.windowStore.LoadOlder(this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;                             // user switched away mid-jump
       }
@@ -1104,26 +2277,139 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link OnDateJumpRequested}. */
+  public async onDateJumpRequested(period: DateJumpPeriod): Promise<void> {
+    return this.OnDateJumpRequested(period);
+  }
+
   // Test feedback dialog state
-  public showTestFeedbackDialog: boolean = false;
-  public testFeedbackDialogData: TestFeedbackDialogData | null = null;
+  public ShowTestFeedbackDialog: boolean = false;
+
+  /** @deprecated Use {@link ShowTestFeedbackDialog}. */
+  public get showTestFeedbackDialog(): boolean {
+    return this.ShowTestFeedbackDialog;
+  }
+  /** @deprecated Use {@link ShowTestFeedbackDialog}. */
+  public set showTestFeedbackDialog(value: boolean) {
+    this.ShowTestFeedbackDialog = value;
+  }
+  public TestFeedbackDialogData: TestFeedbackDialogData | null = null;
+
+  /** @deprecated Use {@link TestFeedbackDialogData}. */
+  public get testFeedbackDialogData(): TestFeedbackDialogData | null {
+    return this.TestFeedbackDialogData;
+  }
+  /** @deprecated Use {@link TestFeedbackDialogData}. */
+  public set testFeedbackDialogData(value: TestFeedbackDialogData | null) {
+    this.TestFeedbackDialogData = value;
+  }
 
   // Image viewer state
-  public showImageViewer: boolean = false;
-  public selectedImageUrl: string = '';
-  public selectedImageAlt: string = '';
-  public selectedImageFileName: string = '';
+  public ShowImageViewer: boolean = false;
+
+  /** @deprecated Use {@link ShowImageViewer}. */
+  public get showImageViewer(): boolean {
+    return this.ShowImageViewer;
+  }
+  /** @deprecated Use {@link ShowImageViewer}. */
+  public set showImageViewer(value: boolean) {
+    this.ShowImageViewer = value;
+  }
+  public SelectedImageUrl: string = '';
+
+  /** @deprecated Use {@link SelectedImageUrl}. */
+  public get selectedImageUrl(): string {
+    return this.SelectedImageUrl;
+  }
+  /** @deprecated Use {@link SelectedImageUrl}. */
+  public set selectedImageUrl(value: string) {
+    this.SelectedImageUrl = value;
+  }
+  public SelectedImageAlt: string = '';
+
+  /** @deprecated Use {@link SelectedImageAlt}. */
+  public get selectedImageAlt(): string {
+    return this.SelectedImageAlt;
+  }
+  /** @deprecated Use {@link SelectedImageAlt}. */
+  public set selectedImageAlt(value: string) {
+    this.SelectedImageAlt = value;
+  }
+  public SelectedImageFileName: string = '';
+
+  /** @deprecated Use {@link SelectedImageFileName}. */
+  public get selectedImageFileName(): string {
+    return this.SelectedImageFileName;
+  }
+  /** @deprecated Use {@link SelectedImageFileName}. */
+  public set selectedImageFileName(value: string) {
+    this.SelectedImageFileName = value;
+  }
 
   // Upload indicator state (shown centered in conversation area)
-  public isUploadingAttachments: boolean = false;
-  public uploadingMessage: string = '';
+  public IsUploadingAttachments: boolean = false;
+
+  /** @deprecated Use {@link IsUploadingAttachments}. */
+  public get isUploadingAttachments(): boolean {
+    return this.IsUploadingAttachments;
+  }
+  /** @deprecated Use {@link IsUploadingAttachments}. */
+  public set isUploadingAttachments(value: boolean) {
+    this.IsUploadingAttachments = value;
+  }
+  public UploadingMessage: string = '';
+
+  /** @deprecated Use {@link UploadingMessage}. */
+  public get uploadingMessage(): string {
+    return this.UploadingMessage;
+  }
+  /** @deprecated Use {@link UploadingMessage}. */
+  public set uploadingMessage(value: string) {
+    this.UploadingMessage = value;
+  }
 
   // Attachment support based on agent modalities
   // Computed from conversation manager (Sage) and any previous agent in conversation
-  public enableAttachments: boolean = false;
-  public maxAttachments: number = 10;
-  public maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // 20MB default
-  public acceptedFileTypes: string = 'image/*';
+  public EnableAttachments: boolean = false;
+
+  /** @deprecated Use {@link EnableAttachments}. */
+  public get enableAttachments(): boolean {
+    return this.EnableAttachments;
+  }
+  /** @deprecated Use {@link EnableAttachments}. */
+  public set enableAttachments(value: boolean) {
+    this.EnableAttachments = value;
+  }
+  public MaxAttachments: number = 10;
+
+  /** @deprecated Use {@link MaxAttachments}. */
+  public get maxAttachments(): number {
+    return this.MaxAttachments;
+  }
+  /** @deprecated Use {@link MaxAttachments}. */
+  public set maxAttachments(value: number) {
+    this.MaxAttachments = value;
+  }
+  public MaxAttachmentSizeBytes: number = 20 * 1024 * 1024;
+
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  public get maxAttachmentSizeBytes(): number {
+    return this.MaxAttachmentSizeBytes;
+  }
+  /** @deprecated Use {@link MaxAttachmentSizeBytes}. */
+  public set maxAttachmentSizeBytes(value: number) {
+    this.MaxAttachmentSizeBytes = value;
+  } // 20MB default
+  public AcceptedFileTypes: string = 'image/*';
+
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  public get acceptedFileTypes(): string {
+    return this.AcceptedFileTypes;
+  }
+  /** @deprecated Use {@link AcceptedFileTypes}. */
+  public set acceptedFileTypes(value: string) {
+    this.AcceptedFileTypes = value;
+  }
   private conversationManagerAgent: MJAIAgentEntityExtended | null = null;
 
   private engine = ConversationEngine.Instance;
@@ -1156,14 +2442,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `MJ: AI Agent Sessions` lookup per conversation, only when stamped rows exist.
    * Tolerant: a failed lookup leaves the map empty and cards render their generic label.
    */
-  public realtimeSessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+  public RealtimeSessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+
+  /** @deprecated Use {@link RealtimeSessionMetaMap}. */
+  public get realtimeSessionMetaMap(): Map<string, RealtimeSessionTimelineMeta> {
+    return this.RealtimeSessionMetaMap;
+  }
+  /** @deprecated Use {@link RealtimeSessionMetaMap}. */
+  public set realtimeSessionMetaMap(value: Map<string, RealtimeSessionTimelineMeta>) {
+    this.RealtimeSessionMetaMap = value;
+  }
 
   /** Agent name the overlay banner shows: the reviewed session's agent while reviewing, else the live call's. */
-  public get realtimeOverlayAgentName(): string {
+  public get RealtimeOverlayAgentName(): string {
     if (this.RealtimeReview && !this.RealtimeSession.IsActive) {
       return this.RealtimeReview.AgentName;
     }
     return this.RealtimeSession.CurrentAgentName;
+  }
+
+  /** @deprecated Use {@link RealtimeOverlayAgentName}. */
+  public get realtimeOverlayAgentName(): string {
+    return this.RealtimeOverlayAgentName;
   }
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
@@ -1280,7 +2580,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             ConversationId: created,
             MessageText: seed,
             Provider: this.ProviderToUse as GraphQLDataProvider,
-            CurrentUser: this.currentUser
+            CurrentUser: this.CurrentUser
           });
         }
       });
@@ -1304,7 +2604,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           toolEvent.Request.ToolName,
           toolEvent.Request.Params
         );
-        this.beforeToolInvoked.emit(args);
+        this.BeforeToolInvoked.emit(args);
         if (args.Cancel) {
           toolEvent.Cancel = true;
           toolEvent.CancelReason = args.CancelReason;
@@ -1313,7 +2613,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.agentClientService.ToolExecuted$
       .pipe(takeUntil(this.destroy$))
       .subscribe((toolEvent) => {
-        this.afterToolInvoked.emit(
+        this.AfterToolInvoked.emit(
           new AfterToolInvokedEventArgs(
             toolEvent.Request.ToolName,
             toolEvent.Request.Params,
@@ -1333,12 +2633,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .subscribe((event) => {
         switch (event.kind) {
           case 'session-started':
-            this.sessionStarted.emit(
+            this.SessionStarted.emit(
               new SessionStartedEventArgs(event.sessionId, event.channelKinds)
             );
             return;
           case 'session-channel':
-            this.sessionChannelStateChanged.emit(
+            this.SessionChannelStateChanged.emit(
               new SessionChannelStateChangedEventArgs(
                 event.sessionId,
                 event.channelKind,
@@ -1347,7 +2647,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             );
             return;
           case 'session-ended':
-            this.sessionEnded.emit(
+            this.SessionEnded.emit(
               new SessionEndedEventArgs(event.sessionId, event.reason)
             );
             return;
@@ -1361,13 +2661,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Fallback: If workspace didn't initialize (shouldn't happen), initialize now
     if (!this.mentionAutocompleteService.IsInitialized) {
       console.warn('⚠️ Mention autocomplete not initialized by workspace, initializing now...');
-      await this.mentionAutocompleteService.initialize(this.currentUser);
+      await this.mentionAutocompleteService.initialize(this.CurrentUser);
     }
 
     // Ensure ConversationEngine and ArtifactMetadataEngine are loaded.
     // Config(false) is a no-op if already loaded by another component.
     // ConversationEngine.Config() also initializes ArtifactMetadataEngine internally.
-    await ConversationEngine.Instance.Config(false, this.currentUser);
+    await ConversationEngine.Instance.Config(false, this.CurrentUser);
 
     // Initialize attachment support based on agent modalities
     await this.initializeAttachmentSupport();
@@ -1379,8 +2679,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.isInitialized = true;
 
     // Initial load if there's already an active conversation
-    if (this.conversationId) {
-      await this.onConversationChanged(this.conversationId);
+    if (this.ConversationId) {
+      await this.onConversationChanged(this.ConversationId);
     }
 
     // Setup resize listeners
@@ -1410,7 +2710,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (event) => {
         // Find the message in our current conversation
-        const conversationId = this.conversationId;
+        const conversationId = this.ConversationId;
         const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message && conversationId) {
           await this.handleMessageCompletion(message, event.agentRunId, conversationId);
@@ -1425,7 +2725,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.agentStateService.activeAgents$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (agents) => {
-        const conversationId = this.conversationId;
+        const conversationId = this.ConversationId;
         if (!conversationId) return;
         const conversationAgents = agents.filter(a => UUIDsEqual(a.run.ConversationID, conversationId));
         const hasActiveAgents = conversationAgents.length > 0;
@@ -1434,7 +2734,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           // updated agent runs, and new artifacts. Deliberately not the engine's full-history
           // RefreshConversationDetails: that would re-query the whole conversation and, via
           // GetCachedDetails, replace the loaded window with every row.
-          await this.windowStore.RefreshLatest(this.currentUser);
+          await this.windowStore.RefreshLatest(this.CurrentUser);
           if (!this.isActiveConversation(conversationId)) {
             return;
           }
@@ -1480,19 +2780,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (this.conversationManagerAgent?.ID) {
         // Get attachment limits from agent metadata (uses Agent → Model → System → Default cascade)
         const limits = AIEngineBase.Instance.GetAgentAttachmentLimits(this.conversationManagerAgent.ID);
-        this.enableAttachments = limits.enabled;
-        this.maxAttachments = limits.maxAttachments;
-        this.maxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
-        this.acceptedFileTypes = limits.acceptedFileTypes;
-        LogStatusEx({message: `Attachment support initialized: ${this.enableAttachments} (max ${this.maxAttachments}, ${(this.maxAttachmentSizeBytes / 1024 / 1024).toFixed(0)}MB)`, verboseOnly: true});
+        this.EnableAttachments = limits.enabled;
+        this.MaxAttachments = limits.maxAttachments;
+        this.MaxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
+        this.AcceptedFileTypes = limits.acceptedFileTypes;
+        LogStatusEx({message: `Attachment support initialized: ${this.EnableAttachments} (max ${this.MaxAttachments}, ${(this.MaxAttachmentSizeBytes / 1024 / 1024).toFixed(0)}MB)`, verboseOnly: true});
       } else {
         // Default to false if we can't determine
-        this.enableAttachments = false;
+        this.EnableAttachments = false;
         LogStatusEx({message: 'Attachment support disabled: conversation manager agent not available', verboseOnly: true});
       }
     } catch (error) {
       console.warn('Failed to initialize attachment support:', error);
-      this.enableAttachments = false;
+      this.EnableAttachments = false;
     }
   }
 
@@ -1526,12 +2826,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Get limits from the determined agent
     if (agentIdForLimits) {
       const limits = AIEngineBase.Instance.GetAgentAttachmentLimits(agentIdForLimits);
-      this.enableAttachments = limits.enabled;
-      this.maxAttachments = limits.maxAttachments;
-      this.maxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
-      this.acceptedFileTypes = limits.acceptedFileTypes;
+      this.EnableAttachments = limits.enabled;
+      this.MaxAttachments = limits.maxAttachments;
+      this.MaxAttachmentSizeBytes = limits.maxAttachmentSizeBytes;
+      this.AcceptedFileTypes = limits.acceptedFileTypes;
     } else {
-      this.enableAttachments = false;
+      this.EnableAttachments = false;
     }
   }
 
@@ -1542,9 +2842,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (Date.now() < this.bottomFollowSuppressedUntil) {
           return;
         }
-        this.scrollToBottomNow();
+        this.ScrollToBottomNow();
         // Check scroll state after scrolling to bottom
-        this.checkScroll();
+        this.CheckScroll();
       }, 100);
     }
     if (this.pendingTurnStartMessageId) {
@@ -1580,7 +2880,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private isActiveConversation(conversationId: string | null | undefined): boolean {
-    return UUIDsEqual(conversationId, this.conversationId);
+    return UUIDsEqual(conversationId, this.ConversationId);
   }
 
   private isActiveConversationLoad(conversationId: string | null | undefined, loadToken: number): boolean {
@@ -1595,55 +2895,55 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private resetConversationScopedViewState(): void {
     this.clearTurnTracking();
-    this.showArtifactPanel = false;
-    this.selectedArtifactId = null;
-    this.selectedVersionNumber = undefined;
-    this.canShareSelectedArtifact = false;
-    this.canEditSelectedArtifact = false;
-    this.showArtifactsModal = false;
-    this.showSystemArtifacts = false;
-    this.expandedArtifactId = null;
+    this.ShowArtifactPanel = false;
+    this.SelectedArtifactId = null;
+    this.SelectedVersionNumber = undefined;
+    this.CanShareSelectedArtifact = false;
+    this.CanEditSelectedArtifact = false;
+    this.ShowArtifactsModal = false;
+    this.ShowSystemArtifacts = false;
+    this.ExpandedArtifactId = null;
     this._combinedArtifactsMap = null;
 
-    this.isArtifactShareModalOpen = false;
-    this.artifactToShare = null;
-    this.showCollectionPicker = false;
-    this.collectionPickerArtifactId = null;
-    this.collectionPickerExcludedIds = [];
-    this.collectionPickerVersionId = null;
-    this.collectionPickerArtifactName = '';
-    this.collectionPickerVersionNumber = null;
+    this.IsArtifactShareModalOpen = false;
+    this.ArtifactToShare = null;
+    this.ShowCollectionPicker = false;
+    this.CollectionPickerArtifactId = null;
+    this.CollectionPickerExcludedIds = [];
+    this.CollectionPickerVersionId = null;
+    this.CollectionPickerArtifactName = '';
+    this.CollectionPickerVersionNumber = null;
 
-    this.showImageViewer = false;
-    this.selectedImageUrl = '';
-    this.selectedImageAlt = '';
-    this.selectedImageFileName = '';
-    this.showTestFeedbackDialog = false;
-    this.testFeedbackDialogData = null;
-    this.showPinsPanel = false;
+    this.ShowImageViewer = false;
+    this.SelectedImageUrl = '';
+    this.SelectedImageAlt = '';
+    this.SelectedImageFileName = '';
+    this.ShowTestFeedbackDialog = false;
+    this.TestFeedbackDialogData = null;
+    this.ShowPinsPanel = false;
     this.pinsHydrated = false;
-    this.showAgentPanel = false;
-    this.showExportModal = false;
-    this.showShareModal = false;
-    this.shareContext = null;
-    this.showMembersModal = false;
-    this.showProjectSelector = false;
-    this.isUploadingAttachments = false;
-    this.uploadingMessage = '';
+    this.ShowAgentPanel = false;
+    this.ShowExportModal = false;
+    this.ShowShareModal = false;
+    this.ShareContext = null;
+    this.ShowMembersModal = false;
+    this.ShowProjectSelector = false;
+    this.IsUploadingAttachments = false;
+    this.UploadingMessage = '';
     this.intentCheckMessage = null;
 
     // Reset width along with the flag — otherwise a pane maximized in the
     // previous conversation leaves artifactPaneWidth at 100, and the next
     // artifact opens overflowing the viewport (chat area still visible).
     // Guarded so a non-maximized user-dragged width survives the switch.
-    if (this.isArtifactPaneMaximized) {
+    if (this.IsArtifactPaneMaximized) {
       this.resetArtifactPaneSizing();
     }
   }
 
   private resetArtifactPaneSizing(): void {
-    this.isArtifactPaneMaximized = false;
-    this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
+    this.IsArtifactPaneMaximized = false;
+    this.ArtifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
@@ -1666,7 +2966,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (!this.messageInputMetadataCache.has(conversationId)) {
         this.messageInputMetadataCache.set(conversationId, {
           conversationId: conversationId,
-          conversationName: this.conversation?.Name || null
+          conversationName: this.Conversation?.Name || null
         });
       }
 
@@ -1674,7 +2974,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // This prevents the "no messages" flash when switching between conversations.
       const hasCachedMessages = this.engine.HasCachedDetails(conversationId);
       if (!hasCachedMessages) {
-        this.isLoadingConversation = true;
+        this.IsLoadingConversation = true;
         this.messages = [];
         this.cdr.detectChanges();
       }
@@ -1689,7 +2989,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           return;
         }
         // TODO: Replace polling with PubSub - see plans/repair-conversations-ui-performance.md
-        this.agentStateService.startPolling(this.currentUser, conversationId);
+        this.agentStateService.startPolling(this.CurrentUser, conversationId);
       } catch (error) {
         if (!this.isActiveConversationLoad(conversationId, loadToken)) {
           return;
@@ -1701,7 +3001,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           return;
         }
         this.currentlyLoadingConversationId = null;
-        this.isLoadingConversation = false;
+        this.IsLoadingConversation = false;
 
         // Create new array reference to trigger Angular change detection
         this.messages = [...this.messages];
@@ -1718,7 +3018,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } else {
       // No active conversation - show empty state
       this.messages = [];
-      this.isLoadingConversation = false;
+      this.IsLoadingConversation = false;
       this.currentlyLoadingConversationId = null;
       this.lastLoadedConversationId = null;
       this.agentStateService.stopPolling();
@@ -1730,8 +3030,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * This allows multiple message-input components to exist simultaneously (hidden)
    * preserving their state when switching conversations
    */
-  public getCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
+  public GetCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
     return Array.from(this.messageInputMetadataCache.values());
+  }
+
+  /** @deprecated Use {@link GetCachedInputs}. */
+  public getCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
+    return this.GetCachedInputs();
   }
 
   /**
@@ -1752,11 +3057,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * we need to find the one that matches the current conversationId.
    */
   private getActiveMessageInputComponent(): MessageInputComponent | undefined {
-    if (!this.messageInputComponents || !this.conversationId) {
+    if (!this.messageInputComponents || !this.ConversationId) {
       return undefined;
     }
     return this.messageInputComponents.find(
-      component => component.conversationId === this.conversationId
+      component => component.conversationId === this.ConversationId
     );
   }
 
@@ -1786,7 +3091,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Concurrent with the window — the two share only the conversation id, and running the
       // pin read after the window made it delay first paint for no reason.
       await Promise.all([
-        this.windowStore.LoadLatest(conversationId, this.currentUser),
+        this.windowStore.LoadLatest(conversationId, this.CurrentUser),
         this.loadPinnedMessageCount(conversationId, loadToken)
       ]);
       if (!this.isActiveConversationLoad(conversationId, loadToken)) {
@@ -1798,9 +3103,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.messages = snapshot.Details;
 
       // Copy user avatars from the window result
-      this.userAvatarMap.clear();
+      this.UserAvatarMap.clear();
       for (const [userId, avatar] of snapshot.UserAvatars) {
-        this.userAvatarMap.set(userId, {
+        this.UserAvatarMap.set(userId, {
           imageUrl: avatar.ImageURL,
           iconClass: avatar.IconClass
         });
@@ -1809,12 +3114,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.updateAttachmentSupport();
 
       // Detect in-progress messages for streaming reconnection
-      this.inProgressMessageIds = [...this.messages
+      this.InProgressMessageIds = [...this.messages
         .filter(m => m.Status === 'In-Progress')
         .map(m => m.ID)];
 
-      if (this.inProgressMessageIds.length > 0) {
-        LogStatusEx({message: `🔌 Detected ${this.inProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
+      if (this.InProgressMessageIds.length > 0) {
+        LogStatusEx({message: `🔌 Detected ${this.InProgressMessageIds.length} in-progress messages for reconnection`, verboseOnly: true});
       }
 
       // Check for missed completions (user navigated away, agent completed, user returned)
@@ -1872,7 +3177,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       EntityName: 'MJ: Conversation Details',
       ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
       ResultType: 'count_only'
-    }, this.currentUser);
+    }, this.CurrentUser);
 
     if (!this.isActiveConversationLoad(conversationId, loadToken)) {
       return;
@@ -1897,7 +3202,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       ExtraFilter: `ConversationID='${conversationId}' AND IsPinned=1`,
       OrderBy: 'Sequence DESC',   // newest pin first — the panel's order
       ResultType: 'entity_object'
-    }, this.currentUser);
+    }, this.CurrentUser);
 
     if (!this.isActiveConversation(conversationId)) {
       return;
@@ -1921,7 +3226,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const systemArtifactList: LazyArtifactInfo[] = [];
 
     for (const artifactData of artifacts) {
-      const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
+      const lazyInfo = new LazyArtifactInfo(artifactData, this.CurrentUser);
       if (artifactData.Visibility === 'System Only') {
         systemArtifactList.push(lazyInfo);
       } else {
@@ -1930,10 +3235,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     if (artifactList.length > 0) {
-      this.artifactsByDetailId.set(detailId, artifactList);
+      this.ArtifactsByDetailId.set(detailId, artifactList);
     }
     if (systemArtifactList.length > 0) {
-      this.systemArtifactsByDetailId.set(detailId, systemArtifactList);
+      this.SystemArtifactsByDetailId.set(detailId, systemArtifactList);
     }
   }
 
@@ -1965,7 +3270,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     for (const detailId of newIds) {
       const agentRun = snapshot.AgentRunsByDetailId.get(detailId);
       if (agentRun) {
-        this.agentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
+        this.AgentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
       }
       const artifacts = snapshot.ArtifactsByDetailId.get(detailId);
       if (artifacts) {
@@ -1973,17 +3278,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       const ratings = snapshot.RatingsByDetailId.get(detailId);
       if (ratings) {
-        this.ratingsByDetailId.set(detailId, ratings);
+        this.RatingsByDetailId.set(detailId, ratings);
       }
     }
 
     if (newIds.length > 0) {
-      const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(newIds, this.currentUser);
+      const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(newIds, this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
       for (const [detailId, attachments] of attachmentsMap) {
-        this.attachmentsByDetailId.set(detailId, attachments);
+        this.AttachmentsByDetailId.set(detailId, attachments);
       }
     }
 
@@ -1994,7 +3299,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     if (sessionMeta.size > 0) {
-      this.realtimeSessionMetaMap = new Map([...this.realtimeSessionMetaMap, ...sessionMeta]);
+      this.RealtimeSessionMetaMap = new Map([...this.RealtimeSessionMetaMap, ...sessionMeta]);
     }
 
     // A page of OLDER artifacts just entered the map. Any artifact-panel baseline taken before
@@ -2003,14 +3308,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.artifactMapGeneration++;
 
     // New references so the message list's ngOnChanges sees the extended maps.
-    this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
-    this.artifactsByDetailId = new Map(this.artifactsByDetailId);
-    this.ratingsByDetailId = new Map(this.ratingsByDetailId);
-    this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
-    this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+    this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
+    this.ArtifactsByDetailId = new Map(this.ArtifactsByDetailId);
+    this.RatingsByDetailId = new Map(this.RatingsByDetailId);
+    this.SystemArtifactsByDetailId = new Map(this.SystemArtifactsByDetailId);
+    this.AttachmentsByDetailId = new Map(this.AttachmentsByDetailId);
 
     this._combinedArtifactsMap = null;
-    this.artifactCount = this.calculateUniqueArtifactCount();
+    this.ArtifactCount = this.calculateUniqueArtifactCount();
     this.updateArtifactCountDisplay();
   }
 
@@ -2044,14 +3349,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const cacheEntry = snapshot;
 
       // Clear and rebuild component maps from the window's peripherals
-      this.agentRunsByDetailId.clear();
-      this.artifactsByDetailId.clear();
-      this.systemArtifactsByDetailId.clear();
-      this.ratingsByDetailId.clear();
+      this.AgentRunsByDetailId.clear();
+      this.ArtifactsByDetailId.clear();
+      this.SystemArtifactsByDetailId.clear();
+      this.RatingsByDetailId.clear();
 
       // Copy agent runs from engine (cast to extended type for UI compatibility)
       for (const [detailId, agentRun] of cacheEntry.AgentRunsByDetailId) {
-        this.agentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
+        this.AgentRunsByDetailId.set(detailId, agentRun as MJAIAgentRunEntityExtended);
       }
 
       // Convert ArtifactJSON[] from engine cache into LazyArtifactInfo[] for UI
@@ -2061,19 +3366,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Copy ratings from engine cache
       for (const [detailId, ratings] of cacheEntry.RatingsByDetailId) {
-        this.ratingsByDetailId.set(detailId, ratings);
+        this.RatingsByDetailId.set(detailId, ratings);
       }
 
       // Load attachments (still separate — not part of GetConversationComplete query)
-      this.attachmentsByDetailId.clear();
+      this.AttachmentsByDetailId.clear();
       const messageIds = cacheEntry.Details.map(d => d.ID).filter((id): id is string => !!id);
       if (messageIds.length > 0) {
-        const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(messageIds, this.currentUser);
+        const attachmentsMap = await this.attachmentService.loadAttachmentsForMessages(messageIds, this.CurrentUser);
         if (!this.isCurrentConversationContext(conversationId, loadToken)) {
           return;
         }
         for (const [detailId, attachments] of attachmentsMap) {
-          this.attachmentsByDetailId.set(detailId, attachments);
+          this.AttachmentsByDetailId.set(detailId, attachments);
         }
       }
 
@@ -2085,17 +3390,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
 
       // Create new Map references to trigger Angular change detection
-      this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
-      this.artifactsByDetailId = new Map(this.artifactsByDetailId);
-      this.ratingsByDetailId = new Map(this.ratingsByDetailId);
-      this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
-      this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+      this.AgentRunsByDetailId = new Map(this.AgentRunsByDetailId);
+      this.ArtifactsByDetailId = new Map(this.ArtifactsByDetailId);
+      this.RatingsByDetailId = new Map(this.RatingsByDetailId);
+      this.SystemArtifactsByDetailId = new Map(this.SystemArtifactsByDetailId);
+      this.AttachmentsByDetailId = new Map(this.AttachmentsByDetailId);
 
       // Clear combined cache since we loaded new artifacts
       this._combinedArtifactsMap = null;
 
       // Update artifact count for header display
-      this.artifactCount = this.calculateUniqueArtifactCount();
+      this.ArtifactCount = this.calculateUniqueArtifactCount();
       this.updateArtifactCountDisplay();
 
       this.lastLoadedConversationId = conversationId;
@@ -2122,7 +3427,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;                 // stale load — the conversation changed underneath
     }
     // New reference so the message list's ngOnChanges sees the update
-    this.realtimeSessionMetaMap = metaMap;
+    this.RealtimeSessionMetaMap = metaMap;
   }
 
   /**
@@ -2140,48 +3445,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     conversationId?: string,
     loadToken?: number
   ): Promise<Map<string, RealtimeSessionTimelineMeta> | null> {
-    const sessionIds: string[] = [];
-    const seen = new Set<string>();
-    for (const detail of details) {
-      const raw = detail.AgentSessionID?.trim() ?? '';
-      if (raw.length === 0) {
-        continue;
-      }
-      const key = NormalizeUUID(raw);
-      if (!seen.has(key)) {
-        seen.add(key);
-        sessionIds.push(raw);
-      }
-    }
+    // Collecting the ids and mapping the rows both live in the runtime, so the React Native thread
+    // keys its map the same way (NormalizeUUID) and parses ClosedAt the same way. The query itself
+    // stays here — it is the one part that is genuinely host-specific.
+    const sessionIds = CollectRealtimeSessionIDs(details);
 
-    const metaMap = new Map<string, RealtimeSessionTimelineMeta>();
+    let metaMap = new Map<string, RealtimeSessionTimelineMeta>();
     if (sessionIds.length > 0) {
       try {
         const idList = sessionIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView<{
-          ID: string;
-          Agent: string | null;
-          Status: 'Active' | 'Closed' | 'Idle';
-          CloseReason: string | null;
-          ClosedAt: string | Date | null;
-        }>({
+        const result = await rv.RunView<RealtimeSessionMetaRow>({
           EntityName: 'MJ: AI Agent Sessions',
           ExtraFilter: `ID IN (${idList})`,
-          Fields: ['ID', 'Agent', 'Status', 'CloseReason', 'ClosedAt'],
+          Fields: [...REALTIME_SESSION_META_FIELDS],
           ResultType: 'simple'
         });
         if (result.Success) {
-          for (const row of result.Results ?? []) {
-            const closedAt = row.ClosedAt ? new Date(row.ClosedAt) : null;
-            metaMap.set(NormalizeUUID(row.ID), {
-              SessionID: row.ID,
-              AgentName: row.Agent ?? null,
-              Status: row.Status ?? null,
-              CloseReason: row.CloseReason ?? null,
-              ClosedAt: closedAt && !isNaN(closedAt.getTime()) ? closedAt : null
-            });
-          }
+          metaMap = MapRealtimeSessionMeta(result.Results);
         }
       } catch (error) {
         console.warn('Failed to load realtime session meta — session cards render without status chips:', error);
@@ -2203,23 +3484,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Database tasks are loaded separately by TasksDropdownComponent
   }
 
-  async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
+  async OnMessageSent(message: MJConversationDetailEntity): Promise<void> {
     // The draft became a message — remove it from the persisted map + snapshot.
-    const sentKey = (message.ConversationID ?? this.conversationId ?? '').trim().toLowerCase();
-    this.draftStore.ClearDraft(message.ConversationID ?? this.conversationId);
+    const sentKey = (message.ConversationID ?? this.ConversationId ?? '').trim().toLowerCase();
+    this.draftStore.ClearDraft(message.ConversationID ?? this.ConversationId);
     if (sentKey) {
       this.initialDraftSnapshots.delete(sentKey);
     }
-    if (this.pendingMessage && this.isPendingMessageTarget(message.ConversationID)) {
+    if (this.PendingMessage && this.isPendingMessageTarget(message.ConversationID)) {
       this._pendingMessageReservedTargetId = null;
-      this.pendingMessageConsumed.emit();
+      this.PendingMessageConsumed.emit();
     }
 
     // Guard: ignore events from hidden message-input instances belonging to other conversations.
     // Multiple inputs are kept alive in the DOM cache (one per visited conversation) and all
     // emit events to this single parent. Without this check, a background agent's response
     // for conversation A would pollute conversation B's message list.
-    if (!UUIDsEqual(message.ConversationID, this.conversationId)) {
+    if (!UUIDsEqual(message.ConversationID, this.ConversationId)) {
       // Invalidate that conversation's cache so fresh data loads when the user switches back
       if (message.ConversationID) {
         this.resetComponentState(message.ConversationID);
@@ -2252,8 +3533,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Invalidate cache when new message is added.
       // Without this, navigating away and back would load stale cached data
       // that doesn't include this new message.
-      if (this.conversationId) {
-        this.resetComponentState(this.conversationId);
+      if (this.ConversationId) {
+        this.resetComponentState(this.ConversationId);
       }
 
       // Load attachments for the new message (if any were saved with it)
@@ -2268,8 +3549,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // buildMessagesFromCache handles the nav-away/nav-back reconnection case;
       // this handles the active-session case where the agent just started.
       // Without this, inProgressMessageIds stays [] and the completion event is never received.
-      if (message.Status === 'In-Progress' && message.ID && !this.inProgressMessageIds.includes(message.ID)) {
-        this.inProgressMessageIds = [...this.inProgressMessageIds, message.ID];
+      if (message.Status === 'In-Progress' && message.ID && !this.InProgressMessageIds.includes(message.ID)) {
+        this.InProgressMessageIds = [...this.InProgressMessageIds, message.ID];
       }
     }
 
@@ -2283,16 +3564,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  onInitialMessageAutoSendStarted(event: {conversationId: string}): void {
-    if (this.pendingMessage && this.isPendingMessageTarget(event.conversationId)) {
+  /** @deprecated Use {@link OnMessageSent}. */
+  async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
+    return this.OnMessageSent(message);
+  }
+
+  OnInitialMessageAutoSendStarted(event: {conversationId: string}): void {
+    if (this.PendingMessage && this.isPendingMessageTarget(event.conversationId)) {
       this._pendingMessageReservedTargetId = event.conversationId;
     }
   }
 
-  onInitialMessageAutoSendFailed(event: {conversationId: string}): void {
+  /** @deprecated Use {@link OnInitialMessageAutoSendStarted}. */
+  onInitialMessageAutoSendStarted(event: {conversationId: string}): void {
+    return this.OnInitialMessageAutoSendStarted(event);
+  }
+
+  OnInitialMessageAutoSendFailed(event: {conversationId: string}): void {
     if (UUIDsEqual(event.conversationId, this._pendingMessageReservedTargetId)) {
       this._pendingMessageReservedTargetId = null;
     }
+  }
+
+  /** @deprecated Use {@link OnInitialMessageAutoSendFailed}. */
+  onInitialMessageAutoSendFailed(event: {conversationId: string}): void {
+    return this.OnInitialMessageAutoSendFailed(event);
   }
 
   private isPendingMessageTarget(conversationId: string | null | undefined): boolean {
@@ -2305,14 +3601,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private async loadAttachmentsForMessage(messageId: string, conversationId: string | null | undefined): Promise<void> {
     try {
-      const attachments = await this.attachmentService.loadAttachmentsForMessage(messageId, this.currentUser);
+      const attachments = await this.attachmentService.loadAttachmentsForMessage(messageId, this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
       if (attachments.length > 0) {
-        this.attachmentsByDetailId.set(messageId, attachments);
+        this.AttachmentsByDetailId.set(messageId, attachments);
         // Create new map reference to trigger Angular change detection
-        this.attachmentsByDetailId = new Map(this.attachmentsByDetailId);
+        this.AttachmentsByDetailId = new Map(this.AttachmentsByDetailId);
         LogStatusEx({message: `Loaded ${attachments.length} attachment(s) for message ${messageId}`, verboseOnly: true});
       }
     } catch (error) {
@@ -2325,10 +3621,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Called when new messages are created to ensure avatar data is available
    */
   private async ensureCurrentUserInAvatarMap(): Promise<void> {
-    const userId = this.currentUser.ID;
+    const userId = this.CurrentUser.ID;
 
     // If user already in map, skip
-    if (this.userAvatarMap.has(userId)) {
+    if (this.UserAvatarMap.has(userId)) {
       return;
     }
 
@@ -2337,7 +3633,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const userEntity = await md.GetEntityObject<any>('MJ: Users');
     await userEntity.Load(userId);
 
-    this.userAvatarMap.set(userId, {
+    this.UserAvatarMap.set(userId, {
       imageUrl: userEntity.UserImageURL || null,
       iconClass: userEntity.UserImageIconClass || null
     });
@@ -2349,7 +3645,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Handle agent run detected event from progress updates
    * This is called when the first progress update arrives with an agent run ID
    */
-  async onAgentRunDetected(event: {conversationId: string; conversationDetailId: string; agentRunId: string}): Promise<void> {
+  async OnAgentRunDetected(event: {conversationId: string; conversationDetailId: string; agentRunId: string}): Promise<void> {
     // Guard: ignore events from a background conversation's (hidden, still-streaming) input
     // after a conversation swap. Without this, a background run would be written into the
     // active conversation's agent-run map and engine cache. See onMessageSent() for context.
@@ -2359,12 +3655,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     await this.addAgentRunToMap(event.conversationId, event.conversationDetailId, event.agentRunId);
   }
 
+  /** @deprecated Use {@link OnAgentRunDetected}. */
+  async onAgentRunDetected(event: {conversationId: string; conversationDetailId: string; agentRunId: string}): Promise<void> {
+    return this.OnAgentRunDetected(event);
+  }
+
   /**
    * Handle message completion event from message-input
    * Refreshes the agent run data in-place to get final status and timestamps
    * Also reloads attachments created during agent execution (e.g., generated images)
    */
-  async onMessageComplete(event: {conversationId: string; conversationDetailId: string; agentId?: string}): Promise<void> {
+  async OnMessageComplete(event: {conversationId: string; conversationDetailId: string; agentId?: string}): Promise<void> {
     // Guard: ignore completion of a background conversation's run after a conversation swap.
     // Without this, a background run is refreshed into the active conversation's engine cache
     // (keyed by this.conversationId) and its attachments loaded into the active map.
@@ -2373,7 +3674,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Get existing agent run from map
-    const existingAgentRun = this.agentRunsByDetailId.get(event.conversationDetailId);
+    const existingAgentRun = this.AgentRunsByDetailId.get(event.conversationDetailId);
 
     if (existingAgentRun?.ID) {
       // Refresh the SAME object by calling Load() - preserves all references
@@ -2390,7 +3691,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         const newEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         newEntity.LoadFromData(existingAgentRun);
         // swap the map entry to have this object now
-        this.agentRunsByDetailId.set(event.conversationDetailId, newEntity);
+        this.AgentRunsByDetailId.set(event.conversationDetailId, newEntity);
 
         // Also update ConversationEngine's cache
         if (event.conversationId) {
@@ -2413,12 +3714,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnMessageComplete}. */
+  async onMessageComplete(event: {conversationId: string; conversationDetailId: string; agentId?: string}): Promise<void> {
+    return this.OnMessageComplete(event);
+  }
+
   /**
    * Handle agent run update event from progress updates
    * This is called on EVERY progress update with the full, live agent run object
    * Provides real-time updates of status, timestamps, tokens, cost during execution
    */
-  async onAgentRunUpdate(event: {conversationId: string; conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+  async OnAgentRunUpdate(event: {conversationId: string; conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
     // Guard: ignore live progress updates from a background conversation's run after a swap.
     // Without this, a background run is written into the active conversation's agent-run map
     // and into ConversationEngine's cache keyed by this.conversationId. See onMessageSent().
@@ -2428,7 +3734,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (event.agentRun) {
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
-      this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+      this.AgentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
 
       // Also update ConversationEngine's cache for other consumers
       if (event.conversationId) {
@@ -2446,13 +3752,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnAgentRunUpdate}. */
+  async onAgentRunUpdate(event: {conversationId: string; conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+    return this.OnAgentRunUpdate(event);
+  }
+
   /**
    * Public entry point to reload messages in the active conversation.
    * Called by the parent resource wrapper when the user clicks the Refresh button,
    * so that new agent responses are visible without a full page reload.
    */
-  public async reloadMessages(): Promise<void> {
+  public async ReloadMessages(): Promise<void> {
     await this.reloadMessagesForActiveConversation();
+  }
+
+  /** @deprecated Use {@link ReloadMessages}. */
+  public async reloadMessages(): Promise<void> {
+    return this.ReloadMessages();
   }
 
   /**
@@ -2461,7 +3777,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Called when agent completion is detected to discover newly delegated agent messages.
    */
   private async reloadMessagesForActiveConversation(): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     if (!conversationId) {
       return;
     }
@@ -2470,7 +3786,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Refresh the newest window page rather than reading the engine's full-history cache,
       // which the windowed path never populates — reading it here returned undefined and
       // silently skipped everything below, so delegated-agent messages never appeared.
-      await this.windowStore.RefreshLatest(this.currentUser);
+      await this.windowStore.RefreshLatest(this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
@@ -2510,7 +3826,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         if (message.AgentID && message.ID) {
           const agentRun = this.engine.GetAgentRunForDetail(conversationId, message.ID);
           if (agentRun) {
-            this.agentRunsByDetailId.set(message.ID, agentRun as MJAIAgentRunEntityExtended);
+            this.AgentRunsByDetailId.set(message.ID, agentRun as MJAIAgentRunEntityExtended);
             LogStatusEx({message: `✅ Found cached agent run for new delegated message ${message.ID}`, verboseOnly: true});
           }
         }
@@ -2550,7 +3866,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
 
       // Reload agent run to get final status, timestamps, and cost
-      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      const agentRun = this.AgentRunsByDetailId.get(message.ID);
       if (agentRun?.ID) {
         await agentRun.Load(agentRun.ID);
         if (!isCurrent()) {
@@ -2580,7 +3896,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Update inProgressMessageIds to include new delegated agents
       // This triggers callback registration via the setter in message-input
-      this.inProgressMessageIds = [...this.messages
+      this.InProgressMessageIds = [...this.messages
         .filter(m => m.Status === 'In-Progress')
         .map(m => m.ID)];
 
@@ -2611,10 +3927,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
-  async onAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
+  async OnAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
     // Guard: ignore agent responses from background inputs for other conversations.
     // See onMessageSent() for the full explanation.
-    if (!UUIDsEqual(event.message.ConversationID, this.conversationId)) {
+    if (!UUIDsEqual(event.message.ConversationID, this.ConversationId)) {
       if (event.message.ConversationID) {
         this.resetComponentState(event.message.ConversationID);
       }
@@ -2626,8 +3942,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.messages = [...this.messages, event.message];
 
     // Invalidate cache for this conversation since we have new messages
-    if (this.conversationId) {
-      this.resetComponentState(this.conversationId);
+    if (this.ConversationId) {
+      this.resetComponentState(this.ConversationId);
     }
 
     // Where the viewport goes when the agent responds
@@ -2661,6 +3977,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnAgentResponse}. */
+  async onAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
+    return this.OnAgentResponse(event);
+  }
+
   /**
    * Reset component-level UI state so peripheral data reprocesses on next load.
    * Does NOT invalidate ConversationEngine cache — the engine is the single source of truth
@@ -2681,14 +4002,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async addAgentRunToMap(conversationId: string | null | undefined, conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<MJAIAgentRunEntityExtended> {
     try {
       // Always refresh if forced, or if not in map yet
-      if (forceRefresh || !this.agentRunsByDetailId.has(conversationDetailId)) {
+      if (forceRefresh || !this.AgentRunsByDetailId.has(conversationDetailId)) {
         const md = this.ProviderToUse;
-        const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
+        const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.CurrentUser);
         if (await agentRun.Load(agentRunId)) {
           if (!this.isActiveConversation(conversationId)) {
             return agentRun;
           }
-          this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+          this.AgentRunsByDetailId.set(conversationDetailId, agentRun);
 
           // Also update ConversationEngine's cache for other consumers
           if (conversationId) {
@@ -2704,7 +4025,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         return agentRun;
       } 
       else {
-        return this.agentRunsByDetailId.get(conversationDetailId)!;
+        return this.AgentRunsByDetailId.get(conversationDetailId)!;
       }
     } catch (error) {
       console.error('Failed to load agent run for map:', error);
@@ -2725,7 +4046,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       const md = this.ProviderToUse;
 
       // Get the ConversationID for this detail
-      const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+      const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.CurrentUser);
       if (!(await detail.Load(conversationDetailId))) {
         console.error('Failed to load conversation detail');
         return;
@@ -2739,7 +4060,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       // Refresh the newest window page — picks up artifacts written by the just-finished run
       // without re-querying the whole conversation.
-      await this.windowStore.RefreshLatest(this.currentUser);
+      await this.windowStore.RefreshLatest(this.CurrentUser);
       if (!isCurrent()) {
         return;
       }
@@ -2752,16 +4073,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  OpenProjectSelector(): void {
+    this.ShowProjectSelector = true;
+  }
+
+  /** @deprecated Use {@link OpenProjectSelector}. */
   openProjectSelector(): void {
-    this.showProjectSelector = true;
+    return this.OpenProjectSelector();
   }
 
+  ToggleMembersModal(): void {
+    this.ShowMembersModal = !this.ShowMembersModal;
+  }
+
+  /** @deprecated Use {@link ToggleMembersModal}. */
   toggleMembersModal(): void {
-    this.showMembersModal = !this.showMembersModal;
+    return this.ToggleMembersModal();
   }
 
+  ViewArtifacts(): void {
+    this.ShowArtifactsModal = true;
+  }
+
+  /** @deprecated Use {@link ViewArtifacts}. */
   viewArtifacts(): void {
-    this.showArtifactsModal = true;
+    return this.ViewArtifacts();
   }
 
   /**
@@ -2772,12 +4108,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private updateArtifactCountDisplay(): void {
     const uniqueArtifactIds = new Set<string>();
-    for (const artifactList of this.effectiveArtifactsMap.values()) {
+    for (const artifactList of this.EffectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         uniqueArtifactIds.add(info.artifactId);
       }
     }
-    this.artifactCountDisplay = uniqueArtifactIds.size;
+    this.ArtifactCountDisplay = uniqueArtifactIds.size;
   }
 
   /**
@@ -2786,7 +4122,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private calculateUniqueArtifactCount(): number {
     const uniqueArtifactIds = new Set<string>();
-    for (const artifactList of this.artifactsByDetailId.values()) {
+    for (const artifactList of this.ArtifactsByDetailId.values()) {
       for (const info of artifactList) {
         uniqueArtifactIds.add(info.artifactId);
       }
@@ -2801,7 +4137,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private allArtifactRefs(): ArtifactVersionRef[] {
     const refs: ArtifactVersionRef[] = [];
-    for (const artifactList of this.artifactsByDetailId.values()) {
+    for (const artifactList of this.ArtifactsByDetailId.values()) {
       for (const info of artifactList) {
         refs.push({
           artifactId: info.artifactId,
@@ -2827,11 +4163,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private snapshotArtifactPanelBaseline(): ArtifactPanelBaseline {
     return {
-      versions: snapshotArtifactVersions(this.allArtifactRefs()),
-      conversationId: this.conversationId,
-      mapConversationId: this.lastLoadedConversationId,
-      mapGeneration: this.artifactMapGeneration,
-      selectionEpoch: this.artifactSelectionEpoch,
+      Versions: SnapshotArtifactVersions(this.allArtifactRefs()),
+      conversationId: this.ConversationId,
+      MapConversationId: this.lastLoadedConversationId,
+      MapGeneration: this.artifactMapGeneration,
+      SelectionEpoch: this.artifactSelectionEpoch,
     };
   }
 
@@ -2850,22 +4186,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // The baseline is comparable only if the map was holding THIS conversation's artifacts when it
     // was taken, and nothing merged an older page in since.
     const baselineComparable =
-      baseline.mapConversationId != null &&
-      UUIDsEqual(baseline.mapConversationId, baseline.conversationId) &&
-      this.artifactMapGeneration === baseline.mapGeneration;
+      baseline.MapConversationId != null &&
+      UUIDsEqual(baseline.MapConversationId, baseline.conversationId) &&
+      this.artifactMapGeneration === baseline.MapGeneration;
 
-    const action = decideArtifactPanelAction({
-      panelOpen: this.showArtifactPanel,
-      selectedArtifactId: this.selectedArtifactId,
-      before: baseline.versions,
+    const action = DecideArtifactPanelAction({
+      panelOpen: this.ShowArtifactPanel,
+      selectedArtifactId: this.SelectedArtifactId,
+      before: baseline.Versions,
       after: this.allArtifactRefs(),
       baselineComparable,
-      userChangedSelection: this.artifactSelectionEpoch !== baseline.selectionEpoch,
+      userChangedSelection: this.artifactSelectionEpoch !== baseline.SelectionEpoch,
     });
 
     if (!baselineComparable && action.kind === 'none') {
       LogStatusEx({
-        message: `🎨 Skipping artifact panel decision: the before/after snapshots describe different artifact populations (map held ${baseline.mapConversationId ?? 'nothing'}, conversation was ${baseline.conversationId})`,
+        message: `🎨 Skipping artifact panel decision: the before/after snapshots describe different artifact populations (map held ${baseline.MapConversationId ?? 'nothing'}, conversation was ${baseline.conversationId})`,
         verboseOnly: true
       });
     }
@@ -2879,13 +4215,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async applyArtifactPanelAction(action: ArtifactPanelAction, conversationId: string | null | undefined): Promise<void> {
     switch (action.kind) {
       case 'open':
-        this.selectedArtifactId = action.artifactId;
-        this.selectedVersionNumber = action.versionNumber;
-        this.showArtifactPanel = true;
+        this.SelectedArtifactId = action.artifactId;
+        this.SelectedVersionNumber = action.versionNumber;
+        this.ShowArtifactPanel = true;
         await this.loadArtifactPermissions(action.artifactId, conversationId, action.artifactId);
         // The permission load is async: the user may have switched conversations or picked a
         // different artifact while it was in flight, so only narrate what is still on screen.
-        if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, action.artifactId)) {
+        if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, action.artifactId)) {
           return;
         }
         LogStatusEx({
@@ -2900,7 +4236,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         // and that second load runs without a cancellation token, so it can also land after a newer
         // one. The subject path is the one to keep: it reloads the version list too, which a
         // brand-new version needs, and it carries a load token.
-        this.artifactViewerRefresh$.next({ artifactId: action.artifactId, versionNumber: action.versionNumber });
+        this.ArtifactViewerRefresh$.next({ artifactId: action.artifactId, versionNumber: action.versionNumber });
         return;
       case 'none':
         return;
@@ -2912,10 +4248,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Combines user-visible and system artifacts when toggle is on
    * Uses caching to prevent infinite change detection loops
    */
-  public get effectiveArtifactsMap(): Map<string, LazyArtifactInfo[]> {
-    if (!this.showSystemArtifacts) {
+  public get EffectiveArtifactsMap(): Map<string, LazyArtifactInfo[]> {
+    if (!this.ShowSystemArtifacts) {
       // Only user-visible artifacts - no need to cache
-      return this.artifactsByDetailId;
+      return this.ArtifactsByDetailId;
     }
 
     // Return cached combined map if available
@@ -2927,12 +4263,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const combined = new Map<string, LazyArtifactInfo[]>();
 
     // Add all user-visible artifacts
-    for (const [key, value] of this.artifactsByDetailId) {
+    for (const [key, value] of this.ArtifactsByDetailId) {
       combined.set(key, [...value]);
     }
 
     // Add system artifacts
-    for (const [key, value] of this.systemArtifactsByDetailId) {
+    for (const [key, value] of this.SystemArtifactsByDetailId) {
       if (combined.has(key)) {
         // Merge with existing artifacts for this detail
         combined.get(key)!.push(...value);
@@ -2946,23 +4282,38 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return combined;
   }
 
+  /** @deprecated Use {@link EffectiveArtifactsMap}. */
+  public get effectiveArtifactsMap(): Map<string, LazyArtifactInfo[]> {
+    return this.EffectiveArtifactsMap;
+  }
+
   /**
    * Toggles system artifacts visibility
    * Clears the cache so the map will be rebuilt on next access
    */
-  public toggleSystemArtifacts(): void {
-    this.showSystemArtifacts = !this.showSystemArtifacts;
+  public ToggleSystemArtifacts(): void {
+    this.ShowSystemArtifacts = !this.ShowSystemArtifacts;
     this._combinedArtifactsMap = null; // Clear cache
     this.updateArtifactCountDisplay();
     this.cdr.detectChanges(); // Force update
+  }
+
+  /** @deprecated Use {@link ToggleSystemArtifacts}. */
+  public toggleSystemArtifacts(): void {
+    return this.ToggleSystemArtifacts();
   }
 
   /**
    * Check if there are any system artifacts in this conversation
    * Used to conditionally show/hide the "Show System" toggle button
    */
+  public get HasSystemArtifacts(): boolean {
+    return this.SystemArtifactsByDetailId.size > 0;
+  }
+
+  /** @deprecated Use {@link HasSystemArtifacts}. */
   public get hasSystemArtifacts(): boolean {
-    return this.systemArtifactsByDetailId.size > 0;
+    return this.HasSystemArtifacts;
   }
 
   /**
@@ -2971,7 +4322,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Works with LazyArtifactInfo - uses display data without loading full entities
    * Respects showSystemArtifacts toggle
    */
-  getArtifactsArray(): Array<{
+  GetArtifactsArray(): Array<{
     artifactId: string;
     versionId: string;
     name: string;
@@ -2989,7 +4340,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Group by artifactId, collecting all version details
     // Use effectiveArtifactsMap to respect showSystemArtifacts toggle
-    for (const artifactList of this.effectiveArtifactsMap.values()) {
+    for (const artifactList of this.EffectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         const artifactId = info.artifactId;
         const versionId = info.artifactVersionId;
@@ -3027,82 +4378,134 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }));
   }
 
-  toggleArtifactExpansion(artifactId: string, event: Event): void {
-    event.stopPropagation(); // Prevent opening artifact when clicking expand button
-    this.expandedArtifactId = this.expandedArtifactId === artifactId ? null : artifactId;
+  /** @deprecated Use {@link GetArtifactsArray}. */
+  getArtifactsArray(): Array<{
+    artifactId: string;
+    versionId: string;
+    name: string;
+    versionCount: number;
+    visibility: string;
+    versions: Array<{versionId: string; versionNumber: number}>
+  }> {
+    return this.GetArtifactsArray();
   }
 
-  async openArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
-    const conversationId = this.conversationId;
+  ToggleArtifactExpansion(artifactId: string, event: Event): void {
+    event.stopPropagation(); // Prevent opening artifact when clicking expand button
+    this.ExpandedArtifactId = this.ExpandedArtifactId === artifactId ? null : artifactId;
+  }
+
+  /** @deprecated Use {@link ToggleArtifactExpansion}. */
+  toggleArtifactExpansion(artifactId: string, event: Event): void {
+    return this.ToggleArtifactExpansion(artifactId, event);
+  }
+
+  async OpenArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
+    const conversationId = this.ConversationId;
     this.artifactSelectionEpoch++;
-    this.selectedArtifactId = artifactId;
-    this.selectedVersionNumber = versionNumber;
-    this.showArtifactPanel = true;
-    this.showArtifactsModal = false;
+    this.SelectedArtifactId = artifactId;
+    this.SelectedVersionNumber = versionNumber;
+    this.ShowArtifactPanel = true;
+    this.ShowArtifactsModal = false;
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(artifactId, conversationId, artifactId);
-    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, artifactId)) {
+    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, artifactId)) {
       return;
     }
     this.cdr.detectChanges();
   }
 
-  exportConversation(): void {
-    if (this.conversation) {
-      this.showExportModal = true;
+  /** @deprecated Use {@link OpenArtifactFromModal}. */
+  async openArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
+    return this.OpenArtifactFromModal(artifactId, versionNumber);
+  }
+
+  ExportConversation(): void {
+    if (this.Conversation) {
+      this.ShowExportModal = true;
     }
   }
 
+  /** @deprecated Use {@link ExportConversation}. */
+  exportConversation(): void {
+    return this.ExportConversation();
+  }
+
+  OnExportModalCancelled(): void {
+    this.ShowExportModal = false;
+  }
+
+  /** @deprecated Use {@link OnExportModalCancelled}. */
   onExportModalCancelled(): void {
-    this.showExportModal = false;
+    return this.OnExportModalCancelled();
   }
 
+  OnExportModalComplete(): void {
+    this.ShowExportModal = false;
+  }
+
+  /** @deprecated Use {@link OnExportModalComplete}. */
   onExportModalComplete(): void {
-    this.showExportModal = false;
+    return this.OnExportModalComplete();
   }
 
-  async onProjectSelected(project: any): Promise<void> {
-    if (this.conversation && project) {
+  async OnProjectSelected(project: any): Promise<void> {
+    if (this.Conversation && project) {
       try {
         await this.engine.SaveConversation(
-          this.conversation.ID,
+          this.Conversation.ID,
           { ProjectID: project.ID },
-          this.currentUser
+          this.CurrentUser
         );
-        this.showProjectSelector = false;
+        this.ShowProjectSelector = false;
       } catch (error) {
         console.error('Failed to assign project:', error);
       }
-    } else if (this.conversation && !project) {
+    } else if (this.Conversation && !project) {
       // Remove project assignment
       try {
         await this.engine.SaveConversation(
-          this.conversation.ID,
+          this.Conversation.ID,
           { ProjectID: null },
-          this.currentUser
+          this.CurrentUser
         );
-        this.showProjectSelector = false;
+        this.ShowProjectSelector = false;
       } catch (error) {
         console.error('Failed to remove project:', error);
       }
     }
   }
 
-  shareConversation(): void {
-    if (!this.conversation) return;
-    this.shareContext = {
-      ResourceID: this.conversation.ID,
-      ResourceName: this.conversation.Name ?? 'Conversation',
-      OwnerUserID: this.conversation.UserID ?? null,
-      OwnerDisplayName: this.conversation.User ?? 'You',
-      CurrentUserID: this.currentUser?.ID ?? null
-    };
-    this.showShareModal = true;
+  /** @deprecated Use {@link OnProjectSelected}. */
+  async onProjectSelected(project: any): Promise<void> {
+    return this.OnProjectSelected(project);
   }
 
+  ShareConversation(): void {
+    if (!this.Conversation) return;
+    this.ShareContext = {
+      ResourceID: this.Conversation.ID,
+      ResourceName: this.Conversation.Name ?? 'Conversation',
+      OwnerUserID: this.Conversation.UserID ?? null,
+      OwnerDisplayName: this.Conversation.User ?? 'You',
+      CurrentUserID: this.CurrentUser?.ID ?? null
+    };
+    this.ShowShareModal = true;
+  }
+
+  /** @deprecated Use {@link ShareConversation}. */
+  shareConversation(): void {
+    return this.ShareConversation();
+  }
+
+  OnShareDialogResult(_result: { Action: 'save' | 'cancel' }): void {
+    this.ShowShareModal = false;
+  }
+
+  /** @deprecated Use {@link OnShareDialogResult}. */
   onShareDialogResult(_result: { Action: 'save' | 'cancel' }): void {
-    this.showShareModal = false;
+    return this.OnShareDialogResult(_result);
   }
 
   /**
@@ -3110,13 +4513,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * when the current user owns the conversation or when the share has no
    * recorded grantor (legacy share pre-dating `SharedByUserID`).
    */
-  public get sharedByBadge(): { display: string; fullTooltip: string } | null {
-    if (!this.conversation) return null;
-    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+  public get SharedByBadge(): { display: string; fullTooltip: string } | null {
+    if (!this.Conversation) return null;
+    const info = this.engine.GetSharedByInfo(this.Conversation.ID);
     if (!info || !info.UserID) return null;
     const display = info.Email ?? info.Name ?? 'another user';
     const tooltip = info.Email && info.Name ? `${info.Name} <${info.Email}>` : display;
     return { display, fullTooltip: `Shared by ${tooltip}` };
+  }
+
+  /** @deprecated Use {@link SharedByBadge}. */
+  public get sharedByBadge(): { display: string; fullTooltip: string } | null {
+    return this.SharedByBadge;
   }
 
   /**
@@ -3124,10 +4532,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * (i.e., it was shared with them read-only). Gates the message input and
    * any other write-capable UI.
    */
-  public get isReadOnlyView(): boolean {
-    if (!this.conversation) return false;
-    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+  public get IsReadOnlyView(): boolean {
+    if (!this.Conversation) return false;
+    const info = this.engine.GetSharedByInfo(this.Conversation.ID);
     return info?.Level === 'View';
+  }
+
+  /** @deprecated Use {@link IsReadOnlyView}. */
+  public get isReadOnlyView(): boolean {
+    return this.IsReadOnlyView;
   }
 
   /**
@@ -3137,56 +4550,91 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * {@link MJResourcePermissionEntityExtended.callerMayGrantShare}, so the UI
    * doesn't offer an action the save would refuse.
    */
-  public get canShareConversation(): boolean {
-    if (!this.conversation || !this.currentUser) return false;
-    if (this.conversation.UserID && this.conversation.UserID.toLowerCase() === this.currentUser.ID.toLowerCase()) {
+  public get CanShareConversation(): boolean {
+    if (!this.Conversation || !this.CurrentUser) return false;
+    if (this.Conversation.UserID && this.Conversation.UserID.toLowerCase() === this.CurrentUser.ID.toLowerCase()) {
       return true;
     }
-    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    const info = this.engine.GetSharedByInfo(this.Conversation.ID);
     return info?.Level === 'Owner';
   }
 
+  /** @deprecated Use {@link CanShareConversation}. */
+  public get canShareConversation(): boolean {
+    return this.CanShareConversation;
+  }
+
+  OnReplyInThread(message: MJConversationDetailEntity): void {
+    // Open thread panel for this message - emit to parent
+    this.ThreadOpened.emit(message.ID);
+  }
+
+  /** @deprecated Use {@link OnReplyInThread}. */
   onReplyInThread(message: MJConversationDetailEntity): void {
-    // Open thread panel for this message - emit to parent
-    this.threadOpened.emit(message.ID);
+    return this.OnReplyInThread(message);
   }
 
+  OnViewThread(message: MJConversationDetailEntity): void {
+    // Open thread panel for this message - emit to parent
+    this.ThreadOpened.emit(message.ID);
+  }
+
+  /** @deprecated Use {@link OnViewThread}. */
   onViewThread(message: MJConversationDetailEntity): void {
-    // Open thread panel for this message - emit to parent
-    this.threadOpened.emit(message.ID);
+    return this.OnViewThread(message);
   }
 
-  onLocalThreadClosed(): void {
+  OnLocalThreadClosed(): void {
     // Close the thread panel - emit to parent
-    this.threadClosed.emit();
+    this.ThreadClosed.emit();
   }
 
-  onThreadReplyAdded(reply: MJConversationDetailEntity): void {
+  /** @deprecated Use {@link OnLocalThreadClosed}. */
+  onLocalThreadClosed(): void {
+    return this.OnLocalThreadClosed();
+  }
+
+  OnThreadReplyAdded(reply: MJConversationDetailEntity): void {
     // Optionally refresh the message list to update thread counts
     // For now, we'll just log it
     LogStatusEx({message: 'Thread reply added', verboseOnly: true, additionalArgs: [reply]});
 
     // Reload messages to get updated thread counts
-    if (this.conversationId) {
-      const conversationId = this.conversationId;
+    if (this.ConversationId) {
+      const conversationId = this.ConversationId;
       const loadToken = ++this.conversationLoadToken;
       void this.loadMessages(conversationId, loadToken);
     }
   }
 
-  onToggleAgentPanel(): void {
-    this.showAgentPanel = !this.showAgentPanel;
+  /** @deprecated Use {@link OnThreadReplyAdded}. */
+  onThreadReplyAdded(reply: MJConversationDetailEntity): void {
+    return this.OnThreadReplyAdded(reply);
+  }
+
+  OnToggleAgentPanel(): void {
+    this.ShowAgentPanel = !this.ShowAgentPanel;
     // The agent panel component handles its own visibility
     // This could be used to toggle a modal or different view
   }
 
-  onAgentSelected(agentRun: MJAIAgentRunEntity): void {
+  /** @deprecated Use {@link OnToggleAgentPanel}. */
+  onToggleAgentPanel(): void {
+    return this.OnToggleAgentPanel();
+  }
+
+  OnAgentSelected(agentRun: MJAIAgentRunEntity): void {
     // When an agent is clicked in the indicator, could show details
     LogStatusEx({message: 'Agent selected', verboseOnly: true, additionalArgs: [agentRun.ID]});
     // Could open a modal or navigate to agent details
   }
 
-  onMessageEdited(message: MJConversationDetailEntity): void {
+  /** @deprecated Use {@link OnAgentSelected}. */
+  onAgentSelected(agentRun: MJAIAgentRunEntity): void {
+    return this.OnAgentSelected(agentRun);
+  }
+
+  OnMessageEdited(message: MJConversationDetailEntity): void {
     // Message was edited and saved, trigger change detection
     LogStatusEx({message: 'Message edited', verboseOnly: true, additionalArgs: [message.ID]});
     // The entity was mutated in place, so the transcript already shows the new text. Replace
@@ -3195,7 +4643,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.windowStore.ApplyLocalDetail(message);
   }
 
-  onMessagePinToggled(message: MJConversationDetailEntity): void {
+  /** @deprecated Use {@link OnMessageEdited}. */
+  onMessageEdited(message: MJConversationDetailEntity): void {
+    return this.OnMessageEdited(message);
+  }
+
+  OnMessagePinToggled(message: MJConversationDetailEntity): void {
     // The entity object is already mutated by .Save(), and the window holds that same object
     // reference, so the transcript reflects the change with no cache write.
     //
@@ -3210,21 +4663,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.pinsHydrated) {
       this.windowStore.ApplyLocalPin(message);
     } else {
-      this.windowStore.SetPinnedCount(this.pinnedMessageCount + (message.IsPinned ? 1 : -1));
+      this.windowStore.SetPinnedCount(this.PinnedMessageCount + (message.IsPinned ? 1 : -1));
     }
 
     // Auto-close the panel when the last pin is removed
-    if (this.showPinsPanel && this.pinnedMessageCount === 0) {
-      setTimeout(() => { this.showPinsPanel = false; this.cdr.detectChanges(); }, 600);
+    if (this.ShowPinsPanel && this.PinnedMessageCount === 0) {
+      setTimeout(() => { this.ShowPinsPanel = false; this.cdr.detectChanges(); }, 600);
     }
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnMessagePinToggled}. */
+  onMessagePinToggled(message: MJConversationDetailEntity): void {
+    return this.OnMessagePinToggled(message);
   }
 
   /**
    * Scrolls the message list to the target message and plays the beacon animation.
    * Called when the user clicks "Jump to message" in the pins panel.
    */
-  async onJumpToMessage(messageId: string): Promise<void> {
+  async OnJumpToMessage(messageId: string): Promise<void> {
     // Delegated to the list rather than queried here. A `[data-message-id]` lookup only finds
     // MOUNTED messages, and a pin is by definition often far above the viewport — exactly the
     // region the list unmounts into spacers — so this button silently did nothing for any pin
@@ -3248,10 +4706,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // The paging loop deliberately skipped the per-page peripheral rebuild — pay it once,
     // here, before asking the list for element positions.
-    await this.refreshAfterPaging(this.conversationId!);
+    await this.refreshAfterPaging(this.ConversationId!);
     if (this.messageListComponent?.ScrollToMessage(messageId)) {
       this.beaconMessage(messageId);
     }
+  }
+
+  /** @deprecated Use {@link OnJumpToMessage}. */
+  async onJumpToMessage(messageId: string): Promise<void> {
+    return this.OnJumpToMessage(messageId);
   }
 
   /**
@@ -3263,12 +4726,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * reason: an unbounded walk back is the thing windowing exists to avoid.
    */
   private async loadUntilMessageIsWindowed(messageId: string): Promise<boolean> {
-    const target = this.pinnedMessages.find(p => UUIDsEqual(p.ID, messageId));
+    const target = this.PinnedMessages.find(p => UUIDsEqual(p.ID, messageId));
     if (!target) {
       return false;   // not a loaded pin — nothing tells us how far back to page
     }
 
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     for (let page = 0; page < DATE_JUMP_MAX_PAGES; page++) {
       const snapshot = this.windowStore.GetSnapshot();
       const oldest = snapshot.Cursor.OldestSequence;
@@ -3280,7 +4743,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
 
       // Store-level paging for the same reason as the date jump — the caller refreshes once.
-      await this.windowStore.LoadOlder(this.currentUser);
+      await this.windowStore.LoadOlder(this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return false;                       // user switched away mid-jump
       }
@@ -3306,13 +4769,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Unpins a message from the pins panel — saves to DB and patches the cache.
    */
-  async onUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+  async OnUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
     const previous = message.IsPinned;
     message.IsPinned = false;
     this.cdr.detectChanges();
     try {
       await message.Save();
-      this.onMessagePinToggled(message);
+      this.OnMessagePinToggled(message);
     } catch (err) {
       console.error('Failed to unpin message from panel:', err);
       message.IsPinned = previous;
@@ -3320,11 +4783,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link OnUnpinFromPanel}. */
+  async onUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    return this.OnUnpinFromPanel(message);
+  }
+
   /**
    * Handle suggested response selection from user
    * Sends the selected response as a new user message WITHOUT modifying the visible input
    */
-  async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+  async OnSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
     const messageText = event.customInput || event.text;
 
     // Get the active message input for the current conversation
@@ -3332,19 +4800,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const activeInput = this.getActiveMessageInputComponent();
 
     // If we have an active conversation with message input available, use it
-    if (activeInput && !this.isNewConversation) {
+    if (activeInput && !this.IsNewConversation) {
       await activeInput.sendMessageWithText(messageText);
-    } else if (!this.conversation || this.isNewConversation) {
+    } else if (!this.Conversation || this.IsNewConversation) {
       // If no conversation or in new unsaved state, route through empty state handler
       // This will create the conversation and send the message
-      await this.onEmptyStateMessageSent({ text: messageText, attachments: [] });
+      await this.OnEmptyStateMessageSent({ text: messageText, attachments: [] });
     } else {
       console.error('MessageInputComponent not available and not in a valid state to create conversation');
     }
   }
 
-  async onDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
-    if (!UUIDsEqual(this.conversation?.UserID, this.currentUser?.ID)) return;
+  /** @deprecated Use {@link OnSuggestedResponseSelected}. */
+  async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+    return this.OnSuggestedResponseSelected(event);
+  }
+
+  async OnDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
+    if (!UUIDsEqual(this.Conversation?.UserID, this.CurrentUser?.ID)) return;
 
     // Find this message and all messages after it sorted by creation time
     const sortedMessages = [...this.messages].sort((a, b) =>
@@ -3372,7 +4845,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const md = this.ProviderToUse;
     const loadResults = await Promise.all(
       toHide.map(async msg => {
-        const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+        const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.CurrentUser);
         const loaded = await entity.Load(msg.ID);
         return loaded ? entity : null;
       })
@@ -3396,32 +4869,42 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.windowStore.RemoveDetail(id);
     }
     this.messages = this.messages.filter(m => !hideIds.has(m.ID));
-    this.resetComponentState(this.conversationId!);
+    this.resetComponentState(this.ConversationId!);
     this.cdr.detectChanges();
   }
 
-  onRetryMessage(message: MJConversationDetailEntity): void {
+  /** @deprecated Use {@link OnDeleteMessage}. */
+  async onDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
+    return this.OnDeleteMessage(message);
+  }
+
+  OnRetryMessage(message: MJConversationDetailEntity): void {
     // TODO: Implement retry logic
     // This should find the parent user message and re-trigger the agent invocation
     LogStatusEx({message: 'Retry requested for message', verboseOnly: true, additionalArgs: [message.ID]});
     // For now, just log it - full implementation would require refactoring agent invocation
   }
 
+  /** @deprecated Use {@link OnRetryMessage}. */
+  onRetryMessage(message: MJConversationDetailEntity): void {
+    return this.OnRetryMessage(message);
+  }
+
   /**
    * Handle attachment click - opens the image viewer for images
    */
-  onAttachmentClicked(attachment: MessageAttachment): void {
+  OnAttachmentClicked(attachment: MessageAttachment): void {
     if (attachment.type === 'Image' && attachment.contentUrl) {
-      this.selectedImageUrl = attachment.contentUrl;
-      this.selectedImageAlt = attachment.fileName || 'Image attachment';
-      this.selectedImageFileName = attachment.fileName || 'image';
-      this.showImageViewer = true;
+      this.SelectedImageUrl = attachment.contentUrl;
+      this.SelectedImageAlt = attachment.fileName || 'Image attachment';
+      this.SelectedImageFileName = attachment.fileName || 'image';
+      this.ShowImageViewer = true;
       return;
     }
 
     // Artifact-backed attachments open in the artifact viewer panel.
     if (attachment.source === 'artifact' && attachment.artifactId) {
-      this.onArtifactClicked({
+      this.OnArtifactClicked({
         artifactId: attachment.artifactId,
         versionId: attachment.artifactVersionId
       });
@@ -3439,50 +4922,65 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link OnAttachmentClicked}. */
+  onAttachmentClicked(attachment: MessageAttachment): void {
+    return this.OnAttachmentClicked(attachment);
+  }
+
   /**
    * Handle image viewer close
    */
+  OnImageViewerClosed(): void {
+    this.ShowImageViewer = false;
+    this.SelectedImageUrl = '';
+    this.SelectedImageAlt = '';
+    this.SelectedImageFileName = '';
+  }
+
+  /** @deprecated Use {@link OnImageViewerClosed}. */
   onImageViewerClosed(): void {
-    this.showImageViewer = false;
-    this.selectedImageUrl = '';
-    this.selectedImageAlt = '';
-    this.selectedImageFileName = '';
+    return this.OnImageViewerClosed();
   }
 
   /**
    * Handle upload state changes from message input component
    */
-  onUploadStateChanged(event: {isUploading: boolean; message: string}): void {
-    this.isUploadingAttachments = event.isUploading;
-    this.uploadingMessage = event.message;
+  OnUploadStateChanged(event: {isUploading: boolean; message: string}): void {
+    this.IsUploadingAttachments = event.isUploading;
+    this.UploadingMessage = event.message;
   }
 
-  async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
-    const conversationId = this.conversationId;
+  /** @deprecated Use {@link OnUploadStateChanged}. */
+  onUploadStateChanged(event: {isUploading: boolean; message: string}): void {
+    return this.OnUploadStateChanged(event);
+  }
+
+  async OnArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
+    const conversationId = this.ConversationId;
     this.artifactSelectionEpoch++;
-    this.selectedArtifactId = data.artifactId;
+    this.SelectedArtifactId = data.artifactId;
 
     // If versionId is provided, find the version number from display data (no lazy load needed)
     if (data.versionId) {
-      for (const artifactList of this.artifactsByDetailId.values()) {
+      for (const artifactList of this.ArtifactsByDetailId.values()) {
         for (const artifactInfo of artifactList) {
           if (artifactInfo.artifactVersionId === data.versionId) {
-            this.selectedVersionNumber = artifactInfo.versionNumber;
-            LogStatusEx({message: `📦 Opening artifact viewer for v${this.selectedVersionNumber}`, verboseOnly: true});
+            this.SelectedVersionNumber = artifactInfo.versionNumber;
+            LogStatusEx({message: `📦 Opening artifact viewer for v${this.SelectedVersionNumber}`, verboseOnly: true});
             break;
           }
         }
       }
     } else {
       // No specific version, let viewer default to latest
-      this.selectedVersionNumber = undefined;
+      this.SelectedVersionNumber = undefined;
     }
 
-    this.showArtifactPanel = true;
+    this.ShowArtifactPanel = true;
 
     // Load permissions for the selected artifact
     await this.loadArtifactPermissions(data.artifactId, conversationId, data.artifactId);
-    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, data.artifactId)) {
+    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, data.artifactId)) {
       return;
     }
 
@@ -3492,7 +4990,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  async onArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
+  /** @deprecated Use {@link OnArtifactClicked}. */
+  async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
+    return this.OnArtifactClicked(data);
+  }
+
+  async OnArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
     // Guard: ignore artifacts created by a background conversation's agent after a swap.
     // Without this, reloadArtifactsForMessage -> loadPeripheralData would CLEAR the active
     // conversation's artifact/agent-run/rating/attachment maps and rebuild them from the
@@ -3521,43 +5024,63 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  onCloseArtifactPanel(): void {
+  /** @deprecated Use {@link OnArtifactCreated}. */
+  async onArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
+    return this.OnArtifactCreated(data);
+  }
+
+  OnCloseArtifactPanel(): void {
     this.artifactSelectionEpoch++;
-    this.showArtifactPanel = false;
-    this.selectedArtifactId = null;
+    this.ShowArtifactPanel = false;
+    this.SelectedArtifactId = null;
     // Clear permissions
-    this.canShareSelectedArtifact = false;
-    this.canEditSelectedArtifact = false;
+    this.CanShareSelectedArtifact = false;
+    this.CanEditSelectedArtifact = false;
     // Reset maximize state and width when closing so the next artifact opens at default size
     this.resetArtifactPaneSizing();
     this.cdr.detectChanges();
   }
 
-  toggleMaximizeArtifactPane(): void {
-    if (this.isArtifactPaneMaximized) {
+  /** @deprecated Use {@link OnCloseArtifactPanel}. */
+  onCloseArtifactPanel(): void {
+    return this.OnCloseArtifactPanel();
+  }
+
+  ToggleMaximizeArtifactPane(): void {
+    if (this.IsArtifactPaneMaximized) {
       // Restore to previous width
-      this.artifactPaneWidth = this.artifactPaneWidthBeforeMaximize;
-      this.isArtifactPaneMaximized = false;
+      this.ArtifactPaneWidth = this.artifactPaneWidthBeforeMaximize;
+      this.IsArtifactPaneMaximized = false;
     } else {
       // Maximize - store current width and set to 100%
-      this.artifactPaneWidthBeforeMaximize = this.artifactPaneWidth;
-      this.artifactPaneWidth = 100;
-      this.isArtifactPaneMaximized = true;
+      this.artifactPaneWidthBeforeMaximize = this.ArtifactPaneWidth;
+      this.ArtifactPaneWidth = 100;
+      this.IsArtifactPaneMaximized = true;
     }
   }
 
-  onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
-    this.collectionPickerArtifactId = event.artifactId;
-    this.collectionPickerExcludedIds = event.excludedCollectionIds;
-    // Snapshot version + name from the viewer so the picker's preview pane has real context
-    const viewer = this.artifactViewerComponent;
-    this.collectionPickerVersionId = viewer?.artifactVersion?.ID ?? null;
-    this.collectionPickerArtifactName = viewer?.displayName ?? '';
-    this.collectionPickerVersionNumber = viewer?.selectedVersionNumber ?? null;
-    this.showCollectionPicker = true;
+  /** @deprecated Use {@link ToggleMaximizeArtifactPane}. */
+  toggleMaximizeArtifactPane(): void {
+    return this.ToggleMaximizeArtifactPane();
   }
 
-  async onCollectionPickerCompleted(event: { successIds: string[]; failedIds: string[] }): Promise<void> {
+  OnSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
+    this.CollectionPickerArtifactId = event.artifactId;
+    this.CollectionPickerExcludedIds = event.excludedCollectionIds;
+    // Snapshot version + name from the viewer so the picker's preview pane has real context
+    const viewer = this.artifactViewerComponent;
+    this.CollectionPickerVersionId = viewer?.artifactVersion?.ID ?? null;
+    this.CollectionPickerArtifactName = viewer?.displayName ?? '';
+    this.CollectionPickerVersionNumber = viewer?.selectedVersionNumber ?? null;
+    this.ShowCollectionPicker = true;
+  }
+
+  /** @deprecated Use {@link OnSaveToCollectionRequested}. */
+  onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
+    return this.OnSaveToCollectionRequested(event);
+  }
+
+  async OnCollectionPickerCompleted(event: { successIds: string[]; failedIds: string[] }): Promise<void> {
     // Refresh the viewer's bookmark / "already saved" state if anything actually wrote
     if (event.successIds.length > 0 && this.artifactViewerComponent) {
       await this.artifactViewerComponent.ReloadCollectionAssociations();
@@ -3574,17 +5097,27 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
-  onCollectionPickerCancelled(): void {
+  /** @deprecated Use {@link OnCollectionPickerCompleted}. */
+  async onCollectionPickerCompleted(event: { successIds: string[]; failedIds: string[] }): Promise<void> {
+    return this.OnCollectionPickerCompleted(event);
+  }
+
+  OnCollectionPickerCancelled(): void {
     this.closeCollectionPicker();
   }
 
+  /** @deprecated Use {@link OnCollectionPickerCancelled}. */
+  onCollectionPickerCancelled(): void {
+    return this.OnCollectionPickerCancelled();
+  }
+
   private closeCollectionPicker(): void {
-    this.showCollectionPicker = false;
-    this.collectionPickerArtifactId = null;
-    this.collectionPickerExcludedIds = [];
-    this.collectionPickerVersionId = null;
-    this.collectionPickerArtifactName = '';
-    this.collectionPickerVersionNumber = null;
+    this.ShowCollectionPicker = false;
+    this.CollectionPickerArtifactId = null;
+    this.CollectionPickerExcludedIds = [];
+    this.CollectionPickerVersionId = null;
+    this.CollectionPickerArtifactName = '';
+    this.CollectionPickerVersionNumber = null;
     this.cdr.detectChanges();
   }
 
@@ -3592,8 +5125,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Helper method to check if a conversation detail has an artifact
    * Used by message components to determine whether to show artifact card
    */
+  public ConversationDetailHasArtifact(conversationDetailId: string): boolean {
+    return this.ArtifactsByDetailId.has(conversationDetailId);
+  }
+
+  /** @deprecated Use {@link ConversationDetailHasArtifact}. */
   public conversationDetailHasArtifact(conversationDetailId: string): boolean {
-    return this.artifactsByDetailId.has(conversationDetailId);
+    return this.ConversationDetailHasArtifact(conversationDetailId);
   }
 
   /**
@@ -3601,11 +5139,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Returns the LAST (most recent) artifact if multiple exist
    * Returns LazyArtifactInfo - caller can trigger lazy load if full entities needed
    */
-  public getArtifactInfo(conversationDetailId: string): LazyArtifactInfo | undefined {
-    const artifactList = this.artifactsByDetailId.get(conversationDetailId);
+  public GetArtifactInfo(conversationDetailId: string): LazyArtifactInfo | undefined {
+    const artifactList = this.ArtifactsByDetailId.get(conversationDetailId);
     return artifactList && artifactList.length > 0
       ? artifactList[artifactList.length - 1]
       : undefined;
+  }
+
+  /** @deprecated Use {@link GetArtifactInfo}. */
+  public getArtifactInfo(conversationDetailId: string): LazyArtifactInfo | undefined {
+    return this.GetArtifactInfo(conversationDetailId);
   }
 
   /**
@@ -3613,20 +5156,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Use this when you need to display all artifacts (e.g., in a list)
    * Returns LazyArtifactInfo array - caller can trigger lazy load if full entities needed
    */
+  public GetAllArtifactsForDetail(conversationDetailId: string): LazyArtifactInfo[] {
+    return this.ArtifactsByDetailId.get(conversationDetailId) || [];
+  }
+
+  /** @deprecated Use {@link GetAllArtifactsForDetail}. */
   public getAllArtifactsForDetail(conversationDetailId: string): LazyArtifactInfo[] {
-    return this.artifactsByDetailId.get(conversationDetailId) || [];
+    return this.GetAllArtifactsForDetail(conversationDetailId);
   }
 
   /**
    * Resize handle methods for artifact pane
    */
-  onResizeStart(event: MouseEvent): void {
+  OnResizeStart(event: MouseEvent): void {
     this.isResizing = true;
     this.startX = event.clientX;
-    this.startWidth = this.artifactPaneWidth;
+    this.startWidth = this.ArtifactPaneWidth;
     event.preventDefault();
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
+  }
+
+  /** @deprecated Use {@link OnResizeStart}. */
+  onResizeStart(event: MouseEvent): void {
+    return this.OnResizeStart(event);
   }
 
   private onResizeMove(event: MouseEvent): void {
@@ -3639,7 +5192,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Constrain between 20% and 70%
     newWidth = Math.max(20, Math.min(70, newWidth));
-    this.artifactPaneWidth = newWidth;
+    this.ArtifactPaneWidth = newWidth;
   }
 
   private onResizeEnd(event: MouseEvent): void {
@@ -3656,12 +5209,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Touch event handlers for mobile resize support
    */
-  onResizeTouchStart(event: TouchEvent): void {
+  OnResizeTouchStart(event: TouchEvent): void {
     this.isResizing = true;
     const touch = event.touches[0];
     this.startX = touch.clientX;
-    this.startWidth = this.artifactPaneWidth;
+    this.startWidth = this.ArtifactPaneWidth;
     event.preventDefault();
+  }
+
+  /** @deprecated Use {@link OnResizeTouchStart}. */
+  onResizeTouchStart(event: TouchEvent): void {
+    return this.OnResizeTouchStart(event);
   }
 
   private onResizeTouchMove(event: TouchEvent): void {
@@ -3674,7 +5232,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     let newWidth = this.startWidth + deltaPercent;
 
     newWidth = Math.max(20, Math.min(70, newWidth));
-    this.artifactPaneWidth = newWidth;
+    this.ArtifactPaneWidth = newWidth;
   }
 
   private onResizeTouchEnd(event: TouchEvent): void {
@@ -3693,7 +5251,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       if (saved) {
         const width = parseFloat(saved);
         if (!isNaN(width) && width >= 20 && width <= 70) {
-          this.artifactPaneWidth = width;
+          this.ArtifactPaneWidth = width;
         }
       }
     } catch (error) {
@@ -3703,23 +5261,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private saveArtifactPaneWidth(): void {
     try {
-      localStorage.setItem(this.ARTIFACT_PANE_WIDTH_KEY, this.artifactPaneWidth.toString());
+      localStorage.setItem(this.ARTIFACT_PANE_WIDTH_KEY, this.ArtifactPaneWidth.toString());
     } catch (error) {
       console.warn('Failed to save artifact pane width to localStorage:', error);
     }
   }
 
-  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
+  OnConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
     LogStatusEx({message: '🎉 Conversation renamed', verboseOnly: true, additionalArgs: [event]});
     // Pass the event up to workspace component for animation
-    this.conversationRenamed.emit(event);
+    this.ConversationRenamed.emit(event);
+  }
+
+  /** @deprecated Use {@link OnConversationRenamed}. */
+  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
+    return this.OnConversationRenamed(event);
   }
 
   /**
    * Handle message sent from empty state component
    * Creates a new conversation and emits to parent to update selection
    */
-  async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
+  async OnEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
     // The new-conversation draft became a message — remove the 'new' entry and
     // reset its restore snapshot so the NEXT new-conversation composer starts clean.
     this.draftStore.ClearDraft(null);
@@ -3732,7 +5295,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     LogStatusEx({message: '📨 Empty state message received', verboseOnly: true, additionalArgs: [text, `${attachments?.length || 0} attachments`]});
 
     try {
-      this.isProcessing = true;
+      this.IsProcessing = true;
 
       // Create a new conversation using the engine. applicationScope +
       // applicationId let embedded surfaces (e.g. the Form Builder cockpit)
@@ -3747,33 +5310,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // 'Global' so the save doesn't blow up. The conversation lands in
       // the main list — visible but not silently lost.
       const effectiveScope: 'Global' | 'Application' | 'Both' =
-        (this.applicationScope !== 'Global' && !this.applicationId)
+        (this.ApplicationScope !== 'Global' && !this.ApplicationId)
           ? 'Global'
-          : this.applicationScope;
+          : this.ApplicationScope;
       // Linked-record stamping — both columns must be populated together
       // or both null (DB CHECK constraint CK_Conversation_LinkBinding).
       // We only forward the pair when BOTH inputs are supplied; if the
       // host bound one but not the other, treat as misconfiguration and
       // skip the linkage rather than failing the save.
-      const hasLink = !!this.linkedEntityId && !!this.linkedRecordId;
+      const hasLink = !!this.LinkedEntityId && !!this.LinkedRecordId;
       const newConversation = await this.engine.CreateConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
-        this.environmentId,
-        this.currentUser,
+        this.EnvironmentId,
+        this.CurrentUser,
         undefined,
         undefined,
         {
           applicationScope: effectiveScope,
-          applicationId: effectiveScope === 'Global' ? null : this.applicationId,
-          defaultAgentId: this.defaultAgentId,
-          linkedEntityId: hasLink ? this.linkedEntityId : null,
-          linkedRecordId: hasLink ? this.linkedRecordId : null,
+          applicationId: effectiveScope === 'Global' ? null : this.ApplicationId,
+          defaultAgentId: this.DefaultAgentId,
+          linkedEntityId: hasLink ? this.LinkedEntityId : null,
+          linkedRecordId: hasLink ? this.LinkedRecordId : null,
         }
       );
 
       if (!newConversation) {
         console.error('Failed to create new conversation');
-        this.isProcessing = false;
+        this.IsProcessing = false;
         return;
       }
 
@@ -3792,7 +5355,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // creates the new message-input component
       const pendingMessage = text?.trim() || '';
       const pendingAttachments = attachments || [];
-      this.conversationCreated.emit({
+      this.ConversationCreated.emit({
         conversation: newConversation,
         pendingMessage,
         pendingAttachments
@@ -3801,13 +5364,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } catch (error) {
       console.error('Error creating conversation from empty state:', error);
     } finally {
-      this.isProcessing = false;
+      this.IsProcessing = false;
     }
   }
 
-  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+  /** @deprecated Use {@link OnEmptyStateMessageSent}. */
+  async onEmptyStateMessageSent(event: {text: string; attachments: PendingAttachment[]}): Promise<void> {
+    return this.OnEmptyStateMessageSent(event);
+  }
+
+  OnOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Pass the event up to the parent component (workspace or explorer wrapper)
-    this.openEntityRecord.emit(event);
+    this.OpenEntityRecord.emit(event);
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    return this.OnOpenEntityRecord(event);
   }
 
   /** Record `open:resource` buttons → same openEntityRecord chain as agent-run links. */
@@ -3826,20 +5399,30 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       console.warn('open:resource: incomplete primary key', command.entityName, command);
       return;
     }
-    this.openEntityRecord.emit({ entityName: command.entityName, compositeKey });
+    this.OpenEntityRecord.emit({ entityName: command.entityName, compositeKey });
   }
 
-  onNavigationRequest(event: NavigationRequest): void {
+  OnNavigationRequest(event: NavigationRequest): void {
     // Pass the event up to the parent component for app-level navigation
     this.navigationRequest.emit(event);
   }
 
-  viewTestRun(testRunId: string): void {
+  /** @deprecated Use {@link OnNavigationRequest}. */
+  onNavigationRequest(event: NavigationRequest): void {
+    return this.OnNavigationRequest(event);
+  }
+
+  ViewTestRun(testRunId: string): void {
     // Open the test run record in the entity viewer
-    this.openEntityRecord.emit({
+    this.OpenEntityRecord.emit({
       entityName: 'MJ: Test Runs',
       compositeKey: CompositeKey.FromID(testRunId)
     });
+  }
+
+  /** @deprecated Use {@link ViewTestRun}. */
+  viewTestRun(testRunId: string): void {
+    return this.ViewTestRun(testRunId);
   }
 
   /**
@@ -3849,12 +5432,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `openEntityRecord` chain every other chat record-open uses, so the Explorer
    * wrapper routes it through `NavigationService.OpenEntityRecord`.
    */
-  onRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
+  OnRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
     // The overlay can name any entity — resolve its key column(s) from metadata, not a hardcoded ID.
-    this.openEntityRecord.emit({
+    this.OpenEntityRecord.emit({
       entityName: event.EntityName,
       compositeKey: CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.EntityName), event.RecordID)
     });
+  }
+
+  /** @deprecated Use {@link OnRealtimeNavigateRequest}. */
+  onRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
+    return this.OnRealtimeNavigateRequest(event);
   }
 
   /**
@@ -3871,8 +5459,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (!created) {
       return;
     }
-    void this.engine.EnsureConversationLoaded(created, this.currentUser);
-    this.realtimeConversationReady.emit({ conversationId: created, select: false });
+    void this.engine.EnsureConversationLoaded(created, this.CurrentUser);
+    this.RealtimeConversationReady.emit({ conversationId: created, select: false });
   }
 
   /**
@@ -3894,7 +5482,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     // Naming normally fired at the first utterance; this covers a silent call's default.
-    this.realtimeConversationReady.emit({ conversationId, select: true });
+    this.RealtimeConversationReady.emit({ conversationId, select: true });
   }
 
   /**
@@ -3905,12 +5493,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * agent-completion refresh path, and no-ops when no conversation is open.
    */
   private async reloadActiveConversationTimeline(): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     if (!conversationId) {
       return;
     }
     try {
-      await this.windowStore.RefreshLatest(this.currentUser);
+      await this.windowStore.RefreshLatest(this.CurrentUser);
       if (!this.isActiveConversation(conversationId)) {
         return;
       }
@@ -3996,12 +5584,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * The start flips `Active$` synchronously, so clearing the review immediately after
    * never unhosts the overlay mid-transition.
    */
-  public async onReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
+  public async OnReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
     const agentName = this.RealtimeReview?.AgentName ?? null;
     try {
       const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
-        request.ConversationId ?? this.conversationId,
+        request.ConversationId ?? this.ConversationId,
         request.LastSessionId,
         agentName,
         null, // preferredModelId
@@ -4011,8 +5599,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         null, // recordingConsent
         null, // mediaCollectionId
         // App awareness — see message-input.startVoiceSession for the rationale.
-        this.applicationId,
-        this.appContext as AppContextSnapshot | null
+        this.ApplicationId,
+        this.AppContext as AppContextSnapshot | null
       );
       this.RealtimeReview = null;
       await start;
@@ -4022,9 +5610,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
+  /** @deprecated Use {@link OnReviewStartLive}. */
+  public async onReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
+    return this.OnReviewStartLive(request);
+  }
+
   /** Review mode's Close: drop the review state (the overlay unhosts itself). */
-  public onReviewClosed(): void {
+  public OnReviewClosed(): void {
     this.ClearRealtimeSessionReview();
+  }
+
+  /** @deprecated Use {@link OnReviewClosed}. */
+  public onReviewClosed(): void {
+    return this.OnReviewClosed();
   }
 
   /**
@@ -4035,16 +5633,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *
    * Usage: Hold Shift and click any AI message bubble. Open DevTools Console to see the dump.
    */
-  onDiagnosticRequested(messageId: string): void {
+  OnDiagnosticRequested(messageId: string): void {
     const streaming = this.streamingService.getDiagnosticSnapshot(messageId);
-    const agentRun = this.agentRunsByDetailId.get(messageId);
-    const isInProgress = this.inProgressMessageIds.includes(messageId);
+    const agentRun = this.AgentRunsByDetailId.get(messageId);
+    const isInProgress = this.InProgressMessageIds.includes(messageId);
 
     console.group(`%c[MJ Diagnostic Dump] Message ${messageId}`, 'color: #0076b6; font-weight: bold');
     console.log('Timestamp:', new Date().toISOString());
-    console.log('ConversationID:', this.conversationId);
+    console.log('ConversationID:', this.ConversationId);
     console.log('isInProgress (UI):', isInProgress);
-    console.log('All inProgressMessageIds:', [...this.inProgressMessageIds]);
+    console.log('All inProgressMessageIds:', [...this.InProgressMessageIds]);
     console.log('Streaming connection:', streaming.connectionStatus);
     console.log('Streaming callbacks registered:', streaming.callbackCount);
     if (streaming.recentCompletion) {
@@ -4058,34 +5656,54 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     console.groupEnd();
   }
 
-  onTestFeedbackMessage(message: MJConversationDetailEntity): void {
+  /** @deprecated Use {@link OnDiagnosticRequested}. */
+  onDiagnosticRequested(messageId: string): void {
+    return this.OnDiagnosticRequested(messageId);
+  }
+
+  OnTestFeedbackMessage(message: MJConversationDetailEntity): void {
     if (!message.TestRunID) {
       console.error('Cannot provide test feedback: message has no TestRunID');
       return;
     }
 
-    this.testFeedbackDialogData = {
+    this.TestFeedbackDialogData = {
       testRunId: message.TestRunID,
       conversationDetailId: message.ID,
-      currentUser: this.currentUser
+      currentUser: this.CurrentUser
     };
-    this.showTestFeedbackDialog = true;
+    this.ShowTestFeedbackDialog = true;
   }
 
-  onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
-    this.showTestFeedbackDialog = false;
-    this.testFeedbackDialogData = null;
+  /** @deprecated Use {@link OnTestFeedbackMessage}. */
+  onTestFeedbackMessage(message: MJConversationDetailEntity): void {
+    return this.OnTestFeedbackMessage(message);
+  }
+
+  OnTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
+    this.ShowTestFeedbackDialog = false;
+    this.TestFeedbackDialogData = null;
     if (result.success) {
       console.log('Test feedback saved successfully:', result.feedbackId);
     }
   }
 
-  onTaskClicked(task: MJTaskEntity): void {
-    // Pass task click up to workspace to navigate to Tasks tab
-    this.taskClicked.emit(task);
+  /** @deprecated Use {@link OnTestFeedbackDialogClosed}. */
+  onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
+    return this.OnTestFeedbackDialogClosed(result);
   }
 
-  onNavigateToConversation(event: {conversationId: string; taskId: string}): void {
+  OnTaskClicked(task: MJTaskEntity): void {
+    // Pass task click up to workspace to navigate to Tasks tab
+    this.TaskClicked.emit(task);
+  }
+
+  /** @deprecated Use {@link OnTaskClicked}. */
+  onTaskClicked(task: MJTaskEntity): void {
+    return this.OnTaskClicked(task);
+  }
+
+  OnNavigateToConversation(event: {conversationId: string; taskId: string}): void {
     // Navigate to the conversation with the active task - emit to parent
     // Parent will update its selection state
     // For now, we can't navigate to a different conversation from within chat area
@@ -4093,12 +5711,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     console.log('Navigate to conversation requested:', event.conversationId);
   }
 
+  /** @deprecated Use {@link OnNavigateToConversation}. */
+  onNavigateToConversation(event: {conversationId: string; taskId: string}): void {
+    return this.OnNavigateToConversation(event);
+  }
+
   /**
    * Handle navigation request from artifact viewer Links tab
    */
-  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
+  OnArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
     LogStatusEx({message: '🔗 Chat area: Artifact link clicked', verboseOnly: true, additionalArgs: [event]});
-    this.artifactLinkClicked.emit(event);
+    this.ArtifactLinkClicked.emit(event);
+  }
+
+  /** @deprecated Use {@link OnArtifactLinkNavigation}. */
+  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
+    return this.OnArtifactLinkNavigation(event);
   }
 
   /**
@@ -4107,32 +5735,32 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private async loadArtifactPermissions(artifactId: string, expectedConversationId?: string | null, expectedSelectedArtifactId?: string | null): Promise<boolean> {
     const canApply = () => {
       const conversationOk = expectedConversationId === undefined || this.isActiveConversation(expectedConversationId);
-      const artifactOk = !expectedSelectedArtifactId || UUIDsEqual(this.selectedArtifactId, expectedSelectedArtifactId);
+      const artifactOk = !expectedSelectedArtifactId || UUIDsEqual(this.SelectedArtifactId, expectedSelectedArtifactId);
       return conversationOk && artifactOk;
     };
 
     // Guard against null/undefined
     if (!artifactId) {
       if (canApply()) {
-        this.canShareSelectedArtifact = false;
-        this.canEditSelectedArtifact = false;
+        this.CanShareSelectedArtifact = false;
+        this.CanEditSelectedArtifact = false;
       }
       return false;
     }
 
     try {
-      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.currentUser);
+      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.CurrentUser);
       if (!canApply()) {
         return false;
       }
-      this.canShareSelectedArtifact = permissions.canShare;
-      this.canEditSelectedArtifact = permissions.canEdit;
+      this.CanShareSelectedArtifact = permissions.canShare;
+      this.CanEditSelectedArtifact = permissions.canEdit;
       return true;
     } catch (error) {
       console.error('Failed to load artifact permissions:', error);
       if (canApply()) {
-        this.canShareSelectedArtifact = false;
-        this.canEditSelectedArtifact = false;
+        this.CanShareSelectedArtifact = false;
+        this.CanEditSelectedArtifact = false;
       }
       return false;
     }
@@ -4141,17 +5769,22 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Handle share request from artifact viewer
    */
-  async onArtifactShareRequested(artifactId: string): Promise<void> {
+  async OnArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
     const md = this.ProviderToUse;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 
     if (artifact) {
-      this.artifactToShare = artifact;
-      this.isArtifactShareModalOpen = true;
+      this.ArtifactToShare = artifact;
+      this.IsArtifactShareModalOpen = true;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link OnArtifactShareRequested}. */
+  async onArtifactShareRequested(artifactId: string): Promise<void> {
+    return this.OnArtifactShareRequested(artifactId);
   }
 
   /**
@@ -4175,8 +5808,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * to the prior conversation turn.
    */
   async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<PendingAttachment | null> {
-    const conversationId = this.conversationId;
-    if (!conversationId || !this.currentUser) return null;
+    const conversationId = this.ConversationId;
+    if (!conversationId || !this.CurrentUser) return null;
 
     const messageInput = this.getActiveMessageInputComponent();
     const snapshotTitle = event.snapshot.title || 'Untitled Snapshot';
@@ -4184,8 +5817,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     try {
       const result = await this.analyzeArtifactService.CreateSnapshotArtifact({
         snapshot: event.snapshot,
-        currentUser: this.currentUser,
-        environmentId: this.environmentId,
+        currentUser: this.CurrentUser,
+        environmentId: this.EnvironmentId,
       });
       if (!this.isActiveConversation(conversationId)) {
         return null;
@@ -4248,9 +5881,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * than throwing. The user's conversation state isn't disrupted.
    */
   private async handleCaptureDataSnapshotCommand(command: CaptureDataSnapshotCommand): Promise<void> {
-    const conversationId = this.conversationId;
+    const conversationId = this.ConversationId;
     console.log('[client:capture-data-snapshot] Handler invoked', { command, conversationId });
-    if (!conversationId || !this.currentUser) {
+    if (!conversationId || !this.CurrentUser) {
       console.warn('[client:capture-data-snapshot] No active conversation/user; ignoring');
       return;
     }
@@ -4270,12 +5903,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    const panelAlreadyOpen = this.selectedArtifactId === artifactId && this.showArtifactPanel;
+    const panelAlreadyOpen = this.SelectedArtifactId === artifactId && this.ShowArtifactPanel;
     console.log(
       '[client:capture-data-snapshot] Panel state — currentSelectedId=' +
-        this.selectedArtifactId +
+        this.SelectedArtifactId +
         ' showPanel=' +
-        this.showArtifactPanel +
+        this.ShowArtifactPanel +
         ' panelAlreadyOpen=' +
         panelAlreadyOpen,
     );
@@ -4283,15 +5916,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Open the artifact panel so the viewer mounts (if it isn't already).
     if (!panelAlreadyOpen) {
       this.artifactSelectionEpoch++;
-      this.selectedArtifactId = artifactId;
-      this.selectedVersionNumber = undefined;
-      this.showArtifactPanel = true;
+      this.SelectedArtifactId = artifactId;
+      this.SelectedVersionNumber = undefined;
+      this.ShowArtifactPanel = true;
       try {
         await this.loadArtifactPermissions(artifactId, conversationId, artifactId);
       } catch {
         // Non-fatal — permissions are for UI affordances, not capture
       }
-      if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, artifactId)) {
+      if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, artifactId)) {
         return;
       }
       this.cdr.detectChanges();
@@ -4303,7 +5936,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // and query-backed / server-paged components need additional time to load
     // their rows (we now wait for rows, not just a registered table).
     const snapshot = await this.waitForViewerSnapshot(15000);
-    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, artifactId)) {
+    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, artifactId)) {
       return;
     }
     if (!snapshot) {
@@ -4447,19 +6080,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * first, then drop the filter here.
    */
   private async findMostRecentComponentArtifactId(): Promise<string | null> {
-    if (!this.conversationId || !this.currentUser) return null;
+    if (!this.ConversationId || !this.CurrentUser) return null;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Get all conversation detail IDs for this conversation, newest first.
       const detailsResult = await rv.RunView<MJConversationDetailEntity>(
         {
           EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID='${this.conversationId}'`,
+          ExtraFilter: `ConversationID='${this.ConversationId}'`,
           Fields: ['ID'],
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'simple',
         },
-        this.currentUser,
+        this.CurrentUser,
       );
       if (!detailsResult.Success || !detailsResult.Results?.length) return null;
       const detailIds = detailsResult.Results.map((d) => `'${d.ID}'`).join(',');
@@ -4472,7 +6105,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           OrderBy: '__mj_CreatedAt DESC',
           ResultType: 'simple',
         },
-        this.currentUser,
+        this.CurrentUser,
       );
       if (!junctionResult.Success || !junctionResult.Results?.length) return null;
 
@@ -4489,7 +6122,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           Fields: ['ID', 'ArtifactID'],
           ResultType: 'simple',
         },
-        this.currentUser,
+        this.CurrentUser,
       );
       if (!versionsResult.Success || !versionsResult.Results?.length) return null;
 
@@ -4506,7 +6139,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           ExtraFilter: `ID IN (${artifactFilter})`,
           ResultType: 'simple',
         },
-        this.currentUser,
+        this.CurrentUser,
       );
       if (!artifactsResult.Success || !artifactsResult.Results?.length) return null;
 
@@ -4538,28 +6171,38 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Handle close of artifact share modal
    */
-  onArtifactShareModalClose(): void {
-    this.isArtifactShareModalOpen = false;
-    this.artifactToShare = null;
+  OnArtifactShareModalClose(): void {
+    this.IsArtifactShareModalOpen = false;
+    this.ArtifactToShare = null;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnArtifactShareModalClose}. */
+  onArtifactShareModalClose(): void {
+    return this.OnArtifactShareModalClose();
   }
 
   /**
    * Handle successful share - refresh permissions
    */
-  async onArtifactShared(): Promise<void> {
-    this.isArtifactShareModalOpen = false;
-    this.artifactToShare = null;
+  async OnArtifactShared(): Promise<void> {
+    this.IsArtifactShareModalOpen = false;
+    this.ArtifactToShare = null;
 
     // Refresh permissions for the active artifact
-    if (this.selectedArtifactId) {
-      await this.loadArtifactPermissions(this.selectedArtifactId);
+    if (this.SelectedArtifactId) {
+      await this.loadArtifactPermissions(this.SelectedArtifactId);
     }
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnArtifactShared}. */
+  async onArtifactShared(): Promise<void> {
+    return this.OnArtifactShared();
+  }
+
   // Scroll functionality (pattern from skip-chat)
-  checkScroll(): void {
+  CheckScroll(): void {
     if (!this.scrollContainer) return;
 
     const element = this.scrollContainer.nativeElement;
@@ -4572,24 +6215,29 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const newValue = !atBottom && hasScrollableContent;
 
     // Only update if value changed to prevent unnecessary change detection
-    if (this.showScrollToBottomIcon !== newValue) {
-      this.showScrollToBottomIcon = newValue;
+    if (this.ShowScrollToBottomIcon !== newValue) {
+      this.ShowScrollToBottomIcon = newValue;
       this.cdr.detectChanges();
     }
   }
 
-  scrollToBottomNow(retryCount: number = 0): void {
+  /** @deprecated Use {@link CheckScroll}. */
+  checkScroll(): void {
+    return this.CheckScroll();
+  }
+
+  ScrollToBottomNow(retryCount: number = 0): void {
     try {
       if (!this.scrollContainer) {
         if (retryCount < 10) {
-          setTimeout(() => this.scrollToBottomNow(retryCount + 1), 50);
+          setTimeout(() => this.ScrollToBottomNow(retryCount + 1), 50);
         }
         return;
       }
 
       const element = this.scrollContainer.nativeElement;
       if (element.scrollHeight === 0 && retryCount < 10) {
-        setTimeout(() => this.scrollToBottomNow(retryCount + 1), 50);
+        setTimeout(() => this.ScrollToBottomNow(retryCount + 1), 50);
       } else if (element.scrollHeight > 0) {
         element.scrollTop = element.scrollHeight;
       }
@@ -4598,11 +6246,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
   }
 
-  scrollToBottomAnimate(): void {
+  /** @deprecated Use {@link ScrollToBottomNow}. */
+  scrollToBottomNow(retryCount: number = 0): void {
+    return this.ScrollToBottomNow(retryCount);
+  }
+
+  ScrollToBottomAnimate(): void {
     if (this.scrollContainer) {
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
+  }
+
+  /** @deprecated Use {@link ScrollToBottomAnimate}. */
+  scrollToBottomAnimate(): void {
+    return this.ScrollToBottomAnimate();
   }
 
   /**
@@ -4633,7 +6291,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.scrollToBottom = true;
       return;
     }
-    if (this.readReplyFromTop) {
+    if (this.ReadReplyFromTop) {
       if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
         this.currentTurnStartMessageId = message.ID;
       } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
@@ -4666,7 +6324,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * fits is already fully on screen at the bottom, and moving it would be motion for nothing.
    */
   private scrollTurnToTop(messageId: string, attempt: number = 0): void {
-    if (!this.readReplyFromTop) {
+    if (!this.ReadReplyFromTop) {
       return;
     }
     const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
@@ -4688,9 +6346,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (turnHeight > container.clientHeight) {
       container.scroll({ top: turnTop, behavior: 'smooth' });
     } else {
-      this.scrollToBottomNow();
+      this.ScrollToBottomNow();
     }
-    this.checkScroll();
+    this.CheckScroll();
   }
 
   /**
@@ -4766,7 +6424,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const completedStatuses = ['Completed', 'Failed', 'Error', 'Cancelled'];
 
     for (const message of inProgressMessages) {
-      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      const agentRun = this.AgentRunsByDetailId.get(message.ID);
 
       if (!agentRun) {
         // No agent run yet — fire-and-forget may not have created it.
@@ -4800,7 +6458,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     for (const message of errorMessages) {
-      const agentRun = this.agentRunsByDetailId.get(message.ID);
+      const agentRun = this.AgentRunsByDetailId.get(message.ID);
       if (agentRun && agentRun.Status === 'Completed') {
         LogStatusEx({message: `🔧 Correcting stale error: message ${message.ID} shows Error but agent run ${agentRun.ID} completed successfully`, verboseOnly: true});
         await this.handleMessageCompletion(message, agentRun.ID, conversationId, loadToken);
@@ -4813,28 +6471,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Opens the artifact and scrolls to the message containing it
    */
   private async handlePendingArtifactNavigation(): Promise<void> {
-    if (!this.pendingArtifactId) {
+    if (!this.PendingArtifactId) {
       return; // No pending navigation
     }
-    const pendingTargetConversationId = this.pendingArtifactConversationId ?? this.conversationId;
-    if (!this.pendingArtifactId || !this.isActiveConversation(pendingTargetConversationId)) {
+    const pendingTargetConversationId = this.PendingArtifactConversationId ?? this.ConversationId;
+    if (!this.PendingArtifactId || !this.isActiveConversation(pendingTargetConversationId)) {
       return;
     }
 
-    console.log('📦 Processing pending artifact navigation:', this.pendingArtifactId, 'v' + this.pendingArtifactVersionNumber);
+    console.log('📦 Processing pending artifact navigation:', this.PendingArtifactId, 'v' + this.PendingArtifactVersionNumber);
 
     // Capture values before emitting consumed event
-    const artifactIdToOpen = this.pendingArtifactId;
-    const versionNumberToOpen = this.pendingArtifactVersionNumber;
-    const conversationId = this.conversationId;
+    const artifactIdToOpen = this.PendingArtifactId;
+    const versionNumberToOpen = this.PendingArtifactVersionNumber;
+    const conversationId = this.ConversationId;
 
     // Notify parent that we consumed the pending artifact
-    this.pendingArtifactConsumed.emit();
+    this.PendingArtifactConsumed.emit();
 
     // Find the message containing this artifact version
     let messageIdWithArtifact: string | null = null;
 
-    for (const [detailId, artifactList] of this.artifactsByDetailId.entries()) {
+    for (const [detailId, artifactList] of this.ArtifactsByDetailId.entries()) {
       for (const artifactInfo of artifactList) {
         if (artifactInfo.artifactId === artifactIdToOpen) {
           // Found the artifact - check if version matches (if specified)
@@ -4855,13 +6513,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Open the artifact panel
     this.artifactSelectionEpoch++;
-    this.selectedArtifactId = artifactIdToOpen;
-    this.selectedVersionNumber = versionNumberToOpen ?? undefined;
-    this.showArtifactPanel = true;
+    this.SelectedArtifactId = artifactIdToOpen;
+    this.SelectedVersionNumber = versionNumberToOpen ?? undefined;
+    this.ShowArtifactPanel = true;
 
     // Load permissions for the artifact
     await this.loadArtifactPermissions(artifactIdToOpen, conversationId, artifactIdToOpen);
-    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, artifactIdToOpen)) {
+    if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.SelectedArtifactId, artifactIdToOpen)) {
       return;
     }
     this.cdr.detectChanges();
@@ -4892,14 +6550,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Handle intent check started - show temporary "Analyzing intent..." message
    */
-  async onIntentCheckStarted(event: {conversationId: string}): Promise<void> {
+  async OnIntentCheckStarted(event: {conversationId: string}): Promise<void> {
     // Guard: ignore intent-check UI from a background conversation's input after a swap,
     // so the "Analyzing..." placeholder isn't injected into the displayed conversation.
     if (!this.isActiveConversation(event.conversationId)) {
       return;
     }
     const md = this.ProviderToUse;
-    const tempMessage = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+    const tempMessage = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.CurrentUser);
 
     // Create a temporary message that looks like an AI response in-progress
     tempMessage.Message = '🔍 Analyzing your request to determine the best agent...';
@@ -4920,10 +6578,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnIntentCheckStarted}. */
+  async onIntentCheckStarted(event: {conversationId: string}): Promise<void> {
+    return this.OnIntentCheckStarted(event);
+  }
+
   /**
    * Handle intent check completed - remove temporary message
    */
-  onIntentCheckCompleted(event: {conversationId: string}): void {
+  OnIntentCheckCompleted(event: {conversationId: string}): void {
     // Guard (symmetric with onIntentCheckStarted): ignore a background conversation's
     // intent-check completion after a swap. Without this, a late completion from the
     // conversation the user just left would remove the ACTIVE conversation's own
@@ -4937,5 +6600,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.intentCheckMessage = null;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link OnIntentCheckCompleted}. */
+  onIntentCheckCompleted(event: {conversationId: string}): void {
+    return this.OnIntentCheckCompleted(event);
   }
 }

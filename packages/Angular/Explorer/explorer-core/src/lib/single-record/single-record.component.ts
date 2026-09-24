@@ -29,12 +29,48 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export class SingleRecordComponent extends BaseAngularComponent implements OnDestroy {
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
-  @Input() public newRecordValues: string | Record<string, unknown> | null = '';
+  @Input() public NewRecordValues: string | Record<string, unknown> | null = '';
 
-  @Output() public loadComplete: EventEmitter<void> = new EventEmitter<void>();
-  @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
+  /** @deprecated Use {@link NewRecordValues}. */
+  @Input() public set newRecordValues(value: string | Record<string, unknown> | null) {
+    this.NewRecordValues = value;
+  }
+  /** @deprecated Use {@link NewRecordValues}. */
+  public get newRecordValues(): string | Record<string, unknown> | null {
+    return this.NewRecordValues;
+  }
+
+  @Output() public LoadComplete: EventEmitter<void> = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link LoadComplete}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (loadComplete) keeps working. Must stay AFTER LoadComplete: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public loadComplete = this.LoadComplete;
+  @Output() public RecordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
+
+  /**
+   * @deprecated Use {@link RecordSaved}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (recordSaved) keeps working. Must stay AFTER RecordSaved: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public recordSaved = this.RecordSaved;
   /** Emitted when the hosted form asks to be dismissed (e.g. Discard on a new record). */
-  @Output() public recordDismissed: EventEmitter<void> = new EventEmitter<void>();
+  @Output() public RecordDismissed: EventEmitter<void> = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link RecordDismissed}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (recordDismissed) keeps working. Must stay AFTER RecordDismissed: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public recordDismissed = this.RecordDismissed;
 
   /**
    * The live form's composition — sections, related grids, contributions, and the slots
@@ -43,7 +79,7 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
    * The form is created dynamically inside `<mj-entity-form-host>`, so this relay is the
    * only route the snapshot has out to Explorer.
    */
-  @Output() public compositionChanged: EventEmitter<FormCompositionSnapshot> = new EventEmitter<FormCompositionSnapshot>();
+  @Output() public CompositionChanged: EventEmitter<FormCompositionSnapshot> = new EventEmitter<FormCompositionSnapshot>();
 
   @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
 
@@ -65,8 +101,13 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   private recentAccessService = new RecentAccessService();
 
   /** Unblock the shell's first-resource-load gate (success or error). */
+  OnLoadComplete(): void {
+    this.LoadComplete.emit();
+  }
+
+  /** @deprecated Use {@link OnLoadComplete}. */
   onLoadComplete(): void {
-    this.loadComplete.emit();
+    return this.OnLoadComplete();
   }
 
   private compositionSub: Subscription | null = null;
@@ -81,10 +122,10 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   onFormCreated(form: BaseFormComponent): void {
     this.compositionSub?.unsubscribe();
     this.compositionSub = form.CompositionChanged.subscribe((snapshot: FormCompositionSnapshot) =>
-      this.compositionChanged.emit(snapshot),
+      this.CompositionChanged.emit(snapshot),
     );
     if (form.CompositionSnapshot) {
-      this.compositionChanged.emit(form.CompositionSnapshot);
+      this.CompositionChanged.emit(form.CompositionSnapshot);
     }
   }
 
@@ -94,22 +135,37 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
   }
 
   /** Log access for existing records once the form's record is ready. */
-  onRecordReady(record: BaseEntity): void {
+  OnRecordReady(record: BaseEntity): void {
     if (record?.IsSaved) {
       this.recentAccessService.logAccess(record.EntityInfo.Name, record.PrimaryKey, 'record');
     }
   }
 
-  onSaved(record: BaseEntity): void {
-    this.recordSaved.emit(record);
+  /** @deprecated Use {@link OnRecordReady}. */
+  onRecordReady(record: BaseEntity): void {
+    return this.OnRecordReady(record);
   }
 
-  onNotification(event: FormNotificationEvent): void {
+  OnSaved(record: BaseEntity): void {
+    this.RecordSaved.emit(record);
+  }
+
+  /** @deprecated Use {@link OnSaved}. */
+  onSaved(record: BaseEntity): void {
+    return this.OnSaved(record);
+  }
+
+  OnNotification(event: FormNotificationEvent): void {
     this.sharedService.CreateSimpleNotification(event.Message, event.Type, event.Duration);
   }
 
+  /** @deprecated Use {@link OnNotification}. */
+  onNotification(event: FormNotificationEvent): void {
+    return this.OnNotification(event);
+  }
+
   /** Map the form's navigation requests onto Explorer's NavigationService. */
-  handleNavigation(event: FormNavigationEvent): void {
+  HandleNavigation(event: FormNavigationEvent): void {
     switch (event.Kind) {
       case 'record':
         this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
@@ -132,7 +188,7 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
         window.open(`mailto:${event.EmailAddress}`, '_self');
         break;
       case 'dismiss':
-        this.recordDismissed.emit();
+        this.RecordDismissed.emit();
         break;
       case 'create-related': {
         // A FK field wants a new related record created. Open the related entity's form
@@ -148,5 +204,10 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnDes
         break;
       }
     }
+  }
+
+  /** @deprecated Use {@link HandleNavigation}. */
+  handleNavigation(event: FormNavigationEvent): void {
+    return this.HandleNavigation(event);
   }
 }

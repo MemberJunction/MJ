@@ -55,7 +55,7 @@ export class MjIconPickerComponent implements ControlValueAccessor {
     @Input()
     set Value(value: string) {
         this._value = value ?? '';
-        this.text = this._value;
+        this.Text = this._value;
     }
     get Value(): string { return this._value; }
 
@@ -80,7 +80,7 @@ export class MjIconPickerComponent implements ControlValueAccessor {
     @ViewChild('search') private searchBox?: ElementRef<HTMLInputElement>;
 
     /** What is in the text box, which may not yet be a complete class string. */
-    public text = '';
+    public Text = '';
 
     /** Whether the icon grid is open. */
     public IsOpen = false;
@@ -113,7 +113,7 @@ export class MjIconPickerComponent implements ControlValueAccessor {
 
     /** The icon drawn in the preview, or '' when nothing is set. */
     public get Preview(): string {
-        return NormalizeIconClass(this.text, this.Style);
+        return NormalizeIconClass(this.Text, this.Style);
     }
 
     /** The current icon's bare name, for the grid's selected state. */
@@ -188,7 +188,7 @@ export class MjIconPickerComponent implements ControlValueAccessor {
 
     /** Typed text is normalized on the way out, so a bare name still renders. */
     public OnTextChanged(raw: string): void {
-        this.text = raw;
+        this.Text = raw;
         this.commit(NormalizeIconClass(raw, this.Style));
         this.cdr.markForCheck();
     }
@@ -196,14 +196,14 @@ export class MjIconPickerComponent implements ControlValueAccessor {
     /** Writes the icon in the style that draws it, not in whatever the field defaulted to. */
     public Choose(icon: FontAwesomeIcon): void {
         const value = this.ClassFor(icon);
-        this.text = value;
+        this.Text = value;
         this.commit(value);
         this.Close();
     }
 
     /** Clears the icon. A panel with none is a normal thing to want. */
     public Clear(): void {
-        this.text = '';
+        this.Text = '';
         this.commit('');
     }
 
@@ -222,7 +222,7 @@ export class MjIconPickerComponent implements ControlValueAccessor {
 
     public writeValue(value: string | null): void {
         this._value = value ?? '';
-        this.text = this._value;
+        this.Text = this._value;
         this.cdr.markForCheck();
     }
 

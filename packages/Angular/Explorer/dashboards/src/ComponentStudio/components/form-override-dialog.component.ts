@@ -233,8 +233,26 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
      */
     @Input() EditMode = false;
 
-    @Output() confirmed = new EventEmitter<FormOverrideDialogResult>();
-    @Output() dismissed = new EventEmitter<void>();
+    @Output() Confirmed = new EventEmitter<FormOverrideDialogResult>();
+
+    /**
+     * @deprecated Use {@link Confirmed}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (confirmed) keeps working. Must stay AFTER Confirmed: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() confirmed = this.Confirmed;
+    @Output() Dismissed = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link Dismissed}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (dismissed) keeps working. Must stay AFTER Dismissed: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() dismissed = this.Dismissed;
 
     public Name = '';
     public Description: string | null = null;
@@ -243,9 +261,27 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     public RoleID: string | null = null;
     public Priority = 0;
     public Status: OverrideStatus = 'Pending';
-    public validationError: string | null = null;
+    public ValidationError: string | null = null;
 
-    public availableRoles: RoleInfo[] = [];
+    /** @deprecated Use {@link ValidationError}. */
+    public get validationError(): string | null {
+        return this.ValidationError;
+    }
+    /** @deprecated Use {@link ValidationError}. */
+    public set validationError(value: string | null) {
+        this.ValidationError = value;
+    }
+
+    public AvailableRoles: RoleInfo[] = [];
+
+    /** @deprecated Use {@link AvailableRoles}. */
+    public get availableRoles(): RoleInfo[] {
+        return this.AvailableRoles;
+    }
+    /** @deprecated Use {@link AvailableRoles}. */
+    public set availableRoles(value: RoleInfo[]) {
+        this.AvailableRoles = value;
+    }
 
     /**
      * Whether this user may show a form to a role or to everyone.
@@ -273,7 +309,7 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     ngOnInit(): void {
         // Load roles eagerly — small list, used only when Scope='Role'.
         const provider = this.ProviderToUse;
-        this.availableRoles = provider?.Roles ?? [];
+        this.AvailableRoles = provider?.Roles ?? [];
     }
 
     /**
@@ -301,7 +337,7 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
         this.Name = (this.InitialName?.trim() || this.ComponentName || '').trim();
         this.Description = this.InitialDescription?.trim() || null;
         this.Notes = this.InitialNotes?.trim() || null;
-        this.validationError = null;
+        this.ValidationError = null;
         // Default Status to Pending — matches the new "create as draft,
         // activate later" workflow. Edit-mode callers will override via
         // InitialStatus.
@@ -345,19 +381,19 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
 
     public OnConfirmClick(): void {
         if (!this.Name?.trim()) {
-            this.validationError = 'Name is required.';
+            this.ValidationError = 'Name is required.';
             return;
         }
         if (!this.EntityName) {
-            this.validationError = 'No entity selected. Pick one in the Field Binding inspector before activating.';
+            this.ValidationError = 'No entity selected. Pick one in the Field Binding inspector before activating.';
             return;
         }
         if (this.Scope === 'Role' && !this.RoleID) {
-            this.validationError = 'Pick a role when Scope = Role.';
+            this.ValidationError = 'Pick a role when Scope = Role.';
             return;
         }
-        this.validationError = null;
-        this.confirmed.emit({
+        this.ValidationError = null;
+        this.Confirmed.emit({
             Name: this.Name.trim(),
             Description: this.Description,
             Notes: this.Notes,
@@ -370,6 +406,6 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     }
 
     public OnCancelClick(): void {
-        this.dismissed.emit();
+        this.Dismissed.emit();
     }
 }

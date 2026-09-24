@@ -48,8 +48,7 @@
               "Get Scheduled Job Statistics",
               "Web Page Content",
               "URL Metadata Extractor",
-              "Google Custom Search",
-              "Perplexity Search",
+              "Web Search",
               "Preview Document"
             ]
           }
@@ -196,29 +195,15 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "02862A6E-5AAB-4DE2-B16D-8553145F668C"
           },
           "sync": {
-            "lastModified": "2026-03-26T22:05:22.838Z",
-            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "84CC71B1-14DA-4341-A301-D7781EDFE6E3"
-          },
-          "sync": {
-            "lastModified": "2026-08-20T22:30:09.554Z",
-            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
+            "lastModified": "2026-09-21T02:45:37.122Z",
+            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
         {
@@ -499,6 +484,20 @@
           "sync": {
             "lastModified": "2026-04-09T17:25:00.898Z",
             "checksum": "f771348487b3ef029c984184fb097591e903ab745616272331914b6fb0d78c22"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84CC71B1-14DA-4341-A301-D7781EDFE6E3"
+          },
+          "deleteRecord": {
+            "delete": true,
+            "deletedAt": "2026-09-22T18:53:11.631Z"
           }
         }
       ],
@@ -958,8 +957,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-09-12T15:03:57.464Z",
-      "checksum": "252dfb1129350a6c8d92f89a579b56e283ddfd318dc859ec5c32e9a0df928b5f"
+      "lastModified": "2026-09-21T02:45:37.105Z",
+      "checksum": "4fe54fe156517a51154e5277e2ccf1eec0b5a875bca4d52d7b6d66bb0d3a9b00"
     }
   }
 ]

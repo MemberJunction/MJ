@@ -2,7 +2,7 @@
 import { ValidationResult } from '@memberjunction/global';
 
 /**
- * Fold slot-mounted panels' `validate()` results into the record's own validation.
+ * Fold slot-mounted panels' `Validate()` results into the record's own validation.
  * Base errors stay first so field-level messages keep their position.
  */
 export function MergePanelValidation(base: ValidationResult, panels: readonly ValidationResult[]): ValidationResult {

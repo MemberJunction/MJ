@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass } from "@memberjunction/global";
 import type { MJEntityFormContributionEntity } from "@memberjunction/core-entities";
-import { ParseClaimedFieldNames, addOutput, failure, getStringParam } from "./_shared";
+import { ParseClaimedFieldNames, AddOutput, Failure, GetStringParam } from "./_shared";
 
 /** One contribution row, flattened for an agent or an apply flow to reason about. */
 export interface FormContributionSummary {
@@ -39,14 +39,14 @@ export class GetFormContributionsForEntityAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const entityName = getStringParam(params, "EntityName");
-            if (!entityName) return failure("MISSING_PARAMETER", "Parameter 'EntityName' is required.");
+            const entityName = GetStringParam(params, "EntityName");
+            if (!entityName) return Failure("MISSING_PARAMETER", "Parameter 'EntityName' is required.");
             const provider = params.Provider ?? Metadata.Provider;
-            if (!provider) return failure("NO_PROVIDER", "No metadata provider available.");
+            if (!provider) return Failure("NO_PROVIDER", "No metadata provider available.");
             const user = params.ContextUser;
-            if (!user) return failure("NO_USER", "Action requires a ContextUser.");
+            if (!user) return Failure("NO_USER", "Action requires a ContextUser.");
             const entity = provider.EntityByName(entityName);
-            if (!entity) return failure("ENTITY_NOT_FOUND", `Entity '${entityName}' is not registered.`);
+            if (!entity) return Failure("ENTITY_NOT_FOUND", `Entity '${entityName}' is not registered.`);
 
             const rv = RunView.FromMetadataProvider(provider);
             const rows = await rv.RunView<MJEntityFormContributionEntity>({
@@ -55,7 +55,7 @@ export class GetFormContributionsForEntityAction extends BaseAction {
                 OrderBy: "Precedence DESC, SortKey DESC",
                 ResultType: 'entity_object',
             }, user);
-            if (!rows.Success) return failure("QUERY_FAILED", rows.ErrorMessage ?? 'Contribution lookup failed.');
+            if (!rows.Success) return Failure("QUERY_FAILED", rows.ErrorMessage ?? 'Contribution lookup failed.');
 
             const components = await this.loadComponentLabels(rv, rows.Results ?? [], user);
 
@@ -78,12 +78,12 @@ export class GetFormContributionsForEntityAction extends BaseAction {
                 });
 
             const payload = { EntityName: entity.Name, Contributions: summaries };
-            addOutput(params, "Result", payload);
+            AddOutput(params, "Result", payload);
             return { Success: true, ResultCode: "SUCCESS", Message: JSON.stringify(payload) };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             LogError(`GetFormContributionsForEntityAction: ${message}`);
-            return failure("UNEXPECTED_ERROR", message);
+            return Failure("UNEXPECTED_ERROR", message);
         }
     }
 

@@ -10,17 +10,36 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Registration Context Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="registrationContext"
-        SectionName="Registration Context"
-        Icon="fa fa-info-circle"
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+
+    </mj-collapsible-panel>
+
+    <!-- Form Integration Section -->
+    <mj-collapsible-panel
+        SectionKey="formIntegration"
+        SectionName="Form Integration"
+        Icon="fa fa-plug"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="EntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ComponentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -50,30 +69,11 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Component Configuration Section -->
-    <mj-collapsible-panel
-        SectionKey="componentConfiguration"
-        SectionName="Component Configuration"
-        Icon="fa fa-cogs"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ComponentID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Configuration"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -84,7 +84,7 @@
     <mj-collapsible-panel
         SectionKey="generalInformation"
         SectionName="General Information"
-        Icon="fa fa-align-left"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -114,11 +114,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Layout Configuration Section -->
+    <!-- Placement and Layout Section -->
     <mj-collapsible-panel
-        SectionKey="layoutConfiguration"
-        SectionName="Layout Configuration"
-        Icon="fa fa-layer-group"
+        SectionKey="placementAndLayout"
+        SectionName="Placement and Layout"
+        Icon="fa fa-th-large"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -134,30 +134,6 @@
             [ShowLabel]="true"
             FieldName="SortKey"
             Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ReplacesSectionKey"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ReplacesFieldNames"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ReplacesSectionKeys"
-            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -180,11 +156,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Related Data Mapping Section -->
+    <!-- Replacement Rules Section -->
     <mj-collapsible-panel
-        SectionKey="relatedDataMapping"
-        SectionName="Related Data Mapping"
-        Icon="fa fa-link"
+        SectionKey="replacementRules"
+        SectionName="Replacement Rules"
+        Icon="fa fa-exchange-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -201,6 +177,30 @@
             [ShowLabel]="true"
             FieldName="RelatedJoinField"
             Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ReplacesSectionKey"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ReplacesSectionKeys"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ReplacesFieldNames"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -261,7 +261,7 @@
     <mj-collapsible-panel
         SectionKey="accessControl"
         SectionName="Access Control"
-        Icon="fa fa-shield-alt"
+        Icon="fa fa-lock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -297,7 +297,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

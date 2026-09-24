@@ -64,7 +64,7 @@ export interface AgentRequestAssignmentStrategy {
  * Merges two strategy objects, preferring non-null values from `override`.
  * Used when walking the resolution chain to layer overrides on top of defaults.
  */
-export function mergeAssignmentStrategies(
+export function MergeAssignmentStrategies(
     base: AgentRequestAssignmentStrategy | null | undefined,
     override: AgentRequestAssignmentStrategy | null | undefined
 ): AgentRequestAssignmentStrategy | null {
@@ -83,11 +83,19 @@ export function mergeAssignmentStrategies(
     };
 }
 
+/** @deprecated Use {@link MergeAssignmentStrategies}. */
+export function mergeAssignmentStrategies(
+    base: AgentRequestAssignmentStrategy | null | undefined,
+    override: AgentRequestAssignmentStrategy | null | undefined
+): AgentRequestAssignmentStrategy | null {
+    return MergeAssignmentStrategies(base, override);
+}
+
 /**
  * Parses a JSON string into an `AgentRequestAssignmentStrategy`, returning null
  * if the input is null, undefined, empty, or invalid JSON.
  */
-export function parseAssignmentStrategy(json: string | null | undefined): AgentRequestAssignmentStrategy | null {
+export function ParseAssignmentStrategy(json: string | null | undefined): AgentRequestAssignmentStrategy | null {
     if (!json || json.trim().length === 0) return null;
     try {
         const parsed = JSON.parse(json);
@@ -98,4 +106,9 @@ export function parseAssignmentStrategy(json: string | null | undefined): AgentR
     } catch {
         return null;
     }
+}
+
+/** @deprecated Use {@link ParseAssignmentStrategy}. */
+export function parseAssignmentStrategy(json: string | null | undefined): AgentRequestAssignmentStrategy | null {
+    return ParseAssignmentStrategy(json);
 }

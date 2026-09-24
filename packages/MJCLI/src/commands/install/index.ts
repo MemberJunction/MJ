@@ -15,9 +15,9 @@ import {
 import { LegacyInstaller } from '../../lib/legacy-install.js';
 import {
   NonInteractiveError,
-  failOnNonInteractive,
+  FailOnNonInteractive,
   requireInteractive,
-  withNonInteractiveHandling,
+  WithNonInteractiveHandling,
 } from '../../lib/interactive-guard.js';
 
 export default class Install extends Command {
@@ -84,7 +84,7 @@ export default class Install extends Command {
   async run(): Promise<void> {
     const { flags } = await this.parse(Install);
 
-    return withNonInteractiveHandling(this, async () => {
+    return WithNonInteractiveHandling(this, async () => {
       if (flags.legacy) {
         // The legacy installer is a two-dozen-question wizard with no flag equivalents,
         // so it is interactive by nature — refuse it up front rather than at question 1.
@@ -245,7 +245,7 @@ export default class Install extends Command {
         'Pass --yes to accept defaults and install the latest version unattended, adding --tag and --config to pin the version and supply settings.'
       );
     } catch (error) {
-      failOnNonInteractive(this, error);
+      FailOnNonInteractive(this, error);
     }
   }
 

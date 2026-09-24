@@ -235,6 +235,8 @@ import { MJExperimentSessionIterationFormComponent } from "./Entities/MJExperime
 import { MJExplorerNavigationItemFormComponent } from "./Entities/MJExplorerNavigationItem/mjexplorernavigationitem.form.component";
 import { MJExternalDataSourceFormComponent } from "./Entities/MJExternalDataSource/mjexternaldatasource.form.component";
 import { MJExternalDataSourceTypeFormComponent } from "./Entities/MJExternalDataSourceType/mjexternaldatasourcetype.form.component";
+import { MJFeatureValueCacheFormComponent } from "./Entities/MJFeatureValueCache/mjfeaturevaluecache.form.component";
+import { MJFeatureValueFormComponent } from "./Entities/MJFeatureValue/mjfeaturevalue.form.component";
 import { MJFileCategoryFormComponent } from "./Entities/MJFileCategory/mjfilecategory.form.component";
 import { MJFileEntityRecordLinkFormComponent } from "./Entities/MJFileEntityRecordLink/mjfileentityrecordlink.form.component";
 import { MJFileFormComponent } from "./Entities/MJFile/mjfile.form.component";
@@ -402,6 +404,7 @@ import { MJVersionLabelFormComponent } from "./Entities/MJVersionLabel/mjversion
 import { MJVersionLabelItemFormComponent } from "./Entities/MJVersionLabelItem/mjversionlabelitem.form.component";
 import { MJVersionLabelRestoreFormComponent } from "./Entities/MJVersionLabelRestore/mjversionlabelrestore.form.component";
 import { MJViewTypeFormComponent } from "./Entities/MJViewType/mjviewtype.form.component";
+import { MJWebSearchProviderFormComponent } from "./Entities/MJWebSearchProvider/mjwebsearchprovider.form.component";
 import { MJWorkspaceFormComponent } from "./Entities/MJWorkspace/mjworkspace.form.component";
 import { MJWorkspaceItemFormComponent } from "./Entities/MJWorkspaceItem/mjworkspaceitem.form.component";
 import { JoinGridModule } from "@memberjunction/ng-join-grid"   
@@ -816,6 +819,7 @@ declarations: [
     MJConversationDetailAttachmentFormComponent,
     MJConversationDetailRatingFormComponent,
     MJDashboardPermissionFormComponent,
+    MJFeatureValueCacheFormComponent,
     MJLibraryFormComponent,
     MJMCPServerConnectionFormComponent,
     MJQueryEntityFormComponent,
@@ -823,7 +827,8 @@ declarations: [
     MJSchemaInfoFormComponent,
     MJSignatureProviderFormComponent,
     MJTaggedItemFormComponent,
-    MJUserFormComponent
+    MJUserFormComponent,
+    MJWebSearchProviderFormComponent
 ],
 imports: [
     CommonModule,
@@ -1292,6 +1297,7 @@ declarations: [
     MJAISkillFormComponent,
     MJEntityActionFilterFormComponent,
     MJExperimentFormComponent,
+    MJFeatureValueFormComponent,
     MJListShareFormComponent,
     MJQueueTypeFormComponent,
     MJRecommendationFormComponent,

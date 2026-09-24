@@ -69,7 +69,7 @@ function render(): {
   fixture.componentInstance.entityName = 'MJ: Users';
 
   const emitted: FormCompositionSnapshot[] = [];
-  fixture.componentInstance.compositionChanged.subscribe((s) => emitted.push(s));
+  fixture.componentInstance.CompositionChanged.subscribe((s) => emitted.push(s));
 
   fixture.detectChanges();
   const host = fixture.debugElement.children[0].componentInstance as EntityFormHostStub;
@@ -81,7 +81,7 @@ function fakeForm(): FakeForm {
 }
 
 describe('SingleRecordComponent (DOM) — composition snapshot', () => {
-  it("re-emits the form's CompositionChanged as compositionChanged", () => {
+  it("re-emits the form's CompositionChanged as CompositionChanged", () => {
     const { host, emitted } = render();
     const form = fakeForm();
     host.FormCreated.emit(form);

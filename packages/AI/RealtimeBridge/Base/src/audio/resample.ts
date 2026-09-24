@@ -32,7 +32,7 @@
  * @returns The resampled PCM16 samples at `toRate`.
  * @throws {Error} when either rate is not a positive finite number.
  */
-export function resamplePcm16(input: Int16Array, fromRate: number, toRate: number): Int16Array {
+export function ResamplePcm16(input: Int16Array, fromRate: number, toRate: number): Int16Array {
     assertPositiveRate(fromRate, 'fromRate');
     assertPositiveRate(toRate, 'toRate');
 
@@ -52,6 +52,11 @@ export function resamplePcm16(input: Int16Array, fromRate: number, toRate: numbe
         out[i] = interpolateSample(input, i * step);
     }
     return out;
+}
+
+/** @deprecated Use {@link ResamplePcm16}. */
+export function resamplePcm16(input: Int16Array, fromRate: number, toRate: number): Int16Array {
+    return ResamplePcm16(input, fromRate, toRate);
 }
 
 /**
@@ -92,7 +97,7 @@ function assertPositiveRate(rate: number, label: string): void {
  * @param toRate The target sample rate in Hz.
  * @returns An `ArrayBuffer` of little-endian PCM16 at `toRate`.
  */
-export function resamplePcm16Buffer(pcm: ArrayBuffer, fromRate: number, toRate: number): ArrayBuffer {
+export function ResamplePcm16Buffer(pcm: ArrayBuffer, fromRate: number, toRate: number): ArrayBuffer {
     const view = new DataView(pcm);
     const count = Math.floor(pcm.byteLength / 2);
     const input = new Int16Array(count);
@@ -100,7 +105,7 @@ export function resamplePcm16Buffer(pcm: ArrayBuffer, fromRate: number, toRate: 
         input[i] = view.getInt16(i * 2, true);
     }
 
-    const resampled = resamplePcm16(input, fromRate, toRate);
+    const resampled = ResamplePcm16(input, fromRate, toRate);
 
     const outBuffer = new ArrayBuffer(resampled.length * 2);
     const outView = new DataView(outBuffer);
@@ -108,4 +113,9 @@ export function resamplePcm16Buffer(pcm: ArrayBuffer, fromRate: number, toRate: 
         outView.setInt16(i * 2, resampled[i], true);
     }
     return outBuffer;
+}
+
+/** @deprecated Use {@link ResamplePcm16Buffer}. */
+export function resamplePcm16Buffer(pcm: ArrayBuffer, fromRate: number, toRate: number): ArrayBuffer {
+    return ResamplePcm16Buffer(pcm, fromRate, toRate);
 }

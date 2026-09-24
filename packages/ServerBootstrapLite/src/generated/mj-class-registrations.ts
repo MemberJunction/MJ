@@ -189,7 +189,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (416 classes)
+// @memberjunction/core-entities (419 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -430,6 +430,8 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -603,6 +605,7 @@ import {
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -864,7 +867,12 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/search-engine (14 classes)
+// @memberjunction/tag-engine-base (1 classes)
+import {
+    TagEngineBase,
+} from '@memberjunction/tag-engine-base';
+
+// @memberjunction/search-engine (15 classes)
 import {
     AzureAISearchProvider,
     BGEReRanker,
@@ -877,15 +885,11 @@ import {
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
+    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
 } from '@memberjunction/search-engine';
-
-// @memberjunction/tag-engine-base (1 classes)
-import {
-    TagEngineBase,
-} from '@memberjunction/tag-engine-base';
 
 // @memberjunction/templates (3 classes)
 import {
@@ -1077,7 +1081,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (152 classes)
+// @memberjunction/core-actions (153 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1088,6 +1092,7 @@ import {
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -1551,6 +1556,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeatureValueCacheEntity,
+    MJFeatureValueEntity,
     MJFileCategoryEntity,
     MJFileEntity,
     MJFileEntityRecordLinkEntity,
@@ -1660,12 +1667,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
-    MJSearchScopePermissionEntity,
-    MJSearchScopeProviderEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopePermissionEntity,
+    MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
@@ -1728,6 +1735,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1863,13 +1871,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetVideoAnalyticsAction,
     HootSuiteBulkSchedulePostsAction,
     HootSuiteCreateScheduledPostAction,
-    HootSuiteDeleteScheduledPostAction,
-    HootSuiteGetAnalyticsAction,
-    HootSuiteGetScheduledPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteDeleteScheduledPostAction,
+    HootSuiteGetAnalyticsAction,
+    HootSuiteGetScheduledPostsAction,
     HootSuiteGetSocialProfilesAction,
     HootSuiteSearchPostsAction,
     HootSuiteUpdateScheduledPostAction,
@@ -1919,6 +1927,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DatabaseWellKnownUserSource,
     RecordComparisonCompareServerOperation,
     MJScheduledJobEntityExtended,
+    TagEngineBase,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -1930,10 +1939,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OpenSearchSearchProvider,
     SearchScopePermissionResolver,
     StorageSearchProvider,
+    TagSearchProvider,
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
-    TagEngineBase,
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2066,14 +2075,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
-    MJUserEntityServer,
-    MJUserRoleEntityServer,
-    MJUserRoutineEntityServer,
-    MJUserRoutineRecipientEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
+    MJUserRoutineEntityServer,
+    MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     APIRateLimiterAction,
@@ -2085,6 +2094,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2251,7 +2261,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 962;
+export const CLASS_REGISTRATIONS_COUNT = 967;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -2306,8 +2316,8 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/generic-database-provider',
     '@memberjunction/record-comparison',
     '@memberjunction/scheduling-engine-base',
-    '@memberjunction/search-engine',
     '@memberjunction/tag-engine-base',
+    '@memberjunction/search-engine',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',

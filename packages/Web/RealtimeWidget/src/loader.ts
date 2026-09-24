@@ -10,11 +10,11 @@
 
 import type { WidgetMountOptions, WidgetSession } from './types.js';
 import { WidgetSessionClient } from './session/widget-session-client.js';
-import { readVisitorKey, writeVisitorKey, clearVisitorKey } from './session/visitor-key-cookie.js';
+import { ReadVisitorKey, WriteVisitorKey, ClearVisitorKey } from './session/visitor-key-cookie.js';
 import type { IWidgetTransport } from './transport/widget-transport.js';
 import type { IVoiceController } from './voice/voice-controller.js';
 import { DEFAULT_VOICE_LIMITS, type VoiceAbuseLimits } from './voice/voice-abuse-guard.js';
-import { SupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } from './ui/support-widget-element.js';
+import { SupportWidgetElement, DefineSupportWidgetElement, WIDGET_TAG_NAME } from './ui/support-widget-element.js';
 
 /** Optional injection points so the loader is unit-testable without a network/runtime. */
 export interface WidgetMountDeps {
@@ -31,18 +31,18 @@ export interface WidgetMountDeps {
 /**
  * Mints a guest session and mounts a configured widget element. Returns the element.
  */
-export async function mountWidget(options: WidgetMountOptions, deps: WidgetMountDeps = {}): Promise<SupportWidgetElement> {
-    defineSupportWidgetElement();
+export async function MountWidget(options: WidgetMountOptions, deps: WidgetMountDeps = {}): Promise<SupportWidgetElement> {
+    DefineSupportWidgetElement();
 
     const client = (deps.sessionClientFactory ?? defaultSessionClient)(options.apiUrl, options.widgetKey);
 
     // Returning-visitor anchor (RV1): present the durable cookie (if any) so the server can chain this
     // visit to the visitor's prior conversation. Gated server-side on the widget's RememberReturningVisitors
     // toggle — when off, the server returns no visitorKey and we set no cookie below.
-    const presentedVisitorKey = readVisitorKey(options.widgetKey);
+    const presentedVisitorKey = ReadVisitorKey(options.widgetKey);
     const session = await client.Mint(presentedVisitorKey);
     if (session.rememberReturningVisitors && session.visitorKey) {
-        writeVisitorKey(options.widgetKey, session.visitorKey);
+        WriteVisitorKey(options.widgetKey, session.visitorKey);
     }
 
     const transport = await (deps.transportFactory ?? defaultTransport)(options.apiUrl);
@@ -66,7 +66,7 @@ export async function mountWidget(options: WidgetMountOptions, deps: WidgetMount
             if (!result.success) {
                 throw new Error(result.error ?? 'forget failed');
             }
-            clearVisitorKey(options.widgetKey);
+            ClearVisitorKey(options.widgetKey);
         });
     }
 
@@ -76,8 +76,13 @@ export async function mountWidget(options: WidgetMountOptions, deps: WidgetMount
     return element;
 }
 
+/** @deprecated Use {@link MountWidget}. */
+export async function mountWidget(options: WidgetMountOptions, deps: WidgetMountDeps = {}): Promise<SupportWidgetElement> {
+    return MountWidget(options, deps);
+}
+
 /** Reads data-attributes from the host and mounts. Safe to call once on script load. */
-export async function bootstrapFromDocument(doc: Document = document): Promise<SupportWidgetElement | null> {
+export async function BootstrapFromDocument(doc: Document = document): Promise<SupportWidgetElement | null> {
     const mountEl = doc.querySelector<HTMLElement>('[data-widget-key]');
     const widgetKey = mountEl?.dataset.widgetKey;
     const apiUrl = mountEl?.dataset.apiUrl;
@@ -85,13 +90,18 @@ export async function bootstrapFromDocument(doc: Document = document): Promise<S
         // Nothing to mount — the host hasn't placed a configured element. Not an error.
         return null;
     }
-    return mountWidget({
+    return MountWidget({
         widgetKey,
         apiUrl,
         mountTarget: mountEl,
         title: mountEl.dataset.title,
         greeting: mountEl.dataset.greeting,
     });
+}
+
+/** @deprecated Use {@link BootstrapFromDocument}. */
+export async function bootstrapFromDocument(doc: Document = document): Promise<SupportWidgetElement | null> {
+    return BootstrapFromDocument(doc);
 }
 
 function defaultSessionClient(apiUrl: string, widgetKey: string): WidgetSessionClient {

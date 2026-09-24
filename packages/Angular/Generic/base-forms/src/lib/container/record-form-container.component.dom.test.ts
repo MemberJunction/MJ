@@ -312,7 +312,21 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
       const f = renderRail({ sources: [source('identity', {}, ['Name'])], showValidation: true, errors: [failure('Name'), failure('Orphan')] });
       expect(f.componentInstance.UnroutedValidationErrorCount).toBe(1);
       expect(f.componentInstance.FormIndicators.ErrorCount).toBe(1);
-      expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-error')).toBeNull();
+      // No GROUP owns it, so no rail item is badged …
+      expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-item .mj-forms-chrome-rail-error')).toBeNull();
+      // … but the expanded rail still shows it on its own row. Before this row existed the
+      // unrouted count reached only the collapsed spine, so an expanded rail sat clean over a
+      // form whose save had just been refused.
+      const row = f.nativeElement.querySelector('.mj-forms-chrome-rail-unrouted') as HTMLElement | null;
+      expect(row).not.toBeNull();
+      expect(row?.querySelector('.mj-forms-chrome-rail-error')?.textContent?.trim()).toBe('1');
+      expect(row?.getAttribute('title')).toBe('1 problem is not in any section shown here');
+    });
+
+    it('renders no unrouted row when every failure has a section', () => {
+      const f = renderRail({ sources: [source('identity', { ErrorCount: 1 }, ['Name'])], showValidation: true, errors: [failure('Name')] });
+      expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-unrouted')).toBeNull();
+      expect(errorBadge(f, 'Details')?.textContent?.trim()).toBe('1');
     });
 
     it('renders the related-grid row count only when it is non-zero', () => {
@@ -562,12 +576,12 @@ describe('MjRecordFormContainerComponent (DOM) — a contribution that replaces 
  * when the preview changes, or the panel belongs to no tab and shows on none.
  */
 describe('MjRecordFormContainerComponent (DOM) — the placement preview', () => {
-  type Resolving = { ResolveChrome(): void };
+  type Resolving = { resolveChrome(): void };
 
   it('works out the rail again when the previewed panel changes', () => {
     vi.useFakeTimers();
     // The stub entity cannot be resolved for real; only whether a resolve happens matters here.
-    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'ResolveChrome')
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'resolveChrome')
       .mockImplementation(() => undefined);
     try {
       const preview = new FormPlacementPreview();
@@ -612,7 +626,7 @@ describe('MjRecordFormContainerComponent (DOM) — the placement preview', () =>
 
   it('shows the tab that holds the previewed panel, whatever tab it opened on', () => {
     vi.useFakeTimers();
-    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'ResolveChrome')
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'resolveChrome')
       .mockImplementation(() => undefined);
     try {
       const { preview, chrome } = renderPreviewForm(RAILED);
@@ -638,7 +652,7 @@ describe('MjRecordFormContainerComponent (DOM) — the placement preview', () =>
 
   it('shows the tab a bare strip that replaces blocks belongs to', () => {
     vi.useFakeTimers();
-    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'ResolveChrome')
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'resolveChrome')
       .mockImplementation(() => undefined);
     try {
       const { preview, chrome } = renderPreviewForm({
@@ -658,7 +672,7 @@ describe('MjRecordFormContainerComponent (DOM) — the placement preview', () =>
 
   it('shows the first tab for a bare strip that replaces nothing, where it sits above everything', () => {
     vi.useFakeTimers();
-    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'ResolveChrome')
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'resolveChrome')
       .mockImplementation(() => undefined);
     try {
       const { preview, chrome } = renderPreviewForm(RAILED_NO_STRIP);

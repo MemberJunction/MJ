@@ -2,29 +2,29 @@ import { describe, it, expect } from 'vitest';
 import type { ComponentSpec } from '../component-spec';
 import {
     DEFAULT_FORM_CONTRIBUTION_SLOT,
-    getDeclaredFormContribution,
-    isFormPanelRole,
+    GetDeclaredFormContribution,
+    IsFormPanelRole,
 } from '../forms/form-contribution-spec';
 
 function spec(over: Partial<ComponentSpec>): ComponentSpec {
     return over as unknown as ComponentSpec;
 }
 
-describe('isFormPanelRole', () => {
+describe('IsFormPanelRole', () => {
     it('is true only for componentRole form-panel', () => {
-        expect(isFormPanelRole(spec({ componentRole: 'form-panel' }))).toBe(true);
-        expect(isFormPanelRole(spec({ componentRole: 'form' }))).toBe(false);
-        expect(isFormPanelRole(spec({}))).toBe(false);
+        expect(IsFormPanelRole(spec({ componentRole: 'form-panel' }))).toBe(true);
+        expect(IsFormPanelRole(spec({ componentRole: 'form' }))).toBe(false);
+        expect(IsFormPanelRole(spec({}))).toBe(false);
     });
 });
 
-describe('getDeclaredFormContribution', () => {
+describe('GetDeclaredFormContribution', () => {
     it('returns null when the spec is not a form panel', () => {
-        expect(getDeclaredFormContribution(spec({ componentRole: 'form', formContribution: { title: 'x', slot: 'after-fields', presentation: 'panel' } }))).toBeNull();
+        expect(GetDeclaredFormContribution(spec({ componentRole: 'form', formContribution: { title: 'x', slot: 'after-fields', presentation: 'panel' } }))).toBeNull();
     });
 
     it('fills slot and presentation defaults and trims the title', () => {
-        const c = getDeclaredFormContribution(spec({
+        const c = GetDeclaredFormContribution(spec({
             componentRole: 'form-panel',
             title: 'Lifetime value',
             formContribution: { title: '  LTV strip  ' } as never,
@@ -38,10 +38,10 @@ describe('getDeclaredFormContribution', () => {
     });
 
     it('falls back to spec.title when the block has no title, and rejects unknown slots', () => {
-        const noTitle = getDeclaredFormContribution(spec({ componentRole: 'form-panel', title: 'Renewals' }));
+        const noTitle = GetDeclaredFormContribution(spec({ componentRole: 'form-panel', title: 'Renewals' }));
         expect(noTitle?.title).toBe('Renewals');
         expect(noTitle?.slot).toBe('after-fields');
-        const badSlot = getDeclaredFormContribution(spec({
+        const badSlot = GetDeclaredFormContribution(spec({
             componentRole: 'form-panel', title: 'x',
             formContribution: { title: 'x', slot: 'sidebar' } as never,
         }));
@@ -49,7 +49,7 @@ describe('getDeclaredFormContribution', () => {
     });
 
     it('passes through claims, inclusion, chrome group, icon, sortKey and configuration', () => {
-        const c = getDeclaredFormContribution(spec({
+        const c = GetDeclaredFormContribution(spec({
             componentRole: 'form-panel',
             formContribution: {
                 title: 'Tickets', slot: 'after-related', presentation: 'panel', sortKey: 80,

@@ -26,11 +26,11 @@
 <ng-template #body>
   @if (loadError) {
     <mj-alert Variant="error">{{ loadError }}</mj-alert>
-  } @else if (componentSpec && hostProps) {
+  } @else if (componentSpec && HostProps) {
     <mj-react-component
       #reactComponent
       [component]="componentSpec"
-      [componentProps]="hostProps"
+      [componentProps]="HostProps"
       (componentEvent)="OnReactComponentEvent($event)"
       (openEntityRecord)="OnOpenEntityRecord($event)">
     </mj-react-component>

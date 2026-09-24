@@ -119,10 +119,15 @@ function safeCodePoint(code: number): string {
  * the job. Text that was never double-escaped has no entities left by then, so the
  * extra pass is a no-op on it.
  */
-export function stripHtml(text: string): string {
+export function StripHtml(text: string): string {
     const unescaped = decodeEntities(text);
     const withoutTags = unescaped.replace(/<[^>]*>/g, '');
     return decodeEntities(withoutTags).replace(/\s+/g, ' ').trim();
+}
+
+/** @deprecated Use {@link StripHtml}. */
+export function stripHtml(text: string): string {
+    return StripHtml(text);
 }
 
 /**
@@ -135,7 +140,7 @@ export function stripHtml(text: string): string {
  * caller report them rather than wonder where they went. Age filtering is a
  * separate step ({@link filterByAge}) precisely so that decision stays visible.
  */
-export function parseFeedArticles(xml: string, feedName: string): FeedArticle[] {
+export function ParseFeedArticles(xml: string, feedName: string): FeedArticle[] {
     const articles: FeedArticle[] = [];
     const blockPattern = /<(item|entry)(?:\s[^>]*)?>([\s\S]*?)<\/\1\s*>/g;
     let match: RegExpExecArray | null;
@@ -143,7 +148,7 @@ export function parseFeedArticles(xml: string, feedName: string): FeedArticle[] 
     while ((match = blockPattern.exec(xml)) !== null) {
         const itemXml = match[2];
 
-        const title = stripHtml(extractTag(itemXml, 'title'));
+        const title = StripHtml(extractTag(itemXml, 'title'));
         if (!title) continue;
 
         // RSS puts the URL in <link>text</link>; Atom puts it in <link href="…"/>,
@@ -177,14 +182,19 @@ export function parseFeedArticles(xml: string, feedName: string): FeedArticle[] 
         articles.push({
             title,
             link,
-            description: stripHtml(rawDescription).slice(0, MAX_DESCRIPTION_LENGTH),
-            publishedAt: parseFeedDate(rawDate),
+            description: StripHtml(rawDescription).slice(0, MAX_DESCRIPTION_LENGTH),
+            publishedAt: ParseFeedDate(rawDate),
             categories,
             feedName,
         });
     }
 
     return articles;
+}
+
+/** @deprecated Use {@link ParseFeedArticles}. */
+export function parseFeedArticles(xml: string, feedName: string): FeedArticle[] {
+    return ParseFeedArticles(xml, feedName);
 }
 
 /** Some feeds carry the canonical URL as a permalink `<guid>` and no `<link>`. */
@@ -194,10 +204,15 @@ function extractPermalinkGuid(xml: string): string {
 }
 
 /** A feed date as ISO 8601, or null when it is missing or unparseable. */
-export function parseFeedDate(raw: string): string | null {
+export function ParseFeedDate(raw: string): string | null {
     if (!raw) return null;
     const parsed = new Date(raw);
     return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+/** @deprecated Use {@link ParseFeedDate}. */
+export function parseFeedDate(raw: string): string | null {
+    return ParseFeedDate(raw);
 }
 
 // ─── Age filtering ────────────────────────────────────────────────────────────
@@ -222,7 +237,7 @@ export interface AgeFilterResult {
  * A future-dated article is kept: publishers do post-date, and a clock skew of a
  * few minutes should not delete the newest item in the feed.
  */
-export function filterByAge(
+export function FilterByAge(
     articles: FeedArticle[],
     maxAgeDays: number,
     now: Date,
@@ -249,6 +264,16 @@ export function filterByAge(
     return { kept, tooOldCount, undatedCount };
 }
 
+/** @deprecated Use {@link FilterByAge}. */
+export function filterByAge(
+    articles: FeedArticle[],
+    maxAgeDays: number,
+    now: Date,
+    includeUndated: boolean,
+): AgeFilterResult {
+    return FilterByAge(articles, maxAgeDays, now, includeUndated);
+}
+
 // ─── Scoring ──────────────────────────────────────────────────────────────────
 
 /**
@@ -260,7 +285,7 @@ export function filterByAge(
  * matters; the alternative, word-boundary matching, would miss 'AI-driven' and
  * plurals, which costs more in practice.
  */
-export function computeRelevanceScore(article: FeedArticle, keywords: string[]): { score: number; matched: string[] } {
+export function ComputeRelevanceScore(article: FeedArticle, keywords: string[]): { score: number; matched: string[] } {
     const title = article.title.toLowerCase();
     const description = article.description.toLowerCase();
     const categories = article.categories.map(c => c.toLowerCase()).join(' ');
@@ -286,18 +311,28 @@ export function computeRelevanceScore(article: FeedArticle, keywords: string[]):
     return { score, matched };
 }
 
+/** @deprecated Use {@link ComputeRelevanceScore}. */
+export function computeRelevanceScore(article: FeedArticle, keywords: string[]): { score: number; matched: string[] } {
+    return ComputeRelevanceScore(article, keywords);
+}
+
 /**
  * Recency as a 0-1 decay across the window: 1.0 for something published at `now`,
  * floored at 0.1 at the far edge so an in-window article never scores as though it
  * were out of window. Undated and out-of-window both score 0.
  */
-export function computeRecencyScore(publishedAt: string | null, timeWindowDays: number, now: Date): number {
+export function ComputeRecencyScore(publishedAt: string | null, timeWindowDays: number, now: Date): number {
     if (publishedAt === null || timeWindowDays <= 0) return 0;
     const ageDays = (now.getTime() - new Date(publishedAt).getTime()) / MS_PER_DAY;
     if (ageDays > timeWindowDays) return 0;
     // Future-dated articles clamp to the maximum rather than exceeding it.
     if (ageDays <= 0) return 1;
     return Math.max(0.1, 1 - ageDays / timeWindowDays);
+}
+
+/** @deprecated Use {@link ComputeRecencyScore}. */
+export function computeRecencyScore(publishedAt: string | null, timeWindowDays: number, now: Date): number {
+    return ComputeRecencyScore(publishedAt, timeWindowDays, now);
 }
 
 /**
@@ -307,15 +342,15 @@ export function computeRecencyScore(publishedAt: string | null, timeWindowDays: 
  * recency — which is the right behaviour for "just show me what is new" rather
  * than an error.
  */
-export function scoreAndRankArticles(
+export function ScoreAndRankArticles(
     articles: FeedArticle[],
     keywords: string[],
     timeWindowDays: number,
     now: Date,
 ): ScoredFeedArticle[] {
     const scored = articles.map((article): ScoredFeedArticle => {
-        const { score: relevanceScore, matched } = computeRelevanceScore(article, keywords);
-        const recencyScore = computeRecencyScore(article.publishedAt, timeWindowDays, now);
+        const { score: relevanceScore, matched } = ComputeRelevanceScore(article, keywords);
+        const recencyScore = ComputeRecencyScore(article.publishedAt, timeWindowDays, now);
         return {
             article,
             relevanceScore,
@@ -330,6 +365,16 @@ export function scoreAndRankArticles(
     return scored.sort((a, b) => b.totalScore - a.totalScore);
 }
 
+/** @deprecated Use {@link ScoreAndRankArticles}. */
+export function scoreAndRankArticles(
+    articles: FeedArticle[],
+    keywords: string[],
+    timeWindowDays: number,
+    now: Date,
+): ScoredFeedArticle[] {
+    return ScoreAndRankArticles(articles, keywords, timeWindowDays, now);
+}
+
 /**
  * Drop articles that matched nothing and are not fresh enough to be interesting
  * on their own.
@@ -339,7 +384,12 @@ export function scoreAndRankArticles(
  * though none of the supplied keywords appeared in it. With no keywords supplied,
  * everything is relevant by definition and nothing is dropped.
  */
-export function filterRelevant(scored: ScoredFeedArticle[], keywords: string[], recencyFloor = 0.75): ScoredFeedArticle[] {
+export function FilterRelevant(scored: ScoredFeedArticle[], keywords: string[], recencyFloor = 0.75): ScoredFeedArticle[] {
     if (keywords.length === 0) return scored;
     return scored.filter(s => s.relevanceScore > 0 || s.recencyScore >= recencyFloor);
+}
+
+/** @deprecated Use {@link FilterRelevant}. */
+export function filterRelevant(scored: ScoredFeedArticle[], keywords: string[], recencyFloor = 0.75): ScoredFeedArticle[] {
+    return FilterRelevant(scored, keywords, recencyFloor);
 }

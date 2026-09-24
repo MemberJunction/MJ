@@ -132,7 +132,8 @@
         @if (HasRelatedEntity) {
           <div class="mj-fk-search"
               [class.mj-fk-search--matched]="FKHasLinkedValue"
-              [class.mj-fk-search--scoped]="FKFocused && FKSearchableFields.length > 1">
+              [class.mj-fk-search--scoped]="FKFocused && FKSearchableFields.length > 1"
+              [class.mj-fk-search--toggle]="FKFocused && !!FKScopeLabels">
             @if (FKHasLinkedValue && !(FKFocused && FKSearchableFields.length > 1)) {
               <i class="fa-solid fa-link mj-fk-link-icon" title="Linked record"></i>
             }
@@ -157,6 +158,16 @@
                 <i class="fa-solid fa-magnifying-glass mj-fk-scope-pill-icon"></i>
                 <span class="mj-fk-scope-pill-label">{{ FKSearchFieldLabel }}</span>
                 <i class="fa-solid mj-fk-scope-pill-caret" [class.fa-chevron-up]="FKShowScopeMenu" [class.fa-chevron-down]="!FKShowScopeMenu"></i>
+              </button>
+            }
+
+            <!-- Population toggle: only when the resolved lookup strategy offers a second
+                 population (e.g. customers vs the whole directory). -->
+            @if (FKFocused && FKScopeLabels) {
+              <button type="button" class="mj-fk-scope-toggle"
+                  (mousedown)="OnFKScopeChange($event)"
+                  [title]="'Showing ' + (FKScope === 'primary' ? FKScopeLabels.primary : FKScopeLabels.all) + ' — click to switch'">
+                {{ FKScope === 'primary' ? FKScopeLabels.all : FKScopeLabels.primary }}
               </button>
             }
 
@@ -281,33 +292,49 @@
                           </div>
                         }
                       </div>
-                      <!-- Data rows -->
-                      @for (suggestion of FKSuggestions; track suggestion.PrimaryKeyValue; let i = $index) {
-                        <div class="mj-fk-grid-row"
-                            [class.mj-fk-grid-row--active]="i === FKActiveIndex"
-                            [class.mj-fk-grid-row--selected]="IsFKRowSelected(suggestion)"
-                            (mousedown)="OnFKSelectItem(suggestion, $event)"
-                            (mouseenter)="FKActiveIndex = i">
-                          @if (FKHasIconColumn) {
-                            <div class="mj-fk-cell mj-fk-cell--icon">
-                              @if (suggestion.Icon) { <i [class]="suggestion.Icon"></i> }
-                            </div>
-                          }
-                          @for (col of FKColumnFields; track col; let last = $last) {
-                            @if (col === FKNameField) {
-                              <div class="mj-fk-cell mj-fk-cell--name" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)">
-                                @if (IsFKRowSelected(suggestion)) {
-                                  <i class="fa-solid fa-check mj-fk-selected-check" title="Currently selected"></i>
-                                }
-                                <span [innerHTML]="suggestion.HighlightedName"></span>
-                              </div>
-                            } @else {
-                              <div class="mj-fk-cell" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)" [title]="FKCellFor(suggestion, col)?.Value || ''">
-                                <span [innerHTML]="FKCellFor(suggestion, col)?.HighlightedValue || ''"></span>
+                      <!-- Data rows, under their group's header. A strategy that returns one
+                           unlabelled group renders exactly as before. -->
+                      @for (group of FKGroups; track group.Key) {
+                        @if (group.Label && FKSuggestionsInGroup(group.Key).length > 0) {
+                          <div class="mj-fk-grid-row mj-fk-group-head" (mousedown)="$event.preventDefault()">{{ group.Label }}</div>
+                        }
+                        @for (suggestion of FKSuggestionsInGroup(group.Key); track suggestion.PrimaryKeyValue) {
+                          <div class="mj-fk-grid-row"
+                              [class.mj-fk-grid-row--active]="FKIndexOf(suggestion) === FKActiveIndex"
+                              [class.mj-fk-grid-row--selected]="IsFKRowSelected(suggestion)"
+                              (mousedown)="OnFKSelectItem(suggestion, $event)"
+                              (mouseenter)="FKActiveIndex = FKIndexOf(suggestion)">
+                            @if (FKHasIconColumn) {
+                              <div class="mj-fk-cell mj-fk-cell--icon">
+                                @if (suggestion.Icon) { <i [class]="suggestion.Icon"></i> }
                               </div>
                             }
-                          }
-                        </div>
+                            @for (col of FKColumnFields; track col; let last = $last) {
+                              @if (col === FKNameField) {
+                                <div class="mj-fk-cell mj-fk-cell--name" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)">
+                                  @if (IsFKRowSelected(suggestion)) {
+                                    <i class="fa-solid fa-check mj-fk-selected-check" title="Currently selected"></i>
+                                  }
+                                  <span class="mj-fk-name-line">
+                                    <span [innerHTML]="suggestion.HighlightedName"></span>
+                                    @for (chip of suggestion.Chips ?? []; track chip.Text) {
+                                      <span class="mj-fk-chip"
+                                          [class.mj-fk-chip--info]="chip.Tone === 'info'"
+                                          [class.mj-fk-chip--warn]="chip.Tone === 'warn'">{{ chip.Text }}</span>
+                                    }
+                                  </span>
+                                  @if (suggestion.Secondary) {
+                                    <span class="mj-fk-secondary">{{ suggestion.Secondary }}</span>
+                                  }
+                                </div>
+                              } @else {
+                                <div class="mj-fk-cell" [class.mj-fk-cell--fill]="FKColumnFillsTrack(col, last)" [title]="FKCellFor(suggestion, col)?.Value || ''">
+                                  <span [innerHTML]="FKCellFor(suggestion, col)?.HighlightedValue || ''"></span>
+                                </div>
+                              }
+                            }
+                          </div>
+                        }
                       }
                     </div>
                   </div>

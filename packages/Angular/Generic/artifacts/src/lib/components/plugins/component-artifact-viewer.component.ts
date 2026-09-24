@@ -4,7 +4,7 @@ import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-ar
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
-  isFormRole, isFormPanelRole, getDeclaredFormEntityName, getDeclaredFormContribution,
+  isFormRole, IsFormPanelRole, getDeclaredFormEntityName, GetDeclaredFormContribution,
   type FormPanelHostProps,
 } from '@memberjunction/interactive-component-types/forms';
 import {
@@ -13,7 +13,7 @@ import {
 import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
 import { InteractiveFormComponent } from '@memberjunction/ng-base-forms';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
-import { evaluateComponentPermissions, PermissionEvaluationResult } from './component-permission-evaluation';
+import { EvaluateComponentPermissions, PermissionEvaluationResult } from './component-permission-evaluation';
 
 /**
  * Viewer component for interactive Component artifacts (React-based UI components)
@@ -31,11 +31,38 @@ import { evaluateComponentPermissions, PermissionEvaluationResult } from './comp
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'ComponentArtifactViewerPlugin')
 export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnChanges {
-  @ViewChild('reactComponent') reactComponent?: MJReactComponent;
-  @ViewChild('panelReactComponent') panelReactComponent?: MJReactComponent;
-  @ViewChild('interactiveForm') interactiveForm?: InteractiveFormComponent;
+  @ViewChild('reactComponent') ReactComponent?: MJReactComponent;
+
+  /** @deprecated Use {@link ReactComponent}. */
+  get reactComponent(): MJReactComponent | undefined {
+    return this.ReactComponent;
+  }
+  /** @deprecated Use {@link ReactComponent}. */
+  set reactComponent(value: MJReactComponent | undefined) {
+    this.ReactComponent = value;
+  }
+  @ViewChild('panelReactComponent') PanelReactComponent?: MJReactComponent;
+  @ViewChild('interactiveForm') InteractiveForm?: InteractiveFormComponent;
+
+  /** @deprecated Use {@link InteractiveForm}. */
+  get interactiveForm(): InteractiveFormComponent | undefined {
+    return this.InteractiveForm;
+  }
+  /** @deprecated Use {@link InteractiveForm}. */
+  set interactiveForm(value: InteractiveFormComponent | undefined) {
+    this.InteractiveForm = value;
+  }
   @Output() tabsChanged = new EventEmitter<void>();
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() OpenEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
 
   /**
    * Emitted when the user clicks "Apply to my form" on a form-role artifact.
@@ -43,41 +70,158 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * the entity name. The host is responsible for confirming + invoking the
    * actual server action.
    */
-  @Output() applyFormRequested = new EventEmitter<{ spec: ComponentSpec; entityName: string }>();
+  @Output() ApplyFormRequested = new EventEmitter<{ spec: ComponentSpec; entityName: string }>();
+
+  /**
+   * @deprecated Use {@link ApplyFormRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (applyFormRequested) keeps working. Must stay AFTER ApplyFormRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() applyFormRequested = this.ApplyFormRequested;
 
   // ── Form-aware state (only populated when componentRole === 'form') ──
 
   /** True when this artifact's spec declares `componentRole: 'form'`. */
-  public isFormArtifact = false;
+  public IsFormArtifact = false;
+
+  /** @deprecated Use {@link IsFormArtifact}. */
+  public get isFormArtifact() {
+    return this.IsFormArtifact;
+  }
+  /** @deprecated Use {@link IsFormArtifact}. */
+  public set isFormArtifact(value) {
+    this.IsFormArtifact = value;
+  }
 
   /** True for `componentRole: 'form-panel'` — a single contribution, not a whole form. */
-  public isFormPanelArtifact = false;
+  public IsFormPanelArtifact = false;
 
   /** Host props for the panel preview. Null until a record is bound. */
-  public panelPreviewProps: FormPanelHostProps | null = null;
+  public PanelPreviewProps: FormPanelHostProps | null = null;
 
   /** Entity the form targets — resolved from spec.entityName / dataRequirements. */
-  public formEntityInfo: EntityInfo | null = null;
+  public FormEntityInfo: EntityInfo | null = null;
+
+  /** @deprecated Use {@link FormEntityInfo}. */
+  public get formEntityInfo(): EntityInfo | null {
+    return this.FormEntityInfo;
+  }
+  /** @deprecated Use {@link FormEntityInfo}. */
+  public set formEntityInfo(value: EntityInfo | null) {
+    this.FormEntityInfo = value;
+  }
 
   /** The real or fixture record currently bound to the form preview. */
-  public formRecord: BaseEntity | null = null;
+  public FormRecord: BaseEntity | null = null;
+
+  /** @deprecated Use {@link FormRecord}. */
+  public get formRecord(): BaseEntity | null {
+    return this.FormRecord;
+  }
+  /** @deprecated Use {@link FormRecord}. */
+  public set formRecord(value: BaseEntity | null) {
+    this.FormRecord = value;
+  }
 
   /** True iff `formRecord` is a real DB row (vs a fixture NewRecord()). */
-  public formRecordIsReal = false;
+  public FormRecordIsReal = false;
+
+  /** @deprecated Use {@link FormRecordIsReal}. */
+  public get formRecordIsReal() {
+    return this.FormRecordIsReal;
+  }
+  /** @deprecated Use {@link FormRecordIsReal}. */
+  public set formRecordIsReal(value) {
+    this.FormRecordIsReal = value;
+  }
 
   /** Label for the chip (e.g. the record's Name field). */
-  public formRecordLabel = '';
+  public FormRecordLabel = '';
+
+  /** @deprecated Use {@link FormRecordLabel}. */
+  public get formRecordLabel() {
+    return this.FormRecordLabel;
+  }
+  /** @deprecated Use {@link FormRecordLabel}. */
+  public set formRecordLabel(value) {
+    this.FormRecordLabel = value;
+  }
 
   /** Picker UI state. */
-  public showRecordPicker = false;
-  public recordSearchTerm = '';
-  public recordSearchResults: Array<{ ID: string; Label: string }> = [];
-  public formInitError: string | null = null;
+  public ShowRecordPicker = false;
+
+  /** @deprecated Use {@link ShowRecordPicker}. */
+  public get showRecordPicker() {
+    return this.ShowRecordPicker;
+  }
+  /** @deprecated Use {@link ShowRecordPicker}. */
+  public set showRecordPicker(value) {
+    this.ShowRecordPicker = value;
+  }
+  public RecordSearchTerm = '';
+
+  /** @deprecated Use {@link RecordSearchTerm}. */
+  public get recordSearchTerm() {
+    return this.RecordSearchTerm;
+  }
+  /** @deprecated Use {@link RecordSearchTerm}. */
+  public set recordSearchTerm(value) {
+    this.RecordSearchTerm = value;
+  }
+  public RecordSearchResults: Array<{ ID: string; Label: string }> = [];
+
+  /** @deprecated Use {@link RecordSearchResults}. */
+  public get recordSearchResults(): Array<{ ID: string; Label: string }> {
+    return this.RecordSearchResults;
+  }
+  /** @deprecated Use {@link RecordSearchResults}. */
+  public set recordSearchResults(value: Array<{ ID: string; Label: string }>) {
+    this.RecordSearchResults = value;
+  }
+  public FormInitError: string | null = null;
+
+  /** @deprecated Use {@link FormInitError}. */
+  public get formInitError(): string | null {
+    return this.FormInitError;
+  }
+  /** @deprecated Use {@link FormInitError}. */
+  public set formInitError(value: string | null) {
+    this.FormInitError = value;
+  }
 
   // Component data
-  public component: ComponentSpec | null = null;
-  public componentCode: string = "";
-  public componentName: string = '';
+  public Component: ComponentSpec | null = null;
+
+  /** @deprecated Use {@link Component}. */
+  public get component(): ComponentSpec | null {
+    return this.Component;
+  }
+  /** @deprecated Use {@link Component}. */
+  public set component(value: ComponentSpec | null) {
+    this.Component = value;
+  }
+  public ComponentCode: string = "";
+
+  /** @deprecated Use {@link ComponentCode}. */
+  public get componentCode(): string {
+    return this.ComponentCode;
+  }
+  /** @deprecated Use {@link ComponentCode}. */
+  public set componentCode(value: string) {
+    this.ComponentCode = value;
+  }
+  public ComponentName: string = '';
+
+  /** @deprecated Use {@link ComponentName}. */
+  public get componentName(): string {
+    return this.ComponentName;
+  }
+  /** @deprecated Use {@link ComponentName}. */
+  public set componentName(value: string) {
+    this.ComponentName = value;
+  }
 
   /**
    * Cached resolved spec from the registry, preserved even after the React component
@@ -92,26 +236,58 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * the spec resolved from the registry.
    */
   private get liveReactComponent(): MJReactComponent | undefined {
-    return this.reactComponent ?? this.panelReactComponent;
+    return this.ReactComponent ?? this.PanelReactComponent;
   }
 
-  public get resolvedComponentSpec(): ComponentSpec | null {
+  public get ResolvedComponentSpec(): ComponentSpec | null {
     // Prefer the live React component's resolved spec (most up-to-date),
     // then fall back to our cached copy (survives DOM destruction),
     // then fall back to the stripped local spec as last resort.
-    return this.liveReactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.component;
+    return this.liveReactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.Component;
+  }
+
+  /** @deprecated Use {@link ResolvedComponentSpec}. */
+  public get resolvedComponentSpec(): ComponentSpec | null {
+    return this.ResolvedComponentSpec;
   }
 
   // Feedback panel
   public ShowFeedbackPanel = false;
 
   // Error state
-  public hasError = false;
+  public HasError = false;
+
+  /** @deprecated Use {@link HasError}. */
+  public get hasError() {
+    return this.HasError;
+  }
+  /** @deprecated Use {@link HasError}. */
+  public set hasError(value) {
+    this.HasError = value;
+  }
   public errorMessage = '';
-  public errorDetails = '';
+  public ErrorDetails = '';
+
+  /** @deprecated Use {@link ErrorDetails}. */
+  public get errorDetails() {
+    return this.ErrorDetails;
+  }
+  /** @deprecated Use {@link ErrorDetails}. */
+  public set errorDetails(value) {
+    this.ErrorDetails = value;
+  }
 
   // Permission state
-  public permissionResult: PermissionEvaluationResult | null = null;
+  public PermissionResult: PermissionEvaluationResult | null = null;
+
+  /** @deprecated Use {@link PermissionResult}. */
+  public get permissionResult(): PermissionEvaluationResult | null {
+    return this.PermissionResult;
+  }
+  /** @deprecated Use {@link PermissionResult}. */
+  public set permissionResult(value: PermissionEvaluationResult | null) {
+    this.PermissionResult = value;
+  }
 
   /**
    * Whether this plugin has content to display in the Display tab.
@@ -124,7 +300,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   public override get hasDisplayContent(): boolean {
     // Use this.component directly - it's available synchronously after loadComponentSpec()
-    return !!this.component?.namespace || !!this.component?.code
+    return !!this.Component?.namespace || !!this.Component?.code
   }
 
   constructor(private adapter: AngularAdapterService, private cdr: ChangeDetectorRef) {
@@ -156,10 +332,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     try {
       // Clear cached resolved spec from previous version so stale data doesn't persist
       this._cachedResolvedSpec = null;
-      this.permissionResult = null;
+      this.PermissionResult = null;
 
       if (this.artifactVersion?.Content) {
-        this.component = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec;
+        this.Component = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec;
         this.extractComponentParts();
         this.evaluatePermissions();
         // Form-aware detection. Done here (not in ngAfterViewInit) so the
@@ -172,9 +348,9 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       }
     } catch (error) {
       console.error('Failed to load component spec:', error);
-      this.hasError = true;
+      this.HasError = true;
       this.errorMessage = 'Failed to load component';
-      this.errorDetails = error instanceof Error ? error.message : String(error);
+      this.ErrorDetails = error instanceof Error ? error.message : String(error);
     }
   }
 
@@ -185,19 +361,24 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Runs synchronously against already-loaded client-side metadata.
    */
   private evaluatePermissions(): void {
-    const spec = this.resolvedComponentSpec;
+    const spec = this.ResolvedComponentSpec;
     if (!spec) return;
 
     const provider = this.ProviderToUse;
     const currentUser = provider.CurrentUser;
     if (!currentUser) return; // No user context — skip check
 
-    this.permissionResult = evaluateComponentPermissions(spec, currentUser, provider);
+    this.PermissionResult = EvaluateComponentPermissions(spec, currentUser, provider);
   }
 
   /** Whether the component should be blocked from rendering due to missing permissions. */
+  public get IsPermissionBlocked(): boolean {
+    return !!this.PermissionResult && !this.PermissionResult.canRun;
+  }
+
+  /** @deprecated Use {@link IsPermissionBlocked}. */
   public get isPermissionBlocked(): boolean {
-    return !!this.permissionResult && !this.permissionResult.canRun;
+    return this.IsPermissionBlocked;
   }
 
   /**
@@ -212,9 +393,9 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       await this.adapter.initialize();
     } catch (error) {
       console.error('Failed to initialize Angular adapter:', error);
-      this.hasError = true;
+      this.HasError = true;
       this.errorMessage = 'Failed to initialize component runtime';
-      this.errorDetails = error instanceof Error ? error.message : String(error);
+      this.ErrorDetails = error instanceof Error ? error.message : String(error);
     }
   }
 
@@ -228,7 +409,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   public GetAdditionalTabs(): ArtifactViewerTab[] {
     const tabs: ArtifactViewerTab[] = [];
 
-    const resolvedComponent = this.resolvedComponentSpec;
+    const resolvedComponent = this.ResolvedComponentSpec;
 
     if (!resolvedComponent) {
       return tabs;
@@ -297,11 +478,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   }
 
   private extractComponentParts(): void {
-    if (this.resolvedComponentSpec?.name) {
-      this.componentName = this.resolvedComponentSpec.name;
+    if (this.ResolvedComponentSpec?.name) {
+      this.ComponentName = this.ResolvedComponentSpec.name;
     }
-    if (this.resolvedComponentSpec?.code) {
-      this.componentCode = BuildComponentCompleteCode(this.resolvedComponentSpec);
+    if (this.ResolvedComponentSpec?.code) {
+      this.ComponentCode = BuildComponentCompleteCode(this.ResolvedComponentSpec);
     }
   }
 
@@ -312,10 +493,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * render and <mj-react-component> is removed by the @if/else block).
    * Emits tabsChanged so the parent panel re-evaluates allTabs and renders the new tab labels.
    */
-  onReactComponentInitialized(): void {
+  OnReactComponentInitialized(): void {
     const host = this.liveReactComponent;
     if (host?.resolvedComponentSpec &&
-        host.resolvedComponentSpec !== this.component) {
+        host.resolvedComponentSpec !== this.Component) {
       // Cache the resolved spec so it's available even after the React component is destroyed
       this._cachedResolvedSpec = host.resolvedComponentSpec;
       this.tabsChanged.emit();
@@ -328,28 +509,43 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
   }
 
-  onComponentEvent(event: unknown): void {
+  /** @deprecated Use {@link OnReactComponentInitialized}. */
+  onReactComponentInitialized(): void {
+    return this.OnReactComponentInitialized();
+  }
+
+  OnComponentEvent(event: unknown): void {
     console.log('Component event:', event);
 
     // Handle error events from React component
     if (event && typeof event === 'object' && 'type' in event && event.type === 'error') {
       const errorEvent = event as { type: 'error'; payload: { error: string; source: string } };
-      this.hasError = true;
+      this.HasError = true;
       this.errorMessage = 'Component Failed to Load';
-      this.errorDetails = errorEvent.payload.error || 'Unknown error occurred while loading the component';
+      this.ErrorDetails = errorEvent.payload.error || 'Unknown error occurred while loading the component';
     }
+  }
+
+  /** @deprecated Use {@link OnComponentEvent}. */
+  onComponentEvent(event: unknown): void {
+    return this.OnComponentEvent(event);
   }
 
   /**
    * Handle entity record open request from React component
    * Propagates the event up to parent components
    */
-  onOpenEntityRecord(event: {entityName: string; key: CompositeKey}): void {
+  OnOpenEntityRecord(event: {entityName: string; key: CompositeKey}): void {
     // Transform to use 'compositeKey' name for consistency with Angular components
-    this.openEntityRecord.emit({
+    this.OpenEntityRecord.emit({
       entityName: event.entityName,
       compositeKey: event.key
     });
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
+  onOpenEntityRecord(event: {entityName: string; key: CompositeKey}): void {
+    return this.OnOpenEntityRecord(event);
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
@@ -357,7 +553,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     // MJReactComponent.getCurrentDataState() already includes the fallback
     // to intercepted RunView/RunQuery results when the React component
     // doesn't register getCurrentDataState() via callbacks.RegisterMethod.
-    const dataState = this.reactComponent?.getCurrentDataState?.();
+    const dataState = this.ReactComponent?.getCurrentDataState?.();
     if (dataState && typeof dataState === 'object') {
       return dataState as DataSnapshot;
     }
@@ -369,7 +565,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     // the component. The artifact itself is attached to the conversation as an
     // Input junction, so the agent can reason from the spec + any static data
     // baked into the component code.
-    const spec = this.resolvedComponentSpec;
+    const spec = this.ResolvedComponentSpec;
     if (!spec) return null;
 
     const snap = new DataSnapshot();
@@ -386,7 +582,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Component artifacts support feedback when a resolved spec is available.
    */
   public override get SupportsFeedback(): boolean {
-    return !!this.resolvedComponentSpec;
+    return !!this.ResolvedComponentSpec;
   }
 
   /**
@@ -415,47 +611,47 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * against type-appropriate empty values.
    */
   private async detectAndInitFormArtifact(): Promise<void> {
-    this.isFormArtifact = false;
-    this.isFormPanelArtifact = false;
-    this.panelPreviewProps = null;
-    this.formEntityInfo = null;
-    this.formRecord = null;
-    this.formRecordIsReal = false;
-    this.formRecordLabel = '';
-    this.formInitError = null;
+    this.IsFormArtifact = false;
+    this.IsFormPanelArtifact = false;
+    this.PanelPreviewProps = null;
+    this.FormEntityInfo = null;
+    this.FormRecord = null;
+    this.FormRecordIsReal = false;
+    this.FormRecordLabel = '';
+    this.FormInitError = null;
 
-    const spec = this.component;
-    if (!spec || (!isFormRole(spec) && !isFormPanelRole(spec))) return;
+    const spec = this.Component;
+    if (!spec || (!isFormRole(spec) && !IsFormPanelRole(spec))) return;
 
-    this.isFormArtifact = true;
-    this.isFormPanelArtifact = isFormPanelRole(spec);
+    this.IsFormArtifact = true;
+    this.IsFormPanelArtifact = IsFormPanelRole(spec);
 
     const entityName = getDeclaredFormEntityName(spec);
     if (!entityName) {
-      this.formInitError = 'Form artifact has no declared entity. Showing without record context.';
+      this.FormInitError = 'Form artifact has no declared entity. Showing without record context.';
       return;
     }
 
     const provider = this.ProviderToUse;
     const entity = provider?.EntityByName(entityName);
     if (!entity) {
-      this.formInitError = `Entity "${entityName}" not registered with the active provider.`;
+      this.FormInitError = `Entity "${entityName}" not registered with the active provider.`;
       return;
     }
-    this.formEntityInfo = entity;
+    this.FormEntityInfo = entity;
 
     // Load Top-1 record by default. If empty / fails, fall back to a fresh
     // synthetic record. Either way the form mounts — failure to find a real
     // record is informational, not fatal.
     const record = await this.loadTopOneRecord(entity);
     if (record) {
-      this.formRecord = record;
-      this.formRecordIsReal = true;
-      this.formRecordLabel = this.computeRecordLabel(record);
+      this.FormRecord = record;
+      this.FormRecordIsReal = true;
+      this.FormRecordLabel = this.computeRecordLabel(record);
     } else {
-      this.formRecord = await this.buildFixtureRecord(entity);
-      this.formRecordIsReal = false;
-      this.formRecordLabel = 'Mock data';
+      this.FormRecord = await this.buildFixtureRecord(entity);
+      this.FormRecordIsReal = false;
+      this.FormRecordLabel = 'Mock data';
     }
     this.rebuildPanelPreviewProps();
     // This runs after an await on a RunView that resolves outside Angular's zone,
@@ -519,15 +715,15 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Search-as-you-type for the picker. Queries by name field (or any
    * indexed string field, best-effort). Limits to 8 hits for tightness.
    */
-  public async onPickerSearchInput(term: string): Promise<void> {
-    this.recordSearchTerm = term;
-    if (!this.formEntityInfo || term.trim().length === 0) {
-      this.recordSearchResults = [];
+  public async OnPickerSearchInput(term: string): Promise<void> {
+    this.RecordSearchTerm = term;
+    if (!this.FormEntityInfo || term.trim().length === 0) {
+      this.RecordSearchResults = [];
       return;
     }
-    const nameField = this.formEntityInfo.NameField?.Name;
+    const nameField = this.FormEntityInfo.NameField?.Name;
     if (!nameField) {
-      this.recordSearchResults = [];
+      this.RecordSearchResults = [];
       return;
     }
     try {
@@ -536,45 +732,55 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       // term so we don't break SQL — RunView passes ExtraFilter as-is.
       const safe = term.replace(/'/g, "''");
       const result = await rv.RunView<BaseEntity>({
-        EntityName: this.formEntityInfo.Name,
+        EntityName: this.FormEntityInfo.Name,
         ExtraFilter: `${nameField} LIKE '%${safe}%'`,
         MaxRows: 8,
         ResultType: 'entity_object',
       }, this.ProviderToUse.CurrentUser);
       if (result.Success) {
-        this.recordSearchResults = (result.Results ?? []).map(r => ({
+        this.RecordSearchResults = (result.Results ?? []).map(r => ({
           ID: r.PrimaryKey?.ToConcatenatedString() ?? '',
           Label: this.computeRecordLabel(r),
         }));
       }
     } catch (err) {
       LogError(`ComponentArtifactViewer: picker search failed: ${err instanceof Error ? err.message : String(err)}`);
-      this.recordSearchResults = [];
+      this.RecordSearchResults = [];
     }
   }
 
+  /** @deprecated Use {@link OnPickerSearchInput}. */
+  public async onPickerSearchInput(term: string): Promise<void> {
+    return this.OnPickerSearchInput(term);
+  }
+
   /** User picked a different record from the search results. Re-bind the form. */
-  public async onPickerSelect(item: { ID: string; Label: string }): Promise<void> {
-    if (!this.formEntityInfo) return;
+  public async OnPickerSelect(item: { ID: string; Label: string }): Promise<void> {
+    if (!this.FormEntityInfo) return;
     try {
       const rec = await this.ProviderToUse.GetEntityObject<BaseEntity>(
-        this.formEntityInfo.Name, this.ProviderToUse.CurrentUser,
+        this.FormEntityInfo.Name, this.ProviderToUse.CurrentUser,
       );
       const pk = new CompositeKey();
-      pk.LoadFromURLSegment(this.formEntityInfo, item.ID);
+      pk.LoadFromURLSegment(this.FormEntityInfo, item.ID);
       const loaded = await rec.InnerLoad(pk);
       if (loaded) {
-        this.formRecord = rec;
-        this.formRecordIsReal = true;
-        this.formRecordLabel = item.Label;
+        this.FormRecord = rec;
+        this.FormRecordIsReal = true;
+        this.FormRecordLabel = item.Label;
         this.rebuildPanelPreviewProps();
-        this.showRecordPicker = false;
-        this.recordSearchTerm = '';
-        this.recordSearchResults = [];
+        this.ShowRecordPicker = false;
+        this.RecordSearchTerm = '';
+        this.RecordSearchResults = [];
       }
     } catch (err) {
       LogError(`ComponentArtifactViewer: failed to load picked record ${item.ID}: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /** @deprecated Use {@link OnPickerSelect}. */
+  public async onPickerSelect(item: { ID: string; Label: string }): Promise<void> {
+    return this.OnPickerSelect(item);
   }
 
   /**
@@ -594,37 +800,42 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * the panel looks like, not what it can do once installed.
    */
   private rebuildPanelPreviewProps(): void {
-    this.panelPreviewProps = null;
-    if (!this.isFormPanelArtifact || !this.formRecord || !this.formEntityInfo || !this.component) return;
-    const contribution = getDeclaredFormContribution(this.component);
+    this.PanelPreviewProps = null;
+    if (!this.IsFormPanelArtifact || !this.FormRecord || !this.FormEntityInfo || !this.Component) return;
+    const contribution = GetDeclaredFormContribution(this.Component);
     if (!contribution) return;
-    const registration = ContributionSpecToRegistration(this.formEntityInfo.Name, contribution);
-    this.panelPreviewProps = BuildFormPanelHostProps({
-      Record: this.formRecord,
+    const registration = ContributionSpecToRegistration(this.FormEntityInfo.Name, contribution);
+    this.PanelPreviewProps = BuildFormPanelHostProps({
+      Record: this.FormRecord,
       FormComponent: null,
       Contribution: registration,
-      SectionKey: ResolveContributionKey(registration.Metadata) || `preview:${this.component.name}`,
+      SectionKey: ResolveContributionKey(registration.Metadata) || `preview:${this.Component.name}`,
       Layout: 'accordion',
       IsExpanded: true,
     });
   }
 
-  public async onApplyClicked(): Promise<void> {
-    if (!this.formEntityInfo) return;
+  public async OnApplyClicked(): Promise<void> {
+    if (!this.FormEntityInfo) return;
 
     const spec = await this.resolveSpecWithCode();
     if (!spec) {
       // The artifact stores a registry reference, so the code arrives only once
       // the preview has resolved it. Saying so beats a button that does nothing.
-      this.formInitError = 'Component code is still loading. Try again in a moment.';
+      this.FormInitError = 'Component code is still loading. Try again in a moment.';
       this.cdr.detectChanges();
       return;
     }
 
-    this.applyFormRequested.emit({
+    this.ApplyFormRequested.emit({
       spec,
-      entityName: this.formEntityInfo.Name,
+      entityName: this.FormEntityInfo.Name,
     });
+  }
+
+  /** @deprecated Use {@link OnApplyClicked}. */
+  public async onApplyClicked(): Promise<void> {
+    return this.OnApplyClicked();
   }
 
   /**
@@ -632,18 +843,18 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   private async resolveSpecWithCode(): Promise<ComponentSpec | null> {
     // 1. Prefer the live React bridge's resolved spec (non-form path).
-    const resolved = this.resolvedComponentSpec;
+    const resolved = this.ResolvedComponentSpec;
     if (resolved?.code) return resolved;
 
     // 2. For whole-form artifacts, the React component lives inside
     //    <mj-interactive-form>. Reach into it to get the resolved spec from the
     //    component registry.
-    const formReactSpec = this.interactiveForm?.reactComponent?.resolvedComponentSpec;
+    const formReactSpec = this.InteractiveForm?.reactComponent?.resolvedComponentSpec;
     if (formReactSpec?.code) return formReactSpec;
 
     // 2b. A panel previews through its own React host, which is the only place
     //     its registry-resolved spec exists.
-    const panelReactSpec = this.panelReactComponent?.resolvedComponentSpec;
+    const panelReactSpec = this.PanelReactComponent?.resolvedComponentSpec;
     if (panelReactSpec?.code) return panelReactSpec;
 
     // 3. Re-parse the artifact version's Content directly — the agent stores the
@@ -656,7 +867,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
 
     // 4. DB fallback — fetch from MJ: Components by name.
-    const name = resolved?.name ?? this.component?.name;
+    const name = resolved?.name ?? this.Component?.name;
     if (name) {
       const dbSpec = await this.fetchFullSpecByName(name);
       if (dbSpec?.code) return dbSpec;

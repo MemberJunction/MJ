@@ -6,7 +6,7 @@ import type { ComponentSpec } from '@memberjunction/interactive-component-types'
 import {
     FormPanelEventNames,
     FormPanelMethodNames,
-    isFormPanelRole,
+    IsFormPanelRole,
     type FormPanelHostProps,
     type FormPanelRowCountChangedArgs,
     type FormPanelValidateResult,
@@ -27,7 +27,7 @@ import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
  * Layering: the React component never touches BaseEntity. This host owns the
  * `FormPanelHostProps` snapshot, applies `FieldChanged` to the PARENT record (the
  * parent form's Save persists it), forwards `RowCountChanged` to the rail badge, and
- * surfaces `Validate` through `BaseFormPanel.validate()`.
+ * surfaces `Validate` through `BaseFormPanel.Validate()`.
  */
 @Component({
     standalone: false,
@@ -37,10 +37,10 @@ import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
 export class InteractiveFormPanelComponent extends BaseFormPanel implements OnInit, DoCheck, OnDestroy {
     @Input() Contribution!: FormContributionRegistration;
 
-    @ViewChild('reactComponent') public reactComponent?: MJReactComponent;
+    @ViewChild('reactComponent') public ReactComponent?: MJReactComponent;
 
     public componentSpec: ComponentSpec | null = null;
-    public hostProps: FormPanelHostProps | null = null;
+    public HostProps: FormPanelHostProps | null = null;
 
     /**
      * Load-time failure only: missing ComponentID, component not found, bad Specification
@@ -48,11 +48,11 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
      * already contained — `<mj-react-component>` wraps every spec in the runtime's
      * error boundary (`createErrorBoundary`, `mj-react-component.component.ts`), so the
      * throw stays inside this panel's subtree and the rest of the form renders and saves
-     * normally. Bind the boundary's error output to `renderError` so the failure is
+     * normally. Bind the boundary's error output to `RenderError` so the failure is
      * visible in the panel rather than silent, and log it once.
      */
     public loadError: string | null = null;
-    public renderError: string | null = null;
+    public RenderError: string | null = null;
 
     private lastValidation: FormPanelValidateResult | null = null;
     private lastEditMode: boolean | null = null;
@@ -130,18 +130,18 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
             const modeChanged = this.lastEditMode !== null && edit !== this.lastEditMode;
             this.lastEditMode = edit;
             this.lastExpanded = expanded;
-            if (this.hostProps) this.RebuildHostProps();
+            if (this.HostProps) this.RebuildHostProps();
             if (modeChanged) this.invokeIfRegistered(FormPanelMethodNames.SetEditMode, { mode: edit ? 'edit' : 'view' });
         }
     }
 
     public ngOnDestroy(): void {
-        this.hostProps = null;
+        this.HostProps = null;
     }
 
     public RebuildHostProps(): void {
-        if (!this.Record) { this.hostProps = null; return; }
-        this.hostProps = BuildFormPanelHostProps({
+        if (!this.Record) { this.HostProps = null; return; }
+        this.HostProps = BuildFormPanelHostProps({
             Record: this.Record,
             FormComponent: this.FormComponent ?? null,
             Contribution: this.Contribution,
@@ -193,7 +193,7 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
      * error and no log. Resolving a non-Promise is a no-op, so one code path
      * covers both shapes.
      */
-    public override async validate(): Promise<ValidationResult> {
+    public override async Validate(): Promise<ValidationResult> {
         const returned = this.invokeIfRegistered<FormPanelValidateResult | Promise<FormPanelValidateResult>>(
             FormPanelMethodNames.Validate,
         );
@@ -201,7 +201,7 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
         try {
             live = await Promise.resolve(returned);
         } catch (err) {
-            LogError(`InteractiveFormPanelComponent.validate: panel validator threw: ${err instanceof Error ? err.message : String(err)}`);
+            LogError(`InteractiveFormPanelComponent.Validate: panel validator threw: ${err instanceof Error ? err.message : String(err)}`);
             live = undefined;
         }
         const state = live && typeof live === 'object' && 'isValid' in live ? live : this.lastValidation;
@@ -254,9 +254,9 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
     }
 
     private invokeIfRegistered<T = unknown>(method: string, ...args: unknown[]): T | undefined {
-        if (!this.reactComponent?.hasMethod?.(method)) return undefined;
+        if (!this.ReactComponent?.hasMethod?.(method)) return undefined;
         try {
-            return this.reactComponent.invokeMethod(method, ...args) as T;
+            return this.ReactComponent.invokeMethod(method, ...args) as T;
         } catch (err) {
             LogError(`InteractiveFormPanelComponent.${method}: ${err instanceof Error ? err.message : String(err)}`);
             return undefined;
@@ -266,7 +266,7 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
     private async loadSpec(): Promise<void> {
         const supplied = this.Contribution?.ComponentSpec;
         if (supplied) {
-            this.componentSpec = isFormPanelRole(supplied) ? supplied : null;
+            this.componentSpec = IsFormPanelRole(supplied) ? supplied : null;
             if (!this.componentSpec) this.loadError = `Component ${supplied.name} does not declare componentRole='form-panel'.`;
             this.cdr.markForCheck();
             return;
@@ -291,7 +291,7 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
             return;
         }
         if (!this.componentSpec) { this.loadError = `Component ${component.Name} has an empty Specification.`; return; }
-        if (!isFormPanelRole(this.componentSpec)) {
+        if (!IsFormPanelRole(this.componentSpec)) {
             this.loadError = `Component ${component.Name} does not declare componentRole='form-panel'.`;
             this.componentSpec = null;
         }

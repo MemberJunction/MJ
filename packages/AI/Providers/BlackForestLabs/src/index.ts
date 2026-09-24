@@ -68,8 +68,13 @@ export class FLUXImageGenerator extends BaseImageGenerator {
     /**
      * Configure polling behavior for async task completion
      */
-    public setPollingConfig(config: Partial<BFLPollingConfig>): void {
+    public SetPollingConfig(config: Partial<BFLPollingConfig>): void {
         this._pollingConfig = { ...this._pollingConfig, ...config };
+    }
+
+    /** @deprecated Use {@link SetPollingConfig}. */
+    public setPollingConfig(config: Partial<BFLPollingConfig>): void {
+        return this.SetPollingConfig(config);
     }
 
     /**

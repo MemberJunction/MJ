@@ -181,35 +181,89 @@ export class SimpleEntityFieldInfo {
     /**
      * Name of the field
      */
-    name: string;
+    Name: string;
+
+    /** @deprecated Use {@link Name}. */
+    get name(): string {
+        return this.Name;
+    }
+    /** @deprecated Use {@link Name}. */
+    set name(value: string) {
+        this.Name = value;
+    }
     /**
      * Display sequence usually used for this field
      */
-    sequence: number;
+    Sequence: number;
+
+    /** @deprecated Use {@link Sequence}. */
+    get sequence(): number {
+        return this.Sequence;
+    }
+    /** @deprecated Use {@link Sequence}. */
+    set sequence(value: number) {
+        this.Sequence = value;
+    }
     /**
      * Whether this field is usually displayed in a user-facing view
      */
-    defaultInView: boolean;
+    DefaultInView: boolean;
+
+    /** @deprecated Use {@link DefaultInView}. */
+    get defaultInView(): boolean {
+        return this.DefaultInView;
+    }
+    /** @deprecated Use {@link DefaultInView}. */
+    set defaultInView(value: boolean) {
+        this.DefaultInView = value;
+    }
     /**
      * SQL Server type of the field, e.g., 'varchar', 'int', etc.
      */
-    type: string;
+    Type: string;
+
+    /** @deprecated Use {@link Type}. */
+    get type(): string {
+        return this.Type;
+    }
+    /** @deprecated Use {@link Type}. */
+    set type(value: string) {
+        this.Type = value;
+    }
     /**
      * Whether the field allows null values
      */
-    allowsNull: boolean;
+    AllowsNull: boolean;
+
+    /** @deprecated Use {@link AllowsNull}. */
+    get allowsNull(): boolean {
+        return this.AllowsNull;
+    }
+    /** @deprecated Use {@link AllowsNull}. */
+    set allowsNull(value: boolean) {
+        this.AllowsNull = value;
+    }
     /**
      * Whether the field is part of the primary key
      */
-    isPrimaryKey: boolean;
+    IsPrimaryKey: boolean;
+
+    /** @deprecated Use {@link IsPrimaryKey}. */
+    get isPrimaryKey(): boolean {
+        return this.IsPrimaryKey;
+    }
+    /** @deprecated Use {@link IsPrimaryKey}. */
+    set isPrimaryKey(value: boolean) {
+        this.IsPrimaryKey = value;
+    }
     /**
      * Possible values for the field, if applicable
      */
-    possibleValues?: string[];
+    possibleValues?: string[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
     /**
      * Description of the field
      */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     constructor(init?: Partial<SimpleEntityFieldInfo>) {
         if (init) {
@@ -243,12 +297,12 @@ export class SimpleEntityFieldInfo {
      */
     ToEntityFieldInfo(): Partial<EntityFieldInfo> {
         return {
-            Name: this.name,
-            Sequence: this.sequence,
-            DefaultInView: this.defaultInView,
-            Type: this.type,
-            AllowsNull: this.allowsNull,
-            IsPrimaryKey: this.isPrimaryKey,
+            Name: this.Name,
+            Sequence: this.Sequence,
+            DefaultInView: this.DefaultInView,
+            Type: this.Type,
+            AllowsNull: this.AllowsNull,
+            IsPrimaryKey: this.IsPrimaryKey,
             Description: this.description
             // Note: possibleValues cannot be directly mapped back as EntityFieldValues
             // requires EntityFieldValueInfo objects with additional metadata
@@ -284,7 +338,7 @@ export class SimpleQueryFieldInfo extends SimpleEntityFieldInfo {
      * Description of the summary calculation (e.g., "Count of orders per customer").
      * Provides context for how the aggregate value is computed.
      */
-    summaryDescription?: string;
+    summaryDescription?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     constructor(init?: Partial<SimpleQueryFieldInfo>) {
         super(init);
@@ -308,21 +362,39 @@ export class SimpleEntityInfo {
     /**
      * Name of the entity (unique system-wide, e.g., "Certifications")
      */
-    name: string;
+    Name: string;
+
+    /** @deprecated Use {@link Name}. */
+    get name(): string {
+        return this.Name;
+    }
+    /** @deprecated Use {@link Name}. */
+    set name(value: string) {
+        this.Name = value;
+    }
 
     /**
      * Optional description of the entity
      */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Complete list of ALL fields in this entity.
      * Used by linter to validate field access with proper severity levels.
      */
-    fields: SimpleEntityFieldInfo[];
+    Fields: SimpleEntityFieldInfo[];
+
+    /** @deprecated Use {@link Fields}. */
+    get fields(): SimpleEntityFieldInfo[] {
+        return this.Fields;
+    }
+    /** @deprecated Use {@link Fields}. */
+    set fields(value: SimpleEntityFieldInfo[]) {
+        this.Fields = value;
+    }
 
     constructor(init?: Partial<SimpleEntityInfo>) {
-        this.fields = [];
+        this.Fields = [];
         if (init) {
             Object.assign(this, init);
         }
@@ -358,7 +430,7 @@ export class SimpleEntityInfo {
      */
     ToEntityInfo(): Partial<EntityInfo> {
         return {
-            Name: this.name,
+            Name: this.Name,
             Description: this.description
             // Note: Fields cannot be directly mapped back as EntityInfo.Fields
             // requires EntityFieldInfo objects with additional metadata and context
@@ -370,8 +442,13 @@ export class SimpleEntityInfo {
      * @param fieldName The field name to check
      * @returns True if the field exists, false otherwise
      */
+    HasField(fieldName: string): boolean {
+        return this.Fields.some(f => f.name === fieldName);
+    }
+
+    /** @deprecated Use {@link HasField}. */
     hasField(fieldName: string): boolean {
-        return this.fields.some(f => f.name === fieldName);
+        return this.HasField(fieldName);
     }
 
     /**
@@ -379,15 +456,25 @@ export class SimpleEntityInfo {
      * @param fieldName The field name to find
      * @returns The SimpleEntityFieldInfo if found, undefined otherwise
      */
+    GetField(fieldName: string): SimpleEntityFieldInfo | undefined {
+        return this.Fields.find(f => f.name === fieldName);
+    }
+
+    /** @deprecated Use {@link GetField}. */
     getField(fieldName: string): SimpleEntityFieldInfo | undefined {
-        return this.fields.find(f => f.name === fieldName);
+        return this.GetField(fieldName);
     }
 
     /**
      * Helper method to get all field names as a Set for efficient lookup
      * @returns Set of all field names in this entity
      */
+    GetFieldNameSet(): Set<string> {
+        return new Set(this.Fields.map(f => f.name));
+    }
+
+    /** @deprecated Use {@link GetFieldNameSet}. */
     getFieldNameSet(): Set<string> {
-        return new Set(this.fields.map(f => f.name));
+        return this.GetFieldNameSet();
     }
 }

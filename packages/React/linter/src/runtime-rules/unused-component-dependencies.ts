@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -36,7 +36,7 @@ export class UnusedComponentDependenciesRule extends BaseLintRule {
 
     // Get the function body to search within
     let functionBody: string = '';
-    traverse(ast, {
+    Traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (path.node.id && path.node.id.name === componentName) {
           functionBody = path.toString();

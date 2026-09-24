@@ -40,23 +40,38 @@ export class FormSlotCoordinator {
     private emitDepth = 0;
 
     /** Slot host calls this on init. Idempotent — safe if invoked twice. */
-    public registerSlot(slot: FormPanelSlot): void {
+    public RegisterSlot(slot: FormPanelSlot): void {
         if (!this.presentSlots.has(slot)) {
             this.presentSlots.add(slot);
             this.safeEmit('registerSlot');
         }
     }
 
+    /** @deprecated Use {@link RegisterSlot}. */
+    public registerSlot(slot: FormPanelSlot): void {
+        return this.RegisterSlot(slot);
+    }
+
     /** Slot host calls this on destroy. */
-    public deregisterSlot(slot: FormPanelSlot): void {
+    public DeregisterSlot(slot: FormPanelSlot): void {
         if (this.presentSlots.has(slot)) {
             this.presentSlots.delete(slot);
             this.safeEmit('deregisterSlot');
         }
     }
 
-    public hasSlot(slot: FormPanelSlot): boolean {
+    /** @deprecated Use {@link DeregisterSlot}. */
+    public deregisterSlot(slot: FormPanelSlot): void {
+        return this.DeregisterSlot(slot);
+    }
+
+    public HasSlot(slot: FormPanelSlot): boolean {
         return this.presentSlots.has(slot);
+    }
+
+    /** @deprecated Use {@link HasSlot}. */
+    public hasSlot(slot: FormPanelSlot): boolean {
+        return this.HasSlot(slot);
     }
 
     /** Slots physically present in this form, in document order. */
@@ -73,7 +88,7 @@ export class FormSlotCoordinator {
      * present — the container guarantees `after-everything` exists, so this
      * should never happen in practice.
      */
-    public resolveSlot(preferred: FormPanelSlot): FormPanelSlot | null {
+    public ResolveSlot(preferred: FormPanelSlot): FormPanelSlot | null {
         const startIdx = FORM_SLOT_CHAIN.indexOf(preferred);
         if (startIdx === -1) return null;
         for (let i = startIdx; i < FORM_SLOT_CHAIN.length; i++) {
@@ -85,9 +100,19 @@ export class FormSlotCoordinator {
         return null;
     }
 
+    /** @deprecated Use {@link ResolveSlot}. */
+    public resolveSlot(preferred: FormPanelSlot): FormPanelSlot | null {
+        return this.ResolveSlot(preferred);
+    }
+
     /** RxJS stream that fires whenever a slot registers or deregisters. */
-    public get changes() {
+    public get Changes() {
         return this.changes$.asObservable();
+    }
+
+    /** @deprecated Use {@link Changes}. */
+    public get changes() {
+        return this.Changes;
     }
 
     /**

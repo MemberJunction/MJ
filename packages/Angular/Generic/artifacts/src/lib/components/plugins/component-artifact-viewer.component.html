@@ -56,9 +56,9 @@
             class="form-artifact-apply-btn"
             (click)="onApplyClicked()">
             <i class="fa-solid"
-               [class.fa-circle-check]="!isFormPanelArtifact"
-               [class.fa-puzzle-piece]="isFormPanelArtifact"></i>
-            {{ isFormPanelArtifact ? 'Add to my form' : 'Apply to my form' }}
+               [class.fa-circle-check]="!IsFormPanelArtifact"
+               [class.fa-puzzle-piece]="IsFormPanelArtifact"></i>
+            {{ IsFormPanelArtifact ? 'Add to my form' : 'Apply to my form' }}
           </button>
         }
       </div>
@@ -92,15 +92,15 @@
 
       @if (formRecord && component) {
         <div class="form-artifact-form-host">
-          @if (isFormPanelArtifact) {
+          @if (IsFormPanelArtifact) {
             <!-- A panel is one contribution, so preview it on its own rather than
                  mounting a whole form around it. -->
-            @if (panelPreviewProps) {
+            @if (PanelPreviewProps) {
               <div class="form-artifact-panel-preview">
                 <mj-react-component
                   #panelReactComponent
                   [component]="component"
-                  [componentProps]="panelPreviewProps"
+                  [componentProps]="PanelPreviewProps"
                   (openEntityRecord)="onOpenEntityRecord($event)"
                   (initialized)="onReactComponentInitialized()">
                 </mj-react-component>

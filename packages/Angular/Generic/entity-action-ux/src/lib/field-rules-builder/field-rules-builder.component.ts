@@ -10,7 +10,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, In
 import { EntityFieldRules, Metadata, type EntityInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { FieldRuleSet } from '@memberjunction/global';
 import { AIPromptSelectorComponent } from '../ai-prompt-selector/ai-prompt-selector.component';
-import { blankRuleDraft, draftsToRuleSet, ruleToDraft, type BuilderSourceKind, type RuleDraft } from '../field-rules-model';
+import { BlankRuleDraft, DraftsToRuleSet, RuleToDraft, type BuilderSourceKind, type RuleDraft } from '../field-rules-model';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 @Component({
@@ -165,7 +165,7 @@ export class FieldRulesBuilderComponent {
             return; // echo of our own emit — keep the live drafts intact
         }
         this.lastEmittedJSON = incomingJSON;
-        this.Rules = value?.Rules ? value.Rules.map((r) => ruleToDraft(r)) : [];
+        this.Rules = value?.Rules ? value.Rules.map((r) => RuleToDraft(r)) : [];
         this.validate();
     }
 
@@ -178,7 +178,7 @@ export class FieldRulesBuilderComponent {
     get EntityLabel(): string { return this.entity?.DisplayName || this.entity?.Name || 'record'; }
 
     AddRule(): void {
-        this.Rules = [...this.Rules, blankRuleDraft()];
+        this.Rules = [...this.Rules, BlankRuleDraft()];
         this.emit();
     }
 
@@ -209,7 +209,7 @@ export class FieldRulesBuilderComponent {
 
     /** Serializes the drafts, validates, and emits. */
     private emit(): void {
-        const ruleSet = draftsToRuleSet(this.Rules);
+        const ruleSet = DraftsToRuleSet(this.Rules);
         // Record what we're about to emit so the echo (consumer feeding it back via [Value]) is recognized
         // and ignored — see lastEmittedJSON. Must mirror the Value setter's comparison basis (Rules array).
         this.lastEmittedJSON = JSON.stringify(ruleSet.Rules ?? []);
@@ -218,7 +218,7 @@ export class FieldRulesBuilderComponent {
         this.cdr.detectChanges();
     }
 
-    private validate(ruleSet: FieldRuleSet = draftsToRuleSet(this.Rules)): void {
+    private validate(ruleSet: FieldRuleSet = DraftsToRuleSet(this.Rules)): void {
         if (!this._entityName) {
             this.Errors = [];
         } else {

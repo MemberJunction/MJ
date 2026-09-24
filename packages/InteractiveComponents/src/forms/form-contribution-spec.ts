@@ -36,7 +36,7 @@ export interface FormContributionSpec {
      *
      * Optional because placement is the user's choice, made in the apply dialog, not the
      * component author's — a generated spec that omits it behaves exactly like one that
-     * names a slot. {@link getDeclaredFormContribution} fills the default, so everything
+     * names a slot. {@link GetDeclaredFormContribution} fills the default, so everything
      * downstream of normalization still sees a concrete slot.
      */
     slot?: FormContributionSlot;
@@ -81,7 +81,7 @@ export type FormContributionSectionPosition = 'start' | 'end';
 export type NormalizedFormContributionSpec = FormContributionSpec & { slot: FormContributionSlot };
 
 /** True iff the spec commits to the form-panel contract. */
-export function isFormPanelRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
+export function IsFormPanelRole(spec: Pick<ComponentSpec, 'componentRole'>): boolean {
     return spec.componentRole === 'form-panel';
 }
 
@@ -112,10 +112,10 @@ function cleanString(value: unknown): string | undefined {
  * trims strings, drops unknown slot / inclusion / chromeGroup values, and falls
  * back to `spec.title` when the block has no title.
  */
-export function getDeclaredFormContribution(
+export function GetDeclaredFormContribution(
     spec: Pick<ComponentSpec, 'componentRole' | 'title' | 'formContribution'> | null | undefined,
 ): NormalizedFormContributionSpec | null {
-    if (!spec || !isFormPanelRole(spec)) return null;
+    if (!spec || !IsFormPanelRole(spec)) return null;
     const raw: Partial<FormContributionSpec> = spec.formContribution ?? {};
     const title = cleanString(raw.title) ?? cleanString(spec.title) ?? 'Panel';
     const out: NormalizedFormContributionSpec = {

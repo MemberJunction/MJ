@@ -135,11 +135,16 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
     }
 
     /** Highlight rows whose level has been changed from their loaded state. */
-    public isModified(share: ResourceSharePermissionModel): boolean {
+    public IsModified(share: ResourceSharePermissionModel): boolean {
         return !share.IsNew && share.Level !== share._InitialLevel;
     }
 
-    public async addUserShare(user: MJUserEntity): Promise<void> {
+    /** @deprecated Use {@link IsModified}. */
+    public isModified(share: ResourceSharePermissionModel): boolean {
+        return this.IsModified(share);
+    }
+
+    public async AddUserShare(user: MJUserEntity): Promise<void> {
         if (!this.Context || !this.Adapter) return;
         const row = await this.Adapter.CreateShare(this.Context, user);
         row._InitialLevel = row.Level;
@@ -149,7 +154,12 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
     }
 
-    public removeUserShare(share: ResourceSharePermissionModel): void {
+    /** @deprecated Use {@link AddUserShare}. */
+    public async addUserShare(user: MJUserEntity): Promise<void> {
+        return this.AddUserShare(user);
+    }
+
+    public RemoveUserShare(share: ResourceSharePermissionModel): void {
         if (share.IsNew) {
             this.UserShares = this.UserShares.filter((s) => s !== share);
         } else {
@@ -159,18 +169,33 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         this.cdr.detectChanges();
     }
 
-    public undoRemove(share: ResourceSharePermissionModel): void {
+    /** @deprecated Use {@link RemoveUserShare}. */
+    public removeUserShare(share: ResourceSharePermissionModel): void {
+        return this.RemoveUserShare(share);
+    }
+
+    public UndoRemove(share: ResourceSharePermissionModel): void {
         share.MarkedForRemoval = false;
         this.updateAvailableUsers();
         this.cdr.detectChanges();
     }
 
-    public setLevel(share: ResourceSharePermissionModel, level: ResourceShareLevel): void {
+    /** @deprecated Use {@link UndoRemove}. */
+    public undoRemove(share: ResourceSharePermissionModel): void {
+        return this.UndoRemove(share);
+    }
+
+    public SetLevel(share: ResourceSharePermissionModel, level: ResourceShareLevel): void {
         share.Level = level;
         this.cdr.detectChanges();
     }
 
-    public async onSave(): Promise<void> {
+    /** @deprecated Use {@link SetLevel}. */
+    public setLevel(share: ResourceSharePermissionModel, level: ResourceShareLevel): void {
+        return this.SetLevel(share, level);
+    }
+
+    public async OnSave(): Promise<void> {
         if (!this.Adapter || !this.Context) return;
         if (!this.HasChanges) {
             this.onCancel();
@@ -221,16 +246,26 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
         }
     }
 
+    /** @deprecated Use {@link OnSave}. */
+    public async onSave(): Promise<void> {
+        return this.OnSave();
+    }
+
     public onCancel(): void {
         this.Result.emit({ Action: 'cancel' });
     }
 
-    public getUserInitials(user: MJUserEntity): string {
+    public GetUserInitials(user: MJUserEntity): string {
         const name = user.Name || user.Email || '?';
         const parts = name.split(' ');
         if (parts.length >= 2) {
             return (parts[0][0] + parts[1][0]).toUpperCase();
         }
         return name.substring(0, 2).toUpperCase();
+    }
+
+    /** @deprecated Use {@link GetUserInitials}. */
+    public getUserInitials(user: MJUserEntity): string {
+        return this.GetUserInitials(user);
     }
 }

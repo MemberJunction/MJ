@@ -229,56 +229,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Activity Sync Connections Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsCommonActivitySyncConnections"
-        SectionName="Activity Sync Connections"
-        Icon="fa fa-sync-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsCommonActivitySyncConnections')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Common: Activity Sync Connections','StorageProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Common: Activity Sync Connections','StorageProviderID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsCommonActivitySyncConnections')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCommonActivitySyncConnections', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Activity Sync Provider Types Section -->
-    <mj-collapsible-panel
-        SectionKey="mJBizAppsCommonActivitySyncProviderTypes"
-        SectionName="Activity Sync Provider Types"
-        Icon="fa fa-sync-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJBizAppsCommonActivitySyncProviderTypes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ_BizApps_Common: Activity Sync Provider Types','DefaultStorageProviderID')"
-                [NewRecordValues]="NewRecordValues('MJ_BizApps_Common: Activity Sync Provider Types','DefaultStorageProviderID')"
-                [AllowLoad]="IsSectionExpanded('mJBizAppsCommonActivitySyncProviderTypes')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJBizAppsCommonActivitySyncProviderTypes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- AI Configurations Section -->
     <mj-collapsible-panel
         SectionKey="mJAIConfigurations"

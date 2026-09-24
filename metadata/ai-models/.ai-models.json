@@ -16634,8 +16634,8 @@
             "ID": "73DCEBF1-A6C4-4AED-9DEA-A9DF70FCC346"
           },
           "sync": {
-            "lastModified": "2026-09-13T20:06:41.417Z",
-            "checksum": "4b4378f6d83dbee1505a1ba55b0df703a2bab0864b77ff5dfd3fdf0b0ce16103"
+            "lastModified": "2026-09-15T13:56:43.125Z",
+            "checksum": "90f33ed4aaccbc43dc03938fb56865e8b602cd27985bbf720fe748745d4f4a89"
           }
         },
         {
@@ -16656,6 +16656,10 @@
           },
           "primaryKey": {
             "ID": "1C259373-F5C4-45DD-9A98-E9A30D4C4967"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.142Z",
+            "checksum": "36439a74a5ab44bd3887131bc4a53995f8082e55c742e67e2a1859a12b0a52f7"
           }
         }
       ]
@@ -21054,8 +21058,8 @@
             "ID": "FA7A4744-FAD8-43FC-A5F6-9D029101C0B5"
           },
           "sync": {
-            "lastModified": "2026-07-10T23:26:27.479Z",
-            "checksum": "e08205ce10ae3da82c4184bc749be9c406066dc320e485b7d65a03acc0487943"
+            "lastModified": "2026-09-15T13:56:43.193Z",
+            "checksum": "efdb9a88595336a387e71ae40ae0e60f817d30b18af2e59172b74c9699b3bf69"
           }
         },
         {
@@ -21076,6 +21080,10 @@
           },
           "primaryKey": {
             "ID": "23270618-9761-4EE1-911B-EBDD024A24AF"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.210Z",
+            "checksum": "f059442166f5fbeca4cc0e6a5e92d92f333a3808fa090ad534722741d79cb3da"
           }
         }
       ]
@@ -22635,7 +22643,7 @@
     "fields": {
       "Name": "Claude Opus 5 Fast",
       "PowerRank": 26,
-      "Description": "Anthropic's Fast-mode variant of Claude Opus 5 — identical weights, capabilities, and 1M-token context, served at approximately 2.5x output throughput for 2x the price ($10/$50 per 1M vs $5/$25). The premium buys latency, not intelligence. Invoked as its own API model ID (`claude-opus-5-fast`), which is why it is modeled as a separate entry rather than a flag on Claude Opus 5. IMPORTANT AVAILABILITY LIMITS: Fast mode is a research preview on the Anthropic first-party API only — it is NOT available on Amazon Bedrock, Google Vertex AI, or Microsoft Foundry, and is NOT supported by the Batch API. Also routable via OpenRouter as `anthropic/claude-opus-5-fast`. Use standard Claude Opus 5 for batch workloads and any cloud-hosted deployment.",
+      "Description": "Anthropic's Fast-mode variant of Claude Opus 5 — identical weights, capabilities, and 1M-token context, served at approximately 2.5x output throughput for 2x the price ($10/$50 per 1M vs $5/$25). The premium buys latency, not intelligence. DEPRECATED AS AN API MODEL ID (2026-09-01): Anthropic retired the dedicated `claude-opus-5-fast` model id (and `claude-opus-4-8-fast`) in favour of requesting fast mode on the base model — `claude-opus-5` with `speed: \"fast\"` (or `service_tier: \"fast\"`) and the `fast-mode-2026-02-01` beta header. Anthropic's fast-mode documentation now lists only `claude-opus-5` and `claude-opus-4-8` as supported models. Existing requests to the dedicated id keep working and are served by the same fast-tier capacity, so this record's Anthropic route is marked Deprecated rather than Inactive and its cost row stays Active — but new integrations should target the base model. MJ has no schema field for a per-request speed tier, so how (or whether) to express fast mode once the dedicated id is withdrawn is an open modelling decision; see the 2026-09-21 research report. OTHER AVAILABILITY LIMITS: fast mode is a research preview on the Anthropic first-party API only (access is account-managed / waitlisted) — it is NOT available on Amazon Bedrock, Claude Platform on AWS, Google Vertex AI, or Microsoft Foundry, and is NOT supported by the Batch API or Priority Tier. Also routable via OpenRouter as `anthropic/claude-opus-5-fast`, whose listing carries the same deprecation notice. Use standard Claude Opus 5 for batch workloads and any cloud-hosted deployment.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 9,
@@ -22676,7 +22684,7 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 1,
-            "Status": "Active",
+            "Status": "Deprecated",
             "DriverClass": "AnthropicLLM",
             "APIName": "claude-opus-5-fast",
             "MaxInputTokens": 1000000,
@@ -22690,8 +22698,8 @@
             "ID": "FF554478-0617-4170-9047-36F904BF020D"
           },
           "sync": {
-            "lastModified": "2026-07-28T16:46:12.199Z",
-            "checksum": "15beaaf3fbd5a7a54a93a55add3a7b4e90ad8e0a189a335e0ae2d6c7d976636d"
+            "lastModified": "2026-09-22T18:52:51.660Z",
+            "checksum": "10af6df89660c63bf6d436956af09b9c266279f9838c33f16051e60e8c2ad6fd"
           }
         },
         {
@@ -22773,8 +22781,8 @@
       "ID": "17F2B585-24B6-483F-AAF9-7DE37F310440"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:39.342Z",
-      "checksum": "997ec91c609c06f67cfcfe8e897a2ba856eacf4698a6db9145bb6295424cce88"
+      "lastModified": "2026-09-22T18:52:51.468Z",
+      "checksum": "51e370641e5af548be9ff80e83ddfe363e9fc29307fe142e87d5f4e11f4e7af0"
     }
   },
   {
@@ -23500,6 +23508,34 @@
             "lastModified": "2026-09-13T20:06:41.770Z",
             "checksum": "ba7d9f5a72bf520dd153eb331dac5910da457b4b958f58bc8f4b837f77e78982"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 10,
+            "Status": "Preview",
+            "DriverClass": "AzureLLM",
+            "APIName": "grok-4.6",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "E7865B4E-C799-4E90-AC9A-D0660C25F456"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T18:52:51.849Z",
+            "checksum": "504fa9e606f5ee3b1209445209ee5aef50304a9cd5e50e61cf87cca7fa5a51c1"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -23573,6 +23609,30 @@
           "sync": {
             "lastModified": "2026-09-01T16:57:31.866Z",
             "checksum": "851d2a5aec81e75e83cc78f01693ece979150a6219f9f4a3a49afddabf8359f1"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-08-26T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.5,
+            "CacheWritePricePerUnit": null,
+            "Comments": "Grok 4.6 in Microsoft Foundry (Azure), Global Standard deployment — public preview from 2026-08-26. Rate is at parity with x.ai direct's sub-200K tier: $2/$6 per 1M input/output, $0.50/1M cached input. IMPORTANT: Foundry caps the context window at 200,000 tokens rather than xAI's 500,000, which is why this vendor row records MaxInputTokens 200000 and why xAI's tiered >=200K long-context rate ($4/$12) does not arise on this route. The vendor row Status is `Preview` (not `Active`) because Microsoft lists the deployment as public preview; MaxOutputTokens is carried over from the x.ai direct route as Microsoft has not published a separate completion cap. Sources: https://juliangoldie.com/grok-4-6-microsoft-foundry/ ; https://tokencost.app/blog/grok-4-6-long-context-cloud-pricing ; https://www.eesel.ai/blog/grok-4-6-pricing"
+          },
+          "primaryKey": {
+            "ID": "4E02B191-7723-46F7-905B-F29A4C4C8366"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T18:52:51.866Z",
+            "checksum": "b3050450975ed91b1a804ca73ce67ffec23b228c2a5586e08005bb3b425f287a"
           }
         }
       ]
@@ -23857,8 +23917,8 @@
             "ID": "A6A6D2F5-BA61-469C-B334-1486E9D40E0F"
           },
           "sync": {
-            "lastModified": "2026-08-26T08:34:00.769Z",
-            "checksum": "418a5e22c25947ebba6c02e55a5d49118b8185733512b1a058d34be9d94d2fe5"
+            "lastModified": "2026-09-15T13:56:43.286Z",
+            "checksum": "bfe8eaf927a59c3310e1b2e5d81031e2fb5062575d5f6208e5aceaee3eb7c5e1"
           }
         }
       ],
@@ -23893,8 +23953,8 @@
       "ID": "D5DC6B04-AA19-459A-9ED3-D44B2C42D6A5"
     },
     "sync": {
-      "lastModified": "2026-09-13T20:06:41.828Z",
-      "checksum": "3d4494156ac41ea7760445216a9e64e2731bb0b5fb375202e8f268a27ee4ea90"
+      "lastModified": "2026-09-15T13:56:43.251Z",
+      "checksum": "b46525a2b42e9df51de0c789963e4be1c83fb2fddd29dd7f35d9b9c6a930c409"
     }
   },
   {
@@ -25080,6 +25140,10 @@
           },
           "primaryKey": {
             "ID": "A5BDEE42-C17C-4CA8-B9AC-B513CE7D7B99"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.007Z",
+            "checksum": "cce89cd401901080da6108c5690aa4d7e72eac6d591eee21deebb85ee50ef1de"
           }
         },
         {
@@ -25099,6 +25163,10 @@
           },
           "primaryKey": {
             "ID": "E6C10499-8200-46FA-9BAB-343A0C386218"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.041Z",
+            "checksum": "99908abcf9de7a6b09bb8a76e234216ee9bafbca7ea35fe134cc6faac2a843d7"
           }
         }
       ],
@@ -25121,12 +25189,20 @@
           },
           "primaryKey": {
             "ID": "57CF26BE-1CC0-4D23-8782-68CC658B48F8"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.081Z",
+            "checksum": "15fcf525629b0bdbc2bc3fd87ad44d4ea02dc5ba1cf5e788c17790194f569c3e"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "3049E1EB-6B53-4B58-9D94-75D5F86C76E6"
+    },
+    "sync": {
+      "lastModified": "2026-09-15T13:56:42.795Z",
+      "checksum": "549f3f90de548744471251ec8cff1fec8d748b2ffcdf2e35329b4e6e4aed0f71"
     }
   },
   {
@@ -25163,6 +25239,10 @@
           },
           "primaryKey": {
             "ID": "E99EC9ED-551B-45CF-8EB8-50B151C80104"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.011Z",
+            "checksum": "cce89cd401901080da6108c5690aa4d7e72eac6d591eee21deebb85ee50ef1de"
           }
         },
         {
@@ -25182,6 +25262,10 @@
           },
           "primaryKey": {
             "ID": "87B75ABD-2ED1-48B6-9EDC-7F481FC9F2E7"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.039Z",
+            "checksum": "4f3e53a336acf9656515eb639c4b17bb5c193a33e484e911d123f4b41095cd49"
           }
         }
       ],
@@ -25204,12 +25288,20 @@
           },
           "primaryKey": {
             "ID": "471069B4-DE07-4376-BF3D-6A6AB3BD0EB4"
+          },
+          "sync": {
+            "lastModified": "2026-09-15T13:56:43.080Z",
+            "checksum": "83e167d4fa4516b83fb5d8c30b692ec21c28babca1363b538f1eac2f33570bd3"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "699D1B9D-F63F-4E13-8C1F-6D10F21D55D3"
+    },
+    "sync": {
+      "lastModified": "2026-09-15T13:56:42.794Z",
+      "checksum": "d29681ec5f774ec79703f7192815b468f9d8ffa7bf2b4aa76e7d7a4350498783"
     }
   },
   {
@@ -25632,6 +25724,133 @@
     "sync": {
       "lastModified": "2026-09-16T01:46:08.293Z",
       "checksum": "83bc5757be51e2f182f05d5808eec3f18d478d1f706ab1ed7f94ab3a32ccf9ab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM-5.3-FlashX",
+      "PowerRank": 17,
+      "Description": "Z.AI (Zhipu AI) high-speed serving variant of GLM-5.3-Flash, released 2026-09-18. Same capability base as GLM-5.3-Flash — native multimodal (text/image/video/agentic), 320B total / 18B active parameters on a hybrid sparse + linear attention MoE, 1M-token context and 131,072 max output — served at up to 200 tokens/s for roughly 2.5x the per-token price ($0.37/$1.25 against Flash's $0.15/$0.50). FlashX is a serving and inference upgrade, not a separately documented intelligence checkpoint, so PowerRank matches GLM-5.3-Flash and only CostRank moves. Targeted at visual coding, tool use and long-horizon agent workloads that are latency-bound rather than quality-bound. Note that Z.AI added GLM-5.3-Flash to its GLM Coding Plan subscription but left FlashX off it, so FlashX is metered API only. Sources: https://openrouter.ai/z-ai/glm-5.3-flashx ; https://docs.z.ai/guides/vlm/glm-5.3-flash ; https://www.cometapi.com/what-is-glm-5-3-flashx/ ; https://www.orcarouter.ai/blog/glm-5-3-flashx-release ; https://apimaster.ai/blog/glm-5-3-flashx-api",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "2AE77688-C025-4FBD-82ED-B58A473EDBAC"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T18:52:51.709Z",
+            "checksum": "56fd5202288494b1a84a21b434eae9b56306635efe0a6718d7502e729588d2e3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ZAILLM",
+            "APIName": "glm-5.3-flashx",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "SupportsNativeToolCalling": false
+              }
+            }
+          },
+          "primaryKey": {
+            "ID": "EF9C1960-5C53-447B-B944-ADC1E38D2A10"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T18:52:51.731Z",
+            "checksum": "089a1bf10574c5b2a213853fd937756ee9a080d1b8a137cc5c79d23974fd244b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "z-ai/glm-5.3-flashx",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D7FEAD40-DDB8-4972-8BDD-FA20E978D5A8"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T18:52:51.750Z",
+            "checksum": "1925164ec1810b55da650ee1f4debb542ce7a50774cf28ea0f7c3a0ed4c72cc4"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-09-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.37,
+            "OutputPricePerUnit": 1.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "CacheReadPricePerUnit": 0.075,
+            "CacheWritePricePerUnit": null,
+            "Comments": "GLM-5.3-FlashX launch pricing on Z.AI direct (2026-09-18): $0.37/1M input, $1.25/1M output, $0.075/1M cache read. Approximately 2.5x GLM-5.3-Flash's $0.15/$0.50 for ~200 tokens/s serving; identical model weights. NO OpenRouter cost row is recorded yet: the OpenRouter route (z-ai/glm-5.3-flashx) is live and wired as an Inference Provider, but the published OpenRouter rate could not be confirmed independently of Z.AI's own card at the time of this research run, and an invented price is worse than an absent one. Confirm and add in a later run. Sources: https://openrouter.ai/z-ai/glm-5.3-flashx ; https://www.cometapi.com/what-is-glm-5-3-flashx/ ; https://www.orcarouter.ai/blog/glm-5-3-flashx-release ; https://lmmarketcap.com/model/z-ai-glm-5-3-flashx"
+          },
+          "primaryKey": {
+            "ID": "CAE87D16-8F95-484F-92CD-38572965380C"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T18:52:51.784Z",
+            "checksum": "2ceb9803816de6584f4c36645813533072b9c689dd7ef602811197574976c8a6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7174E758-029D-4713-BE14-9BCC5A433F0C"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T18:52:51.505Z",
+      "checksum": "8d92008bca6d9c38c7aec4009a1a897af586a516ac02e26e1562179ff49543ea"
     }
   }
 ]

@@ -33,6 +33,15 @@ export interface LinkedFieldOption {
    * `undefined` = use the default column set. An empty array = only the Name column.
    */
   visibleFields?: string[];
+  /**
+   * Primary keys the user most recently picked in THIS dropdown, newest first. Read into a
+   * "Recent" group when the dropdown opens with nothing typed, so the parties someone works
+   * with every day are one click away instead of buried in the directory.
+   *
+   * Deliberately not `MJ: User Record Logs`, which records the records a user *opened* — a
+   * different question from which value they last chose for this particular field.
+   */
+  recentPicks?: string[];
 }
 
 /**
@@ -127,5 +136,23 @@ export class LinkedFieldOptionsStore extends BaseSingleton<LinkedFieldOptionsSto
   /** Persist the user's chosen set/order of visible extra columns. */
   public SetVisibleFields(entityName: string, fieldName: string, fields: string[]): void {
     this.patch(entityName, fieldName, o => { o.visibleFields = [...fields]; });
+  }
+
+  /** Primary keys the user picked most recently for this dropdown, newest first. */
+  public RecentPicks(entityName: string, fieldName: string): string[] {
+    return [...(this.Get(entityName, fieldName)?.recentPicks ?? [])];
+  }
+
+  /**
+   * Record a pick: newest first, case-insensitively de-duplicated, capped at `max` so the blob
+   * cannot grow without bound as someone works through a day's orders.
+   */
+  public PushRecentPick(entityName: string, fieldName: string, pk: string, max = 10): void {
+    const value = (pk ?? '').trim();
+    if (!value) return;
+    this.patch(entityName, fieldName, o => {
+      const older = (o.recentPicks ?? []).filter(x => x.toLowerCase() !== value.toLowerCase());
+      o.recentPicks = [value, ...older].slice(0, max);
+    });
   }
 }
