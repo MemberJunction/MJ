@@ -279,15 +279,22 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Highlight a sequence of nodes (e.g., execution path) */
   HighlightPath(nodeIds: string[]): void {
+    // First index of each normalized ID (same answer as findIndex), built once so the node and
+    // connection passes are linear rather than nodes x path and connections x path.
+    const pathIndex = new Map<string, number>();
+    nodeIds.forEach((id, i) => {
+      const key = NormalizeUUID(id);
+      if (!pathIndex.has(key)) pathIndex.set(key, i);
+    });
     for (const node of this.Nodes) {
-      if (nodeIds.some(id => UUIDsEqual(id, node.ID))) {
+      if (pathIndex.has(NormalizeUUID(node.ID))) {
         node.Status = 'running';
       }
     }
     // Highlight connections along the path
     for (const conn of this.Connections) {
-      const srcIdx = nodeIds.findIndex(id => UUIDsEqual(id, conn.SourceNodeID));
-      const tgtIdx = nodeIds.findIndex(id => UUIDsEqual(id, conn.TargetNodeID));
+      const srcIdx = pathIndex.get(NormalizeUUID(conn.SourceNodeID)) ?? -1;
+      const tgtIdx = pathIndex.get(NormalizeUUID(conn.TargetNodeID)) ?? -1;
       if (srcIdx >= 0 && tgtIdx >= 0 && tgtIdx === srcIdx + 1) {
         conn.Animated = true;
       }
@@ -862,18 +869,19 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   private removeSelectedItems(): void {
     // Remove selected connections
-    const removedConnections = this.Connections.filter(c => this.selectedConnectionIDs.some(id => UUIDsEqual(id, c.ID)));
-    this.Connections = this.Connections.filter(c => !this.selectedConnectionIDs.some(id => UUIDsEqual(id, c.ID)));
+    const selectedConnections = new Set(this.selectedConnectionIDs.map(id => NormalizeUUID(id)));
+    const removedConnections = this.Connections.filter(c => selectedConnections.has(NormalizeUUID(c.ID)));
+    this.Connections = this.Connections.filter(c => !selectedConnections.has(NormalizeUUID(c.ID)));
     for (const conn of removedConnections) {
       this.ConnectionRemoved.emit(conn);
     }
 
     // Remove selected nodes and their connections
-    const removedNodes = this.Nodes.filter(n => this.selectedNodeIDs.some(id => UUIDsEqual(id, n.ID)));
-    this.Nodes = this.Nodes.filter(n => !this.selectedNodeIDs.some(id => UUIDsEqual(id, n.ID)));
+    const deletedNodeIDs = new Set(this.selectedNodeIDs.map(id => NormalizeUUID(id)));
+    const removedNodes = this.Nodes.filter(n => deletedNodeIDs.has(NormalizeUUID(n.ID)));
+    this.Nodes = this.Nodes.filter(n => !deletedNodeIDs.has(NormalizeUUID(n.ID)));
 
     // Also remove connections attached to deleted nodes
-    const deletedNodeIDs = new Set(this.selectedNodeIDs.map(id => NormalizeUUID(id)));
     const orphanedConnections = this.Connections.filter(
       c => deletedNodeIDs.has(NormalizeUUID(c.SourceNodeID)) || deletedNodeIDs.has(NormalizeUUID(c.TargetNodeID))
     );
