@@ -36,7 +36,7 @@ export interface EntityCatalogSummary {
  * Group a catalog by trimmed `SchemaName`. Insertion order of schemas follows
  * first occurrence in `entities`.
  */
-export function groupEntitiesBySchema(entities: readonly EntityInfo[]): Map<string, EntityInfo[]> {
+export function GroupEntitiesBySchema(entities: readonly EntityInfo[]): Map<string, EntityInfo[]> {
   const map = new Map<string, EntityInfo[]>();
   for (const entity of entities) {
     const key = (entity.SchemaName ?? '').trim() || 'unknown';
@@ -50,11 +50,16 @@ export function groupEntitiesBySchema(entities: readonly EntityInfo[]): Map<stri
   return map;
 }
 
+/** @deprecated Use {@link GroupEntitiesBySchema}. */
+export function groupEntitiesBySchema(entities: readonly EntityInfo[]): Map<string, EntityInfo[]> {
+  return GroupEntitiesBySchema(entities);
+}
+
 /**
  * Filter a catalog to the named schemas. Matching is case-insensitive and
  * trimmed. Unknown schema names are ignored (the result is just smaller).
  */
-export function entitiesInSchemas(
+export function EntitiesInSchemas(
   entities: readonly EntityInfo[],
   schemas: readonly string[],
 ): EntityInfo[] {
@@ -65,10 +70,18 @@ export function entitiesInSchemas(
   return entities.filter((e) => wanted.has((e.SchemaName ?? '').trim().toLowerCase()));
 }
 
+/** @deprecated Use {@link EntitiesInSchemas}. */
+export function entitiesInSchemas(
+  entities: readonly EntityInfo[],
+  schemas: readonly string[],
+): EntityInfo[] {
+  return EntitiesInSchemas(entities, schemas);
+}
+
 /**
  * Distinct schema names in catalog order (first occurrence wins).
  */
-export function distinctSchemaNames(entities: readonly EntityInfo[]): string[] {
+export function DistinctSchemaNames(entities: readonly EntityInfo[]): string[] {
   const seen = new Set<string>();
   const names: string[] = [];
   for (const entity of entities) {
@@ -82,17 +95,22 @@ export function distinctSchemaNames(entities: readonly EntityInfo[]): string[] {
   return names;
 }
 
+/** @deprecated Use {@link DistinctSchemaNames}. */
+export function distinctSchemaNames(entities: readonly EntityInfo[]): string[] {
+  return DistinctSchemaNames(entities);
+}
+
 /**
  * Project entities into a compact, JSON-serializable summary for agent / MCP
  * context. The catalog itself is not mutated. When `maxEntities` is hit the
  * remaining rows are omitted — callers who need the rest ask for another schema.
  */
-export function summarizeEntitiesForContext(
+export function SummarizeEntitiesForContext(
   entities: readonly EntityInfo[],
   options?: SchemaHydrationOptions,
 ): EntityCatalogSummary[] {
   const scoped = options?.schemas && options.schemas.length > 0
-    ? entitiesInSchemas(entities, options.schemas)
+    ? EntitiesInSchemas(entities, options.schemas)
     : [...entities];
   const capped = options?.maxEntities != null && options.maxEntities >= 0
     ? scoped.slice(0, options.maxEntities)
@@ -113,4 +131,12 @@ export function summarizeEntitiesForContext(
     }
     return summary;
   });
+}
+
+/** @deprecated Use {@link SummarizeEntitiesForContext}. */
+export function summarizeEntitiesForContext(
+  entities: readonly EntityInfo[],
+  options?: SchemaHydrationOptions,
+): EntityCatalogSummary[] {
+  return SummarizeEntitiesForContext(entities, options);
 }

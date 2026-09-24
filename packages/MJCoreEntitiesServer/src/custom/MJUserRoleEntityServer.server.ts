@@ -368,7 +368,7 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
             return null; // not the system user — nothing to guard
         }
 
-        const restricted = MJUserRoleEntityServer.EntitiesWithRestrictingFieldRulesForRole(roleID, provider);
+        const restricted = MJUserRoleEntityServer.entitiesWithRestrictingFieldRulesForRole(roleID, provider);
         if (restricted.length === 0) {
             return null;
         }
@@ -401,7 +401,7 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
      * is the one both guards exist to prevent. Disabling preserves rules so re-enabling does
      * not lose them, so a rule on a disabled entity is dormant rather than gone.
      */
-    private static EntitiesWithRestrictingFieldRulesForRole(roleID: string, provider?: IMetadataProvider): string[] {
+    private static entitiesWithRestrictingFieldRulesForRole(roleID: string, provider?: IMetadataProvider): string[] {
         const md = provider ?? new Metadata();
         const names: string[] = [];
         for (const entity of md.Entities as EntityInfo[]) {

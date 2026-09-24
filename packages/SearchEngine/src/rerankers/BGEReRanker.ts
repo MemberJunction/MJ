@@ -212,7 +212,12 @@ export function LoadBGEReRanker(): void {
  * Test-only export: clear the per-model pipeline cache. Used by tests so each test
  * can install its own mock pipeline.
  */
-export function __resetBGEPipelineCacheForTests(): void {
+export function ResetBGEPipelineCacheForTests(): void {
     pipelineCache.clear();
     transformersPromise = null;
+}
+
+/** @deprecated Use {@link ResetBGEPipelineCacheForTests}. */
+export function __resetBGEPipelineCacheForTests(): void {
+    return ResetBGEPipelineCacheForTests();
 }

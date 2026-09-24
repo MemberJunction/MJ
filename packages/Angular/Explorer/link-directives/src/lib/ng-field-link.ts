@@ -10,8 +10,8 @@ import { BaseLink } from './ng-base-link';
 export class FieldLink extends BaseLink implements OnInit {
 
   @Input('record') record!: BaseEntity; // Input variable to get the entity record
-  @Input('fieldName') fieldName!: string; // Input variable to get the fieldInfo
-  @Input('replaceText') replaceText: boolean = true ; // 
+  @Input('fieldName') fieldName!: string; // Input variable to get the fieldInfo — case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
+  @Input('replaceText') replaceText: boolean = true ; // — case-violation-ok-legacy-back-compat: the explicit binding alias is the contract, so renaming the property changes nothing
 
   private _targetEntity: string = '';
   private _targetEntityInfo: EntityInfo | undefined;

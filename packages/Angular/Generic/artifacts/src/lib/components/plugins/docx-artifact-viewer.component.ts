@@ -121,9 +121,27 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DocxArtifactViewerPlugin')
 export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
   public isLoading = true;
-  public isDownloading = false;
+  public IsDownloading = false;
+
+  /** @deprecated Use {@link IsDownloading}. */
+  public get isDownloading() {
+    return this.IsDownloading;
+  }
+  /** @deprecated Use {@link IsDownloading}. */
+  public set isDownloading(value) {
+    this.IsDownloading = value;
+  }
   public errorMessage = '';
-  public safeHtml: SafeHtml = '';
+  public SafeHtml: SafeHtml = '';
+
+  /** @deprecated Use {@link SafeHtml}. */
+  public get safeHtml(): SafeHtml {
+    return this.SafeHtml;
+  }
+  /** @deprecated Use {@link SafeHtml}. */
+  public set safeHtml(value: SafeHtml) {
+    this.SafeHtml = value;
+  }
 
   /** Raw HTML produced by mammoth — kept for print. */
   private rawHtml = '';
@@ -145,25 +163,35 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     await this.loadDocument();
   }
 
-  public async onDownload(): Promise<void> {
-    if (!this.downloadUrl || this.isDownloading) {
+  public async OnDownload(): Promise<void> {
+    if (!this.downloadUrl || this.IsDownloading) {
       return;
     }
-    this.isDownloading = true;
+    this.IsDownloading = true;
     this.cdr.markForCheck();
     try {
       await this.triggerBrowserDownload(this.downloadUrl, this.artifactVersion?.FileName || 'document.docx');
     } finally {
-      this.isDownloading = false;
+      this.IsDownloading = false;
       this.cdr.markForCheck();
     }
   }
 
-  public onPrint(): void {
+  /** @deprecated Use {@link OnDownload}. */
+  public async onDownload(): Promise<void> {
+    return this.OnDownload();
+  }
+
+  public OnPrint(): void {
     if (!this.rawHtml) {
       return;
     }
     this.openPrintWindow(this.rawHtml);
+  }
+
+  /** @deprecated Use {@link OnPrint}. */
+  public onPrint(): void {
+    return this.OnPrint();
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
@@ -199,7 +227,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       const html = await this.convertDocxToHtml(arrayBuffer);
       this.rawHtml = html;
       const sanitized = this.sanitizer.sanitize(SecurityContext.HTML, html) ?? '';
-      this.safeHtml = sanitized;
+      this.SafeHtml = sanitized;
       this.isLoading = false;
       this.cdr.markForCheck();
     } catch (err) {

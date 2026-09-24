@@ -6,8 +6,8 @@ import { BaseEntity } from '@memberjunction/core';
  * knows what the row means on its screen.
  */
 export interface EnrolledRow {
-    label: string;
-    entity: BaseEntity;
+    Label: string;
+    Entity: BaseEntity;
 }
 
 /**
@@ -45,13 +45,18 @@ export const PROVIDER_PLACEHOLDER_MESSAGES: ReadonlySet<string> = new Set([
  * function: a transport error or a rollback the server could not attribute to one item leaves
  * nothing worth showing, and the caller should keep its generic message rather than invent detail.
  */
-export function serverRefusalReasons(rows: EnrolledRow[]): string[] {
+export function ServerRefusalReasons(rows: EnrolledRow[]): string[] {
     const lines: string[] = [];
     for (const row of rows) {
-        const reason = row.entity.LatestResult?.CompleteMessage?.trim();
+        const reason = row.Entity.LatestResult?.CompleteMessage?.trim();
         if (reason && !PROVIDER_PLACEHOLDER_MESSAGES.has(reason)) {
-            lines.push(`${row.label}: ${reason}`);
+            lines.push(`${row.Label}: ${reason}`);
         }
     }
     return lines;
+}
+
+/** @deprecated Use {@link ServerRefusalReasons}. */
+export function serverRefusalReasons(rows: EnrolledRow[]): string[] {
+    return ServerRefusalReasons(rows);
 }

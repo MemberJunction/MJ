@@ -1,7 +1,7 @@
 import { CompositeKey, EntityInfo, EntityFieldInfo, EntityRelationshipInfo, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { DependencyNode, WalkOptions } from './types';
-import { buildCompositeKeyFromRecord, escapeSqlString } from './constants';
+import { BuildCompositeKeyFromRecord, escapeSqlString } from './constants';
 
 // =============================================================================
 // Internal Types
@@ -549,7 +549,7 @@ export class DependencyGraphWalker {
         visited: Set<string>,
         stats: WalkStats
     ): DependencyNode | null {
-        const key = buildCompositeKeyFromRecord(entityInfo, recordData);
+        const key = BuildCompositeKeyFromRecord(entityInfo, recordData);
         const vKey = this.visitKey(entityInfo.Name, key.ToConcatenatedString());
 
         if (visited.has(vKey)) {

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
-    stableHash32,
-    assignSubModule,
+    StableHash32,
+    AssignSubModule,
     AngularClientGeneratorBase,
 } from '../Angular/angular-codegen';
 import * as statusLogging from '../Misc/status_logging';
@@ -32,25 +32,25 @@ describe('submodule-partition (T9)', () => {
     describe('stableHash32 & assignSubModule algorithm invariants', () => {
         it('matches golden 32-bit FNV-1a hashes for known strings', () => {
             // Golden values pinned to ensure FNV-1a hash stability across all Node versions/platforms
-            expect(stableHash32('')).toBe(2166136261);
-            expect(stableHash32('MJUserFormComponent')).toBe(stableHash32('MJUserFormComponent'));
-            expect(typeof stableHash32('MJUserFormComponent')).toBe('number');
-            expect(stableHash32('MJUserFormComponent') >>> 0).toBe(stableHash32('MJUserFormComponent'));
+            expect(StableHash32('')).toBe(2166136261);
+            expect(StableHash32('MJUserFormComponent')).toBe(StableHash32('MJUserFormComponent'));
+            expect(typeof StableHash32('MJUserFormComponent')).toBe('number');
+            expect(StableHash32('MJUserFormComponent') >>> 0).toBe(StableHash32('MJUserFormComponent'));
 
             // Pin 5 distinct strings to specific numeric outputs
             const hashes = [
-                stableHash32(''),
-                stableHash32('MJUserFormComponent'),
-                stableHash32('MJRoleFormComponent'),
-                stableHash32('MJEntityFormComponent'),
-                stableHash32('MJRecordChangeFormComponent'),
+                StableHash32(''),
+                StableHash32('MJUserFormComponent'),
+                StableHash32('MJRoleFormComponent'),
+                StableHash32('MJEntityFormComponent'),
+                StableHash32('MJRecordChangeFormComponent'),
             ];
             expect(hashes).toEqual([
                 2166136261,
-                stableHash32('MJUserFormComponent'),
-                stableHash32('MJRoleFormComponent'),
-                stableHash32('MJEntityFormComponent'),
-                stableHash32('MJRecordChangeFormComponent'),
+                StableHash32('MJUserFormComponent'),
+                StableHash32('MJRoleFormComponent'),
+                StableHash32('MJEntityFormComponent'),
+                StableHash32('MJRecordChangeFormComponent'),
             ]);
         });
 
@@ -64,7 +64,7 @@ describe('submodule-partition (T9)', () => {
                 'PermissionFormComponent',
             ];
             for (const name of names) {
-                const bucket = assignSubModule(name, 32);
+                const bucket = AssignSubModule(name, 32);
                 expect(bucket).toBeGreaterThanOrEqual(0);
                 expect(bucket).toBeLessThan(32);
                 expect(Number.isInteger(bucket)).toBe(true);
@@ -88,7 +88,7 @@ describe('submodule-partition (T9)', () => {
 
             // Add one new component
             const newComponent = { componentName: 'ZetaFormComponent', relatedEntityItemsRequired: [] };
-            const targetBucket = assignSubModule(newComponent.componentName, 16);
+            const targetBucket = AssignSubModule(newComponent.componentName, 16);
 
             const codeAfter = generator.testGenerateModuleCode([...baseComponents, newComponent], 25, 'Test', 16);
 
@@ -173,7 +173,7 @@ describe('submodule-partition (T9)', () => {
                 { componentName: 'AFormComponent', relatedEntityItemsRequired: [] }
             ];
 
-            const targetBucket = assignSubModule('AFormComponent', 32);
+            const targetBucket = AssignSubModule('AFormComponent', 32);
             const code = generator.testGenerateModuleCode(components, 25, 'Test', 32);
 
             // Only one submodule class should be emitted
@@ -193,7 +193,7 @@ describe('submodule-partition (T9)', () => {
 
     describe('Soft limit warning on bucket overflow', () => {
         it('logs a warning when a bucket exceeds maxComponentsPerModule without splitting', () => {
-            const warnSpy = vi.spyOn(statusLogging, 'logWarning').mockImplementation(() => {});
+            const warnSpy = vi.spyOn(statusLogging, 'LogWarning').mockImplementation(() => {});
 
             const generator = new TestableAngularGenerator();
 

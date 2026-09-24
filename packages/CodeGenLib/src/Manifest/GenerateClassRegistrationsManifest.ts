@@ -1376,13 +1376,18 @@ export interface SubpathExportInfo {
     classToFile: Map<string, string>;
 }
 
-export function resolveSubpathExports(packageDir: string): Map<string, Set<string>> {
+export function ResolveSubpathExports(packageDir: string): Map<string, Set<string>> {
     const detailed = resolveSubpathExportsDetailed(packageDir);
     const result = new Map<string, Set<string>>();
     for (const [subpath, info] of detailed.entries()) {
         result.set(subpath, info.classNames);
     }
     return result;
+}
+
+/** @deprecated Use {@link ResolveSubpathExports}. */
+export function resolveSubpathExports(packageDir: string): Map<string, Set<string>> {
+    return ResolveSubpathExports(packageDir);
 }
 
 /**
@@ -1439,7 +1444,7 @@ function countTypedSubpathExports(packageDir: string): number {
  *
  * @throws when `packageDir` declares typed subpath exports but none of them resolve.
  */
-export function resolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
+export function ResolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
     const subpaths = resolveSubpathExportsDetailed(packageDir);
     if (subpaths.size === 0) {
         const declared = countTypedSubpathExports(packageDir);
@@ -1455,6 +1460,11 @@ export function resolveLazySubpathExports(packageName: string, packageDir: strin
         }
     }
     return subpaths;
+}
+
+/** @deprecated Use {@link ResolveLazySubpathExports}. */
+export function resolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
+    return ResolveLazySubpathExports(packageName, packageDir);
 }
 
 /**
@@ -1705,7 +1715,7 @@ function groupClassesIntoChunks(
     const packageSubpaths = new Map<string, Map<string, SubpathExportInfo>>();
     for (const [depName, depDir] of lazyPackages.entries()) {
         const subpaths = packagesWithLazyClasses.has(depName)
-            ? resolveLazySubpathExports(depName, depDir)
+            ? ResolveLazySubpathExports(depName, depDir)
             : resolveSubpathExportsDetailed(depDir);
         if (subpaths.size > 0) {
             packageSubpaths.set(depName, subpaths);
@@ -2005,7 +2015,7 @@ function writeIfChanged(filePath: string, content: string): boolean {
  * }
  * ```
  */
-export async function generateClassRegistrationsManifest(
+export async function GenerateClassRegistrationsManifest(
     options: GenerateManifestOptions
 ): Promise<GenerateManifestResult> {
     const {
@@ -2243,4 +2253,11 @@ export async function generateClassRegistrationsManifest(
         AddedDependencies: addedDependencies,
         errors
     };
+}
+
+/** @deprecated Use {@link GenerateClassRegistrationsManifest}. */
+export async function generateClassRegistrationsManifest(
+    options: GenerateManifestOptions
+): Promise<GenerateManifestResult> {
+    return GenerateClassRegistrationsManifest(options);
 }

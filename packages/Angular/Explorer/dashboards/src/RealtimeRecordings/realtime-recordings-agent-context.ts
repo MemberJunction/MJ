@@ -40,13 +40,23 @@ export const VALID_SESSION_SORT_DIRECTIONS = ['asc', 'desc'] as const;
 export type SessionSortDirection = (typeof VALID_SESSION_SORT_DIRECTIONS)[number];
 
 /** Type-guard for a recording sort field (keeps the SortSessions tool tolerant). */
-export function isValidSessionSortField(value: unknown): value is SessionSortField {
+export function IsValidSessionSortField(value: unknown): value is SessionSortField {
     return typeof value === 'string' && (VALID_SESSION_SORT_FIELDS as readonly string[]).includes(value);
 }
 
+/** @deprecated Use {@link IsValidSessionSortField}. */
+export function isValidSessionSortField(value: unknown): value is SessionSortField {
+    return IsValidSessionSortField(value);
+}
+
 /** Type-guard for a recording sort direction (keeps the SortSessions tool tolerant). */
-export function isValidSessionSortDirection(value: unknown): value is SessionSortDirection {
+export function IsValidSessionSortDirection(value: unknown): value is SessionSortDirection {
     return typeof value === 'string' && (VALID_SESSION_SORT_DIRECTIONS as readonly string[]).includes(value);
+}
+
+/** @deprecated Use {@link IsValidSessionSortDirection}. */
+export function isValidSessionSortDirection(value: unknown): value is SessionSortDirection {
+    return IsValidSessionSortDirection(value);
 }
 
 /** A bounded, plain projection of one selected recording for the agent context. */
@@ -106,8 +116,13 @@ function capList<T>(items: readonly T[]): T[] {
 }
 
 /** A short display label for a recording — agent name, plus the conversation name when present. */
-export function sessionDisplayLabel(session: { AgentName: string; ConversationName: string | null }): string {
+export function SessionDisplayLabel(session: { AgentName: string; ConversationName: string | null }): string {
     return session.ConversationName ? `${session.AgentName} — ${session.ConversationName}` : session.AgentName;
+}
+
+/** @deprecated Use {@link SessionDisplayLabel}. */
+export function sessionDisplayLabel(session: { AgentName: string; ConversationName: string | null }): string {
+    return SessionDisplayLabel(session);
 }
 
 /**
@@ -123,7 +138,7 @@ export function sessionDisplayLabel(session: { AgentName: string; ConversationNa
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildRealtimeRecordingsAgentContext(
+export function BuildRealtimeRecordingsAgentContext(
     input: RealtimeRecordingsAgentContextInput,
 ): Record<string, unknown> {
     const selected = input.SelectedSession;
@@ -150,7 +165,7 @@ export function buildRealtimeRecordingsAgentContext(
     }
 
     if (input.VisibleSessions.length > 0) {
-        context['VisibleSessionNames'] = capList(input.VisibleSessions.map(s => sessionDisplayLabel(s)));
+        context['VisibleSessionNames'] = capList(input.VisibleSessions.map(s => SessionDisplayLabel(s)));
         context['VisibleSessions'] = capList(input.VisibleSessions.map(s => ({
             ID: s.ID,
             AgentName: s.AgentName,
@@ -164,6 +179,13 @@ export function buildRealtimeRecordingsAgentContext(
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildRealtimeRecordingsAgentContext}. */
+export function buildRealtimeRecordingsAgentContext(
+    input: RealtimeRecordingsAgentContextInput,
+): Record<string, unknown> {
+    return BuildRealtimeRecordingsAgentContext(input);
 }
 
 /** The fields of a recording considered when matching a client-side text filter. */
@@ -185,7 +207,7 @@ export interface SessionSearchFields {
  * @param query - the raw, untrusted query string
  * @returns true when the recording matches the query
  */
-export function sessionMatchesQuery(session: SessionSearchFields, query: string): boolean {
+export function SessionMatchesQuery(session: SessionSearchFields, query: string): boolean {
     const needle = query.trim().toLowerCase();
     if (needle.length === 0) {
         return true;
@@ -194,6 +216,11 @@ export function sessionMatchesQuery(session: SessionSearchFields, query: string)
         .join(' ')
         .toLowerCase();
     return haystack.includes(needle);
+}
+
+/** @deprecated Use {@link SessionMatchesQuery}. */
+export function sessionMatchesQuery(session: SessionSearchFields, query: string): boolean {
+    return SessionMatchesQuery(session, query);
 }
 
 /** A minimal id/name-bearing recording descriptor for the tolerant resolver. */
@@ -222,7 +249,7 @@ export interface SessionResolveCandidate {
  * @param candidates - the loaded recordings
  * @returns the matched candidate, or null on a miss
  */
-export function resolveSessionByIdOrName<T extends SessionResolveCandidate>(input: string, candidates: readonly T[]): T | null {
+export function ResolveSessionByIdOrName<T extends SessionResolveCandidate>(input: string, candidates: readonly T[]): T | null {
     const needle = input.trim().toLowerCase();
     if (!needle) {
         return null;
@@ -231,7 +258,7 @@ export function resolveSessionByIdOrName<T extends SessionResolveCandidate>(inpu
     if (byId) {
         return byId;
     }
-    const byLabel = candidates.find(c => sessionDisplayLabel(c).toLowerCase() === needle);
+    const byLabel = candidates.find(c => SessionDisplayLabel(c).toLowerCase() === needle);
     if (byLabel) {
         return byLabel;
     }
@@ -243,21 +270,31 @@ export function resolveSessionByIdOrName<T extends SessionResolveCandidate>(inpu
     if (byConversation) {
         return byConversation;
     }
-    const byContains = candidates.find(c => sessionDisplayLabel(c).toLowerCase().includes(needle));
+    const byContains = candidates.find(c => SessionDisplayLabel(c).toLowerCase().includes(needle));
     if (byContains) {
         return byContains;
     }
     return null;
 }
 
+/** @deprecated Use {@link ResolveSessionByIdOrName}. */
+export function resolveSessionByIdOrName<T extends SessionResolveCandidate>(input: string, candidates: readonly T[]): T | null {
+    return ResolveSessionByIdOrName(input, candidates);
+}
+
 /**
  * Build a tolerant "not found" error for a recording lookup miss, listing a bounded sample of
  * available recording labels so the agent can correct itself.
  */
-export function buildSessionNotFoundError(input: string, candidates: readonly SessionResolveCandidate[]): string {
+export function BuildSessionNotFoundError(input: string, candidates: readonly SessionResolveCandidate[]): string {
     const sample = candidates
         .slice(0, REALTIME_RECORDINGS_NAME_LIST_CAP)
-        .map(c => sessionDisplayLabel(c))
+        .map(c => SessionDisplayLabel(c))
         .join(', ');
     return `No recorded session matches "${input}". Available recordings include: ${sample || '(none)'}.`;
+}
+
+/** @deprecated Use {@link BuildSessionNotFoundError}. */
+export function buildSessionNotFoundError(input: string, candidates: readonly SessionResolveCandidate[]): string {
+    return BuildSessionNotFoundError(input, candidates);
 }

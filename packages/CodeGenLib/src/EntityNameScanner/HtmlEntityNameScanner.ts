@@ -20,7 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import { resolveEntityNameMap } from './EntityNameScanner';
+import { ResolveEntityNameMap } from './EntityNameScanner';
 
 // ============================================================================
 // Public Types
@@ -163,7 +163,7 @@ function getLineNumber(sourceText: string, offset: number): number {
 /**
  * Scans a single HTML file for entity name references that need the "MJ: " prefix.
  */
-export function scanHtmlFile(
+export function ScanHtmlFile(
     filePath: string,
     sourceText: string,
     renameMap: Map<string, string>,
@@ -223,6 +223,15 @@ export function scanHtmlFile(
     return findings;
 }
 
+/** @deprecated Use {@link ScanHtmlFile}. */
+export function scanHtmlFile(
+    filePath: string,
+    sourceText: string,
+    renameMap: Map<string, string>,
+): HtmlEntityNameFinding[] {
+    return ScanHtmlFile(filePath, sourceText, renameMap);
+}
+
 // ============================================================================
 // HTML File Fixer
 // ============================================================================
@@ -230,7 +239,7 @@ export function scanHtmlFile(
 /**
  * Applies entity name fixes to an HTML file using targeted string replacements.
  */
-export function fixHtmlFile(
+export function FixHtmlFile(
     sourceText: string,
     findings: HtmlEntityNameFinding[],
 ): string {
@@ -248,6 +257,14 @@ export function fixHtmlFile(
     return result;
 }
 
+/** @deprecated Use {@link FixHtmlFile}. */
+export function fixHtmlFile(
+    sourceText: string,
+    findings: HtmlEntityNameFinding[],
+): string {
+    return FixHtmlFile(sourceText, findings);
+}
+
 /** Simple replaceAll using split/join for broad compatibility. */
 function replaceAll(text: string, search: string, replacement: string): string {
     return text.split(search).join(replacement);
@@ -261,7 +278,7 @@ function replaceAll(text: string, search: string, replacement: string): string {
  * Scans HTML template files for hardcoded entity names that need the "MJ: " prefix,
  * and optionally fixes them in place.
  */
-export async function scanHtmlEntityNames(
+export async function ScanHtmlEntityNames(
     options: HtmlEntityNameScanOptions,
 ): Promise<HtmlEntityNameScanResult> {
     const errors: string[] = [];
@@ -283,7 +300,7 @@ export async function scanHtmlEntityNames(
     // Build rename map (tries .ts file first, falls back to embedded rename map)
     let renameMap: Map<string, string>;
     try {
-        renameMap = resolveEntityNameMap(targetPath, options.EntitySubclassesPath, verbose);
+        renameMap = ResolveEntityNameMap(targetPath, options.EntitySubclassesPath, verbose);
     } catch (err) {
         return {
             Success: false,
@@ -325,13 +342,13 @@ export async function scanHtmlEntityNames(
     for (const filePath of htmlFiles) {
         try {
             const sourceText = fs.readFileSync(filePath, 'utf-8');
-            const findings = scanHtmlFile(filePath, sourceText, renameMap);
+            const findings = ScanHtmlFile(filePath, sourceText, renameMap);
 
             if (findings.length > 0) {
                 allFindings.push(...findings);
 
                 if (options.Fix) {
-                    const fixedText = fixHtmlFile(sourceText, findings);
+                    const fixedText = FixHtmlFile(sourceText, findings);
                     fs.writeFileSync(filePath, fixedText, 'utf-8');
                     fixedFiles.push(filePath);
                     if (verbose) {
@@ -358,4 +375,11 @@ export async function scanHtmlEntityNames(
         RenameMapSize: renameMap.size,
         Errors: errors,
     };
+}
+
+/** @deprecated Use {@link ScanHtmlEntityNames}. */
+export async function scanHtmlEntityNames(
+    options: HtmlEntityNameScanOptions,
+): Promise<HtmlEntityNameScanResult> {
+    return ScanHtmlEntityNames(options);
 }

@@ -7,12 +7,12 @@ import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
-import { EnrolledRow, serverRefusalReasons } from './transaction-group-refusals';
+import { EnrolledRow, ServerRefusalReasons } from './transaction-group-refusals';
 import {
-  buildUserManagementAgentContext,
-  isValidUserStatusFilter,
-  resolveUserByIDOrName,
-  resolveRoleByIDOrName,
+  BuildUserManagementAgentContext,
+  IsValidUserStatusFilter,
+  ResolveUserByIDOrName,
+  ResolveRoleByIDOrName,
   UserManagementAgentContextInput,
 } from './user-management-agent-context';
 
@@ -43,45 +43,180 @@ interface FilterOptions {
 export class UserManagementComponent extends BaseDashboard implements OnDestroy {
 
   // State management
-  public users: MJUserEntity[] = [];
-  public filteredUsers: MJUserEntity[] = [];
-  public roles: MJRoleEntity[] = [];
-  public selectedUser: MJUserEntity | null = null;
+  public Users: MJUserEntity[] = [];
+
+  /** @deprecated Use {@link Users}. */
+  public get users(): MJUserEntity[] {
+    return this.Users;
+  }
+  /** @deprecated Use {@link Users}. */
+  public set users(value: MJUserEntity[]) {
+    this.Users = value;
+  }
+  public FilteredUsers: MJUserEntity[] = [];
+
+  /** @deprecated Use {@link FilteredUsers}. */
+  public get filteredUsers(): MJUserEntity[] {
+    return this.FilteredUsers;
+  }
+  /** @deprecated Use {@link FilteredUsers}. */
+  public set filteredUsers(value: MJUserEntity[]) {
+    this.FilteredUsers = value;
+  }
+  public Roles: MJRoleEntity[] = [];
+
+  /** @deprecated Use {@link Roles}. */
+  public get roles(): MJRoleEntity[] {
+    return this.Roles;
+  }
+  /** @deprecated Use {@link Roles}. */
+  public set roles(value: MJRoleEntity[]) {
+    this.Roles = value;
+  }
+  public SelectedUser: MJUserEntity | null = null;
+
+  /** @deprecated Use {@link SelectedUser}. */
+  public get selectedUser(): MJUserEntity | null {
+    return this.SelectedUser;
+  }
+  /** @deprecated Use {@link SelectedUser}. */
+  public set selectedUser(value: MJUserEntity | null) {
+    this.SelectedUser = value;
+  }
   public isLoading = false;
   public error: string | null = null;
 
   // Selection state for bulk actions
-  public selectedUserIds = new Set<string>();
+  public SelectedUserIds = new Set<string>();
+
+  /** @deprecated Use {@link SelectedUserIds}. */
+  public get selectedUserIds() {
+    return this.SelectedUserIds;
+  }
+  /** @deprecated Use {@link SelectedUserIds}. */
+  public set selectedUserIds(value) {
+    this.SelectedUserIds = value;
+  }
 
   // Dialog state
-  public showUserDialog = false;
-  public userDialogData: UserDialogData | null = null;
+  public ShowUserDialog = false;
+
+  /** @deprecated Use {@link ShowUserDialog}. */
+  public get showUserDialog() {
+    return this.ShowUserDialog;
+  }
+  /** @deprecated Use {@link ShowUserDialog}. */
+  public set showUserDialog(value) {
+    this.ShowUserDialog = value;
+  }
+  public UserDialogData: UserDialogData | null = null;
+
+  /** @deprecated Use {@link UserDialogData}. */
+  public get userDialogData(): UserDialogData | null {
+    return this.UserDialogData;
+  }
+  /** @deprecated Use {@link UserDialogData}. */
+  public set userDialogData(value: UserDialogData | null) {
+    this.UserDialogData = value;
+  }
 
   // Bulk action dialog state
-  public showBulkActionConfirm = false;
-  public bulkActionType: 'enable' | 'disable' | 'delete' | null = null;
-  public showBulkRoleAssign = false;
-  public bulkRoleId: string = '';
+  public ShowBulkActionConfirm = false;
+
+  /** @deprecated Use {@link ShowBulkActionConfirm}. */
+  public get showBulkActionConfirm() {
+    return this.ShowBulkActionConfirm;
+  }
+  /** @deprecated Use {@link ShowBulkActionConfirm}. */
+  public set showBulkActionConfirm(value) {
+    this.ShowBulkActionConfirm = value;
+  }
+  public BulkActionType: 'enable' | 'disable' | 'delete' | null = null;
+
+  /** @deprecated Use {@link BulkActionType}. */
+  public get bulkActionType(): 'enable' | 'disable' | 'delete' | null {
+    return this.BulkActionType;
+  }
+  /** @deprecated Use {@link BulkActionType}. */
+  public set bulkActionType(value: 'enable' | 'disable' | 'delete' | null) {
+    this.BulkActionType = value;
+  }
+  public ShowBulkRoleAssign = false;
+
+  /** @deprecated Use {@link ShowBulkRoleAssign}. */
+  public get showBulkRoleAssign() {
+    return this.ShowBulkRoleAssign;
+  }
+  /** @deprecated Use {@link ShowBulkRoleAssign}. */
+  public set showBulkRoleAssign(value) {
+    this.ShowBulkRoleAssign = value;
+  }
+  public BulkRoleId: string = '';
+
+  /** @deprecated Use {@link BulkRoleId}. */
+  public get bulkRoleId(): string {
+    return this.BulkRoleId;
+  }
+  /** @deprecated Use {@link BulkRoleId}. */
+  public set bulkRoleId(value: string) {
+    this.BulkRoleId = value;
+  }
   
   // Stats
-  public stats: UserStats = {
+  public Stats: UserStats = {
     totalUsers: 0,
     activeUsers: 0,
     inactiveUsers: 0,
     adminUsers: 0  // This will be based on roles, not Type
   };
+
+  /** @deprecated Use {@link Stats}. */
+  public get stats(): UserStats {
+    return this.Stats;
+  }
+  /** @deprecated Use {@link Stats}. */
+  public set stats(value: UserStats) {
+    this.Stats = value;
+  }
   
   // Filters
-  public filters$ = new BehaviorSubject<FilterOptions>({
+  public Filters$ = new BehaviorSubject<FilterOptions>({
     status: 'all',
     role: '',
     search: ''
   });
+
+  /** @deprecated Use {@link Filters$}. */
+  public get filters$() {
+    return this.Filters$;
+  }
+  /** @deprecated Use {@link Filters$}. */
+  public set filters$(value) {
+    this.Filters$ = value;
+  }
   
   // UI State
   public showCreateDialog = false;
-  public showEditDialog = false;
-  public showDeleteConfirm = false;
+  public ShowEditDialog = false;
+
+  /** @deprecated Use {@link ShowEditDialog}. */
+  public get showEditDialog() {
+    return this.ShowEditDialog;
+  }
+  /** @deprecated Use {@link ShowEditDialog}. */
+  public set showEditDialog(value) {
+    this.ShowEditDialog = value;
+  }
+  public ShowDeleteConfirm = false;
+
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  public get showDeleteConfirm() {
+    return this.ShowDeleteConfirm;
+  }
+  /** @deprecated Use {@link ShowDeleteConfirm}. */
+  public set showDeleteConfirm(value) {
+    this.ShowDeleteConfirm = value;
+  }
 
   // Mobile expansion state
   private expandedUserIds = new Set<string>();
@@ -90,11 +225,20 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   private userRoleMap = new Map<string, string[]>(); // userId -> roleIds[]
   
   // Grid configuration
-  public gridConfig = {
+  public GridConfig = {
     pageSize: 20,
     sortField: 'Name',
     sortDirection: 'asc'
   };
+
+  /** @deprecated Use {@link GridConfig}. */
+  public get gridConfig() {
+    return this.GridConfig;
+  }
+  /** @deprecated Use {@link GridConfig}. */
+  public set gridConfig(value) {
+    this.GridConfig = value;
+  }
   
   protected override destroy$ = new Subject<void>();
   private get metadata() { return this.ProviderToUse; }
@@ -112,7 +256,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   protected loadData(): void {
-    this.loadInitialData();
+    this.LoadInitialData();
   }
 
   // ================================================================
@@ -142,25 +286,25 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
    * {@link buildUserManagementAgentContext} helper (unit-tested in isolation).
    */
   private publishAgentContext(): void {
-    const filters = this.filters$.value;
-    const roleFilter = filters.role ? this.roles.find(r => UUIDsEqual(r.ID, filters.role)) : null;
+    const filters = this.Filters$.value;
+    const roleFilter = filters.role ? this.Roles.find(r => UUIDsEqual(r.ID, filters.role)) : null;
     const input: UserManagementAgentContextInput = {
-      TotalUserCount: this.users.length,
-      FilteredUserCount: this.filteredUsers.length,
-      ActiveUserCount: this.stats.activeUsers,
-      InactiveUserCount: this.stats.inactiveUsers,
+      TotalUserCount: this.Users.length,
+      FilteredUserCount: this.FilteredUsers.length,
+      ActiveUserCount: this.Stats.activeUsers,
+      InactiveUserCount: this.Stats.inactiveUsers,
       StatusFilter: filters.status,
       RoleFilterId: filters.role || null,
       RoleFilterName: roleFilter?.Name ?? null,
       SearchText: filters.search,
-      SelectedUserId: this.selectedUser?.ID ?? null,
-      SelectedUserName: this.selectedUser?.Name ?? null,
-      VisibleUserNames: this.filteredUsers.map(u => u.Name ?? '').filter(n => n !== ''),
-      VisibleUserEmails: this.filteredUsers.map(u => u.Email ?? '').filter(e => e !== ''),
-      AvailableRoleNames: this.roles.map(r => r.Name ?? '').filter(n => n !== ''),
+      SelectedUserId: this.SelectedUser?.ID ?? null,
+      SelectedUserName: this.SelectedUser?.Name ?? null,
+      VisibleUserNames: this.FilteredUsers.map(u => u.Name ?? '').filter(n => n !== ''),
+      VisibleUserEmails: this.FilteredUsers.map(u => u.Email ?? '').filter(e => e !== ''),
+      AvailableRoleNames: this.Roles.map(r => r.Name ?? '').filter(n => n !== ''),
       VisibleColumns: ['Name', 'Email', 'Type', 'Status', 'Roles'],
     };
-    this.navigationService.SetAgentContext(this, buildUserManagementAgentContext(input));
+    this.navigationService.SetAgentContext(this, BuildUserManagementAgentContext(input));
   }
 
   /**
@@ -229,10 +373,10 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
   private handleSwitchStatusFilterTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
     const status = params?.['status'];
-    if (!isValidUserStatusFilter(status)) {
+    if (!IsValidUserStatusFilter(status)) {
       return { Success: false, ErrorMessage: `Invalid status "${String(status)}". Expected one of: all, active, inactive.` };
     }
-    this.onStatusFilterChange(status);
+    this.OnStatusFilterChange(status);
     this.publishAgentContext();
     return { Success: true };
   }
@@ -241,15 +385,15 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     const raw = String(params?.['role'] ?? '');
     if (!raw.trim()) {
       // Empty string explicitly clears the role filter.
-      this.updateFilter({ role: '' });
+      this.UpdateFilter({ role: '' });
       this.publishAgentContext();
       return { Success: true };
     }
-    const resolved = resolveRoleByIDOrName(raw, this.roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
+    const resolved = ResolveRoleByIDOrName(raw, this.Roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
     if (!resolved.ok) {
       return { Success: false, ErrorMessage: resolved.error };
     }
-    this.updateFilter({ role: resolved.match.ID });
+    this.UpdateFilter({ role: resolved.match.ID });
     this.publishAgentContext();
     return { Success: true };
   }
@@ -259,21 +403,21 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     if (typeof searchText !== 'string') {
       return { Success: false, ErrorMessage: 'searchText must be a string.' };
     }
-    this.updateFilter({ search: searchText });
+    this.UpdateFilter({ search: searchText });
     this.publishAgentContext();
     return { Success: true };
   }
 
   private handleSelectUserTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
     const raw = String(params?.['user'] ?? '');
-    const resolved = resolveUserByIDOrName(raw, this.users.map(u => ({
+    const resolved = ResolveUserByIDOrName(raw, this.Users.map(u => ({
       ID: u.ID, Name: u.Name ?? '', Email: u.Email, FirstName: u.FirstName, LastName: u.LastName,
     })));
     if (!resolved.ok) {
       return { Success: false, ErrorMessage: resolved.error };
     }
-    const match = this.users.find(u => UUIDsEqual(u.ID, resolved.match.ID)) ?? null;
-    this.selectedUser = match;
+    const match = this.Users.find(u => UUIDsEqual(u.ID, resolved.match.ID)) ?? null;
+    this.SelectedUser = match;
     this.cdr.markForCheck();
     this.publishAgentContext();
     return { Success: true };
@@ -296,7 +440,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
   private handleNavigateToUserRecordTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
     const raw = String(params?.['user'] ?? '');
-    const resolved = resolveUserByIDOrName(raw, this.users.map(u => ({
+    const resolved = ResolveUserByIDOrName(raw, this.Users.map(u => ({
       ID: u.ID, Name: u.Name ?? '', Email: u.Email, FirstName: u.FirstName, LastName: u.LastName,
     })));
     if (!resolved.ok) {
@@ -310,7 +454,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   private applySortToVisibleUsers(): void {
     const dir = this.agentSortDirection === 'desc' ? -1 : 1;
     const field = this.agentSortField;
-    this.filteredUsers = [...this.filteredUsers].sort((a, b) => {
+    this.FilteredUsers = [...this.FilteredUsers].sort((a, b) => {
       const av = this.sortKeyForUser(a, field);
       const bv = this.sortKeyForUser(b, field);
       return av.localeCompare(bv) * dir;
@@ -328,14 +472,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private handleClearFiltersTool(): { Success: boolean } {
-    this.resetAllFiltersAndSearch();
+    this.ResetAllFiltersAndSearch();
     this.publishAgentContext();
     return { Success: true };
   }
 
   private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
     try {
-      await this.loadInitialData();
+      await this.LoadInitialData();
       this.publishAgentContext();
       return { Success: true };
     } catch (e) {
@@ -344,10 +488,10 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private handleExportTool(): { Success: boolean; ErrorMessage?: string } {
-    if (this.filteredUsers.length === 0) {
+    if (this.FilteredUsers.length === 0) {
       return { Success: false, ErrorMessage: 'No users to export.' };
     }
-    this.exportUsers();
+    this.ExportUsers();
     return { Success: true };
   }
 
@@ -357,7 +501,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     super.ngOnDestroy();
   }
   
-  public async loadInitialData(): Promise<void> {
+  public async LoadInitialData(): Promise<void> {
     try {
       this.isLoading = true;
       this.error = null;
@@ -369,8 +513,8 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         this.loadUserRoles()
       ]);
       
-      this.users = users;
-      this.roles = roles;
+      this.Users = users;
+      this.Roles = roles;
       
       // Build user-role mapping
       this.buildUserRoleMapping(userRoles);
@@ -388,6 +532,11 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         this.publishAgentContext();
       });
     }
+  }
+
+  /** @deprecated Use {@link LoadInitialData}. */
+  public async loadInitialData(): Promise<void> {
+    return this.LoadInitialData();
   }
 
   private async loadUsers(): Promise<MJUserEntity[]> {
@@ -437,7 +586,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   private setupFilterSubscription(): void {
-    this.filters$
+    this.Filters$
       .pipe(
         debounceTime(300),
         distinctUntilChanged((a, b) => JSON.stringify(a) === JSON.stringify(b)),
@@ -450,8 +599,8 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private applyFilters(): void {
-    const filters = this.filters$.value;
-    let filtered = [...this.users];
+    const filters = this.Filters$.value;
+    let filtered = [...this.Users];
 
     // Apply status filter
     if (filters.status !== 'all') {
@@ -479,28 +628,33 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       );
     }
     
-    this.filteredUsers = filtered;
+    this.FilteredUsers = filtered;
     // Preserve any agent-requested sort across filter changes (read-only display ordering).
     this.applySortToVisibleUsers();
   }
 
   private calculateStats(): void {
-    this.stats = {
-      totalUsers: this.users.length,
-      activeUsers: this.users.filter(u => u.IsActive).length,
-      inactiveUsers: this.users.filter(u => !u.IsActive).length,
-      adminUsers: this.users.filter(u => u.Type === 'Owner').length  // Using Owner as admin type
+    this.Stats = {
+      totalUsers: this.Users.length,
+      activeUsers: this.Users.filter(u => u.IsActive).length,
+      inactiveUsers: this.Users.filter(u => !u.IsActive).length,
+      adminUsers: this.Users.filter(u => u.Type === 'Owner').length  // Using Owner as admin type
     };
   }
   
   // Public methods for template
-  public onStatusFilterChange(status: 'all' | 'active' | 'inactive'): void {
-    this.updateFilter({ status });
+  public OnStatusFilterChange(status: 'all' | 'active' | 'inactive'): void {
+    this.UpdateFilter({ status });
   }
 
-  public updateFilter(partial: Partial<FilterOptions>): void {
-    this.filters$.next({
-      ...this.filters$.value,
+  /** @deprecated Use {@link OnStatusFilterChange}. */
+  public onStatusFilterChange(status: 'all' | 'active' | 'inactive'): void {
+    return this.OnStatusFilterChange(status);
+  }
+
+  public UpdateFilter(partial: Partial<FilterOptions>): void {
+    this.Filters$.next({
+      ...this.Filters$.value,
       ...partial
     });
     // Discrete changes (chips, popover dropdowns) apply immediately. Text search
@@ -511,48 +665,68 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       this.cdr.markForCheck();
     }
   }
+
+  /** @deprecated Use {@link UpdateFilter}. */
+  public updateFilter(partial: Partial<FilterOptions>): void {
+    return this.UpdateFilter(partial);
+  }
   
+  public SelectUser(user: MJUserEntity): void {
+    this.SelectedUser = user;
+    this.ShowEditDialog = true;
+  }
+
+  /** @deprecated Use {@link SelectUser}. */
   public selectUser(user: MJUserEntity): void {
-    this.selectedUser = user;
-    this.showEditDialog = true;
+    return this.SelectUser(user);
   }
   
   public createNewUser(): void {
-    this.userDialogData = {
+    this.UserDialogData = {
       mode: 'create',
-      availableRoles: this.roles
+      availableRoles: this.Roles
     };
-    this.showUserDialog = true;
+    this.ShowUserDialog = true;
   }
   
-  public editUser(user: MJUserEntity): void {
-    this.userDialogData = {
+  public EditUser(user: MJUserEntity): void {
+    this.UserDialogData = {
       user: user,
       mode: 'edit',
-      availableRoles: this.roles
+      availableRoles: this.Roles
     };
-    this.showUserDialog = true;
+    this.ShowUserDialog = true;
+  }
+
+  /** @deprecated Use {@link EditUser}. */
+  public editUser(user: MJUserEntity): void {
+    return this.EditUser(user);
   }
   
+  public ConfirmDeleteUser(user: MJUserEntity): void {
+    this.SelectedUser = user;
+    this.ShowDeleteConfirm = true;
+  }
+
+  /** @deprecated Use {@link ConfirmDeleteUser}. */
   public confirmDeleteUser(user: MJUserEntity): void {
-    this.selectedUser = user;
-    this.showDeleteConfirm = true;
+    return this.ConfirmDeleteUser(user);
   }
   
-  public async deleteUser(): Promise<void> {
-    if (!this.selectedUser) return;
+  public async DeleteUser(): Promise<void> {
+    if (!this.SelectedUser) return;
     
     try {
       // Load user entity to delete
       const user = await this.metadata.GetEntityObject<MJUserEntity>('MJ: Users');
-      const loadResult = await user.Load(this.selectedUser.ID);
+      const loadResult = await user.Load(this.SelectedUser.ID);
       
       if (loadResult) {
         const deleteResult = await user.Delete();
         if (deleteResult) {
-          this.showDeleteConfirm = false;
-          this.selectedUser = null;
-          await this.loadInitialData();
+          this.ShowDeleteConfirm = false;
+          this.SelectedUser = null;
+          await this.LoadInitialData();
         } else {
           throw new Error(user.LatestResult?.Message || 'Failed to delete user');
         }
@@ -567,8 +741,13 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       });
     }
   }
+
+  /** @deprecated Use {@link DeleteUser}. */
+  public async deleteUser(): Promise<void> {
+    return this.DeleteUser();
+  }
   
-  public async toggleUserStatus(user: MJUserEntity): Promise<void> {
+  public async ToggleUserStatus(user: MJUserEntity): Promise<void> {
     try {
       user.IsActive = !user.IsActive;
       // BaseEntity.Save() returns false on a validation failure — it does NOT throw. Discarding
@@ -598,9 +777,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       });
     }
   }
+
+  /** @deprecated Use {@link ToggleUserStatus}. */
+  public async toggleUserStatus(user: MJUserEntity): Promise<void> {
+    return this.ToggleUserStatus(user);
+  }
   
-  public exportUsers(): void {
-    if (this.filteredUsers.length === 0) {
+  public ExportUsers(): void {
+    if (this.FilteredUsers.length === 0) {
       this.error = 'No users to export';
       return;
     }
@@ -611,7 +795,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       const csvRows = [headers.join(',')];
 
       // Add user data
-      this.filteredUsers.forEach(user => {
+      this.FilteredUsers.forEach(user => {
         const row = [
           this.escapeCSV(user.Name || ''),
           this.escapeCSV(user.FirstName || ''),
@@ -645,6 +829,11 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
+  /** @deprecated Use {@link ExportUsers}. */
+  public exportUsers(): void {
+    return this.ExportUsers();
+  }
+
   private escapeCSV(value: string): string {
     if (value.includes(',') || value.includes('"') || value.includes('\n')) {
       return `"${value.replace(/"/g, '""')}"`;
@@ -652,19 +841,34 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     return value;
   }
   
+  public RefreshData(): void {
+    this.LoadInitialData();
+  }
+
+  /** @deprecated Use {@link RefreshData}. */
   public refreshData(): void {
-    this.loadInitialData();
+    return this.RefreshData();
   }
   
-  public getStatusIcon(user: MJUserEntity): string {
+  public GetStatusIcon(user: MJUserEntity): string {
     return user.IsActive ? 'fa-check-circle' : 'fa-times-circle';
   }
-  
-  public getStatusClass(user: MJUserEntity): string {
-    return user.IsActive ? 'status-active' : 'status-inactive';
+
+  /** @deprecated Use {@link GetStatusIcon}. */
+  public getStatusIcon(user: MJUserEntity): string {
+    return this.GetStatusIcon(user);
   }
   
-  public getUserTypeIcon(user: MJUserEntity): string {
+  public GetStatusClass(user: MJUserEntity): string {
+    return user.IsActive ? 'status-active' : 'status-inactive';
+  }
+
+  /** @deprecated Use {@link GetStatusClass}. */
+  public getStatusClass(user: MJUserEntity): string {
+    return this.GetStatusClass(user);
+  }
+  
+  public GetUserTypeIcon(user: MJUserEntity): string {
     switch (user.Type) {
       case 'Owner':
         return 'fa-shield-halved';
@@ -674,63 +878,113 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         return 'fa-user';
     }
   }
+
+  /** @deprecated Use {@link GetUserTypeIcon}. */
+  public getUserTypeIcon(user: MJUserEntity): string {
+    return this.GetUserTypeIcon(user);
+  }
   
-  public getUserInitials(user: MJUserEntity): string {
+  public GetUserInitials(user: MJUserEntity): string {
     const first = user.FirstName?.charAt(0) || '';
     const last = user.LastName?.charAt(0) || '';
     return (first + last).toUpperCase() || user.Name?.charAt(0).toUpperCase() || 'U';
   }
 
-  public onUserDialogResult(result: UserDialogResult): void {
-    this.showUserDialog = false;
-    this.userDialogData = null;
+  /** @deprecated Use {@link GetUserInitials}. */
+  public getUserInitials(user: MJUserEntity): string {
+    return this.GetUserInitials(user);
+  }
+
+  public OnUserDialogResult(result: UserDialogResult): void {
+    this.ShowUserDialog = false;
+    this.UserDialogData = null;
 
     if (result.action === 'save') {
       // Refresh the user list to show changes
-      this.loadInitialData();
+      this.LoadInitialData();
     }
   }
 
+  /** @deprecated Use {@link OnUserDialogResult}. */
+  public onUserDialogResult(result: UserDialogResult): void {
+    return this.OnUserDialogResult(result);
+  }
+
   // Selection methods for bulk actions
+  public get IsAllSelected(): boolean {
+    return this.FilteredUsers.length > 0 &&
+           this.FilteredUsers.every(user => this.SelectedUserIds.has(user.ID));
+  }
+
+  /** @deprecated Use {@link IsAllSelected}. */
   public get isAllSelected(): boolean {
-    return this.filteredUsers.length > 0 &&
-           this.filteredUsers.every(user => this.selectedUserIds.has(user.ID));
+    return this.IsAllSelected;
   }
 
+  public get IsIndeterminate(): boolean {
+    const selectedCount = this.FilteredUsers.filter(user => this.SelectedUserIds.has(user.ID)).length;
+    return selectedCount > 0 && selectedCount < this.FilteredUsers.length;
+  }
+
+  /** @deprecated Use {@link IsIndeterminate}. */
   public get isIndeterminate(): boolean {
-    const selectedCount = this.filteredUsers.filter(user => this.selectedUserIds.has(user.ID)).length;
-    return selectedCount > 0 && selectedCount < this.filteredUsers.length;
+    return this.IsIndeterminate;
   }
 
+  public get HasSelection(): boolean {
+    return this.SelectedUserIds.size > 0;
+  }
+
+  /** @deprecated Use {@link HasSelection}. */
   public get hasSelection(): boolean {
-    return this.selectedUserIds.size > 0;
+    return this.HasSelection;
   }
 
+  public get SelectedCount(): number {
+    return this.SelectedUserIds.size;
+  }
+
+  /** @deprecated Use {@link SelectedCount}. */
   public get selectedCount(): number {
-    return this.selectedUserIds.size;
+    return this.SelectedCount;
   }
 
-  public get hasActiveFilters(): boolean {
-    const filters = this.filters$.value;
+  public get HasActiveFilters(): boolean {
+    const filters = this.Filters$.value;
     return filters.status !== 'all' || filters.role !== '';
   }
 
-  public get activeFilterCount(): number {
+  /** @deprecated Use {@link HasActiveFilters}. */
+  public get hasActiveFilters(): boolean {
+    return this.HasActiveFilters;
+  }
+
+  public get ActiveFilterCount(): number {
     let count = 0;
-    const filters = this.filters$.value;
+    const filters = this.Filters$.value;
     if (filters.status !== 'all') count++;
     if (filters.role !== '') count++;
     return count;
   }
 
-  public clearFilters(): void {
-    this.filters$.next({
-      ...this.filters$.value,
+  /** @deprecated Use {@link ActiveFilterCount}. */
+  public get activeFilterCount(): number {
+    return this.ActiveFilterCount;
+  }
+
+  public ClearFilters(): void {
+    this.Filters$.next({
+      ...this.Filters$.value,
       status: 'all',
       role: ''
     });
     this.applyFilters();
     this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link ClearFilters}. */
+  public clearFilters(): void {
+    return this.ClearFilters();
   }
 
   // -- Filter panel binding (mj-filter-panel inside the popover) -------------
@@ -745,7 +999,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
    * FilterFieldConfig[] describing the popover's Role field. Driven off
    * `roles[]` so the dropdown stays in sync as roles load.
    */
-  public get filterFields(): FilterFieldConfig[] {
+  public get FilterFields(): FilterFieldConfig[] {
     return [
       {
         key: 'status',
@@ -763,28 +1017,38 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         label: 'Role',
         icon: 'fa-solid fa-user-shield',
         placeholder: 'All Roles',
-        filterable: this.roles.length > 10,
+        filterable: this.Roles.length > 10,
         options: [
           { text: 'All Roles', value: '' },
-          ...this.roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
+          ...this.Roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
         ]
       }
     ];
   }
 
+  /** @deprecated Use {@link FilterFields}. */
+  public get filterFields(): FilterFieldConfig[] {
+    return this.FilterFields;
+  }
+
   /** Current popover field values keyed by FilterFieldConfig.key. */
+  public get FilterValues(): Record<string, unknown> {
+    return { status: this.Filters$.value.status, role: this.Filters$.value.role };
+  }
+
+  /** @deprecated Use {@link FilterValues}. */
   public get filterValues(): Record<string, unknown> {
-    return { status: this.filters$.value.status, role: this.filters$.value.role };
+    return this.FilterValues;
   }
 
   /** Total active filters (Status + Role) — drives the Filter button badge. */
   public get TotalActiveFilterCount(): number {
-    const f = this.filters$.value;
+    const f = this.Filters$.value;
     return (f.status !== 'all' ? 1 : 0) + (f.role !== '' ? 1 : 0);
   }
 
   /** Apply a value change from <mj-filter-panel>. */
-  public onFilterPanelChange(values: Record<string, unknown>): void {
+  public OnFilterPanelChange(values: Record<string, unknown>): void {
     const partial: Partial<FilterOptions> = {};
     if ('status' in values) {
       partial.status = (values['status'] as FilterOptions['status']) || 'all';
@@ -792,78 +1056,123 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     if ('role' in values) {
       partial.role = (values['role'] as string) ?? '';
     }
-    this.updateFilter(partial);
+    this.UpdateFilter(partial);
+  }
+
+  /** @deprecated Use {@link OnFilterPanelChange}. */
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    return this.OnFilterPanelChange(values);
   }
 
   /** Clear all filters (Status + Role); search persists. */
+  public ClearAllAppliedFilters(): void {
+    this.UpdateFilter({ status: 'all', role: '' });
+  }
+
+  /** @deprecated Use {@link ClearAllAppliedFilters}. */
   public clearAllAppliedFilters(): void {
-    this.updateFilter({ status: 'all', role: '' });
+    return this.ClearAllAppliedFilters();
   }
 
   /** True when search and/or panel filters are narrowing the list — gates the
    *  no-results empty-state "Reset filters" CTA. */
   public get IsListNarrowed(): boolean {
-    return this.filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
+    return this.Filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
   }
 
   /** Reset everything narrowing the list (search + Status + Role) and refresh
    *  immediately. Wired to the no-results empty-state CTA. Unlike
    *  clearAllAppliedFilters(), this also clears the search box. */
-  public resetAllFiltersAndSearch(): void {
-    this.filters$.next({ status: 'all', role: '', search: '' });
+  public ResetAllFiltersAndSearch(): void {
+    this.Filters$.next({ status: 'all', role: '', search: '' });
     this.applyFilters();
     this.cdr.markForCheck();
   }
 
-  public toggleSelectAll(): void {
-    if (this.isAllSelected) {
+  /** @deprecated Use {@link ResetAllFiltersAndSearch}. */
+  public resetAllFiltersAndSearch(): void {
+    return this.ResetAllFiltersAndSearch();
+  }
+
+  public ToggleSelectAll(): void {
+    if (this.IsAllSelected) {
       // Deselect all filtered users
-      this.filteredUsers.forEach(user => this.selectedUserIds.delete(user.ID));
+      this.FilteredUsers.forEach(user => this.SelectedUserIds.delete(user.ID));
     } else {
       // Select all filtered users
-      this.filteredUsers.forEach(user => this.selectedUserIds.add(user.ID));
+      this.FilteredUsers.forEach(user => this.SelectedUserIds.add(user.ID));
     }
   }
 
-  public toggleUserSelection(userId: string, event?: Event): void {
+  /** @deprecated Use {@link ToggleSelectAll}. */
+  public toggleSelectAll(): void {
+    return this.ToggleSelectAll();
+  }
+
+  public ToggleUserSelection(userId: string, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
-    if (this.selectedUserIds.has(userId)) {
-      this.selectedUserIds.delete(userId);
+    if (this.SelectedUserIds.has(userId)) {
+      this.SelectedUserIds.delete(userId);
     } else {
-      this.selectedUserIds.add(userId);
+      this.SelectedUserIds.add(userId);
     }
   }
 
-  public isUserSelected(userId: string): boolean {
-    return this.selectedUserIds.has(userId);
+  /** @deprecated Use {@link ToggleUserSelection}. */
+  public toggleUserSelection(userId: string, event?: Event): void {
+    return this.ToggleUserSelection(userId, event);
   }
 
+  public IsUserSelected(userId: string): boolean {
+    return this.SelectedUserIds.has(userId);
+  }
+
+  /** @deprecated Use {@link IsUserSelected}. */
+  public isUserSelected(userId: string): boolean {
+    return this.IsUserSelected(userId);
+  }
+
+  public ClearSelection(): void {
+    this.SelectedUserIds.clear();
+  }
+
+  /** @deprecated Use {@link ClearSelection}. */
   public clearSelection(): void {
-    this.selectedUserIds.clear();
+    return this.ClearSelection();
   }
 
   // Bulk action methods
+  public ConfirmBulkAction(action: 'enable' | 'disable' | 'delete'): void {
+    if (!this.HasSelection) return;
+    this.BulkActionType = action;
+    this.ShowBulkActionConfirm = true;
+  }
+
+  /** @deprecated Use {@link ConfirmBulkAction}. */
   public confirmBulkAction(action: 'enable' | 'disable' | 'delete'): void {
-    if (!this.hasSelection) return;
-    this.bulkActionType = action;
-    this.showBulkActionConfirm = true;
+    return this.ConfirmBulkAction(action);
   }
 
+  public CancelBulkAction(): void {
+    this.ShowBulkActionConfirm = false;
+    this.BulkActionType = null;
+  }
+
+  /** @deprecated Use {@link CancelBulkAction}. */
   public cancelBulkAction(): void {
-    this.showBulkActionConfirm = false;
-    this.bulkActionType = null;
+    return this.CancelBulkAction();
   }
 
-  public async executeBulkAction(): Promise<void> {
-    if (!this.bulkActionType || !this.hasSelection) return;
+  public async ExecuteBulkAction(): Promise<void> {
+    if (!this.BulkActionType || !this.HasSelection) return;
 
     try {
       this.isLoading = true;
-      const selectedUsers = this.users.filter(user => this.selectedUserIds.has(user.ID));
+      const selectedUsers = this.Users.filter(user => this.SelectedUserIds.has(user.ID));
 
-      switch (this.bulkActionType) {
+      switch (this.BulkActionType) {
         case 'enable':
           await this.bulkSetUserStatus(selectedUsers, true);
           break;
@@ -875,10 +1184,10 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
           break;
       }
 
-      this.clearSelection();
-      this.showBulkActionConfirm = false;
-      this.bulkActionType = null;
-      await this.loadInitialData();
+      this.ClearSelection();
+      this.ShowBulkActionConfirm = false;
+      this.BulkActionType = null;
+      await this.LoadInitialData();
     } catch (error: unknown) {
       console.error('Bulk action failed:', error);
       this.ngZone.run(() => {
@@ -891,6 +1200,11 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         this.cdr.markForCheck();
       });
     }
+  }
+
+  /** @deprecated Use {@link ExecuteBulkAction}. */
+  public async executeBulkAction(): Promise<void> {
+    return this.ExecuteBulkAction();
   }
 
   private async bulkSetUserStatus(users: MJUserEntity[], isActive: boolean): Promise<void> {
@@ -927,28 +1241,38 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   // Bulk role assignment
+  public OpenBulkRoleAssign(): void {
+    if (!this.HasSelection) return;
+    this.BulkRoleId = '';
+    this.ShowBulkRoleAssign = true;
+  }
+
+  /** @deprecated Use {@link OpenBulkRoleAssign}. */
   public openBulkRoleAssign(): void {
-    if (!this.hasSelection) return;
-    this.bulkRoleId = '';
-    this.showBulkRoleAssign = true;
+    return this.OpenBulkRoleAssign();
   }
 
+  public CancelBulkRoleAssign(): void {
+    this.ShowBulkRoleAssign = false;
+    this.BulkRoleId = '';
+  }
+
+  /** @deprecated Use {@link CancelBulkRoleAssign}. */
   public cancelBulkRoleAssign(): void {
-    this.showBulkRoleAssign = false;
-    this.bulkRoleId = '';
+    return this.CancelBulkRoleAssign();
   }
 
-  public async executeBulkRoleAssign(): Promise<void> {
-    if (!this.bulkRoleId || !this.hasSelection) return;
+  public async ExecuteBulkRoleAssign(): Promise<void> {
+    if (!this.BulkRoleId || !this.HasSelection) return;
 
     try {
       this.isLoading = true;
-      const selectedUserIds = Array.from(this.selectedUserIds);
+      const selectedUserIds = Array.from(this.SelectedUserIds);
 
       // Collect only the users that don't already have the role
       const usersNeedingRole = selectedUserIds.filter(userId => {
         const existingRoles = this.userRoleMap.get(userId) || [];
-        return !existingRoles.includes(this.bulkRoleId);
+        return !existingRoles.includes(this.BulkRoleId);
       });
 
       if (usersNeedingRole.length > 0) {
@@ -983,7 +1307,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
           const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
           userRole.UserID = userId;
-          userRole.RoleID = this.bulkRoleId;
+          userRole.RoleID = this.BulkRoleId;
           userRole.TransactionGroup = tg;
           if (!await userRole.Save()) {
             refusals.push(`${this.describeUser(userId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -992,7 +1316,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
             // Kept so the SERVER's reason can be read back off it below. Without this the entity
             // goes out of scope at the end of the iteration and the reason #4309 puts on
             // LatestResult has nobody left to read it.
-            enrolled.push({ label: this.describeUser(userId), entity: userRole });
+            enrolled.push({ Label: this.describeUser(userId), Entity: userRole });
           }
         }
         if (refusals.length > 0) {
@@ -1004,17 +1328,17 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         if (!await tg.Submit()) {
           // Every row enrolled, so this is a SERVER-side refusal (or a rollback). Since #4309 the
           // server says which row and why, and that reason is now on each entity's LatestResult.
-          const reasons = serverRefusalReasons(enrolled);
+          const reasons = ServerRefusalReasons(enrolled);
           throw new Error(reasons.length > 0
             ? `Failed to assign roles — all changes have been rolled back.\n${reasons.join('\n')}`
             : 'Failed to assign roles — all changes have been rolled back');
         }
       }
 
-      this.clearSelection();
-      this.showBulkRoleAssign = false;
-      this.bulkRoleId = '';
-      await this.loadInitialData();
+      this.ClearSelection();
+      this.ShowBulkRoleAssign = false;
+      this.BulkRoleId = '';
+      await this.LoadInitialData();
     } catch (error: unknown) {
       console.error('Bulk role assignment failed:', error);
       this.ngZone.run(() => {
@@ -1029,9 +1353,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
-  public getBulkActionMessage(): string {
-    const count = this.selectedCount;
-    switch (this.bulkActionType) {
+  /** @deprecated Use {@link ExecuteBulkRoleAssign}. */
+  public async executeBulkRoleAssign(): Promise<void> {
+    return this.ExecuteBulkRoleAssign();
+  }
+
+  public GetBulkActionMessage(): string {
+    const count = this.SelectedCount;
+    switch (this.BulkActionType) {
       case 'enable':
         return `Are you sure you want to enable ${count} user${count > 1 ? 's' : ''}?`;
       case 'disable':
@@ -1043,8 +1372,13 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
-  public getBulkActionTitle(): string {
-    switch (this.bulkActionType) {
+  /** @deprecated Use {@link GetBulkActionMessage}. */
+  public getBulkActionMessage(): string {
+    return this.GetBulkActionMessage();
+  }
+
+  public GetBulkActionTitle(): string {
+    switch (this.BulkActionType) {
       case 'enable':
         return 'Enable Users';
       case 'disable':
@@ -1056,9 +1390,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
-  public getBulkActionButtonText(): string {
-    const count = this.selectedCount;
-    switch (this.bulkActionType) {
+  /** @deprecated Use {@link GetBulkActionTitle}. */
+  public getBulkActionTitle(): string {
+    return this.GetBulkActionTitle();
+  }
+
+  public GetBulkActionButtonText(): string {
+    const count = this.SelectedCount;
+    switch (this.BulkActionType) {
       case 'enable':
         return `Enable ${count} User${count > 1 ? 's' : ''}`;
       case 'disable':
@@ -1070,8 +1409,13 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
+  /** @deprecated Use {@link GetBulkActionButtonText}. */
+  public getBulkActionButtonText(): string {
+    return this.GetBulkActionButtonText();
+  }
+
   // Expansion methods
-  public toggleUserExpansion(userId: string): void {
+  public ToggleUserExpansion(userId: string): void {
     if (this.expandedUserIds.has(userId)) {
       this.expandedUserIds.delete(userId);
     } else {
@@ -1079,14 +1423,29 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     }
   }
 
-  public isUserExpanded(userId: string): boolean {
+  /** @deprecated Use {@link ToggleUserExpansion}. */
+  public toggleUserExpansion(userId: string): void {
+    return this.ToggleUserExpansion(userId);
+  }
+
+  public IsUserExpanded(userId: string): boolean {
     return this.expandedUserIds.has(userId);
   }
 
+  /** @deprecated Use {@link IsUserExpanded}. */
+  public isUserExpanded(userId: string): boolean {
+    return this.IsUserExpanded(userId);
+  }
+
   // Get roles for a specific user
-  public getUserRoles(userId: string): MJRoleEntity[] {
+  public GetUserRoles(userId: string): MJRoleEntity[] {
     const roleIds = this.userRoleMap.get(userId) || [];
-    return this.roles.filter(role => roleIds.some(id => UUIDsEqual(id, role.ID)));
+    return this.Roles.filter(role => roleIds.some(id => UUIDsEqual(id, role.ID)));
+  }
+
+  /** @deprecated Use {@link GetUserRoles}. */
+  public getUserRoles(userId: string): MJRoleEntity[] {
+    return this.GetUserRoles(userId);
   }
 
   /**
@@ -1094,7 +1453,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
    * refusal for a user who has dropped out of the loaded page is still traceable.
    */
   private describeUser(userId: string): string {
-    const user = this.users.find(u => UUIDsEqual(u.ID, userId));
+    const user = this.Users.find(u => UUIDsEqual(u.ID, userId));
     return user?.Email ?? user?.Name ?? userId;
   }
 }

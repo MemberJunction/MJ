@@ -22,14 +22,14 @@ import {
   PSFeatureBar,
   PSMetricDisplay,
   PS_FEATURE_DOMINANCE_THRESHOLD,
-  formatMetricValue,
-  humanizeFeatureName,
-  maxFeatureImportance,
-  metricsToDisplay,
-  overfitGap,
-  parseFeatureImportance,
-  parseMetrics,
-  primaryModelScore,
+  FormatMetricValue,
+  HumanizeFeatureName,
+  MaxFeatureImportance,
+  MetricsToDisplay,
+  OverfitGap,
+  ParseFeatureImportance,
+  ParseMetrics,
+  PrimaryModelScore,
 } from './ml-model-view-models';
 
 /** A pending promote/archive action awaiting user confirmation. */
@@ -63,34 +63,121 @@ interface PendingPromotion {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PSModelDetailComponent {
-  @Input() model: MJMLModelEntity | null = null;
-  @Input() provider: IMetadataProvider | null = null;
-  @Input() currentUser: UserInfo | null = null;
-  @Input() showActions = true;
+  @Input() Model: MJMLModelEntity | null = null;
 
-  @Output() statusChanged = new EventEmitter<{ modelId: string; newStatus: string }>();
+  /** @deprecated Use {@link Model}. */
+  @Input() set model(value: MJMLModelEntity | null) {
+    this.Model = value;
+  }
+  /** @deprecated Use {@link Model}. */
+  get model(): MJMLModelEntity | null {
+    return this.Model;
+  }
+  @Input() Provider: IMetadataProvider | null = null;
+
+  /** @deprecated Use {@link Provider}. */
+  @Input() set provider(value: IMetadataProvider | null) {
+    this.Provider = value;
+  }
+  /** @deprecated Use {@link Provider}. */
+  get provider(): IMetadataProvider | null {
+    return this.Provider;
+  }
+  @Input() CurrentUser: UserInfo | null = null;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
+  @Input() ShowActions = true;
+
+  /** @deprecated Use {@link ShowActions}. */
+  @Input() set showActions(value: PSModelDetailComponent['ShowActions']) {
+    this.ShowActions = value;
+  }
+  /** @deprecated Use {@link ShowActions}. */
+  get showActions(): PSModelDetailComponent['ShowActions'] {
+    return this.ShowActions;
+  }
+
+  @Output() StatusChanged = new EventEmitter<{ modelId: string; newStatus: string }>();
+
+  /**
+   * @deprecated Use {@link StatusChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (statusChanged) keeps working. Must stay AFTER StatusChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() statusChanged = this.StatusChanged;
 
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly notifications = inject(MJNotificationService);
 
-  public readonly lifecycleSteps = ['Draft', 'Validated', 'Published', 'Archived'] as const;
-  public readonly dominanceThreshold = PS_FEATURE_DOMINANCE_THRESHOLD.toFixed(2);
+  public readonly LifecycleSteps = ['Draft', 'Validated', 'Published', 'Archived'] as const;
 
-  public pending: PendingPromotion | null = null;
-  public pendingReason = '';
-  public busy = false;
+  /** @deprecated Use {@link LifecycleSteps}. */
+  public get lifecycleSteps() {
+    return this.LifecycleSteps;
+  }
+  public readonly DominanceThreshold = PS_FEATURE_DOMINANCE_THRESHOLD.toFixed(2);
+
+  /** @deprecated Use {@link DominanceThreshold}. */
+  public get dominanceThreshold() {
+    return this.DominanceThreshold;
+  }
+
+  public Pending: PendingPromotion | null = null;
+
+  /** @deprecated Use {@link Pending}. */
+  public get pending(): PendingPromotion | null {
+    return this.Pending;
+  }
+  /** @deprecated Use {@link Pending}. */
+  public set pending(value: PendingPromotion | null) {
+    this.Pending = value;
+  }
+  public PendingReason = '';
+
+  /** @deprecated Use {@link PendingReason}. */
+  public get pendingReason() {
+    return this.PendingReason;
+  }
+  /** @deprecated Use {@link PendingReason}. */
+  public set pendingReason(value) {
+    this.PendingReason = value;
+  }
+  public Busy = false;
+
+  /** @deprecated Use {@link Busy}. */
+  public get busy() {
+    return this.Busy;
+  }
+  /** @deprecated Use {@link Busy}. */
+  public set busy(value) {
+    this.Busy = value;
+  }
 
   @Input() displayName?: string;
 
-  public get modelDisplayName(): string {
+  public get ModelDisplayName(): string {
     if (this.displayName) return this.displayName;
-    if (!this.model) return '';
-    return this.model.Pipeline || (this.model.Algorithm ? `${this.model.Algorithm} Model` : 'ML Model');
+    if (!this.Model) return '';
+    return this.Model.Pipeline || (this.Model.Algorithm ? `${this.Model.Algorithm} Model` : 'ML Model');
+  }
+
+  /** @deprecated Use {@link ModelDisplayName}. */
+  public get modelDisplayName(): string {
+    return this.ModelDisplayName;
   }
 
   // ── Badges & Lifecycle Stepper ──
 
-  public statusBadgeClass(status: string | null | undefined): string {
+  public StatusBadgeClass(status: string | null | undefined): string {
     switch ((status ?? '').toLowerCase()) {
       case 'published':
         return 'green';
@@ -105,115 +192,200 @@ export class PSModelDetailComponent {
     }
   }
 
-  public stepState(step: string): 'done' | 'curr' | 'todo' {
+  /** @deprecated Use {@link StatusBadgeClass}. */
+  public statusBadgeClass(status: string | null | undefined): string {
+    return this.StatusBadgeClass(status);
+  }
+
+  public StepState(step: string): 'done' | 'curr' | 'todo' {
     const order = ['Draft', 'Validated', 'Published', 'Archived'];
-    const currIdx = order.indexOf(this.model?.Status ?? 'Draft');
+    const currIdx = order.indexOf(this.Model?.Status ?? 'Draft');
     const stepIdx = order.indexOf(step);
     if (stepIdx < currIdx) return 'done';
     if (stepIdx === currIdx) return 'curr';
     return 'todo';
   }
 
-  public get targetSuffix(): string {
-    const target = this.model?.TargetVariable;
+  /** @deprecated Use {@link StepState}. */
+  public stepState(step: string): 'done' | 'curr' | 'todo' {
+    return this.StepState(step);
+  }
+
+  public get TargetSuffix(): string {
+    const target = this.Model?.TargetVariable;
     return target ? ` · predicts ${target}` : '';
+  }
+
+  /** @deprecated Use {@link TargetSuffix}. */
+  public get targetSuffix(): string {
+    return this.TargetSuffix;
   }
 
   // ── Metrics & Performance Derivations ──
 
-  public get primaryScoreLabel(): string {
-    if (!this.model) return 'Score';
-    const score = primaryModelScore(this.model);
+  public get PrimaryScoreLabel(): string {
+    if (!this.Model) return 'Score';
+    const score = PrimaryModelScore(this.Model);
     return score?.label ?? 'AUC';
   }
 
-  public get trainPrimaryScore(): string {
-    if (!this.model) return '—';
-    const score = primaryModelScore(this.model);
-    const trainMetrics = parseMetrics(this.model.Metrics);
+  /** @deprecated Use {@link PrimaryScoreLabel}. */
+  public get primaryScoreLabel(): string {
+    return this.PrimaryScoreLabel;
+  }
+
+  public get TrainPrimaryScore(): string {
+    if (!this.Model) return '—';
+    const score = PrimaryModelScore(this.Model);
+    const trainMetrics = ParseMetrics(this.Model.Metrics);
     if (score && trainMetrics[score.key] != null) {
-      return formatMetricValue(score.key, trainMetrics[score.key]!);
+      return FormatMetricValue(score.key, trainMetrics[score.key]!);
     }
     return trainMetrics.AUC != null ? trainMetrics.AUC.toFixed(3) : '—';
   }
 
-  public get holdoutPrimaryScore(): string {
-    if (!this.model) return '—';
-    const score = primaryModelScore(this.model);
-    const holdoutMetrics = parseMetrics(this.model.HoldoutMetrics);
+  /** @deprecated Use {@link TrainPrimaryScore}. */
+  public get trainPrimaryScore(): string {
+    return this.TrainPrimaryScore;
+  }
+
+  public get HoldoutPrimaryScore(): string {
+    if (!this.Model) return '—';
+    const score = PrimaryModelScore(this.Model);
+    const holdoutMetrics = ParseMetrics(this.Model.HoldoutMetrics);
     if (score && holdoutMetrics[score.key] != null) {
-      return formatMetricValue(score.key, holdoutMetrics[score.key]!);
+      return FormatMetricValue(score.key, holdoutMetrics[score.key]!);
     }
     return holdoutMetrics.AUC != null ? holdoutMetrics.AUC.toFixed(3) : '—';
   }
 
-  public get secondaryMetrics(): PSMetricDisplay[] {
-    if (!this.model) return [];
-    const score = primaryModelScore(this.model);
+  /** @deprecated Use {@link HoldoutPrimaryScore}. */
+  public get holdoutPrimaryScore(): string {
+    return this.HoldoutPrimaryScore;
+  }
+
+  public get SecondaryMetrics(): PSMetricDisplay[] {
+    if (!this.Model) return [];
+    const score = PrimaryModelScore(this.Model);
     const primaryKey = score?.key;
-    const holdout = metricsToDisplay(parseMetrics(this.model.HoldoutMetrics), { excludeAuc: false });
-    const all = holdout.length > 0 ? holdout : metricsToDisplay(parseMetrics(this.model.Metrics), { excludeAuc: false });
+    const holdout = MetricsToDisplay(ParseMetrics(this.Model.HoldoutMetrics), { excludeAuc: false });
+    const all = holdout.length > 0 ? holdout : MetricsToDisplay(ParseMetrics(this.Model.Metrics), { excludeAuc: false });
     return primaryKey ? all.filter((m) => m.key !== primaryKey) : all.filter((m) => m.key !== 'AUC');
   }
 
-  public get gapText(): string {
-    if (!this.model) return '';
-    const gap = overfitGap(this.model);
+  /** @deprecated Use {@link SecondaryMetrics}. */
+  public get secondaryMetrics(): PSMetricDisplay[] {
+    return this.SecondaryMetrics;
+  }
+
+  public get GapText(): string {
+    if (!this.Model) return '';
+    const gap = OverfitGap(this.Model);
     return gap == null ? '' : Math.abs(gap).toFixed(3);
   }
 
-  public get gapVerdict(): string {
-    if (!this.model) return '';
-    const gap = overfitGap(this.model);
+  /** @deprecated Use {@link GapText}. */
+  public get gapText(): string {
+    return this.GapText;
+  }
+
+  public get GapVerdict(): string {
+    if (!this.Model) return '';
+    const gap = OverfitGap(this.Model);
     if (gap == null) return '';
     return gap > 0.1 ? 'is wide — watch for overfitting' : 'is within tolerance — no overfitting flag';
   }
 
+  /** @deprecated Use {@link GapVerdict}. */
+  public get gapVerdict(): string {
+    return this.GapVerdict;
+  }
+
   // ── Feature Importance & Leakage Gate ──
 
-  public get importance(): PSFeatureBar[] {
-    if (!this.model) return [];
-    return parseFeatureImportance(this.model.FeatureImportance, 6).map((b) => ({
+  public get Importance(): PSFeatureBar[] {
+    if (!this.Model) return [];
+    return ParseFeatureImportance(this.Model.FeatureImportance, 6).map((b) => ({
       ...b,
-      name: humanizeFeatureName(b.name),
+      name: HumanizeFeatureName(b.name),
     }));
   }
 
-  public get importanceCaption(): string {
-    const n = this.importance.length;
+  /** @deprecated Use {@link Importance}. */
+  public get importance(): PSFeatureBar[] {
+    return this.Importance;
+  }
+
+  public get ImportanceCaption(): string {
+    const n = this.Importance.length;
     return n === 0 ? 'no data' : `normalized · top ${n}`;
   }
 
+  /** @deprecated Use {@link ImportanceCaption}. */
+  public get importanceCaption(): string {
+    return this.ImportanceCaption;
+  }
+
+  public get TopFeatureName(): string {
+    return this.Importance[0]?.name ?? '—';
+  }
+
+  /** @deprecated Use {@link TopFeatureName}. */
   public get topFeatureName(): string {
-    return this.importance[0]?.name ?? '—';
+    return this.TopFeatureName;
   }
 
+  public get TopFeatureValue(): string {
+    return this.Importance[0]?.value ?? '—';
+  }
+
+  /** @deprecated Use {@link TopFeatureValue}. */
   public get topFeatureValue(): string {
-    return this.importance[0]?.value ?? '—';
+    return this.TopFeatureValue;
   }
 
-  public get leakageFlagged(): boolean {
-    if (!this.model) return false;
-    const max = maxFeatureImportance(this.model.FeatureImportance);
+  public get LeakageFlagged(): boolean {
+    if (!this.Model) return false;
+    const max = MaxFeatureImportance(this.Model.FeatureImportance);
     return max != null && max >= PS_FEATURE_DOMINANCE_THRESHOLD;
+  }
+
+  /** @deprecated Use {@link LeakageFlagged}. */
+  public get leakageFlagged(): boolean {
+    return this.LeakageFlagged;
   }
 
   // ── Actions & Promotion Flow ──
 
+  public get CanValidate(): boolean {
+    return this.Model?.Status === 'Draft';
+  }
+
+  /** @deprecated Use {@link CanValidate}. */
   public get canValidate(): boolean {
-    return this.model?.Status === 'Draft';
+    return this.CanValidate;
   }
 
+  public get CanPublish(): boolean {
+    return this.Model?.Status === 'Validated';
+  }
+
+  /** @deprecated Use {@link CanPublish}. */
   public get canPublish(): boolean {
-    return this.model?.Status === 'Validated';
+    return this.CanPublish;
   }
 
+  public get CanArchive(): boolean {
+    return this.Model?.Status === 'Published' || this.Model?.Status === 'Validated';
+  }
+
+  /** @deprecated Use {@link CanArchive}. */
   public get canArchive(): boolean {
-    return this.model?.Status === 'Published' || this.model?.Status === 'Validated';
+    return this.CanArchive;
   }
 
-  public get actionHint(): string {
-    switch (this.model?.Status) {
+  public get ActionHint(): string {
+    switch (this.Model?.Status) {
       case 'Draft':
         return 'Verify metrics and feature importance before validating or publishing.';
       case 'Validated':
@@ -227,64 +399,104 @@ export class PSModelDetailComponent {
     }
   }
 
-  public requestPromote(targetStatus: PredictiveStudioModelTargetStatus): void {
-    if (!this.model) return;
-    this.pendingReason = '';
-    this.pending = {
-      modelId: this.model.ID,
-      modelName: `${this.modelDisplayName} v${this.model.Version}`,
+  /** @deprecated Use {@link ActionHint}. */
+  public get actionHint(): string {
+    return this.ActionHint;
+  }
+
+  public RequestPromote(targetStatus: PredictiveStudioModelTargetStatus): void {
+    if (!this.Model) return;
+    this.PendingReason = '';
+    this.Pending = {
+      modelId: this.Model.ID,
+      modelName: `${this.ModelDisplayName} v${this.Model.Version}`,
       targetStatus,
-      leakageFlagged: this.leakageFlagged && targetStatus !== 'Archived',
+      leakageFlagged: this.LeakageFlagged && targetStatus !== 'Archived',
     };
     this.cdr.markForCheck();
   }
 
-  public cancelPromote(): void {
-    if (this.busy) return;
-    this.pending = null;
-    this.pendingReason = '';
+  /** @deprecated Use {@link RequestPromote}. */
+  public requestPromote(targetStatus: PredictiveStudioModelTargetStatus): void {
+    return this.RequestPromote(targetStatus);
+  }
+
+  public CancelPromote(): void {
+    if (this.Busy) return;
+    this.Pending = null;
+    this.PendingReason = '';
     this.cdr.markForCheck();
   }
 
+  /** @deprecated Use {@link CancelPromote}. */
+  public cancelPromote(): void {
+    return this.CancelPromote();
+  }
+
+  public get PendingTitle(): string {
+    if (!this.Pending) return '';
+    return this.Pending.targetStatus === 'Archived' ? 'Archive model' : `Promote to ${this.Pending.targetStatus}`;
+  }
+
+  /** @deprecated Use {@link PendingTitle}. */
   public get pendingTitle(): string {
-    if (!this.pending) return '';
-    return this.pending.targetStatus === 'Archived' ? 'Archive model' : `Promote to ${this.pending.targetStatus}`;
+    return this.PendingTitle;
   }
 
+  public get PendingIcon(): string {
+    if (!this.Pending) return 'fa-solid fa-check';
+    return this.Pending.targetStatus === 'Archived' ? 'fa-solid fa-box-archive' : 'fa-solid fa-arrow-up';
+  }
+
+  /** @deprecated Use {@link PendingIcon}. */
   public get pendingIcon(): string {
-    if (!this.pending) return 'fa-solid fa-check';
-    return this.pending.targetStatus === 'Archived' ? 'fa-solid fa-box-archive' : 'fa-solid fa-arrow-up';
+    return this.PendingIcon;
   }
 
+  public get PendingConfirmLabel(): string {
+    if (!this.Pending) return 'Confirm';
+    return this.Pending.targetStatus === 'Archived' ? 'Archive' : `Promote to ${this.Pending.targetStatus}`;
+  }
+
+  /** @deprecated Use {@link PendingConfirmLabel}. */
   public get pendingConfirmLabel(): string {
-    if (!this.pending) return 'Confirm';
-    return this.pending.targetStatus === 'Archived' ? 'Archive' : `Promote to ${this.pending.targetStatus}`;
+    return this.PendingConfirmLabel;
   }
 
+  public get PendingVariant(): 'info' | 'warn' | 'danger' {
+    if (!this.Pending) return 'info';
+    if (this.Pending.targetStatus === 'Archived') return 'warn';
+    return this.Pending.leakageFlagged ? 'warn' : 'info';
+  }
+
+  /** @deprecated Use {@link PendingVariant}. */
   public get pendingVariant(): 'info' | 'warn' | 'danger' {
-    if (!this.pending) return 'info';
-    if (this.pending.targetStatus === 'Archived') return 'warn';
-    return this.pending.leakageFlagged ? 'warn' : 'info';
+    return this.PendingVariant;
   }
 
-  public get pendingMessage(): string {
-    if (!this.pending) return '';
-    const name = this.escapeHtml(this.pending.modelName);
-    if (this.pending.targetStatus === 'Archived') {
+  public get PendingMessage(): string {
+    if (!this.Pending) return '';
+    const name = this.escapeHtml(this.Pending.modelName);
+    if (this.Pending.targetStatus === 'Archived') {
       return `Archive <strong>${name}</strong>? This detaches any active scoring bindings and removes it from production scoring. The model artifact remains immutable and recoverable.`;
     }
-    if (this.pending.leakageFlagged) {
+    if (this.Pending.leakageFlagged) {
       return `<strong>${name}</strong> is flagged for possible target leakage. Publishing requires an explicit sign-off — confirm you understand the risk and provide a reason below.`;
     }
-    return `Promote <strong>${name}</strong> to <strong>${this.pending.targetStatus}</strong>? This changes only the lifecycle state — the trained weights never change.`;
+    return `Promote <strong>${name}</strong> to <strong>${this.Pending.targetStatus}</strong>? This changes only the lifecycle state — the trained weights never change.`;
   }
 
-  public async confirmPromote(reason: string): Promise<void> {
-    if (!this.pending || this.busy || !this.model) return;
-    this.busy = true;
+  /** @deprecated Use {@link PendingMessage}. */
+  public get pendingMessage(): string {
+    return this.PendingMessage;
+  }
+
+  public async ConfirmPromote(reason: string): Promise<void> {
+    if (!this.Pending || this.Busy || !this.Model) return;
+    this.Busy = true;
     this.cdr.markForCheck();
 
-    const { modelId, modelName, targetStatus, leakageFlagged } = this.pending;
+    const { modelId, modelName, targetStatus, leakageFlagged } = this.Pending;
 
     try {
       const op = new PredictiveStudioPromoteModelOperation();
@@ -295,16 +507,16 @@ export class PSModelDetailComponent {
           signOff: leakageFlagged ? true : undefined,
           reason: reason || undefined,
         },
-        { provider: this.provider ?? undefined, user: this.currentUser ?? undefined },
+        { provider: this.Provider ?? undefined, user: this.CurrentUser ?? undefined },
       );
 
       if (result.Success && result.Output?.promoted) {
         const newStatus = result.Output.status;
-        this.model.Status = newStatus as 'Draft' | 'Validated' | 'Published' | 'Archived';
+        this.Model.Status = newStatus as 'Draft' | 'Validated' | 'Published' | 'Archived';
         this.notifications.CreateSimpleNotification(`${modelName} → ${newStatus}`, 'success', 3500);
-        this.statusChanged.emit({ modelId, newStatus });
-        this.pending = null;
-        this.pendingReason = '';
+        this.StatusChanged.emit({ modelId, newStatus });
+        this.Pending = null;
+        this.PendingReason = '';
       } else {
         this.notifications.CreateSimpleNotification(
           result.ErrorMessage || `Could not promote ${modelName} (status: ${result.Output?.status ?? 'unchanged'}).`,
@@ -319,9 +531,14 @@ export class PSModelDetailComponent {
         5000,
       );
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link ConfirmPromote}. */
+  public async confirmPromote(reason: string): Promise<void> {
+    return this.ConfirmPromote(reason);
   }
 
   private escapeHtml(value: string): string {

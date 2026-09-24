@@ -79,7 +79,7 @@ function serializeBody(data: unknown): string {
  * answers the same condition with 401 and failed over correctly, which is what made the
  * inconsistency easy to miss.
  */
-export function classifyHttpFailure(error: unknown, vendor: string): WebSearchProviderResponse {
+export function ClassifyHttpFailure(error: unknown, vendor: string): WebSearchProviderResponse {
     // Status 0 is HttpError's "the request never produced a response" — a timeout or network
     // failure, which is transient by definition.
     if (IsHttpError(error) && error.Status > 0) {
@@ -89,29 +89,39 @@ export function classifyHttpFailure(error: unknown, vendor: string): WebSearchPr
         if (status === 400 || status === 422) {
             // An auth verdict dressed as a bad request: another provider may well serve this query.
             if (isCredentialRejection(detail, error)) {
-                return failure(
+                return Failure(
                     'transient',
                     `${vendor} rejected the API key (HTTP ${status}): ${detail}`,
                 );
             }
-            return failure('permanent', `${vendor} rejected the request (HTTP ${status}): ${detail}`);
+            return Failure('permanent', `${vendor} rejected the request (HTTP ${status}): ${detail}`);
         }
         if (status === 401 || status === 403) {
-            return failure('transient', `${vendor} rejected the API key (HTTP ${status}): ${detail}`);
+            return Failure('transient', `${vendor} rejected the API key (HTTP ${status}): ${detail}`);
         }
         if (status === 429) {
-            return failure('transient', `${vendor} rate limit or quota exceeded: ${detail}`);
+            return Failure('transient', `${vendor} rate limit or quota exceeded: ${detail}`);
         }
-        return failure('transient', `${vendor} API error (HTTP ${status}): ${detail}`);
+        return Failure('transient', `${vendor} API error (HTTP ${status}): ${detail}`);
     }
 
     const message = error instanceof Error ? error.message : String(error);
-    return failure('transient', `${vendor} request failed: ${message}`);
+    return Failure('transient', `${vendor} request failed: ${message}`);
+}
+
+/** @deprecated Use {@link ClassifyHttpFailure}. */
+export function classifyHttpFailure(error: unknown, vendor: string): WebSearchProviderResponse {
+    return ClassifyHttpFailure(error, vendor);
 }
 
 /** Build a failed provider response. */
-export function failure(kind: WebSearchFailureKind, message: string): WebSearchProviderResponse {
+export function Failure(kind: WebSearchFailureKind, message: string): WebSearchProviderResponse {
     return { Success: false, Hits: [], FailureKind: kind, ErrorMessage: message };
+}
+
+/** @deprecated Use {@link Failure}. */
+export function failure(kind: WebSearchFailureKind, message: string): WebSearchProviderResponse {
+    return Failure(kind, message);
 }
 
 /** Pull whatever explanation an error body carries, without assuming a shape. */
@@ -143,9 +153,17 @@ function describeErrorBody(error: HttpError): string {
 }
 
 /** Map a relative freshness window onto a vendor's own code table. */
-export function mapFreshnessWindow<T extends string>(
+export function MapFreshnessWindow<T extends string>(
     window: 'day' | 'week' | 'month' | 'year',
     codes: Record<'day' | 'week' | 'month' | 'year', T>,
 ): T {
     return codes[window];
+}
+
+/** @deprecated Use {@link MapFreshnessWindow}. */
+export function mapFreshnessWindow<T extends string>(
+    window: 'day' | 'week' | 'month' | 'year',
+    codes: Record<'day' | 'week' | 'month' | 'year', T>,
+): T {
+    return MapFreshnessWindow(window, codes);
 }

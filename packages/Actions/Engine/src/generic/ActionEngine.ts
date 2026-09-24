@@ -100,7 +100,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * one cache, loaded once, shared by every consumer (and reused by AIEngine.RefreshActions via the
     * BaseEngineRegistry).
     */
-   private get Base(): ActionEngineBase {
+   private get base(): ActionEngineBase {
       return ActionEngineBase.Instance;
    }
 
@@ -119,31 +119,31 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (contextUser) {
          this._contextUser = contextUser;
       }
-      await this.Base.Config(forceRefresh, contextUser, provider);
+      await this.base.Config(forceRefresh, contextUser, provider);
    }
 
    /** True once the underlying ActionEngineBase cache has loaded. */
-   public get Loaded(): boolean { return this.Base.Loaded; }
+   public get Loaded(): boolean { return this.base.Loaded; }
 
-   public get ContextUser(): UserInfo { return (this._contextUser ?? this.Base.ContextUser) as UserInfo; }
+   public get ContextUser(): UserInfo { return (this._contextUser ?? this.base.ContextUser) as UserInfo; }
    public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
    // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
-   public get Actions(): MJActionEntityExtended[] { return this.Base.Actions; }
-   public get ActionCategories(): MJActionCategoryEntity[] { return this.Base.ActionCategories; }
-   public get ActionParams(): MJActionParamEntity[] { return this.Base.ActionParams; }
-   public get ActionFilters(): MJActionFilterEntity[] { return this.Base.ActionFilters; }
-   public get ActionResultCodes(): MJActionResultCodeEntity[] { return this.Base.ActionResultCodes; }
-   public get ActionLibraries(): MJActionLibraryEntity[] { return this.Base.ActionLibraries; }
-   public get CoreActions(): MJActionEntityExtended[] { return this.Base.CoreActions; }
-   public get NonCoreActions(): MJActionEntityExtended[] { return this.Base.NonCoreActions; }
-   public get CoreActionsRootCategoryID(): string { return this.Base.CoreActionsRootCategoryID; }
+   public get Actions(): MJActionEntityExtended[] { return this.base.Actions; }
+   public get ActionCategories(): MJActionCategoryEntity[] { return this.base.ActionCategories; }
+   public get ActionParams(): MJActionParamEntity[] { return this.base.ActionParams; }
+   public get ActionFilters(): MJActionFilterEntity[] { return this.base.ActionFilters; }
+   public get ActionResultCodes(): MJActionResultCodeEntity[] { return this.base.ActionResultCodes; }
+   public get ActionLibraries(): MJActionLibraryEntity[] { return this.base.ActionLibraries; }
+   public get CoreActions(): MJActionEntityExtended[] { return this.base.CoreActions; }
+   public get NonCoreActions(): MJActionEntityExtended[] { return this.base.NonCoreActions; }
+   public get CoreActionsRootCategoryID(): string { return this.base.CoreActionsRootCategoryID; }
 
    // ── Proxied lookups ──
-   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean { return this.Base.IsChildCategoryOf(categoryId, parentCategoryId); }
-   public IsCoreAction(action: MJActionEntityExtended): boolean { return this.Base.IsCoreAction(action); }
-   public IsCoreActionCategory(categoryId: string): boolean { return this.Base.IsCoreActionCategory(categoryId); }
-   public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.Base.GetActionByName(actionName); }
+   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean { return this.base.IsChildCategoryOf(categoryId, parentCategoryId); }
+   public IsCoreAction(action: MJActionEntityExtended): boolean { return this.base.IsCoreAction(action); }
+   public IsCoreActionCategory(categoryId: string): boolean { return this.base.IsCoreActionCategory(categoryId); }
+   public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.base.GetActionByName(actionName); }
 
    /**
     * Fire-and-forget queue for action-execution-log writes. Action-execution logging is observability —

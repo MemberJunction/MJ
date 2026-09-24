@@ -14,7 +14,7 @@ export class RelatedEntityHandler {
   /**
    * Load related entities for a record
    */
-  async loadRelatedEntities(
+  async LoadRelatedEntities(
     parentRecord: BaseEntity,
     relationConfig: RelatedEntityConfig,
     parentEntityConfig: EntityConfig,
@@ -70,11 +70,36 @@ export class RelatedEntityHandler {
     }
   }
 
+  /** @deprecated Use {@link LoadRelatedEntities}. */
+  async loadRelatedEntities(
+    parentRecord: BaseEntity,
+    relationConfig: RelatedEntityConfig,
+    parentEntityConfig: EntityConfig,
+    existingRelatedEntities: RecordData[],
+    processRecordData: (
+      record: BaseEntity,
+      primaryKey: Record<string, any>,
+      targetDir: string,
+      entityConfig: EntityConfig,
+      verbose?: boolean,
+      isNewRecord?: boolean,
+      existingRecordData?: RecordData,
+      currentDepth?: number,
+      ancestryPath?: Set<string>,
+      fieldOverrides?: Record<string, any>
+    ) => Promise<RecordData>,
+    currentDepth: number,
+    ancestryPath: Set<string>,
+    verbose?: boolean
+  ): Promise<RecordData[]> {
+    return this.LoadRelatedEntities(parentRecord, relationConfig, parentEntityConfig, existingRelatedEntities, processRecordData, currentDepth, ancestryPath, verbose);
+  }
+
   /**
    * Batch-load related entities for multiple parent records at once.
    * Uses a single IN query per chunk instead of N individual queries.
    */
-  async batchQueryRelatedEntities(
+  async BatchQueryRelatedEntities(
     parentPrimaryKeys: string[],
     relationConfig: RelatedEntityConfig,
     verbose?: boolean
@@ -126,11 +151,20 @@ export class RelatedEntityHandler {
     return allResults;
   }
 
+  /** @deprecated Use {@link BatchQueryRelatedEntities}. */
+  async batchQueryRelatedEntities(
+    parentPrimaryKeys: string[],
+    relationConfig: RelatedEntityConfig,
+    verbose?: boolean
+  ): Promise<Map<string, BaseEntity[]>> {
+    return this.BatchQueryRelatedEntities(parentPrimaryKeys, relationConfig, verbose);
+  }
+
   /**
    * Load related entities from pre-fetched batch data instead of querying per-parent.
    * Falls back gracefully when no batch data is available for a given parent.
    */
-  async loadRelatedEntitiesFromBatch(
+  async LoadRelatedEntitiesFromBatch(
     parentRecord: BaseEntity,
     relationConfig: RelatedEntityConfig,
     parentEntityConfig: EntityConfig,
@@ -181,6 +215,32 @@ export class RelatedEntityHandler {
       this.logError(`Error loading related entities from batch for ${relationConfig.entity}`, error, verbose);
       return [];
     }
+  }
+
+  /** @deprecated Use {@link LoadRelatedEntitiesFromBatch}. */
+  async loadRelatedEntitiesFromBatch(
+    parentRecord: BaseEntity,
+    relationConfig: RelatedEntityConfig,
+    parentEntityConfig: EntityConfig,
+    existingRelatedEntities: RecordData[],
+    processRecordData: (
+      record: BaseEntity,
+      primaryKey: Record<string, any>,
+      targetDir: string,
+      entityConfig: EntityConfig,
+      verbose?: boolean,
+      isNewRecord?: boolean,
+      existingRecordData?: RecordData,
+      currentDepth?: number,
+      ancestryPath?: Set<string>,
+      fieldOverrides?: Record<string, any>
+    ) => Promise<RecordData>,
+    currentDepth: number,
+    ancestryPath: Set<string>,
+    batchedRelatedRecords: Map<string, BaseEntity[]>,
+    verbose?: boolean
+  ): Promise<RecordData[]> {
+    return this.LoadRelatedEntitiesFromBatch(parentRecord, relationConfig, parentEntityConfig, existingRelatedEntities, processRecordData, currentDepth, ancestryPath, batchedRelatedRecords, verbose);
   }
 
   /**

@@ -17,7 +17,7 @@ import type { EntityTableSpec, ColumnSpec } from './database-designer.types.js';
  * Returns `null` for a single table with no FK relationships — a lone box with
  * no connections adds no visual value over the prototype column table.
  */
-export function generateERDFromTableSpec(tables: EntityTableSpec[]): string | null {
+export function GenerateERDFromTableSpec(tables: EntityTableSpec[]): string | null {
     if (!tables.length) return null;
 
     const hasAnyFKs = tables.some(t => (t.ForeignKeys?.length ?? 0) > 0);
@@ -37,6 +37,11 @@ export function generateERDFromTableSpec(tables: EntityTableSpec[]): string | nu
     }
 
     return lines.join('\n');
+}
+
+/** @deprecated Use {@link GenerateERDFromTableSpec}. */
+export function generateERDFromTableSpec(tables: EntityTableSpec[]): string | null {
+    return GenerateERDFromTableSpec(tables);
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────

@@ -7,9 +7,9 @@ import {
     BRIDGE_FEATURE_GROUPS,
     BridgeFeatureGroup,
     BridgeFeatureKey,
-    countEnabledFeatures,
-    isFeatureEnabled,
-    setFeature,
+    CountEnabledFeatures,
+    IsFeatureEnabled,
+    SetFeature,
 } from './bridge-provider-features';
 
 /**
@@ -64,12 +64,12 @@ export class MJAIBridgeProviderFormComponentExtended extends MJAIBridgeProviderF
 
     /** Count of enabled capabilities — drives the panel badge. */
     public get EnabledFeatureCount(): number {
-        return countEnabledFeatures(this.record?.SupportedFeaturesObject ?? null);
+        return CountEnabledFeatures(this.record?.SupportedFeaturesObject ?? null);
     }
 
     /** Read a single capability flag for the template. */
     public IsFeatureOn(key: BridgeFeatureKey): boolean {
-        return isFeatureEnabled(this.record?.SupportedFeaturesObject ?? null, key);
+        return IsFeatureEnabled(this.record?.SupportedFeaturesObject ?? null, key);
     }
 
     /**
@@ -81,7 +81,7 @@ export class MJAIBridgeProviderFormComponentExtended extends MJAIBridgeProviderF
         if (!this.record || !this.EditMode) {
             return;
         }
-        this.record.SupportedFeaturesObject = setFeature(
+        this.record.SupportedFeaturesObject = SetFeature(
             this.record.SupportedFeaturesObject ?? null,
             key,
             enabled,
