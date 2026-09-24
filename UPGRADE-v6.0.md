@@ -253,6 +253,23 @@ then restart MJAPI so the metadata cache picks it up. To find affected rows befo
 compare each `List` field's column against its `EntityFieldValue` rows; a scan tool for this is
 tracked for 6.2.
 
+### Delete mutations gained a `SkipRecordChanges` option
+
+`DeleteOptionsInput` gained `SkipRecordChanges` in 6.1.0, and on 6.1.0 to 6.1.3 it is a required
+field. A 5.51.x client that spells out every option in `options___` on a delete does not know the
+field, so on those builds every such delete fails schema validation:
+
+> *Field "DeleteOptionsInput.SkipRecordChanges" of required type "Boolean!" was not provided*
+
+The server never honours the flag from the wire (it forces it back to `false` and logs the
+attempt), so the field carries no meaning for a client; it is present only so the delete input
+mirrors the in-process options.
+
+**Migration:** from 6.1.4 the field is optional and defaults to `false`, so 5.51-shaped clients
+work unchanged. On 6.1.0 to 6.1.3, add `SkipRecordChanges: false` to the delete options your
+client sends; note that a 5.51 API rejects the field as unknown, so this change can only ship
+together with the upgrade.
+
 ### `ng-filter-builder` renamed two public exports
 
 `@memberjunction/ng-filter-builder` renamed `createEmptyFilter` to `CreateEmptyFilter` and
