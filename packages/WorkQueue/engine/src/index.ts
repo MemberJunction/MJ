@@ -41,3 +41,5 @@ export * from './handlers/BaseWorkHandler';
 export * from './handlers/ResolveWorkHandler';
 export * from './handlers/BoundWorkHandler';
 export * from './host/HostedSubscriptionPlanner';
+export * from './host/WorkQueueHost';
+export * from './host/WorkQueueSweeper';

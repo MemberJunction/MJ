@@ -9,6 +9,7 @@ import type {
 } from '@memberjunction/work-queue-core';
 import { BaseWorkHandler } from '../handlers/BaseWorkHandler';
 import type { WorkQueueHostEngine } from '../host/HostedSubscriptionPlanner';
+import type { HostRuntime, HostRuntimeArgs } from '../host/WorkQueueHost';
 import type { DeadLetteredEvent } from '../transports/TransportDriverDeps';
 
 export const TEST_USER = { ID: 'AAAAAAAA-1111-4111-8111-000000000001', Email: 'system@memberjunction.org' } as UserInfo;
@@ -311,4 +312,34 @@ export function BuildHostScenario(): HostScenario {
     engine.Drivers.set(IDS.DatabaseTransport, databaseDriver);
     engine.Drivers.set(IDS.AwsTransport, awsDriver);
     return { Engine: engine, DatabaseDriver: databaseDriver, AwsDriver: awsDriver };
+}
+
+export class FakeRuntime implements HostRuntime {
+    public Started = 0;
+    public Stopped = 0;
+    public Kicks = 0;
+    public InFlightCount = 0;
+    /** When set, Stop() waits for it — lets a test hold a shutdown open. */
+    public StopGate: Promise<void> | null = null;
+
+    constructor(public readonly Args: HostRuntimeArgs) {}
+
+    public Start(): void {
+        this.Started++;
+    }
+
+    public async Stop(): Promise<void> {
+        this.Stopped++;
+        if (this.StopGate) {
+            await this.StopGate;
+        }
+    }
+
+    public Kick(): void {
+        this.Kicks++;
+    }
+
+    public get SubscriptionName(): string {
+        return this.Args.Policy.SubscriptionName;
+    }
 }
