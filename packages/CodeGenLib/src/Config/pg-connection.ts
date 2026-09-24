@@ -115,8 +115,13 @@ export async function PGConnection(): Promise<pg.Pool> {
  * pool. (`await PGConnection()` followed by `getPgConfig()` is guaranteed
  * to return the live config.)
  */
-export function getPgConfig(): PGConnectionConfig | undefined {
+export function GetPgConfig(): PGConnectionConfig | undefined {
   return _pgConfig;
+}
+
+/** @deprecated Use {@link GetPgConfig}. */
+export function getPgConfig(): PGConnectionConfig | undefined {
+  return GetPgConfig();
 }
 
 /**

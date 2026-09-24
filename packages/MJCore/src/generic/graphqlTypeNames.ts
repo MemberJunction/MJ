@@ -64,7 +64,7 @@ export const MJ_CORE_SCHEMA = '__mj';
  * // (All chars removed, so prepends underscore)
  * ```
  */
-export function sanitizeGraphQLName(input: string): string {
+export function SanitizeGraphQLName(input: string): string {
     if (!input || input.length === 0) {
         return '';
     }
@@ -89,6 +89,11 @@ export function sanitizeGraphQLName(input: string): string {
     return sanitized;
 }
 
+/** @deprecated Use {@link SanitizeGraphQLName}. */
+export function sanitizeGraphQLName(input: string): string {
+    return SanitizeGraphQLName(input);
+}
+
 /**
  * Returns the schema-based prefix for programmatic identifiers (class names, GraphQL types).
  * This is the single source of truth for schema-to-prefix mapping, shared by both TypeScript
@@ -109,7 +114,7 @@ export function sanitizeGraphQLName(input: string): string {
  * getSchemaPrefix('sales')  // "sales"
  * ```
  */
-export function getSchemaPrefix(schemaName: string): string {
+export function GetSchemaPrefix(schemaName: string): string {
     const trimmed = schemaName.trim().toLowerCase();
 
     // Core MJ schema: __mj -> 'MJ'
@@ -123,7 +128,12 @@ export function getSchemaPrefix(schemaName: string): string {
     }
 
     // Default: sanitize the schema name
-    return sanitizeGraphQLName(schemaName);
+    return SanitizeGraphQLName(schemaName);
+}
+
+/** @deprecated Use {@link GetSchemaPrefix}. */
+export function getSchemaPrefix(schemaName: string): string {
+    return GetSchemaPrefix(schemaName);
 }
 
 /**
@@ -151,13 +161,18 @@ export function getSchemaPrefix(schemaName: string): string {
  * // Output: "salesInvoice"
  * ```
  */
-export function getGraphQLTypeNameBase(entity: EntityInfo): string {
+export function GetGraphQLTypeNameBase(entity: EntityInfo): string {
     // Prefer the case-stable canonical schema name when present. On PostgreSQL the physical
     // SchemaName is folded to lowercase, so deriving the prefix from SchemaName diverges from the
     // published, hand-cased entity packages (and from the SQL vwEntities ClassName, which uses the
     // same COALESCE). CanonicalSchemaName is NULL on SQL Server / existing installs / __mj, where
     // it correctly falls back to SchemaName — keeping client, server, and the SQL view in lockstep.
-    const schemaPrefix = getSchemaPrefix(entity.CanonicalSchemaName ?? entity.SchemaName);
-    const sanitizedBaseTable = sanitizeGraphQLName(entity.BaseTable);
+    const schemaPrefix = GetSchemaPrefix(entity.CanonicalSchemaName ?? entity.SchemaName);
+    const sanitizedBaseTable = SanitizeGraphQLName(entity.BaseTable);
     return `${schemaPrefix}${sanitizedBaseTable}`;
+}
+
+/** @deprecated Use {@link GetGraphQLTypeNameBase}. */
+export function getGraphQLTypeNameBase(entity: EntityInfo): string {
+    return GetGraphQLTypeNameBase(entity);
 }

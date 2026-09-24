@@ -35,7 +35,7 @@ import { configInfo } from './config';
  * export gives tests a pure-function entry point without forcing them to
  * mock `mssql.connect`.
  */
-export function buildSqlConfig(): mssql.config {
+export function BuildSqlConfig(): mssql.config {
   const {
     dbDatabase,
     dbHost,
@@ -77,6 +77,11 @@ export function buildSqlConfig(): mssql.config {
   };
 }
 
+/** @deprecated Use {@link BuildSqlConfig}. */
+export function buildSqlConfig(): mssql.config {
+  return BuildSqlConfig();
+}
+
 /**
  * Module-internal cache for the resolved mssql config. Populated on first
  * call to {@link MSSQLConnection}. Read via the {@link getSqlConfig}
@@ -104,7 +109,7 @@ let _pool: mssql.ConnectionPool;
  */
 export async function MSSQLConnection(): Promise<mssql.ConnectionPool> {
   if (!_pool) {
-    _sqlConfig = buildSqlConfig();
+    _sqlConfig = BuildSqlConfig();
     _pool = await mssql.connect(_sqlConfig);
   }
   return _pool;
@@ -121,6 +126,11 @@ export async function MSSQLConnection(): Promise<mssql.ConnectionPool> {
  * the pool. (`await MSSQLConnection()` followed by `getSqlConfig()` is
  * guaranteed to return the live config.)
  */
-export function getSqlConfig(): mssql.config | undefined {
+export function GetSqlConfig(): mssql.config | undefined {
   return _sqlConfig;
+}
+
+/** @deprecated Use {@link GetSqlConfig}. */
+export function getSqlConfig(): mssql.config | undefined {
+  return GetSqlConfig();
 }

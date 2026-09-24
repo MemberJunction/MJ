@@ -52,18 +52,63 @@ export interface ServerDialogResult {
 })
 export class MCPServerDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
 
-    @Input() server: MCPServerData | null = null;
-    @Input() visible = false;
+    @Input() Server: MCPServerData | null = null;
+
+    /** @deprecated Use {@link Server}. */
+    @Input() set server(value: MCPServerData | null) {
+      this.Server = value;
+    }
+    /** @deprecated Use {@link Server}. */
+    get server(): MCPServerData | null {
+      return this.Server;
+    }
+    @Input() Visible = false;
+
+    /** @deprecated Use {@link Visible}. */
+    @Input() set visible(value: MCPServerDialogComponent['Visible']) {
+      this.Visible = value;
+    }
+    /** @deprecated Use {@link Visible}. */
+    get visible(): MCPServerDialogComponent['Visible'] {
+      return this.Visible;
+    }
     @Output() close = new EventEmitter<ServerDialogResult>();
 
-    public serverForm: FormGroup;
-    public transportTypes = TRANSPORT_TYPES;
-    public authTypes = AUTH_TYPES;
+    public ServerForm: FormGroup;
+
+    /** @deprecated Use {@link ServerForm}. */
+    public get serverForm(): FormGroup {
+      return this.ServerForm;
+    }
+    /** @deprecated Use {@link ServerForm}. */
+    public set serverForm(value: FormGroup) {
+      this.ServerForm = value;
+    }
+    public TransportTypes = TRANSPORT_TYPES;
+
+    /** @deprecated Use {@link TransportTypes}. */
+    public get transportTypes() {
+      return this.TransportTypes;
+    }
+    /** @deprecated Use {@link TransportTypes}. */
+    public set transportTypes(value) {
+      this.TransportTypes = value;
+    }
+    public AuthTypes = AUTH_TYPES;
+
+    /** @deprecated Use {@link AuthTypes}. */
+    public get authTypes() {
+      return this.AuthTypes;
+    }
+    /** @deprecated Use {@link AuthTypes}. */
+    public set authTypes(value) {
+      this.AuthTypes = value;
+    }
     public IsSaving = false;
     public ErrorMessage: string | null = null;
 
     public get IsEditMode(): boolean {
-        return !!this.server?.ID;
+        return !!this.Server?.ID;
     }
 
     public get DialogTitle(): string {
@@ -71,7 +116,7 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
     }
 
     public get SelectedTransportType(): string {
-        return this.serverForm?.get('TransportType')?.value ?? 'StreamableHTTP';
+        return this.ServerForm?.get('TransportType')?.value ?? 'StreamableHTTP';
     }
 
     public get RequiresURL(): boolean {
@@ -84,7 +129,7 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
     }
 
     public get SelectedAuthType(): string {
-        return this.serverForm?.get('DefaultAuthType')?.value ?? 'None';
+        return this.ServerForm?.get('DefaultAuthType')?.value ?? 'None';
     }
 
     public get IsOAuth2(): boolean {
@@ -96,7 +141,7 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
         private cdr: ChangeDetectorRef
     ) {
         super();
-        this.serverForm = this.createForm();
+        this.ServerForm = this.createForm();
     }
 
     ngOnInit(): void {
@@ -105,7 +150,7 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['server'] || changes['visible']) {
-            if (this.visible) {
+            if (this.Visible) {
                 this.initializeForm();
             }
         }
@@ -134,28 +179,28 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
     }
 
     private initializeForm(): void {
-        if (this.server) {
-            this.serverForm.patchValue({
-                Name: this.server.Name,
-                Description: this.server.Description ?? '',
-                TransportType: this.server.TransportType,
-                ServerURL: this.server.ServerURL ?? '',
-                Command: this.server.Command ?? '',
+        if (this.Server) {
+            this.ServerForm.patchValue({
+                Name: this.Server.Name,
+                Description: this.Server.Description ?? '',
+                TransportType: this.Server.TransportType,
+                ServerURL: this.Server.ServerURL ?? '',
+                Command: this.Server.Command ?? '',
                 CommandArgs: '',  // Would need to load from entity
-                DefaultAuthType: this.server.DefaultAuthType,
-                RateLimitPerMinute: this.server.RateLimitPerMinute,
-                RateLimitPerHour: this.server.RateLimitPerHour,
+                DefaultAuthType: this.Server.DefaultAuthType,
+                RateLimitPerMinute: this.Server.RateLimitPerMinute,
+                RateLimitPerHour: this.Server.RateLimitPerHour,
                 RequestTimeoutMs: 60000,
-                Status: this.server.Status,
+                Status: this.Server.Status,
                 // OAuth configuration fields
-                OAuthIssuerURL: this.server.OAuthIssuerURL ?? '',
-                OAuthScopes: this.server.OAuthScopes ?? '',
-                OAuthMetadataCacheTTLMinutes: this.server.OAuthMetadataCacheTTLMinutes ?? 1440,
-                OAuthClientID: this.server.OAuthClientID ?? '',
-                OAuthClientSecretEncrypted: this.server.OAuthClientSecretEncrypted ?? ''
+                OAuthIssuerURL: this.Server.OAuthIssuerURL ?? '',
+                OAuthScopes: this.Server.OAuthScopes ?? '',
+                OAuthMetadataCacheTTLMinutes: this.Server.OAuthMetadataCacheTTLMinutes ?? 1440,
+                OAuthClientID: this.Server.OAuthClientID ?? '',
+                OAuthClientSecretEncrypted: this.Server.OAuthClientSecretEncrypted ?? ''
             });
         } else {
-            this.serverForm.reset({
+            this.ServerForm.reset({
                 Name: '',
                 Description: '',
                 TransportType: 'StreamableHTTP',
@@ -181,9 +226,9 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
     }
 
     private updateValidators(): void {
-        const urlControl = this.serverForm.get('ServerURL');
-        const commandControl = this.serverForm.get('Command');
-        const oauthIssuerControl = this.serverForm.get('OAuthIssuerURL');
+        const urlControl = this.ServerForm.get('ServerURL');
+        const commandControl = this.ServerForm.get('Command');
+        const oauthIssuerControl = this.ServerForm.get('OAuthIssuerURL');
 
         if (this.RequiresURL) {
             urlControl?.setValidators([Validators.required]);
@@ -208,17 +253,27 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
         oauthIssuerControl?.updateValueAndValidity();
     }
 
-    public onTransportTypeChange(): void {
+    public OnTransportTypeChange(): void {
         this.updateValidators();
     }
 
-    public onAuthTypeChange(): void {
+    /** @deprecated Use {@link OnTransportTypeChange}. */
+    public onTransportTypeChange(): void {
+      return this.OnTransportTypeChange();
+    }
+
+    public OnAuthTypeChange(): void {
         this.updateValidators();
+    }
+
+    /** @deprecated Use {@link OnAuthTypeChange}. */
+    public onAuthTypeChange(): void {
+      return this.OnAuthTypeChange();
     }
 
     public async save(): Promise<void> {
-        if (this.serverForm.invalid) {
-            this.serverForm.markAllAsTouched();
+        if (this.ServerForm.invalid) {
+            this.ServerForm.markAllAsTouched();
             return;
         }
 
@@ -230,14 +285,14 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
 
-            if (this.IsEditMode && this.server) {
-                await entity.InnerLoad(CompositeKey.FromID(this.server.ID));
+            if (this.IsEditMode && this.Server) {
+                await entity.InnerLoad(CompositeKey.FromID(this.Server.ID));
             } else {
                 entity.NewRecord();
             }
 
             // Apply form values
-            const formValue = this.serverForm.value;
+            const formValue = this.ServerForm.value;
             entity.Name = formValue.Name;
             entity.Description = formValue.Description || null;
             entity.TransportType = formValue.TransportType;
@@ -286,8 +341,13 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
         this.close.emit({ saved: false });
     }
 
-    public hasError(controlName: string, errorType: string): boolean {
-        const control = this.serverForm.get(controlName);
+    public HasError(controlName: string, errorType: string): boolean {
+        const control = this.ServerForm.get(controlName);
         return control?.hasError(errorType) && control?.touched || false;
+    }
+
+    /** @deprecated Use {@link HasError}. */
+    public hasError(controlName: string, errorType: string): boolean {
+      return this.HasError(controlName, errorType);
     }
 }

@@ -20,7 +20,7 @@ import { BaseRealtimeChannelServer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
 import { IRealtimeChannelServerDataAware } from './realtime-channel-server-data-context';
-import { buildAgentMediaContextNote } from './agent-media-library';
+import { BuildAgentMediaContextNote } from './agent-media-library';
 
 /**
  * Server half of the Media interactive channel. One instance per realtime session (created by
@@ -66,7 +66,7 @@ export class MediaChannelServer extends BaseRealtimeChannelServer implements IRe
         // Per-session override (runtime kit) takes precedence over the agent default; the resolver
         // already UUID-validated it, and the library re-validates before use (defense in depth).
         const overrideCollectionID = this.readMediaCollectionOverride();
-        const note = await buildAgentMediaContextNote(
+        const note = await BuildAgentMediaContextNote(
             this.sessionProvider,
             this.sessionContextUser,
             agentID,

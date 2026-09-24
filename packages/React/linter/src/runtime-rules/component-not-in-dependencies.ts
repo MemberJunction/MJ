@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -33,7 +33,7 @@ export class ComponentNotInDependenciesRule extends BaseLintRule {
       }
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       // Check for components.X usage in JSX
       JSXElement(path: NodePath<t.JSXElement>) {
         const openingElement = path.node.openingElement;

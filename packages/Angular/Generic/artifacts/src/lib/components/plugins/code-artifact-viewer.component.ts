@@ -2,7 +2,7 @@ import { Component, Input } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
-import { createCodeSnapshot } from '../../snapshot-helpers';
+import { CreateCodeSnapshot } from '../../snapshot-helpers';
 
 /**
  * Viewer component for code artifacts (Python, C#, Java, TypeScript, JavaScript, SQL, CSS, XML)
@@ -80,11 +80,47 @@ import { createCodeSnapshot } from '../../snapshot-helpers';
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'CodeArtifactViewerPlugin')
 export class CodeArtifactViewerComponent extends BaseArtifactViewerPluginComponent {
-  public codeContent = '';
-  public language = 'plaintext';
-  public languageLabel = 'Code';
+  public CodeContent = '';
 
-  @Input() contentType?: string;
+  /** @deprecated Use {@link CodeContent}. */
+  public get codeContent() {
+    return this.CodeContent;
+  }
+  /** @deprecated Use {@link CodeContent}. */
+  public set codeContent(value) {
+    this.CodeContent = value;
+  }
+  public Language = 'plaintext';
+
+  /** @deprecated Use {@link Language}. */
+  public get language() {
+    return this.Language;
+  }
+  /** @deprecated Use {@link Language}. */
+  public set language(value) {
+    this.Language = value;
+  }
+  public LanguageLabel = 'Code';
+
+  /** @deprecated Use {@link LanguageLabel}. */
+  public get languageLabel() {
+    return this.LanguageLabel;
+  }
+  /** @deprecated Use {@link LanguageLabel}. */
+  public set languageLabel(value) {
+    this.LanguageLabel = value;
+  }
+
+  @Input() ContentType?: string;
+
+  /** @deprecated Use {@link ContentType}. */
+  @Input() set contentType(value: string | undefined) {
+    this.ContentType = value;
+  }
+  /** @deprecated Use {@link ContentType}. */
+  get contentType(): string | undefined {
+    return this.ContentType;
+  }
 
   /**
    * Code artifacts always have content to display
@@ -94,55 +130,60 @@ export class CodeArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   ngOnInit(): void {
-    this.codeContent = this.getContent();
+    this.CodeContent = this.getContent();
     this.detectLanguage();
   }
 
   private detectLanguage(): void {
-    const ct = this.contentType?.toLowerCase() || '';
+    const ct = this.ContentType?.toLowerCase() || '';
 
     // Map content types to Monaco editor language modes
     if (ct.includes('python')) {
-      this.language = 'python';
-      this.languageLabel = 'Python';
+      this.Language = 'python';
+      this.LanguageLabel = 'Python';
     } else if (ct.includes('csharp') || ct.includes('c#')) {
-      this.language = 'csharp';
-      this.languageLabel = 'C#';
+      this.Language = 'csharp';
+      this.LanguageLabel = 'C#';
     } else if (ct.includes('java')) {
-      this.language = 'java';
-      this.languageLabel = 'Java';
+      this.Language = 'java';
+      this.LanguageLabel = 'Java';
     } else if (ct.includes('typescript')) {
-      this.language = 'typescript';
-      this.languageLabel = 'TypeScript';
+      this.Language = 'typescript';
+      this.LanguageLabel = 'TypeScript';
     } else if (ct.includes('javascript')) {
-      this.language = 'javascript';
-      this.languageLabel = 'JavaScript';
+      this.Language = 'javascript';
+      this.LanguageLabel = 'JavaScript';
     } else if (ct.includes('sql')) {
-      this.language = 'sql';
-      this.languageLabel = 'SQL';
+      this.Language = 'sql';
+      this.LanguageLabel = 'SQL';
     } else if (ct.includes('css')) {
-      this.language = 'css';
-      this.languageLabel = 'CSS';
+      this.Language = 'css';
+      this.LanguageLabel = 'CSS';
     } else if (ct.includes('xml')) {
-      this.language = 'xml';
-      this.languageLabel = 'XML';
+      this.Language = 'xml';
+      this.LanguageLabel = 'XML';
     } else {
-      this.language = 'plaintext';
-      this.languageLabel = 'Code';
+      this.Language = 'plaintext';
+      this.LanguageLabel = 'Code';
     }
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
-    return createCodeSnapshot(this.getRawContent(), this.getDisplayTitle());
+    return CreateCodeSnapshot(this.getRawContent(), this.getDisplayTitle());
   }
 
-  onCopy(): void {
-    if (this.codeContent) {
-      navigator.clipboard.writeText(this.codeContent).then(() => {
+  OnCopy(): void {
+    if (this.CodeContent) {
+      navigator.clipboard.writeText(this.CodeContent).then(() => {
         console.log('✅ Copied code to clipboard');
       }).catch(err => {
         console.error('Failed to copy to clipboard:', err);
       });
     }
+  }
+
+  /** @deprecated Use {@link OnCopy}. */
+  onCopy(): void {
+    return this.OnCopy();
   }
 }

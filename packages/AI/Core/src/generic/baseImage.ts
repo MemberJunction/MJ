@@ -8,45 +8,45 @@ export class GeneratedImage {
     /**
      * Raw binary image data. Either data or url will be populated, not both.
      */
-    data?: Buffer;
+    data?: Buffer;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Base64-encoded image data. Convenience representation of the data field.
      * If data is populated, base64 will also be populated with the encoded value.
      */
-    base64?: string;
+    base64?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * URL to the generated image. Some providers return URLs instead of direct data.
      * Either url or data will be populated, not both.
      * URLs may be temporary and expire after a period of time.
      */
-    url?: string;
+    url?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * The image format/encoding
      */
-    format: 'png' | 'jpg' | 'jpeg' | 'webp' | 'gif' = 'png';
+    format: 'png' | 'jpg' | 'jpeg' | 'webp' | 'gif' = 'png';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Width of the generated image in pixels
      */
-    width?: number;
+    width?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Height of the generated image in pixels
      */
-    height?: number;
+    height?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Provider-specific index when multiple images are generated
      */
-    index?: number;
+    index?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Optional content filter results from the provider
      */
-    contentFilterResults?: ContentFilterResult;
+    contentFilterResults?: ContentFilterResult;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
@@ -76,18 +76,18 @@ export class ImageGenerationResult extends BaseResult {
     /**
      * Array of generated images. May contain multiple images if n > 1 was requested.
      */
-    images: GeneratedImage[] = [];
+    images: GeneratedImage[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Some providers (like OpenAI DALL-E 3) may revise the prompt for safety or quality.
      * The revised prompt used for generation is returned here.
      */
-    revisedPrompt?: string;
+    revisedPrompt?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Usage information if provided by the model
      */
-    usage?: ModelUsage;
+    usage?: ModelUsage;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Provider-specific metadata
@@ -131,66 +131,66 @@ export class ImageGenerationParams {
     /**
      * Model name/ID to use for generation
      */
-    model?: string;
+    model?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Text prompt describing the image to generate. Required.
      */
-    prompt: string;
+    prompt: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Negative prompt - things to avoid in the generated image.
      * Not all providers support this.
      */
-    negativePrompt?: string;
+    negativePrompt?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Number of images to generate. Default is 1.
      * Some providers have limits on the maximum number.
      */
-    n?: number = 1;
+    n?: number = 1;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Size of the generated image(s)
      */
-    size?: ImageSize = '1024x1024';
+    size?: ImageSize = '1024x1024';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Quality level for the generated image
      */
-    quality?: ImageQuality = 'standard';
+    quality?: ImageQuality = 'standard';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Style preset for the generated image
      */
-    style?: ImageStyle;
+    style?: ImageStyle;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * How the generated image should be returned
      */
-    outputFormat?: ImageResponseFormat = 'b64_json';
+    outputFormat?: ImageResponseFormat = 'b64_json';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Optional seed for reproducible generation.
      * Not all providers support seeding.
      */
-    seed?: number;
+    seed?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Aspect ratio as an alternative to explicit size.
      * Format: "width:height" e.g., "16:9", "1:1", "9:16"
      */
-    aspectRatio?: string;
+    aspectRatio?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * User identifier for tracking/abuse prevention
      */
-    user?: string;
+    user?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Provider-specific additional parameters
      */
-    providerOptions?: Record<string, unknown>;
+    providerOptions?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
@@ -200,49 +200,49 @@ export class ImageEditParams {
     /**
      * Model name/ID to use for editing
      */
-    model?: string;
+    model?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * The original image to edit. Can be a Buffer, base64 string, or URL.
      */
-    image: Buffer | string;
+    image: Buffer | string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Text prompt describing the edit to make
      */
-    prompt: string;
+    prompt: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Mask image indicating which areas to edit.
      * Transparent/white areas will be regenerated.
      * Can be a Buffer, base64 string, or URL.
      */
-    mask?: Buffer | string;
+    mask?: Buffer | string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Negative prompt - things to avoid
      */
-    negativePrompt?: string;
+    negativePrompt?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Number of edited images to generate
      */
-    n?: number = 1;
+    n?: number = 1;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Size of the output image(s)
      */
-    size?: ImageSize;
+    size?: ImageSize;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * How the result should be returned
      */
-    outputFormat?: ImageResponseFormat = 'b64_json';
+    outputFormat?: ImageResponseFormat = 'b64_json';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Provider-specific additional parameters
      */
-    providerOptions?: Record<string, unknown>;
+    providerOptions?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
@@ -252,43 +252,43 @@ export class ImageVariationParams {
     /**
      * Model name/ID to use for variations
      */
-    model?: string;
+    model?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * The original image to create variations of.
      * Can be a Buffer, base64 string, or URL.
      */
-    image: Buffer | string;
+    image: Buffer | string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Optional prompt to guide the variation
      */
-    prompt?: string;
+    prompt?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Number of variations to generate
      */
-    n?: number = 1;
+    n?: number = 1;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Size of the output image(s)
      */
-    size?: ImageSize;
+    size?: ImageSize;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * How the result should be returned
      */
-    outputFormat?: ImageResponseFormat = 'b64_json';
+    outputFormat?: ImageResponseFormat = 'b64_json';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Strength of variation (0-1). Higher values create more different images.
      */
-    strength?: number;
+    strength?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Provider-specific additional parameters
      */
-    providerOptions?: Record<string, unknown>;
+    providerOptions?: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**
@@ -298,47 +298,47 @@ export class ImageModelInfo {
     /**
      * Model identifier
      */
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Human-readable model name
      */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Model description
      */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Supported image sizes
      */
-    supportedSizes?: ImageSize[];
+    supportedSizes?: ImageSize[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Maximum number of images per request
      */
-    maxImages?: number;
+    maxImages?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Whether the model supports image editing/inpainting
      */
-    supportsEditing?: boolean;
+    supportsEditing?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Whether the model supports image variations
      */
-    supportsVariations?: boolean;
+    supportsVariations?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Whether the model supports negative prompts
      */
-    supportsNegativePrompt?: boolean;
+    supportsNegativePrompt?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /**
      * Whether the model supports seeded generation
      */
-    supportsSeed?: boolean;
+    supportsSeed?: boolean;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
 /**

@@ -48,7 +48,7 @@ export interface SelectorCandidate {
  *
  * @returns the chosen `Index`, or `undefined` when there are no candidates.
  */
-export function chooseSelectorMatch(candidates: SelectorCandidate[]): number | undefined {
+export function ChooseSelectorMatch(candidates: SelectorCandidate[]): number | undefined {
     if (candidates.length === 0) {
         return undefined;
     }
@@ -64,6 +64,11 @@ export function chooseSelectorMatch(candidates: SelectorCandidate[]): number | u
         }
     }
     return best.Index;
+}
+
+/** @deprecated Use {@link ChooseSelectorMatch}. */
+export function chooseSelectorMatch(candidates: SelectorCandidate[]): number | undefined {
+    return ChooseSelectorMatch(candidates);
 }
 
 /**
@@ -107,7 +112,7 @@ async function measureMatches(locator: Locator): Promise<SelectorCandidate[]> {
  * Never throws: if measurement fails for any reason, the caller gets the
  * unnarrowed locator and the pre-existing behavior.
  */
-export async function resolveActionLocator(page: Page, selector: string): Promise<Locator> {
+export async function ResolveActionLocator(page: Page, selector: string): Promise<Locator> {
     const locator = page.locator(selector);
     try {
         // count() is a plain query — no layout, no serialization — so the
@@ -120,9 +125,14 @@ export async function resolveActionLocator(page: Page, selector: string): Promis
         if (count > MAX_MEASURED_MATCHES) {
             return locator.first();
         }
-        const index = chooseSelectorMatch(await measureMatches(locator));
+        const index = ChooseSelectorMatch(await measureMatches(locator));
         return index === undefined ? locator : locator.nth(index);
     } catch {
         return locator;
     }
+}
+
+/** @deprecated Use {@link ResolveActionLocator}. */
+export async function resolveActionLocator(page: Page, selector: string): Promise<Locator> {
+    return ResolveActionLocator(page, selector);
 }

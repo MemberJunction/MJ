@@ -20,12 +20,17 @@ export interface NativeToolResult {
 }
 
 /** The model's own turn, replayed into history so the results that follow have something to answer. */
-export function buildAssistantToolCallTurn(turn: { text: string; toolCalls: ChatToolCall[] }): AgentChatMessage {
+export function BuildAssistantToolCallTurn(turn: { text: string; toolCalls: ChatToolCall[] }): AgentChatMessage {
     return { role: 'assistant', content: turn.text ?? '', toolCalls: turn.toolCalls };
 }
 
+/** @deprecated Use {@link BuildAssistantToolCallTurn}. */
+export function buildAssistantToolCallTurn(turn: { text: string; toolCalls: ChatToolCall[] }): AgentChatMessage {
+    return BuildAssistantToolCallTurn(turn);
+}
+
 /** One `tool` turn with a `tool_result` block per result, paired to its call by id. */
-export function buildToolResultTurn(results: readonly NativeToolResult[], metadata: AgentChatMessageMetadata | undefined): AgentChatMessage {
+export function BuildToolResultTurn(results: readonly NativeToolResult[], metadata: AgentChatMessageMetadata | undefined): AgentChatMessage {
     const content: ChatMessageContentBlock[] = results.map((r) => ({
         type: 'tool_result',
         content: r.content,
@@ -36,11 +41,16 @@ export function buildToolResultTurn(results: readonly NativeToolResult[], metada
     return { role: 'tool', content, metadata };
 }
 
+/** @deprecated Use {@link BuildToolResultTurn}. */
+export function buildToolResultTurn(results: readonly NativeToolResult[], metadata: AgentChatMessageMetadata | undefined): AgentChatMessage {
+    return BuildToolResultTurn(results, metadata);
+}
+
 /**
  * Compaction for tool turns: shrink each block's text and keep the block structure — a tool turn
  * whose content became a plain string would be rejected by every provider.
  */
-export function compactToolResultContent(message: AgentChatMessage, compact: (text: string) => string): AgentChatMessage {
+export function CompactToolResultContent(message: AgentChatMessage, compact: (text: string) => string): AgentChatMessage {
     if (!Array.isArray(message.content)) {
         return { ...message, content: compact(String(message.content)) };
     }
@@ -48,4 +58,9 @@ export function compactToolResultContent(message: AgentChatMessage, compact: (te
         ...message,
         content: message.content.map((b) => (b.type === 'tool_result' ? { ...b, content: compact(b.content) } : b))
     };
+}
+
+/** @deprecated Use {@link CompactToolResultContent}. */
+export function compactToolResultContent(message: AgentChatMessage, compact: (text: string) => string): AgentChatMessage {
+    return CompactToolResultContent(message, compact);
 }

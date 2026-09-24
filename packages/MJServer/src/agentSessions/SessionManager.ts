@@ -8,7 +8,7 @@ import {
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
-import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
+import { WriteReturningVisitorRecap } from './ReturningVisitorRecap.js';
 import { ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
@@ -207,7 +207,7 @@ export class SessionManager {
         // Returning-visitor recap (RV2): if this session's conversation is returning-visitor-enabled,
         // summarize it into an Active memory note so the visitor's next session opens with prior context.
         // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
-        await writeReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
+        await WriteReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
     }
 

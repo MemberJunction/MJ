@@ -69,10 +69,10 @@ function relativeTimeLabel(when: Date, now: Date = new Date()): string {
  */
 export function AdaptConversationToSummary(item: ConversationListItem): ConversationSummary {
     const conv = item.entity;
-    const agents: ConversationParticipantAgent[] = item.agentIds.length === 0
+    const agents: ConversationParticipantAgent[] = item.AgentIds.length === 0
         ? [{ id: 'unknown', name: 'Skip', color: Colors.agentFallback, initial: 'A' }]
-        : item.agentIds.map((id, idx) => {
-            const name = item.agentNames[idx] ?? 'Agent';
+        : item.AgentIds.map((id, idx) => {
+            const name = item.AgentNames[idx] ?? 'Agent';
             return {
                 id,
                 name,
@@ -81,18 +81,18 @@ export function AdaptConversationToSummary(item: ConversationListItem): Conversa
             };
         });
     return {
-        id: conv.ID,
+        Id: conv.ID,
         // Both run through the mention conversion for the same reason message bodies do: a title
         // derived from a message that opened with a mention, and a snippet that IS the last message,
         // would otherwise show the raw `@{"type":…}` wire format in the list. Converting at display
         // also repairs conversations already named that way in the database.
-        title: MentionsToPlainText(conv.Name) || '(untitled)',
-        snippet: MentionsToPlainText(item.latestSnippet) || '(no messages yet)',
-        timestamp: relativeTimeLabel(item.latestAt),
-        agents,
-        messageCount: item.messageCount,
-        live: item.live,
-        pinned: conv.IsPinned ?? false,
+        Title: MentionsToPlainText(conv.Name) || '(untitled)',
+        Snippet: MentionsToPlainText(item.LatestSnippet) || '(no messages yet)',
+        Timestamp: relativeTimeLabel(item.LatestAt),
+        Agents: agents,
+        MessageCount: item.messageCount,
+        Live: item.live,
+        Pinned: conv.IsPinned ?? false,
     };
 }
 
@@ -101,10 +101,10 @@ export function AdaptConversationToSummary(item: ConversationListItem): Conversa
  * matching the visual structure of the mockup.
  */
 export type GroupedConversations = {
-    pinned: ConversationSummary[];
-    today: ConversationSummary[];
-    yesterday: ConversationSummary[];
-    earlier: ConversationSummary[];
+    Pinned: ConversationSummary[];
+    Today: ConversationSummary[];
+    Yesterday: ConversationSummary[];
+    Earlier: ConversationSummary[];
 };
 
 /**
@@ -116,7 +116,7 @@ export type GroupedConversations = {
  * @returns The four grouped, UI-shaped summary buckets.
  */
 export function GroupConversations(items: ConversationListItem[]): GroupedConversations {
-    const out: GroupedConversations = { pinned: [], today: [], yesterday: [], earlier: [] };
+    const out: GroupedConversations = { Pinned: [], Today: [], Yesterday: [], Earlier: [] };
     const now = new Date();
     const todayStr = now.toDateString();
     const yesterday = new Date(now);
@@ -125,24 +125,24 @@ export function GroupConversations(items: ConversationListItem[]): GroupedConver
 
     for (const item of items) {
         const summary = AdaptConversationToSummary(item);
-        if (summary.pinned) {
-            out.pinned.push(summary);
+        if (summary.Pinned) {
+            out.Pinned.push(summary);
             continue;
         }
-        const when = item.latestAt.toDateString();
-        if (when === todayStr) out.today.push(summary);
-        else if (when === yesterdayStr) out.yesterday.push(summary);
-        else out.earlier.push(summary);
+        const when = item.LatestAt.toDateString();
+        if (when === todayStr) out.Today.push(summary);
+        else if (when === yesterdayStr) out.Yesterday.push(summary);
+        else out.Earlier.push(summary);
     }
     return out;
 }
 
 /** UI reference to an agent (id + name + derived avatar color/initial). */
 export type AdaptedAgentRef = {
-    id: string;
-    name: string;
-    color: string;
-    initial: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    color: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    initial: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -170,16 +170,16 @@ export function AdaptAgentRef(id: string | null | undefined, name: string | null
  * agent reference, run status, suggested follow-up responses, and completion time.
  */
 export type AdaptedMessage =
-    | { kind: 'user'; id: string; text: string; createdAt: Date }
+    | { kind: 'user'; id: string; text: string; CreatedAt: Date }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     | {
-        kind: 'agent';
-        id: string;
-        agent: AdaptedAgentRef;
-        body: string;
-        createdAt: Date;
-        status: 'Complete' | 'In-Progress' | 'Error';
-        suggestedResponses: string[];
-        completionMs: number | null;
+        kind: 'agent';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+        id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+        Agent: AdaptedAgentRef;
+        Body: string;
+        CreatedAt: Date;
+        Status: 'Complete' | 'In-Progress' | 'Error';
+        SuggestedResponses: string[];
+        CompletionMs: number | null;
         /**
          * The artifact this turn produced, when it produced one.
          *
@@ -188,7 +188,7 @@ export type AdaptedMessage =
          * show an artifact card in place instead of only listing artifacts in a dock detached from
          * the turn that created them.
          */
-        artifactId: string | null;
+        artifactId: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     };
 
 /**
@@ -201,15 +201,15 @@ export type AdaptedMessage =
  * since the feature shipped; this screen did not, which is the divergence this type closes.
  */
 export type AdaptedTimelineItem =
-    | { kind: 'message'; message: AdaptedMessage }
+    | { kind: 'message'; message: AdaptedMessage }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     | {
-        kind: 'session';
+        kind: 'session';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
         /** The collapsed block: time range, turn count, last-turn preview. */
-        group: RealtimeSessionTimelineGroup;
+        Group: RealtimeSessionTimelineGroup;
         /** Session row enrichment (agent name, status, close reason), or null when unavailable. */
-        meta: RealtimeSessionTimelineMeta | null;
+        Meta: RealtimeSessionTimelineMeta | null;
         /** The session's visible turns, so the card can expand in place instead of leaving a dead end. */
-        turns: AdaptedMessage[];
+        Turns: AdaptedMessage[];
     };
 
 /**
@@ -232,7 +232,7 @@ export function AdaptMessage(msg: ConversationMessage): AdaptedMessage {
             id: d.ID,
             // Mention tokens are stored as JSON for exact routing; a person must never see that.
             text: MentionsToPlainText(d.Message),
-            createdAt: date,
+            CreatedAt: date,
         };
     }
     // Treat both 'AI' and 'Error' as agent rows
@@ -250,12 +250,12 @@ export function AdaptMessage(msg: ConversationMessage): AdaptedMessage {
     return {
         kind: 'agent',
         id: d.ID,
-        agent: AdaptAgentRef(d.AgentID, msg.agentName),
-        body: d.Message ?? (d.Error ?? ''),
-        createdAt: date,
-        status: d.Status ?? 'Complete',
-        suggestedResponses,
-        completionMs: d.CompletionTime ?? null,
+        Agent: AdaptAgentRef(d.AgentID, msg.agentName),
+        Body: d.Message ?? (d.Error ?? ''),
+        CreatedAt: date,
+        Status: d.Status ?? 'Complete',
+        SuggestedResponses: suggestedResponses,
+        CompletionMs: d.CompletionTime ?? null,
         artifactId: d.ArtifactID ?? null,
     };
 }
@@ -272,21 +272,21 @@ export function AdaptMessage(msg: ConversationMessage): AdaptedMessage {
  */
 export function AdaptConversation(load: ConversationDetailLoad) {
     const participants = new Map<string, AdaptedAgentRef>();
-    for (const msg of load.messages) {
+    for (const msg of load.Messages) {
         if (msg.detail.AgentID) {
             const ref = AdaptAgentRef(msg.detail.AgentID, msg.agentName);
             if (!participants.has(ref.id)) participants.set(ref.id, ref);
         }
     }
     return {
-        id: load.conversation.ID,
-        title: MentionsToPlainText(load.conversation.Name) || '(untitled)',
+        id: load.Conversation.ID,
+        title: MentionsToPlainText(load.Conversation.Name) || '(untitled)',
         participants: Array.from(participants.values()),
-        messageCount: load.messages.length,
-        live: load.messages.some((m) => m.detail.Status === 'In-Progress'),
-        messages: load.messages.map(AdaptMessage),
+        messageCount: load.Messages.length,
+        live: load.Messages.some((m) => m.detail.Status === 'In-Progress'),
+        messages: load.Messages.map(AdaptMessage),
         timeline: BuildThreadTimeline(load),
-        artifacts: load.artifacts,
+        artifacts: load.Artifacts,
     };
 }
 
@@ -306,7 +306,7 @@ export function BuildThreadTimeline(load: ConversationDetailLoad): AdaptedTimeli
     // The grouping pass reads a structural row shape; carrying the adapted message alongside it
     // avoids a second lookup to get from a grouped row back to what should be rendered.
     type Source = RealtimeTimelineSourceDetail & { Adapted: AdaptedMessage; Visible: boolean };
-    const sources: Source[] = load.messages.map((m) => {
+    const sources: Source[] = load.Messages.map((m) => {
         const row: RealtimeTimelineSourceDetail = {
             ID: m.detail.ID,
             AgentSessionID: m.detail.AgentSessionID ?? null,
@@ -333,9 +333,9 @@ export function BuildThreadTimeline(load: ConversationDetailLoad): AdaptedTimeli
             ? { kind: 'message' as const, message: item.Detail.Adapted }
             : {
                 kind: 'session' as const,
-                group: item.Group,
-                meta: FindRealtimeSessionMeta(load.sessionMeta, item.Group.SessionID),
-                turns: turnsBySession.get(NormalizeUUID(item.Group.SessionID)) ?? [],
+                Group: item.Group,
+                Meta: FindRealtimeSessionMeta(load.SessionMeta, item.Group.SessionID),
+                Turns: turnsBySession.get(NormalizeUUID(item.Group.SessionID)) ?? [],
             },
     );
 }

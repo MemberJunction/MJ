@@ -97,7 +97,7 @@ async function createSetting(user: UserInfo, tag: string): Promise<MJUserSetting
  * Create the self-contained Query/Category fixtures (lifted from the original
  * bootstrap). Forces QueryEngine to refresh so resolveQuery sees them.
  */
-export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Promise<RunQueryFixtures> {
+export async function CreateRunQueryFixtures(ctx: IntegrationCheckContext): Promise<RunQueryFixtures> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
     const schema = ctx.Schema ?? '__mj';
     const user = ctx.User;
@@ -159,12 +159,17 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     return fixtures;
 }
 
+/** @deprecated Use {@link CreateRunQueryFixtures}. */
+export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Promise<RunQueryFixtures> {
+    return CreateRunQueryFixtures(ctx);
+}
+
 /**
  * Best-effort teardown — sweep leftover settings, then delete whatever queries/category were
  * created in FK-safe order. Partial-safe (R4): a mid-Setup crash may have created only some of
  * the fixture records, so each is guarded before delete.
  */
-export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fixtures: RunQueryFixtures): Promise<void> {
+export async function TeardownRunQueryFixtures(ctx: IntegrationCheckContext, fixtures: RunQueryFixtures): Promise<void> {
     try {
         const rv = new RunView();
         const leftovers = await rv.RunView<MJUserSettingEntity>({
@@ -188,6 +193,11 @@ export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fix
     } catch (e) {
         console.error(`Teardown warning: ${e instanceof Error ? e.message : String(e)}`);
     }
+}
+
+/** @deprecated Use {@link TeardownRunQueryFixtures}. */
+export async function teardownRunQueryFixtures(ctx: IntegrationCheckContext, fixtures: RunQueryFixtures): Promise<void> {
+    return TeardownRunQueryFixtures(ctx, fixtures);
 }
 
 /** The ordered runquery-cache bundle. The whole bundle mutates the DB by design. */
@@ -559,10 +569,10 @@ for (const check of RunQueryCacheChecks) {
 // The bundle's shared Query/Category fixtures, run through the generic bundle-lifecycle hook so the
 // driver and the dispatcher script create/tear them down identically (was a hardcoded driver special-case).
 IntegrationCheckRegistry.Instance.RegisterLifecycle('runquery-cache', {
-    Setup: async ctx => { ctx.Fixtures = await createRunQueryFixtures(ctx); },
+    Setup: async ctx => { ctx.Fixtures = await CreateRunQueryFixtures(ctx); },
     Teardown: async ctx => {
         if (ctx.Fixtures) {
-            await teardownRunQueryFixtures(ctx, ctx.Fixtures);
+            await TeardownRunQueryFixtures(ctx, ctx.Fixtures);
             ctx.Fixtures = undefined;
         }
     }

@@ -814,7 +814,7 @@ export class AIPromptRunner {
         // selected candidate's AIPromptModel bag. Resolving without those skips the two layers the
         // capability is normally declared on and silently inverts the decision.
         if (params.tools?.length) {
-          const nativeDecision = this.resolveNativeToolCallingDecision(
+          const nativeDecision = this.ResolveNativeToolCallingDecision(
             prompt, params, selection.model,
             selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
             selection.promptModelConfiguration);
@@ -3291,7 +3291,15 @@ export class AIPromptRunner {
           break;
         }
 
-        // If we reach here, the result was successful
+        // A failure that is not eligible for failover (structural error, or none diagnosed) is
+        // returned as-is — but never silently: callers often see only an empty result.
+        if (!result.success) {
+          this.logError(
+            `Model call failed and is not eligible for failover (${result.errorInfo?.errorType ?? 'undiagnosed'}): ${result.errorMessage ?? 'no error message'}`,
+            { prompt, model: candidate.model, metadata: { vendorId: candidate.vendorId, driverClass: candidate.driverClass } }
+          );
+        }
+
         // Update promptRun with failover information if we had prior failures
         if (failoverAttempts.length > 0 && promptRun) {
           this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);
@@ -3537,7 +3545,7 @@ export class AIPromptRunner {
    * Never throws: the gate is an opt-in enhancement and must not be able to fail a run that would
    * otherwise succeed, so any configuration problem resolves to the path that has always worked.
    */
-  public resolveNativeToolCallingDecision(
+  public ResolveNativeToolCallingDecision(
     prompt: MJAIPromptEntityExtended,
     params: AIPromptParams,
     model: MJAIModelEntityExtended,
@@ -3574,6 +3582,17 @@ export class AIPromptRunner {
     }
   }
 
+  /** @deprecated Use {@link ResolveNativeToolCallingDecision}. */
+  public resolveNativeToolCallingDecision(
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    promptModelConfiguration?: AIPromptConfiguration | null
+  ): NativeToolCallingDecision {
+    return this.ResolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
+  }
+
   private applyNativeToolCalling(
     chatParams: ChatParams,
     prompt: MJAIPromptEntityExtended,
@@ -3583,7 +3602,7 @@ export class AIPromptRunner {
     promptModelConfiguration?: AIPromptConfiguration | null
   ): void {
     const decision: NativeToolCallingDecision =
-      this.resolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
+      this.ResolveNativeToolCallingDecision(prompt, params, model, vendorId, promptModelConfiguration);
 
     if (decision.warning) {
       console.warn(

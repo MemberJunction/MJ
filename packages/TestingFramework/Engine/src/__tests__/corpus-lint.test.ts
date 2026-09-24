@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { parseCorpusCase } from '../eval/corpus';
+import { ParseCorpusCase } from '../eval/corpus';
 
 // src/__tests__/ → repo root is 5 levels up (Engine → TestingFramework → packages → root).
 const CORPUS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../../../metadata-optional/prompt-eval-corpus/cases');
@@ -37,14 +37,14 @@ describe('prompt-eval corpus', () => {
     });
 
     it.each(files)('%s parses and validates', (file) => {
-        const parsed = parseCorpusCase(JSON.parse(readFileSync(join(CORPUS_DIR, file), 'utf8')) as unknown);
+        const parsed = ParseCorpusCase(JSON.parse(readFileSync(join(CORPUS_DIR, file), 'utf8')) as unknown);
         // The filename IS the id, so a case can be found from a result row without a lookup.
         expect(`${parsed.id}.json`).toBe(file);
         expect(parsed.description.length).toBeGreaterThan(20);
     });
 
     it('has unique ids', () => {
-        const ids = files.map((f) => parseCorpusCase(JSON.parse(readFileSync(join(CORPUS_DIR, f), 'utf8')) as unknown).id);
+        const ids = files.map((f) => ParseCorpusCase(JSON.parse(readFileSync(join(CORPUS_DIR, f), 'utf8')) as unknown).id);
         expect(new Set(ids).size).toBe(ids.length);
     });
 

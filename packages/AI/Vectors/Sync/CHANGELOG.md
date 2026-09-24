@@ -1,5 +1,68 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 42d701e: Extract @memberjunction/entity-documents from @memberjunction/ai-vector-sync to provide reusable entity document parsing and caching across vector sync, autotagging, and feature pipelines.
+
+### Patch Changes
+
+- 6ab86a7: fix(vectors): live UI update on vector sync completion and loud failure reporting on embedding errors
+  - **Vector Management Dashboard**:
+    - In `VectorManagementResourceComponent`, `RunView` for `MJ: Entity Record Documents` now sets `BypassCache: true` during row refresh to avoid returning stale zero-vector counts from `QueryCache`.
+    - Added `buildSidebarData()` call in the sync completion flow so Vector DB Health, status reason, and vector coverage percentage update in real-time.
+    - Replaced strict equality (`===`) checks on `EntityDocumentID` with case-insensitive `UUIDsEqual()` across row finding and status/progress updating methods.
+    - Canonicalized entity document IDs to `doc.ID` and updated `SyncingIds` tracking with case-insensitive `IsSyncing()` checks.
+    - Added `forceRefresh?: boolean` parameter to `LoadData()` and `fetchAllData()` to bypass cache on manual refreshes and entity document creation/updates.
+  - **AI Vector Sync Engine**:
+    - In `EntityVectorSyncer`, caught and recorded embedding generation errors (`_embedErrors`) when calling `EmbedTexts()`.
+    - Fails loudly when embedding models throw or return 0 vectors for valid records (e.g., due to missing API keys like `AI_VENDOR_API_KEY__<DRIVER>` or model unavailability).
+    - Emits `Stage: 'error'` with an explicit error message naming the driver and expected environment variable, ensuring failures are not masked as silent completions with 0 vectors.
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/entity-documents@6.2.0-edge.0
+  - @memberjunction/ai-vectors@6.2.0-edge.0
+  - @memberjunction/templates@6.2.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.0
+  - @memberjunction/credentials@6.2.0-edge.0
+  - @memberjunction/templates-base-types@6.2.0-edge.0
+  - @memberjunction/ai-vectordb@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

@@ -252,8 +252,8 @@ describe('SendMessage', () => {
     it('reports both detail ids so a caller can attach files and track the reply', async () => {
         const result = await SendMessage({ conversationId: 'c', text: 'x' });
         const [user, ai] = state.savedDetails;
-        expect(result.userMessageId).toBe(user.ID);
-        expect(result.aiMessageId).toBe(ai.ID);
+        expect(result.UserMessageId).toBe(user.ID);
+        expect(result.AiMessageId).toBe(ai.ID);
     });
 
     it('fails cleanly when the user message cannot be saved', async () => {

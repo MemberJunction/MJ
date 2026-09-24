@@ -22,10 +22,10 @@ export class AccountInfoComponent extends BaseAngularComponent implements OnInit
     super();}
 
   async ngOnInit(): Promise<void> {
-    await this.LoadAccountInfo();
+    await this.loadAccountInfo();
   }
 
-  private async LoadAccountInfo(): Promise<void> {
+  private async loadAccountInfo(): Promise<void> {
     this.IsLoading = true;
     this.ErrorMessage = '';
 

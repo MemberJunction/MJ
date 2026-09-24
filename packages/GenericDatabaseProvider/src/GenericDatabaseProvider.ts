@@ -86,7 +86,7 @@ import { SQLDialect, GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline, type RenderResult } from './renderPipeline.js';
-import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
+import { CRUDSprocType, UseJsonArgShape } from './crudSprocFieldRules.js';
 import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
 import type { RecordChangePayload } from '@memberjunction/core';
 
@@ -1078,7 +1078,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * invocation in lockstep.
      */
     public UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType): boolean {
-        return useJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
+        return UseJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
     }
 
     /**************************************************************************/

@@ -43,7 +43,7 @@
 
 import ivm from 'isolated-vm';
 import { CodeExecutionParams, CodeExecutionResult } from './types';
-import { getLibrarySource, isModuleAllowed, getAllowedModuleNames } from './libraries';
+import { GetLibrarySource, IsModuleAllowed, GetAllowedModuleNames } from './libraries';
 
 /**
  * Message types for IPC communication with parent process
@@ -329,13 +329,13 @@ async function executeInIsolate(
             }
 
             // Check if module is allowed
-            if (!isModuleAllowed(moduleName)) {
-                const allowedList = getAllowedModuleNames().join(', ');
+            if (!IsModuleAllowed(moduleName)) {
+                const allowedList = GetAllowedModuleNames().join(', ');
                 throw new Error(`Module '${moduleName}' is not available. Allowed modules: ${allowedList}`);
             }
 
             // Load the library source
-            const libSource = getLibrarySource(moduleName);
+            const libSource = GetLibrarySource(moduleName);
             if (!libSource) {
                 throw new Error(`Failed to load library '${moduleName}'`);
             }

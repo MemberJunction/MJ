@@ -15,7 +15,12 @@ import { TabEvent } from '@memberjunction/ng-tabstrip';
 })
 export class MJEntityActionFormComponentExtended extends MJEntityActionFormComponent {
     public record!: MJEntityActionEntity;
-    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+    public readonly ToolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** @deprecated Use {@link ToolbarConfig}. */
+    public get toolbarConfig() {
+      return this.ToolbarConfig;
+    }
 
     /** Custom-layout Entity Action form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
@@ -32,9 +37,14 @@ export class MJEntityActionFormComponentExtended extends MJEntityActionFormCompo
     /**
      * Handle tab selection events
      */
-    public onTabSelect(e: TabEvent) {
+    public OnTabSelect(e: TabEvent) {
         this.currentTab = e.tab?.Name || null;
         this.sharedService.InvokeManualResize();
+    }
+
+    /** @deprecated Use {@link OnTabSelect}. */
+    public onTabSelect(e: TabEvent) {
+      return this.OnTabSelect(e);
     }
 
     /**

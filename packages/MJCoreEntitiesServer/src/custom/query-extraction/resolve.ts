@@ -70,11 +70,11 @@ export function ResolveCompositionReferences(
         const { parameterMapping, passthroughMappings } = BuildParameterMappings(token.Parameters);
 
         resolved.push({
-            depQuery,
-            referencePath: token.FullPath,
-            alias,
-            parameterMapping,
-            passthroughMappings,
+            DepQuery: depQuery,
+            ReferencePath: token.FullPath,
+            Alias: alias,
+            ParameterMapping: parameterMapping,
+            PassthroughMappings: passthroughMappings,
         });
     }
 
@@ -183,12 +183,12 @@ export function BuildPassthroughParams(
     const seenParamNames = new Set<string>();
 
     for (const ref of resolvedRefs) {
-        for (const mapping of ref.passthroughMappings) {
+        for (const mapping of ref.PassthroughMappings) {
             const nameLower = mapping.parentParamName.toLowerCase();
             if (seenParamNames.has(nameLower)) continue;
             seenParamNames.add(nameLower);
 
-            const depParam = ref.depQuery.QueryParameters.find(
+            const depParam = ref.DepQuery.QueryParameters.find(
                 p => p.Name.toLowerCase() === mapping.depParamName.toLowerCase()
             );
 
@@ -198,14 +198,14 @@ export function BuildPassthroughParams(
                 isRequired: depParam ? depParam.IsRequired : true,
                 defaultValue: depParam?.DefaultValue ?? null,
                 filters: [],
-                usageLocations: [ref.referencePath],
+                usageLocations: [ref.ReferencePath],
             });
 
             contextMap.set(nameLower, {
-                description: depParam?.Description ?? null,
-                sampleValue: depParam?.SampleValue ?? null,
-                depQueryName: ref.depQuery.Name,
-                depParamName: mapping.depParamName,
+                Description: depParam?.Description ?? null,
+                SampleValue: depParam?.SampleValue ?? null,
+                DepQueryName: ref.DepQuery.Name,
+                DepParamName: mapping.depParamName,
             });
         }
     }
@@ -546,9 +546,9 @@ export function ExtractEntityMetadataFromSQL(
                 if (relevantFields.length > 0) {
                     results.push({
                         name: matchingEntity.Name,
-                        schemaName: matchingEntity.SchemaName,
-                        baseView: matchingEntity.BaseView,
-                        fields: relevantFields,
+                        SchemaName: matchingEntity.SchemaName,
+                        BaseView: matchingEntity.BaseView,
+                        Fields: relevantFields,
                     });
                 }
             }
@@ -657,7 +657,7 @@ function resolveFieldFromSelectColumns(
     if (selectCol.TableQualifier) {
         const ref = aliasToRef.get(selectCol.TableQualifier.toLowerCase());
         if (ref) {
-            const match = ref.depQuery.QueryFields.find(
+            const match = ref.DepQuery.QueryFields.find(
                 f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
             );
             if (match) return match;
@@ -666,7 +666,7 @@ function resolveFieldFromSelectColumns(
 
     // No table qualifier — try all composition refs
     for (const ref of Array.from(aliasToRef.values())) {
-        const match = ref.depQuery.QueryFields.find(
+        const match = ref.DepQuery.QueryFields.find(
             f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
         );
         if (match) return match;
@@ -685,7 +685,7 @@ function buildDependencyFieldLookup(
     const lookup = new Map<string, MJQueryFieldEntity>();
 
     for (const ref of resolvedRefs) {
-        for (const field of ref.depQuery.QueryFields) {
+        for (const field of ref.DepQuery.QueryFields) {
             const nameLower = field.Name.toLowerCase();
             if (!lookup.has(nameLower)) {
                 lookup.set(nameLower, field);
@@ -989,8 +989,8 @@ function buildAliasToRefMap(
 ): Map<string, ResolvedCompositionReference> {
     const aliasToRef = new Map<string, ResolvedCompositionReference>();
     for (const ref of resolvedRefs) {
-        if (ref.alias) {
-            aliasToRef.set(ref.alias.toLowerCase(), ref);
+        if (ref.Alias) {
+            aliasToRef.set(ref.Alias.toLowerCase(), ref);
         }
     }
     return aliasToRef;

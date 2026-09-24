@@ -21,7 +21,7 @@
  * @param savedParams  queryParams restored with the workspace tab
  * @param configValue  value from the tab configuration itself
  */
-export function resolveDeepLinkParam(
+export function ResolveDeepLinkParam(
   name: string,
   search: string,
   savedParams: Record<string, string> | undefined,
@@ -29,4 +29,14 @@ export function resolveDeepLinkParam(
 ): string | undefined {
   const fromUrl = new URLSearchParams(search ?? '').get(name);
   return fromUrl || savedParams?.[name] || configValue || undefined;
+}
+
+/** @deprecated Use {@link ResolveDeepLinkParam}. */
+export function resolveDeepLinkParam(
+  name: string,
+  search: string,
+  savedParams: Record<string, string> | undefined,
+  configValue: string | undefined
+): string | undefined {
+  return ResolveDeepLinkParam(name, search, savedParams, configValue);
 }

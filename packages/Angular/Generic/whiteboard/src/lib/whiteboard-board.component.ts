@@ -619,7 +619,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   // ────────────────────────────────────────────── text styling
 
   /** Family key → CSS font stack ('sans' = null so the board's default font cascades). */
-  private static readonly FontStacks: Record<WhiteboardFontFamily, string | null> = {
+  private static readonly fontStacks: Record<WhiteboardFontFamily, string | null> = {
     sans: null,
     serif: 'Georgia, "Times New Roman", serif',
     mono: 'var(--mj-font-mono, ui-monospace, "SF Mono", Menlo, monospace)'
@@ -632,7 +632,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
 
   /** Inline font-family stack for a styled text/sticky item (null = inherit). */
   public ItemFontFamily(item: WhiteboardStickyItem | WhiteboardTextItem): string | null {
-    return item.FontFamily ? RealtimeWhiteboardBoardComponent.FontStacks[item.FontFamily] : null;
+    return item.FontFamily ? RealtimeWhiteboardBoardComponent.fontStacks[item.FontFamily] : null;
   }
 
   /** Inline font-weight for a styled text/sticky item (null = the kind's CSS default). */

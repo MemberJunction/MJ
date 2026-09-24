@@ -65,12 +65,66 @@ import { NavigationRequest } from '@memberjunction/ng-artifacts';
   styleUrls: ['./conversation-workspace.component.css']
 })
 export class ConversationWorkspaceComponent extends BaseAngularComponent implements OnInit, OnDestroy, DoCheck {
-  @Input() environmentId!: string;
-  @Input() initialConversationId?: string;
-  @Input() layout: WorkspaceLayout = 'full';
-  @Input() currentUser!: UserInfo;
-  @Input() activeContext?: 'library' | 'task';
-  @Input() contextItemId?: string;
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() InitialConversationId?: string;
+
+  /** @deprecated Use {@link InitialConversationId}. */
+  @Input() set initialConversationId(value: string | undefined) {
+    this.InitialConversationId = value;
+  }
+  /** @deprecated Use {@link InitialConversationId}. */
+  get initialConversationId(): string | undefined {
+    return this.InitialConversationId;
+  }
+  @Input() Layout: WorkspaceLayout = 'full';
+
+  /** @deprecated Use {@link Layout}. */
+  @Input() set layout(value: WorkspaceLayout) {
+    this.Layout = value;
+  }
+  /** @deprecated Use {@link Layout}. */
+  get layout(): WorkspaceLayout {
+    return this.Layout;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() ActiveContext?: 'library' | 'task';
+
+  /** @deprecated Use {@link ActiveContext}. */
+  @Input() set activeContext(value: 'library' | 'task' | undefined) {
+    this.ActiveContext = value;
+  }
+  /** @deprecated Use {@link ActiveContext}. */
+  get activeContext(): 'library' | 'task' | undefined {
+    return this.ActiveContext;
+  }
+  @Input() ContextItemId?: string;
+
+  /** @deprecated Use {@link ContextItemId}. */
+  @Input() set contextItemId(value: string | undefined) {
+    this.ContextItemId = value;
+  }
+  /** @deprecated Use {@link ContextItemId}. */
+  get contextItemId(): string | undefined {
+    return this.ContextItemId;
+  }
   /**
    * Show the Routines section at the very bottom of the left sidebar. Default true;
    * hosts that don't want routines (or embed a reduced chat surface) set false.
@@ -80,96 +134,378 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Input() ShowRoutines: boolean = true;
 
   // Navigation properties for external control (deep linking from URL)
+  @Input() set ActiveTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
+    if (value && value !== this.ActiveTab) {
+      this.ActiveTab = value;
+    }
+  }
+
+  /** @deprecated Use {@link ActiveTabInput}. */
   @Input() set activeTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
-    if (value && value !== this.activeTab) {
-      this.activeTab = value;
-    }
+    this.ActiveTabInput = value;
   }
 
-  @Input() set activeConversationInput(value: string | undefined) {
-    if (value && value !== this.selectedConversationId) {
+  @Input() set ActiveConversationInput(value: string | undefined) {
+    if (value && value !== this.SelectedConversationId) {
       console.log('🔗 Deep link to conversation:', value);
-      this.activeTab = 'conversations';
-      this.setActiveConversation(value);
+      this.ActiveTab = 'conversations';
+      this.SetActiveConversation(value);
     }
   }
 
-  @Input() set activeCollectionInput(value: string | undefined) {
-    if (value && value !== this.collectionState.activeCollectionId) {
+  /** @deprecated Use {@link ActiveConversationInput}. */
+  @Input() set activeConversationInput(value: string | undefined) {
+    this.ActiveConversationInput = value;
+  }
+
+  @Input() set ActiveCollectionInput(value: string | undefined) {
+    if (value && value !== this.CollectionState.activeCollectionId) {
       console.log('🔗 Deep link to collection:', value);
-      this.activeTab = 'collections';
-      this.collectionState.setActiveCollection(value);
+      this.ActiveTab = 'collections';
+      this.CollectionState.setActiveCollection(value);
     }
   }
 
-  @Input() set activeVersionIdInput(value: string | undefined) {
-    if (value && value !== this.activeVersionId) {
+  /** @deprecated Use {@link ActiveCollectionInput}. */
+  @Input() set activeCollectionInput(value: string | undefined) {
+    this.ActiveCollectionInput = value;
+  }
+
+  @Input() set ActiveVersionIdInput(value: string | undefined) {
+    if (value && value !== this.ActiveVersionId) {
       console.log('🔗 Deep link to version:', value);
-      this.activeTab = 'collections';
+      this.ActiveTab = 'collections';
       // Store the version ID immediately to prevent ngDoCheck from clearing it
-      this.activeVersionId = value;
+      this.ActiveVersionId = value;
       // Open artifact by version ID
-      this.artifactState.openArtifactByVersionId(value);
+      this.ArtifactState.openArtifactByVersionId(value);
     }
   }
 
-  @Input() set activeTaskInput(value: string | undefined) {
+  /** @deprecated Use {@link ActiveVersionIdInput}. */
+  @Input() set activeVersionIdInput(value: string | undefined) {
+    this.ActiveVersionIdInput = value;
+  }
+
+  @Input() set ActiveTaskInput(value: string | undefined) {
     if (value && value !== this._activeTaskId) {
       this._activeTaskId = value;
     }
   }
 
+  /** @deprecated Use {@link ActiveTaskInput}. */
+  @Input() set activeTaskInput(value: string | undefined) {
+    this.ActiveTaskInput = value;
+  }
+
   private _activeTaskId?: string;
-  get activeTaskId(): string | undefined {
+  get ActiveTaskId(): string | undefined {
     return this._activeTaskId;
   }
 
-  @Output() conversationChanged = new EventEmitter<MJConversationEntity>();
-  @Output() artifactOpened = new EventEmitter<MJArtifactEntity>();
-  @Output() navigationChanged = new EventEmitter<{
+  /** @deprecated Use {@link ActiveTaskId}. */
+  get activeTaskId(): string | undefined {
+    return this.ActiveTaskId;
+  }
+
+  @Output() ConversationChanged = new EventEmitter<MJConversationEntity>();
+
+  /**
+   * @deprecated Use {@link ConversationChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (conversationChanged) keeps working. Must stay AFTER ConversationChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() conversationChanged = this.ConversationChanged;
+  @Output() ArtifactOpened = new EventEmitter<MJArtifactEntity>();
+
+  /**
+   * @deprecated Use {@link ArtifactOpened}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (artifactOpened) keeps working. Must stay AFTER ArtifactOpened: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() artifactOpened = this.ArtifactOpened;
+  @Output() NavigationChanged = new EventEmitter<{
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
     collectionId?: string;
     versionId?: string;
     taskId?: string;
   }>();
-  @Output() newConversationStarted = new EventEmitter<void>();
-  @Output() actionableCommandExecuted = new EventEmitter<ActionableCommand>();
-  @Output() automaticCommandExecuted = new EventEmitter<AutomaticCommand>();
-  @Output() navigationRequested = new EventEmitter<NavigationRequest>();
 
-  public activeTab: NavigationTab = 'conversations';
-  public isSidebarVisible: boolean = true;
-  public isArtifactPanelOpen: boolean = false;
-  public isSearchPanelOpen: boolean = false;
-  public isWorkspaceReady: boolean = false;
-  public renamedConversationId: string | null = null;
-  public activeArtifactId: string | null = null;
-  public activeVersionNumber: number | null = null;
-  public activeVersionId: string | null = null;
-  public isMobileView: boolean = false;
-  public isSidebarPinned: boolean = false; // Default unpinned until settings load (prevents flicker)
+  /**
+   * @deprecated Use {@link NavigationChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigationChanged) keeps working. Must stay AFTER NavigationChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigationChanged = this.NavigationChanged;
+  @Output() NewConversationStarted = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link NewConversationStarted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (newConversationStarted) keeps working. Must stay AFTER NewConversationStarted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() newConversationStarted = this.NewConversationStarted;
+  @Output() ActionableCommandExecuted = new EventEmitter<ActionableCommand>();
+
+  /**
+   * @deprecated Use {@link ActionableCommandExecuted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (actionableCommandExecuted) keeps working. Must stay AFTER ActionableCommandExecuted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() actionableCommandExecuted = this.ActionableCommandExecuted;
+  @Output() AutomaticCommandExecuted = new EventEmitter<AutomaticCommand>();
+
+  /**
+   * @deprecated Use {@link AutomaticCommandExecuted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (automaticCommandExecuted) keeps working. Must stay AFTER AutomaticCommandExecuted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() automaticCommandExecuted = this.AutomaticCommandExecuted;
+  @Output() NavigationRequested = new EventEmitter<NavigationRequest>();
+
+  /**
+   * @deprecated Use {@link NavigationRequested}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigationRequested) keeps working. Must stay AFTER NavigationRequested: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigationRequested = this.NavigationRequested;
+
+  public ActiveTab: NavigationTab = 'conversations';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  public get activeTab(): NavigationTab {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  public set activeTab(value: NavigationTab) {
+    this.ActiveTab = value;
+  }
+  public IsSidebarVisible: boolean = true;
+
+  /** @deprecated Use {@link IsSidebarVisible}. */
+  public get isSidebarVisible(): boolean {
+    return this.IsSidebarVisible;
+  }
+  /** @deprecated Use {@link IsSidebarVisible}. */
+  public set isSidebarVisible(value: boolean) {
+    this.IsSidebarVisible = value;
+  }
+  public IsArtifactPanelOpen: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactPanelOpen}. */
+  public get isArtifactPanelOpen(): boolean {
+    return this.IsArtifactPanelOpen;
+  }
+  /** @deprecated Use {@link IsArtifactPanelOpen}. */
+  public set isArtifactPanelOpen(value: boolean) {
+    this.IsArtifactPanelOpen = value;
+  }
+  public IsSearchPanelOpen: boolean = false;
+
+  /** @deprecated Use {@link IsSearchPanelOpen}. */
+  public get isSearchPanelOpen(): boolean {
+    return this.IsSearchPanelOpen;
+  }
+  /** @deprecated Use {@link IsSearchPanelOpen}. */
+  public set isSearchPanelOpen(value: boolean) {
+    this.IsSearchPanelOpen = value;
+  }
+  public IsWorkspaceReady: boolean = false;
+
+  /** @deprecated Use {@link IsWorkspaceReady}. */
+  public get isWorkspaceReady(): boolean {
+    return this.IsWorkspaceReady;
+  }
+  /** @deprecated Use {@link IsWorkspaceReady}. */
+  public set isWorkspaceReady(value: boolean) {
+    this.IsWorkspaceReady = value;
+  }
+  public RenamedConversationId: string | null = null;
+
+  /** @deprecated Use {@link RenamedConversationId}. */
+  public get renamedConversationId(): string | null {
+    return this.RenamedConversationId;
+  }
+  /** @deprecated Use {@link RenamedConversationId}. */
+  public set renamedConversationId(value: string | null) {
+    this.RenamedConversationId = value;
+  }
+  public ActiveArtifactId: string | null = null;
+
+  /** @deprecated Use {@link ActiveArtifactId}. */
+  public get activeArtifactId(): string | null {
+    return this.ActiveArtifactId;
+  }
+  /** @deprecated Use {@link ActiveArtifactId}. */
+  public set activeArtifactId(value: string | null) {
+    this.ActiveArtifactId = value;
+  }
+  public ActiveVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link ActiveVersionNumber}. */
+  public get activeVersionNumber(): number | null {
+    return this.ActiveVersionNumber;
+  }
+  /** @deprecated Use {@link ActiveVersionNumber}. */
+  public set activeVersionNumber(value: number | null) {
+    this.ActiveVersionNumber = value;
+  }
+  public ActiveVersionId: string | null = null;
+
+  /** @deprecated Use {@link ActiveVersionId}. */
+  public get activeVersionId(): string | null {
+    return this.ActiveVersionId;
+  }
+  /** @deprecated Use {@link ActiveVersionId}. */
+  public set activeVersionId(value: string | null) {
+    this.ActiveVersionId = value;
+  }
+  public IsMobileView: boolean = false;
+
+  /** @deprecated Use {@link IsMobileView}. */
+  public get isMobileView(): boolean {
+    return this.IsMobileView;
+  }
+  /** @deprecated Use {@link IsMobileView}. */
+  public set isMobileView(value: boolean) {
+    this.IsMobileView = value;
+  }
+  public IsSidebarPinned: boolean = false;
+
+  /** @deprecated Use {@link IsSidebarPinned}. */
+  public get isSidebarPinned(): boolean {
+    return this.IsSidebarPinned;
+  }
+  /** @deprecated Use {@link IsSidebarPinned}. */
+  public set isSidebarPinned(value: boolean) {
+    this.IsSidebarPinned = value;
+  } // Default unpinned until settings load (prevents flicker)
 
   // Artifact permissions
-  public canShareActiveArtifact: boolean = false;
-  public canEditActiveArtifact: boolean = false;
+  public CanShareActiveArtifact: boolean = false;
+
+  /** @deprecated Use {@link CanShareActiveArtifact}. */
+  public get canShareActiveArtifact(): boolean {
+    return this.CanShareActiveArtifact;
+  }
+  /** @deprecated Use {@link CanShareActiveArtifact}. */
+  public set canShareActiveArtifact(value: boolean) {
+    this.CanShareActiveArtifact = value;
+  }
+  public CanEditActiveArtifact: boolean = false;
+
+  /** @deprecated Use {@link CanEditActiveArtifact}. */
+  public get canEditActiveArtifact(): boolean {
+    return this.CanEditActiveArtifact;
+  }
+  /** @deprecated Use {@link CanEditActiveArtifact}. */
+  public set canEditActiveArtifact(value: boolean) {
+    this.CanEditActiveArtifact = value;
+  }
 
   // Share modal state
-  public isArtifactShareModalOpen: boolean = false;
-  public artifactToShare: MJArtifactEntity | null = null;
+  public IsArtifactShareModalOpen: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactShareModalOpen}. */
+  public get isArtifactShareModalOpen(): boolean {
+    return this.IsArtifactShareModalOpen;
+  }
+  /** @deprecated Use {@link IsArtifactShareModalOpen}. */
+  public set isArtifactShareModalOpen(value: boolean) {
+    this.IsArtifactShareModalOpen = value;
+  }
+  public ArtifactToShare: MJArtifactEntity | null = null;
+
+  /** @deprecated Use {@link ArtifactToShare}. */
+  public get artifactToShare(): MJArtifactEntity | null {
+    return this.ArtifactToShare;
+  }
+  /** @deprecated Use {@link ArtifactToShare}. */
+  public set artifactToShare(value: MJArtifactEntity | null) {
+    this.ArtifactToShare = value;
+  }
 
   // Resize state - Sidebar
-  public sidebarWidth: number = 260; // Default width
-  public isSidebarCollapsed: boolean = true; // Default collapsed until settings load (prevents flicker)
-  public sidebarTransitionsEnabled: boolean = false; // Disabled during initial load to prevent jarring animation
-  public isSidebarSettingsLoaded: boolean = false; // Tracks whether settings have been loaded (prevents render before state is known)
+  public SidebarWidth: number = 260;
+
+  /** @deprecated Use {@link SidebarWidth}. */
+  public get sidebarWidth(): number {
+    return this.SidebarWidth;
+  }
+  /** @deprecated Use {@link SidebarWidth}. */
+  public set sidebarWidth(value: number) {
+    this.SidebarWidth = value;
+  } // Default width
+  public IsSidebarCollapsed: boolean = true;
+
+  /** @deprecated Use {@link IsSidebarCollapsed}. */
+  public get isSidebarCollapsed(): boolean {
+    return this.IsSidebarCollapsed;
+  }
+  /** @deprecated Use {@link IsSidebarCollapsed}. */
+  public set isSidebarCollapsed(value: boolean) {
+    this.IsSidebarCollapsed = value;
+  } // Default collapsed until settings load (prevents flicker)
+  public SidebarTransitionsEnabled: boolean = false;
+
+  /** @deprecated Use {@link SidebarTransitionsEnabled}. */
+  public get sidebarTransitionsEnabled(): boolean {
+    return this.SidebarTransitionsEnabled;
+  }
+  /** @deprecated Use {@link SidebarTransitionsEnabled}. */
+  public set sidebarTransitionsEnabled(value: boolean) {
+    this.SidebarTransitionsEnabled = value;
+  } // Disabled during initial load to prevent jarring animation
+  public IsSidebarSettingsLoaded: boolean = false;
+
+  /** @deprecated Use {@link IsSidebarSettingsLoaded}. */
+  public get isSidebarSettingsLoaded(): boolean {
+    return this.IsSidebarSettingsLoaded;
+  }
+  /** @deprecated Use {@link IsSidebarSettingsLoaded}. */
+  public set isSidebarSettingsLoaded(value: boolean) {
+    this.IsSidebarSettingsLoaded = value;
+  } // Tracks whether settings have been loaded (prevents render before state is known)
   private isSidebarResizing: boolean = false;
   private sidebarResizeStartX: number = 0;
   private sidebarResizeStartWidth: number = 0;
 
   // Resize state - Artifact Panel
-  public artifactPanelWidth: number = 40; // Default 40% width
-  public isArtifactPanelMaximized: boolean = false;
+  public ArtifactPanelWidth: number = 40;
+
+  /** @deprecated Use {@link ArtifactPanelWidth}. */
+  public get artifactPanelWidth(): number {
+    return this.ArtifactPanelWidth;
+  }
+  /** @deprecated Use {@link ArtifactPanelWidth}. */
+  public set artifactPanelWidth(value: number) {
+    this.ArtifactPanelWidth = value;
+  } // Default 40% width
+  public IsArtifactPanelMaximized: boolean = false;
+
+  /** @deprecated Use {@link IsArtifactPanelMaximized}. */
+  public get isArtifactPanelMaximized(): boolean {
+    return this.IsArtifactPanelMaximized;
+  }
+  /** @deprecated Use {@link IsArtifactPanelMaximized}. */
+  public set isArtifactPanelMaximized(value: boolean) {
+    this.IsArtifactPanelMaximized = value;
+  }
   private artifactPanelWidthBeforeMaximize: number = 40; // Store width before maximizing
   private isArtifactPanelResizing: boolean = false;
   private artifactPanelResizeStartX: number = 0;
@@ -193,31 +529,130 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private isLoadingSettings: boolean = false;
 
   // Task filter for conversation-specific filtering
-  public tasksFilter: string = '1=1';
+  public TasksFilter: string = '1=1';
+
+  /** @deprecated Use {@link TasksFilter}. */
+  public get tasksFilter(): string {
+    return this.TasksFilter;
+  }
+  /** @deprecated Use {@link TasksFilter}. */
+  public set tasksFilter(value: string) {
+    this.TasksFilter = value;
+  }
 
   // LOCAL CONVERSATION STATE - enables multiple workspace instances
   // Each workspace manages its own selection state independently
-  public selectedConversationId: string | null = null;
-  public selectedConversation: MJConversationEntity | null = null;
-  public selectedThreadId: string | null = null;
-  public isNewUnsavedConversation: boolean = false;
-  public pendingMessageToSend: string | null = null;
-  public pendingAttachmentsToSend: PendingAttachment[] | null = null;
+  public SelectedConversationId: string | null = null;
+
+  /** @deprecated Use {@link SelectedConversationId}. */
+  public get selectedConversationId(): string | null {
+    return this.SelectedConversationId;
+  }
+  /** @deprecated Use {@link SelectedConversationId}. */
+  public set selectedConversationId(value: string | null) {
+    this.SelectedConversationId = value;
+  }
+  public SelectedConversation: MJConversationEntity | null = null;
+
+  /** @deprecated Use {@link SelectedConversation}. */
+  public get selectedConversation(): MJConversationEntity | null {
+    return this.SelectedConversation;
+  }
+  /** @deprecated Use {@link SelectedConversation}. */
+  public set selectedConversation(value: MJConversationEntity | null) {
+    this.SelectedConversation = value;
+  }
+  public SelectedThreadId: string | null = null;
+
+  /** @deprecated Use {@link SelectedThreadId}. */
+  public get selectedThreadId(): string | null {
+    return this.SelectedThreadId;
+  }
+  /** @deprecated Use {@link SelectedThreadId}. */
+  public set selectedThreadId(value: string | null) {
+    this.SelectedThreadId = value;
+  }
+  public IsNewUnsavedConversation: boolean = false;
+
+  /** @deprecated Use {@link IsNewUnsavedConversation}. */
+  public get isNewUnsavedConversation(): boolean {
+    return this.IsNewUnsavedConversation;
+  }
+  /** @deprecated Use {@link IsNewUnsavedConversation}. */
+  public set isNewUnsavedConversation(value: boolean) {
+    this.IsNewUnsavedConversation = value;
+  }
+  public PendingMessageToSend: string | null = null;
+
+  /** @deprecated Use {@link PendingMessageToSend}. */
+  public get pendingMessageToSend(): string | null {
+    return this.PendingMessageToSend;
+  }
+  /** @deprecated Use {@link PendingMessageToSend}. */
+  public set pendingMessageToSend(value: string | null) {
+    this.PendingMessageToSend = value;
+  }
+  public PendingAttachmentsToSend: PendingAttachment[] | null = null;
+
+  /** @deprecated Use {@link PendingAttachmentsToSend}. */
+  public get pendingAttachmentsToSend(): PendingAttachment[] | null {
+    return this.PendingAttachmentsToSend;
+  }
+  /** @deprecated Use {@link PendingAttachmentsToSend}. */
+  public set pendingAttachmentsToSend(value: PendingAttachment[] | null) {
+    this.PendingAttachmentsToSend = value;
+  }
   /** The conversation pendingMessageToSend is destined for — bound to the chat-area so the
    *  auto-send reaches only that conversation's input, even if the user swaps conversations
    *  during the async send window (prevents the message bleeding into the swapped-to conversation). */
-  public pendingMessageConversationId: string | null = null;
-  public pendingArtifactId: string | null = null;
-  public pendingArtifactConversationId: string | null = null;
-  public pendingArtifactVersionNumber: number | null = null;
+  public PendingMessageConversationId: string | null = null;
+
+  /** @deprecated Use {@link PendingMessageConversationId}. */
+  public get pendingMessageConversationId(): string | null {
+    return this.PendingMessageConversationId;
+  }
+  /** @deprecated Use {@link PendingMessageConversationId}. */
+  public set pendingMessageConversationId(value: string | null) {
+    this.PendingMessageConversationId = value;
+  }
+  public PendingArtifactId: string | null = null;
+
+  /** @deprecated Use {@link PendingArtifactId}. */
+  public get pendingArtifactId(): string | null {
+    return this.PendingArtifactId;
+  }
+  /** @deprecated Use {@link PendingArtifactId}. */
+  public set pendingArtifactId(value: string | null) {
+    this.PendingArtifactId = value;
+  }
+  public PendingArtifactConversationId: string | null = null;
+
+  /** @deprecated Use {@link PendingArtifactConversationId}. */
+  public get pendingArtifactConversationId(): string | null {
+    return this.PendingArtifactConversationId;
+  }
+  /** @deprecated Use {@link PendingArtifactConversationId}. */
+  public set pendingArtifactConversationId(value: string | null) {
+    this.PendingArtifactConversationId = value;
+  }
+  public PendingArtifactVersionNumber: number | null = null;
+
+  /** @deprecated Use {@link PendingArtifactVersionNumber}. */
+  public get pendingArtifactVersionNumber(): number | null {
+    return this.PendingArtifactVersionNumber;
+  }
+  /** @deprecated Use {@link PendingArtifactVersionNumber}. */
+  public set pendingArtifactVersionNumber(value: number | null) {
+    this.PendingArtifactVersionNumber = value;
+  }
 
   private engine = ConversationEngine.Instance;
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocompleteService = MentionAutocompleteService.Instance;
 
   constructor(
-    public artifactState: ArtifactStateService,
-    public collectionState: CollectionStateService,
+    public ArtifactState: ArtifactStateService,
+    public CollectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
     private notificationService: MJNotificationService,
     private streamingService: ConversationStreamingService,
@@ -225,6 +660,24 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     private cdr: ChangeDetectorRef
   ) {
     super();
+  }
+
+  /** @deprecated Use {@link ArtifactState}. */
+  public get artifactState(): ArtifactStateService {
+    return this.ArtifactState;
+  }
+  /** @deprecated Use {@link ArtifactState}. */
+  public set artifactState(value: ArtifactStateService) {
+    this.ArtifactState = value;
+  }
+
+  /** @deprecated Use {@link CollectionState}. */
+  public get collectionState(): CollectionStateService {
+    return this.CollectionState;
+  }
+  /** @deprecated Use {@link CollectionState}. */
+  public set collectionState(value: CollectionStateService) {
+    this.CollectionState = value;
   }
 
   // =========================================================================
@@ -236,68 +689,98 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * Sets the active conversation for this workspace instance
    * @param id The conversation ID to activate (or null to clear)
    */
-  setActiveConversation(id: string | null): void {
+  SetActiveConversation(id: string | null): void {
     console.log('🎯 Setting active conversation:', id);
-    this.selectedConversationId = id;
-    this.selectedConversation = id ? (this.engine.GetConversation(id) ?? null) : null;
+    this.SelectedConversationId = id;
+    this.SelectedConversation = id ? (this.engine.GetConversation(id) ?? null) : null;
     // Clear unsaved state when switching to an existing conversation
     if (id) {
-      this.isNewUnsavedConversation = false;
+      this.IsNewUnsavedConversation = false;
     }
+  }
+
+  /** @deprecated Use {@link SetActiveConversation}. */
+  setActiveConversation(id: string | null): void {
+    return this.SetActiveConversation(id);
   }
 
   /**
    * Initiates a new unsaved conversation (doesn't create DB record yet)
    * This shows the welcome screen and delays DB creation until first message
    */
-  startNewConversation(): void {
+  StartNewConversation(): void {
     console.log('✨ Starting new unsaved conversation');
-    this.selectedConversationId = null;
-    this.selectedConversation = null;
-    this.isNewUnsavedConversation = true;
-    this.pendingMessageToSend = null;
-    this.pendingAttachmentsToSend = null;
-    this.pendingMessageConversationId = null;
+    this.SelectedConversationId = null;
+    this.SelectedConversation = null;
+    this.IsNewUnsavedConversation = true;
+    this.PendingMessageToSend = null;
+    this.PendingAttachmentsToSend = null;
+    this.PendingMessageConversationId = null;
 
     // Auto-collapse if mobile OR if sidebar is not pinned
-    if (this.isMobileView || !this.isSidebarPinned) {
-      this.collapseSidebar();
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
     }
+  }
+
+  /** @deprecated Use {@link StartNewConversation}. */
+  startNewConversation(): void {
+    return this.StartNewConversation();
   }
 
   /**
    * Clears the new unsaved conversation state
    * Called when the conversation is actually created or cancelled
    */
+  ClearNewConversationState(): void {
+    this.IsNewUnsavedConversation = false;
+  }
+
+  /** @deprecated Use {@link ClearNewConversationState}. */
   clearNewConversationState(): void {
-    this.isNewUnsavedConversation = false;
+    return this.ClearNewConversationState();
   }
 
   /**
    * Opens a thread panel for a specific message
    * @param messageId The parent message ID
    */
+  OpenThread(messageId: string): void {
+    this.SelectedThreadId = messageId;
+  }
+
+  /** @deprecated Use {@link OpenThread}. */
   openThread(messageId: string): void {
-    this.selectedThreadId = messageId;
+    return this.OpenThread(messageId);
   }
 
   /**
    * Closes the currently open thread panel
    */
+  CloseThread(): void {
+    this.SelectedThreadId = null;
+  }
+
+  /** @deprecated Use {@link CloseThread}. */
   closeThread(): void {
-    this.selectedThreadId = null;
+    return this.CloseThread();
   }
 
   /**
    * Handler for conversation selection from sidebar/list
    */
-  onConversationSelected(conversationId: string): void {
-    this.setActiveConversation(conversationId);
+  OnConversationSelected(conversationId: string): void {
+    this.SetActiveConversation(conversationId);
 
     // Auto-collapse if mobile OR if sidebar is not pinned
-    if (this.isMobileView || !this.isSidebarPinned) {
-      this.collapseSidebar();
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
     }
+  }
+
+  /** @deprecated Use {@link OnConversationSelected}. */
+  onConversationSelected(conversationId: string): void {
+    return this.OnConversationSelected(conversationId);
   }
 
   /**
@@ -311,17 +794,17 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * spec: the user may have the sidebar hidden; don't yank their context if so —
    * the refreshed cache makes it appear whenever the list is reopened).
    */
-  async onRealtimeConversationReady(event: { conversationId: string; select: boolean }): Promise<void> {
+  async OnRealtimeConversationReady(event: { conversationId: string; select: boolean }): Promise<void> {
     try {
-      await ConversationEngine.Instance.LoadConversations(this.environmentId, this.currentUser, true);
-      if (event.select && this.isSidebarVisible) {
+      await ConversationEngine.Instance.LoadConversations(this.EnvironmentId, this.CurrentUser, true);
+      if (event.select && this.IsSidebarVisible) {
         const conversation = ConversationEngine.Instance.Conversations.find(
           c => UUIDsEqual(c.ID, event.conversationId)
         );
         if (conversation) {
-          this.selectedConversationId = conversation.ID;
-          this.selectedConversation = conversation;
-          this.isNewUnsavedConversation = false;
+          this.SelectedConversationId = conversation.ID;
+          this.SelectedConversation = conversation;
+          this.IsNewUnsavedConversation = false;
         }
       }
     } catch (error) {
@@ -329,7 +812,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
   }
 
-  onConversationCreated(event: {
+  /** @deprecated Use {@link OnRealtimeConversationReady}. */
+  async onRealtimeConversationReady(event: { conversationId: string; select: boolean }): Promise<void> {
+    return this.OnRealtimeConversationReady(event);
+  }
+
+  OnConversationCreated(event: {
     conversation: MJConversationEntity;
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
@@ -337,18 +825,27 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     try {
       // Set ALL state atomically before Angular change detection runs
       // This ensures the new message-input component receives the pending data
-      this.pendingMessageToSend = event.pendingMessage || null;
-      this.pendingAttachmentsToSend = event.pendingAttachments || null;
+      this.PendingMessageToSend = event.pendingMessage || null;
+      this.PendingAttachmentsToSend = event.pendingAttachments || null;
       // Pin the pending message to THIS conversation so a fast conversation-swap can't
       // redirect its auto-send into a different conversation.
-      this.pendingMessageConversationId = event.conversation.ID;
-      this.selectedConversationId = event.conversation.ID;
-      this.selectedConversation = event.conversation;
-      this.isNewUnsavedConversation = false;
+      this.PendingMessageConversationId = event.conversation.ID;
+      this.SelectedConversationId = event.conversation.ID;
+      this.SelectedConversation = event.conversation;
+      this.IsNewUnsavedConversation = false;
       // The conversation is already added to ConversationEngine by the chat area
     } catch (error) {
       console.error('onConversationCreated ERROR:', error);
     }
+  }
+
+  /** @deprecated Use {@link OnConversationCreated}. */
+  onConversationCreated(event: {
+    conversation: MJConversationEntity;
+    pendingMessage?: string;
+    pendingAttachments?: PendingAttachment[];
+  }): void {
+    return this.OnConversationCreated(event);
   }
 
   /**
@@ -356,30 +853,40 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * @deprecated Use onConversationCreated with pendingMessage instead
    */
   onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
-    this.pendingMessageToSend = event.text;
-    this.pendingAttachmentsToSend = event.attachments;
-    this.pendingMessageConversationId = this.selectedConversationId;
+    this.PendingMessageToSend = event.text;
+    this.PendingAttachmentsToSend = event.attachments;
+    this.PendingMessageConversationId = this.SelectedConversationId;
   }
 
   /**
    * Handler for thread opened from chat area
    */
+  OnThreadOpened(threadId: string): void {
+    this.SelectedThreadId = threadId;
+  }
+
+  /** @deprecated Use {@link OnThreadOpened}. */
   onThreadOpened(threadId: string): void {
-    this.selectedThreadId = threadId;
+    return this.OnThreadOpened(threadId);
   }
 
   /**
    * Handler for thread closed from chat area
    */
+  OnThreadClosed(): void {
+    this.SelectedThreadId = null;
+  }
+
+  /** @deprecated Use {@link OnThreadClosed}. */
   onThreadClosed(): void {
-    this.selectedThreadId = null;
+    return this.OnThreadClosed();
   }
 
   async ngOnInit() {
     // Bind provider-aware services to this component's provider so multi-server
     // browser apps don't silently fall back to the global Metadata.Provider.
     // ArtifactStateService cascades to ArtifactPermissionService and CollectionPermissionService.
-    this.artifactState.Provider = this.ProviderToUse;
+    this.ArtifactState.Provider = this.ProviderToUse;
     this.artifactPermissionService.Provider = this.ProviderToUse;
 
     // Initialize global streaming service FIRST
@@ -392,26 +899,26 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
       .subscribe(request => {
-        this.onActionableCommand(request.command);
+        this.OnActionableCommand(request.command);
       });
 
     this.uiCommandHandler.automaticCommandRequested
       .pipe(takeUntil(this.destroy$))
       .subscribe(command => {
-        this.onAutomaticCommand(command);
+        this.OnAutomaticCommand(command);
       });
 
     // Check initial mobile state FIRST
     this.checkMobileView();
 
     // Load sidebar state - but on mobile, always default to collapsed
-    if (this.isMobileView) {
-      this.isSidebarCollapsed = true;
-      this.isSidebarVisible = false;
-      this.isSidebarSettingsLoaded = true; // Mobile doesn't need to load settings
+    if (this.IsMobileView) {
+      this.IsSidebarCollapsed = true;
+      this.IsSidebarVisible = false;
+      this.IsSidebarSettingsLoaded = true; // Mobile doesn't need to load settings
       // Enable transitions after a brief delay to ensure initial state is applied
       setTimeout(() => {
-        this.sidebarTransitionsEnabled = true;
+        this.SidebarTransitionsEnabled = true;
       }, 50);
     } else {
       // Load from User Settings (async) - await before continuing to prevent flicker
@@ -419,7 +926,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.cdr.detectChanges();
       // Enable transitions after state is loaded and applied
       setTimeout(() => {
-        this.sidebarTransitionsEnabled = true;
+        this.SidebarTransitionsEnabled = true;
       }, 50);
     }
 
@@ -448,55 +955,55 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       // Initialize mention autocomplete service immediately after AI engine
       // This ensures the cache is built from the fully-loaded agent list
-      await this.mentionAutocompleteService.initialize(this.currentUser);
+      await this.mentionAutocompleteService.initialize(this.CurrentUser);
       console.log('✅ Mention autocomplete initialized');
 
       // Mark workspace as ready - this allows UI to render
-      this.isWorkspaceReady = true;
+      this.IsWorkspaceReady = true;
       this.cdr.detectChanges();
     } catch (error) {
       console.error('❌ Failed to initialize engines:', error);
       // Still mark as ready so UI isn't blocked forever
-      this.isWorkspaceReady = true;
+      this.IsWorkspaceReady = true;
       this.cdr.detectChanges();
     }
 
     // Subscribe to artifact panel state
-    this.artifactState.isPanelOpen$
+    this.ArtifactState.isPanelOpen$
       .pipe(takeUntil(this.destroy$))
       .subscribe(isOpen => {
-        this.isArtifactPanelOpen = isOpen;
+        this.IsArtifactPanelOpen = isOpen;
       });
 
     // Subscribe to active artifact ID
-    this.artifactState.activeArtifactId$
+    this.ArtifactState.activeArtifactId$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async id => {
-        this.activeArtifactId = id;
+        this.ActiveArtifactId = id;
         // Load permissions when artifact changes
         if (id) {
           await this.loadArtifactPermissions(id);
         } else {
-          this.canShareActiveArtifact = false;
-          this.canEditActiveArtifact = false;
+          this.CanShareActiveArtifact = false;
+          this.CanEditActiveArtifact = false;
         }
       });
 
     // Subscribe to active version number
-    this.artifactState.activeVersionNumber$
+    this.ArtifactState.activeVersionNumber$
       .pipe(takeUntil(this.destroy$))
       .subscribe(versionNumber => {
-        this.activeVersionNumber = versionNumber;
+        this.ActiveVersionNumber = versionNumber;
       });
 
     // Set initial conversation if provided
-    if (this.initialConversationId) {
-      this.setActiveConversation(this.initialConversationId);
+    if (this.InitialConversationId) {
+      this.SetActiveConversation(this.InitialConversationId);
     }
 
     // Handle context-based navigation
-    if (this.activeContext === 'library') {
-      this.activeTab = 'collections';
+    if (this.ActiveContext === 'library') {
+      this.ActiveTab = 'collections';
     }
     // Task context will be handled by chat header dropdown, not navigation tabs
 
@@ -515,47 +1022,47 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     const c = md.EntityByName('MJ: Conversations');
     if (!cd || !c) {
       console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
-      this.tasksFilter = `ParentID IS NULL AND UserID = '${this.currentUser.ID}'`; // Fallback to user-owned tasks only
+      this.TasksFilter = `ParentID IS NULL AND UserID = '${this.CurrentUser.ID}'`; // Fallback to user-owned tasks only
       return;
     }
 
-    this.tasksFilter = `ParentID IS NULL AND (UserID = '${this.currentUser.ID}' OR ConversationDetailID IN (
+    this.TasksFilter = `ParentID IS NULL AND (UserID = '${this.CurrentUser.ID}' OR ConversationDetailID IN (
       SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}] 
       WHERE 
-      UserID ='${this.currentUser.ID}' OR 
+      UserID ='${this.CurrentUser.ID}' OR 
       ConversationID IN (
-        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${this.currentUser.ID}'
+        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${this.CurrentUser.ID}'
       )
     ))`;
-    console.log('📝 Conversations domain tasks filter built:', this.tasksFilter);
+    console.log('📝 Conversations domain tasks filter built:', this.TasksFilter);
   }
 
   ngDoCheck() {
     // Detect new unsaved conversation state changes
-    const currentIsNewConversation = this.isNewUnsavedConversation;
+    const currentIsNewConversation = this.IsNewUnsavedConversation;
     if (currentIsNewConversation !== this.previousIsNewConversation) {
       this.previousIsNewConversation = currentIsNewConversation;
       if (currentIsNewConversation) {
         // Emit event to clear URL conversation parameter
         Promise.resolve().then(() => {
-          this.newConversationStarted.emit();
+          this.NewConversationStarted.emit();
         });
       }
     }
 
     // Detect conversation changes and emit event
-    const currentId = this.selectedConversationId;
+    const currentId = this.SelectedConversationId;
     if (currentId !== this.previousConversationId) {
       this.previousConversationId = currentId;
-      const conversation = this.selectedConversation;
+      const conversation = this.SelectedConversation;
       if (conversation) {
-        this.conversationChanged.emit(conversation);
+        this.ConversationChanged.emit(conversation);
 
         // Also emit navigationChanged for URL updates (only if on conversations tab)
-        if (this.activeTab === 'conversations' && currentId) {
+        if (this.ActiveTab === 'conversations' && currentId) {
           // Defer emission until after change detection completes
           Promise.resolve().then(() => {
-            this.navigationChanged.emit({
+            this.NavigationChanged.emit({
               tab: 'conversations',
               conversationId: currentId
             });
@@ -565,14 +1072,14 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Detect task selection changes (when on tasks tab)
-    if (this.activeTab === 'tasks') {
-      const currentTaskId = this.activeTaskId;
+    if (this.ActiveTab === 'tasks') {
+      const currentTaskId = this.ActiveTaskId;
       if (currentTaskId !== this.previousTaskId) {
         this.previousTaskId = currentTaskId;
         if (currentTaskId) {
           // Defer emission until after change detection completes
           Promise.resolve().then(() => {
-            this.navigationChanged.emit({
+            this.NavigationChanged.emit({
               tab: 'tasks',
               taskId: currentTaskId
             });
@@ -612,7 +1119,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
     // Only handle when sidebar is expanded but unpinned
-    if (this.isSidebarCollapsed || this.isSidebarPinned) {
+    if (this.IsSidebarCollapsed || this.IsSidebarPinned) {
       return;
     }
 
@@ -623,21 +1130,21 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
     // If click is outside sidebar and expand handle, collapse it
     if (!sidebarElement && !expandHandle) {
-      this.collapseSidebar();
+      this.CollapseSidebar();
     }
   }
 
   private checkMobileView(): void {
-    const wasMobile = this.isMobileView;
-    this.isMobileView = window.innerWidth < 768;
+    const wasMobile = this.IsMobileView;
+    this.IsMobileView = window.innerWidth < 768;
 
-    if (this.isMobileView && !wasMobile) {
+    if (this.IsMobileView && !wasMobile) {
       // Switched to mobile - hide sidebar and default to collapsed
-      this.isSidebarVisible = false;
-      this.isSidebarCollapsed = true;
-    } else if (!this.isMobileView && wasMobile) {
+      this.IsSidebarVisible = false;
+      this.IsSidebarCollapsed = true;
+    } else if (!this.IsMobileView && wasMobile) {
       // Switched to desktop - show sidebar, restore state from User Settings
-      this.isSidebarVisible = true;
+      this.IsSidebarVisible = true;
       this.loadSidebarState().then(() => {
         this.cdr.detectChanges();
       });
@@ -647,36 +1154,56 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   /**
    * Collapse sidebar
    */
-  collapseSidebar(): void {
-    this.isSidebarCollapsed = true;
-    if (this.isMobileView) {
-      this.isSidebarVisible = false;
+  CollapseSidebar(): void {
+    this.IsSidebarCollapsed = true;
+    if (this.IsMobileView) {
+      this.IsSidebarVisible = false;
     }
+  }
+
+  /** @deprecated Use {@link CollapseSidebar}. */
+  collapseSidebar(): void {
+    return this.CollapseSidebar();
   }
 
   /**
    * Expand sidebar (unpinned - will auto-collapse on selection)
    */
+  ExpandSidebar(): void {
+    this.IsSidebarCollapsed = false;
+    this.IsSidebarPinned = false;
+  }
+
+  /** @deprecated Use {@link ExpandSidebar}. */
   expandSidebar(): void {
-    this.isSidebarCollapsed = false;
-    this.isSidebarPinned = false;
+    return this.ExpandSidebar();
   }
 
   /**
    * Pin sidebar - keep it open after selection
    */
-  pinSidebar(): void {
-    this.isSidebarPinned = true;
+  PinSidebar(): void {
+    this.IsSidebarPinned = true;
     this.saveSidebarState();
+  }
+
+  /** @deprecated Use {@link PinSidebar}. */
+  pinSidebar(): void {
+    return this.PinSidebar();
   }
 
   /**
    * Unpin sidebar - will auto-collapse on next selection
    */
-  unpinSidebar(): void {
-    this.isSidebarPinned = false;
-    this.collapseSidebar();
+  UnpinSidebar(): void {
+    this.IsSidebarPinned = false;
+    this.CollapseSidebar();
     this.saveSidebarState();
+  }
+
+  /** @deprecated Use {@link UnpinSidebar}. */
+  unpinSidebar(): void {
+    return this.UnpinSidebar();
   }
 
   /**
@@ -699,16 +1226,16 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    */
   private async saveSidebarStateToServer(): Promise<void> {
     try {
-      const userId = this.currentUser?.ID;
+      const userId = this.CurrentUser?.ID;
       if (!userId) {
         return;
       }
 
       const stateToSave = {
-        collapsed: this.isSidebarCollapsed,
-        pinned: this.isSidebarPinned,
-        sidebarWidth: this.sidebarWidth,
-        artifactPanelWidth: this.artifactPanelWidth
+        collapsed: this.IsSidebarCollapsed,
+        pinned: this.IsSidebarPinned,
+        sidebarWidth: this.SidebarWidth,
+        artifactPanelWidth: this.ArtifactPanelWidth
       };
 
       const engine = UserInfoEngine.Instance;
@@ -740,7 +1267,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.isLoadingSettings = true;
 
     try {
-      const userId = this.currentUser?.ID;
+      const userId = this.CurrentUser?.ID;
       if (userId) {
         // Try loading from cached User Settings
         const engine = UserInfoEngine.Instance;
@@ -748,15 +1275,15 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
         if (setting?.Value) {
           const state = JSON.parse(setting.Value);
-          this.isSidebarCollapsed = state.collapsed ?? true;
-          this.isSidebarPinned = state.pinned ?? false;
+          this.IsSidebarCollapsed = state.collapsed ?? true;
+          this.IsSidebarPinned = state.pinned ?? false;
 
           // Load width values if present (with validation)
           if (typeof state.sidebarWidth === 'number' && state.sidebarWidth >= 200 && state.sidebarWidth <= 500) {
-            this.sidebarWidth = state.sidebarWidth;
+            this.SidebarWidth = state.sidebarWidth;
           }
           if (typeof state.artifactPanelWidth === 'number' && state.artifactPanelWidth >= 20 && state.artifactPanelWidth <= 70) {
-            this.artifactPanelWidth = state.artifactPanelWidth;
+            this.ArtifactPanelWidth = state.artifactPanelWidth;
           }
 
           this.isLoadingSettings = false;
@@ -766,23 +1293,23 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       // No saved state found - NEW USER DEFAULT:
       // Start with sidebar collapsed and show new conversation screen
-      this.isSidebarCollapsed = true;
-      this.isSidebarPinned = false;
-      this.isNewUnsavedConversation = true;
+      this.IsSidebarCollapsed = true;
+      this.IsSidebarPinned = false;
+      this.IsNewUnsavedConversation = true;
     } catch (error) {
       console.warn('Failed to load sidebar state:', error);
       // Default to collapsed for new users on error
-      this.isSidebarCollapsed = true;
-      this.isSidebarPinned = false;
+      this.IsSidebarCollapsed = true;
+      this.IsSidebarPinned = false;
     } finally {
       this.isLoadingSettings = false;
-      this.isSidebarSettingsLoaded = true;
+      this.IsSidebarSettingsLoaded = true;
     }
   }
 
-  onTabChanged(tab: NavigationTab): void {
-    const wasOnDifferentTab = this.activeTab !== tab;
-    this.activeTab = tab;
+  OnTabChanged(tab: NavigationTab): void {
+    const wasOnDifferentTab = this.ActiveTab !== tab;
+    this.ActiveTab = tab;
 
     // Emit navigation change event with current state
     const navEvent: any = {
@@ -790,62 +1317,92 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     };
 
     if (tab === 'conversations') {
-      navEvent.conversationId = this.selectedConversationId || undefined;
+      navEvent.conversationId = this.SelectedConversationId || undefined;
     } else if (tab === 'collections') {
       // If switching TO collections tab from another tab, clear to root level
       if (wasOnDifferentTab) {
-        this.collectionState.setActiveCollection(null);
-        this.activeVersionId = null;
+        this.CollectionState.setActiveCollection(null);
+        this.ActiveVersionId = null;
         // Don't include collectionId or versionId - go to root
       } else {
         // Already on collections tab, preserve current state
-        if (this.collectionState.activeCollectionId) {
-          navEvent.collectionId = this.collectionState.activeCollectionId;
+        if (this.CollectionState.activeCollectionId) {
+          navEvent.collectionId = this.CollectionState.activeCollectionId;
         }
-        if (this.activeVersionId && this.collectionState.activeCollectionId) {
-          navEvent.versionId = this.activeVersionId;
+        if (this.ActiveVersionId && this.CollectionState.activeCollectionId) {
+          navEvent.versionId = this.ActiveVersionId;
         }
       }
     } else if (tab === 'tasks') {
-      navEvent.taskId = this.activeTaskId || undefined;
+      navEvent.taskId = this.ActiveTaskId || undefined;
     }
 
-    this.navigationChanged.emit(navEvent);
+    this.NavigationChanged.emit(navEvent);
 
     // Auto-close artifact panel when switching away from collections
     if (tab === 'conversations' || tab === 'tasks') {
-      this.artifactState.closeArtifact();
+      this.ArtifactState.closeArtifact();
     }
   }
 
+  /** @deprecated Use {@link OnTabChanged}. */
+  onTabChanged(tab: NavigationTab): void {
+    return this.OnTabChanged(tab);
+  }
+
+  ToggleSidebar(): void {
+    this.IsSidebarVisible = !this.IsSidebarVisible;
+  }
+
+  /** @deprecated Use {@link ToggleSidebar}. */
   toggleSidebar(): void {
-    this.isSidebarVisible = !this.isSidebarVisible;
+    return this.ToggleSidebar();
   }
 
-  closeSidebar(): void {
-    if (this.isMobileView && this.isSidebarVisible) {
-      this.isSidebarVisible = false;
+  CloseSidebar(): void {
+    if (this.IsMobileView && this.IsSidebarVisible) {
+      this.IsSidebarVisible = false;
     }
   }
 
+  /** @deprecated Use {@link CloseSidebar}. */
+  closeSidebar(): void {
+    return this.CloseSidebar();
+  }
+
+  CloseArtifactPanel(): void {
+    this.ArtifactState.closeArtifact();
+  }
+
+  /** @deprecated Use {@link CloseArtifactPanel}. */
   closeArtifactPanel(): void {
-    this.artifactState.closeArtifact();
+    return this.CloseArtifactPanel();
   }
 
+  OpenSearch(): void {
+    this.IsSearchPanelOpen = true;
+  }
+
+  /** @deprecated Use {@link OpenSearch}. */
   openSearch(): void {
-    this.isSearchPanelOpen = true;
+    return this.OpenSearch();
   }
 
+  CloseSearch(): void {
+    this.IsSearchPanelOpen = false;
+  }
+
+  /** @deprecated Use {@link CloseSearch}. */
   closeSearch(): void {
-    this.isSearchPanelOpen = false;
+    return this.CloseSearch();
   }
 
-  async onRefreshAgentCache(): Promise<void> {
+  async OnRefreshAgentCache(): Promise<void> {
     try {
       await AIEngineBase.Instance.Config(true);
 
       // Refresh the mention autocomplete service to pick up new agents
-      await this.mentionAutocompleteService.refresh(this.currentUser);
+      await this.mentionAutocompleteService.refresh(this.CurrentUser);
 
       const agentCount = AIEngineBase.Instance.Agents?.length || 0;
       this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
@@ -856,15 +1413,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
   }
 
-  handleSearchResult(result: SearchResult): void {
+  /** @deprecated Use {@link OnRefreshAgentCache}. */
+  async onRefreshAgentCache(): Promise<void> {
+    return this.OnRefreshAgentCache();
+  }
+
+  HandleSearchResult(result: SearchResult): void {
     console.log('🔍 Navigating to search result:', result);
 
     switch (result.type) {
       case 'conversation':
         // Switch to conversations tab and select conversation
-        this.activeTab = 'conversations';
-        this.setActiveConversation(result.id);
-        this.navigationChanged.emit({
+        this.ActiveTab = 'conversations';
+        this.SetActiveConversation(result.id);
+        this.NavigationChanged.emit({
           tab: 'conversations',
           conversationId: result.id
         });
@@ -872,10 +1434,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       case 'message':
         // Switch to conversations tab, open conversation, and scroll to message (future enhancement)
-        this.activeTab = 'conversations';
+        this.ActiveTab = 'conversations';
         if (result.conversationId) {
-          this.setActiveConversation(result.conversationId);
-          this.navigationChanged.emit({
+          this.SetActiveConversation(result.conversationId);
+          this.NavigationChanged.emit({
             tab: 'conversations',
             conversationId: result.conversationId
             // TODO: Add messageId for scroll-to support in future
@@ -885,15 +1447,15 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       case 'artifact':
         // Switch to collections tab and open artifact
-        this.activeTab = 'collections';
-        this.artifactState.openArtifact(result.id);
+        this.ActiveTab = 'collections';
+        this.ArtifactState.openArtifact(result.id);
 
         // If artifact is in a collection, navigate to that collection
         const collectionId = result.collectionId || undefined;
 
         // Search results don't have version ID, so just navigate to collection
         // The artifact will open with latest version
-        this.navigationChanged.emit({
+        this.NavigationChanged.emit({
           tab: 'collections',
           collectionId
         });
@@ -901,10 +1463,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       case 'collection':
         // Switch to collections tab and navigate to collection
-        this.activeTab = 'collections';
-        this.collectionState.setActiveCollection(result.id);
+        this.ActiveTab = 'collections';
+        this.CollectionState.setActiveCollection(result.id);
 
-        this.navigationChanged.emit({
+        this.NavigationChanged.emit({
           tab: 'collections',
           collectionId: result.id
         });
@@ -912,9 +1474,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       case 'task':
         // Switch to tasks tab and select task
-        this.activeTab = 'tasks';
+        this.ActiveTab = 'tasks';
         this._activeTaskId = result.id;
-        this.navigationChanged.emit({
+        this.NavigationChanged.emit({
           tab: 'tasks',
           taskId: result.id
         });
@@ -922,31 +1484,46 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Close search panel after navigation
-    this.closeSearch();
+    this.CloseSearch();
+  }
+
+  /** @deprecated Use {@link HandleSearchResult}. */
+  handleSearchResult(result: SearchResult): void {
+    return this.HandleSearchResult(result);
   }
 
   /**
    * Sidebar resize methods
    */
-  onSidebarResizeStart(event: MouseEvent): void {
+  OnSidebarResizeStart(event: MouseEvent): void {
     this.isSidebarResizing = true;
     this.sidebarResizeStartX = event.clientX;
-    this.sidebarResizeStartWidth = this.sidebarWidth;
+    this.sidebarResizeStartWidth = this.SidebarWidth;
     event.preventDefault();
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   }
 
+  /** @deprecated Use {@link OnSidebarResizeStart}. */
+  onSidebarResizeStart(event: MouseEvent): void {
+    return this.OnSidebarResizeStart(event);
+  }
+
   /**
    * Artifact panel resize methods
    */
-  onArtifactPanelResizeStart(event: MouseEvent): void {
+  OnArtifactPanelResizeStart(event: MouseEvent): void {
     this.isArtifactPanelResizing = true;
     this.artifactPanelResizeStartX = event.clientX;
-    this.artifactPanelResizeStartWidth = this.artifactPanelWidth;
+    this.artifactPanelResizeStartWidth = this.ArtifactPanelWidth;
     event.preventDefault();
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
+  }
+
+  /** @deprecated Use {@link OnArtifactPanelResizeStart}. */
+  onArtifactPanelResizeStart(event: MouseEvent): void {
+    return this.OnArtifactPanelResizeStart(event);
   }
 
   private onResizeMove(event: MouseEvent): void {
@@ -956,7 +1533,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       // Constrain between 200px and 500px
       newWidth = Math.max(200, Math.min(500, newWidth));
-      this.sidebarWidth = newWidth;
+      this.SidebarWidth = newWidth;
     } else if (this.isArtifactPanelResizing) {
       const container = document.querySelector('.workspace-content') as HTMLElement;
       if (!container) return;
@@ -968,7 +1545,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
       // Constrain between 20% and 70%
       newWidth = Math.max(20, Math.min(70, newWidth));
-      this.artifactPanelWidth = newWidth;
+      this.ArtifactPanelWidth = newWidth;
     }
   }
 
@@ -989,20 +1566,30 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   /**
    * Touch event handlers for mobile resize support
    */
-  onSidebarResizeTouchStart(event: TouchEvent): void {
+  OnSidebarResizeTouchStart(event: TouchEvent): void {
     this.isSidebarResizing = true;
     const touch = event.touches[0];
     this.sidebarResizeStartX = touch.clientX;
-    this.sidebarResizeStartWidth = this.sidebarWidth;
+    this.sidebarResizeStartWidth = this.SidebarWidth;
     event.preventDefault();
   }
 
-  onArtifactPanelResizeTouchStart(event: TouchEvent): void {
+  /** @deprecated Use {@link OnSidebarResizeTouchStart}. */
+  onSidebarResizeTouchStart(event: TouchEvent): void {
+    return this.OnSidebarResizeTouchStart(event);
+  }
+
+  OnArtifactPanelResizeTouchStart(event: TouchEvent): void {
     this.isArtifactPanelResizing = true;
     const touch = event.touches[0];
     this.artifactPanelResizeStartX = touch.clientX;
-    this.artifactPanelResizeStartWidth = this.artifactPanelWidth;
+    this.artifactPanelResizeStartWidth = this.ArtifactPanelWidth;
     event.preventDefault();
+  }
+
+  /** @deprecated Use {@link OnArtifactPanelResizeTouchStart}. */
+  onArtifactPanelResizeTouchStart(event: TouchEvent): void {
+    return this.OnArtifactPanelResizeTouchStart(event);
   }
 
   private onResizeTouchMove(event: TouchEvent): void {
@@ -1012,7 +1599,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       let newWidth = this.sidebarResizeStartWidth + deltaX;
 
       newWidth = Math.max(200, Math.min(500, newWidth));
-      this.sidebarWidth = newWidth;
+      this.SidebarWidth = newWidth;
     } else if (this.isArtifactPanelResizing) {
       const container = document.querySelector('.workspace-content') as HTMLElement;
       if (!container) return;
@@ -1024,7 +1611,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       let newWidth = this.artifactPanelResizeStartWidth + deltaPercent;
 
       newWidth = Math.max(20, Math.min(70, newWidth));
-      this.artifactPanelWidth = newWidth;
+      this.ArtifactPanelWidth = newWidth;
     }
   }
 
@@ -1048,35 +1635,50 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * binding compiles. New consumers should use the resource components in
    * @memberjunction/ng-explorer-core instead of this workspace.
    */
-  onApplyFormRequested(_event: { spec: unknown; entityName: string }): void {
+  OnApplyFormRequested(_event: { spec: unknown; entityName: string }): void {
     console.warn('Workspace.onApplyFormRequested: workspace is deprecated; use the per-feature resource components instead.');
   }
 
-  toggleMaximizeArtifactPanel(): void {
-    if (this.isArtifactPanelMaximized) {
+  /** @deprecated Use {@link OnApplyFormRequested}. */
+  onApplyFormRequested(_event: { spec: unknown; entityName: string }): void {
+    return this.OnApplyFormRequested(_event);
+  }
+
+  ToggleMaximizeArtifactPanel(): void {
+    if (this.IsArtifactPanelMaximized) {
       // Restore to previous width
-      this.artifactPanelWidth = this.artifactPanelWidthBeforeMaximize;
-      this.isArtifactPanelMaximized = false;
+      this.ArtifactPanelWidth = this.artifactPanelWidthBeforeMaximize;
+      this.IsArtifactPanelMaximized = false;
     } else {
       // Maximize - store current width and set to 100%
-      this.artifactPanelWidthBeforeMaximize = this.artifactPanelWidth;
-      this.artifactPanelWidth = 100;
-      this.isArtifactPanelMaximized = true;
+      this.artifactPanelWidthBeforeMaximize = this.ArtifactPanelWidth;
+      this.ArtifactPanelWidth = 100;
+      this.IsArtifactPanelMaximized = true;
     }
   }
 
-  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
+  /** @deprecated Use {@link ToggleMaximizeArtifactPanel}. */
+  toggleMaximizeArtifactPanel(): void {
+    return this.ToggleMaximizeArtifactPanel();
+  }
+
+  OnConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
     console.log('✨ Workspace received rename event:', event);
     // Trigger animation in sidebar by setting the ID
-    this.renamedConversationId = event.conversationId;
+    this.RenamedConversationId = event.conversationId;
 
     // Clear after animation completes (1500ms)
     setTimeout(() => {
-      this.renamedConversationId = null;
+      this.RenamedConversationId = null;
     }, 1500);
   }
 
-  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+  /** @deprecated Use {@link OnConversationRenamed}. */
+  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
+    return this.OnConversationRenamed(event);
+  }
+
+  OnOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     const pairs = event.compositeKey.KeyValuePairs || [];
     const keys: Record<string, string | number> = {};
     for (const p of pairs) {
@@ -1091,14 +1693,24 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       keys,
       mode: 'view'
     };
-    this.actionableCommandExecuted.emit(command);
+    this.ActionableCommandExecuted.emit(command);
   }
 
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    return this.OnOpenEntityRecord(event);
+  }
+
+  OnNavigationRequest(event: NavigationRequest): void {
+    this.NavigationRequested.emit(event);
+  }
+
+  /** @deprecated Use {@link OnNavigationRequest}. */
   onNavigationRequest(event: NavigationRequest): void {
-    this.navigationRequested.emit(event);
+    return this.OnNavigationRequest(event);
   }
 
-  onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
+  OnOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
     // Convert to actionable command and emit
     const command: ActionableCommand = {
       type: 'open:resource',
@@ -1108,32 +1720,42 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       resourceId: event.recordId,
       mode: 'view'
     };
-    this.actionableCommandExecuted.emit(command);
+    this.ActionableCommandExecuted.emit(command);
   }
 
-  onTaskClicked(task: MJTaskEntity): void {
+  /** @deprecated Use {@link OnOpenEntityRecordFromTasks}. */
+  onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
+    return this.OnOpenEntityRecordFromTasks(event);
+  }
+
+  OnTaskClicked(task: MJTaskEntity): void {
     // Switch to Tasks tab and set active task ID
-    this.activeTab = 'tasks';
+    this.ActiveTab = 'tasks';
     this._activeTaskId = task.ID;
 
     // Emit navigation change
-    this.navigationChanged.emit({
+    this.NavigationChanged.emit({
       tab: 'tasks',
       taskId: task.ID
     });
   }
 
+  /** @deprecated Use {@link OnTaskClicked}. */
+  onTaskClicked(task: MJTaskEntity): void {
+    return this.OnTaskClicked(task);
+  }
+
   /**
    * Handle collection navigation events
    */
-  onCollectionNavigated(event: { collectionId: string | null; versionId?: string | null }): void {
+  OnCollectionNavigated(event: { collectionId: string | null; versionId?: string | null }): void {
     console.log('📁 Collection navigated:', event);
 
     // Store the version ID for URL sync
     // CRITICAL: Only update activeVersionId if versionId was explicitly provided in the event
     // If versionId is undefined (not provided), keep the current activeVersionId
     if (event.versionId !== undefined) {
-      this.activeVersionId = event.versionId;
+      this.ActiveVersionId = event.versionId;
     }
     // Otherwise: versionId not provided in event, preserve current activeVersionId
 
@@ -1142,14 +1764,14 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Only emit if the event explicitly includes a versionId, or if we're intentionally closing the artifact
     if (event.versionId !== undefined) {
       // Event explicitly specifies artifact state (user clicked artifact or intentionally closed it)
-      this.navigationChanged.emit({
+      this.NavigationChanged.emit({
         tab: 'collections',
         collectionId: event.collectionId || undefined,
         versionId: event.versionId || undefined
       });
-    } else if (!this.activeVersionId) {
+    } else if (!this.ActiveVersionId) {
       // No artifact currently open, safe to emit collection-only navigation
-      this.navigationChanged.emit({
+      this.NavigationChanged.emit({
         tab: 'collections',
         collectionId: event.collectionId || undefined
       });
@@ -1158,53 +1780,63 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Don't emit - preserve current URL state with artifact
   }
 
+  /** @deprecated Use {@link OnCollectionNavigated}. */
+  onCollectionNavigated(event: { collectionId: string | null; versionId?: string | null }): void {
+    return this.OnCollectionNavigated(event);
+  }
+
   /**
    * Handle navigation from artifact links
    */
-  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}): void {
+  OnArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}): void {
     console.log('🔗 Navigating from artifact link:', event);
 
     if (event.type === 'conversation') {
-      this.activeTab = 'conversations';
+      this.ActiveTab = 'conversations';
 
       // Close collection artifact viewer if it's open
-      this.artifactState.closeArtifact();
+      this.ArtifactState.closeArtifact();
 
       // Store pending artifact info so chat area can show it and scroll to message
       if (event.artifactId) {
-        this.pendingArtifactId = event.artifactId;
-        this.pendingArtifactConversationId = event.id;
-        this.pendingArtifactVersionNumber = event.versionNumber || null;
+        this.PendingArtifactId = event.artifactId;
+        this.PendingArtifactConversationId = event.id;
+        this.PendingArtifactVersionNumber = event.versionNumber || null;
         console.log('📦 Pending artifact set:', event.artifactId, 'v' + event.versionNumber);
       }
 
-      this.setActiveConversation(event.id);
+      this.SetActiveConversation(event.id);
 
-      this.navigationChanged.emit({
+      this.NavigationChanged.emit({
         tab: 'conversations',
         conversationId: event.id
       });
     } else if (event.type === 'collection') {
-      this.activeTab = 'collections';
-      this.collectionState.setActiveCollection(event.id);
+      this.ActiveTab = 'collections';
+      this.CollectionState.setActiveCollection(event.id);
 
       // Open the artifact automatically when navigating to the collection
       if (event.artifactId) {
-        this.artifactState.openArtifact(event.artifactId, event.versionNumber);
+        this.ArtifactState.openArtifact(event.artifactId, event.versionNumber);
       }
 
       // Store version ID for URL sync (same as viewArtifact does)
       if (event.versionId) {
-        this.activeVersionId = event.versionId;
+        this.ActiveVersionId = event.versionId;
       }
 
       // Emit navigation with version ID so URL includes it
-      this.navigationChanged.emit({
+      this.NavigationChanged.emit({
         tab: 'collections',
         collectionId: event.id,
         versionId: event.versionId
       });
     }
+  }
+
+  /** @deprecated Use {@link OnArtifactLinkNavigation}. */
+  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}): void {
+    return this.OnArtifactLinkNavigation(event);
   }
 
   /**
@@ -1213,78 +1845,103 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private async loadArtifactPermissions(artifactId: string): Promise<void> {
     // Guard against null/undefined
     if (!artifactId) {
-      this.canShareActiveArtifact = false;
-      this.canEditActiveArtifact = false;
+      this.CanShareActiveArtifact = false;
+      this.CanEditActiveArtifact = false;
       return;
     }
 
     try {
-      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.currentUser);
-      this.canShareActiveArtifact = permissions.canShare;
-      this.canEditActiveArtifact = permissions.canEdit;
+      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.CurrentUser);
+      this.CanShareActiveArtifact = permissions.canShare;
+      this.CanEditActiveArtifact = permissions.canEdit;
     } catch (error) {
       console.error('Failed to load artifact permissions:', error);
-      this.canShareActiveArtifact = false;
-      this.canEditActiveArtifact = false;
+      this.CanShareActiveArtifact = false;
+      this.CanEditActiveArtifact = false;
     }
   }
 
   /**
    * Handle share request from artifact viewer
    */
-  async onArtifactShareRequested(artifactId: string): Promise<void> {
+  async OnArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
     const md = this.ProviderToUse;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 
     if (artifact) {
-      this.artifactToShare = artifact;
-      this.isArtifactShareModalOpen = true;
+      this.ArtifactToShare = artifact;
+      this.IsArtifactShareModalOpen = true;
     }
+  }
+
+  /** @deprecated Use {@link OnArtifactShareRequested}. */
+  async onArtifactShareRequested(artifactId: string): Promise<void> {
+    return this.OnArtifactShareRequested(artifactId);
   }
 
   /**
    * Handle close of artifact share modal
    */
+  OnArtifactShareModalClose(): void {
+    this.IsArtifactShareModalOpen = false;
+    this.ArtifactToShare = null;
+  }
+
+  /** @deprecated Use {@link OnArtifactShareModalClose}. */
   onArtifactShareModalClose(): void {
-    this.isArtifactShareModalOpen = false;
-    this.artifactToShare = null;
+    return this.OnArtifactShareModalClose();
   }
 
   /**
    * Handle successful share - refresh permissions
    */
-  async onArtifactShared(): Promise<void> {
-    this.isArtifactShareModalOpen = false;
-    this.artifactToShare = null;
+  async OnArtifactShared(): Promise<void> {
+    this.IsArtifactShareModalOpen = false;
+    this.ArtifactToShare = null;
 
     // Refresh permissions for the active artifact
-    if (this.activeArtifactId) {
-      await this.loadArtifactPermissions(this.activeArtifactId);
+    if (this.ActiveArtifactId) {
+      await this.loadArtifactPermissions(this.ActiveArtifactId);
     }
+  }
+
+  /** @deprecated Use {@link OnArtifactShared}. */
+  async onArtifactShared(): Promise<void> {
+    return this.OnArtifactShared();
   }
 
   /**
    * Handle actionable command execution from child components
    * Bubbles up to host application for handling
    */
-  onActionableCommand(command: ActionableCommand): void {
+  OnActionableCommand(command: ActionableCommand): void {
     if (command.type === 'open:resource' && command.resourceType === 'Record') {
       // chat-area converts Record commands to openEntityRecord; onOpenEntityRecord
       // re-emits them as actionableCommandExecuted. Skip the raw command to avoid a double open.
       return;
     }
     console.log('📤 Bubbling up actionable command:', command);
-    this.actionableCommandExecuted.emit(command);
+    this.ActionableCommandExecuted.emit(command);
+  }
+
+  /** @deprecated Use {@link OnActionableCommand}. */
+  onActionableCommand(command: ActionableCommand): void {
+    return this.OnActionableCommand(command);
   }
 
   /**
    * Handle automatic command execution from child components
    * Bubbles up to host application for handling
    */
-  onAutomaticCommand(command: AutomaticCommand): void {
+  OnAutomaticCommand(command: AutomaticCommand): void {
     console.log('📤 Bubbling up automatic command:', command);
-    this.automaticCommandExecuted.emit(command);
+    this.AutomaticCommandExecuted.emit(command);
+  }
+
+  /** @deprecated Use {@link OnAutomaticCommand}. */
+  onAutomaticCommand(command: AutomaticCommand): void {
+    return this.OnAutomaticCommand(command);
   }
 }

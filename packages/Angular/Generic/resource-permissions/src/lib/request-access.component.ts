@@ -54,7 +54,7 @@ export class RequestResourceAccessComponent  extends BaseAngularComponent implem
             throw new Error(`Resource Type ${this.ResourceType} not found`);
     }
 
-    public async requestAccess() {
+    public async RequestAccess() {
         const p = this.ProviderToUse;
         const permission = await p.GetEntityObject<MJResourcePermissionEntity>("MJ: Resource Permissions", p.CurrentUser);
         permission.ResourceTypeID = this.ResourceTypeObject.ID;
@@ -74,5 +74,10 @@ export class RequestResourceAccessComponent  extends BaseAngularComponent implem
             LogError(`Failed to request access to ${this.ResourceType} record ${this.ResourceRecordID}`, undefined, permission.LatestResult);
             MJNotificationService.Instance.CreateSimpleNotification(`Failed to request access to ${this.ResourceType} record ${this.ResourceName} (${this.ResourceRecordID})`, 'error', 5000);
         }
+    }
+
+    /** @deprecated Use {@link RequestAccess}. */
+    public async requestAccess() {
+      return this.RequestAccess();
     }
 }

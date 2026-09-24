@@ -190,9 +190,14 @@ export interface CreateLiveKitRtcNodeModuleOptions {
  * model's output) into an `Int16Array` view suitable for a LiveKit `AudioFrame`. An odd byte length is
  * truncated to whole samples (a defensive guard — a half sample is never valid PCM16).
  */
-export function pcmToInt16(pcm: ArrayBuffer): Int16Array {
+export function PcmToInt16(pcm: ArrayBuffer): Int16Array {
     const wholeSamples = Math.floor(pcm.byteLength / 2);
     return new Int16Array(pcm, 0, wholeSamples);
+}
+
+/** @deprecated Use {@link PcmToInt16}. */
+export function pcmToInt16(pcm: ArrayBuffer): Int16Array {
+    return PcmToInt16(pcm);
 }
 
 /**
@@ -200,17 +205,29 @@ export function pcmToInt16(pcm: ArrayBuffer): Int16Array {
  * `ArrayBuffer` for the bridge. Copied (not aliased) so a recycled SDK buffer can't mutate bytes the
  * model is still reading.
  */
-export function int16ToArrayBuffer(samples: Int16Array): ArrayBuffer {
+export function Int16ToArrayBuffer(samples: Int16Array): ArrayBuffer {
     const copy = new Int16Array(samples.length);
     copy.set(samples);
     return copy.buffer;
 }
 
+/** @deprecated Use {@link Int16ToArrayBuffer}. */
+export function int16ToArrayBuffer(samples: Int16Array): ArrayBuffer {
+    return Int16ToArrayBuffer(samples);
+}
+
 /** Normalizes the SDK's `remoteParticipants` (Map or array) to an array. */
-export function participantsToArray(
+export function ParticipantsToArray(
     remote: Map<string, RtcParticipant> | RtcParticipant[],
 ): RtcParticipant[] {
     return Array.isArray(remote) ? remote : Array.from(remote.values());
+}
+
+/** @deprecated Use {@link ParticipantsToArray}. */
+export function participantsToArray(
+    remote: Map<string, RtcParticipant> | RtcParticipant[],
+): RtcParticipant[] {
+    return ParticipantsToArray(remote);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -222,7 +239,7 @@ export function participantsToArray(
  * must not force on installs). Throws an actionable error when absent so a misconfigured deployment fails
  * loudly. VERIFY: the module's default/namespace interop shape.
  */
-export const defaultRtcNodeLoader: RtcNodeLoader = async (): Promise<RtcNodeModule> => {
+export const DefaultRtcNodeLoader: RtcNodeLoader = async (): Promise<RtcNodeModule> => {
     try {
         const mod = (await import(/* @vite-ignore */ '@livekit/rtc-node')) as unknownRecord;
         const resolved = (mod.default && typeof mod.default === 'object' ? mod.default : mod) as unknown as RtcNodeModule;
@@ -238,6 +255,9 @@ export const defaultRtcNodeLoader: RtcNodeLoader = async (): Promise<RtcNodeModu
         );
     }
 };
+
+/** @deprecated Use {@link DefaultRtcNodeLoader}. */
+export const defaultRtcNodeLoader: RtcNodeLoader = DefaultRtcNodeLoader;
 
 /**
  * A real {@link NativeRoomClient} over `@livekit/rtc-node`. One instance per room session. Constructed by
@@ -346,7 +366,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         if (!this.rtc || !this.audioSource) {
             return; // not connected yet — drop (matches the seam's pre-connect no-op contract)
         }
-        this.outboundQueue.push(pcmToInt16(pcm));
+        this.outboundQueue.push(PcmToInt16(pcm));
         void this.drainOutbound();
     }
 
@@ -438,7 +458,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         if (!room) {
             return [];
         }
-        return participantsToArray(room.remoteParticipants).map((p) => ({ identity: p.identity, name: p.name }));
+        return ParticipantsToArray(room.remoteParticipants).map((p) => ({ identity: p.identity, name: p.name }));
     }
 
     /** Publishes a reliable text message on the room data channel (the room-native "chat"). */
@@ -493,7 +513,7 @@ export class LiveKitRtcNodeRoomClient implements NativeRoomClient {
         try {
             for await (const frame of stream) {
                 this.audioHandler?.({
-                    data: int16ToArrayBuffer(frame.data),
+                    data: Int16ToArrayBuffer(frame.data),
                     participantIdentity: participant.identity,
                     name: participant.name,
                 });
@@ -527,7 +547,7 @@ export function CreateLiveKitRtcNodeModule(opts: CreateLiveKitRtcNodeModuleOptio
     const outbound = opts.OutboundSampleRate ?? DEFAULT_SAMPLE_RATE;
     const inbound = opts.InboundSampleRate ?? DEFAULT_SAMPLE_RATE;
     const channels = opts.Channels ?? DEFAULT_CHANNELS;
-    const loader = opts.Loader ?? defaultRtcNodeLoader;
+    const loader = opts.Loader ?? DefaultRtcNodeLoader;
     return {
         createRoomClient(options: NativeRoomClientOptions): NativeRoomClient {
             // Credentials (Url/ApiKey/ApiSecret) are not needed here — the bridge hands a pre-signed access

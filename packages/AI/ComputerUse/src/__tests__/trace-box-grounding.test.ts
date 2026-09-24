@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveElementByBox, isRecordableRun, recordTrace } from '../engine/trace.js';
+import { ResolveElementByBox, IsRecordableRun, RecordTrace } from '../engine/trace.js';
 import { ComputerUseResult } from '../types/results.js';
 import { StepRecord, JudgeVerdict } from '../types/judge.js';
 import {
@@ -76,36 +76,36 @@ describe('resolveElementByBox', () => {
     const other = element(4, 'button', 'Accounts', '#accounts-card', box(141, 560, 390, 614));
 
     it('recovers the element the click landed on', () => {
-        expect(resolveElementByBox(box(141, 490, 390, 544), [other, target])?.Name).toBe('Events');
+        expect(ResolveElementByBox(box(141, 490, 390, 544), [other, target])?.Name).toBe('Events');
     });
 
     it('tolerates a slightly shifted box rather than demanding an exact match', () => {
-        expect(resolveElementByBox(box(143, 492, 388, 542), [other, target])?.Name).toBe('Events');
+        expect(ResolveElementByBox(box(143, 492, 388, 542), [other, target])?.Name).toBe('Events');
     });
 
     it('picks the best overlap when several elements intersect the box', () => {
         const wrapper = element(2, 'group', 'Entity cards', '#cards', box(100, 400, 400, 700));
-        expect(resolveElementByBox(box(141, 490, 390, 544), [wrapper, target])?.Name).toBe('Events');
+        expect(ResolveElementByBox(box(141, 490, 390, 544), [wrapper, target])?.Name).toBe('Events');
     });
 
     it('refuses to guess when nothing overlaps enough', () => {
-        expect(resolveElementByBox(box(800, 100, 900, 140), [target, other])).toBeUndefined();
+        expect(ResolveElementByBox(box(800, 100, 900, 140), [target, other])).toBeUndefined();
     });
 
     it('refuses when the click carried no box at all', () => {
-        expect(resolveElementByBox(undefined, [target])).toBeUndefined();
+        expect(ResolveElementByBox(undefined, [target])).toBeUndefined();
     });
 
     it('refuses when the elements carry no boxes to test against', () => {
         const boxless = element(3, 'button', 'Events', '#events-card');
-        expect(resolveElementByBox(box(141, 490, 390, 544), [boxless])).toBeUndefined();
+        expect(ResolveElementByBox(box(141, 490, 390, 544), [boxless])).toBeUndefined();
     });
 });
 
 describe('recordTrace — coordinate clicks', () => {
     it('records a coordinate click with the semantic identity of the element it hit', () => {
         const el = element(3, 'button', 'Events', '#events-card', box(141, 490, 390, 544));
-        const trace = recordTrace({
+        const trace = RecordTrace({
             result: completedResult([completedStep(coordinateClick(box(141, 490, 390, 544)), [el])]),
             testId: 'T042',
             goal: 'Open the Events entity',
@@ -126,7 +126,7 @@ describe('isRecordableRun — ungroundable clicks', () => {
         const el = element(3, 'button', 'Events', '#events-card', box(141, 490, 390, 544));
         const result = completedResult([completedStep(coordinateClick(box(800, 100, 900, 140)), [el])]);
 
-        const gate = isRecordableRun(result);
+        const gate = IsRecordableRun(result);
 
         expect(gate.recordable).toBe(false);
         expect(gate.reason).toMatch(/click/i);
@@ -141,7 +141,7 @@ describe('isRecordableRun — ungroundable clicks', () => {
         typeAction.Text = 'hello';
         const result = completedResult([completedStep(typeAction, [el])]);
 
-        const gate = isRecordableRun(result);
+        const gate = IsRecordableRun(result);
 
         expect(gate.recordable).toBe(false);
         expect(gate.reason).toMatch(/type/i);
@@ -153,14 +153,14 @@ describe('isRecordableRun — ungroundable clicks', () => {
         typeAction.Text = 'hello';
         typeAction.Selector = '#name';
 
-        expect(isRecordableRun(completedResult([completedStep(typeAction, [el])])).recordable).toBe(true);
+        expect(IsRecordableRun(completedResult([completedStep(typeAction, [el])])).recordable).toBe(true);
     });
 
     it('accepts a run whose coordinate click resolves to an element', () => {
         const el = element(3, 'button', 'Events', '#events-card', box(141, 490, 390, 544));
         const result = completedResult([completedStep(coordinateClick(box(141, 490, 390, 544)), [el])]);
 
-        expect(isRecordableRun(result).recordable).toBe(true);
+        expect(IsRecordableRun(result).recordable).toBe(true);
     });
 });
 
@@ -184,7 +184,7 @@ describe('recordTrace — the region an element lives in', () => {
             completedStep(click, [scoped(0, 'AI', '#all-ai', 'group:All applications')]),
         ]);
 
-        const trace = recordTrace({ result, testId: 'T1', goal: 'g', recordedAt: RECORDED_AT });
+        const trace = RecordTrace({ result, testId: 'T1', goal: 'g', recordedAt: RECORDED_AT });
 
         expect(trace.Steps[0].Action.Target?.Scope).toBe('group:All applications');
     });
@@ -196,7 +196,7 @@ describe('recordTrace — the region an element lives in', () => {
             completedStep(click, [element(0, 'link', 'AI', '#ai', box(0, 0, 10, 10))]),
         ]);
 
-        const trace = recordTrace({ result, testId: 'T1', goal: 'g', recordedAt: RECORDED_AT });
+        const trace = RecordTrace({ result, testId: 'T1', goal: 'g', recordedAt: RECORDED_AT });
 
         expect(trace.Steps[0].Action.Target?.Scope).toBeUndefined();
     });

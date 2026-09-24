@@ -37,6 +37,11 @@ const ERROR_METRIC_KEYS: ReadonlySet<string> = new Set([
  * @param metricKey the metric name (e.g. `RMSE`, `rmse`, `roc_auc`)
  * @returns `true` for error metrics (RMSE/MAE/MSE/loss/logloss), else `false`
  */
-export function isErrorMetric(metricKey: string): boolean {
+export function IsErrorMetric(metricKey: string): boolean {
   return ERROR_METRIC_KEYS.has(metricKey.trim().toLowerCase());
+}
+
+/** @deprecated Use {@link IsErrorMetric}. */
+export function isErrorMetric(metricKey: string): boolean {
+  return IsErrorMetric(metricKey);
 }
