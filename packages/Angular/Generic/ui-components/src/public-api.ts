@@ -1,6 +1,8 @@
 // @memberjunction/ng-ui-components
 // Reusable standalone Angular UI components for MemberJunction
 
+export * from './lib/a11y/named-control.base';
+export * from './lib/a11y/unnamed-control-guard';
 export * from './lib/button/button.directive';
 export * from './lib/clickable/clickable.directive';
 export * from './lib/dialog/dialog.component';
