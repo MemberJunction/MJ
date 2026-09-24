@@ -10,7 +10,9 @@
  * hide-baked and skip-baked miss and the user sees a double grid.
  */
 import type { ClassRegistration } from '@memberjunction/global';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { UUIDsEqual } from '@memberjunction/global';
+import type { MJEntityFormContributionEntity } from '@memberjunction/core-entities';
 import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 
 /** Minimum relationship shape the composer reads. Satisfied by EntityRelationshipInfo. */
@@ -52,8 +54,27 @@ export interface FormContributionRegistration {
     /** `MJ: Entity Form Contributions.ID` for metadata rows. */
     RowID?: string;
 
+    /**
+     * Who a metadata row is for. Absent on compiled registrations, which apply to everyone the
+     * code puts them in front of. A `User` row a user can see is necessarily their own — the
+     * collector only returns personal rows for the current user.
+     */
+    Scope?: MJEntityFormContributionEntity['Scope'];
+
     /** The ClassFactory registration for compiled panels — carries the component constructor. */
     Registration?: ClassRegistration;
+
+    /**
+     * A panel the placement dialog is showing before it is saved. It draws its component when
+     * it carries one, else a placeholder. Only a form inside the dialog's preview sees one.
+     */
+    IsPreview?: boolean;
+
+    /**
+     * The component to render when it has not been saved yet, so there is no `ComponentID` to
+     * load. Only the placement preview sets it.
+     */
+    ComponentSpec?: ComponentSpec;
 }
 
 export interface ResolveFormContributionsInput {
@@ -81,6 +102,8 @@ export interface FormContributionWinner {
     ReplacesSectionKey?: string;
     /** Fields this registered winner stands in for, so they are not drawn. */
     ReplacesFieldNames?: readonly string[];
+    /** Further sections this registered winner stands in for, beyond `ReplacesSectionKey`. */
+    ReplacesSectionKeys?: readonly string[];
     BakedSectionKey: string;
     DisplayName: string;
 
@@ -200,7 +223,8 @@ function applicableRegistrations(
         // Claims must name the form entity.
         // Related / field-section claims on entity:'*' would hide panels on every
         // form. Those claims must name the form entity.
-        if ((reg.Metadata.relatedEntity || reg.Metadata.replacesSectionKey) && entity === '*') {
+        if ((reg.Metadata.relatedEntity || ReplacedSectionKeys(reg.Metadata).length > 0 || reg.Metadata.inSectionKey)
+            && entity === '*') {
             return false;
         }
         return true;
@@ -286,6 +310,7 @@ function registeredWinner(
         RelatedJoinField: meta.relatedJoinField ? StripJoinFieldBrackets(meta.relatedJoinField) : undefined,
         ReplacesSectionKey: meta.replacesSectionKey?.trim() || undefined,
         ReplacesFieldNames: meta.replacesFieldNames?.length ? [...meta.replacesFieldNames] : undefined,
+        ReplacesSectionKeys: meta.replacesSectionKeys?.length ? [...meta.replacesSectionKeys] : undefined,
         BakedSectionKey: sectionKey,
         DisplayName: displayName,
         Source: reg.Source,
@@ -387,6 +412,7 @@ export function ContributionHiddenSectionKeys(
     for (const winner of resolved.Winners) {
         if (winner.Kind !== 'registered') continue;
         if (winner.ReplacesSectionKey) keys.push(winner.ReplacesSectionKey);
+        for (const key of winner.ReplacesSectionKeys ?? []) if (key.trim()) keys.push(key.trim());
         if (!winner.RelatedEntity) continue;
         const peer = peers.find((rel) => {
             if (rel.RelatedEntity !== winner.RelatedEntity) return false;
@@ -420,6 +446,36 @@ export function ContributionClaimsFields(
     metadata: Pick<FormPanelRegistrationMetadata, 'replacesFieldNames'> | null | undefined,
 ): boolean {
     return (metadata?.replacesFieldNames ?? []).some((name) => name.trim().length > 0);
+}
+
+/**
+ * Whether this registration is drawn inside a section rather than by a slot: it stands in for
+ * fields, or it names a section to draw in. The section's own host mounts it, so a slot host
+ * must not mount it a second time.
+ */
+export function ContributionDrawsInSection(
+    metadata: Pick<FormPanelRegistrationMetadata, 'replacesFieldNames' | 'inSectionKey'> | null | undefined,
+): boolean {
+    return ContributionClaimsFields(metadata) || !!metadata?.inSectionKey?.trim();
+}
+
+/** Where inside its section a section-hosted contribution draws. */
+export function ContributionSectionPosition(
+    metadata: Pick<FormPanelRegistrationMetadata, 'sectionPosition'> | null | undefined,
+): 'start' | 'end' {
+    return metadata?.sectionPosition === 'end' ? 'end' : 'start';
+}
+
+/** Every section a contribution stands in for: the single key, then the list, without repeats. */
+export function ReplacedSectionKeys(
+    metadata: Pick<FormPanelRegistrationMetadata, 'replacesSectionKey' | 'replacesSectionKeys'> | null | undefined,
+): string[] {
+    const out: string[] = [];
+    for (const raw of [metadata?.replacesSectionKey, ...(metadata?.replacesSectionKeys ?? [])]) {
+        const key = raw?.trim();
+        if (key && !out.includes(key)) out.push(key);
+    }
+    return out;
 }
 
 /**

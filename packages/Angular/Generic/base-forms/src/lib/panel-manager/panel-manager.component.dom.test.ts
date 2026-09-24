@@ -4,7 +4,7 @@ import type { EntityInfo } from '@memberjunction/core';
 import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
 import { MjPanelManagerComponent } from './panel-manager.component';
 import { FormPanelAdminService } from './form-panel-admin.service';
-import type { FormPanelContributionRow } from './form-panel-inventory';
+import type { FormOverrideRow, FormPanelContributionRow } from './form-panel-inventory';
 
 /**
  * The drawer is the only way back out of applying a panel, so the thing it must never do
@@ -23,26 +23,53 @@ function row(over: Partial<FormPanelContributionRow> = {}): FormPanelContributio
         Presentation: 'panel',
         Status: 'Active',
         Scope: 'User',
+        UserID: 'user-me',
+        RoleID: null,
+        Role: null,
         ReplacesSectionKey: 'details',
+        ReplacesFieldNames: [],
         RelatedEntity: null,
         ChromeGroup: null,
         ContributionKey: 'panel:OrgMemberOverviewPanel',
+        ComponentID: 'COMP-1',
+        SortKey: 0,
+        ReplacesSectionKeys: [],
+        InSectionKey: null,
+        SectionPosition: null,
         ...over,
     };
 }
 
 const admin = {
-    RowsForEntity: vi.fn<[], FormPanelContributionRow[]>(() => [row()]),
-    SetActive: vi.fn(async () => ({ Success: true })),
+    RowsForEntity: vi.fn((): FormPanelContributionRow[] => [row()]),
+    OverridesForEntity: vi.fn((): FormOverrideRow[] => []),
+    CanPublish: vi.fn(() => false),
+    SetActive: vi.fn(async (): Promise<{ Success: boolean; Message?: string }> => ({ Success: true })),
     Remove: vi.fn(async () => ({ Success: true })),
     SetPlacement: vi.fn(async () => ({ Success: true })),
+    PublishContribution: vi.fn(async () => ({ Success: true })),
+    PublishOverride: vi.fn(async () => ({ Success: true })),
+    Hide: vi.fn(),
+    Show: vi.fn(),
+};
+
+/** The signed-in user the drawer decides "yours" by, and the roles a holder can publish to. */
+const PROVIDER = {
+    CurrentUser: { ID: 'user-me', UserRoles: [{ RoleID: 'role-sales' }] },
+    Roles: [{ ID: 'role-sales', Name: 'Sales' }, { ID: 'role-ops', Name: 'Ops' }],
 };
 
 beforeEach(() => {
     admin.RowsForEntity.mockReset().mockReturnValue([row()]);
+    admin.OverridesForEntity.mockReset().mockReturnValue([]);
+    admin.CanPublish.mockReset().mockReturnValue(false);
     admin.SetActive.mockReset().mockResolvedValue({ Success: true });
     admin.Remove.mockReset().mockResolvedValue({ Success: true });
     admin.SetPlacement.mockReset().mockResolvedValue({ Success: true });
+    admin.PublishContribution.mockReset().mockResolvedValue({ Success: true });
+    admin.PublishOverride.mockReset().mockResolvedValue({ Success: true });
+    admin.Hide.mockReset();
+    admin.Show.mockReset();
 });
 
 /** The placement dialog is covered by its own spec; here it only has to exist. */
@@ -53,6 +80,9 @@ class PlacementDialogStub {
     @Input() ComponentName = '';
     @Input() SeedState: unknown;
     @Input() ProbeForm = true;
+    @Input() RecordKey: unknown;
+    @Input() ReplacesRowID: unknown;
+    @Input() PanelComponentID: unknown;
     @Output() Applied = new EventEmitter<unknown>();
     @Output() Cancelled = new EventEmitter<void>();
 }
@@ -62,7 +92,10 @@ function render(inputs: Record<string, unknown> = {}) {
         imports: [PlacementDialogStub],
         declarations: [MjPanelManagerComponent],
         providers: [{ provide: FormPanelAdminService, useValue: admin }],
-        inputs: { Visible: true, Entity: ENTITY, TitleByKey: new Map([['details', 'Details']]), ...inputs },
+        inputs: {
+            Visible: true, Entity: ENTITY, TitleByKey: new Map([['details', 'Details']]),
+            Provider: PROVIDER, ...inputs,
+        },
     });
     f.detectChanges();
     return f;
@@ -79,7 +112,7 @@ describe('MjPanelManagerComponent (DOM)', () => {
         const body = text(render());
         expect(body).toContain('Organization Member Overview');
         expect(body).toContain('stands in for the Details section');
-        expect(body).toContain('Only me');
+        expect(body).toContain('Only you');
     });
 
     it('offers turning off and removing a panel that is on', () => {
@@ -107,7 +140,7 @@ describe('MjPanelManagerComponent (DOM) — switching a panel off', () => {
         const changed = vi.fn();
         f.componentInstance.Changed.subscribe(changed);
         await f.componentInstance.OnToggle(f.componentInstance.Items[0]);
-        expect(admin.SetActive).toHaveBeenCalledWith('ROW-1', false, null);
+        expect(admin.SetActive).toHaveBeenCalledWith('ROW-1', false, PROVIDER);
         expect(changed).toHaveBeenCalled();
     });
 
@@ -115,7 +148,7 @@ describe('MjPanelManagerComponent (DOM) — switching a panel off', () => {
         admin.RowsForEntity.mockReturnValue([row({ Status: 'Pending' })]);
         const f = render();
         await f.componentInstance.OnToggle(f.componentInstance.Items[0]);
-        expect(admin.SetActive).toHaveBeenCalledWith('ROW-1', true, null);
+        expect(admin.SetActive).toHaveBeenCalledWith('ROW-1', true, PROVIDER);
     });
 
     it('shows the reason when a write fails, and does not claim the form changed', async () => {
@@ -145,7 +178,7 @@ describe('MjPanelManagerComponent (DOM) — removing a panel', () => {
         const f = render();
         await f.componentInstance.OnRemove(f.componentInstance.Items[0]);
         await f.componentInstance.OnRemove(f.componentInstance.Items[0]);
-        expect(admin.Remove).toHaveBeenCalledWith('ROW-1', null);
+        expect(admin.Remove).toHaveBeenCalledWith('ROW-1', PROVIDER);
     });
 
     it('forgets the confirmation when the drawer is closed', async () => {
@@ -209,10 +242,11 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
 
     // A panel cannot be asked to stand in for itself.
     it('leaves the row being edited out of the panels it could replace', () => {
-        admin.RowsForEntity.mockReturnValue([row(), row({ ID: 'ROW-2', Name: 'Other' })]);
+        admin.RowsForEntity.mockReturnValue([row(), row({ ID: 'ROW-2', Name: 'Other', ContributionKey: 'panel:Other' })]);
         const f = render();
         f.componentInstance.OnEdit(f.componentInstance.Items[0]);
-        expect(f.componentInstance.EditContext?.Existing.map((e) => e.Key)).toEqual(['ROW-2']);
+        // Keyed by contribution key: replacing a panel writes its key, never its row ID.
+        expect(f.componentInstance.EditContext?.Existing.map((e) => e.Key)).toEqual(['panel:Other']);
     });
 
     it('writes the new placement and closes', async () => {
@@ -223,7 +257,7 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
             ActivateNow: true,
         });
         expect(admin.SetPlacement).toHaveBeenCalledWith(
-            'ROW-1', { slot: 'after-fields', presentation: 'panel', title: 'Renamed' }, true, null);
+            'ROW-1', { slot: 'after-fields', presentation: 'panel', title: 'Renamed' }, true, PROVIDER);
         expect(f.componentInstance.Editing).toBeNull();
     });
 
@@ -247,7 +281,7 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
         const f = render();
         f.componentInstance.OnEdit(f.componentInstance.Items[0]);
         const dialog = {
-            State: { ReplaceMode: 'none' } as never,
+            State: { ReplaceMode: 'none', ReplaceSectionKey: '' } as { ReplaceMode: string; ReplaceSectionKey: string },
             Context: {
                 ...f.componentInstance.EditContext!,
                 Sections: [{ Key: 'details', Title: 'Details' }],
@@ -259,15 +293,143 @@ describe('MjPanelManagerComponent (DOM) — changing where a panel goes', () => 
     });
 });
 
+/**
+ * Grouped by who an item belongs to, because that decides what the user may do with it; the
+ * state is a label on each row rather than a heading.
+ */
 describe('MjPanelManagerComponent (DOM) — the list under headings', () => {
-    it('heads the rows by what they are doing', () => {
+    it('heads the user\'s own panels as Yours, whatever their state', () => {
         admin.RowsForEntity.mockReturnValue([row(), row({ ID: 'ROW-2', Status: 'Pending' })]);
         const f = render();
-        expect(f.componentInstance.Groups.map((g) => g.Title)).toEqual(['On this form', 'Drafts']);
+        expect(f.componentInstance.Groups.map((g) => g.Title)).toEqual(['Yours']);
+        expect(text(f)).toContain('draft');
     });
 
     it('draws the headings', () => {
-        expect(text(render())).toContain('On this form');
+        expect(text(render())).toContain('Yours');
+    });
+
+    it('is titled for what it now manages', () => {
+        expect(text(render())).toContain('Manage this form');
+    });
+});
+
+/** A published panel reaches the user as a default they may hide, not one they may change. */
+describe('MjPanelManagerComponent (DOM) — something shared with you', () => {
+    const shared = () => row({ ID: 'ROW-G', Scope: 'Global', UserID: null, ContributionKey: 'panel:Health', Title: 'Health' });
+
+    it('offers hiding it, and nothing that would change it for others', () => {
+        admin.RowsForEntity.mockReturnValue([shared()]);
+        expect(buttons(render())).toEqual(['Hide for me']);
+    });
+
+    it('hides it for this user and tells the form to resolve again', () => {
+        admin.RowsForEntity.mockReturnValue([shared()]);
+        const f = render();
+        const changed = vi.fn();
+        f.componentInstance.Changed.subscribe(changed);
+        f.componentInstance.OnHide(f.componentInstance.Items[0]);
+        expect(admin.Hide).toHaveBeenCalledWith(ENTITY.Name, 'panel:Health');
+        expect(changed).toHaveBeenCalled();
+    });
+
+    it('gives a holder Audience and a Remove that says it is for everyone', async () => {
+        admin.RowsForEntity.mockReturnValue([shared()]);
+        admin.CanPublish.mockReturnValue(true);
+        const f = render();
+        expect(buttons(f)).toContain('Audience…');
+        await f.componentInstance.OnRemove(f.componentInstance.Items[0]);
+        f.detectChanges();
+        expect(buttons(f)).toContain('Remove for everyone?');
+    });
+
+    it('does not list another person\'s personal panel', () => {
+        admin.RowsForEntity.mockReturnValue([row(), row({ ID: 'THEIRS', UserID: 'user-other' })]);
+        expect(render().componentInstance.Items.map((i) => i.ID)).toEqual(['ROW-1']);
+    });
+});
+
+/** Publishing changes what other people see, so it is a holder's act and states its effect first. */
+describe('MjPanelManagerComponent (DOM) — publishing', () => {
+    it('shows no Publish control to a user without the grant', () => {
+        expect(buttons(render())).not.toContain('Publish…');
+    });
+
+    it('offers Publish on the user\'s own panel to a holder', () => {
+        admin.CanPublish.mockReturnValue(true);
+        expect(buttons(render())).toContain('Publish…');
+    });
+
+    it('states who will see it before anything is saved', () => {
+        admin.CanPublish.mockReturnValue(true);
+        const f = render();
+        f.componentInstance.OnPublishPanel(f.componentInstance.Items[0]);
+        f.componentInstance.Publishing!.Scope = 'Role';
+        f.componentInstance.Publishing!.RoleID = 'role-sales';
+        expect(f.componentInstance.AudienceConsequence).toBe(
+            `Everyone in Sales will see this panel on every ${ENTITY.Name} record.`);
+        expect(admin.PublishContribution).not.toHaveBeenCalled();
+    });
+
+    it('will not save a role audience with no role chosen', () => {
+        admin.CanPublish.mockReturnValue(true);
+        const f = render();
+        f.componentInstance.OnPublishPanel(f.componentInstance.Items[0]);
+        f.componentInstance.Publishing!.Scope = 'Role';
+        expect(f.componentInstance.CanConfirmAudience).toBe(false);
+    });
+
+    it('publishes through the service with the chosen audience', async () => {
+        admin.CanPublish.mockReturnValue(true);
+        const f = render();
+        f.componentInstance.OnPublishPanel(f.componentInstance.Items[0]);
+        f.componentInstance.Publishing!.Scope = 'Global';
+        await f.componentInstance.ConfirmAudience();
+        expect(admin.PublishContribution).toHaveBeenCalledWith('ROW-1', { Scope: 'Global', RoleID: null }, PROVIDER);
+        expect(f.componentInstance.Publishing).toBeNull();
+    });
+});
+
+/** Choosing a full custom form happens here as well as in the toolbar picker, from the same list. */
+describe('MjPanelManagerComponent (DOM) — the Form group', () => {
+    const forms: FormOverrideRow[] = [
+        { ID: 'ops', Name: 'Ops Form', Status: 'Active', Scope: 'Global', UserID: null, RoleID: null, Role: null },
+    ];
+
+    it('is absent when there is no custom form to choose', () => {
+        expect(text(render())).not.toContain('Which form you see');
+    });
+
+    it('lists the custom forms and the generated form, and switches between them', () => {
+        admin.OverridesForEntity.mockReturnValue(forms);
+        const f = render({ Variants: [{ ID: 'ops', Label: 'Ops Form' }], CurrentFormID: 'ops' });
+        expect(text(f)).toContain('Ops Form');
+        expect(text(f)).toContain('Generated form');
+        const chosen = vi.fn();
+        f.componentInstance.FormChosen.subscribe(chosen);
+        f.componentInstance.OnUseForm(f.componentInstance.Forms.find((i) => i.ID === null)!);
+        expect(chosen).toHaveBeenCalledWith(null);
+    });
+
+    it('switches form from the radio itself, with no separate button', () => {
+        admin.OverridesForEntity.mockReturnValue(forms);
+        const f = render({ Variants: [{ ID: 'ops', Label: 'Ops Form' }], CurrentFormID: 'ops' });
+        const chosen = vi.fn();
+        f.componentInstance.FormChosen.subscribe(chosen);
+        const radios = (f.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>('input[name="mj-pm-form"]');
+        expect(Array.from(radios).map((r) => r.checked)).toEqual([true, false]);
+        radios[1].click();
+        expect(chosen).toHaveBeenCalledWith(null);
+        expect(text(f)).not.toContain('Use this');
+    });
+
+    it('does nothing when the current form is chosen again', () => {
+        admin.OverridesForEntity.mockReturnValue(forms);
+        const f = render({ Variants: [{ ID: 'ops', Label: 'Ops Form' }], CurrentFormID: 'ops' });
+        const chosen = vi.fn();
+        f.componentInstance.FormChosen.subscribe(chosen);
+        f.componentInstance.OnUseForm(f.componentInstance.Forms.find((i) => i.ID === 'ops')!);
+        expect(chosen).not.toHaveBeenCalled();
     });
 });
 

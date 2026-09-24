@@ -6,6 +6,7 @@ import {
     RelatedContributionKey,
     RelatedEntitySectionKey,
     ResolveContributionKey,
+    ReplacedSectionKeys,
     ResolveFormContributions,
     StripJoinFieldBrackets,
     type FormContributionRegistration,
@@ -52,6 +53,18 @@ export interface FormCompositionContribution {
     Hidden: boolean;
     /** Last-wins rank; the apply flow uses incumbent + 1 to replace a compiled piece. */
     Precedence: number;
+    /** Order among panels in the same slot, higher first. */
+    SortKey: number;
+    /** The section it is placed in, replacing nothing. */
+    InSectionKey?: string;
+    /** Where inside its section it draws. */
+    SectionPosition?: 'start' | 'end';
+    /** Fields it stands in for. */
+    FieldNames?: string[];
+    /** Blocks it stands in for. */
+    SectionKeys?: string[];
+    /** True when it stands in for a section, tab or grid. */
+    ReplacesPlace?: boolean;
 }
 
 export interface FormCompositionSnapshot {
@@ -156,6 +169,12 @@ export function BuildFormCompositionSnapshot(input: BuildFormCompositionSnapshot
             Presentation: presentationOf(reg),
             Hidden: input.HiddenContributionKeys.has(key),
             Precedence: reg.Priority,
+            SortKey: reg.Metadata.sortKey ?? 0,
+            ...(reg.Metadata.inSectionKey ? { InSectionKey: reg.Metadata.inSectionKey } : {}),
+            ...(reg.Metadata.sectionPosition ? { SectionPosition: reg.Metadata.sectionPosition } : {}),
+            ...(reg.Metadata.replacesFieldNames?.length ? { FieldNames: [...reg.Metadata.replacesFieldNames] } : {}),
+            ...(ReplacedSectionKeys(reg.Metadata).length > 0 ? { SectionKeys: [...ReplacedSectionKeys(reg.Metadata)] } : {}),
+            ...(ReplacedSectionKeys(reg.Metadata).length > 0 || reg.Metadata.relatedEntity ? { ReplacesPlace: true } : {}),
         };
     });
 

@@ -16,19 +16,25 @@ import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { BaseFormPanel } from './base-form-panel';
-import { CollapseFormPanelRegistrations, FormContributionEntityMatches } from './form-contribution';
+import {
+    CollapseFormPanelRegistrations,
+    ContributionSectionPosition,
+    FormContributionEntityMatches,
+} from './form-contribution';
 import { CollectFormContributionRegistrations } from './collect-form-contribution-registrations';
+import { FORM_PLACEMENT_PREVIEW } from './placement-preview';
 import { MountFormContribution } from './mount-form-contribution';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
- * `<mj-form-field-panel-slot>` — mounts the contributions that stand in for a field.
+ * `<mj-form-field-panel-slot>` — mounts the contributions drawn inside a section.
  *
- * A contribution can claim one field rather than a whole section. The panel then belongs
- * inside the section that held the field, at the top, so it reads as taking the field's
- * place rather than as a separate card elsewhere on the form. `<mj-collapsible-panel>`
- * renders one of these above its projected content and tells it which fields it holds; the
- * field itself stops drawing, which `FormContext.claimedFieldNames` handles.
+ * Two kinds: a contribution that stands in for some of the section's fields, and one placed in
+ * the section by its key without replacing anything. Either belongs inside the section, so it
+ * reads as part of it rather than as a separate card elsewhere on the form.
+ * `<mj-collapsible-panel>` renders two of these, one above its projected content and one below,
+ * and each mounts the contributions whose `sectionPosition` matches it. A claimed field stops
+ * drawing, which `FormContext.claimedFieldNames` handles.
  *
  * Distinct from `<mj-form-panel-slot>`, which selects by slot position. This one selects by
  * field, and its position is wherever the section is — there is no slot involved and no
@@ -46,6 +52,10 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
     @Input() Entity!: string;
     /** The fields this section draws — the set a contribution may claim from. */
     @Input() FieldNames: readonly string[] = [];
+    /** The section's key, which a contribution placed in the section names. */
+    @Input() SectionKey = '';
+    /** Which end of the section this host draws at. */
+    @Input() Position: 'start' | 'end' = 'start';
     /** The record being edited, threaded through to every mounted panel. */
     @Input() Record!: BaseEntity;
     /** The host form component. */
@@ -59,6 +69,8 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
     private mounted: ComponentRef<BaseFormPanel>[] = [];
     private readonly destroy$ = new Subject<void>();
     private readonly recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+    /** The placement dialog's unsaved panel, when this slot is on the dialog's preview form. */
+    private readonly preview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
 
     public ngOnInit(): void {
         this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe((record) => {
@@ -71,11 +83,12 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
         } catch {
             // No engine here — compiled registrations are the only source.
         }
+        this.preview?.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => this.remount());
     }
 
     public ngOnChanges(changes: SimpleChanges): void {
         if (!this.Entity || !this.Record || !this.FormComponent) return;
-        const structural = ['Entity', 'FieldNames', 'Record', 'FormComponent'];
+        const structural = ['Entity', 'FieldNames', 'SectionKey', 'Position', 'Record', 'FormComponent'];
         const changed = structural.some((k) => changes[k] && changes[k].currentValue !== changes[k].previousValue);
         if (!changed && this.mounted.length > 0) {
             if (changes['FormContext']) {
@@ -120,18 +133,24 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
         }
     }
 
-    /** The winning registrations whose claimed field this section draws, highest sort first. */
+    /**
+     * The winning registrations drawn at this end of this section, highest sort first: those
+     * standing in for a field the section draws, and those placed in the section by its key.
+     */
     private claimsForFields(): ReturnType<typeof CollapseFormPanelRegistrations> {
         const fields = new Set(this.FieldNames.filter((name) => !!name));
-        if (fields.size === 0) return [];
+        const sectionKey = this.SectionKey.trim();
+        if (fields.size === 0 && !sectionKey) return [];
         const all = CollectFormContributionRegistrations(
-            this.Record?.EntityInfo ?? null, this.FormComponent?.ProviderToUse ?? null);
-        // A claim belongs to this section when any of its fields is one this section draws.
-        // Any, not every: a claim naming a field the form stopped drawing still belongs
-        // where its remaining fields are, and dropping it there would leave the panel
-        // nowhere while its other fields stayed hidden.
+            this.Record?.EntityInfo ?? null, this.FormComponent?.ProviderToUse ?? null, { Preview: this.preview });
+        // A field claim belongs to this section when any of its fields is one this section draws.
+        // Any, not every: a claim naming a field the form stopped drawing still belongs where its
+        // remaining fields are, and dropping it there would leave the panel nowhere while its
+        // other fields stayed hidden.
         const matching = all.filter((reg) => {
             if (!FormContributionEntityMatches(reg.Metadata?.entity, this.Entity)) return false;
+            if (ContributionSectionPosition(reg.Metadata) !== this.Position) return false;
+            if (sectionKey && reg.Metadata?.inSectionKey?.trim() === sectionKey) return true;
             const claimed = reg.Metadata?.replacesFieldNames ?? [];
             return claimed.some((name) => fields.has(name.trim()));
         });

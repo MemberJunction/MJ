@@ -10,6 +10,7 @@ import {
     loadComponent, loadContribution, mapToComponentStatus, parseSpecParam, parseVersionBumpKind,
     CONTRIBUTION_KEY_PATTERN, ResolveWriteContributionKey, type VersionBumpKind,
     SerializeClaimedFieldNames,
+    ApplySectionClaims,
 } from "./_shared";
 
 /**
@@ -210,8 +211,8 @@ export class ModifyFormContributionAction extends BaseAction {
         row.ContributionKey = writeKey;
         row.RelatedEntityID = relatedEntityID;
         row.RelatedJoinField = c.relatedJoinField ?? null;
-        row.ReplacesSectionKey = c.replacesSectionKey ?? null;
         row.ReplacesFieldNames = SerializeClaimedFieldNames(c.replacesFieldNames);
+        ApplySectionClaims(row, c);
         row.Inclusion = c.inclusion ?? null;
         row.ChromeGroup = c.chromeGroup ?? null;
         row.Presentation = c.presentation;

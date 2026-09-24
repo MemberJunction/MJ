@@ -72,6 +72,13 @@ describe('BaseFormPanel.DisplayOrder', () => {
             .toBe(3);
     });
 
+    it('takes the place of the first of several sections it stands in for', () => {
+        const order: Record<string, number> = { profile: 4, identity: 2 };
+        const form = { getSectionOrderIndex: (key: string) => order[key] ?? null };
+        expect(panel({ entity: 'E', slot: 'after-fields', replacesSectionKeys: ['profile', 'identity'] }, form).DisplayOrder)
+            .toBe(2);
+    });
+
     it('falls back to its slot when the section it claimed is not in the order', () => {
         const form = { getSectionOrderIndex: () => null };
         expect(panel({ entity: 'E', slot: 'after-fields', replacesSectionKey: 'gone' }, form).DisplayOrder)

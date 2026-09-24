@@ -12,6 +12,12 @@
 /** Where an item came from, which decides what can be done to it. */
 export type FormPanelOrigin = 'contribution' | 'compiled' | 'stock-grid';
 
+/**
+ * Who an item belongs to, from where the user sits. It decides what they may do: anything to
+ * their own, hide what is shared with them, nothing to what a relationship draws.
+ */
+export type FormPanelAudience = 'yours' | 'shared' | 'builtin' | 'relationship';
+
 /** What the item is doing right now. */
 export type FormPanelState = 'active' | 'draft' | 'off' | 'held';
 
@@ -28,9 +34,17 @@ export interface FormPanelInventoryItem {
     /** What it stands in for, in words. Empty when it adds rather than replaces. */
     Replaces: string;
     Presentation: string;
-    /** Who sees it. */
-    Scope: string;
+    /** Who it belongs to, from the user's side. */
+    Audience: FormPanelAudience;
+    /** Who sees it, in words: "Only you", "Sales role", "Everyone", "Built in". */
+    AudienceLabel: string;
     State: FormPanelState;
+    /** The state in a word, for the label beside the audience. */
+    StateLabel: string;
+    /** The key a hide is recorded against. Null when the item cannot be hidden. */
+    HideKey: string | null;
+    /** Whether this user has hidden it. */
+    IsHidden: boolean;
     /** An icon for the row, by what the item is. */
     Icon: string;
     /** Only a contribution row can be switched, edited or deleted. */
@@ -38,11 +52,18 @@ export interface FormPanelInventoryItem {
     CanTurnOff: boolean;
     CanRemove: boolean;
     CanEdit: boolean;
+    /** Hide it for this user — anything they did not add themselves. */
+    CanHide: boolean;
+    CanShow: boolean;
+    /** Publish their own item to a role or to everyone. Holders of the grant only. */
+    CanPublish: boolean;
+    /** Re-aim or unpublish an item shared with them. Holders of the grant only. */
+    CanChangeAudience: boolean;
 }
 
 /** A heading in the list, and the rows under it. */
 export interface FormPanelInventoryGroup {
-    Key: FormPanelState | 'fixed';
+    Key: 'yours' | 'shared' | 'hidden' | 'fixed';
     Title: string;
     /** One line saying what this heading means, for the states that need it. */
     Note: string;
@@ -59,11 +80,37 @@ export interface FormPanelContributionRow {
     Presentation: string;
     Status: string;
     Scope: string;
+    /** Owner of a personal row; null for one shared with a role or everyone. */
+    UserID: string | null;
+    RoleID: string | null;
+    /** The role's name, for the audience label. */
+    Role: string | null;
     ReplacesSectionKey: string | null;
     ReplacesFieldNames: readonly string[];
+    /** Sections the panel stands in for, when it names more than one. */
+    ReplacesSectionKeys: readonly string[];
+    /** A section the panel draws inside, replacing nothing. */
+    InSectionKey: string | null;
+    /** Where inside its section it draws. Null means the start. */
+    SectionPosition: 'start' | 'end' | null;
     RelatedEntity: string | null;
     ChromeGroup: string | null;
     ContributionKey: string | null;
+    /** The component the panel renders. */
+    ComponentID: string;
+    /** Order among panels in the same slot, higher first. */
+    SortKey: number;
+}
+
+/** A full custom form registered on the entity, for the drawer's Form group. */
+export interface FormOverrideRow {
+    ID: string;
+    Name: string;
+    Status: string;
+    Scope: string;
+    UserID: string | null;
+    RoleID: string | null;
+    Role: string | null;
 }
 
 /** A compiled `BaseFormPanel`, which the list shows but cannot change. */
@@ -71,6 +118,8 @@ export interface FormPanelCompiledRow {
     Key: string;
     Title: string;
     Slot: string;
+    /** The key a hide is recorded against. Null when the panel has no stable identity. */
+    HideKey: string | null;
 }
 
 /** A relationship the container fills a grid in for. */
@@ -91,6 +140,14 @@ export interface FormPanelInventoryInput {
     FullCustomForm: boolean;
     /** Titles by rail key and section key, so "what it replaces" reads as a name. */
     TitleByKey?: ReadonlyMap<string, string>;
+    /** The user looking at the list. Decides what is "yours". */
+    CallerID: string;
+    /** The user's roles. A role item is listed only when it is shared with one of them. */
+    CallerRoleIDs: readonly string[];
+    /** Whether the user holds the grant to publish to a role or to everyone. */
+    CanPublish: boolean;
+    /** Keys this user has hidden on this entity. */
+    HiddenKeys: readonly string[];
 }
 
 /** The rail key the chrome layer builds from the field sections. */
@@ -106,11 +163,18 @@ const MORE_TAB_KEY = '__mj_form_more';
  * things the user never typed.
  */
 export function DescribeReplacement(
-    row: Pick<FormPanelContributionRow, 'ReplacesSectionKey' | 'ReplacesFieldNames' | 'RelatedEntity'>,
+    row: Pick<FormPanelContributionRow, 'ReplacesSectionKey' | 'ReplacesFieldNames' | 'RelatedEntity'>
+        & Partial<Pick<FormPanelContributionRow, 'ReplacesSectionKeys'>>,
     titleByKey?: ReadonlyMap<string, string>,
 ): string {
     const related = (row.RelatedEntity ?? '').trim();
     if (related) return `the ${related} grid`;
+
+    const sections = row.ReplacesSectionKeys ?? [];
+    if (sections.length > 1) {
+        const titles = sections.map((key) => titleByKey?.get(key) ?? key);
+        return `the ${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]} sections`;
+    }
 
     const fields = row.ReplacesFieldNames ?? [];
     if (fields.length === 1) return `the ${titleByKey?.get(fields[0]) ?? fields[0]} field`;
@@ -124,12 +188,43 @@ export function DescribeReplacement(
     return title ? `the ${title} section` : `the "${key}" section`;
 }
 
-/** Who sees it, in the words the apply dialog used. */
-export function DescribeScope(scope: string): string {
-    if (scope === 'User') return 'Only me';
-    if (scope === 'Role') return 'My role';
+/**
+ * Who sees an item, in words.
+ *
+ * Names the role rather than saying "a role": someone reading their form wants to know which
+ * group of people a panel was put in front of, and the role's name is the answer.
+ */
+export function DescribeAudience(scope: string, roleName?: string | null): string {
+    if (scope === 'Role') return roleName ? `${roleName} role` : 'A role';
     if (scope === 'Global') return 'Everyone';
-    return scope || 'Only me';
+    return 'Only you';
+}
+
+/** A state in a word, for the label beside the audience. */
+export function DescribeState(state: FormPanelState): string {
+    if (state === 'active') return 'on';
+    if (state === 'held') return 'held back';
+    if (state === 'draft') return 'draft';
+    return 'off';
+}
+
+/**
+ * Whether the list shows this contribution to this user.
+ *
+ * The user's role can read every row, so the list has to decide what belongs in front of them:
+ * their own, what is shared with one of their roles, and what is shared with everyone. Another
+ * person's personal panel, or one aimed at a role they are not in, is not theirs to see here.
+ */
+export function IsListedFor(
+    row: Pick<FormPanelContributionRow, 'Scope' | 'UserID' | 'RoleID'>,
+    callerID: string,
+    callerRoleIDs: readonly string[],
+): boolean {
+    const same = (a: string | null | undefined, b: string): boolean =>
+        (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
+    if (row.Scope === 'User') return same(row.UserID, callerID);
+    if (row.Scope === 'Role') return callerRoleIDs.some((roleID) => same(row.RoleID, roleID));
+    return row.Scope === 'Global';
 }
 
 /**
@@ -146,74 +241,121 @@ export function ContributionState(status: string, fullCustomForm: boolean): Form
 }
 
 /**
- * Everything registered on this form, contributions first.
+ * Everything on this form that concerns this user, contributions first.
  *
- * Contributions lead because they are the only rows a user can act on. A compiled panel
- * is code and a stock grid is a relationship; both are listed so the form's contents are
- * accounted for, and neither offers a button that would not work.
+ * Their own contributions lead because they can do anything to them. What is shared with them
+ * follows — published panels and panels shipped in code — which they can hide. Grids drawn from
+ * a relationship come last; they are listed so the form's contents are accounted for, and offer
+ * no button that would not work.
  */
 export function BuildPanelInventory(input: FormPanelInventoryInput): FormPanelInventoryItem[] {
+    const hidden = new Set(input.HiddenKeys);
     const out: FormPanelInventoryItem[] = [];
-
     for (const row of input.Contributions) {
-        const state = ContributionState(row.Status, input.FullCustomForm);
-        out.push({
-            ID: row.ID,
-            Title: (row.Title ?? '').trim() || row.Name,
-            Subtitle: `${row.Presentation === 'bare' ? 'bare strip' : 'panel'} · added by you`,
-            Origin: 'contribution',
-            Slot: row.Slot,
-            Replaces: DescribeReplacement(row, input.TitleByKey),
-            Presentation: row.Presentation === 'bare' ? 'Bare' : 'Panel',
-            Scope: DescribeScope(row.Scope),
-            State: state,
-            Icon: row.Presentation === 'bare' ? 'fa-solid fa-minus' : 'fa-solid fa-puzzle-piece',
-            CanTurnOn: state === 'draft' || state === 'off',
-            CanTurnOff: state === 'active' || state === 'held',
-            CanRemove: true,
-            CanEdit: true,
-        });
+        if (!IsListedFor(row, input.CallerID, input.CallerRoleIDs)) continue;
+        out.push(contributionItem(row, input, hidden));
     }
-
-    for (const row of input.Compiled) {
-        out.push({
-            ID: row.Key,
-            Title: row.Title || row.Key,
-            Subtitle: 'panel · built into this app',
-            Origin: 'compiled',
-            Slot: row.Slot,
-            Replaces: '',
-            Presentation: 'Panel',
-            Scope: 'Everyone',
-            State: input.FullCustomForm ? 'held' : 'active',
-            Icon: 'fa-solid fa-code',
-            CanTurnOn: false,
-            CanTurnOff: false,
-            CanRemove: false,
-            CanEdit: false,
-        });
-    }
-
-    for (const row of input.StockGrids) {
-        out.push({
-            ID: row.SectionKey,
-            Title: row.DisplayName,
-            Subtitle: 'automatic grid · from the relationship',
-            Origin: 'stock-grid',
-            Slot: '',
-            Replaces: '',
-            Presentation: 'Panel',
-            Scope: 'Everyone',
-            State: input.FullCustomForm ? 'held' : 'active',
-            Icon: 'fa-solid fa-table',
-            CanTurnOn: false,
-            CanTurnOff: false,
-            CanRemove: false,
-            CanEdit: false,
-        });
-    }
-
+    for (const row of input.Compiled) out.push(compiledItem(row, input, hidden));
+    for (const row of input.StockGrids) out.push(stockGridItem(row, input));
     return out;
+}
+
+function contributionItem(
+    row: FormPanelContributionRow,
+    input: FormPanelInventoryInput,
+    hidden: ReadonlySet<string>,
+): FormPanelInventoryItem {
+    const state = ContributionState(row.Status, input.FullCustomForm);
+    const yours = row.Scope === 'User';
+    const hideKey = yours ? null : (row.ContributionKey ?? '').trim() || null;
+    const isHidden = !!hideKey && hidden.has(hideKey);
+    return {
+        ID: row.ID,
+        Title: (row.Title ?? '').trim() || row.Name,
+        Subtitle: `${row.Presentation === 'bare' ? 'bare strip' : 'panel'} · ${yours ? 'added by you' : 'shared with you'}`,
+        Origin: 'contribution',
+        Slot: row.Slot,
+        Replaces: DescribeReplacement(row, input.TitleByKey),
+        Presentation: row.Presentation === 'bare' ? 'Bare' : 'Panel',
+        Audience: yours ? 'yours' : 'shared',
+        AudienceLabel: DescribeAudience(row.Scope, row.Role),
+        State: state,
+        StateLabel: DescribeState(state),
+        HideKey: hideKey,
+        IsHidden: isHidden,
+        Icon: row.Presentation === 'bare' ? 'fa-solid fa-minus' : 'fa-solid fa-puzzle-piece',
+        // Turning on and off changes the row for everyone it reaches, so on a shared item it is
+        // a holder's act; hiding is the per-user switch instead.
+        CanTurnOn: (yours || input.CanPublish) && (state === 'draft' || state === 'off'),
+        CanTurnOff: (yours || input.CanPublish) && (state === 'active' || state === 'held'),
+        CanRemove: yours || input.CanPublish,
+        CanEdit: yours || input.CanPublish,
+        CanHide: !!hideKey && !isHidden,
+        CanShow: isHidden,
+        CanPublish: yours && input.CanPublish,
+        CanChangeAudience: !yours && input.CanPublish,
+    };
+}
+
+function compiledItem(
+    row: FormPanelCompiledRow,
+    input: FormPanelInventoryInput,
+    hidden: ReadonlySet<string>,
+): FormPanelInventoryItem {
+    const state: FormPanelState = input.FullCustomForm ? 'held' : 'active';
+    const isHidden = !!row.HideKey && hidden.has(row.HideKey);
+    return {
+        ID: row.Key,
+        Title: row.Title || row.Key,
+        Subtitle: 'panel · built into this app',
+        Origin: 'compiled',
+        Slot: row.Slot,
+        Replaces: '',
+        Presentation: 'Panel',
+        Audience: 'builtin',
+        AudienceLabel: 'Built in',
+        State: state,
+        StateLabel: DescribeState(state),
+        HideKey: row.HideKey,
+        IsHidden: isHidden,
+        Icon: 'fa-solid fa-code',
+        CanTurnOn: false,
+        CanTurnOff: false,
+        CanRemove: false,
+        CanEdit: false,
+        CanHide: !!row.HideKey && !isHidden,
+        CanShow: isHidden,
+        CanPublish: false,
+        CanChangeAudience: false,
+    };
+}
+
+function stockGridItem(row: FormPanelStockGridRow, input: FormPanelInventoryInput): FormPanelInventoryItem {
+    const state: FormPanelState = input.FullCustomForm ? 'held' : 'active';
+    return {
+        ID: row.SectionKey,
+        Title: row.DisplayName,
+        Subtitle: 'automatic grid · from the relationship',
+        Origin: 'stock-grid',
+        Slot: '',
+        Replaces: '',
+        Presentation: 'Panel',
+        Audience: 'relationship',
+        AudienceLabel: 'From a relationship',
+        State: state,
+        StateLabel: DescribeState(state),
+        HideKey: null,
+        IsHidden: false,
+        Icon: 'fa-solid fa-table',
+        CanTurnOn: false,
+        CanTurnOff: false,
+        CanRemove: false,
+        CanEdit: false,
+        CanHide: false,
+        CanShow: false,
+        CanPublish: false,
+        CanChangeAudience: false,
+    };
 }
 
 /** The count line under the list: how much is registered, and how much of it renders. */
@@ -226,41 +368,95 @@ export function SummarizeInventory(items: readonly FormPanelInventoryItem[]): st
 
 
 /**
- * The list broken into headed groups.
+ * The list broken into headed groups, by who each item belongs to.
  *
- * A flat list mixes things the user chose with things the app and the schema put there,
- * and mixes what is rendering with what is stored and idle. The headings say which is
- * which, so the rows that carry buttons are not hunted for among the rows that do not.
- * Empty groups are dropped.
+ * Grouped by audience rather than by state because audience now decides what a user may do: they
+ * can remove their own, but only hide something shared with them. State becomes a label on each
+ * row. Hidden items get their own group so a hide can always be undone. Empty groups are dropped.
  */
 export function GroupPanelInventory(
     items: readonly FormPanelInventoryItem[],
 ): FormPanelInventoryGroup[] {
-    const fixed = items.filter((item) => item.Origin !== 'contribution');
-    const mine = items.filter((item) => item.Origin === 'contribution');
-
     const groups: FormPanelInventoryGroup[] = [
         {
-            Key: 'active', Title: 'On this form', Note: '',
-            Items: mine.filter((i) => i.State === 'active'),
+            Key: 'yours', Title: 'Yours', Note: '',
+            Items: items.filter((i) => i.Audience === 'yours'),
         },
         {
-            Key: 'held', Title: 'Held back', Note: 'A full custom form is drawing this entity, so these render for nobody.',
-            Items: mine.filter((i) => i.State === 'held'),
+            Key: 'shared', Title: 'Shared with you',
+            Note: 'Put on this form for your role, for everyone, or by the app. Hide any of them for yourself.',
+            Items: items.filter((i) => (i.Audience === 'shared' || i.Audience === 'builtin') && !i.IsHidden),
         },
         {
-            Key: 'draft', Title: 'Drafts', Note: 'Stored, but rendering for nobody until you turn them on.',
-            Items: mine.filter((i) => i.State === 'draft'),
-        },
-        {
-            Key: 'off', Title: 'Turned off', Note: 'Kept, so you can put them back.',
-            Items: mine.filter((i) => i.State === 'off'),
+            Key: 'hidden', Title: 'Hidden by you', Note: 'Still there for everyone else. Show one to put it back.',
+            Items: items.filter((i) => i.IsHidden),
         },
         {
             Key: 'fixed', Title: 'Part of the form itself',
-            Note: 'Built into the app or drawn from a relationship. Not yours to change here.',
-            Items: fixed,
+            Note: 'Drawn from a relationship. Not yours to change here.',
+            Items: items.filter((i) => i.Audience === 'relationship'),
         },
     ];
     return groups.filter((group) => group.Items.length > 0);
+}
+
+/** One full custom form in the drawer's Form group, or the generated form. */
+export interface FormPanelFormItem {
+    /** The override's ID; null for the generated form. */
+    ID: string | null;
+    Title: string;
+    AudienceLabel: string;
+    /** The form this user sees now. */
+    IsCurrent: boolean;
+    /** Whether it belongs to this user alone. */
+    IsYours: boolean;
+    /** Publish this user's own form. Holders of the grant only. */
+    CanPublish: boolean;
+    /** Re-aim or unpublish a form shared with this user. Holders of the grant only. */
+    CanChangeAudience: boolean;
+}
+
+export interface FormPanelFormInput {
+    /** The forms the toolbar picker offers, in its order. */
+    Variants: ReadonlyArray<{ ID: string; Label: string }>;
+    /** Every form registered on the entity, for each one's audience. */
+    Overrides: readonly FormOverrideRow[];
+    /** The form this user sees now; null when it is the generated form. */
+    CurrentFormID: string | null;
+    CanPublish: boolean;
+}
+
+/**
+ * The full custom forms available to this user, and the generated form.
+ *
+ * Built from the toolbar picker's own list so the two cannot disagree about which forms exist.
+ * The generated form is listed too: stepping back to it is a choice like any other, and the only
+ * way to see a panel on an entity whose custom form draws its whole body.
+ */
+export function BuildFormItems(input: FormPanelFormInput): FormPanelFormItem[] {
+    const same = (a: string | null, b: string | null): boolean =>
+        (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+    const items: FormPanelFormItem[] = input.Variants.map((variant) => {
+        const row = input.Overrides.find((o) => same(o.ID, variant.ID));
+        const yours = (row?.Scope ?? 'User') === 'User';
+        return {
+            ID: variant.ID,
+            Title: variant.Label,
+            AudienceLabel: DescribeAudience(row?.Scope ?? 'User', row?.Role),
+            IsCurrent: same(variant.ID, input.CurrentFormID),
+            IsYours: yours,
+            CanPublish: yours && input.CanPublish,
+            CanChangeAudience: !yours && input.CanPublish,
+        };
+    });
+    items.push({
+        ID: null,
+        Title: 'Generated form',
+        AudienceLabel: 'Built in',
+        IsCurrent: !input.CurrentFormID,
+        IsYours: false,
+        CanPublish: false,
+        CanChangeAudience: false,
+    });
+    return items;
 }

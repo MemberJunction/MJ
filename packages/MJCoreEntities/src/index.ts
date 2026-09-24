@@ -48,6 +48,7 @@ export * from './engines/IdentityClaimEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';
+export * from './custom/FormScope/FormScopeRules';
 export * from './custom/operations/EvaluateAuthorizationChecks';
 export { AuthorizationCheckServerOperation, LoadAuthorizationCheckOperation } from './custom/operations/AuthorizationCheckOperation';
 

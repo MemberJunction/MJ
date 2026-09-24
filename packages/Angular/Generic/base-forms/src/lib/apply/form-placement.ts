@@ -55,6 +55,18 @@ export interface FormPlacementExisting {
     Key: string;
     Slot: string;
     Title: string;
+    /** Order among panels in the same position, higher first. Absent means 0. */
+    SortKey?: number;
+    /** The section it is placed in, replacing nothing. */
+    InSectionKey?: string | null;
+    /** Where inside its section it draws, for a placement in a section or a field claim. */
+    SectionPosition?: 'start' | 'end' | null;
+    /** Fields it stands in for; it draws inside the section holding them. */
+    FieldNames?: readonly string[];
+    /** Blocks it stands in for; it draws in the place of the first. */
+    SectionKeys?: readonly string[];
+    /** True when it stands in for a section, tab or grid, so it draws in that place, not at a position. */
+    ReplacesPlace?: boolean;
 }
 
 /** One item in the form's side rail, and the panels it holds. */
@@ -186,11 +198,19 @@ export function ReplacedPreviewKeys(
         const tab = context.Rail.find((item) => item.Key === state.ReplaceRailKey);
         return new Set(tab?.SectionKeys ?? []);
     }
-    if (state.ReplaceMode === 'section') {
-        const key = state.ReplaceSectionKey.trim();
-        return new Set(key ? [key] : []);
-    }
+    if (state.ReplaceMode === 'section') return new Set(ChosenSectionKeys(state, context));
     return new Set<string>();
+}
+
+/**
+ * The sections the `section` mode stands in for, in the form's order and kept to sections the
+ * form draws. The list when one is set, else the single key.
+ */
+export function ChosenSectionKeys(state: FormPlacementState, context: FormPlacementContext): string[] {
+    const wanted = state.ReplaceSectionKeys.length > 0 ? state.ReplaceSectionKeys : [state.ReplaceSectionKey];
+    const keys = wanted.map((key) => key.trim()).filter((key) => key.length > 0);
+    if (context.Sections.length === 0) return keys;
+    return context.Sections.map((s) => s.Key).filter((key) => keys.includes(key));
 }
 
 /** One field on offer, named together with the section that draws it. */
@@ -298,7 +318,7 @@ export function TargetRailItem(
     if (state.ReplaceMode === 'rail-tab') {
         return context.Rail.find((item) => item.Key === state.ReplaceRailKey) ?? null;
     }
-    if (state.ReplaceMode === 'section') return holding(state.ReplaceSectionKey);
+    if (state.ReplaceMode === 'section') return holding(ChosenSectionKeys(state, context)[0] ?? '');
     if (state.ReplaceMode === 'field') {
         return state.ReplaceFieldSectionKey ? holding(state.ReplaceFieldSectionKey) : null;
     }
@@ -356,12 +376,26 @@ export interface FormPlacementState {
     /** Key of the rail tab to stand in for, when the mode is `rail-tab`. */
     ReplaceRailKey: string;
     ReplaceSectionKey: string;
+    /**
+     * Sections to stand in for, when the `section` mode names more than one. Empty means the
+     * one in {@link ReplaceSectionKey}.
+     */
+    ReplaceSectionKeys: string[];
+    /** Section to draw inside, replacing nothing. Empty means the panel goes at {@link Slot}. */
+    InSectionKey: string;
+    /** Where inside its section the panel draws: for {@link InSectionKey} and for a field claim. */
+    SectionPosition: 'start' | 'end';
     /** Section whose fields the `field` mode chooses from. */
     ReplaceFieldSectionKey: string;
     /** Entity field names to stand in for, all inside {@link ReplaceFieldSectionKey}. */
     ReplaceFieldNames: string[];
     ReplaceRelatedIndex: number;
     ReplaceContributionIndex: number;
+    /**
+     * Order among the panels in the same position, higher first. Null leaves it unset: a new
+     * panel saves 0, and an edited one keeps the order it has.
+     */
+    SortKey: number | null;
     ActivateNow: boolean;
 }
 
@@ -446,10 +480,14 @@ export function InitialPlacementState(
         ReplaceMode: 'none',
         ReplaceRailKey: DefaultRailKeyFor(context),
         ReplaceSectionKey: context.Sections[0]?.Key ?? '',
+        ReplaceSectionKeys: [],
+        InSectionKey: '',
+        SectionPosition: 'start',
         ReplaceFieldSectionKey: DefaultFieldSectionKey(context),
         ReplaceFieldNames: [],
         ReplaceRelatedIndex: 0,
         ReplaceContributionIndex: 0,
+        SortKey: null,
         ActivateNow: !context.FullCustomForm,
     };
 }
@@ -468,7 +506,8 @@ export function PlacementStateFromContribution(
     activeNow: boolean,
 ): FormPlacementState {
     const railKey = (spec.replacesSectionKey ?? '').trim();
-    const sectionKey = context.Sections.some((s) => s.Key === railKey) ? railKey : '';
+    const listed = (spec.replacesSectionKeys ?? []).map((k) => k.trim()).filter((k) => k.length > 0);
+    const sectionKey = context.Sections.some((s) => s.Key === railKey) ? railKey : (listed[0] ?? '');
     const isRailTab = !!railKey && !sectionKey
         && ReplaceableRailTabs(context).some((tab) => tab.Key === railKey);
 
@@ -505,10 +544,14 @@ export function PlacementStateFromContribution(
         ReplaceMode: mode,
         ReplaceRailKey: isRailTab ? railKey : DefaultRailKeyFor(context),
         ReplaceSectionKey: sectionKey || context.Sections[0]?.Key || '',
+        ReplaceSectionKeys: listed.length > 1 ? listed : [],
+        InSectionKey: mode === 'none' ? (spec.inSectionKey ?? '').trim() : '',
+        SectionPosition: spec.sectionPosition === 'end' ? 'end' : 'start',
         ReplaceFieldSectionKey: fieldSection?.Key || DefaultFieldSectionKey(context),
         ReplaceFieldNames: keptFields,
         ReplaceRelatedIndex: relatedIndex >= 0 ? relatedIndex : 0,
         ReplaceContributionIndex: contributionIndex >= 0 ? contributionIndex : 0,
+        SortKey: spec.sortKey ?? null,
         ActivateNow: activeNow,
     };
 }
@@ -516,7 +559,8 @@ export function PlacementStateFromContribution(
 /**
  * The state as a contribution block.
  *
- * `sortKey` is deliberately absent, and `contributionKey` is set only when the user chose to
+ * `sortKey` is written only once the user has placed the panel among others in its position,
+ * and `contributionKey` is set only when the user chose to
  * take over a named panel. A key is what makes one contribution replace another, so it is
  * written when a replacement is meant and left for the write path to derive otherwise — the
  * duplicate check compares those strings literally, and two algorithms would not agree.
@@ -534,6 +578,7 @@ export function ResolvePlacementDecision(
 
     const icon = state.Icon.trim();
     if (icon) contribution.icon = icon;
+    if (state.SortKey != null) contribution.sortKey = state.SortKey;
 
     const configuration = proposal?.configuration;
     if (configuration && Object.keys(configuration).length > 0) {
@@ -551,11 +596,16 @@ export function ResolvePlacementDecision(
             if (group) contribution.chromeGroup = group;
         }
     } else if (state.ReplaceMode === 'section') {
-        const key = state.ReplaceSectionKey.trim();
-        if (key) contribution.replacesSectionKey = key;
+        const keys = ChosenSectionKeys(state, context);
+        if (keys.length === 1) contribution.replacesSectionKey = keys[0];
+        else if (keys.length > 1) contribution.replacesSectionKeys = keys;
+        // Panels drawing in one place break ties by page order, so they share one slot and the
+        // slot sorts them by `sortKey`, as the order list does.
+        if (keys.length > 0 && SlotIsOnForm(context, 'before-fields')) contribution.slot = 'before-fields';
     } else if (state.ReplaceMode === 'field') {
         const names = ChosenFieldNames(state, context);
         if (names.length > 0) contribution.replacesFieldNames = names;
+        if (names.length > 0 && state.SectionPosition === 'end') contribution.sectionPosition = 'end';
     } else if (state.ReplaceMode === 'related') {
         const target = context.Related[state.ReplaceRelatedIndex];
         if (target) {
@@ -565,9 +615,18 @@ export function ResolvePlacementDecision(
     } else if (state.ReplaceMode === 'contribution') {
         const target = context.Existing[state.ReplaceContributionIndex];
         if (target?.Key) contribution.contributionKey = target.Key;
+    } else if (state.InSectionKey.trim()) {
+        contribution.inSectionKey = state.InSectionKey.trim();
+        contribution.sectionPosition = state.SectionPosition;
     }
 
     return { Contribution: contribution, ActivateNow: state.ActivateNow };
+}
+
+/** Section titles joined for a sentence: "A and B", "A, B and C". */
+export function DescribeSectionList(titles: readonly string[]): string {
+    if (titles.length <= 1) return titles[0] ?? '';
+    return `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
 }
 
 /**
@@ -592,7 +651,12 @@ export function DescribeFieldList(labels: readonly string[]): string {
  */
 export function SummarizePlacement(state: FormPlacementState, context: FormPlacementContext): string {
     const what = state.Presentation === 'bare' ? 'a bare strip' : 'a panel';
-    const where = state.ReplaceMode === 'field' ? '' : ` at ${state.Slot}`;
+    const inSection = state.ReplaceMode === 'none'
+        ? context.Sections.find((s) => s.Key === state.InSectionKey.trim()) ?? null
+        : null;
+    const where = state.ReplaceMode === 'field' ? ''
+        : inSection ? ` ${state.SectionPosition === 'end' ? 'at the bottom' : 'at the top'} of the ${inSection.Title} section`
+        : ` at ${state.Slot}`;
     const parts = [`Adds ${what}${where} on every ${context.EntityName} record`];
 
     if (state.ReplaceMode === 'rail-tab') {
@@ -600,8 +664,12 @@ export function SummarizePlacement(state: FormPlacementState, context: FormPlace
         parts.push(tab
             ? `taking the place of the whole ${tab.Title} tab, leaving the other tabs alone`
             : 'taking the place of a whole tab, leaving the other tabs alone');
+    } else if (state.ReplaceMode === 'section' && ChosenSectionKeys(state, context).length > 1) {
+        const titles = ChosenSectionKeys(state, context)
+            .map((key) => context.Sections.find((s) => s.Key === key)?.Title ?? key);
+        parts.push(`standing in for the ${DescribeSectionList(titles)} sections, in the place of the first`);
     } else if (state.ReplaceMode === 'section') {
-        const section = context.Sections.find((s) => s.Key === state.ReplaceSectionKey);
+        const section = context.Sections.find((s) => s.Key === ChosenSectionKeys(state, context)[0]);
         if (section && HasDetailsTab(context)) {
             parts.push(`standing in for the ${section.Title} section, one of ${context.Sections.length} inside the Details tab`);
         } else if (section) {
@@ -613,7 +681,7 @@ export function SummarizePlacement(state: FormPlacementState, context: FormPlace
         const labels = names
             .map((name) => (section?.Fields ?? []).find((f) => f.Name === name)?.Label || name);
         parts.push(labels.length > 0 && section
-            ? `standing in for ${DescribeFieldList(labels)} at the top of the ${section.Title} section`
+            ? `standing in for ${DescribeFieldList(labels)} at the ${state.SectionPosition === 'end' ? 'bottom' : 'top'} of the ${section.Title} section`
             : 'standing in for no field yet — pick at least one');
     } else if (state.ReplaceMode === 'related') {
         const related = context.Related[state.ReplaceRelatedIndex];
@@ -623,7 +691,7 @@ export function SummarizePlacement(state: FormPlacementState, context: FormPlace
         if (existing) parts.push(`replacing the ${existing.Title} panel`);
     }
 
-    if (state.ReplaceMode === 'none' && state.Presentation === 'panel' && ShowsRail(context)) {
+    if (state.ReplaceMode === 'none' && !inSection && state.Presentation === 'panel' && ShowsRail(context)) {
         parts.push(SlotJoinsDetailsTab(state.Slot)
             ? 'inside the Details tab'
             : 'as a tab of its own');
@@ -636,7 +704,7 @@ export function SummarizePlacement(state: FormPlacementState, context: FormPlace
     if (state.ReplaceMode === 'field') {
         sentence += ' The chosen position does not apply: a panel standing in for a field renders inside that field\'s section.';
     }
-    if (state.ReplaceMode !== 'field' && context.SlotsVerified && !SlotIsOnForm(context, state.Slot)) {
+    if (state.ReplaceMode !== 'field' && !inSection && context.SlotsVerified && !SlotIsOnForm(context, state.Slot)) {
         sentence += ` This form does not emit ${state.Slot}, so the panel renders at the bottom instead.`;
     }
     if (state.ReplaceMode === 'section' && !context.TargetsVerified) {
@@ -659,4 +727,117 @@ export function ApplyDecisionToSpec<T extends { formContribution?: FormContribut
     decision: FormPlacementDecision,
 ): T {
     return { ...spec, formContribution: decision.Contribution };
+}
+
+/** One panel in the order list of a position. */
+export interface PlacementOrderItem {
+    Key: string;
+    Title: string;
+    SortKey: number;
+    /** The panel being placed. */
+    IsThis: boolean;
+}
+
+/** The key the placed panel is listed under in its own order list. */
+export const PLACEMENT_ORDER_THIS_KEY = '__this__';
+
+/** How far apart a panel is put from its neighbour when it moves to either end of the list. */
+export const PLACEMENT_ORDER_STEP = 10;
+
+/**
+ * The panels in the chosen position, top to bottom, the one being placed among them.
+ *
+ * Higher `SortKey` draws first, as the slot and section hosts sort. The placed panel is listed
+ * after any panel it ties with: a new row loads after the rows already there, and moving the
+ * panel gives it a number of its own. A position is a slot, the top or bottom of a section —
+ * where field claims draw too — or the place of a block that panels stand in for. Empty when the
+ * panel stands in for a tab, grid or panel, since it then draws alone in that thing's place.
+ */
+export function PanelsInPosition(
+    state: FormPlacementState,
+    context: FormPlacementContext,
+    title: string,
+): PlacementOrderItem[] {
+    const here = placedPosition(state, context);
+    if (!here) return [];
+    const others: PlacementOrderItem[] = context.Existing
+        .filter((e) => existingPosition(e, context) === here)
+        .map((e) => ({ Key: e.Key, Title: e.Title, SortKey: e.SortKey ?? 0, IsThis: false }));
+    const self: PlacementOrderItem = { Key: PLACEMENT_ORDER_THIS_KEY, Title: title, SortKey: state.SortKey ?? 0, IsThis: true };
+    const items = [...others, self];
+    return items
+        .map((item, index) => ({ item, index }))
+        .sort((a, b) => b.item.SortKey - a.item.SortKey
+            || (a.item.IsThis ? 1 : b.item.IsThis ? -1 : a.index - b.index))
+        .map((entry) => entry.item);
+}
+
+/**
+ * Where the placed panel draws, as a key shared by every panel drawing in the same place: a slot
+ * name, `in:<section>:<start|end>` for the top or bottom of a section, or `at:<section>` for the
+ * place of a block that panels stand in for. Null when it stands in for a tab, grid or panel.
+ */
+function placedPosition(state: FormPlacementState, context: FormPlacementContext): string | null {
+    if (state.ReplaceMode === 'field') {
+        return state.ReplaceFieldSectionKey ? `in:${state.ReplaceFieldSectionKey}:${state.SectionPosition}` : null;
+    }
+    if (state.ReplaceMode === 'section') return blockPosition(ChosenSectionKeys(state, context), context);
+    if (state.ReplaceMode !== 'none') return null;
+    const inSection = state.InSectionKey.trim();
+    return inSection ? `in:${inSection}:${state.SectionPosition}` : state.Slot;
+}
+
+/** The same key for a panel already on the form. */
+function existingPosition(existing: FormPlacementExisting, context: FormPlacementContext): string | null {
+    const replaced = (existing.SectionKeys ?? []).map((key) => key.trim()).filter((key) => key.length > 0);
+    if (replaced.length > 0) {
+        const drawn = context.Sections.length > 0
+            ? context.Sections.map((s) => s.Key).filter((key) => replaced.includes(key))
+            : replaced;
+        return blockPosition(drawn, context);
+    }
+    if (existing.ReplacesPlace) return null;
+    const position = existing.SectionPosition === 'end' ? 'end' : 'start';
+    const inSection = existing.InSectionKey?.trim();
+    if (inSection) return `in:${inSection}:${position}`;
+    const firstField = (existing.FieldNames ?? []).find((name) => name.trim().length > 0);
+    if (firstField) {
+        const section = SectionHoldingField(context, firstField);
+        return section ? `in:${section.Key}:${position}` : null;
+    }
+    return existing.Slot;
+}
+
+/**
+ * The key for panels standing in for `keys`, in form order: the place of the first. The first
+ * block on the form is also where the before-fields slot draws, so the two share one key.
+ */
+function blockPosition(keys: readonly string[], context: FormPlacementContext): string | null {
+    const first = keys[0];
+    if (!first) return null;
+    return first === context.Sections[0]?.Key ? 'before-fields' : `at:${first}`;
+}
+
+/**
+ * The order number that puts the placed panel one step up or down, or null when it cannot move.
+ *
+ * The number has to fall strictly between its new neighbours, since equal numbers do not say
+ * which draws first. At either end of the list it goes a step past the last one. Between two
+ * panels whose numbers are adjacent or equal there is no number to give, so the move is refused
+ * rather than landing somewhere the list does not show.
+ */
+export function MovedSortKey(items: readonly PlacementOrderItem[], direction: 'up' | 'down'): number | null {
+    const at = items.findIndex((item) => item.IsThis);
+    if (at < 0) return null;
+    const target = direction === 'up' ? at - 1 : at + 1;
+    if (target < 0 || target >= items.length) return null;
+    // Its neighbours after the move, read from the list without it: it lands at `target`.
+    const rest = items.filter((item) => !item.IsThis);
+    const above = rest[target - 1] ?? null;
+    const below = rest[target] ?? null;
+    if (!above && below) return below.SortKey + PLACEMENT_ORDER_STEP;
+    if (above && !below) return above.SortKey - PLACEMENT_ORDER_STEP;
+    if (!above || !below) return null;
+    if (above.SortKey - below.SortKey < 2) return null;
+    return Math.floor((above.SortKey + below.SortKey) / 2);
 }

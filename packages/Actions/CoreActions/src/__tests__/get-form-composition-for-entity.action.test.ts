@@ -32,7 +32,7 @@ const provider = { EntityByName: (n: string) => (n === entity.Name ? entity : un
 const runViewResults: Record<string, unknown[]> = {
     'MJ: Form Chrome Rules': [{ ID: 'r1' }],
     'MJ: Entity Form Contributions': [
-        { ID: 'c1', ContributionKey: 'skip:ltv', Slot: 'before-fields', Title: 'LTV', Presentation: 'bare', Precedence: 0, Inclusion: null },
+        { ID: 'c1', ContributionKey: 'skip:ltv', Slot: 'before-fields', Title: 'LTV', Presentation: 'bare', Precedence: 0, Inclusion: null, SortKey: 7 },
     ],
 };
 const capturedFilters: Record<string, string | undefined> = {};
@@ -84,10 +84,27 @@ describe('GetFormCompositionForEntityAction', () => {
             { Entity: 'MJ_BizApps_Tasks: Task Comments', JoinField: 'PersonID', SectionKey: 'mJBizAppsTasksTaskComments', Inclusion: 'Auto', Source: 'baked' },
         ]);
         expect(payload.Contributions).toEqual([
-            { Key: 'skip:ltv', Slot: 'before-fields', Source: 'metadata', Title: 'LTV', Presentation: 'bare', Hidden: false, Precedence: 0 },
+            { Key: 'skip:ltv', Slot: 'before-fields', Source: 'metadata', Title: 'LTV', Presentation: 'bare', Hidden: false, Precedence: 0, SortKey: 7, FieldNames: [], SectionKeys: [], ReplacesPlace: false },
         ]);
         expect(payload.ChromeRuleCount).toBe(1);
         expect(payload.Note).toMatch(/compiled/i);
+    });
+
+    it('reports the blocks a row stands in for, from the list or the single key', async () => {
+        const rows = runViewResults['MJ: Entity Form Contributions'];
+        const saved = [...rows];
+        rows.push(
+            { ID: 'c2', ContributionKey: 'many', Slot: 'before-fields', Title: 'Many', Presentation: 'panel', Precedence: 0, Inclusion: null, SortKey: 0, ReplacesSectionKeys: '["details","personalIdentity"]' },
+            { ID: 'c3', ContributionKey: 'one', Slot: 'before-fields', Title: 'One', Presentation: 'panel', Precedence: 0, Inclusion: null, SortKey: 0, ReplacesSectionKey: 'systemMetadata' },
+        );
+        try {
+            const payload = JSON.parse((await run()).Message ?? '{}');
+            const byKey = new Map((payload.Contributions as Array<{ Key: string; SectionKeys: string[] }>).map((c) => [c.Key, c.SectionKeys]));
+            expect(byKey.get('many')).toEqual(['details', 'personalIdentity']);
+            expect(byKey.get('one')).toEqual(['systemMetadata']);
+        } finally {
+            rows.splice(0, rows.length, ...saved);
+        }
     });
 
     it('declares the slots CodeGen emits, and not top-area, which no generated form has', async () => {

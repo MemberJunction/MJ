@@ -1,5 +1,5 @@
 /**
- * form-contributions.checks.ts — the 'form-contributions' bundle (FC1–FC8).
+ * form-contributions.checks.ts — the 'form-contributions' bundle (FC1–FC15).
  *
  * Deterministic (no LLM) coverage for metadata-registered form contributions: a
  * `MJ: Entity Form Contributions` row pointing at a `Type='Widget'` Component whose spec
@@ -21,14 +21,22 @@
  *   - FC6: the identity-entity clamp drops Global rows on `MJ: Users` at the read path.
  *   - FC7: the same clamp leaves a User-scope row on that entity alone.
  *   - FC8: the kill switch actually rolls back — the engine loads no contributions.
+ *   - FC9: a UI-only user can switch off their own personal panel.
+ *   - FC10: a UI-only user cannot publish their own panel to everyone.
+ *   - FC11: a UI-only user cannot take over or delete a panel published to everyone.
+ *   - FC12: a holder of Manage Form Defaults can publish, but never writes another user's panel.
+ *   - FC13: a panel standing in for several sections persists them as a list.
+ *   - FC14: a panel placed inside a section persists the section and its position.
+ *   - FC15: the database refuses a row that makes two kinds of claim at once.
  *
  * SQL Server only for FC1 (raw `ctx.Pool`); it skips-as-pass without a pool. Every row this
  * bundle creates is torn down FK-safe in the lifecycle.
  */
-import { RunView, BaseEntity, CompositeKey } from '@memberjunction/core';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { RunView, BaseEntity, CompositeKey, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import type { IMetadataProvider } from '@memberjunction/core';
 import {
     InteractiveFormsEngine,
+    UserCanManageFormDefaults,
     type MJComponentEntity,
     type MJEntityFormContributionEntity,
 } from '@memberjunction/core-entities';
@@ -160,6 +168,41 @@ async function insertRowDirect(
     return row.ID;
 }
 
+/**
+ * The caller as a plain UI user: the same person, holding only the UI role and not an Owner.
+ *
+ * Sharing the caller's ID keeps "their own panel" meaningful — rows the caller created are this
+ * user's personal rows — while the role set decides whether the scope grant is held.
+ */
+function uiOnlyUser(ctx: IntegrationCheckContext): UserInfo {
+    const ui = ctx.Provider.Roles.find(r => r.Name?.trim().toLowerCase() === 'ui');
+    Assert(!!ui, "the 'UI' role is required to act as a plain user and was not found");
+    const user = new UserInfo(ctx.Provider, {
+        ID: ctx.User.ID, Name: ctx.User.Name, Email: ctx.User.Email, Type: 'User', IsActive: true,
+        UserRoles: [new UserRoleInfo({ UserID: ctx.User.ID, RoleID: ui!.ID })],
+    });
+    Assert(!UserCanManageFormDefaults(user, ctx.Provider),
+        'fixture invalid: the UI role alone must not hold Manage Form Defaults');
+    return user;
+}
+
+/** Fails the check when the harness user cannot write shared rows, which FC6 and FC11–12 need. */
+function assertCallerHoldsGrant(ctx: IntegrationCheckContext): void {
+    Assert(UserCanManageFormDefaults(ctx.User, ctx.Provider),
+        'the harness user must hold Manage Form Defaults (Developer or Integration role, or Owner) to write shared rows');
+}
+
+/** The row's scope columns and status as stored, bypassing every cache. */
+async function storedScope(ctx: IntegrationCheckContext, id: string): Promise<{ Scope: string; UserID: string | null; Status: string }> {
+    const result = await new RunView().RunView<{ Scope: string; UserID: string | null; Status: string }>({
+        EntityName: CONTRIBUTION_ENTITY,
+        ExtraFilter: `ID='${id}'`,
+        Fields: ['Scope', 'UserID', 'Status'], ResultType: 'simple', BypassCache: true,
+    }, ctx.User);
+    Assert(result.Success && result.Results.length === 1, `contribution ${id} did not read back`);
+    return result.Results[0];
+}
+
 export const FormContributionsChecks: NamedCheck[] = [
     {
         Id: 'form-contributions.FC1',
@@ -175,7 +218,8 @@ export const FormContributionsChecks: NamedCheck[] = [
                 'ID', 'EntityID', 'ComponentID', 'Name', 'Description', 'Slot', 'SortKey', 'ContributionKey',
                 'RelatedEntityID', 'RelatedJoinField', 'ReplacesSectionKey', 'Inclusion', 'ChromeGroup',
                 'Presentation', 'Title', 'Icon', 'Scope', 'UserID', 'RoleID', 'Precedence', 'Status',
-                'Configuration', 'Notes',
+                'Configuration', 'Notes', 'ReplacesFieldNames', 'ReplacesSectionKeys', 'InSectionKey',
+                'SectionPosition',
             ]) {
                 Assert(present.has(required), `EntityFormContribution is missing column '${required}'`);
             }
@@ -205,6 +249,9 @@ export const FormContributionsChecks: NamedCheck[] = [
                 'CK_EntityFormContribution_BareNoChrome',
                 'CK_EntityFormContribution_JoinNeedsRelated',
                 'CK_EntityFormContribution_OneClaim',
+                'CK_EntityFormContribution_ReplacesSectionKeysShape',
+                'CK_EntityFormContribution_SectionPosition',
+                'CK_EntityFormContribution_SectionPositionNeedsSection',
             ]) {
                 Assert(ckNames.has(expected), `expected CHECK constraint '${expected}' is missing`);
             }
@@ -381,6 +428,143 @@ export const FormContributionsChecks: NamedCheck[] = [
                 InteractiveFormsEngine.MetadataContributionsEnabled = previous;
                 await engine.Config(true, ctx.User, ctx.Provider);
             }
+        }
+    },
+    {
+        Id: 'form-contributions.FC9',
+        Name: 'FC9: a UI-only user can switch off their own personal panel',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const id = await insertRowDirect(ctx, {
+                EntityID: fx().TargetEntityID, ContributionKey: `${RUN_KEY}:own-off`,
+                Scope: 'User', UserID: ctx.User.ID, RoleID: null,
+            });
+            const row = await loadContribution(ctx.Provider, uiOnlyUser(ctx), id);
+            row.Status = 'Inactive';
+            Assert(await row.Save(), `a user must be able to change their own panel: ${row.LatestResult?.CompleteMessage}`);
+            AssertEqual((await storedScope(ctx, id)).Status, 'Inactive', 'the switch-off must be stored');
+        }
+    },
+    {
+        Id: 'form-contributions.FC10',
+        Name: 'FC10: a UI-only user cannot publish their own panel to everyone',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const id = await insertRowDirect(ctx, {
+                EntityID: fx().TargetEntityID, ContributionKey: `${RUN_KEY}:own-promote`,
+                Scope: 'User', UserID: ctx.User.ID, RoleID: null,
+            });
+            const row = await loadContribution(ctx.Provider, uiOnlyUser(ctx), id);
+            row.Scope = 'Global';
+            row.UserID = null;
+            Assert(!(await row.Save()), 'publishing to everyone without Manage Form Defaults must be refused');
+            Assert((row.LatestResult?.CompleteMessage ?? '').includes('Manage Form Defaults'),
+                `the refusal must name the missing grant, got: ${row.LatestResult?.CompleteMessage}`);
+            const stored = await storedScope(ctx, id);
+            AssertEqual(stored.Scope, 'User', 'a refused publish must leave the row personal');
+        }
+    },
+    {
+        Id: 'form-contributions.FC11',
+        Name: 'FC11: a UI-only user cannot take over or delete a panel published to everyone',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            assertCallerHoldsGrant(ctx);
+            const id = await insertRowDirect(ctx, {
+                EntityID: fx().TargetEntityID, ContributionKey: `${RUN_KEY}:shared`,
+                Scope: 'Global', UserID: null, RoleID: null,
+            });
+            const plain = uiOnlyUser(ctx);
+
+            // Demoting a shared row to personal would take it away from everyone else.
+            const takeOver = await loadContribution(ctx.Provider, plain, id);
+            takeOver.Scope = 'User';
+            takeOver.UserID = ctx.User.ID;
+            Assert(!(await takeOver.Save()), 'turning a shared panel into a personal one must be refused');
+
+            // Delete never runs Validate(), so it is guarded on its own path.
+            const remove = await loadContribution(ctx.Provider, plain, id);
+            Assert(!(await remove.Delete()), 'deleting a shared panel without the grant must be refused');
+
+            const stored = await storedScope(ctx, id);
+            AssertEqual(stored.Scope, 'Global', 'the shared panel must still be shared');
+            AssertEqual(stored.Status, 'Active', 'and still live');
+        }
+    },
+    {
+        Id: 'form-contributions.FC12',
+        Name: 'FC12: a holder of Manage Form Defaults can publish, but never writes another user\'s panel',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            assertCallerHoldsGrant(ctx);
+            const id = await insertRowDirect(ctx, {
+                EntityID: fx().TargetEntityID, ContributionKey: `${RUN_KEY}:holder-publish`,
+                Scope: 'User', UserID: ctx.User.ID, RoleID: null,
+            });
+            const row = await loadContribution(ctx.Provider, ctx.User, id);
+            row.Scope = 'Global';
+            row.UserID = null;
+            Assert(await row.Save(), `a holder must be able to publish: ${row.LatestResult?.CompleteMessage}`);
+            AssertEqual((await storedScope(ctx, id)).Scope, 'Global', 'the publish must be stored');
+
+            // The grant covers shared rows only. Someone else's personal row stays theirs.
+            const other = await new RunView().RunView<{ ID: string }>({
+                EntityName: 'MJ: Users',
+                ExtraFilter: `ID<>'${ctx.User.ID}' AND IsActive=1`,
+                Fields: ['ID'], MaxRows: 1, ResultType: 'simple',
+            }, ctx.User);
+            if (!other.Success || other.Results.length === 0) return; // single-user database
+            const aimed = await loadContribution(ctx.Provider, ctx.User, id);
+            aimed.Scope = 'User';
+            aimed.UserID = other.Results[0].ID;
+            Assert(!(await aimed.Save()), 'a holder must not hand a panel to another user as their personal panel');
+        }
+    },
+    {
+        Id: 'form-contributions.FC13',
+        Name: 'FC13: a panel standing in for several sections persists them as a list',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const result = await runAction(ctx, 'Create Form Contribution', [
+                { Name: 'EntityName', Value: TARGET_ENTITY },
+                { Name: 'Name', Value: `${RUN_KEY} many sections ${TAG}` },
+                { Name: 'Spec', Value: JSON.stringify(panelSpec('ItFcManySectionsPanel', {
+                    contributionKey: `${RUN_KEY}:many-sections`, replacesSectionKeys: ['applicationDetails', 'systemMetadata'],
+                })) },
+            ]);
+            Assert(result.Success, `Create failed: ${result.ResultCode} ${JSON.stringify(result.Payload)}`);
+            const row = await loadContribution(ctx.Provider, ctx.User, result.Payload.ContributionID as string);
+            AssertEqual(row.ReplacesSectionKeys, '["applicationDetails","systemMetadata"]', 'several sections are stored as a JSON array');
+            AssertEqual(row.ReplacesSectionKey, null, 'the single-key column stays empty when the list is used');
+        }
+    },
+    {
+        Id: 'form-contributions.FC14',
+        Name: 'FC14: a panel placed inside a section persists the section and its position',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const result = await runAction(ctx, 'Create Form Contribution', [
+                { Name: 'EntityName', Value: TARGET_ENTITY },
+                { Name: 'Name', Value: `${RUN_KEY} in section ${TAG}` },
+                { Name: 'Spec', Value: JSON.stringify(panelSpec('ItFcInSectionPanel', {
+                    contributionKey: `${RUN_KEY}:in-section`, inSectionKey: 'applicationDetails', sectionPosition: 'end',
+                })) },
+            ]);
+            Assert(result.Success, `Create failed: ${result.ResultCode} ${JSON.stringify(result.Payload)}`);
+            const row = await loadContribution(ctx.Provider, ctx.User, result.Payload.ContributionID as string);
+            AssertEqual(row.InSectionKey, 'applicationDetails', 'the section is stored');
+            AssertEqual(row.SectionPosition, 'end', 'and the position inside it');
+        }
+    },
+    {
+        Id: 'form-contributions.FC15',
+        Name: 'FC15: the database refuses a row that makes two kinds of claim at once',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const id = await insertRowDirect(ctx, {
+                EntityID: fx().TargetEntityID, ContributionKey: `${RUN_KEY}:two-claims`,
+                Scope: 'User', UserID: ctx.User.ID, RoleID: null,
+            });
+            const row = await loadContribution(ctx.Provider, ctx.User, id);
+            row.ReplacesSectionKeys = '["applicationDetails","systemMetadata"]';
+            row.ReplacesFieldNames = '["Name"]';
+            Assert(!(await row.Save()), 'a row claiming sections and fields at once must be refused');
+            const fresh = await loadContribution(ctx.Provider, ctx.User, id);
+            fresh.SectionPosition = 'end';
+            Assert(!(await fresh.Save()), 'a position with no section to apply to must be refused');
         }
     },
 ];

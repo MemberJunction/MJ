@@ -16,7 +16,7 @@ import {
 import { MJReactComponent, ReactBridgeService, type ReactComponentEvent } from '@memberjunction/ng-react';
 import { NormalizeIconClass } from '@memberjunction/ng-ui-components';
 import { BaseFormPanel, type FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
-import { ResolveContributionKey, type FormContributionRegistration } from '../panel-slot/form-contribution';
+import { ReplacedSectionKeys, ResolveContributionKey, type FormContributionRegistration } from '../panel-slot/form-contribution';
 import { BuildFormPanelHostProps } from './form-panel-host-props.builder';
 
 /**
@@ -80,6 +80,14 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
      */
     public get Icon(): string {
         return NormalizeIconClass(this.Contribution.Icon) || 'fa-solid fa-puzzle-piece';
+    }
+
+    /**
+     * The key a bare strip is filed under in the rail, when it replaces blocks and so belongs to
+     * their tab. Null for a strip that replaces nothing, which sits above every tab.
+     */
+    public get BareTabKey(): string | null {
+        return ReplacedSectionKeys(this.Contribution.Metadata).length > 0 ? this.SectionKey : null;
     }
 
     public get IsBare(): boolean {
@@ -256,6 +264,13 @@ export class InteractiveFormPanelComponent extends BaseFormPanel implements OnIn
     }
 
     private async loadSpec(): Promise<void> {
+        const supplied = this.Contribution?.ComponentSpec;
+        if (supplied) {
+            this.componentSpec = isFormPanelRole(supplied) ? supplied : null;
+            if (!this.componentSpec) this.loadError = `Component ${supplied.name} does not declare componentRole='form-panel'.`;
+            this.cdr.markForCheck();
+            return;
+        }
         const id = this.Contribution?.ComponentID;
         if (!id) { this.loadError = 'Contribution has no ComponentID.'; return; }
         const provider = this.FormComponent?.ProviderToUse;

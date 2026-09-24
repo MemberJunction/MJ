@@ -1,6 +1,7 @@
 import {
     Component,
     ComponentRef,
+    ElementRef,
     HostBinding,
     Input,
     OnChanges,
@@ -23,12 +24,14 @@ import { BaseFormPanel, FormPanelRegistrationMetadata, FormPanelSlot } from './b
 import { FormSlotCoordinator } from './form-slot-coordinator.service';
 import {
     CollapseFormPanelRegistrations,
-    ContributionClaimsFields,
+    ContributionDrawsInSection,
     FormContributionEntityMatches,
     type FormContributionRegistration,
 } from './form-contribution';
 import { CollectFormContributionRegistrations } from './collect-form-contribution-registrations';
 import { MountFormContribution } from './mount-form-contribution';
+import { PanelHideKey } from './panel-hides';
+import { FORM_PLACEMENT_PREVIEW } from './placement-preview';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
@@ -98,6 +101,9 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     private readonly destroy$ = new Subject<void>();
     private registeredSlot: FormPanelSlot | null = null;
     private readonly recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+    /** The placement dialog's unsaved panel, when this slot is on the dialog's preview form. */
+    private readonly preview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
+    private readonly element = inject<ElementRef<HTMLElement>>(ElementRef);
     /** Tracks synchronous re-entry depth into remount() so a future refactor
      *  that reintroduces a remount loop surfaces loudly instead of freezing. */
     private remountDepth = 0;
@@ -140,6 +146,7 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         } catch {
             // No engine here — compiled registrations are the only source.
         }
+        this.preview?.Changed$.pipe(takeUntil(this.destroy$)).subscribe(() => this.remount());
     }
 
     ngOnChanges(changes: SimpleChanges): void {
@@ -239,12 +246,19 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
                 ref.instance.Record = this.Record;
                 ref.instance.FormComponent = this.FormComponent;
                 ref.instance.RegistrationMetadata = reg.Metadata;
+                ref.instance.SlotElement = this.element.nativeElement;
                 if (this.FormContext) ref.instance.FormContext = this.FormContext;
                 // Left-nav leftover height targets mj-collapsible-panel as a
                 // flex child of .mj-forms-all-panels. The slot is already
                 // display:contents; the mounted host must be too.
                 const host = ref.location.nativeElement as HTMLElement | null;
-                if (host) host.style.display = 'contents';
+                if (host) {
+                    host.style.display = 'contents';
+                    // Lets the drawer tell a panel that drew something from one that self-hid,
+                    // by reading the DOM the way the form probe does.
+                    const hideKey = PanelHideKey(reg);
+                    if (hideKey) host.setAttribute('data-panel-key', hideKey);
+                }
                 this.FormComponent?.RegisterFormPanel?.(ref.instance);
                 // No detectChanges() — Angular's normal CD pass picks the new
                 // component up. Calling detectChanges() synchronously inside
@@ -269,13 +283,13 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     private allForEntity(): FormContributionRegistration[] {
         const entity = this.Record?.EntityInfo ?? null;
         const provider = this.FormComponent?.ProviderToUse ?? null;
-        const all = CollectFormContributionRegistrations(entity, provider);
+        const all = CollectFormContributionRegistrations(entity, provider, { Preview: this.preview });
         const strict = all.filter((reg) => FormContributionEntityMatches(reg.Metadata?.entity, this.Entity));
         this.warnOnLooseRegistrations(all, strict);
-        // A contribution that names fields is mounted by the section drawing them, not by a
-        // slot. It still carries a slot — every row does — so leaving it here would put the
-        // same panel on the form twice, once inside the group and once at the bottom.
-        return strict.filter((reg) => !ContributionClaimsFields(reg.Metadata));
+        // A contribution drawn inside a section — standing in for fields, or placed in one — is
+        // mounted by that section, not by a slot. It still carries a slot, as every row does,
+        // so leaving it here would put the same panel on the form twice.
+        return strict.filter((reg) => !ContributionDrawsInSection(reg.Metadata));
     }
 
     /**

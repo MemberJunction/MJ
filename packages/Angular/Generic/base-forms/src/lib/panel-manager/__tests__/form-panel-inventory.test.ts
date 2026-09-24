@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+    BuildFormItems,
     BuildPanelInventory,
     GroupPanelInventory,
     ContributionState,
+    DescribeAudience,
     DescribeReplacement,
-    DescribeScope,
+    IsListedFor,
     SummarizeInventory,
     type FormPanelContributionRow,
     type FormPanelInventoryInput,
@@ -24,10 +26,19 @@ const CONTRIBUTION: FormPanelContributionRow = {
     Presentation: 'panel',
     Status: 'Active',
     Scope: 'User',
+    UserID: 'user-me',
+    RoleID: null,
+    Role: null,
     ReplacesSectionKey: 'details',
+    ReplacesFieldNames: [],
     RelatedEntity: null,
     ChromeGroup: null,
     ContributionKey: 'panel:OrgMemberOverviewPanel',
+    ComponentID: 'COMP-1',
+    SortKey: 0,
+    ReplacesSectionKeys: [],
+    InSectionKey: null,
+    SectionPosition: null,
 };
 
 const INPUT: FormPanelInventoryInput = {
@@ -36,7 +47,19 @@ const INPUT: FormPanelInventoryInput = {
     StockGrids: [],
     FullCustomForm: false,
     TitleByKey: new Map([['details', 'Details']]),
+    CallerID: 'user-me',
+    CallerRoleIDs: ['role-sales'],
+    CanPublish: false,
+    HiddenKeys: [],
 };
+
+/** A panel published to everyone. */
+const GLOBAL: FormPanelContributionRow = {
+    ...CONTRIBUTION, ID: 'ROW-G', Scope: 'Global', UserID: null, ContributionKey: 'panel:Health', Title: 'Course Health',
+};
+
+/** A compiled panel, hideable by its registration key. */
+const COMPILED = { Key: 'model-predictions', Title: 'Model Predictions', Slot: 'after-fields', HideKey: 'class:model-predictions' };
 
 describe('DescribeReplacement', () => {
     it('names a rail tab rather than printing its key', () => {
@@ -67,19 +90,18 @@ describe('DescribeReplacement', () => {
     });
 });
 
-describe('DescribeScope', () => {
-    it('uses the same words the apply dialog used', () => {
-        expect(DescribeScope('User')).toBe('Only me');
-        expect(DescribeScope('Role')).toBe('My role');
-        expect(DescribeScope('Global')).toBe('Everyone');
+describe('DescribeAudience', () => {
+    it('says who sees it, naming the role', () => {
+        expect(DescribeAudience('User')).toBe('Only you');
+        expect(DescribeAudience('Role', 'Sales')).toBe('Sales role');
+        expect(DescribeAudience('Global')).toBe('Everyone');
+    });
+
+    it('falls back when the role has no name', () => {
+        expect(DescribeAudience('Role', null)).toBe('A role');
     });
 });
 
-/**
- * `held` exists because Active and rendering are not the same thing. A full custom form
- * owns the body, so an Active contribution behind one draws nothing, and a list that
- * called it Active would be describing the row instead of the form.
- */
 describe('ContributionState', () => {
     it('separates a row that is on from a row that is on and rendering', () => {
         expect(ContributionState('Active', false)).toBe('active');
@@ -133,7 +155,7 @@ describe('BuildPanelInventory', () => {
     it('lists what it cannot change, without offering to change it', () => {
         const items = BuildPanelInventory({
             ...INPUT,
-            Compiled: [{ Key: 'skip:health', Title: 'Course Health Strip', Slot: 'top-area' }],
+            Compiled: [{ Key: 'skip:health', Title: 'Course Health Strip', Slot: 'top-area', HideKey: 'class:skip:health' }],
             StockGrids: [{ SectionKey: 'memberProfiles', DisplayName: 'Member Profiles' }],
         });
         const compiled = items.find((i) => i.Origin === 'compiled')!;
@@ -143,6 +165,9 @@ describe('BuildPanelInventory', () => {
             expect(item.CanTurnOn).toBe(false);
             expect(item.CanTurnOff).toBe(false);
         }
+        // Code-shipped panels can still be hidden for oneself; a relationship grid cannot.
+        expect(compiled.CanHide).toBe(true);
+        expect(grid.CanHide).toBe(false);
         expect(compiled.Subtitle).toContain('built into this app');
         expect(grid.Subtitle).toContain('from the relationship');
     });
@@ -150,7 +175,7 @@ describe('BuildPanelInventory', () => {
     it('puts the rows the user can act on first', () => {
         const items = BuildPanelInventory({
             ...INPUT,
-            Compiled: [{ Key: 'skip:health', Title: 'Course Health Strip', Slot: 'top-area' }],
+            Compiled: [{ Key: 'skip:health', Title: 'Course Health Strip', Slot: 'top-area', HideKey: 'class:skip:health' }],
         });
         expect(items[0].Origin).toBe('contribution');
     });
@@ -173,60 +198,129 @@ describe('SummarizeInventory', () => {
 
 
 /**
- * A flat list mixes what the user chose with what the app and the schema put there, and
- * mixes what is rendering with what is stored and idle. The headings separate the rows
- * that carry buttons from the rows that cannot.
+ * Grouped by who an item belongs to, because that decides what the user may do with it: anything
+ * to their own, hide what is shared with them, nothing to what a relationship draws.
  */
 describe('GroupPanelInventory', () => {
     const inventory = (over: Partial<FormPanelInventoryInput> = {}) =>
         GroupPanelInventory(BuildPanelInventory({ ...INPUT, ...over }));
 
-    it('heads the rows the user can act on by what they are doing', () => {
-        const groups = inventory({
-            Contributions: [
-                CONTRIBUTION,
-                { ...CONTRIBUTION, ID: 'ROW-2', Status: 'Pending' },
-                { ...CONTRIBUTION, ID: 'ROW-3', Status: 'Inactive' },
-            ],
-        });
-        expect(groups.map((g) => g.Title)).toEqual(['On this form', 'Drafts', 'Turned off']);
+    it('heads the user\'s own panels as theirs', () => {
+        expect(inventory().map((g) => g.Key)).toEqual(['yours']);
     });
 
-    it('drops a heading with nothing under it', () => {
-        expect(inventory().map((g) => g.Key)).toEqual(['active']);
+    it('puts published and code-shipped panels under Shared with you', () => {
+        const groups = inventory({ Contributions: [CONTRIBUTION, GLOBAL], Compiled: [COMPILED] });
+        const shared = groups.find((g) => g.Key === 'shared')!;
+        expect(shared.Items.map((i) => i.Title)).toEqual(['Course Health', 'Model Predictions']);
     });
 
-    it('separates what the user cannot change into its own group', () => {
-        const groups = inventory({
-            Compiled: [{ Key: 'skip:health', Title: 'Course Health Strip', Slot: 'top-area' }],
-            StockGrids: [{ SectionKey: 'memberProfiles', DisplayName: 'Member Profiles' }],
-        });
-        const fixed = groups.find((g) => g.Key === 'fixed')!;
-        expect(fixed.Title).toBe('Part of the form itself');
-        expect(fixed.Items).toHaveLength(2);
-        expect(fixed.Items.every((i) => !i.CanEdit && !i.CanRemove)).toBe(true);
+    it('moves a hidden panel to Hidden by you, so the hide can be undone', () => {
+        const groups = inventory({ Contributions: [GLOBAL], HiddenKeys: ['panel:Health'] });
+        expect(groups.map((g) => g.Key)).toEqual(['hidden']);
+        expect(groups[0].Items[0].CanShow).toBe(true);
     });
 
-    it('puts the user’s own rows before the form’s own', () => {
-        const groups = inventory({
-            Compiled: [{ Key: 'skip:health', Title: 'Course Health Strip', Slot: 'top-area' }],
-        });
+    it('keeps relationship grids in their own group, last', () => {
+        const groups = inventory({ StockGrids: [{ SectionKey: 'memberProfiles', DisplayName: 'Member Profiles' }] });
         expect(groups[groups.length - 1].Key).toBe('fixed');
     });
 
-    // Active and rendering are not the same thing behind a full custom form.
-    it('heads held-back rows apart from the ones that render', () => {
-        const groups = inventory({ FullCustomForm: true });
-        expect(groups.map((g) => g.Key)).toEqual(['held']);
-        expect(groups[0].Note).toContain('render for nobody');
+    it('shows state as a label rather than as a heading', () => {
+        const groups = inventory({ Contributions: [CONTRIBUTION, { ...CONTRIBUTION, ID: 'ROW-2', Status: 'Pending' }] });
+        expect(groups).toHaveLength(1);
+        expect(groups[0].Items.map((i) => i.StateLabel)).toEqual(['on', 'draft']);
+    });
+});
+
+/**
+ * The user's role can read every contribution row, so the list decides what belongs in front of
+ * them. Listing another person's personal panel, or one aimed at a role they are not in, would
+ * show them things that are none of their business.
+ */
+describe('IsListedFor', () => {
+    it('lists the user\'s own personal panel', () => {
+        expect(IsListedFor({ Scope: 'User', UserID: 'user-me', RoleID: null }, 'user-me', [])).toBe(true);
     });
 
-    it('marks only a contribution as editable', () => {
-        const items = BuildPanelInventory({
-            ...INPUT,
-            Compiled: [{ Key: 'skip:health', Title: 'Course Health Strip', Slot: 'top-area' }],
+    it('does not list someone else\'s personal panel', () => {
+        expect(IsListedFor({ Scope: 'User', UserID: 'user-other', RoleID: null }, 'user-me', [])).toBe(false);
+    });
+
+    it('lists a panel for one of the user\'s roles, and not for another role', () => {
+        expect(IsListedFor({ Scope: 'Role', UserID: null, RoleID: 'role-sales' }, 'user-me', ['role-sales'])).toBe(true);
+        expect(IsListedFor({ Scope: 'Role', UserID: null, RoleID: 'role-ops' }, 'user-me', ['role-sales'])).toBe(false);
+    });
+
+    it('lists a panel for everyone', () => {
+        expect(IsListedFor({ Scope: 'Global', UserID: null, RoleID: null }, 'user-me', [])).toBe(true);
+    });
+
+    it('drops the unlisted rows from the inventory', () => {
+        const theirs = { ...CONTRIBUTION, ID: 'THEIRS', UserID: 'user-other' };
+        expect(BuildPanelInventory({ ...INPUT, Contributions: [CONTRIBUTION, theirs] }).map((i) => i.ID)).toEqual(['ROW-1']);
+    });
+});
+
+/** What each kind of user may do to each kind of item. */
+describe('BuildPanelInventory — who may do what', () => {
+    const item = (row: FormPanelContributionRow, over: Partial<FormPanelInventoryInput> = {}) =>
+        BuildPanelInventory({ ...INPUT, Contributions: [row], ...over })[0];
+
+    it('lets anyone manage their own panel, and hide nothing of it', () => {
+        const mine = item(CONTRIBUTION);
+        expect(mine).toMatchObject({ CanRemove: true, CanEdit: true, CanHide: false, CanPublish: false });
+    });
+
+    it('lets a holder publish their own panel', () => {
+        expect(item(CONTRIBUTION, { CanPublish: true }).CanPublish).toBe(true);
+    });
+
+    it('lets anyone hide a shared panel, but not remove, edit or switch it', () => {
+        const shared = item(GLOBAL);
+        expect(shared).toMatchObject({
+            CanHide: true, CanRemove: false, CanEdit: false, CanTurnOff: false, CanChangeAudience: false,
         });
-        expect(items.find((i) => i.Origin === 'contribution')!.CanEdit).toBe(true);
-        expect(items.find((i) => i.Origin === 'compiled')!.CanEdit).toBe(false);
+    });
+
+    it('lets a holder re-aim, remove and switch a shared panel', () => {
+        const shared = item(GLOBAL, { CanPublish: true });
+        expect(shared).toMatchObject({ CanChangeAudience: true, CanRemove: true, CanTurnOff: true });
+    });
+
+    it('labels the audience by name', () => {
+        const forSales = { ...GLOBAL, Scope: 'Role', RoleID: 'role-sales', Role: 'Sales' };
+        expect(item(forSales).AudienceLabel).toBe('Sales role');
+    });
+});
+
+/** The forms the toolbar picker offers, and the generated form, as the drawer lists them. */
+describe('BuildFormItems', () => {
+    const overrides = [
+        { ID: 'ops', Name: 'Ops Form', Status: 'Active', Scope: 'Role', UserID: null, RoleID: 'role-sales', Role: 'Sales' },
+        { ID: 'finance', Name: 'Finance Form', Status: 'Inactive', Scope: 'User', UserID: 'user-me', RoleID: null, Role: null },
+    ];
+    const variants = [{ ID: 'ops', Label: 'Ops Form' }, { ID: 'finance', Label: 'Finance Form' }];
+
+    it('lists the picker\'s forms and the generated form, marking the current one', () => {
+        const items = BuildFormItems({ Variants: variants, Overrides: overrides, CurrentFormID: 'ops', CanPublish: false });
+        expect(items.map((i) => `${i.Title}${i.IsCurrent ? '*' : ''}`)).toEqual(['Ops Form*', 'Finance Form', 'Generated form']);
+    });
+
+    it('marks the generated form current when no custom form is chosen', () => {
+        const items = BuildFormItems({ Variants: variants, Overrides: overrides, CurrentFormID: null, CanPublish: false });
+        expect(items.find((i) => i.ID === null)?.IsCurrent).toBe(true);
+    });
+
+    it('labels each form by who it is for', () => {
+        const items = BuildFormItems({ Variants: variants, Overrides: overrides, CurrentFormID: null, CanPublish: false });
+        expect(items.map((i) => i.AudienceLabel)).toEqual(['Sales role', 'Only you', 'Built in']);
+    });
+
+    it('offers publishing only a holder\'s own form, and re-aiming only a shared one', () => {
+        const items = BuildFormItems({ Variants: variants, Overrides: overrides, CurrentFormID: null, CanPublish: true });
+        expect(items.find((i) => i.ID === 'finance')).toMatchObject({ CanPublish: true, CanChangeAudience: false });
+        expect(items.find((i) => i.ID === 'ops')).toMatchObject({ CanPublish: false, CanChangeAudience: true });
+        expect(items.find((i) => i.ID === null)).toMatchObject({ CanPublish: false, CanChangeAudience: false });
     });
 });

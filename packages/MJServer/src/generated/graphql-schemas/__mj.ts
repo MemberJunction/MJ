@@ -49061,6 +49061,17 @@ export class MJEntityFormContribution_ {
     @Field({nullable: true, description: `JSON array of field names this contribution stands in for, all within one section. The panel renders at the top of that section and the named fields are not drawn. Mutually exclusive with ReplacesSectionKey and RelatedEntityID.`}) 
     ReplacesFieldNames?: string;
         
+    @Field({nullable: true, description: `JSON array of section keys this contribution stands in for, all within one tab. The panel draws in the place of the first of them and the others are not drawn. Mutually exclusive with every other claim.`}) 
+    ReplacesSectionKeys?: string;
+        
+    @Field({nullable: true, description: `Section key of a section this contribution draws inside, replacing nothing. SectionPosition says whether it draws at the start or the end. Mutually exclusive with every other claim.`}) 
+    @MaxLength(255)
+    InSectionKey?: string;
+        
+    @Field({nullable: true, description: `Where inside its section the panel draws: start or end. Applies to InSectionKey and to a ReplacesFieldNames claim; null means start.`}) 
+    @MaxLength(10)
+    SectionPosition?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Entity?: string;
@@ -49163,6 +49174,15 @@ export class CreateMJEntityFormContributionInput {
     @Field({ nullable: true })
     ReplacesFieldNames: string | null;
 
+    @Field({ nullable: true })
+    ReplacesSectionKeys: string | null;
+
+    @Field({ nullable: true })
+    InSectionKey: string | null;
+
+    @Field({ nullable: true })
+    SectionPosition: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -49244,6 +49264,15 @@ export class UpdateMJEntityFormContributionInput {
 
     @Field({ nullable: true })
     ReplacesFieldNames?: string | null;
+
+    @Field({ nullable: true })
+    ReplacesSectionKeys?: string | null;
+
+    @Field({ nullable: true })
+    InSectionKey?: string | null;
+
+    @Field({ nullable: true })
+    SectionPosition?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

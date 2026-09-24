@@ -4,6 +4,8 @@ import { InteractiveFormsEngine, type MJEntityFormContributionEntity } from '@me
 import { MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { BaseFormPanel, type FormPanelRegistrationMetadata, type FormPanelSlot } from './base-form-panel';
 import type { FormContributionRegistration } from './form-contribution';
+import { HiddenPanelsSetting, ParseHiddenPanelKeys, WithoutHiddenPanels } from './panel-hides';
+import { WithPlacementPreview, type FormPlacementPreview } from './placement-preview';
 
 /**
  * One list of form contributions from two sources:
@@ -103,7 +105,7 @@ export function CollectClassFormPanelRegistrations(): FormContributionRegistrati
 }
 
 /**
- * The field names in a `ReplacesFieldNames` cell.
+ * The names in a `ReplacesFieldNames` or `ReplacesSectionKeys` cell.
  *
  * Stored as a JSON array, the same shape and for the same reason as
  * `FormChromeRule.JoinFields`. A cell that is not an array of names yields none, so a
@@ -135,6 +137,10 @@ export function MetadataContributionToRegistration(row: MJEntityFormContribution
     if (row.ReplacesSectionKey) metadata.replacesSectionKey = row.ReplacesSectionKey;
     const claimedFields = ParseClaimedFieldNames(row.ReplacesFieldNames);
     if (claimedFields.length > 0) metadata.replacesFieldNames = claimedFields;
+    const claimedSections = ParseClaimedFieldNames(row.ReplacesSectionKeys);
+    if (claimedSections.length > 0) metadata.replacesSectionKeys = claimedSections;
+    if (row.InSectionKey) metadata.inSectionKey = row.InSectionKey;
+    if (row.SectionPosition) metadata.sectionPosition = row.SectionPosition;
     if (row.Inclusion) metadata.inclusion = row.Inclusion;
     if (row.ChromeGroup) metadata.chromeGroup = row.ChromeGroup;
     return {
@@ -143,11 +149,26 @@ export function MetadataContributionToRegistration(row: MJEntityFormContribution
         Source: 'metadata',
         ComponentID: row.ComponentID,
         RowID: row.ID,
+        Scope: row.Scope,
         Title: row.Title ?? row.Name,
         Icon: row.Icon ?? undefined,
         Presentation: row.Presentation,
         Configuration: SafeJSONParse<Record<string, unknown>>(row.Configuration ?? '', false) ?? {},
     };
+}
+
+export interface CollectFormContributionOptions {
+    /**
+     * Include the panels this user has hidden. Only the drawer wants these, to list them under
+     * "Hidden by you" so a hide can be undone; everything that draws the form leaves it false.
+     */
+    IncludeHidden?: boolean;
+
+    /**
+     * The placement dialog's unsaved panel, added to the list. Passed only by a form the
+     * dialog renders as its preview.
+     */
+    Preview?: FormPlacementPreview | null;
 }
 
 /**
@@ -158,9 +179,18 @@ export function MetadataContributionToRegistration(row: MJEntityFormContribution
 export function CollectFormContributionRegistrations(
     entity: EntityInfo | null | undefined,
     provider: IMetadataProvider | null | undefined,
+    options?: CollectFormContributionOptions,
 ): FormContributionRegistration[] {
     if (!entity || !provider) return CollectClassFormPanelRegistrations();
+    return WithPlacementPreview(collectFromSources(entity, provider, options), options?.Preview);
+}
 
+/** Class registrations plus applicable rows, memoized. Everything but the preview. */
+function collectFromSources(
+    entity: EntityInfo,
+    provider: IMetadataProvider,
+    options: CollectFormContributionOptions | undefined,
+): FormContributionRegistration[] {
     ensureEngineSubscription();
     const user = provider.CurrentUser;
     const userID = user?.ID ?? '';
@@ -170,7 +200,12 @@ export function CollectFormContributionRegistrations(
     // (.claude/rules/data-access.md), so the same entity name and user can resolve to
     // different rows under two providers. Without it, the second provider reads the
     // first one's memoized list.
-    const key = `${ProviderCacheKey(provider)}::${entity.Name}::${userID}::${classCount}::${engineVersion}`;
+    // The user's hidden panels are part of the identity too, so hiding one repaints at once
+    // rather than waiting for an unrelated change to clear the memo.
+    const includeHidden = options?.IncludeHidden === true;
+    const hiddenSetting = includeHidden ? '' : HiddenPanelsSetting(entity.Name);
+    const key = `${ProviderCacheKey(provider)}::${entity.Name}::${userID}::${classCount}::${engineVersion}` +
+        `::${includeHidden ? 'all' : hiddenSetting}`;
     const hit = cache.get(key);
     if (hit) return hit;
 
@@ -201,7 +236,8 @@ export function CollectFormContributionRegistrations(
         LogError(`CollectFormContributionRegistrations: engine read failed for ${entity.Name}: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    const merged = [...classRegs, ...rows.map(MetadataContributionToRegistration)];
+    const all = [...classRegs, ...rows.map(MetadataContributionToRegistration)];
+    const merged = includeHidden ? all : WithoutHiddenPanels(all, ParseHiddenPanelKeys(hiddenSetting));
     if (cache.size >= MAX_CACHE_ENTRIES) {
         const oldest = cache.keys().next().value;
         if (oldest !== undefined) cache.delete(oldest);

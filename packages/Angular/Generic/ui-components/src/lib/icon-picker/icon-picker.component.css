@@ -27,7 +27,7 @@
 }
 
 .mj-iconpick-preview.is-empty {
-  color: var(--mj-text-tertiary);
+  color: var(--mj-text-muted);
 }
 
 .mj-iconpick-input {
@@ -62,7 +62,7 @@
 
 .mj-iconpick-clear:hover,
 .mj-iconpick-browse:hover {
-  background: var(--mj-bg-hover);
+  background: var(--mj-bg-surface-hover);
   color: var(--mj-text-primary);
 }
 
@@ -117,19 +117,19 @@
 }
 
 .mj-iconpick-cell:hover {
-  background: var(--mj-bg-hover);
+  background: var(--mj-bg-surface-hover);
   color: var(--mj-text-primary);
 }
 
 .mj-iconpick-cell.is-on {
   border-color: var(--mj-border-focus);
-  background: var(--mj-bg-selected);
+  background: var(--mj-bg-surface-active);
   color: var(--mj-text-primary);
 }
 
 .mj-iconpick-empty,
 .mj-iconpick-note {
   margin: var(--mj-space-2) 0 0;
-  color: var(--mj-text-tertiary);
-  font-size: var(--mj-font-size-xs);
+  color: var(--mj-text-muted);
+  font-size: var(--mj-text-xs);
 }

@@ -1024,7 +1024,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (47 classes)
+// @memberjunction/core-entities-server (49 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1053,6 +1053,8 @@ import {
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJEntityFormContributionEntityServer,
+    MJEntityFormOverrideEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2048,6 +2050,8 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJEntityFormContributionEntityServer,
+    MJEntityFormOverrideEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2066,12 +2070,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
-    MJUserViewEntityServer,
-    MJVectorIndexEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserViewEntityServer,
+    MJVectorIndexEntityServer,
     APIRateLimiterAction,
     ActionSmithAgent,
     ActivateFormContributionVersionAction,
@@ -2247,7 +2251,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 960;
+export const CLASS_REGISTRATIONS_COUNT = 962;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1,6 +1,13 @@
 @if (Contribution) {
   @if (IsBare) {
-    <ng-container *ngTemplateOutlet="body"></ng-container>
+    <!-- A bare strip's own flex item: it carries the order a panel's chrome would, and the tab
+         key the rail reads when the strip replaces blocks. -->
+    <div class="mj-form-bare-panel" style="display: block"
+         [style.order]="DisplayOrder"
+         [attr.data-bare-section-key]="BareTabKey"
+         [attr.data-bare-title]="Title">
+      <ng-container *ngTemplateOutlet="body"></ng-container>
+    </div>
   } @else {
     <mj-collapsible-panel
       [SectionKey]="SectionKey"

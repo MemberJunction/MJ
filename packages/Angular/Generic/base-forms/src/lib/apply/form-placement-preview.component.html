@@ -1,0 +1,27 @@
+@if (RecordLabel) {
+  <p class="mj-pp-record"><i class="fa-solid fa-eye" aria-hidden="true"></i> {{ RecordLabel }}</p>
+}
+<div class="mj-pp-viewport" #viewport [style.height.px]="StageHeight">
+  <div class="mj-pp-stage" #stage inert
+       [style.width.px]="StageWidth"
+       [style.transform]="'scale(' + Scale + ')'">
+    @if (RecordResolved) {
+      <!-- Read-only: a preview shows the form as it reads, and an empty required field in
+           edit mode would paint the whole form with validation errors. -->
+      <mj-entity-form-host
+        [EntityName]="EntityName"
+        [PrimaryKey]="PrimaryKey"
+        [EditMode]="false"
+        [Config]="FormConfig"
+        (LoadComplete)="OnLoaded()"
+        (LoadError)="OnLoadError()">
+      </mj-entity-form-host>
+    }
+  </div>
+
+  @if (!Loaded) {
+    <div class="mj-pp-loading">
+      <mj-loading text="Drawing the form…" size="small"></mj-loading>
+    </div>
+  }
+</div>

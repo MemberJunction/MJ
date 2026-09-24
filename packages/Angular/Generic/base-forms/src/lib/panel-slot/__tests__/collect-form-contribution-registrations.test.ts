@@ -11,7 +11,17 @@ const engine = {
 };
 let classRegs: unknown[] = [];
 
-vi.mock('@memberjunction/core-entities', () => ({ InteractiveFormsEngine: { get Instance() { return engine; } } }));
+/** The user's settings, as `UserInfoEngine` holds them. */
+const settings = new Map<string, string>();
+const userInfo = {
+    GetSetting: (key: string) => settings.get(key),
+    SetSettingDebounced: (key: string, value: string) => { settings.set(key, value); },
+};
+
+vi.mock('@memberjunction/core-entities', () => ({
+    InteractiveFormsEngine: { get Instance() { return engine; } },
+    UserInfoEngine: { get Instance() { return userInfo; } },
+}));
 const logError = vi.fn();
 vi.mock('@memberjunction/core', () => ({ LogError: (...args: unknown[]) => logError(...args) }));
 const byMetadataScan = vi.fn(() => classRegs);
@@ -51,6 +61,7 @@ function row(over: Record<string, unknown>) {
 beforeEach(() => {
     InvalidateFormContributionRegistrationCache();
     engine.rows = [];
+    settings.clear();
     // NOT cleared: the collector subscribes to Contributions$ once per module load, so a
     // reset here would leave later tests with an emission nobody listens to.
     engine.Loaded = true;
@@ -60,6 +71,15 @@ beforeEach(() => {
     engine.Config.mockClear();
     engine.GetApplicableContributions.mockClear();
     classRegs = [{ Priority: 0, Metadata: { entity: 'MJ_BizApps_Common: People', slot: 'after-fields' }, SubClass: class {} }];
+});
+
+describe('MetadataContributionToRegistration — section claims', () => {
+    it('carries several replaced sections, and a place inside a section with its position', () => {
+        const many = MetadataContributionToRegistration(row({ ReplacesSectionKeys: '["identity","profile"]' }) as never);
+        expect(many.Metadata.replacesSectionKeys).toEqual(['identity', 'profile']);
+        const inside = MetadataContributionToRegistration(row({ InSectionKey: 'profile', SectionPosition: 'end' }) as never);
+        expect(inside.Metadata).toMatchObject({ inSectionKey: 'profile', sectionPosition: 'end' });
+    });
 });
 
 describe('MetadataContributionToRegistration', () => {
@@ -172,5 +192,44 @@ describe('CollectFormContributionRegistrations — hot path cost', () => {
         engine.subscribers.forEach(fn => fn());
         CollectFormContributionRegistrations(entity, provider);
         expect(byMetadataScan).toHaveBeenCalledTimes(2);
+    });
+});
+
+/**
+ * Hides are applied here, in the one list every consumer of a form reads — slot hosts, the field
+ * slot, the rail and the composition snapshot — so they all agree about what is on the form.
+ */
+describe('CollectFormContributionRegistrations — hidden panels', () => {
+    const HIDE_KEY = 'mj.formPanels.hidden.mj_bizapps_common: people';
+
+    it('drops a published panel this user has hidden', () => {
+        engine.rows = [row({ Scope: 'Global' })];
+        settings.set(HIDE_KEY, JSON.stringify(['skip:person-ltv']));
+        const regs = CollectFormContributionRegistrations(entity, provider);
+        expect(regs.some((r) => r.Source === 'metadata')).toBe(false);
+    });
+
+    it('keeps it for the drawer, which lists it so the hide can be undone', () => {
+        engine.rows = [row({ Scope: 'Global' })];
+        settings.set(HIDE_KEY, JSON.stringify(['skip:person-ltv']));
+        const regs = CollectFormContributionRegistrations(entity, provider, { IncludeHidden: true });
+        expect(regs.some((r) => r.Source === 'metadata')).toBe(true);
+    });
+
+    it('repaints when a hide changes, rather than serving the old list from the memo', () => {
+        engine.rows = [row({ Scope: 'Global' })];
+        expect(CollectFormContributionRegistrations(entity, provider).some((r) => r.Source === 'metadata')).toBe(true);
+        settings.set(HIDE_KEY, JSON.stringify(['skip:person-ltv']));
+        expect(CollectFormContributionRegistrations(entity, provider).some((r) => r.Source === 'metadata')).toBe(false);
+    });
+
+    it('never drops the user\'s own panel, which they turn off rather than hide', () => {
+        engine.rows = [row({ Scope: 'User' })];
+        settings.set(HIDE_KEY, JSON.stringify(['skip:person-ltv']));
+        expect(CollectFormContributionRegistrations(entity, provider).some((r) => r.Source === 'metadata')).toBe(true);
+    });
+
+    it('carries the row\'s scope on the registration', () => {
+        expect(MetadataContributionToRegistration(row({ Scope: 'Role' }) as never).Scope).toBe('Role');
     });
 });

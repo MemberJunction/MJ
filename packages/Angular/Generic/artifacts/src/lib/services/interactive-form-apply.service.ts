@@ -205,7 +205,7 @@ export class InteractiveFormApplyService {
             return this.fail(`Could not read the composition of the "${entityName}" form.`);
         }
 
-        const decision = await this.askWherePanelGoes(context, contribution, spec.name);
+        const decision = await this.askWherePanelGoes(context, contribution, spec.name, spec);
         if (!decision) return { Success: false, Kind: 'contribution', Message: 'Cancelled by user.' };
 
         const placed = decision.Contribution;
@@ -246,7 +246,7 @@ export class InteractiveFormApplyService {
         this.notifications.CreateSimpleNotification(
             activated
                 ? `"${placed.title}" is now on your ${entityName} form at ${placed.slot}.`
-                : `"${placed.title}" was saved as a draft. Turn it on from "Panels on this form" on the ${entityName} form when you are ready.`,
+                : `"${placed.title}" was saved as a draft. Turn it on from "Manage this form" on the ${entityName} form when you are ready.`,
             'success', 4000,
         );
         return {
@@ -280,7 +280,10 @@ export class InteractiveFormApplyService {
                 Related: snapshot.Related.map(r => ({
                     Entity: r.Entity, JoinField: r.JoinField, DisplayName: r.Entity,
                 })),
-                Existing: snapshot.Contributions.map(c => ({ Key: c.Key, Slot: c.Slot, Title: c.Title })),
+                Existing: snapshot.Contributions.map(c => ({
+                    Key: c.Key, Slot: c.Slot, Title: c.Title, SortKey: c.SortKey,
+                    InSectionKey: c.InSectionKey, SectionPosition: c.SectionPosition, FieldNames: c.FieldNames, SectionKeys: c.SectionKeys, ReplacesPlace: c.ReplacesPlace,
+                })),
                 SlotsPresent: [...snapshot.SlotsPresent],
                 // The form reported these, so the dialog does not need to read one.
                 SlotsVerified: true,
@@ -312,7 +315,10 @@ export class InteractiveFormApplyService {
             const raw = JSON.parse(message ?? '{}') as {
                 Sections?: Array<{ Key: string; Title: string; Fields?: Array<{ Name: string; Label: string }> }>;
                 Related?: Array<{ Entity: string; JoinField: string }>;
-                Contributions?: Array<{ Key: string; Slot: string; Title: string }>;
+                Contributions?: Array<{
+                    Key: string; Slot: string; Title: string; SortKey?: number;
+                    InSectionKey?: string; SectionPosition?: 'start' | 'end'; FieldNames?: string[]; SectionKeys?: string[]; ReplacesPlace?: boolean;
+                }>;
                 Layout?: string;
                 SlotsPresent?: FormContributionSlot[];
                 FullCustomForm?: boolean;
@@ -326,7 +332,10 @@ export class InteractiveFormApplyService {
                 Related: (raw.Related ?? []).map(r => ({
                     Entity: r.Entity, JoinField: r.JoinField, DisplayName: r.Entity,
                 })),
-                Existing: (raw.Contributions ?? []).map(c => ({ Key: c.Key, Slot: c.Slot, Title: c.Title })),
+                Existing: (raw.Contributions ?? []).map(c => ({
+                    Key: c.Key, Slot: c.Slot, Title: c.Title, SortKey: c.SortKey ?? 0,
+                    InSectionKey: c.InSectionKey, SectionPosition: c.SectionPosition, FieldNames: c.FieldNames, SectionKeys: c.SectionKeys, ReplacesPlace: c.ReplacesPlace,
+                })),
                 SlotsPresent: raw.SlotsPresent ?? [],
                 // The generated shape, not this form's. The dialog probes to replace it.
                 SlotsVerified: false,
@@ -353,11 +362,13 @@ export class InteractiveFormApplyService {
         context: FormPlacementContext,
         proposal: FormContributionSpec,
         componentName: string | undefined,
+        component: ComponentSpec,
     ): Promise<FormPlacementDecision | null> {
         return new Promise<FormPlacementDecision | null>((resolve) => {
             const ref = this.dialog.Open({
                 content: MjFormPlacementDialogComponent,
-                width: 1080,
+                // Wide enough for the scaled form beside the settings column.
+                width: 1320,
                 minWidth: 720,
             });
             const dialog = ref.Content?.instance as unknown as MjFormPlacementDialogComponent | undefined;
@@ -368,6 +379,8 @@ export class InteractiveFormApplyService {
             }
             dialog.ComponentName = componentName ?? proposal.title;
             dialog.Proposal = proposal;
+            // The preview draws the component itself, not a placeholder, before anything is saved.
+            dialog.PanelComponentSpec = component;
             dialog.Context = context;
 
             let settled = false;
@@ -454,7 +467,7 @@ export class InteractiveFormApplyService {
 
     /**
      * Best-effort activation. On failure the row stays a Pending draft the user can
-     * activate from "Panels on this form", so we log rather than failing the whole apply.
+     * activate from "Manage this form", so we log rather than failing the whole apply.
      */
     private async activateContribution(
         client: GraphQLActionClient,

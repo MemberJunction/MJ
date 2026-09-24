@@ -255,7 +255,7 @@ describe('MjFormPlacementDialogComponent (DOM) — sections that live in a tab',
     it('says the sections are parts of the Details tab', () => {
         const f = render(railed);
         expect(f.componentInstance.SectionsAreInDetailsTab).toBe(true);
-        expect(text(f)).toContain('Replace one block inside the Details tab');
+        expect(text(f)).toContain('Replace blocks inside the Details tab');
     });
 
     it('offers the sections by their own names, since the tab cannot be named', () => {
@@ -265,7 +265,7 @@ describe('MjFormPlacementDialogComponent (DOM) — sections that live in a tab',
     it('calls them plain field sections on a form with no rail', () => {
         const f = render({ ...railed, Layout: 'accordion' });
         expect(f.componentInstance.SectionsAreInDetailsTab).toBe(false);
-        expect(text(f)).toContain('Replace one field group');
+        expect(text(f)).toContain('Replace field groups');
     });
 });
 
@@ -337,6 +337,17 @@ describe('MjFormPlacementDialogComponent (DOM) — standing in for a whole tab',
  * hides a quarter of the tab and leaves the rest on screen, which is not what the label
  * promised, so the two must not read alike.
  */
+
+/** The section names offered once "Replace blocks" is chosen. */
+async function sectionChoices(f: { nativeElement: HTMLElement; detectChanges(): void; whenStable(): Promise<unknown> }): Promise<string[]> {
+    f.nativeElement.querySelector<HTMLInputElement>('input[name="mj-replace"][value="section"]')!.click();
+    f.detectChanges();
+    await f.whenStable();
+    f.detectChanges();
+    return Array.from(f.nativeElement.querySelectorAll('input[name="mj-section-pick"]'))
+        .map((input) => input.parentElement?.querySelector('.mj-placement-fieldpick-name')?.textContent?.trim() ?? '');
+}
+
 describe('MjFormPlacementDialogComponent (DOM) — the section named Details', () => {
     const organizations: FormPlacementContext = {
         ...CONTEXT,
@@ -349,16 +360,12 @@ describe('MjFormPlacementDialogComponent (DOM) — the section named Details', (
         ],
     };
 
-    const options = (f: ReturnType<typeof render>) =>
-        [...f.nativeElement.querySelectorAll('select[name="mj-section"] option')]
-            .map((o) => (o as HTMLOptionElement).textContent?.trim());
-
-    it('qualifies the section that shares the tab’s name', () => {
-        expect(options(render(organizations))).toContain('Details (the field group, not the tab)');
+    it('qualifies the section that shares the tab’s name', async () => {
+        expect(await sectionChoices(render(organizations))).toContain('Details (the field group, not the tab)');
     });
 
-    it('leaves the other section names as they are', () => {
-        expect(options(render(organizations))).toContain('Organization Identity');
+    it('leaves the other section names as they are', async () => {
+        expect(await sectionChoices(render(organizations))).toContain('Organization Identity');
     });
 
     it('says how many panels the chosen tab holds', () => {
@@ -663,10 +670,8 @@ describe('MjFormPlacementDialogComponent (DOM) — a form that shows no rail', (
     });
 
     // The sections are real. Only the tab framing was wrong.
-    it('still offers the form’s own sections, by their own names', () => {
-        const options = Array.from(el(render(accordion)).querySelectorAll('select[name="mj-section"] option'))
-            .map((o) => (o as HTMLOptionElement).textContent?.trim());
-        expect(options).toEqual(['Certification Details', 'Configuration']);
+    it('still offers the form’s own sections, by their own names', async () => {
+        expect(await sectionChoices(render(accordion))).toEqual(['Certification Details', 'Configuration']);
     });
 });
 
@@ -747,5 +752,153 @@ describe('MjFormPlacementDialogComponent (DOM) — standing in for fields', () =
         const derived: FormPlacementContext = { ...withFields, TargetsVerified: false };
         const f = render(derived, null);
         expect(f.componentInstance.CanReplaceField).toBe(false);
+    });
+});
+
+/**
+ * With the form preview on, the scaled form is read-only and every answer is made in the
+ * controls beside it. The preview only has to receive the panel as it would be saved.
+ */
+@Component({ standalone: true, selector: 'mj-form-placement-preview', template: '' })
+class PreviewStub {
+    @Input() EntityName = '';
+    @Input() RecordKey: unknown;
+    @Input() Spec: unknown;
+    @Input() ReplacesRowID: unknown;
+    @Input() PanelComponentSpec: unknown;
+    @Input() PanelComponentID: unknown;
+}
+
+describe('MjFormPlacementDialogComponent (DOM) — the read-only form preview', () => {
+    const withFields: FormPlacementContext = {
+        ...CONTEXT,
+        Sections: [
+            { Key: 'details', Title: 'Details', Fields: [{ Name: 'Name', Label: 'Name' }, { Name: 'Code', Label: 'Code' }] },
+            { Key: 'dates', Title: 'Dates', Fields: [{ Name: 'StartDate', Label: 'Start date' }] },
+        ],
+    };
+
+    function renderPreview(context: FormPlacementContext = withFields) {
+        const f = renderComponentFixture(MjFormPlacementDialogComponent, {
+            imports: [CommonModule, FormsModule, AlertStub, ButtonStub, MjIconPickerComponent, PreviewStub],
+            declarations: [MjFormPlacementDialogComponent],
+            // SlotsVerified skips the probe, so the preview shows without rendering a real form.
+            inputs: { ProbeForm: true, Context: context, Proposal: PROPOSAL, ComponentName: 'Cohort Analytics' },
+        });
+        f.detectChanges();
+        return f;
+    }
+
+    const root = (f: ReturnType<typeof renderPreview>) => f.nativeElement as HTMLElement;
+
+    it('shows the scaled form in place of the list, beside every control the list layout has', () => {
+        const f = renderPreview();
+        expect(root(f).querySelector('mj-form-placement-preview')).not.toBeNull();
+        expect(root(f).querySelector('.mj-placement-gap')).toBeNull();
+        const side = root(f).querySelector('.mj-placement-settings--side')!;
+        expect(side.querySelectorAll('input[name="mj-replace"]').length).toBeGreaterThan(1);
+        expect(side.querySelectorAll('input[name="mj-status"]').length).toBe(2);
+        expect(side.querySelector('select[aria-label="Position on the form"]')).not.toBeNull();
+        expect(side.textContent).toContain('Already on this form');
+    });
+
+    it('falls back to the list when the form cannot be drawn', () => {
+        const f = renderPreview();
+        f.componentInstance.OnPreviewFailed();
+        f.detectChanges();
+        expect(root(f).querySelector('.mj-placement-gap')).not.toBeNull();
+    });
+
+    it('never previews a full custom form, which has no positions to show', () => {
+        expect(renderPreview({ ...withFields, FullCustomForm: true }).componentInstance.ShowFormPreview).toBe(false);
+    });
+
+    it('moves the previewed panel when the position control changes', async () => {
+        const f = renderPreview();
+        const select = root(f).querySelector<HTMLSelectElement>('select[aria-label="Position on the form"]')!;
+        select.value = 'after-everything';
+        select.dispatchEvent(new Event('change'));
+        f.detectChanges();
+        expect(f.componentInstance.PreviewSpec.slot).toBe('after-everything');
+    });
+
+    it('draws a field claim once the fields are ticked', async () => {
+        const f = renderPreview();
+        root(f).querySelector<HTMLInputElement>('input[name="mj-replace"][value="field"]')!.click();
+        f.detectChanges();
+        await f.whenStable();
+        f.detectChanges();
+        const boxes = root(f).querySelectorAll<HTMLInputElement>('.mj-placement-fieldpick-item input');
+        boxes[0].click();
+        boxes[1].click();
+        f.detectChanges();
+        expect(f.componentInstance.PreviewSpec.replacesFieldNames).toEqual(['Name', 'Code']);
+        expect(f.componentInstance.PlacementLine).toBe('At the top of Details, in place of the Name and Code fields');
+    });
+
+    it('hands the preview the same spec until an answer changes, so the form is not redrawn every pass', () => {
+        const dialog = renderPreview().componentInstance;
+        const first = dialog.PreviewSpec;
+        expect(dialog.PreviewSpec).toBe(first);
+        dialog.State.Title = 'Renamed';
+        expect(dialog.PreviewSpec).not.toBe(first);
+    });
+
+    it('says in one line what it replaces, with a way back to replacing nothing', async () => {
+        const f = renderPreview();
+        expect(f.componentInstance.PlacementLine).toBe('After the fields');
+        root(f).querySelector<HTMLInputElement>('input[name="mj-replace"][value="section"]')!.click();
+        f.detectChanges();
+        await f.whenStable();
+        f.detectChanges();
+        expect(text(f)).toContain('In place of the Details section');
+        const back = Array.from(root(f).querySelectorAll('button')).find((b) => b.textContent?.includes('Replace nothing'))!;
+        back.click();
+        f.detectChanges();
+        expect(f.componentInstance.State.ReplaceMode).toBe('none');
+    });
+
+    it('lists the panels sharing the position and moves this one among them', async () => {
+        const f = renderPreview({
+            ...withFields,
+            Existing: [
+                { Key: 'panel:A', Slot: 'after-fields', Title: 'Alpha', SortKey: 20 },
+                { Key: 'panel:B', Slot: 'after-fields', Title: 'Beta', SortKey: 10 },
+            ],
+        });
+        const items = () => Array.from(root(f).querySelectorAll('.mj-placement-order-item')).map((li) => li.textContent?.trim());
+        expect(items()).toEqual(['Alpha', 'Beta', expect.stringContaining('Enrollment')]);
+        root(f).querySelector<HTMLButtonElement>('button[aria-label="Move up"]')!.click();
+        f.detectChanges();
+        expect(items()).toEqual(['Alpha', expect.stringContaining('Enrollment'), 'Beta']);
+        expect(f.componentInstance.PreviewSpec.sortKey).toBe(15);
+    });
+
+    it('shows no order list when the position has no other panel', () => {
+        expect(renderPreview().nativeElement.querySelector('.mj-placement-order')).toBeNull();
+    });
+
+    it('stands in for several blocks once they are ticked', async () => {
+        const f = renderPreview();
+        root(f).querySelector<HTMLInputElement>('input[name="mj-replace"][value="section"]')!.click();
+        f.detectChanges();
+        await f.whenStable();
+        f.detectChanges();
+        const boxes = root(f).querySelectorAll<HTMLInputElement>('input[name="mj-section-pick"]');
+        boxes[1].click();
+        f.detectChanges();
+        expect(f.componentInstance.PreviewSpec.replacesSectionKeys).toEqual(['details', 'dates']);
+        expect(f.componentInstance.PlacementLine).toBe('In place of the Details and Dates sections');
+    });
+
+    it('places the panel inside a section from the position control', () => {
+        const f = renderPreview();
+        const select = root(f).querySelector<HTMLSelectElement>('select[aria-label="Position on the form"]')!;
+        expect(Array.from(select.querySelectorAll('optgroup')).map((g) => g.label)).toEqual(['Between blocks', 'Inside a section']);
+        select.value = 'in:dates:end';
+        select.dispatchEvent(new Event('change'));
+        f.detectChanges();
+        expect(f.componentInstance.PreviewSpec).toMatchObject({ inSectionKey: 'dates', sectionPosition: 'end' });
+        expect(f.componentInstance.PlacementLine).toBe('At the bottom of the Dates section');
     });
 });

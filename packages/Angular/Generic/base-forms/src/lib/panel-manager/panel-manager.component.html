@@ -1,14 +1,11 @@
 @if (Visible) {
   <div class="mj-pm-overlay" (click)="OnOverlayClick($event)">
-    <div class="mj-pm-drawer" (click)="$event.stopPropagation()" role="dialog" aria-label="Panels on this form">
+    <div class="mj-pm-drawer" (click)="$event.stopPropagation()" role="dialog" aria-label="Manage this form">
 
       <div class="mj-pm-header">
         <div class="mj-pm-heading">
-          <h3 class="mj-pm-title">
-            <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
-            Panels on this form
-          </h3>
-          <span class="mj-pm-entity">{{ EntityName }}</span>
+          <div class="mj-pm-eyebrow">Manage this form</div>
+          <h3 class="mj-pm-title">{{ EntityName }}</h3>
         </div>
         <button type="button" class="mj-pm-close" (click)="OnClose()" aria-label="Close">
           <i class="fa-solid fa-xmark" aria-hidden="true"></i>
@@ -27,6 +24,37 @@
       }
 
       <div class="mj-pm-list">
+        @if (HasCustomForms) {
+          <section class="mj-pm-group">
+            <div class="mj-pm-group-head">
+              <span class="mj-pm-group-title">Form</span>
+            </div>
+            <p class="mj-pm-group-note">Which form you see for this entity. Switching changes only your view.</p>
+            <div class="mj-pm-stack" role="radiogroup" aria-label="Form">
+              @for (form of Forms; track form.ID ?? 'generated') {
+                <div class="mj-pm-form" [class.is-current]="form.IsCurrent">
+                  <label class="mj-pm-form-pick">
+                    <input type="radio" name="mj-pm-form"
+                           [checked]="form.IsCurrent"
+                           (change)="OnUseForm(form)">
+                    <span class="mj-pm-form-text">
+                      <span class="mj-pm-row-name">{{ form.Title }}</span>
+                      <span class="mj-pm-row-sub">
+                        {{ form.AudienceLabel }}@if (form.IsCurrent) { &middot; <span class="mj-pm-on">what you see</span> }
+                      </span>
+                    </span>
+                  </label>
+                  @if (form.CanPublish || form.CanChangeAudience) {
+                    <button type="button" class="mj-pm-btn"
+                            [disabled]="Busy === form.ID"
+                            (click)="OnPublishForm(form)">{{ form.CanPublish ? 'Publish…' : 'Audience…' }}</button>
+                  }
+                </div>
+              }
+            </div>
+          </section>
+        }
+
         @if (IsEmpty) {
           <div class="mj-pm-empty">
             <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
@@ -45,46 +73,63 @@
               <p class="mj-pm-group-note">{{ group.Note }}</p>
             }
 
-            @for (item of group.Items; track item.ID) {
-              <div class="mj-pm-row" [class.is-quiet]="!item.CanEdit">
-                <i [class]="item.Icon" class="mj-pm-row-icon" aria-hidden="true"></i>
+            <div class="mj-pm-stack">
+              @for (item of group.Items; track item.ID) {
+                <div class="mj-pm-row" [class.is-quiet]="!item.CanEdit">
+                  <i [class]="item.Icon" class="mj-pm-row-icon" aria-hidden="true"></i>
 
-                <div class="mj-pm-row-main">
-                  <span class="mj-pm-row-name">{{ item.Title }}</span>
-                  <span class="mj-pm-row-sub">{{ item.Subtitle }}</span>
-                  <span class="mj-pm-row-where">
-                    @if (item.Slot) {
-                      <span class="mj-pm-chip mj-pm-mono">{{ item.Slot }}</span>
-                    }
-                    @if (item.Replaces) {
-                      <span class="mj-pm-chip">stands in for {{ item.Replaces }}</span>
-                    }
-                    <span class="mj-pm-chip">{{ item.Scope }}</span>
-                  </span>
-                </div>
-
-                @if (item.CanEdit || item.CanTurnOn || item.CanTurnOff || item.CanRemove) {
-                  <div class="mj-pm-row-actions">
-                    @if (item.CanEdit) {
-                      <button type="button" class="mj-pm-btn mj-pm-btn--primary"
-                              [disabled]="Busy === item.ID"
-                              (click)="OnEdit(item)">Change where it goes</button>
-                    }
-                    @if (item.CanTurnOn || item.CanTurnOff) {
-                      <button type="button" class="mj-pm-btn"
-                              [disabled]="Busy === item.ID"
-                              (click)="OnToggle(item)">{{ ToggleLabel(item) }}</button>
-                    }
-                    @if (item.CanRemove) {
-                      <button type="button" class="mj-pm-btn mj-pm-btn--danger"
-                              [class.is-confirming]="Confirming === item.ID"
-                              [disabled]="Busy === item.ID"
-                              (click)="OnRemove(item)">{{ RemoveLabel(item) }}</button>
-                    }
+                  <div class="mj-pm-row-main">
+                    <span class="mj-pm-row-name">{{ item.Title }}</span>
+                    <span class="mj-pm-row-sub">{{ item.Subtitle }}</span>
+                    <span class="mj-pm-row-where">
+                      @if (item.Slot) {
+                        <span class="mj-pm-chip mj-pm-mono">{{ item.Slot }}</span>
+                      }
+                      @if (item.Replaces) {
+                        <span class="mj-pm-chip">stands in for {{ item.Replaces }}</span>
+                      }
+                      <span class="mj-pm-chip">{{ item.AudienceLabel }}</span>
+                      <span class="mj-pm-chip" [class.mj-pm-chip--on]="item.State === 'active'">{{ item.StateLabel }}</span>
+                    </span>
                   </div>
-                }
-              </div>
-            }
+
+                  @if (item.CanEdit || item.CanTurnOn || item.CanTurnOff || item.CanRemove
+                       || item.CanHide || item.CanShow || item.CanPublish || item.CanChangeAudience) {
+                    <div class="mj-pm-row-actions">
+                      @if (item.CanShow) {
+                        <button type="button" class="mj-pm-btn mj-pm-btn--primary"
+                                (click)="OnShow(item)">Show again</button>
+                      }
+                      @if (item.CanEdit) {
+                        <button type="button" class="mj-pm-btn mj-pm-btn--primary"
+                                [disabled]="Busy === item.ID"
+                                (click)="OnEdit(item)">Change where it goes</button>
+                      }
+                      @if (item.CanTurnOn || item.CanTurnOff) {
+                        <button type="button" class="mj-pm-btn"
+                                [disabled]="Busy === item.ID"
+                                (click)="OnToggle(item)">{{ ToggleLabel(item) }}</button>
+                      }
+                      @if (item.CanPublish || item.CanChangeAudience) {
+                        <button type="button" class="mj-pm-btn"
+                                [disabled]="Busy === item.ID"
+                                (click)="OnPublishPanel(item)">{{ item.CanPublish ? 'Publish…' : 'Audience…' }}</button>
+                      }
+                      @if (item.CanHide) {
+                        <button type="button" class="mj-pm-btn"
+                                (click)="OnHide(item)">Hide for me</button>
+                      }
+                      @if (item.CanRemove) {
+                        <button type="button" class="mj-pm-btn mj-pm-btn--danger"
+                                [class.is-confirming]="Confirming === item.ID"
+                                [disabled]="Busy === item.ID"
+                                (click)="OnRemove(item)">{{ RemoveLabel(item) }}</button>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
           </section>
         }
       </div>
@@ -92,6 +137,40 @@
       <div class="mj-pm-foot">
         <span class="mj-pm-summary">{{ Summary }}</span>
       </div>
+
+      @if (Publishing; as target) {
+        <div class="mj-pm-audience" role="dialog" aria-label="Who sees this">
+          <div class="mj-pm-eyebrow">Who sees it</div>
+          <p class="mj-pm-audience-title">{{ target.Title }}</p>
+          <div class="mj-pm-stack" role="radiogroup" aria-label="Audience">
+            @for (scope of ['User', 'Role', 'Global']; track scope) {
+              <label class="mj-pm-choice" [class.is-on]="target.Scope === scope">
+                <input type="radio" name="mj-pm-audience"
+                       [checked]="target.Scope === scope"
+                       (change)="target.Scope = $any(scope)">
+                <span>{{ AudienceOption($any(scope)) }}</span>
+              </label>
+            }
+          </div>
+          @if (target.Scope === 'Role') {
+            <select class="mj-pm-audience-role" aria-label="Which role"
+                    [value]="target.RoleID ?? ''"
+                    (change)="target.RoleID = $any($event.target).value || null">
+              <option value="">Choose a role…</option>
+              @for (role of RoleOptions; track role.ID) {
+                <option [value]="role.ID">{{ role.Name }}</option>
+              }
+            </select>
+          }
+          <p class="mj-pm-audience-consequence">{{ AudienceConsequence }}</p>
+          <div class="mj-pm-audience-actions">
+            <button type="button" class="mj-pm-btn mj-pm-btn--solid"
+                    [disabled]="!CanConfirmAudience"
+                    (click)="ConfirmAudience()">Save audience</button>
+            <button type="button" class="mj-pm-btn" (click)="CancelAudience()">Cancel</button>
+          </div>
+        </div>
+      }
 
       @if (Editing && EditContext) {
         <div class="mj-pm-edit" role="dialog" aria-label="Change where this panel goes"
@@ -101,6 +180,9 @@
             [Proposal]="EditProposal"
             [ComponentName]="Editing.Title"
             [SeedState]="SeedEdit"
+            [RecordKey]="RecordKey"
+            [ReplacesRowID]="Editing.ID"
+            [PanelComponentID]="EditComponentID"
             (Applied)="OnEditApplied($event)"
             (Cancelled)="CloseEdit()">
           </mj-form-placement-dialog>

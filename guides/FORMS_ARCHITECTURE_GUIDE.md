@@ -289,6 +289,9 @@ related-entity grids. At runtime, registered `BaseFormPanel`s can:
 - **claim a related-entity grid** (`relatedEntity`) so the baked grid hides and yours mounts
 - **fill in** a `DisplayInForm` relationship the template never baked (other OpenApp installed)
 - **replace a named field panel** (`replacesSectionKey`) — hide `details` / `personalIdentity` and mount a hero that is **not** a collapsible panel
+- **replace several field panels of one tab** (`replacesSectionKeys`) — the panel takes the place of the first
+- **replace some fields of one section** (`replacesFieldNames`) — at the top or bottom of that section (`sectionPosition`)
+- **sit inside a section** (`inSectionKey` + `sectionPosition`) — at its top or bottom, replacing nothing
 
 Discovery is `GetAllRegistrationsByMetadata`. Last-wins is ClassFactory `Priority` per `contributionKey`. Plan: [`/plans/form-contributions.md`](../plans/form-contributions.md). Authoring: [PANELS.md](../packages/Angular/Generic/base-forms/PANELS.md).
 

@@ -95,7 +95,7 @@ export class FormSlotProbeService {
 
     /** Section keys of the contributions already registered on this entity. */
     private contributionKeys(entityName: string): string[] {
-        const entity = new Metadata().EntityByName(entityName);
+        const entity = Metadata.Provider?.EntityByName(entityName);
         if (!entity) return [];
         return CollectFormContributionRegistrations(entity, Metadata.Provider)
             .map((reg) => ResolveContributionKey(reg.Metadata))
@@ -254,7 +254,7 @@ export class FormSlotProbeService {
         entityName: string,
         panels: FormChromePanelSnapshot[],
     ): { Groups: FormChromeGroup[]; Layout: 'accordion' | 'left-nav' } {
-        const entity = new Metadata().EntityByName(entityName);
+        const entity = Metadata.Provider?.EntityByName(entityName);
         if (!entity) {
             return { Groups: [], Layout: ResolveFormLayout(null, panels.length) };
         }

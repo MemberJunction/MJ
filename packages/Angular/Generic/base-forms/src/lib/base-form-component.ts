@@ -37,6 +37,7 @@ import { EntityFormConfig } from './types/entity-form-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs } from './types/form-toolbar-item';
 import { CollectFormContributionRegistrations } from './panel-slot/collect-form-contribution-registrations';
 import type { FormContributionRegistration } from './panel-slot/form-contribution';
+import { FORM_PLACEMENT_PREVIEW } from './panel-slot/placement-preview';
 import { FormContextsEqual } from './base-form-component-internals';
 import { ContributionClaimedFieldNames, ContributionHiddenSectionKeys } from './panel-slot/form-contribution';
 
@@ -227,6 +228,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   protected elementRef = inject(ElementRef);
   public cdr = inject(ChangeDetectorRef);
   protected formStateService = inject(FormStateService);
+  /** The placement dialog's unsaved panel, when this form is the dialog's preview. */
+  protected placementPreview = inject(FORM_PLACEMENT_PREVIEW, { optional: true });
 
   // #endregion
 
@@ -1083,7 +1086,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   private contributionClaimedFieldNames(): string[] | undefined {
     const entity = this.record?.EntityInfo;
     if (!entity) return undefined;
-    const regs = CollectFormContributionRegistrations(entity, this.ProviderToUse);
+    const regs = CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview });
     const memo = this._claimedFieldsMemo;
     if (!(memo && memo.entity === entity && memo.regs === regs)) {
       const names = ContributionClaimedFieldNames(
@@ -1115,7 +1118,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     const entity = this.record?.EntityInfo;
     if (!entity) return [];
     // Merged: compiled registrations plus the rows that apply to this user.
-    const regs = CollectFormContributionRegistrations(entity, this.ProviderToUse);
+    const regs = CollectFormContributionRegistrations(entity, this.ProviderToUse, { Preview: this.placementPreview });
     const memo = this._hiddenKeysMemo;
     if (memo && memo.entity === entity && memo.regs === regs) return memo.keys;
     const keys = ContributionHiddenSectionKeys(
@@ -1251,10 +1254,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     let section = this.sectionMap.get(sectionKey);
     if (!section) {
       // Contribution panels use their own SectionKey (e.g. 'orders') which
-      // is never seeded by generated initSections(). Upsert so the left-nav
-      // rail badge can read the count the same way baked grids do.
+      // is never seeded by generated initSections(). Kept in the map only, so the
+      // left-nav rail badge reads the count the same way baked grids do. It stays out
+      // of `sections`: that list is the form's declared order, and a key in it is drawn
+      // at its index instead of at the slot the panel was placed in.
       section = new BaseFormSectionInfo(sectionKey, sectionKey, false, rowCount);
-      this.sections.push(section);
       this.sectionMap.set(sectionKey, section);
     } else {
       section.rowCount = rowCount;

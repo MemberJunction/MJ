@@ -560,6 +560,30 @@ export function SerializeClaimedFieldNames(names: readonly string[] | undefined)
     return cleaned.length > 0 ? JSON.stringify(cleaned) : null;
 }
 
+/**
+ * Writes the section claims of a spec onto a row: the sections it stands in for, and the
+ * section it is placed in with its position there.
+ *
+ * One section is stored in `ReplacesSectionKey` whichever field the spec used, so a single
+ * block has one representation. A position is kept only for a panel drawn inside a section,
+ * which is the only case it means anything and the only case the column's CHECK allows.
+ */
+export function ApplySectionClaims(
+    row: Pick<MJEntityFormContributionEntity, 'ReplacesSectionKey' | 'ReplacesSectionKeys' | 'InSectionKey' | 'SectionPosition'>,
+    contribution: Pick<FormContributionSpec, 'replacesSectionKey' | 'replacesSectionKeys' | 'replacesFieldNames' | 'inSectionKey' | 'sectionPosition'>,
+): void {
+    const sections = ParseClaimedFieldNames(SerializeClaimedFieldNames([
+        ...(contribution.replacesSectionKey ? [contribution.replacesSectionKey] : []),
+        ...(contribution.replacesSectionKeys ?? []),
+    ]));
+    row.ReplacesSectionKey = sections.length === 1 ? sections[0] : null;
+    row.ReplacesSectionKeys = sections.length > 1 ? JSON.stringify(sections) : null;
+    const inSection = contribution.inSectionKey?.trim() || null;
+    row.InSectionKey = inSection;
+    const drawsInSection = !!inSection || (contribution.replacesFieldNames ?? []).some((n) => n.trim().length > 0);
+    row.SectionPosition = drawsInSection ? (contribution.sectionPosition ?? null) : null;
+}
+
 /** The field names in a `ReplacesFieldNames` cell. Inverse of {@link SerializeClaimedFieldNames}. */
 export function ParseClaimedFieldNames(raw: string | null | undefined): string[] {
     if (!raw || raw.trim().length === 0) return [];
@@ -627,8 +651,8 @@ export async function insertContribution(opts: {
     row.ContributionKey = ResolveWriteContributionKey(contribution, relatedEntityName, opts.componentName);
     row.RelatedEntityID = relatedEntityID;
     row.RelatedJoinField = contribution.relatedJoinField ?? null;
-    row.ReplacesSectionKey = contribution.replacesSectionKey ?? null;
     row.ReplacesFieldNames = SerializeClaimedFieldNames(contribution.replacesFieldNames);
+    ApplySectionClaims(row, contribution);
     row.Inclusion = contribution.inclusion ?? null;
     row.ChromeGroup = contribution.chromeGroup ?? null;
     row.Presentation = contribution.presentation;

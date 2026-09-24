@@ -3,7 +3,8 @@ import { BaseEntity, ValidationResult, type FormInclusion } from '@memberjunctio
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { FormToolbarItemConfig, FormToolbarItemKey } from '../types/form-toolbar-item';
-import { SlotDisplayOrder } from './slot-order';
+import { ANCHORED_SLOTS, SlotAnchorSectionKey, SlotDisplayOrder } from './slot-order';
+import { ReplacedSectionKeys } from './form-contribution';
 
 /**
  * Well-known slot positions where panels can be injected into a generated
@@ -94,6 +95,15 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      */
     replacesFieldNames?: readonly string[];
     /**
+     * Sections this contribution stands in for, all within one tab. It draws in the place of the
+     * first of them in the form's order, and the others are not drawn.
+     */
+    replacesSectionKeys?: readonly string[];
+    /** A section this contribution draws inside, replacing nothing. */
+    inSectionKey?: string;
+    /** Where inside its section it draws, for `inSectionKey` and field claims. Absent means the start. */
+    sectionPosition?: 'start' | 'end';
+    /**
      * Pin this contribution to a chrome bucket instead of its own rail item.
      * `'details'` — leftover own-fields group. `'more'` — overflow folder.
      */
@@ -175,6 +185,12 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
     @Input() RegistrationMetadata?: FormPanelRegistrationMetadata;
 
     /**
+     * The slot element the panel was mounted in, set by the slot host. It is where the panel is
+     * on the page, which {@link DisplayOrder} reads its neighbours from.
+     */
+    public SlotElement: HTMLElement | null = null;
+
+    /**
      * The registration a subclass answers from. Overridden where the panel holds its
      * registration somewhere other than {@link RegistrationMetadata}.
      */
@@ -189,15 +205,27 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
      * falls back to the section count and draws every panel at the bottom whatever slot it
      * asked for. A panel standing in for a section takes that section's place instead, so
      * replacing something does not also move it.
+     *
+     * A slot between the form's blocks takes the order of the section beside it on the page,
+     * so the panel draws where the slot is (see {@link SlotAnchorSectionKey}). The very top and
+     * the very bottom keep fixed bands: the bottom has to stay below the More folder.
      */
     public get DisplayOrder(): number {
         const metadata = this.PanelMetadata;
-        const replaced = metadata?.replacesSectionKey?.trim();
-        if (replaced) {
-            const index = this.FormComponent?.getSectionOrderIndex?.(replaced);
-            if (index != null) return index;
-        }
-        return SlotDisplayOrder(metadata?.slot ?? 'after-everything', metadata?.sortKey ?? 0);
+        // Standing in for several sections, it takes the place of whichever comes first.
+        const places = ReplacedSectionKeys(metadata)
+            .map((key) => this.FormComponent?.getSectionOrderIndex?.(key))
+            .filter((index): index is number => index != null);
+        if (places.length > 0) return Math.min(...places);
+        return this.anchoredOrder() ?? SlotDisplayOrder(metadata?.slot ?? 'after-everything', metadata?.sortKey ?? 0);
+    }
+
+    /** The order of the section beside the slot this panel is in, or null when there is none to read. */
+    private anchoredOrder(): number | null {
+        const slot = this.SlotElement?.getAttribute('data-form-slot') as FormPanelSlot | null | undefined;
+        if (!slot || !ANCHORED_SLOTS.has(slot) || !this.FormComponent?.getSectionDisplayOrder) return null;
+        const anchor = SlotAnchorSectionKey(this.SlotElement!);
+        return anchor ? this.FormComponent.getSectionDisplayOrder(anchor.Key) : null;
     }
 
     /**

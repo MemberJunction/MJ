@@ -46,7 +46,7 @@
             "Type": "Input",
             "ValueType": "Other",
             "IsArray": false,
-            "Description": "ComponentSpec with componentRole='form-panel', location='embedded', code, and a formContribution block { slot, presentation, title, contributionKey?, relatedEntity?, relatedJoinField?, replacesSectionKey?, inclusion?, chromeGroup?, sortKey?, icon?, configuration? }.",
+            "Description": "ComponentSpec with componentRole='form-panel', location='embedded', code, and a formContribution block { slot, presentation, title, contributionKey?, relatedEntity?, relatedJoinField?, replacesSectionKey?, replacesSectionKeys?, replacesFieldNames?, inSectionKey?, sectionPosition? ('start' | 'end'), inclusion?, chromeGroup?, sortKey?, icon?, configuration? }. Make at most one claim: a related grid, one section (replacesSectionKey), several sections of one tab (replacesSectionKeys), fields of one section (replacesFieldNames), or a place inside a section without replacing anything (inSectionKey).",
             "IsRequired": true
           },
           "primaryKey": {

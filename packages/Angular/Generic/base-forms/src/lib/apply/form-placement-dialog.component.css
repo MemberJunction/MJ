@@ -424,13 +424,13 @@
   padding: var(--mj-space-3);
   border: 1px solid var(--mj-border-subtle);
   border-radius: var(--mj-radius-md);
-  background: var(--mj-bg-subtle);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .mj-placement-fieldpick-legend {
   padding: 0 var(--mj-space-2);
-  font-size: var(--mj-font-size-xs);
-  font-weight: var(--mj-font-weight-semibold);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
   color: var(--mj-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -453,11 +453,11 @@
 }
 
 .mj-placement-fieldpick-item:hover {
-  background: var(--mj-bg-hover);
+  background: var(--mj-bg-surface-hover);
 }
 
 .mj-placement-fieldpick-item.is-on {
-  background: var(--mj-bg-selected);
+  background: var(--mj-bg-surface-active);
   color: var(--mj-text-primary);
 }
 
@@ -467,3 +467,274 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- preview layout: the real form, scaled, beside a narrow column of answers ---- */
+
+.mj-placement-canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: var(--mj-space-4) var(--mj-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-3);
+  overflow-y: auto;
+  background: var(--mj-bg-surface-card);
+  border-right: 1px solid var(--mj-border-subtle);
+}
+
+/* ---- the column beside the preview ----
+   One quiet column: sections split by hairlines instead of boxes, every choice list drawn as a
+   single bordered list, and only the chosen row's extras (its dropdown and note) shown. The
+   controls are the ones the list layout has; only their arrangement differs. */
+
+.mj-placement-settings--side {
+  flex: 0 0 400px;
+  padding: var(--mj-space-2) var(--mj-space-5) var(--mj-space-5);
+  gap: 0;
+}
+
+.mj-placement-settings--side section {
+  padding: var(--mj-space-4) 0;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+.mj-placement-settings--side section:first-of-type { border-top: 0; }
+
+.mj-placement-settings--side .mj-placement-label { margin-bottom: var(--mj-space-2); }
+
+.mj-placement-settings--side .mj-placement-hint,
+.mj-placement-settings--side .mj-placement-warn {
+  margin-top: var(--mj-space-2);
+  font-size: var(--mj-text-xs);
+}
+
+/* Applies to: a line of text, not a card. */
+.mj-placement-settings--side .mj-placement-entity {
+  display: block;
+  padding: 0;
+  border: 0;
+  line-height: 1.5;
+}
+
+/* How it looks: two compact options side by side; the summary line says what each does. */
+.mj-placement-settings--side .mj-placement-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--mj-space-2); }
+.mj-placement-settings--side .mj-placement-choice { align-items: center; gap: var(--mj-space-2); padding: var(--mj-space-2) var(--mj-space-3); }
+.mj-placement-settings--side .mj-placement-choice-hint { display: none; }
+
+.mj-placement-settings--side .mj-placement-fields { flex-direction: column; gap: var(--mj-space-3); margin-top: var(--mj-space-3); }
+.mj-placement-settings--side .mj-placement-field--icon { width: auto; }
+.mj-placement-settings--side .mj-placement-field label { font-size: var(--mj-text-xs); }
+
+/* Choice lists: one bordered list, rows split by hairlines. */
+.mj-placement-settings--side .mj-placement-stack {
+  gap: 0;
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+}
+
+.mj-placement-settings--side .mj-placement-stack > * + * { border-top: 1px solid var(--mj-border-subtle); }
+
+.mj-placement-settings--side .mj-placement-row {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--mj-space-2) var(--mj-space-3);
+  min-height: 0;
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.mj-placement-settings--side .mj-placement-row.is-on { background: var(--mj-status-info-bg); }
+.mj-placement-settings--side .mj-placement-row > input { margin-top: 3px; }
+.mj-placement-settings--side .mj-placement-row-text { flex: 1 1 0; min-width: 0; line-height: 1.45; }
+
+/* Only the chosen row shows its note and its dropdown; the others are one line each. */
+.mj-placement-settings--side .mj-placement-row:not(.is-on) .mj-placement-row-note--quiet,
+.mj-placement-settings--side .mj-placement-row:not(.is-on) > .mj-placement-select { display: none; }
+
+.mj-placement-settings--side .mj-placement-row > .mj-placement-select {
+  flex: 0 0 calc(100% - 16px - var(--mj-space-3));
+  min-width: 0;
+  margin-left: calc(16px + var(--mj-space-3));
+  text-overflow: ellipsis;
+}
+
+/* The block and field pickers open inside the list, under their row, lined up with the row's
+   text. One column, so a name is never cut short; the checkbox shows what is chosen. */
+.mj-placement-settings--side .mj-placement-fieldpick {
+  margin: 0;
+  padding: 0 var(--mj-space-3) var(--mj-space-3) calc(16px + var(--mj-space-3) * 2);
+  border: 0;
+  border-radius: 0;
+  background: var(--mj-status-info-bg);
+}
+
+/* A legend sits on the fieldset's border by default; floated, it is ordinary content. */
+.mj-placement-settings--side .mj-placement-fieldpick-legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 var(--mj-space-1);
+  padding: 0;
+  letter-spacing: 0.06em;
+}
+
+.mj-placement-settings--side .mj-placement-fieldpick-grid {
+  clear: both;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.mj-placement-settings--side .mj-placement-fieldpick-item {
+  padding: var(--mj-space-1) 0;
+  border-radius: 0;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+.mj-placement-settings--side .mj-placement-fieldpick-item:hover { background: transparent; color: var(--mj-text-primary); }
+.mj-placement-settings--side .mj-placement-fieldpick-item.is-on { background: transparent; color: var(--mj-text-primary); }
+.mj-placement-settings--side .mj-placement-fieldpick-item > input { margin: 0; flex-shrink: 0; }
+.mj-placement-settings--side .mj-placement-fieldpick-name { white-space: normal; overflow: visible; }
+
+.mj-placement-settings--side .mj-placement-fieldpick .mj-placement-warn { margin-top: var(--mj-space-1); }
+
+.mj-placement-settings--side .mj-placement-fieldpick-where {
+  margin-top: var(--mj-space-2);
+  padding-top: var(--mj-space-2);
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+/* The group picker for a field claim sits in its row; drawn as a field, not a white slab. */
+.mj-placement-settings--side .mj-placement-row > .mj-placement-select {
+  border-color: var(--mj-border-default);
+}
+
+.mj-placement-settings--side .mj-placement-existing--compact {
+  min-height: 0;
+  padding: var(--mj-space-2) var(--mj-space-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.mj-placement-select--block { display: block; width: 100%; margin-top: var(--mj-space-2); }
+
+.mj-placement-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--mj-space-1) var(--mj-space-2);
+  font-size: var(--mj-text-sm);
+}
+
+.mj-placement-where-text { font-weight: var(--mj-font-semibold); }
+
+.mj-placement-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--mj-brand-primary);
+  font: inherit;
+  font-size: var(--mj-text-sm);
+  cursor: pointer;
+}
+
+.mj-placement-link:hover { text-decoration: underline; }
+
+@container mj-placement (max-width: 900px) {
+  .mj-placement-canvas { overflow: visible; border-right: 0; border-bottom: 1px solid var(--mj-border-subtle); }
+  .mj-placement-settings--side { flex-basis: auto; }
+}
+
+/* ---- order among the panels in one position ---- */
+
+.mj-placement-sublabel {
+  margin: var(--mj-space-3) 0 var(--mj-space-2);
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-secondary);
+}
+
+.mj-placement-order {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-md);
+  overflow: hidden;
+  counter-reset: mj-placement-order;
+}
+
+.mj-placement-order-item {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  min-height: 36px;
+  padding: var(--mj-space-1) var(--mj-space-2) var(--mj-space-1) var(--mj-space-3);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+  counter-increment: mj-placement-order;
+}
+
+.mj-placement-order-item::before {
+  content: counter(mj-placement-order);
+  flex: 0 0 auto;
+  min-width: 14px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+.mj-placement-order-item + .mj-placement-order-item { border-top: 1px solid var(--mj-border-subtle); }
+
+.mj-placement-order-item.is-this {
+  background: var(--mj-status-info-bg);
+  color: var(--mj-text-primary);
+  font-weight: var(--mj-font-semibold);
+}
+
+.mj-placement-order-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mj-placement-order-moves { display: inline-flex; gap: var(--mj-space-1); }
+
+.mj-placement-order-move {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+
+.mj-placement-order-move:hover:not(:disabled) {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+}
+
+.mj-placement-order-move:focus-visible {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 1px;
+}
+
+.mj-placement-order-move:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Where a field claim draws inside its group. */
+.mj-placement-fieldpick-where {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mj-space-2) var(--mj-space-4);
+  margin-top: var(--mj-space-2);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+}
+
+.mj-placement-fieldpick-where > label { display: inline-flex; align-items: center; gap: var(--mj-space-1); cursor: pointer; }

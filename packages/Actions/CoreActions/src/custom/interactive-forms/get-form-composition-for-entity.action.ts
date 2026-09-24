@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView, ReadRelationshipInclusion, type EntityInfo, type EntityRelationshipInfo } from "@memberjunction/core";
 import { EscapeSQLString, RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { addOutput, failure, getStringParam, ContributionScopeFilter } from "./_shared";
+import { addOutput, failure, getStringParam, ContributionScopeFilter, ParseClaimedFieldNames } from "./_shared";
 import {
     FORM_VARIANT_EXPLICIT_DEFAULT,
     FormVariantSettingKey,
@@ -119,7 +119,8 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                 rv.RunView<ContributionRow>({
                     EntityName: "MJ: Entity Form Contributions",
                     ExtraFilter: `${scope} AND Status='Active'`,
-                    Fields: ['ID', 'ContributionKey', 'Slot', 'Title', 'Name', 'Presentation', 'Precedence', 'Inclusion'],
+                    Fields: ['ID', 'ContributionKey', 'Slot', 'Title', 'Name', 'Presentation', 'Precedence', 'Inclusion', 'SortKey',
+                        'InSectionKey', 'SectionPosition', 'ReplacesFieldNames', 'ReplacesSectionKey', 'ReplacesSectionKeys', 'RelatedEntityID'],
                     ResultType: 'simple',
                 }, user),
                 rv.RunView<OverrideRow>({
@@ -158,6 +159,12 @@ export class GetFormCompositionForEntityAction extends BaseAction {
                     Presentation: r.Presentation,
                     Hidden: r.Inclusion === 'None',
                     Precedence: r.Precedence ?? 0,
+                    SortKey: r.SortKey ?? 0,
+                    InSectionKey: r.InSectionKey ?? undefined,
+                    SectionPosition: r.SectionPosition ?? undefined,
+                    FieldNames: ParseClaimedFieldNames(r.ReplacesFieldNames),
+                    SectionKeys: replacedSectionKeyList(r),
+                    ReplacesPlace: !!(r.ReplacesSectionKey || r.ReplacesSectionKeys || r.RelatedEntityID),
                 })),
                 SlotsPresent: fullCustomForm ? [] : [...GENERATED_FORM_SLOTS],
                 ChromeRuleCount: (rules.Results ?? []).length,
@@ -270,6 +277,14 @@ export class GetFormCompositionForEntityAction extends BaseAction {
     }
 }
 
+/** The blocks a row stands in for: the list when set, else the single key. */
+function replacedSectionKeyList(row: Pick<ContributionRow, 'ReplacesSectionKey' | 'ReplacesSectionKeys'>): string[] {
+    const listed = ParseClaimedFieldNames(row.ReplacesSectionKeys);
+    if (listed.length > 0) return listed;
+    const single = (row.ReplacesSectionKey ?? '').trim();
+    return single ? [single] : [];
+}
+
 /** The contribution columns this action reads. */
 interface ContributionRow {
     ID: string;
@@ -280,6 +295,13 @@ interface ContributionRow {
     Presentation: string;
     Precedence: number;
     Inclusion: string | null;
+    SortKey: number | null;
+    InSectionKey: string | null;
+    SectionPosition: 'start' | 'end' | null;
+    ReplacesFieldNames: string | null;
+    ReplacesSectionKey: string | null;
+    ReplacesSectionKeys: string | null;
+    RelatedEntityID: string | null;
 }
 
 export function LoadGetFormCompositionForEntityAction(): void {

@@ -58,8 +58,8 @@ describe('BuildFormCompositionSnapshot', () => {
 
     it('lists collapsed contributions with source and presentation', () => {
         expect(snapshot.Contributions).toEqual([
-            { Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'header', Presentation: 'bare', Hidden: false, Precedence: 0 },
-            { Key: `related:${TICKETS}:PersonID`, Slot: 'after-related', Source: 'metadata', Title: 'Tickets as cards', Presentation: 'panel', Hidden: false, Precedence: 0 },
+            { Key: 'header', Slot: 'before-fields', Source: 'class', Title: 'header', Presentation: 'bare', Hidden: false, Precedence: 0, SortKey: 0 },
+            { Key: `related:${TICKETS}:PersonID`, Slot: 'after-related', Source: 'metadata', Title: 'Tickets as cards', Presentation: 'panel', Hidden: false, Precedence: 0, SortKey: 0, ReplacesPlace: true },
         ]);
     });
 

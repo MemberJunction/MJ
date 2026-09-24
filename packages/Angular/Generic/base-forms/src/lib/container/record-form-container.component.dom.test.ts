@@ -10,6 +10,7 @@ import type { FormChromeSpec } from '../chrome/form-chrome';
 import type { BaseFormComponent } from '../base-form-component';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
+import { FORM_PLACEMENT_PREVIEW, FormPlacementPreview, PLACEMENT_PREVIEW_KEY } from '../panel-slot/placement-preview';
 import { ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { FormSectionIndicatorCoordinator, type FormSectionIndicatorSource } from '../section-indicators/form-section-indicator-coordinator.service';
 import { ParseValidationSource, SumSectionIndicators, type FormSectionIndicators, type ParsedValidationSource } from '../section-indicators/form-section-indicators';
@@ -63,6 +64,10 @@ class PanelManagerStub {
   @Input() TitleByKey: unknown;
   @Input() Related: unknown;
   @Input() Provider: unknown;
+  @Input() Variants: unknown;
+  @Input() CurrentFormID: unknown;
+  @Input() RecordKey: unknown;
+  @Output() FormChosen = new EventEmitter<string | null>();
 }
 @Component({ standalone: true, selector: 'mj-form-panel-slot', template: '' })
 class PanelSlotStub { @Input() Entity: unknown; @Input() Record: unknown; @Input() FormComponent: unknown; }
@@ -547,5 +552,157 @@ describe('MjRecordFormContainerComponent (DOM) — a contribution that replaces 
 
   it('hides nothing when no contribution claims a tab', () => {
     expect(hiddenKeys(render())).toEqual([]);
+  });
+});
+
+/**
+ * On a form with a side rail, a panel shows only on the tab its key belongs to, and the rail is
+ * worked out from the panels on the page. The placement dialog's preview mounts and re-mounts its
+ * panel without any of the container's own triggers firing, so the rail has to be worked out again
+ * when the preview changes, or the panel belongs to no tab and shows on none.
+ */
+describe('MjRecordFormContainerComponent (DOM) — the placement preview', () => {
+  type Resolving = { ResolveChrome(): void };
+
+  it('works out the rail again when the previewed panel changes', () => {
+    vi.useFakeTimers();
+    // The stub entity cannot be resolved for real; only whether a resolve happens matters here.
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'ResolveChrome')
+      .mockImplementation(() => undefined);
+    try {
+      const preview = new FormPlacementPreview();
+      renderComponentFixture(MjRecordFormContainerComponent, {
+        imports: CHILD_STUBS,
+        declarations: [MjRecordFormContainerComponent],
+        providers: [{ provide: FORM_PLACEMENT_PREVIEW, useValue: preview }],
+        inputs: { Record: RECORD, EntityInfo: { Name: 'Accounts' } },
+      });
+      vi.advanceTimersByTime(10);
+      const before = resolve.mock.calls.length;
+      preview.Show('Accounts', { presentation: 'panel', title: 'New', slot: 'before-fields' });
+      vi.advanceTimersByTime(10);
+      expect(resolve.mock.calls.length).toBeGreaterThan(before);
+    } finally {
+      resolve.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  function renderPreviewForm(spec: FormChromeSpec) {
+    const preview = new FormPlacementPreview();
+    const f = renderComponentFixture(MjRecordFormContainerComponent, {
+      imports: CHILD_STUBS,
+      declarations: [MjRecordFormContainerComponent],
+      providers: [{ provide: FORM_PLACEMENT_PREVIEW, useValue: preview }],
+      inputs: { Record: RECORD, EntityInfo: { Name: 'Accounts' } },
+      setup: (_instance, ref) => ref.injector.get(FormChromeCoordinator).Apply(spec),
+    });
+    return { f, preview, chrome: f.componentRef.injector.get(FormChromeCoordinator) };
+  }
+
+  const RAILED: FormChromeSpec = {
+    Layout: 'left-nav',
+    Groups: [
+      { Key: 'details', Title: 'Details', Icon: '', SectionKeys: ['identity', PLACEMENT_PREVIEW_KEY], IsMore: false },
+      { Key: 'certifications', Title: 'Certifications', Icon: '', SectionKeys: ['certifications'], IsMore: false },
+    ],
+    RelatedRoles: new Map(),
+    MoreSectionKeys: [],
+  };
+
+  it('shows the tab that holds the previewed panel, whatever tab it opened on', () => {
+    vi.useFakeTimers();
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'ResolveChrome')
+      .mockImplementation(() => undefined);
+    try {
+      const { preview, chrome } = renderPreviewForm(RAILED);
+      chrome.SetActiveGroup('certifications');
+      preview.Show('Accounts', { presentation: 'panel', title: 'New', slot: 'after-fields' });
+      vi.advanceTimersByTime(10);
+      expect(chrome.ActiveGroupKey).toBe('details');
+    } finally {
+      resolve.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  // A bare strip draws no collapsible panel, so it is in no tab at all.
+  const RAILED_NO_STRIP: FormChromeSpec = {
+    ...RAILED,
+    Groups: [
+      { Key: 'overview', Title: 'Overview', Icon: '', SectionKeys: ['overview'], IsMore: false },
+      { Key: 'details', Title: 'Details', Icon: '', SectionKeys: ['identity'], IsMore: false },
+      { Key: 'certifications', Title: 'Certifications', Icon: '', SectionKeys: ['certifications'], IsMore: false },
+    ],
+  };
+
+  it('shows the tab a bare strip that replaces blocks belongs to', () => {
+    vi.useFakeTimers();
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'ResolveChrome')
+      .mockImplementation(() => undefined);
+    try {
+      const { preview, chrome } = renderPreviewForm({
+        ...RAILED_NO_STRIP,
+        // The rail counts a replacing strip as a member of the replaced blocks' tab.
+        Groups: RAILED_NO_STRIP.Groups.map((g) => g.Key === 'details' ? { ...g, SectionKeys: [PLACEMENT_PREVIEW_KEY] } : g),
+      });
+      chrome.SetActiveGroup('certifications');
+      preview.Show('Accounts', { presentation: 'bare', title: 'Hero', slot: 'before-fields', replacesSectionKey: 'identity' });
+      vi.advanceTimersByTime(10);
+      expect(chrome.ActiveGroupKey).toBe('details');
+    } finally {
+      resolve.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it('shows the first tab for a bare strip that replaces nothing, where it sits above everything', () => {
+    vi.useFakeTimers();
+    const resolve = vi.spyOn(MjRecordFormContainerComponent.prototype as unknown as Resolving, 'ResolveChrome')
+      .mockImplementation(() => undefined);
+    try {
+      const { preview, chrome } = renderPreviewForm(RAILED_NO_STRIP);
+      chrome.SetActiveGroup('certifications');
+      preview.Show('Accounts', { presentation: 'bare', title: 'Hero', slot: 'before-fields' });
+      vi.advanceTimersByTime(10);
+      expect(chrome.ActiveGroupKey).toBe('overview');
+    } finally {
+      resolve.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+});
+
+/**
+ * A bare strip draws no collapsible panel, so the rail cannot see it by the usual marker. One that
+ * replaces blocks marks itself with the tab key it belongs to; the container shows it only on that
+ * tab, as it does any member.
+ */
+describe('MjRecordFormContainerComponent (DOM) — a bare strip that replaces blocks', () => {
+  const RAILED: FormChromeSpec = {
+    Layout: 'left-nav',
+    Groups: [
+      { Key: 'details', Title: 'Details', Icon: '', SectionKeys: ['hero'], IsMore: false },
+      { Key: 'certifications', Title: 'Certifications', Icon: '', SectionKeys: ['certifications'], IsMore: false },
+    ],
+    RelatedRoles: new Map(),
+    MoreSectionKeys: [],
+  };
+
+  it('shows the strip only on the tab it belongs to', () => {
+    const f = renderComponentFixture(MjRecordFormContainerComponent, {
+      imports: CHILD_STUBS,
+      declarations: [MjRecordFormContainerComponent],
+      inputs: { Record: RECORD, EntityInfo: { Name: 'Accounts' } },
+      setup: (_instance, ref) => ref.injector.get(FormChromeCoordinator).Apply(RAILED),
+    });
+    const strip = document.createElement('div');
+    strip.setAttribute('data-bare-section-key', 'hero');
+    (f.nativeElement as HTMLElement).appendChild(strip);
+
+    f.componentInstance.OnChromeGroupActivate('certifications');
+    expect(strip.style.display).toBe('none');
+    f.componentInstance.OnChromeGroupActivate('details');
+    expect(strip.style.display).toBe('');
   });
 });

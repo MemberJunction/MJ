@@ -10,6 +10,9 @@
     "src/lib/panel-manager/panel-manager.component.ts",
     "src/lib/panel-manager/panel-manager.component.dom.test.ts",
     "src/lib/panel-manager/form-panel-admin.service.ts",
+    "src/lib/panel-slot/panel-hides.ts",
+    "src/lib/panel-manager/form-audience.ts",
+    "src/lib/panel-manager/__tests__/form-panel-admin.publish.test.ts",
     "src/lib/panel-manager/__tests__/form-panel-admin.rows.test.ts",
     "src/lib/panel-manager/form-panel-inventory.ts",
     "src/lib/panel/collapsible-panel.component.ts",
@@ -18,6 +21,7 @@
     "src/lib/field/form-field.component.dom.test.ts",
     "src/lib/base-form-component.ts",
     "src/lib/base-form-component.validation.dom.test.ts",
+    "src/lib/base-form-component.section-order.dom.test.ts",
     "src/lib/isa-related-panel/isa-related-card.component.ts",
     "src/lib/isa-related-panel/isa-related-card.component.dom.test.ts",
     "src/lib/explorer-entity-data-grid.component.ts",
@@ -42,7 +46,11 @@
     "src/lib/apply/form-placement.ts",
     "src/lib/apply/form-slot-probe.service.ts",
     "src/lib/apply/form-placement-dialog.component.ts",
-    "src/lib/apply/form-placement-dialog.component.dom.test.ts"
+    "src/lib/apply/form-placement-dialog.component.dom.test.ts",
+    "src/lib/apply/form-placement-preview.component.ts",
+    "src/lib/panel-slot/placement-preview.ts",
+    "src/lib/panel-slot/placement-preview-panel.component.ts",
+    "src/lib/panel-slot/slot-order.dom.test.ts"
   ],
   "exclude": [
     "node_modules",

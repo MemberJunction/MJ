@@ -22,7 +22,12 @@ import {
     FieldsInSection,
     SectionHoldingField,
     SectionsWithFields,
+    PanelsInPosition,
+    MovedSortKey,
+    ChosenSectionKeys,
+    PLACEMENT_ORDER_STEP,
     type FormPlacementContext,
+    type PlacementOrderItem,
 } from '../form-placement';
 
 /**
@@ -699,5 +704,174 @@ describe('replacing fields inside one group', () => {
         expect(DescribeFieldList(['A', 'B'])).toBe('the A and B fields');
         expect(DescribeFieldList(['A', 'B', 'C'])).toBe('the A, B and C fields');
         expect(DescribeFieldList(['A', 'B', 'C', 'D'])).toBe('4 fields, starting with A');
+    });
+});
+
+/**
+ * Panels in one position draw by `SortKey`, higher first. The dialog lists them with the one being
+ * placed among them, and a move gives that one a number strictly between its new neighbours.
+ */
+describe('Order in a position', () => {
+    const inSlot: FormPlacementContext = {
+        ...CONTEXT,
+        Existing: [
+            { Key: 'panel:A', Slot: 'after-fields', Title: 'A', SortKey: 20 },
+            { Key: 'panel:B', Slot: 'after-fields', Title: 'B', SortKey: 10 },
+            { Key: 'panel:Top', Slot: 'top-area', Title: 'Top', SortKey: 99 },
+        ],
+    };
+    const state = (over: Partial<ReturnType<typeof InitialPlacementState>> = {}) =>
+        ({ ...InitialPlacementState(null, inSlot), Slot: 'after-fields' as const, ...over });
+    const names = (items: PlacementOrderItem[]) => items.map((i) => (i.IsThis ? 'THIS' : i.Title));
+
+    it('lists only the panels in the chosen position, higher first, with a new panel after its ties', () => {
+        expect(names(PanelsInPosition(state(), inSlot, 'New'))).toEqual(['A', 'B', 'THIS']);
+        expect(names(PanelsInPosition(state({ SortKey: 15 }), inSlot, 'New'))).toEqual(['A', 'THIS', 'B']);
+    });
+
+    it('lists nothing while the panel replaces a tab, since it then draws alone in that place', () => {
+        expect(PanelsInPosition(state({ ReplaceMode: 'rail-tab', ReplaceRailKey: 'details' }), inSlot, 'New')).toEqual([]);
+    });
+
+    it('moves between two neighbours to a number strictly between them', () => {
+        const items = PanelsInPosition(state(), inSlot, 'New');
+        expect(MovedSortKey(items, 'up')).toBe(15);
+    });
+
+    it('moves past the end of the list by a step', () => {
+        const items = PanelsInPosition(state({ SortKey: 15 }), inSlot, 'New');
+        expect(MovedSortKey(items, 'up')).toBe(20 + PLACEMENT_ORDER_STEP);
+        expect(MovedSortKey(items, 'down')).toBe(10 - PLACEMENT_ORDER_STEP);
+    });
+
+    it('refuses a move with nowhere to go, or between neighbours that leave no number free', () => {
+        const top = PanelsInPosition(state({ SortKey: 50 }), inSlot, 'New');
+        expect(MovedSortKey(top, 'up')).toBeNull();
+        const tied: FormPlacementContext = { ...inSlot, Existing: [
+            { Key: 'x', Slot: 'after-fields', Title: 'X', SortKey: 0 },
+            { Key: 'y', Slot: 'after-fields', Title: 'Y', SortKey: 0 },
+        ] };
+        const items = PanelsInPosition(state(), tied, 'New');
+        expect(names(items)).toEqual(['X', 'Y', 'THIS']);
+        expect(MovedSortKey(items, 'up')).toBeNull();
+    });
+
+    it('writes the order only once the panel has been placed among others', () => {
+        expect(ResolvePlacementDecision(state(), inSlot, PROPOSAL).Contribution.sortKey).toBeUndefined();
+        expect(ResolvePlacementDecision(state({ SortKey: 15 }), inSlot, PROPOSAL).Contribution.sortKey).toBe(15);
+    });
+
+    it('starts an edit from the order the panel already has', () => {
+        const edit = PlacementStateFromContribution({ ...PROPOSAL, slot: 'after-fields', sortKey: 12 }, inSlot, true);
+        expect(edit.SortKey).toBe(12);
+    });
+});
+
+/**
+ * A panel can stand in for several blocks of one tab, and can be placed inside a section without
+ * replacing anything, at its top or bottom. One block still writes the single-key column.
+ */
+describe('Section claims', () => {
+    const threeSections: FormPlacementContext = {
+        ...CONTEXT,
+        Sections: [
+            { Key: 'identity', Title: 'Identity', Fields: [{ Name: 'Name', Label: 'Name' }] },
+            { Key: 'profile', Title: 'Profile' },
+            { Key: 'account', Title: 'Account' },
+        ],
+    };
+    const base = () => InitialPlacementState(null, threeSections);
+
+    it('keeps chosen blocks in the form order, and falls back to the single key', () => {
+        expect(ChosenSectionKeys({ ...base(), ReplaceSectionKeys: ['account', 'identity'] }, threeSections)).toEqual(['identity', 'account']);
+        expect(ChosenSectionKeys({ ...base(), ReplaceSectionKey: 'profile' }, threeSections)).toEqual(['profile']);
+    });
+
+    it('writes one block to the single key and several to the list', () => {
+        const one = ResolvePlacementDecision({ ...base(), ReplaceMode: 'section', ReplaceSectionKeys: ['profile'] }, threeSections, PROPOSAL).Contribution;
+        expect(one).toMatchObject({ replacesSectionKey: 'profile' });
+        expect(one.replacesSectionKeys).toBeUndefined();
+        const many = ResolvePlacementDecision({ ...base(), ReplaceMode: 'section', ReplaceSectionKeys: ['account', 'identity'] }, threeSections, PROPOSAL).Contribution;
+        expect(many.replacesSectionKeys).toEqual(['identity', 'account']);
+        expect(many.replacesSectionKey).toBeUndefined();
+    });
+
+    it('places a panel inside a section, at the end asked for, replacing nothing', () => {
+        const out = ResolvePlacementDecision({ ...base(), InSectionKey: 'profile', SectionPosition: 'end' }, threeSections, PROPOSAL).Contribution;
+        expect(out).toMatchObject({ inSectionKey: 'profile', sectionPosition: 'end' });
+        expect(SummarizePlacement({ ...base(), InSectionKey: 'profile', SectionPosition: 'end' }, threeSections))
+            .toContain('at the bottom of the Profile section');
+    });
+
+    it('ignores a placement inside a section while the panel replaces something', () => {
+        const out = ResolvePlacementDecision({ ...base(), InSectionKey: 'profile', ReplaceMode: 'section' }, threeSections, PROPOSAL).Contribution;
+        expect(out.inSectionKey).toBeUndefined();
+    });
+
+    it('puts a field claim at the bottom of its group only when asked', () => {
+        const top = ResolvePlacementDecision({ ...base(), ReplaceMode: 'field', ReplaceFieldSectionKey: 'identity', ReplaceFieldNames: ['Name'] }, threeSections, PROPOSAL).Contribution;
+        expect(top.sectionPosition).toBeUndefined();
+        const bottom = ResolvePlacementDecision({ ...base(), ReplaceMode: 'field', ReplaceFieldSectionKey: 'identity', ReplaceFieldNames: ['Name'], SectionPosition: 'end' }, threeSections, PROPOSAL).Contribution;
+        expect(bottom.sectionPosition).toBe('end');
+    });
+
+    it('reads an edit back: several blocks, or a place inside a section', () => {
+        const clean: FormContributionSpec = { presentation: 'panel', title: 'P', slot: 'after-fields' };
+        const many = PlacementStateFromContribution({ ...clean, replacesSectionKeys: ['identity', 'account'] }, threeSections, true);
+        expect(many).toMatchObject({ ReplaceMode: 'section', ReplaceSectionKeys: ['identity', 'account'], ReplaceSectionKey: 'identity' });
+        const inside = PlacementStateFromContribution({ ...clean, inSectionKey: 'profile', sectionPosition: 'end' }, threeSections, true);
+        expect(inside).toMatchObject({ ReplaceMode: 'none', InSectionKey: 'profile', SectionPosition: 'end' });
+    });
+
+    it('orders a panel placed in a section against the others drawn at that end of it', () => {
+        const inSection: FormPlacementContext = {
+            ...threeSections,
+            Existing: [
+                { Key: 'slot-panel', Slot: 'after-fields', Title: 'Slot panel' },
+                { Key: 'placed', Slot: 'after-fields', Title: 'Placed', InSectionKey: 'identity', SectionPosition: 'start', SortKey: 20 },
+                { Key: 'claim', Slot: 'after-fields', Title: 'Field claim', FieldNames: ['Name'], SortKey: 10 },
+                { Key: 'bottom', Slot: 'after-fields', Title: 'Bottom', InSectionKey: 'identity', SectionPosition: 'end' },
+                { Key: 'swap', Slot: 'after-fields', Title: 'Stands in', ReplacesPlace: true },
+            ],
+        };
+        const items = PanelsInPosition({ ...base(), InSectionKey: 'identity', SectionPosition: 'start' }, inSection, 'New');
+        expect(items.map((i) => (i.IsThis ? 'THIS' : i.Title))).toEqual(['Placed', 'Field claim', 'THIS']);
+        const claim = PanelsInPosition(
+            { ...base(), ReplaceMode: 'field', ReplaceFieldSectionKey: 'identity', ReplaceFieldNames: ['Name'] }, inSection, 'New');
+        expect(claim.map((i) => (i.IsThis ? 'THIS' : i.Title))).toEqual(['Placed', 'Field claim', 'THIS']);
+    });
+
+    it('orders a panel standing in for blocks against the others drawn in the first block\'s place', () => {
+        const blocks: FormPlacementContext = {
+            ...threeSections,
+            Existing: [
+                { Key: 'top', Slot: 'before-fields', Title: 'Before the fields', SortKey: 5 },
+                { Key: 'first', Slot: 'before-fields', Title: 'Stands in for Identity', SectionKeys: ['identity'], ReplacesPlace: true },
+                { Key: 'later', Slot: 'before-fields', Title: 'Stands in for Account', SectionKeys: ['account', 'profile'], ReplacesPlace: true },
+            ],
+        };
+        // The first block is where the before-fields slot draws, so those panels share its list.
+        const atFirst = PanelsInPosition({ ...base(), ReplaceMode: 'section', ReplaceSectionKeys: ['identity', 'profile'] }, blocks, 'New');
+        expect(atFirst.map((i) => (i.IsThis ? 'THIS' : i.Title))).toEqual(['Before the fields', 'Stands in for Identity', 'THIS']);
+        // A later block's place holds only the panels that stand in for blocks starting there.
+        const atProfile = PanelsInPosition({ ...base(), ReplaceMode: 'section', ReplaceSectionKeys: ['profile'] }, blocks, 'New');
+        expect(atProfile.map((i) => (i.IsThis ? 'THIS' : i.Title))).toEqual(['Stands in for Account', 'THIS']);
+    });
+
+    it('puts a panel standing in for blocks in the before-fields slot, so its order number decides ties', () => {
+        const out = ResolvePlacementDecision(
+            { ...base(), Slot: 'after-fields', ReplaceMode: 'section', ReplaceSectionKeys: ['profile'], SortKey: 10 }, threeSections, PROPOSAL).Contribution;
+        expect(out).toMatchObject({ slot: 'before-fields', replacesSectionKey: 'profile', sortKey: 10 });
+    });
+
+    it('leaves a panel that stands in for a tab or grid out of every position', () => {
+        const withSwap = { ...threeSections, Existing: [{ Key: 's', Slot: 'after-fields', Title: 'S', ReplacesPlace: true }] };
+        // Only the placed panel is listed, so the dialog shows no list at all.
+        expect(PanelsInPosition({ ...base(), Slot: 'after-fields' }, withSwap, 'New').map((i) => i.IsThis)).toEqual([true]);
+    });
+
+    it('names every block in the summary', () => {
+        expect(SummarizePlacement({ ...base(), ReplaceMode: 'section', ReplaceSectionKeys: ['identity', 'account'] }, threeSections))
+            .toContain('standing in for the Identity and Account sections');
     });
 });

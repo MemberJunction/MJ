@@ -17,6 +17,10 @@ import {
     ShowsRail,
     SlotIsOnForm,
     InitialPlacementState,
+    ChosenSectionKeys,
+    DescribeSectionList,
+    MovedSortKey,
+    PanelsInPosition,
     ResolvePlacementDecision,
     SummarizePlacement,
     type FormPlacementContext,
@@ -27,8 +31,11 @@ import {
     type FormPlacementReplaceMode,
     type FormPlacementSlotChoice,
     type FormPlacementState,
+    type PlacementOrderItem,
 } from './form-placement';
 import { FormSlotProbeService } from './form-slot-probe.service';
+import { CompositeKey } from '@memberjunction/core';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
  * Asks where a generated panel should go before anything is written.
@@ -86,6 +93,21 @@ export class MjFormPlacementDialogComponent {
      * the slots, or one with no Angular form to render, turns it off.
      */
     @Input() ProbeForm = true;
+
+    /**
+     * The record the scaled form preview shows. Null shows a new, unsaved record, which is
+     * what a dialog opened from a conversation has.
+     */
+    @Input() RecordKey: CompositeKey | null = null;
+
+    /** The saved row being edited, which the preview leaves off so it shows only the edit. */
+    @Input() ReplacesRowID: string | null = null;
+
+    /** The component being placed, so the preview draws it rather than a placeholder. */
+    @Input() PanelComponentSpec: ComponentSpec | null = null;
+
+    /** The saved component of the panel being edited, for the same reason. */
+    @Input() PanelComponentID: string | null = null;
 
     /** The user pressed Apply. */
     @Output() Applied = new EventEmitter<FormPlacementDecision>();
@@ -294,7 +316,13 @@ export class MjFormPlacementDialogComponent {
      * file it and shows it above every section. Worth saying before it is applied.
      */
     public get IsPersistentHero(): boolean {
-        return this.State.Presentation === 'bare';
+        return this.State.Presentation === 'bare' && !this.BareJoinsReplacedTab;
+    }
+
+    /** A bare strip that replaces blocks takes their place in their tab, rather than above every tab. */
+    public get BareJoinsReplacedTab(): boolean {
+        return this.State.Presentation === 'bare'
+            && (this.State.ReplaceMode === 'section' || this.State.ReplaceMode === 'rail-tab');
     }
 
     /** A form with no related grids has nothing for a panel to take over. */
@@ -393,6 +421,13 @@ export class MjFormPlacementDialogComponent {
                         ? 'none' : this.State.ReplaceMode,
                 };
             }
+            // Chosen sections, and the section a panel is placed in, must be ones the form draws.
+            const drawn = new Set(this._context.Sections.map((s) => s.Key));
+            this.State = {
+                ...this.State,
+                ReplaceSectionKeys: this.State.ReplaceSectionKeys.filter((k) => drawn.has(k)),
+                InSectionKey: drawn.has(this.State.InSectionKey) ? this.State.InSectionKey : '',
+            };
             // The previously selected section may not be one the form draws.
             if (!this._context.Sections.some((s) => s.Key === this.State.ReplaceSectionKey)) {
                 this.State = {
@@ -405,6 +440,161 @@ export class MjFormPlacementDialogComponent {
             this.Probing = false;
             this.cdr.markForCheck();
         }
+    }
+
+    /** True when the scaled form could not be drawn, so the list stands in for it. */
+    public PreviewFailed = false;
+
+    /**
+     * Whether the real form is shown, scaled, in place of the list.
+     *
+     * Not for a full custom form, which draws its own body and has no positions to show, and
+     * not when the form is not being read at all.
+     */
+    public get ShowFormPreview(): boolean {
+        return this.ProbeForm && !this.PreviewFailed && !this._context.FullCustomForm && !!this._context.EntityName;
+    }
+
+    public OnPreviewFailed(): void {
+        this.PreviewFailed = true;
+        this.cdr.markForCheck();
+    }
+
+    private previewSpec: { Signature: string; Spec: FormContributionSpec } | null = null;
+
+    /**
+     * The panel as it would be saved, for the preview to draw.
+     *
+     * The same object comes back until an answer changes. The preview redraws the form each
+     * time this changes identity, and change detection reads it on every pass.
+     */
+    public get PreviewSpec(): FormContributionSpec {
+        const spec = ResolvePlacementDecision(this.State, this._context, this._proposal).Contribution;
+        const signature = JSON.stringify(spec);
+        if (this.previewSpec?.Signature !== signature) this.previewSpec = { Signature: signature, Spec: spec };
+        return this.previewSpec.Spec;
+    }
+
+    /** Stop replacing anything; the panel goes back to its chosen position. */
+    public ClearReplacement(): void {
+        this.State = { ...this.State, ReplaceMode: 'none', ReplaceFieldNames: [] };
+    }
+
+    /** One line saying where the panel goes and what it replaces. */
+    public get PlacementLine(): string {
+        const slot = FORM_PLACEMENT_SLOTS.find((s) => s.Slot === this.State.Slot)?.Name ?? this.State.Slot;
+        switch (this.State.ReplaceMode) {
+            case 'section': {
+                const titles = ChosenSectionKeys(this.State, this._context)
+                    .map((key) => this._context.Sections.find((s) => s.Key === key)?.Title ?? key);
+                return titles.length > 1
+                    ? `In place of the ${DescribeSectionList(titles)} sections`
+                    : `In place of the ${titles[0] ?? 'chosen'} section`;
+            }
+            case 'field': {
+                const section = this._context.Sections.find((s) => s.Key === this.State.ReplaceFieldSectionKey);
+                const fields = this.ChosenFields.length > 0 ? this.ChosenFieldSummary : 'the fields you pick';
+                const end = this.State.SectionPosition === 'end' ? 'bottom' : 'top';
+                return `At the ${end} of ${section?.Title ?? 'the section'}, in place of ${fields}`;
+            }
+            case 'related': {
+                const related = this._context.Related[Number(this.State.ReplaceRelatedIndex)];
+                return `In place of the ${related?.DisplayName ?? 'related'} grid`;
+            }
+            case 'contribution': {
+                const item = this._context.Existing[Number(this.State.ReplaceContributionIndex)];
+                return `In place of the ${item?.Title ?? 'existing'} panel`;
+            }
+            case 'rail-tab': {
+                const tab = this.RailTabs.find((t) => t.Key === this.State.ReplaceRailKey);
+                return `In place of the whole ${tab?.Title ?? this.State.ReplaceRailKey} tab`;
+            }
+            default: {
+                const inside = this._context.Sections.find((s) => s.Key === this.State.InSectionKey.trim());
+                if (inside) return `At the ${this.State.SectionPosition === 'end' ? 'bottom' : 'top'} of the ${inside.Title} section`;
+                return slot;
+            }
+        }
+    }
+
+    /**
+     * The panels in the chosen position, top to bottom, this one among them. Only worth showing
+     * when there is another panel to order against.
+     */
+    public get OrderItems(): PlacementOrderItem[] {
+        const items = PanelsInPosition(this.State, this._context, this.State.Title.trim() || this.ComponentName || 'This panel');
+        return items.length > 1 ? items : [];
+    }
+
+    public get CanMoveUp(): boolean {
+        return MovedSortKey(this.OrderItems, 'up') != null;
+    }
+
+    public get CanMoveDown(): boolean {
+        return MovedSortKey(this.OrderItems, 'down') != null;
+    }
+
+    /** Whether a neighbour is there but the move has no order number to land on. */
+    public get MoveIsBlocked(): boolean {
+        const items = this.OrderItems;
+        const at = items.findIndex((item) => item.IsThis);
+        const blockedUp = at > 0 && !this.CanMoveUp;
+        const blockedDown = at >= 0 && at < items.length - 1 && !this.CanMoveDown;
+        return blockedUp || blockedDown;
+    }
+
+    /** Move this panel one place up or down among the panels in its position. */
+    public MoveInPosition(direction: 'up' | 'down'): void {
+        const sortKey = MovedSortKey(this.OrderItems, direction);
+        if (sortKey == null) return;
+        this.State = { ...this.State, SortKey: sortKey };
+    }
+
+    /**
+     * The position control's value: a slot name, or `in:<section key>:start|end` for a place
+     * inside a section. One control, because "above the fields" and "at the bottom of Details"
+     * are answers to the same question.
+     */
+    public get PositionValue(): string {
+        const key = this.State.InSectionKey.trim();
+        return key ? `in:${key}:${this.State.SectionPosition}` : this.State.Slot;
+    }
+    public set PositionValue(value: string) {
+        const match = /^in:(.+):(start|end)$/.exec(value);
+        this.State = match
+            ? { ...this.State, InSectionKey: match[1], SectionPosition: match[2] as 'start' | 'end' }
+            : { ...this.State, InSectionKey: '', Slot: value as FormContributionSlot };
+    }
+
+    /** Sections a panel can be placed inside, for the position control. */
+    public get PlaceableSections(): readonly FormPlacementSection[] {
+        return this._context.Sections;
+    }
+
+    /** Whether a section is among those the `section` mode stands in for. */
+    public IsSectionChosen(key: string): boolean {
+        return ChosenSectionKeys(this.State, this._context).includes(key);
+    }
+
+    /**
+     * Add or remove one section from those the panel stands in for. The single key follows the
+     * first chosen section, so a one-section claim reads the same as it always has.
+     */
+    public ToggleSection(key: string, chosen: boolean): void {
+        const current = ChosenSectionKeys(this.State, this._context);
+        const next = chosen ? [...current.filter((k) => k !== key), key] : current.filter((k) => k !== key);
+        const ordered = this._context.Sections.map((s) => s.Key).filter((k) => next.includes(k));
+        this.State = { ...this.State, ReplaceSectionKeys: ordered, ReplaceSectionKey: ordered[0] ?? '' };
+    }
+
+    /** A section claim that names no section stands in for nothing, so Apply would be a lie. */
+    public get SectionClaimIsEmpty(): boolean {
+        return this.State.ReplaceMode === 'section' && ChosenSectionKeys(this.State, this._context).length === 0;
+    }
+
+    /** Whether the panel replaces something, so the line offers a way back. */
+    public get IsReplacing(): boolean {
+        return this.State.ReplaceMode !== 'none';
     }
 
     private readonly probe = inject(FormSlotProbeService);

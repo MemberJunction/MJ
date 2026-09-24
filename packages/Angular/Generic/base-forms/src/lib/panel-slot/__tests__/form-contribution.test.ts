@@ -13,6 +13,9 @@ import {
     StripJoinFieldBrackets,
     type FormContributionRegistration,
     type FormContributionRelationship,
+    ReplacedSectionKeys,
+    ContributionDrawsInSection,
+    ContributionSectionPosition,
 } from '../form-contribution';
 
 const PEOPLE = 'MJ_BizApps_Common: People';
@@ -486,5 +489,30 @@ describe('ContributionClaimedFieldNames', () => {
             entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldNames: ['LifetimeValue'],
         })];
         expect(ContributionHiddenSectionKeys(PEOPLE, [], [], registrations)).toEqual([]);
+    });
+});
+
+describe('Section claims on registrations', () => {
+    it('lists every replaced section once, the single key first', () => {
+        expect(ReplacedSectionKeys({ replacesSectionKey: 'a', replacesSectionKeys: ['b', 'a', ' c '] })).toEqual(['a', 'b', 'c']);
+        expect(ReplacedSectionKeys({})).toEqual([]);
+    });
+
+    it('treats a panel placed in a section like a field claim: the section hosts it', () => {
+        expect(ContributionDrawsInSection({ inSectionKey: 'profile' })).toBe(true);
+        expect(ContributionDrawsInSection({ replacesFieldNames: ['Name'] })).toBe(true);
+        expect(ContributionDrawsInSection({})).toBe(false);
+    });
+
+    it('draws at the start of its section unless it asks for the end', () => {
+        expect(ContributionSectionPosition({})).toBe('start');
+        expect(ContributionSectionPosition({ sectionPosition: 'end' })).toBe('end');
+    });
+
+    it('hides every section a winner stands in for', () => {
+        const keys = ContributionHiddenSectionKeys('E', [], [], [
+            { Priority: 0, Metadata: { entity: 'E', slot: 'before-fields', contributionKey: 'k', replacesSectionKeys: ['identity', 'profile'] } },
+        ]);
+        expect(keys).toEqual(['identity', 'profile']);
     });
 });

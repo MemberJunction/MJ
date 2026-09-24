@@ -1,3 +1,4 @@
+import { By } from '@angular/platform-browser';
 import { describe, it, expect, vi } from 'vitest';
 import { Component, Input } from '@angular/core';
 import { Subject, of } from 'rxjs';
@@ -404,6 +405,8 @@ describe('MjCollapsiblePanelComponent — dragging a panel that is not a declare
 class FieldPanelSlotStub {
   @Input() Entity = '';
   @Input() FieldNames: readonly string[] = [];
+  @Input() SectionKey = '';
+  @Input() Position: 'start' | 'end' = 'start';
   @Input() Record: unknown;
   @Input() FormComponent: unknown;
   @Input() FormContext: unknown;
@@ -457,6 +460,16 @@ describe('MjCollapsiblePanelComponent — hosting a panel that stands in for a f
     const f = renderWithFields(['Name'], formWithRecord);
     const content = query(f, '.mj-forms-panel-content');
     expect(content?.firstElementChild?.tagName.toLowerCase()).toBe('mj-form-field-panel-slot');
+  });
+
+  it('renders a second host below its content, for a panel placed at the end of the section', () => {
+    const f = renderWithFields(['Name'], formWithRecord);
+    const content = query(f, '.mj-forms-panel-content')!;
+    const hosts = Array.from(content.querySelectorAll('mj-form-field-panel-slot'));
+    expect(hosts.length).toBe(2);
+    expect(content.lastElementChild?.tagName.toLowerCase()).toBe('mj-form-field-panel-slot');
+    const stubs = f.debugElement.queryAll(By.directive(FieldPanelSlotStub)).map((d) => d.componentInstance as FieldPanelSlotStub);
+    expect(stubs.map((s) => [s.SectionKey, s.Position])).toEqual([['details', 'start'], ['details', 'end']]);
   });
 
   it('passes the entity and the fields down', () => {

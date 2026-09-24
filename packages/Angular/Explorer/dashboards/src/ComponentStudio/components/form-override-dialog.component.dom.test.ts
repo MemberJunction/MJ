@@ -40,7 +40,11 @@ describe('FormOverrideDialogComponent (DOM)', () => {
   });
 
   it('reveals the role picker with one option per provider role when Scope=Role', () => {
-    const fixture = render({ Visible: true, EntityName: 'Members', InitialScope: 'Role' });
+    // The picker is offered only to someone who may publish; an Owner always may.
+    const fixture = render({
+      Visible: true, EntityName: 'Members', InitialScope: 'Role',
+      Provider: createFakeProvider({ roles: ROLES, currentUser: { Type: 'Owner' } }),
+    });
     const options = queryAll(fixture, 'select.role-picker option');
     // one placeholder + one per role
     expect(options.length).toBe(ROLES.length + 1);
@@ -71,5 +75,20 @@ describe('FormOverrideDialogComponent (DOM)', () => {
     expect(confirmed.length).toBe(1);
     expect(confirmed[0].Name).toBe('Nice Form');
     expect(confirmed[0].EntityName).toBe('Members');
+  });
+
+  /**
+   * Showing a form to a role or to everyone is a grant. Without it the dialog shows the audience
+   * rather than offering controls that the server would refuse.
+   */
+  it('shows the audience as text, with no role or everyone option, to a user without the grant', () => {
+    const fixture = render({ Visible: true, EntityName: 'Members', InitialScope: 'User' });
+    expect(queryAll(fixture, 'input[name="scope"]')).toHaveLength(0);
+    expect(text(fixture, '.scope-readonly')).toBe('Me only');
+  });
+
+  it('names the role a shared form is aimed at, for a user who cannot change it', () => {
+    const fixture = render({ Visible: true, EntityName: 'Members', InitialScope: 'Role', InitialRoleID: 'r2' });
+    expect(text(fixture, '.scope-readonly')).toBe('Member role');
   });
 });

@@ -54,6 +54,18 @@ export interface FormContributionSpec {
      * sections has no single top to sit at.
      */
     replacesFieldNames?: string[];
+    /**
+     * Sections the panel stands in for, all within one tab. It draws in the place of the first
+     * of them and the others are not drawn. A single section uses `replacesSectionKey` instead.
+     */
+    replacesSectionKeys?: string[];
+    /** A section the panel draws inside, replacing nothing. `sectionPosition` says where. */
+    inSectionKey?: string;
+    /**
+     * Where inside its section the panel draws, for `inSectionKey` and for a field claim.
+     * Absent means the start.
+     */
+    sectionPosition?: FormContributionSectionPosition;
     inclusion?: FormContributionInclusion;
     chromeGroup?: FormContributionChromeGroup;
     presentation: FormContributionPresentation;
@@ -61,6 +73,9 @@ export interface FormContributionSpec {
     icon?: string;
     configuration?: Record<string, unknown>;
 }
+
+/** Where inside a section a panel draws. */
+export type FormContributionSectionPosition = 'start' | 'end';
 
 /** A contribution block after normalization, where the slot has been resolved. */
 export type NormalizedFormContributionSpec = FormContributionSpec & { slot: FormContributionSlot };
@@ -120,6 +135,11 @@ export function getDeclaredFormContribution(
     if (replaces) out.replacesSectionKey = replaces;
     const replacedFields = cleanStringList(raw.replacesFieldNames);
     if (replacedFields) out.replacesFieldNames = replacedFields;
+    const replacedSections = cleanStringList(raw.replacesSectionKeys);
+    if (replacedSections) out.replacesSectionKeys = replacedSections;
+    const inSection = cleanString(raw.inSectionKey);
+    if (inSection) out.inSectionKey = inSection;
+    if (raw.sectionPosition === 'start' || raw.sectionPosition === 'end') out.sectionPosition = raw.sectionPosition;
     if (raw.inclusion === 'Primary' || raw.inclusion === 'More' || raw.inclusion === 'None') out.inclusion = raw.inclusion;
     if (raw.chromeGroup === 'details' || raw.chromeGroup === 'more') out.chromeGroup = raw.chromeGroup;
     const icon = cleanString(raw.icon);

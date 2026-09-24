@@ -21,38 +21,136 @@
     </mj-alert>
   }
 
-  <div class="mj-placement-body">
+  @if (ShowFormPreview) {
+    <div class="mj-placement-body mj-placement-body--preview">
 
-    <!-- Left: the form, with each slot as a target -->
-    <div class="mj-placement-preview">
-      <div class="mj-placement-label">Where it goes</div>
-      <p class="mj-placement-hint">
-        The <strong>{{ Context.EntityName }}</strong> form as it will look. Pick one of the positions
-        between the blocks that are already there.
-      </p>
-      @if (Probing) {
-        <p class="mj-placement-hint">Reading the positions this form offers&hellip;</p>
-      } @else if (SlotsAreAssumed) {
+      <!-- Left: the real form, scaled, with the panel drawn where it will go -->
+      <div class="mj-placement-canvas">
         <p class="mj-placement-hint">
-          Positions shown are the ones generated forms offer. This form could not be read, so a
-          hand-written custom template may differ.
+          The form as it will look, with your panel on it. Make your choices on the right.
         </p>
-      }
+        <mj-form-placement-preview
+          [EntityName]="Context.EntityName"
+          [RecordKey]="RecordKey"
+          [Spec]="PreviewSpec"
+          [ReplacesRowID]="ReplacesRowID"
+          [PanelComponentSpec]="PanelComponentSpec"
+          [PanelComponentID]="PanelComponentID"
+          (Failed)="OnPreviewFailed()">
+        </mj-form-placement-preview>
+      </div>
 
-      @for (choice of SlotsAbove; track choice.Slot) {
-        <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: choice }"></ng-container>
-      }
+      <!-- Right: every answer, including the ones the preview sets by clicking -->
+      <div class="mj-placement-settings mj-placement-settings--side">
 
-      @if (SectionsAreInDetailsTab) {
-        <div class="mj-placement-tab" [class.is-replaced]="IsWholeDetailsTabReplaced">
-          <div class="mj-placement-tab-head">
-            <i class="fa-solid fa-id-card" aria-hidden="true"></i>
-            <span class="mj-placement-tab-name">Details</span>
-            <span class="mj-placement-tab-kind">one rail tab &middot; {{ DetailsTabSectionCount }} field groups</span>
+        <section>
+          <div class="mj-placement-label">Where it goes</div>
+          <div class="mj-placement-where">
+            <span class="mj-placement-where-text">{{ PlacementLine }}</span>
+            @if (IsReplacing) {
+              <button type="button" class="mj-placement-link" (click)="ClearReplacement()">Replace nothing</button>
+            }
           </div>
+          <select class="mj-placement-select mj-placement-select--block" aria-label="Position on the form"
+                  [(ngModel)]="PositionValue" name="mj-slot-select">
+            <optgroup label="Between blocks">
+              @for (choice of Slots; track choice.Slot) {
+                <option [value]="choice.Slot">{{ choice.Name }}</option>
+              }
+            </optgroup>
+            @if (PlaceableSections.length > 0) {
+              <optgroup label="Inside a section">
+                @for (section of PlaceableSections; track section.Key) {
+                  <option [value]="'in:' + section.Key + ':start'">Top of {{ section.Title }}</option>
+                  <option [value]="'in:' + section.Key + ':end'">Bottom of {{ section.Title }}</option>
+                }
+              </optgroup>
+            }
+          </select>
+          @if (IsReplacing) {
+            <p class="mj-placement-hint">The position is used only when the panel replaces nothing.</p>
+          }
+
+          @if (OrderItems.length > 0) {
+            <div class="mj-placement-sublabel">Order in this position</div>
+            <ol class="mj-placement-order" aria-label="Order in this position">
+              @for (item of OrderItems; track item.Key) {
+                <li class="mj-placement-order-item" [class.is-this]="item.IsThis">
+                  <span class="mj-placement-order-name">{{ item.Title }}</span>
+                  @if (item.IsThis) {
+                    <span class="mj-placement-order-moves">
+                      <button type="button" class="mj-placement-order-move" aria-label="Move up"
+                              [disabled]="!CanMoveUp" (click)="MoveInPosition('up')">
+                        <i class="fa-solid fa-arrow-up" aria-hidden="true"></i>
+                      </button>
+                      <button type="button" class="mj-placement-order-move" aria-label="Move down"
+                              [disabled]="!CanMoveDown" (click)="MoveInPosition('down')">
+                        <i class="fa-solid fa-arrow-down" aria-hidden="true"></i>
+                      </button>
+                    </span>
+                  }
+                </li>
+              }
+            </ol>
+            @if (MoveIsBlocked) {
+              <p class="mj-placement-hint">
+                Two neighbouring panels share an order number, so this one cannot go between them.
+                Move one of them first.
+              </p>
+            }
+          }
+        </section>
+
+        <ng-container *ngTemplateOutlet="settings"></ng-container>
+
+      </div>
+    </div>
+  } @else {
+    <div class="mj-placement-body">
+
+      <!-- Left: the form, with each slot as a target -->
+      <div class="mj-placement-preview">
+        <div class="mj-placement-label">Where it goes</div>
+        <p class="mj-placement-hint">
+          The <strong>{{ Context.EntityName }}</strong> form as it will look. Pick one of the positions
+          between the blocks that are already there.
+        </p>
+        @if (Probing) {
+          <p class="mj-placement-hint">Reading the positions this form offers&hellip;</p>
+        } @else if (SlotsAreAssumed) {
+          <p class="mj-placement-hint">
+            Positions shown are the ones generated forms offer. This form could not be read, so a
+            hand-written custom template may differ.
+          </p>
+        }
+
+        @for (choice of SlotsAbove; track choice.Slot) {
+          <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: choice }"></ng-container>
+        }
+
+        @if (SectionsAreInDetailsTab) {
+          <div class="mj-placement-tab" [class.is-replaced]="IsWholeDetailsTabReplaced">
+            <div class="mj-placement-tab-head">
+              <i class="fa-solid fa-id-card" aria-hidden="true"></i>
+              <span class="mj-placement-tab-name">Details</span>
+              <span class="mj-placement-tab-kind">one rail tab &middot; {{ DetailsTabSectionCount }} field groups</span>
+            </div>
+            @for (section of Context.Sections; track section.Key) {
+              <div class="mj-placement-existing mj-placement-existing--nested"
+                   [class.is-replaced]="IsReplaced(section.Key)">
+                <span class="mj-placement-existing-name">{{ section.Title }}</span>
+                <span class="mj-placement-existing-kind">
+                  {{ IsReplaced(section.Key) ? 'replaced' : 'field group' }}
+                </span>
+              </div>
+              @if (HostsFieldPanel(section.Key)) {
+                <ng-container *ngTemplateOutlet="fieldPanelCard"></ng-container>
+              }
+            }
+          </div>
+        } @else {
           @for (section of Context.Sections; track section.Key) {
-            <div class="mj-placement-existing mj-placement-existing--nested"
-                 [class.is-replaced]="IsReplaced(section.Key)">
+            <div class="mj-placement-existing" [class.is-replaced]="IsReplaced(section.Key)">
               <span class="mj-placement-existing-name">{{ section.Title }}</span>
               <span class="mj-placement-existing-kind">
                 {{ IsReplaced(section.Key) ? 'replaced' : 'field group' }}
@@ -62,53 +160,98 @@
               <ng-container *ngTemplateOutlet="fieldPanelCard"></ng-container>
             }
           }
-        </div>
-      } @else {
-        @for (section of Context.Sections; track section.Key) {
-          <div class="mj-placement-existing" [class.is-replaced]="IsReplaced(section.Key)">
-            <span class="mj-placement-existing-name">{{ section.Title }}</span>
+        }
+
+        @if (SlotAfterFields) {
+          <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: SlotAfterFields }"></ng-container>
+        }
+
+        @for (related of Context.Related; track related.Entity + related.JoinField; let i = $index) {
+          <div class="mj-placement-existing" [class.is-replaced]="IsRelatedReplaced(i)">
+            <span class="mj-placement-existing-name">{{ related.DisplayName }}</span>
             <span class="mj-placement-existing-kind">
-              {{ IsReplaced(section.Key) ? 'replaced' : 'field group' }}
+              {{ IsRelatedReplaced(i) ? 'replaced' : 'auto grid' }}
             </span>
           </div>
-          @if (HostsFieldPanel(section.Key)) {
-            <ng-container *ngTemplateOutlet="fieldPanelCard"></ng-container>
-          }
         }
-      }
 
-      @if (SlotAfterFields) {
-        <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: SlotAfterFields }"></ng-container>
-      }
+        @for (choice of SlotsBelow; track choice.Slot) {
+          <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: choice }"></ng-container>
+        }
 
-      @for (related of Context.Related; track related.Entity + related.JoinField; let i = $index) {
-        <div class="mj-placement-existing" [class.is-replaced]="IsRelatedReplaced(i)">
-          <span class="mj-placement-existing-name">{{ related.DisplayName }}</span>
-          <span class="mj-placement-existing-kind">
-            {{ IsRelatedReplaced(i) ? 'replaced' : 'auto grid' }}
-          </span>
-        </div>
-      }
+        @if (HasRail) {
+          <p class="mj-placement-hint mj-placement-rail-note">
+            @if (AddsRailItem) {
+              Your panel gets a rail item of its own.
+            } @else if (TargetRail) {
+              Your panel appears under <strong>{{ TargetRail.Title }}</strong> in the rail.
+            } @else {
+              A bare strip has no rail item. It sits above every section.
+            }
+          </p>
+        }
+      </div>
 
-      @for (choice of SlotsBelow; track choice.Slot) {
-        <ng-container *ngTemplateOutlet="slotRow; context: { $implicit: choice }"></ng-container>
-      }
-
-      @if (HasRail) {
-        <p class="mj-placement-hint mj-placement-rail-note">
-          @if (AddsRailItem) {
-            Your panel gets a rail item of its own.
-          } @else if (TargetRail) {
-            Your panel appears under <strong>{{ TargetRail.Title }}</strong> in the rail.
-          } @else {
-            A bare strip has no rail item. It sits above every section.
-          }
-        </p>
-      }
+      <!-- Right: the answers -->
+      <div class="mj-placement-settings">
+        <ng-container *ngTemplateOutlet="settings"></ng-container>
+      </div>
     </div>
+  }
 
-    <!-- Right: the answers -->
-    <div class="mj-placement-settings">
+  <div class="mj-placement-foot">
+    <button type="button" mjButton variant="primary" [disabled]="FieldClaimIsEmpty || SectionClaimIsEmpty" (click)="OnApply()">Add to the form</button>
+    <button type="button" mjButton (click)="OnCancel()">Cancel</button>
+    <span class="mj-placement-spacer"></span>
+    <span class="mj-placement-summary">{{ Summary }}</span>
+  </div>
+
+</div>
+
+<!--
+  One position. Drawn as a gap between the blocks rather than as a block of its own: a
+  slot is a place to insert something, not another thing on the form, and boxing it like
+  the content made the two read as peers. Selected, the gap opens and holds the panel.
+-->
+<ng-template #slotRow let-choice>
+  <div class="mj-placement-gap" [class.is-on]="State.Slot === choice.Slot">
+    <label class="mj-placement-gap-pick">
+      <input type="radio" name="mj-slot" [value]="choice.Slot" [(ngModel)]="State.Slot">
+      <span class="mj-placement-gap-rule" aria-hidden="true"></span>
+      <span class="mj-placement-gap-text">
+        <span class="mj-placement-gap-name">{{ choice.Name }}</span>
+        <span class="mj-placement-mono mj-placement-gap-slot">{{ choice.Label }}</span>
+      </span>
+      <span class="mj-placement-gap-rule" aria-hidden="true"></span>
+    </label>
+    @if (State.Slot === choice.Slot) {
+      <div class="mj-placement-slot-card">
+        <span class="mj-placement-slot-card-name">{{ State.Title || ComponentName || 'Your panel' }}</span>
+        <span class="mj-placement-slot-card-hint">Your panel lands here</span>
+      </div>
+    }
+  </div>
+</ng-template>
+
+<!--
+  A panel standing in for a field belongs inside that field's section, at the top. Drawn
+  under the section block rather than as a slot gap, because the slot choice does not
+  apply to this claim.
+-->
+<ng-template #fieldPanelCard>
+  <div class="mj-placement-slot-card mj-placement-slot-card--in-section">
+    <span class="mj-placement-slot-card-name">{{ State.Title || ComponentName || 'Your panel' }}</span>
+    <span class="mj-placement-slot-card-hint">
+      at the top of this section, in place of {{ ChosenFieldSummary }}
+    </span>
+  </div>
+</ng-template>
+
+<!--
+  The answers, shared by both layouts. With the form preview on, clicks on the form and these
+  controls edit the same state, so either one can be used and each shows what the other chose.
+-->
+<ng-template #settings>
 
       <section>
         <div class="mj-placement-label">Applies to</div>
@@ -155,6 +298,8 @@
         }
         @if (IsPersistentHero) {
           <p class="mj-placement-warn">A bare strip has no rail item. On a form with a side rail it stays above every section rather than belonging to one.</p>
+        } @else if (BareJoinsReplacedTab && HasRail) {
+          <p class="mj-placement-hint">A bare strip that replaces blocks takes their place, in their tab.</p>
         }
       </section>
 
@@ -188,22 +333,36 @@
                    [disabled]="!CanReplaceSection" [(ngModel)]="State.ReplaceMode">
             <span class="mj-placement-row-text">
               @if (SectionsAreInDetailsTab) {
-                Replace <strong>one block</strong> inside the Details tab
-                <span class="mj-placement-row-note--quiet">1 of {{ DetailsTabSectionCount }} &mdash; the tab and its other {{ DetailsTabSectionCount - 1 }} blocks stay</span>
+                Replace <strong>blocks</strong> inside the Details tab
+                <span class="mj-placement-row-note--quiet">the tab and the blocks you leave stay</span>
               } @else {
-                Replace <strong>one field group</strong>
+                Replace <strong>field groups</strong>
               }
               @if (SectionTargetsAreDerived) {
                 <span class="mj-placement-row-note">from entity metadata &mdash; may not match this form</span>
               }
             </span>
-            <select class="mj-placement-select" aria-label="Which field group to replace"
-                    [disabled]="State.ReplaceMode !== 'section'" [(ngModel)]="State.ReplaceSectionKey" name="mj-section">
-              @for (section of Context.Sections; track section.Key) {
-                <option [value]="section.Key">{{ SectionLabel(section) }}</option>
-              }
-            </select>
           </label>
+
+          @if (State.ReplaceMode === 'section') {
+            <!-- Several blocks, all in one tab: the panel takes the place of the first. -->
+            <fieldset class="mj-placement-fieldpick">
+              <legend class="mj-placement-fieldpick-legend">Blocks your panel takes the place of</legend>
+              <div class="mj-placement-fieldpick-grid">
+                @for (section of Context.Sections; track section.Key) {
+                  <label class="mj-placement-fieldpick-item" [class.is-on]="IsSectionChosen(section.Key)">
+                    <input type="checkbox" name="mj-section-pick"
+                           [checked]="IsSectionChosen(section.Key)"
+                           (change)="ToggleSection(section.Key, $any($event.target).checked)">
+                    <span class="mj-placement-fieldpick-name">{{ SectionLabel(section) }}</span>
+                  </label>
+                }
+              </div>
+              @if (SectionClaimIsEmpty) {
+                <p class="mj-placement-warn">Pick at least one block, or this panel stands in for nothing.</p>
+              }
+            </fieldset>
+          }
 
           <label class="mj-placement-row" [class.is-on]="State.ReplaceMode === 'field'"
                  [class.is-off]="!CanReplaceField">
@@ -211,7 +370,7 @@
                    [disabled]="!CanReplaceField" [(ngModel)]="State.ReplaceMode">
             <span class="mj-placement-row-text">
               Replace <strong>fields</strong> inside one group
-              <span class="mj-placement-row-note--quiet">your panel renders at the top of that group, in their place</span>
+              <span class="mj-placement-row-note--quiet">your panel draws inside that group, in their place</span>
               @if (!CanReplaceField) {
                 <span class="mj-placement-row-note">this form's fields could not be read</span>
               }
@@ -244,6 +403,16 @@
               @if (FieldClaimIsEmpty) {
                 <p class="mj-placement-warn">Pick at least one field, or this panel stands in for nothing.</p>
               }
+              <div class="mj-placement-fieldpick-where" role="radiogroup" aria-label="Where in the group">
+                <label>
+                  <input type="radio" name="mj-field-position" value="start" [(ngModel)]="State.SectionPosition">
+                  At the top of the group
+                </label>
+                <label>
+                  <input type="radio" name="mj-field-position" value="end" [(ngModel)]="State.SectionPosition">
+                  At the bottom
+                </label>
+              </div>
             </fieldset>
           }
 
@@ -303,54 +472,4 @@
           </div>
         </section>
       }
-
-    </div>
-  </div>
-
-  <div class="mj-placement-foot">
-    <button type="button" mjButton variant="primary" [disabled]="FieldClaimIsEmpty" (click)="OnApply()">Add to the form</button>
-    <button type="button" mjButton (click)="OnCancel()">Cancel</button>
-    <span class="mj-placement-spacer"></span>
-    <span class="mj-placement-summary">{{ Summary }}</span>
-  </div>
-
-</div>
-
-<!--
-  One position. Drawn as a gap between the blocks rather than as a block of its own: a
-  slot is a place to insert something, not another thing on the form, and boxing it like
-  the content made the two read as peers. Selected, the gap opens and holds the panel.
--->
-<ng-template #slotRow let-choice>
-  <div class="mj-placement-gap" [class.is-on]="State.Slot === choice.Slot">
-    <label class="mj-placement-gap-pick">
-      <input type="radio" name="mj-slot" [value]="choice.Slot" [(ngModel)]="State.Slot">
-      <span class="mj-placement-gap-rule" aria-hidden="true"></span>
-      <span class="mj-placement-gap-text">
-        <span class="mj-placement-gap-name">{{ choice.Name }}</span>
-        <span class="mj-placement-mono mj-placement-gap-slot">{{ choice.Label }}</span>
-      </span>
-      <span class="mj-placement-gap-rule" aria-hidden="true"></span>
-    </label>
-    @if (State.Slot === choice.Slot) {
-      <div class="mj-placement-slot-card">
-        <span class="mj-placement-slot-card-name">{{ State.Title || ComponentName || 'Your panel' }}</span>
-        <span class="mj-placement-slot-card-hint">Your panel lands here</span>
-      </div>
-    }
-  </div>
-</ng-template>
-
-<!--
-  A panel standing in for a field belongs inside that field's section, at the top. Drawn
-  under the section block rather than as a slot gap, because the slot choice does not
-  apply to this claim.
--->
-<ng-template #fieldPanelCard>
-  <div class="mj-placement-slot-card mj-placement-slot-card--in-section">
-    <span class="mj-placement-slot-card-name">{{ State.Title || ComponentName || 'Your panel' }}</span>
-    <span class="mj-placement-slot-card-hint">
-      at the top of this section, in place of {{ ChosenFieldSummary }}
-    </span>
-  </div>
 </ng-template>
