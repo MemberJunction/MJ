@@ -65,6 +65,7 @@ const engineStub = (overrides: Record<string, unknown> = {}) => ({
   Projects: seededProjects,
   GetSharedByInfo: (_id: string): SharedByInfo | null => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
+  CanEditConversation: ConversationEngine.prototype.CanEditConversation,
   GetConversation(id: string) {
     return (this as unknown as { Conversations: MJConversationEntity[] }).Conversations.find(c => c.ID === id);
   },
@@ -513,5 +514,72 @@ describe('ConversationListComponent (DOM) — the menu stays inside the window',
     findItem(f, 'Move to folder').click();
     f.detectChanges();
     expect(menuPosition(f).top).toBe('142px'); // pinned to the bottom: 600 - 8 - 450
+  });
+});
+
+describe('ConversationListComponent (DOM) — who can move and pin', () => {
+  beforeEach(() => {
+    vi.spyOn(ConversationListComponent.prototype, 'ngOnInit').mockImplementation(() => {});
+  });
+
+  /** U1 is mine; U2 belongs to someone else and reaches me through a grant at `level`. */
+  const renderWithGrant = (
+    level: SharedByInfo['Level'],
+    setup?: (c: ConversationListComponent) => void,
+    engineOverrides: Record<string, unknown> = {}
+  ) =>
+    render((c) => {
+      const engine = (c as unknown as { engine: { Conversations: MJConversationEntity[] } }).engine;
+      engine.Conversations = [conv('U1', 'Loose One'), conv('U2', 'Loose Two', { UserID: 'someone-else', User: 'Someone' })];
+      (c as unknown as { rebuildGroups: () => void }).rebuildGroups();
+      setup?.(c);
+    }, {
+      GetSharedByInfo: (id: string): SharedByInfo | null =>
+        id === 'U2' ? { UserID: 'someone-else', Name: 'Someone', Email: null, Level: level } : null,
+      ...engineOverrides
+    });
+
+  it('disables Pin and Move for a conversation shared with you at View level', () => {
+    const { f } = renderWithGrant('View');
+    rightClickOn(f, rowFor(f, 'Loose Two'));
+    expect(findItem(f, 'Pin').disabled).toBe(true);
+    expect(findItem(f, 'Move to folder').disabled).toBe(true);
+  });
+
+  it('offers Pin and Move for a conversation shared with you at Edit level', () => {
+    const { f } = renderWithGrant('Edit');
+    rightClickOn(f, rowFor(f, 'Loose Two'));
+    expect(findItem(f, 'Pin').disabled).toBe(false);
+    expect(findItem(f, 'Move to folder').disabled).toBe(false);
+  });
+
+  it('offers Pin and Move for a selection when any row in it can be changed', () => {
+    const { f } = renderWithGrant('View', (c) => selectRows(c, ['U1', 'U2']));
+    rightClickOn(f, rowFor(f, 'Loose Two'));
+    expect(findItem(f, 'Pin').disabled).toBe(false);
+    expect(findItem(f, 'Unpin').disabled).toBe(false);
+    expect(findItem(f, 'Move to folder').disabled).toBe(false);
+  });
+
+  it('does not let you drag a conversation you hold only View access to', () => {
+    const { f } = renderWithGrant('View');
+    expect(rowFor(f, 'Loose Two').getAttribute('draggable')).toBe('false');
+    expect(rowFor(f, 'Loose One').getAttribute('draggable')).toBe('true');
+  });
+
+  it('says which conversations were left out, and why', async () => {
+    const { f } = renderWithGrant('View', (c) => selectRows(c, ['U1', 'U2']), {
+      PinMultipleConversations: vi.fn().mockResolvedValue({
+        Successful: ['U1'],
+        Failed: [{ ID: 'U2', Name: 'Loose Two', Error: 'You have View access only' }]
+      })
+    });
+    rightClickOn(f, rowFor(f, 'Loose One'));
+    findItem(f, 'Pin').click();
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    const alert = f.debugElement.injector.get(DialogService).alert as unknown as ReturnType<typeof vi.fn>;
+    const message = String(alert.mock.calls[0][1]);
+    expect(message).toContain('Loose Two');
+    expect(message).toContain('View access only');
   });
 });

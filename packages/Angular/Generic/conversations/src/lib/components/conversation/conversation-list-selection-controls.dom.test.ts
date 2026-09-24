@@ -64,6 +64,7 @@ const engineStub = (overrides: Record<string, unknown> = {}) => ({
   Projects: seededProjects,
   GetSharedByInfo: (): SharedByInfo | null => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
+  CanEditConversation: ConversationEngine.prototype.CanEditConversation,
   GetConversation(id: string) {
     return (this as unknown as { Conversations: MJConversationEntity[] }).Conversations.find(c => c.ID === id);
   },
@@ -214,6 +215,17 @@ describe('ConversationListComponent (DOM) — the selection bar', () => {
       selectRows(c, ['U1']);
     });
     expect(barButton(f, 'Share').disabled).toBe(true);
+  });
+
+  it('disables Pin and Move when no selected conversation can be changed', () => {
+    const { f } = render((c) => selectRows(c, ['U1']), {}, {
+      GetSharedByInfo: (id: string): SharedByInfo | null =>
+        id === 'U1' ? { UserID: 'someone-else', Name: 'Someone', Email: null, Level: 'View' } : null,
+      Conversations: [conv('U1', 'Loose One', { UserID: 'someone-else' })]
+    });
+    expect(barButton(f, 'Pin').disabled).toBe(true);
+    expect(barButton(f, 'Move to folder').disabled).toBe(true);
+    expect(barButton(f, 'Delete').disabled).toBe(false);
   });
 
   it('deletes the selection', async () => {

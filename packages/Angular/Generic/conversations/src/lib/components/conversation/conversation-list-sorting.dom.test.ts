@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import type { UserInfo } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import type { MJConversationEntity, MJProjectEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import { ConversationListComponent } from './conversation-list.component';
@@ -55,6 +56,7 @@ const stubEngine = (conversations: MJConversationEntity[], projects: MJProjectEn
   Conversations: conversations,
   Projects: projects,
   GetSharedByInfo: () => null,
+  CanEditConversation: ConversationEngine.prototype.CanEditConversation,
   GetConversation: (id: string) => conversations.find(c => c.ID === id)
 });
 

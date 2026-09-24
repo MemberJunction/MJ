@@ -608,6 +608,18 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * True when the user may change the conversation's folder and pin: they own
+     * it, or hold an Edit or Owner grant on it. A View grant is read-only.
+     */
+    public CanEditConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        const level = this.GetSharedByInfo(conversation.ID)?.Level;
+        return level === 'Edit' || level === 'Owner';
+    }
+
+    /**
      * Guard flag: set true while the engine itself is performing a mutation.
      * Prevents the entity event handler from re-processing our own saves/deletes,
      * which would cause redundant cache updates or infinite loops.
@@ -1395,6 +1407,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Applies the same field updates to several conversations, one save at a time so
      * a single rejection cannot fail the batch, then re-emits the list once.
      * A conversation whose save fails keeps its previous field values in memory.
+     * Conversations the user holds only View access to are refused without a save.
      */
     private async saveMultipleConversations(
         ids: string[],
@@ -1421,6 +1434,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                             continue;
                         }
                         conversation = entity;
+                    }
+
+                    if (!this.CanEditConversation(conversation, contextUser.ID)) {
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: 'You have View access only'
+                        });
+                        continue;
                     }
 
                     const previous: ConversationBulkUpdate = {

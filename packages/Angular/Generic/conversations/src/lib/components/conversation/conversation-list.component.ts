@@ -83,11 +83,16 @@ interface ListContextMenu {
               <span class="selection-count">{{ selectedConversationIds.size }} selected</span>
               <button class="selection-bar-btn"
                       (click)="barSetPinned()"
-                      [title]="selectionHasUnpinned() ? 'Pin' : 'Unpin'"
+                      [disabled]="!canChangeAny(selectedIds)"
+                      [title]="canChangeAny(selectedIds) ? (selectionHasUnpinned() ? 'Pin' : 'Unpin') : ChangeRefusedReason"
                       [attr.aria-label]="selectionHasUnpinned() ? 'Pin' : 'Unpin'">
                 <i class="fas fa-thumbtack" [class.fa-rotate-90]="!selectionHasUnpinned()"></i>
               </button>
-              <button class="selection-bar-btn" (click)="barOpenMoveMenu($event)" title="Move to folder" aria-label="Move to folder">
+              <button class="selection-bar-btn"
+                      (click)="barOpenMoveMenu($event)"
+                      [disabled]="!canChangeAny(selectedIds)"
+                      [title]="canChangeAny(selectedIds) ? 'Move to folder' : ChangeRefusedReason"
+                      aria-label="Move to folder">
                 <i class="fas fa-folder-tree"></i>
               </button>
               <button class="selection-bar-btn"
@@ -318,7 +323,7 @@ interface ListContextMenu {
            [class.renamed]="IsConversationRenamed(conversation)"
            [class.dragging]="IsConversationDragging(conversation)"
            [style.paddingLeft.px]="depth ? 16 + depth * 14 : 16"
-           [draggable]="true"
+           [draggable]="canChange(conversation)"
            (dragstart)="onConversationDragStart(conversation, $event)"
            (dragend)="onConversationDragEnd()"
            (dragover)="onConversationRowDragOver(conversation, $event)"
@@ -416,21 +421,29 @@ interface ListContextMenu {
             } @else {
               @if (contextMenu.targets.length > 1) {
                 <div class="context-menu-header">{{ contextMenu.targets.length }} selected</div>
-                <button class="menu-item" (click)="contextSetPinned(true)">
+                <button class="menu-item" (click)="contextSetPinned(true)"
+                        [disabled]="!canChangeAny(contextMenu.targets)"
+                        [attr.title]="canChangeAny(contextMenu.targets) ? null : ChangeRefusedReason">
                   <i class="fas fa-thumbtack"></i>
                   <span>Pin</span>
                 </button>
-                <button class="menu-item" (click)="contextSetPinned(false)">
+                <button class="menu-item" (click)="contextSetPinned(false)"
+                        [disabled]="!canChangeAny(contextMenu.targets)"
+                        [attr.title]="canChangeAny(contextMenu.targets) ? null : ChangeRefusedReason">
                   <i class="fas fa-thumbtack fa-rotate-90"></i>
                   <span>Unpin</span>
                 </button>
               } @else {
-                <button class="menu-item" (click)="contextTogglePin()">
+                <button class="menu-item" (click)="contextTogglePin()"
+                        [disabled]="!canChangeAny(contextMenu.targets)"
+                        [attr.title]="canChangeAny(contextMenu.targets) ? null : ChangeRefusedReason">
                   <i class="fas fa-thumbtack"></i>
                   <span>{{ contextMenu.conversation?.IsPinned ? 'Unpin' : 'Pin' }}</span>
                 </button>
               }
-              <button class="menu-item" (click)="openMoveSubmenu($event)">
+              <button class="menu-item" (click)="openMoveSubmenu($event)"
+                      [disabled]="!canChangeAny(contextMenu.targets)"
+                      [attr.title]="canChangeAny(contextMenu.targets) ? null : ChangeRefusedReason">
                 <i class="fas fa-folder-tree"></i>
                 <span>Move to folder</span>
                 <i class="fas fa-chevron-right submenu-arrow"></i>
@@ -1228,6 +1241,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   /** Why Share is unavailable, shown on its disabled button. */
   public readonly ShareRefusedReason = 'Only the owner, or someone with Owner access, can share a conversation';
+
+  /** Why Move and Pin are unavailable, shown on their disabled buttons. */
+  public readonly ChangeRefusedReason = 'You need Edit access to move or pin a conversation shared with you';
 
   /** How long a touch must rest on a row before it selects the row. */
   private static readonly LongPressDelayMs = 500;
@@ -2101,6 +2117,20 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     return this.engine.CanShareConversation(conversation, this.currentUser.ID);
   }
 
+  /** True when at least one of the conversations can be moved or pinned by the current user. */
+  public canChangeAny(ids: string[]): boolean {
+    return ids.some(id => {
+      const conversation = this.engine.GetConversation(id);
+      return !!conversation && this.canChange(conversation);
+    });
+  }
+
+  /** True when the user may move or pin the conversation: they own it, or hold Edit or Owner access. */
+  public canChange(conversation: MJConversationEntity): boolean {
+    if (!this.currentUser) return false;
+    return this.engine.CanEditConversation(conversation, this.currentUser.ID);
+  }
+
   public onShareDialogResult(_result: ResourceShareDialogResult): void {
     this.isShareDialogOpen = false;
     this.shareContexts = [];
@@ -2553,7 +2583,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   ): Promise<void> {
     if (result.Failed.length === 0) return;
 
-    const failedNames = result.Failed.map(f => `"${f.Name}"`).join(', ');
+    const failedNames = result.Failed.map(f => `"${f.Name}" (${f.Error})`).join(', ');
     await this.dialogService.alert(
       'Partial Success',
       `${result.Successful.length} conversation${result.Successful.length === 1 ? '' : 's'} ${verb}.\n\n` +

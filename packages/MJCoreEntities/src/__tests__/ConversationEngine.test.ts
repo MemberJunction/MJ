@@ -816,28 +816,30 @@ describe('ConversationEngine', () => {
     // ========================================================================
     // CAN SHARE CONVERSATION
     // ========================================================================
-    describe('CanShareConversation', () => {
-        /** Loads c-mine (owned), c-owner (Owner grant), c-edit (Edit grant) and c-view (View grant). */
-        const loadWithGrants = async () => {
-            vi.mocked(ResourcePermissionEngine.Instance.GetUserAvailableResources).mockReturnValueOnce([
-                { ResourceRecordID: 'c-owner', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'Owner' },
-                { ResourceRecordID: 'c-edit', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'Edit' },
-                { ResourceRecordID: 'c-view', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'View' },
-            ] as unknown as ReturnType<typeof ResourcePermissionEngine.Instance.GetUserAvailableResources>);
-            runViewResultQueue.push({
-                Success: true,
-                Results: [
-                    createMockConversation({ ID: 'c-mine', UserID: 'user-1' }),
-                    createMockConversation({ ID: 'c-owner', UserID: 'user-2' }),
-                    createMockConversation({ ID: 'c-edit', UserID: 'user-2' }),
-                    createMockConversation({ ID: 'c-view', UserID: 'user-2' }),
-                ],
-            });
-            await engine.LoadConversations('env-1', contextUser);
-        };
-        const conversation = (id: string) =>
-            engine.GetConversation(id) as unknown as Parameters<typeof engine.CanShareConversation>[0];
+    /** Loads c-mine (owned), c-owner (Owner grant), c-edit (Edit grant) and c-view (View grant). */
+    const loadWithGrants = async () => {
+        vi.mocked(ResourcePermissionEngine.Instance.GetUserAvailableResources).mockReturnValueOnce([
+            { ResourceRecordID: 'c-owner', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'Owner' },
+            { ResourceRecordID: 'c-edit', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'Edit' },
+            { ResourceRecordID: 'c-view', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'View' },
+        ] as unknown as ReturnType<typeof ResourcePermissionEngine.Instance.GetUserAvailableResources>);
+        runViewResultQueue.push({
+            Success: true,
+            Results: [
+                createMockConversation({ ID: 'c-mine', UserID: 'user-1' }),
+                createMockConversation({ ID: 'c-owner', UserID: 'user-2' }),
+                createMockConversation({ ID: 'c-edit', UserID: 'user-2' }),
+                createMockConversation({ ID: 'c-view', UserID: 'user-2' }),
+            ],
+        });
+        await engine.LoadConversations('env-1', contextUser);
+    };
+    const conversation = (id: string) =>
+        engine.GetConversation(id) as unknown as Parameters<typeof engine.CanShareConversation>[0];
+    const saveSpy = (id: string) =>
+        (engine.GetConversation(id) as unknown as { Save: ReturnType<typeof vi.fn> }).Save;
 
+    describe('CanShareConversation', () => {
         it('lets the owner share, matching the user ID regardless of case', async () => {
             await loadWithGrants();
             expect(engine.CanShareConversation(conversation('c-mine'), 'USER-1')).toBe(true);
@@ -852,6 +854,51 @@ describe('ConversationEngine', () => {
             await loadWithGrants();
             expect(engine.CanShareConversation(conversation('c-edit'), 'user-1')).toBe(false);
             expect(engine.CanShareConversation(conversation('c-view'), 'user-1')).toBe(false);
+        });
+    });
+
+    // ========================================================================
+    // CAN EDIT CONVERSATION — who may move and pin
+    // ========================================================================
+    describe('CanEditConversation', () => {
+        it('lets the owner change the conversation', async () => {
+            await loadWithGrants();
+            expect(engine.CanEditConversation(conversation('c-mine'), 'USER-1')).toBe(true);
+        });
+
+        it('lets a person with an Edit or Owner grant change it', async () => {
+            await loadWithGrants();
+            expect(engine.CanEditConversation(conversation('c-edit'), 'user-1')).toBe(true);
+            expect(engine.CanEditConversation(conversation('c-owner'), 'user-1')).toBe(true);
+        });
+
+        it('refuses a person with a View grant', async () => {
+            await loadWithGrants();
+            expect(engine.CanEditConversation(conversation('c-view'), 'user-1')).toBe(false);
+        });
+    });
+
+    describe('Move and pin need Edit access', () => {
+        it('does not pin a conversation shared at View level, and says why', async () => {
+            await loadWithGrants();
+
+            const result = await engine.PinMultipleConversations(['c-view', 'c-edit'], true, contextUser);
+
+            expect(result.Successful).toEqual(['c-edit']);
+            expect(result.Failed.map(f => f.ID)).toEqual(['c-view']);
+            expect(result.Failed[0].Error).toContain('View access');
+            expect(saveSpy('c-view')).not.toHaveBeenCalled();
+            expect((engine.GetConversation('c-view') as unknown as Record<string, unknown>)['IsPinned']).toBe(false);
+        });
+
+        it('does not move a conversation shared at View level', async () => {
+            await loadWithGrants();
+
+            const result = await engine.MoveMultipleConversationsToProject(['c-view', 'c-mine'], 'proj-1', contextUser);
+
+            expect(result.Successful).toEqual(['c-mine']);
+            expect(result.Failed.map(f => f.ID)).toEqual(['c-view']);
+            expect(saveSpy('c-view')).not.toHaveBeenCalled();
         });
     });
 

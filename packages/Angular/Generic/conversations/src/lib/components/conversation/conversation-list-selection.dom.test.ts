@@ -37,6 +37,7 @@ const conv = (id: string, name: string, extra: Partial<MJConversationEntity> = {
   ({
     ID: id,
     Name: name,
+    UserID: 'u1',
     Description: '',
     ProjectID: null,
     IsPinned: false,
@@ -71,6 +72,7 @@ const stubEngine = (
   Projects: projects,
   GetSharedByInfo: () => null,
   CanShareConversation: ConversationEngine.prototype.CanShareConversation,
+  CanEditConversation: ConversationEngine.prototype.CanEditConversation,
   GetConversation: (id: string) => conversations.find(c => c.ID === id),
   ...overrides
 });
