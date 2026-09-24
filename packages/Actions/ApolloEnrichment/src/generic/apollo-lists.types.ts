@@ -246,32 +246,32 @@ export interface ApolloMoveResult {
 /** The operations the list/search actions need. No delete surface, by design. */
 export interface IApolloRESTClient {
     /** Every label, account and contact alike. Master key required. */
-    listLabels(): Promise<ApolloLabel[]>;
+    listLabels(): Promise<ApolloLabel[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Create a label. `modality` is required by Apollo — omitting it returns 422. */
-    createLabel(name: string, modality?: 'contacts' | 'accounts'): Promise<ApolloLabel>;
+    createLabel(name: string, modality?: 'contacts' | 'accounts'): Promise<ApolloLabel>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Resolve a label by exact name, case-insensitive; null when no match. */
-    findLabelByName(name: string): Promise<ApolloLabel | null>;
+    findLabelByName(name: string): Promise<ApolloLabel | null>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** One page of saved accounts. */
-    searchAccounts(filter: ApolloAccountSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloAccountsPage>;
+    searchAccounts(filter: ApolloAccountSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloAccountsPage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** One page of saved contacts. */
-    searchContacts(filter: ApolloContactSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloContactsPage>;
+    searchContacts(filter: ApolloContactSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloContactsPage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** One page of net-new prospects. */
-    searchPeople(filter: ApolloPeopleSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloPeoplePage>;
+    searchPeople(filter: ApolloPeopleSearchFilter, paging?: ApolloPagingOptions): Promise<ApolloPeoplePage>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Move accounts between lists, two-step and label-preserving. The supplied
      * accounts MUST carry current `labelNames` from a fresh read — stale labels
      * would be written back as the intended set and strip real memberships.
      */
-    moveAccounts(
+    moveAccounts(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         accounts: ApolloAccount[],
         fromList: string,
         toList: string,
         options?: { verify?: boolean },
     ): Promise<ApolloMoveResult>;
     /** The same for contacts. */
-    moveContacts(
+    moveContacts(  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
         contacts: ApolloContact[],
         fromList: string,
         toList: string,

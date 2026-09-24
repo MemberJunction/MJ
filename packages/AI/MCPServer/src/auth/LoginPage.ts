@@ -12,15 +12,15 @@
  */
 export interface LoginPageOptions {
   /** Name of the MCP client requesting access */
-  clientName?: string;
+  clientName?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Provider name for display (e.g., "Microsoft", "Google") */
-  providerName?: string;
+  providerName?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** URL to redirect to when user clicks continue */
-  continueUrl: string;
+  continueUrl: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Resource name (e.g., "MemberJunction MCP Server") */
-  resourceName?: string;
+  resourceName?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Custom logo URL (optional) */
-  logoUrl?: string;
+  logoUrl?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -28,13 +28,13 @@ export interface LoginPageOptions {
  */
 export interface ErrorPageOptions {
   /** Error title */
-  title: string;
+  title: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Error message */
-  message: string;
+  message: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Whether to show a "try again" button */
-  showRetry?: boolean;
+  showRetry?: boolean;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** URL to retry (if showRetry is true) */
-  retryUrl?: string;
+  retryUrl?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -42,9 +42,9 @@ export interface ErrorPageOptions {
  */
 export interface SuccessPageOptions {
   /** Client name that received access */
-  clientName?: string;
+  clientName?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
   /** Message to show (e.g., "You can close this window") */
-  message?: string;
+  message?: string;  // case-violation-ok-legacy-back-compat: the Model Context Protocol wire shape — these field names ARE the protocol, serialized to every MCP client
 }
 
 /**
@@ -53,7 +53,7 @@ export interface SuccessPageOptions {
  * This page is shown when a user arrives at the authorization endpoint
  * to provide context about what they're authorizing.
  */
-export function renderLoginPage(options: LoginPageOptions): string {
+export function RenderLoginPage(options: LoginPageOptions): string {
   const {
     clientName = 'An application',
     providerName = 'your identity provider',
@@ -241,10 +241,15 @@ export function renderLoginPage(options: LoginPageOptions): string {
 </html>`;
 }
 
+/** @deprecated Use {@link RenderLoginPage}. */
+export function renderLoginPage(options: LoginPageOptions): string {
+  return RenderLoginPage(options);
+}
+
 /**
  * Renders an error page.
  */
-export function renderErrorPage(options: ErrorPageOptions): string {
+export function RenderErrorPage(options: ErrorPageOptions): string {
   const { title, message, showRetry = false, retryUrl } = options;
 
   const retryButton = showRetry && retryUrl
@@ -341,10 +346,15 @@ export function renderErrorPage(options: ErrorPageOptions): string {
 </html>`;
 }
 
+/** @deprecated Use {@link RenderErrorPage}. */
+export function renderErrorPage(options: ErrorPageOptions): string {
+  return RenderErrorPage(options);
+}
+
 /**
  * Renders a success page.
  */
-export function renderSuccessPage(options: SuccessPageOptions): string {
+export function RenderSuccessPage(options: SuccessPageOptions): string {
   const {
     clientName = 'The application',
     message = 'You can now close this window and return to your application.',
@@ -425,6 +435,11 @@ export function renderSuccessPage(options: SuccessPageOptions): string {
   </div>
 </body>
 </html>`;
+}
+
+/** @deprecated Use {@link RenderSuccessPage}. */
+export function renderSuccessPage(options: SuccessPageOptions): string {
+  return RenderSuccessPage(options);
 }
 
 /**

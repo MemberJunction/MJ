@@ -1,5 +1,155 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 666c4e6: Add a Brave Search action and give Perplexity Search a structured `search` mode.
+
+  Google discontinues the Custom Search JSON API on 2027-01-01 and has already closed it to new
+  customers, so MJ needs a web-search provider that is not Google's and not a proxy for Google's.
+  Brave serves from its own index, returns the same `title`/`url`/`snippet` shape the Google action
+  returns, and therefore fails independently of it.
+  - **New `Brave Search` action** (`braveApiKey` in `mj.config.cjs`, or `BRAVE_SEARCH_API_KEY`).
+    Supports `Count`, `Offset`, `Country`, `SearchLang`, `SafeSearch`, `Freshness` and
+    `ExtraSnippets`; clamps out-of-range paging rather than letting Brave reject the request;
+    reports zero results as success.
+  - **`Perplexity Search` gains a `Mode` parameter, defaulting to `search`.** It previously always
+    called `/chat/completions` — the Sonar chat models — which bills per token, takes seconds, and
+    returns prose plus a flat citation list. `Mode: 'search'` calls the raw `/search` endpoint
+    instead: structured results, sub-second, flat-priced per query. `Mode: 'answer'` preserves the
+    previous behaviour exactly. `Citations` is still emitted in `search` mode, so callers reading
+    only the URL list are unaffected.
+  - Corrects the `config.ts` guidance that recommended Perplexity as the Google successor; Gemini
+    grounding is documented there as non-viable for this use (expiring redirect URLs, no snippets,
+    and terms that forbid caching or analysing results).
+
+- 666c4e6: Add `@memberjunction/web-search-engine` — metadata-driven web search with provider failover.
+
+  Google discontinues the Custom Search JSON API on 2027-01-01 and Microsoft retired the Bing Search
+  APIs in 2025. MJ had four independent web-search Actions with three incompatible output contracts,
+  so nothing could transparently fall back and swapping vendors meant editing every agent that named
+  one. This makes the vendor a row in a table.
+  - **New `__mj.WebSearchProvider` table** — `DriverClass`, `Status`, `Priority`, `CredentialID`,
+    `ProviderConfig`, `MaxResultsOverride`, `AllowResultCaching`. A near-mirror of `SearchProvider`,
+    deliberately, so the two are learnable together.
+  - **New `WebSearchEngine`** — orders providers by `Priority` and serves from the first Active,
+    available one. Failover is conditional: a transient failure (rate limit, 5xx, timeout, a
+    rejected credential) moves to the next provider; a permanent one — the query itself rejected —
+    stops, because every other vendor will reject it too. That distinction is drawn from the
+    response body rather than the status code alone, since Google answers an invalid API key with
+    HTTP 400 while Perplexity uses 401. An explicitly named `Provider` never falls back, and
+    fails with a code that distinguishes never-configured, parked, uncredentialed and incapable.
+  - **Five drivers** — Brave (own index, default primary), Tavily, Perplexity (`/search`, not the
+    chat models), Google Custom Search (retiring), DuckDuckGo (keyless last resort).
+  - **`Web Search` Action is now a provider-neutral router**, so agents bind to one stable tool and
+    never make the vendor decision. DuckDuckGo becomes one driver behind it rather than the
+    implementation. Its HTML-scraping fallback was **removed**, not carried over: CodeQL flagged
+    polynomial ReDoS and incomplete sanitization in the parser's regexes over remote HTML, and for a
+    fallback inside a last-resort provider the capability was not worth the exposure. The driver now
+    answers only what DuckDuckGo's Instant Answer API returns, which is a minority of queries. The
+    regression test was removed with the code it tested. No regex runs over remote input anywhere in
+    the package.
+  - **`WebSearch.Query` Remote Operation** — metadata, the `websearch:execute` scope, and the server
+    implementation, so browser clients get the same capability without API keys leaving the server.
+  - **Agents and skills rebound.** Every agent and skill that does web lookups now binds the
+    provider-neutral `Web Search` Action and leaves `Provider` unset so the engine can fail over.
+    `Google Custom Search` and `Perplexity Search` remain registered for direct or manual execution
+    but carry no agent or skill bindings, and the rows removed from metadata are annotated for
+    deletion so existing databases lose them too.
+
+### Patch Changes
+
+- abf8778: Actions inside an agent run now receive the run's runtime API keys, so a run on a customer's key generates its images on that key too.
+
+  `ExecuteAgentParams.apiKeys` already reaches every prompt (`AIPromptRunner` → `GetAIAPIKey(driverClass, apiKeys)`), but `BaseAgent` never handed it to actions, and `Generate Image` called `GetAIAPIKey(driverClass)` with no second argument — so a run whose prompts used a customer's OpenAI key still generated images on the platform's.
+  - `BaseAgent.ExecuteSingleAction` hands each action a SCOPED RESOLVER on the new `RunActionParams.RuntimeAPIKeyResolver` (a `RuntimeAPIKeyResolver` from `@memberjunction/actions-base`) when the run has runtime keys — one driver class in, one key out. Per dispatch, not on `Context`: the context is one object shared by every action in the run and copied into sub-agent runs, so the resolver is bound to the action it was handed to even under parallel dispatch. The key list itself is never handed to an action, so none can enumerate the run's credentials; a new `actionMayUseRuntimeAPIKey(action, driverClass, params)` hook (default: allow) lets an agent refuse a class to an action, a refusal being the platform key, not an error. Every resolution is logged by action and driver class (never the key). Absent when the run has no keys, so no action has to special-case it.
+  - `Generate Image` asks the resolver for its own driver class and falls back to `GetAIAPIKey(driverClass)` — per driver class, exactly as prompts do. Also fixes the vendor-name fallback, which found a key and then passed the empty one to the generator.
+  - `@memberjunction/actions-base`: `RunActionParams.RuntimeAPIKeyResolver` + the `RuntimeAPIKeyResolver` type; `RunActionParams.Context` documents the well-known keys BaseAgent stamps.
+
+  No behaviour change for a run with no runtime keys.
+
+- b2a9ba1: Security hardening.
+  - **SSRF**: the two remaining raw `fetch(url)` calls on caller-controlled URLs in CoreActions — `BaseFileHandlerAction.loadFromURL` (the `FileURL` path every file-handling action shares) and `ReadRSSFeedAction.FetchFeed` — now route through the SSRF-guarded `SafeFetch` from `@memberjunction/network-utils`, matching Web Page Content / HTTP Request / URL Metadata Extractor. Private, loopback, link-local (incl. the 169.254.169.254 cloud-metadata endpoint) and reserved targets are blocked, and every redirect hop is re-validated.
+  - **SQL literal escaping**: three MJServer sites interpolating caller-supplied values into `ExtraFilter` without escaping now use `EscapeSQLString` per the repo standard — `UpdateQueryExtended`'s duplicate-name check (`input.Name` / `finalCategoryID`), `FetchEntityVectorsResolver.loadEntityDocument` (`entityDocumentID`), and the `ExampleNewUserSubClass` template's `Email` lookup (which breaks today on legitimate `O'Brien`-style addresses and is the snippet integrators copy).
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [42d701e]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [e3db74f]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [7fe994a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [6ab86a7]
+- Updated dependencies [666c4e6]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai-agents@6.2.0-edge.0
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-prompts@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.0
+  - @memberjunction/ai-vector-sync@6.2.0-edge.0
+  - @memberjunction/content-autotagging@6.2.0-edge.0
+  - @memberjunction/record-set-processor@6.2.0-edge.0
+  - @memberjunction/actions@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/search-engine@6.2.0-edge.0
+  - @memberjunction/web-search-engine@6.2.0-edge.0
+  - @memberjunction/ai-agent-manager@6.2.0-edge.0
+  - @memberjunction/core-entities-server@6.2.0-edge.0
+  - @memberjunction/ai-betty-bot@6.2.0-edge.0
+  - @memberjunction/clustering-engine@6.2.0-edge.0
+  - @memberjunction/ai-mcp-client@6.2.0-edge.0
+  - @memberjunction/communication-types@6.2.0-edge.0
+  - @memberjunction/communication-engine@6.2.0-edge.0
+  - @memberjunction/external-change-detection@6.2.0-edge.0
+  - @memberjunction/integration-engine@6.2.0-edge.0
+  - @memberjunction/lists@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/react-linter@6.2.0-edge.0
+  - @memberjunction/esignature@6.2.0-edge.0
+  - @memberjunction/geo-core@6.2.0-edge.0
+  - @memberjunction/code-execution@6.2.0-edge.0
+  - @memberjunction/interactive-component-types@6.2.0-edge.0
+  - @memberjunction/record-set-processor-base@6.2.0-edge.0
+  - @memberjunction/lists-base@6.2.0-edge.0
+  - @memberjunction/export-engine@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/network-utils@6.2.0-edge.0
+  - @memberjunction/sql-dialect@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

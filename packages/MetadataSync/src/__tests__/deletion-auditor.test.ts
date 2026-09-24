@@ -138,9 +138,9 @@ describe('DeletionAuditor.checkRecordExistence', () => {
   it('falls back to the per-record path for composite-key entities (no batched query)', async () => {
     const auditor = makeAuditor();
     const loadEntity = vi
-      .spyOn(SyncEngine.prototype, 'loadEntity')
+      .spyOn(SyncEngine.prototype, 'LoadEntity')
       // Truthy => the record still exists in the database.
-      .mockResolvedValue({} as unknown as Awaited<ReturnType<SyncEngine['loadEntity']>>);
+      .mockResolvedValue({} as unknown as Awaited<ReturnType<SyncEngine['LoadEntity']>>);
 
     const records = [
       makeRecord(COMPOSITE, 'c1', { PartA: '1', PartB: '2' }),

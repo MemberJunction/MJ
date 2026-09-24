@@ -8,7 +8,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { HttpPost } from '@memberjunction/network-utils';
 import { BaseWebSearchProvider } from '../BaseWebSearchProvider';
 import { WebSearchCapabilities, WebSearchHit, WebSearchParams, WebSearchProviderResponse } from '../types';
-import { classifyHttpFailure, failure } from './httpFailure';
+import { ClassifyHttpFailure, Failure } from './httpFailure';
 
 interface TavilyAPIResult {
     title?: string;
@@ -94,7 +94,7 @@ export class TavilyWebSearchProvider extends BaseWebSearchProvider {
             });
 
             if (!response.Data) {
-                return failure('transient', 'Empty response from Tavily.');
+                return Failure('transient', 'Empty response from Tavily.');
             }
 
             return {
@@ -103,7 +103,7 @@ export class TavilyWebSearchProvider extends BaseWebSearchProvider {
                 Answer: params.IncludeAnswer ? response.Data.answer : undefined,
             };
         } catch (e) {
-            return classifyHttpFailure(e, 'Tavily');
+            return ClassifyHttpFailure(e, 'Tavily');
         }
     }
 

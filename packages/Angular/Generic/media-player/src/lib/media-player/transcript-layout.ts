@@ -22,12 +22,21 @@ export type TranscriptPosition = 'side' | 'bottom';
  * @param userVisible the runtime (toggle-driven) visibility state
  * @returns true when the transcript panel should render
  */
-export function resolveTranscriptVisible(
+export function ResolveTranscriptVisible(
   hasTranscript: boolean,
   showTranscript: boolean,
   userVisible: boolean,
 ): boolean {
   return hasTranscript && showTranscript && userVisible;
+}
+
+/** @deprecated Use {@link ResolveTranscriptVisible}. */
+export function resolveTranscriptVisible(
+  hasTranscript: boolean,
+  showTranscript: boolean,
+  userVisible: boolean,
+): boolean {
+  return ResolveTranscriptVisible(hasTranscript, showTranscript, userVisible);
 }
 
 /**
@@ -40,10 +49,19 @@ export function resolveTranscriptVisible(
  * @param showToggle the `ShowTranscriptToggle` input (whether the button renders)
  * @returns true when the toggle button should render
  */
-export function resolveTranscriptToggleVisible(
+export function ResolveTranscriptToggleVisible(
   hasTranscript: boolean,
   showTranscript: boolean,
   showToggle: boolean,
 ): boolean {
   return hasTranscript && showTranscript && showToggle;
+}
+
+/** @deprecated Use {@link ResolveTranscriptToggleVisible}. */
+export function resolveTranscriptToggleVisible(
+  hasTranscript: boolean,
+  showTranscript: boolean,
+  showToggle: boolean,
+): boolean {
+  return ResolveTranscriptToggleVisible(hasTranscript, showTranscript, showToggle);
 }

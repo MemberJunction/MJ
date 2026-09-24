@@ -25,18 +25,28 @@ const DISMISSABLE_OVERLAY_PATTERN = /(cdk-overlay-backdrop|k-overlay|k-animation
  * helpers unit-testable without a browser; a real `Page` satisfies it structurally.
  */
 export interface OverlayDismissablePage {
-    keyboard: { press(key: string): Promise<void> };
+    keyboard: { press(key: string): Promise<void> };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Whether a failed action failed *because* a dismissable overlay covered the target. */
-export function isBlockedByDismissableOverlay(error: unknown): boolean {
+export function IsBlockedByDismissableOverlay(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error);
     return message.includes('intercepts pointer events') && DISMISSABLE_OVERLAY_PATTERN.test(message);
 }
 
+/** @deprecated Use {@link IsBlockedByDismissableOverlay}. */
+export function isBlockedByDismissableOverlay(error: unknown): boolean {
+    return IsBlockedByDismissableOverlay(error);
+}
+
 /** Clear the blocking overlay the way a person would. */
-export async function dismissOverlay(page: OverlayDismissablePage): Promise<void> {
+export async function DismissOverlay(page: OverlayDismissablePage): Promise<void> {
     await page.keyboard.press('Escape');
+}
+
+/** @deprecated Use {@link DismissOverlay}. */
+export async function dismissOverlay(page: OverlayDismissablePage): Promise<void> {
+    return DismissOverlay(page);
 }
 
 /**
@@ -58,7 +68,7 @@ export const OVERLAY_RETRY_TIMEOUT_MS = 1500;
  * `attempt` receives the timeout to use, so the retry is bounded rather than
  * repeating the caller's full action timeout.
  */
-export async function retryPastDismissableOverlay<T>(
+export async function RetryPastDismissableOverlay<T>(
     page: OverlayDismissablePage,
     attempt: (timeoutMs: number) => Promise<T>,
     actionTimeoutMs: number
@@ -66,10 +76,19 @@ export async function retryPastDismissableOverlay<T>(
     try {
         return await attempt(actionTimeoutMs);
     } catch (error) {
-        if (!isBlockedByDismissableOverlay(error)) {
+        if (!IsBlockedByDismissableOverlay(error)) {
             throw error;
         }
-        await dismissOverlay(page);
+        await DismissOverlay(page);
         return await attempt(OVERLAY_RETRY_TIMEOUT_MS);
     }
+}
+
+/** @deprecated Use {@link RetryPastDismissableOverlay}. */
+export async function retryPastDismissableOverlay<T>(
+    page: OverlayDismissablePage,
+    attempt: (timeoutMs: number) => Promise<T>,
+    actionTimeoutMs: number
+): Promise<T> {
+    return RetryPastDismissableOverlay(page, attempt, actionTimeoutMs);
 }

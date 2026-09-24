@@ -12,24 +12,24 @@
 import { describe, it, expect } from 'vitest';
 import {
     PERMISSIONS_CONTEXT_LIST_CAP,
-    buildAuditLogAgentContext,
-    buildPermissionsNotFoundError,
-    buildResourceAccessAgentContext,
-    buildUserAccessAgentContext,
-    capPermissionsList,
-    resolvePermissionsCandidate,
+    BuildAuditLogAgentContext,
+    BuildPermissionsNotFoundError,
+    BuildResourceAccessAgentContext,
+    BuildUserAccessAgentContext,
+    CapPermissionsList,
+    ResolvePermissionsCandidate,
 } from '../Permissions/permissions-agent-context';
 
 describe('capPermissionsList', () => {
     it('caps to the default cap and returns a new array', () => {
         const input = Array.from({ length: PERMISSIONS_CONTEXT_LIST_CAP + 5 }, (_, i) => `n${i}`);
-        const out = capPermissionsList(input);
+        const out = CapPermissionsList(input);
         expect(out.length).toBe(PERMISSIONS_CONTEXT_LIST_CAP);
         expect(out).not.toBe(input);
     });
     it('honors a custom cap and tolerates a bad cap', () => {
-        expect(capPermissionsList(['a', 'b', 'c'], 2)).toEqual(['a', 'b']);
-        expect(capPermissionsList(['a', 'b'], -1).length).toBeLessThanOrEqual(PERMISSIONS_CONTEXT_LIST_CAP);
+        expect(CapPermissionsList(['a', 'b', 'c'], 2)).toEqual(['a', 'b']);
+        expect(CapPermissionsList(['a', 'b'], -1).length).toBeLessThanOrEqual(PERMISSIONS_CONTEXT_LIST_CAP);
     });
 });
 
@@ -39,23 +39,23 @@ describe('resolvePermissionsCandidate', () => {
         { ID: 'D-2', Name: 'Entity Permissions' },
     ];
     it('matches by exact ID (case-insensitive)', () => {
-        expect(resolvePermissionsCandidate('d-1', candidates)?.Name).toBe('Dashboard Permissions');
+        expect(ResolvePermissionsCandidate('d-1', candidates)?.Name).toBe('Dashboard Permissions');
     });
     it('matches by exact name (case-insensitive, trimmed)', () => {
-        expect(resolvePermissionsCandidate('  entity permissions ', candidates)?.ID).toBe('D-2');
+        expect(ResolvePermissionsCandidate('  entity permissions ', candidates)?.ID).toBe('D-2');
     });
     it('falls back to a partial contains match on name', () => {
-        expect(resolvePermissionsCandidate('entity', candidates)?.ID).toBe('D-2');
+        expect(ResolvePermissionsCandidate('entity', candidates)?.ID).toBe('D-2');
     });
     it('returns null on a miss and on empty input', () => {
-        expect(resolvePermissionsCandidate('nope', candidates)).toBeNull();
-        expect(resolvePermissionsCandidate('   ', candidates)).toBeNull();
+        expect(ResolvePermissionsCandidate('nope', candidates)).toBeNull();
+        expect(ResolvePermissionsCandidate('   ', candidates)).toBeNull();
     });
 });
 
 describe('buildPermissionsNotFoundError', () => {
     it('echoes a bounded sample of available names', () => {
-        const msg = buildPermissionsNotFoundError('xyz', 'permission domain', [
+        const msg = BuildPermissionsNotFoundError('xyz', 'permission domain', [
             { ID: '1', Name: 'Alpha' },
             { ID: '2', Name: 'Beta' },
         ]);
@@ -67,7 +67,7 @@ describe('buildPermissionsNotFoundError', () => {
 
 describe('buildResourceAccessAgentContext', () => {
     it('publishes selection, counts, and bounded grantee names', () => {
-        const ctx = buildResourceAccessAgentContext({
+        const ctx = BuildResourceAccessAgentContext({
             SelectedDomainName: 'Dashboard Permissions',
             AvailableDomainNames: ['Dashboard Permissions', 'Entity Permissions'],
             ResourceTypes: ['Dashboards'],
@@ -87,7 +87,7 @@ describe('buildResourceAccessAgentContext', () => {
     it('flags grantee-name truncation and domain truncation', () => {
         const grantees = Array.from({ length: PERMISSIONS_CONTEXT_LIST_CAP + 3 }, (_, i) => `g${i}`);
         const domains = Array.from({ length: PERMISSIONS_CONTEXT_LIST_CAP + 1 }, (_, i) => `d${i}`);
-        const ctx = buildResourceAccessAgentContext({
+        const ctx = BuildResourceAccessAgentContext({
             SelectedDomainName: 'd0',
             AvailableDomainNames: domains,
             ResourceTypes: [],
@@ -106,7 +106,7 @@ describe('buildResourceAccessAgentContext', () => {
 
 describe('buildUserAccessAgentContext', () => {
     it('publishes selected user name, per-domain access, and totals', () => {
-        const ctx = buildUserAccessAgentContext({
+        const ctx = BuildUserAccessAgentContext({
             SelectedUserId: 'u-1',
             SelectedUserName: 'Alice Admin',
             SelectedUserRoles: ['Administrator'],
@@ -126,7 +126,7 @@ describe('buildUserAccessAgentContext', () => {
     });
     it('reports available-user truncation when over the cap', () => {
         const users = Array.from({ length: PERMISSIONS_CONTEXT_LIST_CAP + 4 }, (_, i) => `u${i}`);
-        const ctx = buildUserAccessAgentContext({
+        const ctx = BuildUserAccessAgentContext({
             SelectedUserId: null,
             SelectedUserName: null,
             SelectedUserRoles: [],
@@ -143,7 +143,7 @@ describe('buildUserAccessAgentContext', () => {
 
 describe('buildAuditLogAgentContext', () => {
     it('publishes filters, HasActiveFilters, counts, and bounded recent entries', () => {
-        const ctx = buildAuditLogAgentContext({
+        const ctx = BuildAuditLogAgentContext({
             DomainFilter: 'Dashboard Permissions',
             UserFilter: 'u-1',
             UserFilterName: 'Alice Admin',
@@ -166,7 +166,7 @@ describe('buildAuditLogAgentContext', () => {
         expect(ctx['EndDate']).toBeNull();
     });
     it('reports HasActiveFilters=false when no filter is set', () => {
-        const ctx = buildAuditLogAgentContext({
+        const ctx = BuildAuditLogAgentContext({
             DomainFilter: '', UserFilter: '', UserFilterName: null, StartDate: '', EndDate: '',
             EntryCount: 0, RecentEntries: [], AvailableDomainNames: [], AvailableUserNames: [],
             AvailableUserCount: 0, IsLoading: false, HasRunQuery: false,
@@ -177,7 +177,7 @@ describe('buildAuditLogAgentContext', () => {
         const entries = Array.from({ length: PERMISSIONS_CONTEXT_LIST_CAP + 5 }, (_, i) => ({
             ChangedAt: '2026-01-01T00:00:00.000Z', ChangedByUserName: `u${i}`, DomainName: 'D', ChangeType: 'Create',
         }));
-        const ctx = buildAuditLogAgentContext({
+        const ctx = BuildAuditLogAgentContext({
             DomainFilter: '', UserFilter: '', UserFilterName: null, StartDate: '', EndDate: '',
             EntryCount: entries.length, RecentEntries: entries, AvailableDomainNames: [], AvailableUserNames: [],
             AvailableUserCount: 0, IsLoading: false, HasRunQuery: true,
@@ -189,17 +189,17 @@ describe('buildAuditLogAgentContext', () => {
 
 describe('Permissions context safety — no mutation surface, no secrets', () => {
     it('never publishes a permission-mutating, credential, or secret field', () => {
-        const ra = buildResourceAccessAgentContext({
+        const ra = BuildResourceAccessAgentContext({
             SelectedDomainName: 'D', AvailableDomainNames: ['D'], ResourceTypes: ['T'],
             ResourceTypeInput: 'T', ResourceIdInput: 'r', LastQueryLabel: 'x', GranteeCount: 1,
             GranteeNames: ['Alice'], IsLoading: false,
         });
-        const ua = buildUserAccessAgentContext({
+        const ua = BuildUserAccessAgentContext({
             SelectedUserId: 'u', SelectedUserName: 'Alice', SelectedUserRoles: ['Admin'],
             DomainSummaries: [{ DomainName: 'D', ResourceCount: 1, Expanded: true, ResourceNames: ['r'] }],
             TotalResourceCount: 1, AvailableUserNames: ['Alice'], AvailableUserCount: 1, IsLoadingPermissions: false,
         });
-        const al = buildAuditLogAgentContext({
+        const al = BuildAuditLogAgentContext({
             DomainFilter: 'D', UserFilter: 'u', UserFilterName: 'Alice', StartDate: '', EndDate: '',
             EntryCount: 1, RecentEntries: [{ ChangedAt: '2026-01-01T00:00:00.000Z', ChangedByUserName: 'Alice', DomainName: 'D', ChangeType: 'Update' }],
             AvailableDomainNames: ['D'], AvailableUserNames: ['Alice'], AvailableUserCount: 1, IsLoading: false, HasRunQuery: true,

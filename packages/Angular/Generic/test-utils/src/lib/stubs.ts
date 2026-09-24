@@ -34,13 +34,76 @@ import { NG_VALUE_ACCESSOR, type ControlValueAccessor } from '@angular/forms';
   template: '<span class="stub-loading">{{ text }}</span>',
 })
 export class StubLoadingComponent {
-  @Input() text = 'Loading...';
-  @Input() showText = true;
-  @Input() size = 'auto';
-  @Input() animation = 'pulse';
-  @Input() animationDuration = 1.5;
-  @Input() textColor = '';
-  @Input() logoColor = '';
+  @Input() Text = 'Loading...';
+
+  /** @deprecated Use {@link Text}. */
+  @Input() set text(value: StubLoadingComponent['Text']) {
+    this.Text = value;
+  }
+  /** @deprecated Use {@link Text}. */
+  get text(): StubLoadingComponent['Text'] {
+    return this.Text;
+  }
+  @Input() ShowText = true;
+
+  /** @deprecated Use {@link ShowText}. */
+  @Input() set showText(value: StubLoadingComponent['ShowText']) {
+    this.ShowText = value;
+  }
+  /** @deprecated Use {@link ShowText}. */
+  get showText(): StubLoadingComponent['ShowText'] {
+    return this.ShowText;
+  }
+  @Input() Size = 'auto';
+
+  /** @deprecated Use {@link Size}. */
+  @Input() set size(value: StubLoadingComponent['Size']) {
+    this.Size = value;
+  }
+  /** @deprecated Use {@link Size}. */
+  get size(): StubLoadingComponent['Size'] {
+    return this.Size;
+  }
+  @Input() Animation = 'pulse';
+
+  /** @deprecated Use {@link Animation}. */
+  @Input() set animation(value: StubLoadingComponent['Animation']) {
+    this.Animation = value;
+  }
+  /** @deprecated Use {@link Animation}. */
+  get animation(): StubLoadingComponent['Animation'] {
+    return this.Animation;
+  }
+  @Input() AnimationDuration = 1.5;
+
+  /** @deprecated Use {@link AnimationDuration}. */
+  @Input() set animationDuration(value: StubLoadingComponent['AnimationDuration']) {
+    this.AnimationDuration = value;
+  }
+  /** @deprecated Use {@link AnimationDuration}. */
+  get animationDuration(): StubLoadingComponent['AnimationDuration'] {
+    return this.AnimationDuration;
+  }
+  @Input() TextColor = '';
+
+  /** @deprecated Use {@link TextColor}. */
+  @Input() set textColor(value: StubLoadingComponent['TextColor']) {
+    this.TextColor = value;
+  }
+  /** @deprecated Use {@link TextColor}. */
+  get textColor(): StubLoadingComponent['TextColor'] {
+    return this.TextColor;
+  }
+  @Input() LogoColor = '';
+
+  /** @deprecated Use {@link LogoColor}. */
+  @Input() set logoColor(value: StubLoadingComponent['LogoColor']) {
+    this.LogoColor = value;
+  }
+  /** @deprecated Use {@link LogoColor}. */
+  get logoColor(): StubLoadingComponent['LogoColor'] {
+    return this.LogoColor;
+  }
 }
 
 /**
@@ -121,12 +184,21 @@ export class StubDropdownComponent implements ControlValueAccessor {
   @Output() ValueChange = new EventEmitter<string>();
 
   /** Last value written through the CVA (by the form or by user interaction). */
-  value: unknown;
+  Value: unknown;
+
+  /** @deprecated Use {@link Value}. */
+  get value(): unknown {
+    return this.Value;
+  }
+  /** @deprecated Use {@link Value}. */
+  set value(value: unknown) {
+    this.Value = value;
+  }
   private onChange: (v: unknown) => void = () => undefined;
   private onTouched: () => void = () => undefined;
 
   writeValue(v: unknown): void {
-    this.value = v;
+    this.Value = v;
   }
   registerOnChange(fn: (v: unknown) => void): void {
     this.onChange = fn;
@@ -134,12 +206,17 @@ export class StubDropdownComponent implements ControlValueAccessor {
   registerOnTouched(fn: () => void): void {
     this.onTouched = fn;
   }
-  onSelect(e: Event): void {
+  OnSelect(e: Event): void {
     const v = (e.target as HTMLSelectElement).value;
-    this.value = v;
+    this.Value = v;
     this.onChange(v);
     this.onTouched();
     this.ValueChange.emit(v);
+  }
+
+  /** @deprecated Use {@link OnSelect}. */
+  onSelect(e: Event): void {
+    return this.OnSelect(e);
   }
 }
 
@@ -168,12 +245,21 @@ export class StubNumericInputComponent implements ControlValueAccessor {
   @Input() Placeholder = '';
 
   /** Last value written through the CVA (by the form or by typing into the input). */
-  value: number | null = null;
+  Value: number | null = null;
+
+  /** @deprecated Use {@link Value}. */
+  get value(): number | null {
+    return this.Value;
+  }
+  /** @deprecated Use {@link Value}. */
+  set value(value: number | null) {
+    this.Value = value;
+  }
   private onChange: (v: number | null) => void = () => undefined;
   private onTouched: () => void = () => undefined;
 
   writeValue(v: number | null): void {
-    this.value = v;
+    this.Value = v;
   }
   registerOnChange(fn: (v: number | null) => void): void {
     this.onChange = fn;
@@ -181,10 +267,15 @@ export class StubNumericInputComponent implements ControlValueAccessor {
   registerOnTouched(fn: () => void): void {
     this.onTouched = fn;
   }
-  onInput(e: Event): void {
+  OnInput(e: Event): void {
     const raw = (e.target as HTMLInputElement).value;
-    this.value = raw === '' ? null : Number(raw);
-    this.onChange(this.value);
+    this.Value = raw === '' ? null : Number(raw);
+    this.onChange(this.Value);
     this.onTouched();
+  }
+
+  /** @deprecated Use {@link OnInput}. */
+  onInput(e: Event): void {
+    return this.OnInput(e);
   }
 }

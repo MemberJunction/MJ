@@ -10,7 +10,7 @@ export class TypeTablesCache extends BaseEngine<TypeTablesCache> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Entity Relationship Display Components',
-                PropertyName: '_EntityRelationshipDisplayComponents',
+                PropertyName: '_entityRelationshipDisplayComponents',
                 CacheLocal: true
             }
         ];
@@ -22,7 +22,7 @@ export class TypeTablesCache extends BaseEngine<TypeTablesCache> {
     }
 
     public get EntityRelationshipDisplayComponents() {
-        return this.GetConfigData<MJEntityRelationshipDisplayComponentEntity>('_EntityRelationshipDisplayComponents');
+        return this.GetConfigData<MJEntityRelationshipDisplayComponentEntity>('_entityRelationshipDisplayComponents');
     }
-    private _EntityRelationshipDisplayComponents: MJEntityRelationshipDisplayComponentEntity[] = [];
+    private _entityRelationshipDisplayComponents: MJEntityRelationshipDisplayComponentEntity[] = [];
 }

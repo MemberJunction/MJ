@@ -3,7 +3,7 @@ import { ProviderConfigDataBase, RunViewResult } from '../generic/interfaces';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { ProviderBase } from '../generic/providerBase';
 import { RunViewParams } from '../views/runView';
-import { TelemetryManager, TelemetryParamsUnion, TelemetryRunViewsBatchParams, isBatchRunViewParams } from '../generic/telemetryManager';
+import { TelemetryManager, TelemetryParamsUnion, TelemetryRunViewsBatchParams, IsBatchRunViewParams } from '../generic/telemetryManager';
 import { CompositeKey } from '../generic/compositeKey';
 
 /**
@@ -110,7 +110,7 @@ describe('ProviderBase batch telemetry threading (PreRunViews)', () => {
         const call = spy.mock.calls.find(c => c[1] === 'ProviderBase.RunViews');
         expect(call).toBeDefined();
         const p: TelemetryParamsUnion = call![2];
-        if (!isBatchRunViewParams(p)) throw new Error('expected batch RunViews telemetry params');
+        if (!IsBatchRunViewParams(p)) throw new Error('expected batch RunViews telemetry params');
         expect(p.Entities).toEqual(['', 'Test Entity 1']);
         // The named view's cursor must sit at ITS index — not shifted onto index 0.
         expect(p.AfterKeys).toEqual([undefined, key.ToConcatenatedString()]);

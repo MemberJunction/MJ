@@ -348,97 +348,211 @@ const DEFAULT_PROJECT_ICONS = [
   `]
 })
 export class ProjectFormModalComponent extends BaseAngularComponent implements OnInit  {
-  @Input() dialogRef!: MJDialogRef;
-  @Input() project: MJProjectEntity | null = null;
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() DialogRef!: MJDialogRef;
+
+  /** @deprecated Use {@link DialogRef}. */
+  @Input() set dialogRef(value: MJDialogRef) {
+    this.DialogRef = value;
+  }
+  /** @deprecated Use {@link DialogRef}. */
+  get dialogRef(): MJDialogRef {
+    return this.DialogRef;
+  }
+  @Input() Project: MJProjectEntity | null = null;
+
+  /** @deprecated Use {@link Project}. */
+  @Input() set project(value: MJProjectEntity | null) {
+    this.Project = value;
+  }
+  /** @deprecated Use {@link Project}. */
+  get project(): MJProjectEntity | null {
+    return this.Project;
+  }
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
   /** When creating a new folder, the parent folder ID for nesting (null = top level). */
-  @Input() parentId: string | null = null;
+  @Input() ParentId: string | null = null;
 
-  @Output() projectSaved = new EventEmitter<MJProjectEntity>();
+  /** @deprecated Use {@link ParentId}. */
+  @Input() set parentId(value: string | null) {
+    this.ParentId = value;
+  }
+  /** @deprecated Use {@link ParentId}. */
+  get parentId(): string | null {
+    return this.ParentId;
+  }
 
-  public formData: ProjectFormData = {
+  @Output() ProjectSaved = new EventEmitter<MJProjectEntity>();
+
+  /**
+   * @deprecated Use {@link ProjectSaved}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (projectSaved) keeps working. Must stay AFTER ProjectSaved: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() projectSaved = this.ProjectSaved;
+
+  public FormData: ProjectFormData = {
     name: '',
     description: '',
     color: '#0076B6',
     icon: 'fa-folder'
   };
 
-  public showNameError = false;
-  public isEditMode = false;
-  public availableColors = DEFAULT_PROJECT_COLORS;
-  public availableIcons = DEFAULT_PROJECT_ICONS;
+  /** @deprecated Use {@link FormData}. */
+  public get formData(): ProjectFormData {
+    return this.FormData;
+  }
+  /** @deprecated Use {@link FormData}. */
+  public set formData(value: ProjectFormData) {
+    this.FormData = value;
+  }
+
+  public ShowNameError = false;
+
+  /** @deprecated Use {@link ShowNameError}. */
+  public get showNameError() {
+    return this.ShowNameError;
+  }
+  /** @deprecated Use {@link ShowNameError}. */
+  public set showNameError(value) {
+    this.ShowNameError = value;
+  }
+  public IsEditMode = false;
+
+  /** @deprecated Use {@link IsEditMode}. */
+  public get isEditMode() {
+    return this.IsEditMode;
+  }
+  /** @deprecated Use {@link IsEditMode}. */
+  public set isEditMode(value) {
+    this.IsEditMode = value;
+  }
+  public AvailableColors = DEFAULT_PROJECT_COLORS;
+
+  /** @deprecated Use {@link AvailableColors}. */
+  public get availableColors() {
+    return this.AvailableColors;
+  }
+  /** @deprecated Use {@link AvailableColors}. */
+  public set availableColors(value) {
+    this.AvailableColors = value;
+  }
+  public AvailableIcons = DEFAULT_PROJECT_ICONS;
+
+  /** @deprecated Use {@link AvailableIcons}. */
+  public get availableIcons() {
+    return this.AvailableIcons;
+  }
+  /** @deprecated Use {@link AvailableIcons}. */
+  public set availableIcons(value) {
+    this.AvailableIcons = value;
+  }
 
   /** Translucent tint of the selected color, used behind the preview/icon glyph. */
-  public get chipBackground(): string {
-    const hex = this.formData.color || '#0076B6';
+  public get ChipBackground(): string {
+    const hex = this.FormData.color || '#0076B6';
     // 8-digit hex (#RRGGBBAA) — ~14% alpha tint of the chosen color
     return /^#[0-9a-fA-F]{6}$/.test(hex) ? `${hex}24` : hex;
+  }
+
+  /** @deprecated Use {@link ChipBackground}. */
+  public get chipBackground(): string {
+    return this.ChipBackground;
   }
 
   constructor(private cdr: ChangeDetectorRef) {
   super();}
 
   ngOnInit(): void {
-    this.isEditMode = this.project != null;
+    this.IsEditMode = this.Project != null;
 
-    if (this.project) {
+    if (this.Project) {
       this.loadProjectData();
     }
   }
 
   private loadProjectData(): void {
-    if (!this.project) return;
+    if (!this.Project) return;
 
-    this.formData = {
-      name: this.project.Name || '',
-      description: this.project.Description || '',
-      color: this.project.Color || '#0076B6',
-      icon: this.project.Icon || 'fa-folder'
+    this.FormData = {
+      name: this.Project.Name || '',
+      description: this.Project.Description || '',
+      color: this.Project.Color || '#0076B6',
+      icon: this.Project.Icon || 'fa-folder'
     };
   }
 
+  SelectColor(color: string): void {
+    this.FormData.color = color;
+    this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link SelectColor}. */
   selectColor(color: string): void {
-    this.formData.color = color;
+    return this.SelectColor(color);
+  }
+
+  SelectIcon(icon: string): void {
+    this.FormData.icon = icon;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link SelectIcon}. */
   selectIcon(icon: string): void {
-    this.formData.icon = icon;
-    this.cdr.detectChanges();
+    return this.SelectIcon(icon);
   }
 
-  async onSave(): Promise<void> {
+  async OnSave(): Promise<void> {
     // Validate
-    if (!this.formData.name.trim()) {
-      this.showNameError = true;
+    if (!this.FormData.name.trim()) {
+      this.ShowNameError = true;
       this.cdr.detectChanges();
       return;
     }
 
-    this.showNameError = false;
+    this.ShowNameError = false;
 
     try {
       const md = this.ProviderToUse;
-      const project = this.project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
+      const project = this.Project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.CurrentUser);
 
-      project.Name = this.formData.name.trim();
-      project.Description = this.formData.description.trim() || null;
-      project.Color = this.formData.color;
-      project.Icon = this.formData.icon;
+      project.Name = this.FormData.name.trim();
+      project.Description = this.FormData.description.trim() || null;
+      project.Color = this.FormData.color;
+      project.Icon = this.FormData.icon;
 
-      if (!this.isEditMode) {
-        project.EnvironmentID = this.environmentId;
+      if (!this.IsEditMode) {
+        project.EnvironmentID = this.EnvironmentId;
         project.IsArchived = false;
-        if (this.parentId) {
-          project.ParentID = this.parentId;
+        if (this.ParentId) {
+          project.ParentID = this.ParentId;
         }
       }
 
       const saved = await project.Save();
       if (saved) {
-        this.projectSaved.emit(project);
-        this.dialogRef.Close();
+        this.ProjectSaved.emit(project);
+        this.DialogRef.Close();
       } else {
         throw new Error('Failed to save project');
       }
@@ -448,7 +562,12 @@ export class ProjectFormModalComponent extends BaseAngularComponent implements O
     }
   }
 
+  /** @deprecated Use {@link OnSave}. */
+  async onSave(): Promise<void> {
+    return this.OnSave();
+  }
+
   onCancel(): void {
-    this.dialogRef.Close();
+    this.DialogRef.Close();
   }
 }

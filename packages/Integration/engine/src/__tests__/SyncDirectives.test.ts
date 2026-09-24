@@ -7,7 +7,7 @@ import {
     SYNC_DIRECTIVE_CONFIG_KEY,
 } from '../SyncDirectives.js';
 import { FieldMappingEngine } from '../FieldMappingEngine.js';
-import { computeContentHash } from '../ContentHash.js';
+import { ComputeContentHash } from '../ContentHash.js';
 import type { ICompanyIntegrationFieldMap } from '../entity-types.js';
 import type { ExternalRecord } from '../types.js';
 
@@ -128,7 +128,7 @@ describe('FieldMappingEngine with exclusions', () => {
         } as unknown as ExternalRecord;
         const [a] = engine.Apply([record], maps, 'Test Entity', excl);
         const [b] = engine.Apply([changed], maps, 'Test Entity', excl);
-        expect(computeContentHash(a.MappedFields)).toBe(computeContentHash(b.MappedFields));
+        expect(ComputeContentHash(a.MappedFields)).toBe(ComputeContentHash(b.MappedFields));
     });
 
     it('without exclusions, behaviour is unchanged (regression guard)', () => {

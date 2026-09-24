@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo } from '../generic/entityInfo';
-import { getGraphQLTypeNameBase, getSchemaPrefix } from '../generic/graphqlTypeNames';
+import { GetGraphQLTypeNameBase, GetSchemaPrefix } from '../generic/graphqlTypeNames';
 
 /**
  * Builds a minimal EntityInfo carrying only the three fields getGraphQLTypeNameBase reads
@@ -21,7 +21,7 @@ describe('getGraphQLTypeNameBase', () => {
         // Canonical absent -> falls back to SchemaName. On SQL Server SchemaName is already
         // canonical-cased, so this is the net-zero path.
         const entity = makeEntity({ SchemaName: 'mjBizAppsCommon', BaseTable: 'Person', CanonicalSchemaName: null });
-        expect(getGraphQLTypeNameBase(entity)).toBe('mjBizAppsCommonPerson');
+        expect(GetGraphQLTypeNameBase(entity)).toBe('mjBizAppsCommonPerson');
     });
 
     it('prefers CanonicalSchemaName over the (lowercased) SchemaName when present (PostgreSQL)', () => {
@@ -32,19 +32,19 @@ describe('getGraphQLTypeNameBase', () => {
             BaseTable: 'Person',
             CanonicalSchemaName: 'mjBizAppsCommon',
         });
-        expect(getGraphQLTypeNameBase(entity)).toBe('mjBizAppsCommonPerson');
+        expect(GetGraphQLTypeNameBase(entity)).toBe('mjBizAppsCommonPerson');
     });
 
     it('falls back to SchemaName when CanonicalSchemaName is undefined', () => {
         const entity = makeEntity({ SchemaName: 'sales', BaseTable: 'Invoice' });
         entity.CanonicalSchemaName = undefined as unknown as string;
-        expect(getGraphQLTypeNameBase(entity)).toBe('salesInvoice');
+        expect(GetGraphQLTypeNameBase(entity)).toBe('salesInvoice');
     });
 
     it('maps the core __mj schema to the MJ prefix regardless of which schema field is used', () => {
         // __mj is never overridden by a canonical name; the special-case mapping holds.
         const entity = makeEntity({ SchemaName: '__mj', BaseTable: 'AIModel', CanonicalSchemaName: null });
-        expect(getGraphQLTypeNameBase(entity)).toBe('MJAIModel');
+        expect(GetGraphQLTypeNameBase(entity)).toBe('MJAIModel');
     });
 
     it('keeps the client/server prefix aligned with getSchemaPrefix on the canonical name', () => {
@@ -52,6 +52,6 @@ describe('getGraphQLTypeNameBase', () => {
         // vwEntities ClassName derives via COALESCE(CanonicalSchemaName, SchemaName).
         const canonical = 'mjBizAppsCommon';
         const entity = makeEntity({ SchemaName: 'mjbizappscommon', BaseTable: 'Address', CanonicalSchemaName: canonical });
-        expect(getGraphQLTypeNameBase(entity)).toBe(`${getSchemaPrefix(canonical)}Address`);
+        expect(GetGraphQLTypeNameBase(entity)).toBe(`${GetSchemaPrefix(canonical)}Address`);
     });
 });

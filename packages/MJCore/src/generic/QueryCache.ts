@@ -94,7 +94,7 @@ export class QueryCache {
      * @param config - Cache configuration settings
      * @returns The cached entry if valid, null otherwise
      */
-    get(queryId: string, params: Record<string, unknown>, config: QueryCacheConfig): QueryCacheEntry | null {
+    Get(queryId: string, params: Record<string, unknown>, config: QueryCacheConfig): QueryCacheEntry | null {
         if (!config.enabled) return null;
 
         const key = this.getCacheKey(queryId, params);
@@ -124,6 +124,11 @@ export class QueryCache {
         
         return entry;
     }
+
+    /** @deprecated Use {@link Get}. */
+    get(queryId: string, params: Record<string, unknown>, config: QueryCacheConfig): QueryCacheEntry | null {
+        return this.Get(queryId, params, config);
+    }
     
     /**
      * Cache query results with TTL and LRU eviction.
@@ -134,7 +139,7 @@ export class QueryCache {
      * @param results - The query results to cache
      * @param config - Cache configuration settings
      */
-    set(queryId: string, params: Record<string, unknown>, results: unknown[], config: QueryCacheConfig): void {
+    Set(queryId: string, params: Record<string, unknown>, results: unknown[], config: QueryCacheConfig): void {
         if (!config.enabled) return;
 
         const key = this.getCacheKey(queryId, params);
@@ -161,6 +166,11 @@ export class QueryCache {
 
         this.cache.set(key, entry);
         this.updateAccessOrder(key);
+    }
+
+    /** @deprecated Use {@link Set}. */
+    set(queryId: string, params: Record<string, unknown>, results: unknown[], config: QueryCacheConfig): void {
+        return this.Set(queryId, params, results, config);
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -281,7 +291,7 @@ export class QueryCache {
      * 
      * @param queryId - Optional query ID to clear specific query cache
      */
-    clear(queryId?: string): void {
+    Clear(queryId?: string): void {
         if (queryId) {
             // Clear all data entries for specific query
             const keysToDelete = Array.from(this.cache.keys())
@@ -306,6 +316,11 @@ export class QueryCache {
             this.accessOrder = [];
             LogStatus(`Cleared entire query cache (${size} data + ${countSize} count entries)`);
         }
+    }
+
+    /** @deprecated Use {@link Clear}. */
+    clear(queryId?: string): void {
+        return this.Clear(queryId);
     }
     
     /**
@@ -339,7 +354,7 @@ export class QueryCache {
      * 
      * @returns Object containing cache performance metrics
      */
-    getStats(): {
+    GetStats(): {
         size: number;
         hits: number;
         misses: number;
@@ -359,6 +374,18 @@ export class QueryCache {
             expirations: this.stats.expirations
         };
     }
+
+    /** @deprecated Use {@link GetStats}. */
+    getStats(): {
+        size: number;
+        hits: number;
+        misses: number;
+        hitRate: number;
+        evictions: number;
+        expirations: number;
+    } {
+        return this.GetStats();
+    }
     
     /**
      * Clean up expired entries from the cache.
@@ -366,7 +393,7 @@ export class QueryCache {
      * 
      * @returns Number of expired entries removed
      */
-    cleanupExpired(): number {
+    CleanupExpired(): number {
         const now = Date.now();
         let cleaned = 0;
 
@@ -390,5 +417,10 @@ export class QueryCache {
         }
 
         return cleaned;
+    }
+
+    /** @deprecated Use {@link CleanupExpired}. */
+    cleanupExpired(): number {
+        return this.CleanupExpired();
     }
 }

@@ -130,44 +130,44 @@ export class ActionMetadataGenerator {
         const actions: ActionRecord[] = [];
 
         for (const obj of config.Objects) {
-            actions.push(...this.GenerateActionsForObject(config, obj));
+            actions.push(...this.generateActionsForObject(config, obj));
         }
 
         return {
-            SyncConfig: this.BuildSyncConfig(),
+            SyncConfig: this.buildSyncConfig(),
             ActionRecords: actions,
-            CategoryRecords: this.BuildCategoryRecords(config),
+            CategoryRecords: this.buildCategoryRecords(config),
         };
     }
 
     // ─── Per-Object Generation ───────────────────────────────────────
 
-    private GenerateActionsForObject(
+    private generateActionsForObject(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo
     ): ActionRecord[] {
         const actions: ActionRecord[] = [];
-        const displayName = obj.DisplayName || this.Humanize(obj.Name);
+        const displayName = obj.DisplayName || this.humanize(obj.Name);
 
         // Get — always generated
-        actions.push(this.BuildGetAction(config, obj, displayName));
+        actions.push(this.buildGetAction(config, obj, displayName));
 
         // Create/Update/Delete/Upsert — only if object supports write
         if (obj.SupportsWrite) {
-            actions.push(this.BuildCreateAction(config, obj, displayName));
-            actions.push(this.BuildUpdateAction(config, obj, displayName));
-            actions.push(this.BuildDeleteAction(config, obj, displayName));
-            actions.push(this.BuildUpsertAction(config, obj, displayName));
+            actions.push(this.buildCreateAction(config, obj, displayName));
+            actions.push(this.buildUpdateAction(config, obj, displayName));
+            actions.push(this.buildDeleteAction(config, obj, displayName));
+            actions.push(this.buildUpsertAction(config, obj, displayName));
         }
 
         // Search — if configured
         if (config.IncludeSearch !== false) {
-            actions.push(this.BuildSearchAction(config, obj, displayName));
+            actions.push(this.buildSearchAction(config, obj, displayName));
         }
 
         // List — if configured
         if (config.IncludeList !== false) {
-            actions.push(this.BuildListAction(config, obj, displayName));
+            actions.push(this.buildListAction(config, obj, displayName));
         }
 
         return actions;
@@ -175,53 +175,53 @@ export class ActionMetadataGenerator {
 
     // ─── Action Builders ─────────────────────────────────────────────
 
-    private BuildGetAction(
+    private buildGetAction(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo,
         displayName: string
     ): ActionRecord {
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('ExternalID', 'Both', true, `The unique ID of the ${displayName} record to retrieve`),
-            this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
-            this.BuildSystemParam('Record', 'Output', false, `The retrieved ${displayName} record with all fields`),
+            this.buildSystemParam('ExternalID', 'Both', true, `The unique ID of the ${displayName} record to retrieve`),
+            this.buildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
+            this.buildSystemParam('Record', 'Output', false, `The retrieved ${displayName} record with all fields`),
         ];
 
         // Add output params for each field so agents know what fields exist
         for (const field of obj.Fields) {
-            params.push(this.FieldToOutputParam(field));
+            params.push(this.fieldToOutputParam(field));
         }
 
-        return this.BuildAction(config, obj, 'Get', displayName,
+        return this.buildAction(config, obj, 'Get', displayName,
             `Retrieves a single ${displayName} record from ${config.IntegrationName} by its external ID`,
             params
         );
     }
 
-    private BuildCreateAction(
+    private buildCreateAction(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo,
         displayName: string
     ): ActionRecord {
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
+            this.buildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
         ];
 
         // Input params for writable fields
         for (const field of obj.Fields) {
             if (field.IsReadOnly || field.IsPrimaryKey) continue;
-            params.push(this.FieldToInputParam(field));
+            params.push(this.fieldToInputParam(field));
         }
 
         // Output
-        params.push(this.BuildSystemParam('ExternalID', 'Output', false, `The external ID of the newly created ${displayName} record`));
+        params.push(this.buildSystemParam('ExternalID', 'Output', false, `The external ID of the newly created ${displayName} record`));
 
-        return this.BuildAction(config, obj, 'Create', displayName,
+        return this.buildAction(config, obj, 'Create', displayName,
             `Creates a new ${displayName} record in ${config.IntegrationName}`,
             params
         );
     }
 
-    private BuildUpsertAction(
+    private buildUpsertAction(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo,
         displayName: string
@@ -230,109 +230,109 @@ export class ActionMetadataGenerator {
             ? `The unique field used to match an existing ${displayName} record (defaults to "${obj.UpsertKey}")`
             : `The unique field used to match an existing ${displayName} record (connector default if omitted)`;
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
-            this.BuildSystemParam('IDProperty', 'Input', false, idPropertyDesc),
+            this.buildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
+            this.buildSystemParam('IDProperty', 'Input', false, idPropertyDesc),
         ];
 
         // Input params for writable fields
         for (const field of obj.Fields) {
             if (field.IsReadOnly || field.IsPrimaryKey) continue;
-            params.push(this.FieldToInputParam(field, false)); // None required — upsert may match an existing record
+            params.push(this.fieldToInputParam(field, false)); // None required — upsert may match an existing record
         }
 
         // Output
-        params.push(this.BuildSystemParam('ExternalID', 'Output', false, `The external ID of the created or updated ${displayName} record`));
+        params.push(this.buildSystemParam('ExternalID', 'Output', false, `The external ID of the created or updated ${displayName} record`));
 
-        return this.BuildAction(config, obj, 'Upsert', displayName,
+        return this.buildAction(config, obj, 'Upsert', displayName,
             `Creates or updates a ${displayName} in ${config.IntegrationName} (idempotent upsert keyed on a natural ID)`,
             params
         );
     }
 
-    private BuildUpdateAction(
+    private buildUpdateAction(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo,
         displayName: string
     ): ActionRecord {
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('ExternalID', 'Both', true, `The external ID of the ${displayName} record to update`),
-            this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
+            this.buildSystemParam('ExternalID', 'Both', true, `The external ID of the ${displayName} record to update`),
+            this.buildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
         ];
 
         // Input params for writable fields (none required — partial update)
         for (const field of obj.Fields) {
             if (field.IsReadOnly || field.IsPrimaryKey) continue;
-            params.push(this.FieldToInputParam(field, false)); // Not required for updates
+            params.push(this.fieldToInputParam(field, false)); // Not required for updates
         }
 
-        return this.BuildAction(config, obj, 'Update', displayName,
+        return this.buildAction(config, obj, 'Update', displayName,
             `Updates an existing ${displayName} record in ${config.IntegrationName}. Only provided fields are changed.`,
             params
         );
     }
 
-    private BuildDeleteAction(
+    private buildDeleteAction(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo,
         displayName: string
     ): ActionRecord {
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('ExternalID', 'Input', true, `The external ID of the ${displayName} record to delete`),
-            this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
+            this.buildSystemParam('ExternalID', 'Input', true, `The external ID of the ${displayName} record to delete`),
+            this.buildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
         ];
 
-        return this.BuildAction(config, obj, 'Delete', displayName,
+        return this.buildAction(config, obj, 'Delete', displayName,
             `Deletes (archives) a ${displayName} record from ${config.IntegrationName}`,
             params
         );
     }
 
-    private BuildSearchAction(
+    private buildSearchAction(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo,
         displayName: string
     ): ActionRecord {
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
-            this.BuildSystemParam('PageSize', 'Input', false, 'Maximum number of records to return (default: 100)'),
-            this.BuildSystemParam('Page', 'Input', false, 'Page number for paginated results (1-based)'),
-            this.BuildSystemParam('Sort', 'Input', false, 'Sort expression (connector-specific format)'),
+            this.buildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
+            this.buildSystemParam('PageSize', 'Input', false, 'Maximum number of records to return (default: 100)'),
+            this.buildSystemParam('Page', 'Input', false, 'Page number for paginated results (1-based)'),
+            this.buildSystemParam('Sort', 'Input', false, 'Sort expression (connector-specific format)'),
         ];
 
         // Input params for searchable fields (all non-PK fields as optional filters)
         for (const field of obj.Fields) {
             if (field.IsPrimaryKey) continue;
-            params.push(this.FieldToInputParam(field, false)); // All optional for search
+            params.push(this.fieldToInputParam(field, false)); // All optional for search
         }
 
         // Outputs
-        params.push(this.BuildSystemParam('Records', 'Output', false, `Array of matching ${displayName} records`));
-        params.push(this.BuildSystemParam('TotalCount', 'Output', false, 'Total number of matching records'));
-        params.push(this.BuildSystemParam('HasMore', 'Output', false, 'Whether more pages of results exist'));
+        params.push(this.buildSystemParam('Records', 'Output', false, `Array of matching ${displayName} records`));
+        params.push(this.buildSystemParam('TotalCount', 'Output', false, 'Total number of matching records'));
+        params.push(this.buildSystemParam('HasMore', 'Output', false, 'Whether more pages of results exist'));
 
-        return this.BuildAction(config, obj, 'Search', displayName,
+        return this.buildAction(config, obj, 'Search', displayName,
             `Searches for ${displayName} records in ${config.IntegrationName} matching the given field filters`,
             params
         );
     }
 
-    private BuildListAction(
+    private buildListAction(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo,
         displayName: string
     ): ActionRecord {
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
-            this.BuildSystemParam('PageSize', 'Input', false, 'Maximum number of records to return per page (default: 100)'),
-            this.BuildSystemParam('Cursor', 'Input', false, 'Opaque cursor for fetching the next page (from previous ListResult)'),
-            this.BuildSystemParam('Sort', 'Input', false, 'Sort expression (connector-specific format)'),
-            this.BuildSystemParam('Records', 'Output', false, `Array of ${displayName} records in this page`),
-            this.BuildSystemParam('HasMore', 'Output', false, 'Whether more pages of results exist'),
-            this.BuildSystemParam('NextCursor', 'Output', false, 'Cursor to pass for the next page'),
-            this.BuildSystemParam('TotalCount', 'Output', false, 'Total number of records, if known'),
+            this.buildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
+            this.buildSystemParam('PageSize', 'Input', false, 'Maximum number of records to return per page (default: 100)'),
+            this.buildSystemParam('Cursor', 'Input', false, 'Opaque cursor for fetching the next page (from previous ListResult)'),
+            this.buildSystemParam('Sort', 'Input', false, 'Sort expression (connector-specific format)'),
+            this.buildSystemParam('Records', 'Output', false, `Array of ${displayName} records in this page`),
+            this.buildSystemParam('HasMore', 'Output', false, 'Whether more pages of results exist'),
+            this.buildSystemParam('NextCursor', 'Output', false, 'Cursor to pass for the next page'),
+            this.buildSystemParam('TotalCount', 'Output', false, 'Total number of records, if known'),
         ];
 
-        return this.BuildAction(config, obj, 'List', displayName,
+        return this.buildAction(config, obj, 'List', displayName,
             `Lists ${displayName} records from ${config.IntegrationName} with cursor-based pagination`,
             params
         );
@@ -340,7 +340,7 @@ export class ActionMetadataGenerator {
 
     // ─── Core Builders ───────────────────────────────────────────────
 
-    private BuildAction(
+    private buildAction(
         config: ActionGeneratorConfig,
         obj: IntegrationObjectInfo,
         verb: IntegrationActionVerb,
@@ -367,12 +367,12 @@ export class ActionMetadataGenerator {
             },
             relatedEntities: {
                 'MJ: Action Params': params,
-                'MJ: Action Result Codes': this.BuildStandardResultCodes(verb),
+                'MJ: Action Result Codes': this.buildStandardResultCodes(verb),
             },
         };
     }
 
-    private BuildSystemParam(
+    private buildSystemParam(
         name: string,
         type: 'Input' | 'Output' | 'Both',
         isRequired: boolean,
@@ -391,13 +391,13 @@ export class ActionMetadataGenerator {
         };
     }
 
-    private FieldToInputParam(field: IntegrationFieldInfo, requiredOverride?: boolean): ActionParamRecord {
+    private fieldToInputParam(field: IntegrationFieldInfo, requiredOverride?: boolean): ActionParamRecord {
         return {
             fields: {
                 ActionID: '@parent:ID',
                 Name: field.Name,
                 Type: 'Input',
-                ValueType: this.MapFieldTypeToValueType(field.Type),
+                ValueType: this.mapFieldTypeToValueType(field.Type),
                 IsArray: false,
                 IsRequired: requiredOverride ?? field.IsRequired,
                 Description: field.Description || `${field.DisplayName || field.Name} field`,
@@ -405,13 +405,13 @@ export class ActionMetadataGenerator {
         };
     }
 
-    private FieldToOutputParam(field: IntegrationFieldInfo): ActionParamRecord {
+    private fieldToOutputParam(field: IntegrationFieldInfo): ActionParamRecord {
         return {
             fields: {
                 ActionID: '@parent:ID',
                 Name: field.Name,
                 Type: 'Output',
-                ValueType: this.MapFieldTypeToValueType(field.Type),
+                ValueType: this.mapFieldTypeToValueType(field.Type),
                 IsArray: false,
                 IsRequired: false,
                 Description: field.Description || `${field.DisplayName || field.Name} value from the retrieved record`,
@@ -419,7 +419,7 @@ export class ActionMetadataGenerator {
         };
     }
 
-    private BuildStandardResultCodes(verb: IntegrationActionVerb): ActionResultCodeRecord[] {
+    private buildStandardResultCodes(verb: IntegrationActionVerb): ActionResultCodeRecord[] {
         const codes: ActionResultCodeRecord[] = [
             { fields: { ActionID: '@parent:ID', ResultCode: 'SUCCESS', IsSuccess: true, Description: `${verb} operation completed successfully` } },
             { fields: { ActionID: '@parent:ID', ResultCode: 'EXECUTOR_ERROR', IsSuccess: false, Description: 'Internal executor error' } },
@@ -438,7 +438,7 @@ export class ActionMetadataGenerator {
 
     // ─── .mj-sync.json ──────────────────────────────────────────────
 
-    private BuildSyncConfig(): Record<string, unknown> {
+    private buildSyncConfig(): Record<string, unknown> {
         return {
             entity: 'MJ: Actions',
             filePattern: '**/.*.json',
@@ -479,7 +479,7 @@ export class ActionMetadataGenerator {
 
     // ─── Category Generation ─────────────────────────────────────────
 
-    private BuildCategoryRecords(config: ActionGeneratorConfig): CategoryRecord[] {
+    private buildCategoryRecords(config: ActionGeneratorConfig): CategoryRecord[] {
         if (config.CreateCategory === false) return [];
 
         const fields: Record<string, unknown> = {
@@ -497,7 +497,7 @@ export class ActionMetadataGenerator {
     // ─── Helpers ─────────────────────────────────────────────────────
 
     /** Converts a field data type to an ActionParam ValueType */
-    private MapFieldTypeToValueType(fieldType: string): string {
+    private mapFieldTypeToValueType(fieldType: string): string {
         switch (fieldType.toLowerCase()) {
             case 'boolean':
             case 'number':
@@ -518,7 +518,7 @@ export class ActionMetadataGenerator {
     }
 
     /** Converts a snake_case or lowercase name to a human-readable form */
-    private Humanize(name: string): string {
+    private humanize(name: string): string {
         return name
             .replace(/_/g, ' ')
             .replace(/([a-z])([A-Z])/g, '$1 $2')

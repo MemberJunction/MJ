@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { subSplitCompoundBatch } from '../rules/SubSplitter.js';
+import { SubSplitCompoundBatch } from '../rules/SubSplitter.js';
 
 describe('subSplitCompoundBatch', () => {
   // ============================================================
@@ -7,7 +7,7 @@ describe('subSplitCompoundBatch', () => {
   // ============================================================
   it('should not split a single CREATE TABLE statement', () => {
     const batch = 'CREATE TABLE __mj.Users (\n  ID UUID NOT NULL,\n  Name VARCHAR(100)\n);';
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(batch);
   });
@@ -17,7 +17,7 @@ describe('subSplitCompoundBatch', () => {
   // ============================================================
   it('should not split a single INSERT statement', () => {
     const batch = "INSERT INTO __mj.Users (ID, Name) VALUES ('abc', 'Test');";
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(batch);
   });
@@ -31,7 +31,7 @@ describe('subSplitCompoundBatch', () => {
       "INSERT INTO __mj.Users (ID, Name) VALUES ('a1', 'Alice');",
       "INSERT INTO __mj.Users (ID, Name) VALUES ('b2', 'Bob');",
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(3);
     expect(result[0]).toMatch(/^PRINT/);
     expect(result[1]).toMatch(/^INSERT/);
@@ -48,7 +48,7 @@ describe('subSplitCompoundBatch', () => {
       'ALTER TABLE __mj.Users ADD COLUMN Age INTEGER;',
       "INSERT INTO __mj.Users (ID, Name) VALUES ('c3', 'Carol');",
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(2);
     expect(result[0]).toContain('ALTER TABLE');
     expect(result[1]).toContain('INSERT INTO');
@@ -67,7 +67,7 @@ describe('subSplitCompoundBatch', () => {
       '  INSERT INTO __mj.AuditLog (Action) VALUES (\'Get User\');',
       'END;',
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(batch);
   });
@@ -82,7 +82,7 @@ describe('subSplitCompoundBatch', () => {
       "DELETE FROM old data references",
       "that should not cause splitting');",
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     // The INSERT/DELETE inside the string should NOT cause splitting
     expect(result).toHaveLength(1);
   });
@@ -96,7 +96,7 @@ describe('subSplitCompoundBatch', () => {
       'SET @Counter = @Counter + 1;',
       "INSERT INTO __mj.Log (Val) VALUES (@Counter);",
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(batch);
   });
@@ -114,7 +114,7 @@ describe('subSplitCompoundBatch', () => {
       "  PRINT 'Error occurred';",
       'END CATCH',
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(batch);
   });
@@ -124,7 +124,7 @@ describe('subSplitCompoundBatch', () => {
   // ============================================================
   it('should return an empty batch unchanged', () => {
     const batch = '';
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe('');
   });
@@ -138,7 +138,7 @@ describe('subSplitCompoundBatch', () => {
       'SELECT ID, Name FROM __mj.Users',
       'WHERE Active = 1;',
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(batch);
   });
@@ -155,7 +155,7 @@ describe('subSplitCompoundBatch', () => {
       '  RETURN (SELECT COUNT(*) FROM __mj.Users);',
       'END;',
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(batch);
   });
@@ -173,7 +173,7 @@ describe('subSplitCompoundBatch', () => {
       "  INSERT INTO __mj.AuditLog (Action) VALUES ('Update');",
       'END;',
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(batch);
   });
@@ -187,7 +187,7 @@ describe('subSplitCompoundBatch', () => {
       'GRANT INSERT ON __mj.Users TO cdp_UI;',
       'GRANT UPDATE ON __mj.Users TO cdp_UI;',
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(3);
     expect(result[0]).toMatch(/^GRANT SELECT/);
     expect(result[1]).toMatch(/^GRANT INSERT/);
@@ -207,7 +207,7 @@ describe('subSplitCompoundBatch', () => {
       ")",
       "CREATE INDEX IDX_AUTO_MJ_FKEY_Entity_ParentID ON [__mj].[Entity] ([ParentID]);",
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toContain('IF NOT EXISTS');
     expect(result[0]).toContain('CREATE INDEX');
@@ -221,7 +221,7 @@ describe('subSplitCompoundBatch', () => {
       "IF OBJECT_ID('tempdb..#EntityNameMapping') IS NOT NULL",
       "    DROP TABLE #EntityNameMapping;",
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
     expect(result[0]).toContain('IF OBJECT_ID');
     expect(result[0]).toContain('DROP TABLE');
@@ -237,7 +237,7 @@ describe('subSplitCompoundBatch', () => {
       "    ALTER TABLE __mj.Foo ADD Bar VARCHAR(50);",
       "END",
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(1);
   });
 
@@ -251,7 +251,7 @@ describe('subSplitCompoundBatch', () => {
       "IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_B')",
       "CREATE INDEX IX_B ON __mj.Foo (Col2);",
     ].join('\n');
-    const result = subSplitCompoundBatch(batch);
+    const result = SubSplitCompoundBatch(batch);
     expect(result).toHaveLength(2);
     expect(result[0]).toContain('IX_A');
     expect(result[1]).toContain('IX_B');

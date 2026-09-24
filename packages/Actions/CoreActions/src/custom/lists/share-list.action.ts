@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { ListSharing } from '@memberjunction/lists';
 import type { ShareTarget } from '@memberjunction/lists-base';
 
-import { addOutputParam, getStringParam, missingParam } from './_action-helpers';
+import { AddOutputParam, GetStringParam, MissingParam } from './_action-helpers';
 
 /**
  * Grant a direct share on a List to a user or role. Mirrors
@@ -19,10 +19,10 @@ import { addOutputParam, getStringParam, missingParam } from './_action-helpers'
 @RegisterClass(BaseAction, 'Share List')
 export class ShareListAction extends BaseAction {
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-    const listId = getStringParam(params, 'ListID');
-    const targetKind = getStringParam(params, 'TargetKind') as 'user' | 'role' | undefined;
-    const targetId = getStringParam(params, 'TargetID');
-    if (!listId) return missingParam('ListID');
+    const listId = GetStringParam(params, 'ListID');
+    const targetKind = GetStringParam(params, 'TargetKind') as 'user' | 'role' | undefined;
+    const targetId = GetStringParam(params, 'TargetID');
+    if (!listId) return MissingParam('ListID');
     if (targetKind !== 'user' && targetKind !== 'role') {
       return {
         Success: false,
@@ -30,9 +30,9 @@ export class ShareListAction extends BaseAction {
         Message: `TargetKind must be 'user' or 'role' (got '${targetKind ?? ''}')`,
       };
     }
-    if (!targetId) return missingParam('TargetID');
+    if (!targetId) return MissingParam('TargetID');
 
-    const level = (getStringParam(params, 'PermissionLevel') ?? 'View') as 'View' | 'Edit' | 'Owner';
+    const level = (GetStringParam(params, 'PermissionLevel') ?? 'View') as 'View' | 'Edit' | 'Owner';
     if (level !== 'View' && level !== 'Edit' && level !== 'Owner') {
       return {
         Success: false,
@@ -46,7 +46,7 @@ export class ShareListAction extends BaseAction {
 
     const sharing = new ListSharing(params.ContextUser, params.Provider);
     const result = await sharing.Share({ ListID: listId, Target: target, PermissionLevel: level });
-    addOutputParam(params, 'PermissionID', result.PermissionID);
+    AddOutputParam(params, 'PermissionID', result.PermissionID);
     return { Success: result.Success, ResultCode: result.ResultCode, Message: result.Message };
   }
 }

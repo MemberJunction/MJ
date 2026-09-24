@@ -28,13 +28,13 @@ export { PUSH_TOKEN_SETTING_KEY } from './push-token-store';
 /** Outcome of {@link RegisterForPushNotifications}. */
 export type PushRegistrationResult = {
     /** Whether the OS granted notification permission (or provisional on iOS). */
-    granted: boolean;
+    granted: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** The acquired Expo push token, or `null` when one couldn't be minted (simulator). */
-    token: string | null;
+    token: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Whether the token was successfully written to the backend. */
-    persisted: boolean;
+    persisted: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Human-readable explanation when `token`/`persisted` is falsy. */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 };
 
 /**

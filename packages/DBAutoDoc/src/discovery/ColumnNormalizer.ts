@@ -27,76 +27,76 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { createLLMInstance } from '../utils/llm-factory.js';
+import { CreateLLMInstance } from '../utils/llm-factory.js';
 import { AIConfig } from '../types/config.js';
 import { OrganicKeyNormalizationStrategy } from '../types/organic-keys.js';
-import { cleanAndParseJSON } from '../utils/json.js';
+import { CleanAndParseJSON } from '../utils/json.js';
 
 /** One column's input to the normalizer. */
 export interface NormalizerInputColumn {
-    schema: string;
-    table: string;
-    column: string;
-    dataType: string;
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    table: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Column: string;
+    dataType: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Original LLM-generated description from DBAutoDoc's prior analysis pass. */
-    originalDescription: string;
+    OriginalDescription: string;
     /** Sample values from the column's actual data. */
-    sampleValues: string[];
+    SampleValues: string[];
     /** Whether the column participates in any FK (declared or detected). */
-    participatesInFK: boolean;
-    fkTarget?: { schema: string; table: string; column: string } | null;
-    isPrimaryKey: boolean;
+    ParticipatesInFK: boolean;
+    FkTarget?: { schema: string; table: string; column: string } | null;
+    isPrimaryKey: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** All columns of one table, batched for a single LLM call. */
 export interface TableNormalizationInput {
-    schema: string;
-    schemaDescription?: string;
-    table: string;
-    tableDescription?: string;
-    columns: NormalizerInputColumn[];
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    SchemaDescription?: string;
+    table: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    TableDescription?: string;
+    columns: NormalizerInputColumn[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** One column's normalized output. */
 export interface NormalizedColumn extends NormalizerInputColumn {
-    conceptName: string;
-    normalizationStrategy: OrganicKeyNormalizationStrategy;
-    customNormalizationExpression?: string;
-    normalizedDescription: string;
-    isUsefulOrganicKey: boolean;
+    ConceptName: string;
+    NormalizationStrategy: OrganicKeyNormalizationStrategy;
+    CustomNormalizationExpression?: string;
+    NormalizedDescription: string;
+    IsUsefulOrganicKey: boolean;
     confidence: number;
-    reasoning: string;
+    reasoning: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Aggregate result of normalizing many tables. */
 export interface NormalizationBatchResult {
     /** Useful organic-key columns surviving normalization (filtered to isUsefulOrganicKey=true). */
-    normalized: NormalizedColumn[];
+    Normalized: NormalizedColumn[];
     /** Columns the normalizer marked isUsefulOrganicKey=false (audit, free-form, etc.). */
-    rejected: number;
+    rejected: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Tables where the LLM call failed entirely. */
-    errors: number;
-    tokens: { total: number; input: number; output: number };
+    errors: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    tokens: { total: number; input: number; output: number };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface NormalizerOptions {
     /** Concurrency for per-table LLM calls. Default 8. */
-    concurrency?: number;
+    Concurrency?: number;
     /** Max retries per table on transient failures. Default 2. */
-    maxRetries?: number;
+    MaxRetries?: number;
     /** Progress callback (done count, total count). */
-    onProgress?: (done: number, total: number) => void;
+    OnProgress?: (done: number, total: number) => void;
 }
 
 export class TableNormalizer {
     private readonly llm: BaseLLM;
 
     constructor(private readonly aiConfig: AIConfig) {
-        this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
+        this.llm = CreateLLMInstance(aiConfig.provider, aiConfig.apiKey);
     }
 
     /** Normalize one table — one LLM call returning per-column entries. */
-    public async normalizeTable(
+    public async NormalizeTable(
         input: TableNormalizationInput,
         maxRetries = 2,
     ): Promise<{
@@ -145,7 +145,7 @@ export class TableNormalizer {
 
             let parsed: LLMTableResponse | null = null;
             try {
-                parsed = cleanAndParseJSON<LLMTableResponse>(content);
+                parsed = CleanAndParseJSON<LLMTableResponse>(content);
             } catch (err) {
                 lastError = `JSON parse threw: ${(err as Error).message}. Content prefix: ${content.slice(0, 200)}`;
                 if (attempt < maxRetries) continue;
@@ -158,7 +158,7 @@ export class TableNormalizer {
             }
 
             // Match the LLM's response entries back to input columns by name.
-            const byName = new Map(input.columns.map((c) => [c.column.toLowerCase(), c]));
+            const byName = new Map(input.columns.map((c) => [c.Column.toLowerCase(), c]));
             const normalized: NormalizedColumn[] = [];
             for (const entry of parsed.columns) {
                 if (!entry || typeof entry.column !== 'string') continue;
@@ -166,11 +166,11 @@ export class TableNormalizer {
                 if (!inputCol) continue; // LLM hallucinated a column name; skip
                 normalized.push({
                     ...inputCol,
-                    conceptName: entry.conceptName ?? '',
-                    normalizationStrategy: entry.normalizationStrategy ?? 'LowerCaseTrim',
-                    customNormalizationExpression: sanitizePlaceholder(entry.customNormalizationExpression),
-                    normalizedDescription: entry.normalizedDescription ?? '',
-                    isUsefulOrganicKey: !!entry.isUsefulOrganicKey,
+                    ConceptName: entry.conceptName ?? '',
+                    NormalizationStrategy: entry.normalizationStrategy ?? 'LowerCaseTrim',
+                    CustomNormalizationExpression: sanitizePlaceholder(entry.customNormalizationExpression),
+                    NormalizedDescription: entry.normalizedDescription ?? '',
+                    IsUsefulOrganicKey: !!entry.isUsefulOrganicKey,
                     confidence: clamp01(entry.confidence),
                     reasoning: entry.reasoning ?? '',
                 });
@@ -180,13 +180,25 @@ export class TableNormalizer {
         return { normalized: [], tokens: cumTokens, errorMessage: lastError || 'unknown failure after retries' };
     }
 
+    /** @deprecated Use {@link NormalizeTable}. */
+    public async normalizeTable(
+        input: TableNormalizationInput,
+        maxRetries = 2,
+    ): Promise<{
+        normalized: NormalizedColumn[];
+        tokens: { total: number; input: number; output: number };
+        errorMessage?: string;
+    }> {
+      return this.NormalizeTable(input, maxRetries);
+    }
+
     /** Batch normalize many tables with bounded concurrency. */
-    public async normalizeAll(
+    public async NormalizeAll(
         tables: TableNormalizationInput[],
         opts: NormalizerOptions = {},
     ): Promise<NormalizationBatchResult> {
-        const concurrency = Math.max(1, opts.concurrency ?? 8);
-        const maxRetries = Math.max(0, opts.maxRetries ?? 2);
+        const concurrency = Math.max(1, opts.Concurrency ?? 8);
+        const maxRetries = Math.max(0, opts.MaxRetries ?? 2);
 
         const allNormalized: NormalizedColumn[] = [];
         let rejected = 0;
@@ -201,7 +213,7 @@ export class TableNormalizer {
             while (true) {
                 const idx = cursor++;
                 if (idx >= tables.length) return;
-                const r = await this.normalizeTable(tables[idx], maxRetries);
+                const r = await this.NormalizeTable(tables[idx], maxRetries);
                 total += r.tokens.total;
                 input += r.tokens.input;
                 output += r.tokens.output;
@@ -210,16 +222,24 @@ export class TableNormalizer {
                     errors++;
                 } else {
                     for (const n of r.normalized) {
-                        if (n.isUsefulOrganicKey) allNormalized.push(n);
+                        if (n.IsUsefulOrganicKey) allNormalized.push(n);
                         else rejected++;
                     }
                 }
                 completed++;
-                opts.onProgress?.(completed, tables.length);
+                opts.OnProgress?.(completed, tables.length);
             }
         });
         await Promise.all(runners);
-        return { normalized: allNormalized, rejected, errors, tokens: { total, input, output } };
+        return { Normalized: allNormalized, rejected, errors, tokens: { total, input, output } };
+    }
+
+    /** @deprecated Use {@link NormalizeAll}. */
+    public async normalizeAll(
+        tables: TableNormalizationInput[],
+        opts: NormalizerOptions = {},
+    ): Promise<NormalizationBatchResult> {
+      return this.NormalizeAll(tables, opts);
     }
 }
 
@@ -432,15 +452,15 @@ interface LLMTableResponse {
 function buildUserPrompt(input: TableNormalizationInput): string {
     const lines: string[] = [];
     lines.push(`Table: ${input.schema}.${input.table}`);
-    if (input.schemaDescription) lines.push(`Schema purpose: ${truncate(input.schemaDescription, 240)}`);
-    if (input.tableDescription) lines.push(`Table purpose:  ${truncate(input.tableDescription, 240)}`);
+    if (input.SchemaDescription) lines.push(`Schema purpose: ${truncate(input.SchemaDescription, 240)}`);
+    if (input.TableDescription) lines.push(`Table purpose:  ${truncate(input.TableDescription, 240)}`);
     lines.push('');
     lines.push(`Columns (${input.columns.length}):`);
     for (const c of input.columns) {
-        lines.push(`  - ${c.column}  [${c.dataType}]${c.isPrimaryKey ? '  PK' : ''}${c.participatesInFK ? `  FK${c.fkTarget ? `→${c.fkTarget.schema}.${c.fkTarget.table}.${c.fkTarget.column}` : ''}` : ''}`);
-        if (c.originalDescription) lines.push(`      description: ${truncate(c.originalDescription, 240)}`);
-        if (c.sampleValues && c.sampleValues.length > 0) {
-            const samples = c.sampleValues
+        lines.push(`  - ${c.Column}  [${c.dataType}]${c.isPrimaryKey ? '  PK' : ''}${c.ParticipatesInFK ? `  FK${c.FkTarget ? `→${c.FkTarget.schema}.${c.FkTarget.table}.${c.FkTarget.column}` : ''}` : ''}`);
+        if (c.OriginalDescription) lines.push(`      description: ${truncate(c.OriginalDescription, 240)}`);
+        if (c.SampleValues && c.SampleValues.length > 0) {
+            const samples = c.SampleValues
                 .slice(0, 5)
                 .map((v) => JSON.stringify(truncate(String(v), 80)))
                 .join(', ');

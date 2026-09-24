@@ -17,22 +17,22 @@ import { ColumnDefinition, DatabaseDocumentation, ForeignKeyReference, TableDefi
 
 /** OrderLine → Order → Contact: the spoke reaches the hub's organic key in two hops. */
 const path: BridgePath = {
-  spokeSchema: 'sales',
-  spokeTable: 'OrderLine',
-  hubSchema: 'sales',
-  hubTable: 'Contact',
-  hubKeyField: 'emailAddress',
-  hops: [
+  SpokeSchema: 'sales',
+  SpokeTable: 'OrderLine',
+  HubSchema: 'sales',
+  HubTable: 'Contact',
+  HubKeyField: 'emailAddress',
+  Hops: [
     { fromSchema: 'sales', fromTable: 'OrderLine', fromColumn: 'orderId', toSchema: 'sales', toTable: 'Order', toColumn: 'id', kind: 'hard' },
     { fromSchema: 'sales', fromTable: 'Order', fromColumn: 'contactId', toSchema: 'sales', toTable: 'Contact', toColumn: 'id', kind: 'hard' },
   ],
-  pathLength: 2,
-  pathConfidence: 1,
+  PathLength: 2,
+  PathConfidence: 1,
 };
 
 describe('generateBridgeView — identifier quoting per provider', () => {
   it('keeps the SQL Server bracket form by default', () => {
-    const { sql } = generateBridgeView(path, 'id');
+    const { Sql: sql } = generateBridgeView(path, 'id');
     expect(sql).toBe(
       [
         'SELECT',
@@ -46,7 +46,7 @@ describe('generateBridgeView — identifier quoting per provider', () => {
   });
 
   it('double-quotes every identifier on PostgreSQL, preserving mixed case', () => {
-    const { sql } = generateBridgeView(path, 'id', { provider: 'postgresql' });
+    const { Sql: sql } = generateBridgeView(path, 'id', { provider: 'postgresql' });
     expect(sql).toBe(
       [
         'SELECT',
@@ -63,26 +63,26 @@ describe('generateBridgeView — identifier quoting per provider', () => {
   it('treats an explicitly undefined provider as the SQL Server default', () => {
     // Callers thread an optional provider through as `{ provider }`; spreading that explicit
     // undefined over the defaults must not leave the quoter without a platform.
-    expect(generateBridgeView(path, 'id', { provider: undefined }).sql).toContain('FROM [sales].[OrderLine] spoke');
+    expect(generateBridgeView(path, 'id', { provider: undefined }).Sql).toContain('FROM [sales].[OrderLine] spoke');
   });
 
   it('uses backticks on MySQL', () => {
-    const { sql } = generateBridgeView(path, 'id', { provider: 'mysql' });
+    const { Sql: sql } = generateBridgeView(path, 'id', { provider: 'mysql' });
     expect(sql).toContain('FROM `sales`.`OrderLine` spoke');
     expect(sql).toContain('hub.`emailAddress` AS `emailAddress`');
   });
 
   it('doubles the closing delimiter inside a name for each dialect', () => {
-    const odd: BridgePath = { ...path, hubKeyField: 'e]"`mail' };
-    expect(generateBridgeView(odd, 'id').sql).toContain('hub.[e]]"`mail]');
-    expect(generateBridgeView(odd, 'id', { provider: 'postgresql' }).sql).toContain('hub."e]""`mail"');
-    expect(generateBridgeView(odd, 'id', { provider: 'mysql' }).sql).toContain('hub.`e]"``mail`');
+    const odd: BridgePath = { ...path, HubKeyField: 'e]"`mail' };
+    expect(generateBridgeView(odd, 'id').Sql).toContain('hub.[e]]"`mail]');
+    expect(generateBridgeView(odd, 'id', { provider: 'postgresql' }).Sql).toContain('hub."e]""`mail"');
+    expect(generateBridgeView(odd, 'id', { provider: 'mysql' }).Sql).toContain('hub.`e]"``mail`');
   });
 
   it('never includes a view header — CodeGen supplies the platform DDL', () => {
     const providers: BridgeViewProvider[] = ['sqlserver', 'postgresql', 'mysql'];
     for (const provider of providers) {
-      expect(generateBridgeView(path, 'id', { provider }).sql).toMatch(/^SELECT\n/);
+      expect(generateBridgeView(path, 'id', { provider }).Sql).toMatch(/^SELECT\n/);
     }
   });
 });
@@ -149,9 +149,9 @@ describe('detectTransitiveBridges — bridge SQL dialect', () => {
 
   function spokeSQL(provider?: BridgeViewProvider): string {
     const findings = detectTransitiveBridges([emailCluster], edges, state, { provider });
-    const finding = findings.find((f) => f.spokeTable === 'OrderLine');
+    const finding = findings.find((f) => f.SpokeTable === 'OrderLine');
     expect(finding).toBeDefined();
-    return finding!.view.sql;
+    return finding!.View.Sql;
   }
 
   it('writes the bridge body in PostgreSQL syntax when the analyzed database is PostgreSQL', () => {

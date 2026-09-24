@@ -5,7 +5,7 @@ import { ComponentRef } from '@angular/core';
 import { renderComponentFixture, query, queryAll, text, attr, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { TreeComponent } from './tree.component';
-import { createDefaultTreeNode, TreeNode } from '../models/tree-types';
+import { CreateDefaultTreeNode, TreeNode } from '../models/tree-types';
 import { AfterNodeClickEventArgs } from '../events/tree-events';
 
 /**
@@ -27,10 +27,10 @@ function renderTree(options: { inputs?: Record<string, unknown>; setup?: (i: Tre
 }
 
 function branch(partial: Partial<TreeNode>): TreeNode {
-  return createDefaultTreeNode({ Type: 'branch', ...partial });
+  return CreateDefaultTreeNode({ Type: 'branch', ...partial });
 }
 function leaf(partial: Partial<TreeNode>): TreeNode {
-  return createDefaultTreeNode({ Type: 'leaf', ...partial });
+  return CreateDefaultTreeNode({ Type: 'leaf', ...partial });
 }
 
 describe('TreeComponent (DOM)', () => {

@@ -10,7 +10,7 @@ import { HarnessProcess, HarnessProcessSpec, SandboxExecutor } from './SandboxEx
  * harness itself, and the Docker provider spawns `docker exec`. Only the argv differs, so the
  * process plumbing lives here once rather than in each provider.
  */
-export function wrapChildProcess(child: ChildProcessWithoutNullStreams): HarnessProcess {
+export function WrapChildProcess(child: ChildProcessWithoutNullStreams): HarnessProcess {
     return {
         Stdout: readLines(child.stdout),
         Stderr: readLines(child.stderr),
@@ -30,6 +30,11 @@ export function wrapChildProcess(child: ChildProcessWithoutNullStreams): Harness
             }
         },
     };
+}
+
+/** @deprecated Use {@link WrapChildProcess}. */
+export function wrapChildProcess(child: ChildProcessWithoutNullStreams): HarnessProcess {
+    return WrapChildProcess(child);
 }
 
 /** Frames a stream into complete lines. */
@@ -85,6 +90,6 @@ export class ChildProcessExecutor implements SandboxExecutor {
             env: { ...this.baseEnvironment(), ...spec.Environment },
             signal: spec.CancellationToken,
         });
-        return wrapChildProcess(child);
+        return WrapChildProcess(child);
     }
 }

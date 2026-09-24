@@ -530,7 +530,7 @@ export class ComponentRunner {
   /**
    * Lint component code before execution
    */
-  async lintComponent(
+  async LintComponent(
     componentCode: string, 
     componentName: string,
     componentSpec?: any,
@@ -556,7 +556,19 @@ export class ComponentRunner {
     };
   }
 
-  async executeComponent(options: ComponentExecutionOptions): Promise<ComponentExecutionResult> {
+  /** @deprecated Use {@link LintComponent}. */
+  async lintComponent(
+    componentCode: string, 
+    componentName: string,
+    componentSpec?: any,
+    isRootComponent?: boolean,
+    contextUser?: UserInfo,
+    options?: any
+  ): Promise<{ violations: Violation[]; hasErrors: boolean }> {
+    return this.LintComponent(componentCode, componentName, componentSpec, isRootComponent, contextUser, options);
+  }
+
+  async ExecuteComponent(options: ComponentExecutionOptions): Promise<ComponentExecutionResult> {
     const startTime = Date.now();
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -1224,6 +1236,10 @@ export class ComponentRunner {
               this.state = { hasError: false, error: null };
             }
             
+            // React reads this static into a local and calls it UNBOUND
+            // (`var f = fiber.type.getDerivedStateFromError; f(error)`), so a stub
+            // that forwards through `this` throws before the capture below can run —
+            // the harness would then miss the user component's error entirely.
             static getDerivedStateFromError(error: any) {
               // Capture the actual error message IMMEDIATELY
               (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
@@ -1801,6 +1817,11 @@ export class ComponentRunner {
         }
       }
     }
+  }
+
+  /** @deprecated Use {@link ExecuteComponent}. */
+  async executeComponent(options: ComponentExecutionOptions): Promise<ComponentExecutionResult> {
+    return this.ExecuteComponent(options);
   }
 
   /**
@@ -2958,7 +2979,12 @@ export class ComponentRunner {
       const VectorService = (window as any).MJReactRuntime?.SimpleVectorService || 
                            class { 
                              // Stub implementation if not available
-                             cosineSimilarity(_a: number[], _b: number[]): number { return 0; }
+                             CosineSimilarity(_a: number[], _b: number[]): number { return 0; }
+
+                             /** @deprecated Use {@link CosineSimilarity}. */
+                             cosineSimilarity(_a: number[], _b: number[]): number {
+                               return this.CosineSimilarity(_a, _b);
+                             }
                            };
       
       (window as any).__mjUtilities = {

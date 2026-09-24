@@ -79,7 +79,7 @@ const METRIC_ALIASES: Record<string, PSMetricKey> = {
 
 export const PS_FEATURE_DOMINANCE_THRESHOLD = 0.6;
 
-export function humanizeFeatureName(name: string): string {
+export function HumanizeFeatureName(name: string): string {
   if (!name) return '';
   return name
     .replace(/^Is([A-Z])/, '$1')
@@ -89,7 +89,12 @@ export function humanizeFeatureName(name: string): string {
     .replace(/\b[a-z]/g, (c) => c.toUpperCase());
 }
 
-export function parseMetrics(json: string | null | undefined): PSMetricMap {
+/** @deprecated Use {@link HumanizeFeatureName}. */
+export function humanizeFeatureName(name: string): string {
+  return HumanizeFeatureName(name);
+}
+
+export function ParseMetrics(json: string | null | undefined): PSMetricMap {
   if (!json) return {};
   let parsed: unknown;
   try {
@@ -102,19 +107,29 @@ export function parseMetrics(json: string | null | undefined): PSMetricMap {
   for (const [rawKey, rawVal] of Object.entries(parsed as Record<string, unknown>)) {
     const value = typeof rawVal === 'number' && Number.isFinite(rawVal) ? rawVal : null;
     if (value == null) continue;
-    const canonical = canonicalMetricKey(rawKey);
+    const canonical = CanonicalMetricKey(rawKey);
     if (canonical && out[canonical] == null) out[canonical] = value;
   }
   return out;
 }
 
-export function canonicalMetricKey(rawKey: string): PSMetricKey | null {
+/** @deprecated Use {@link ParseMetrics}. */
+export function parseMetrics(json: string | null | undefined): PSMetricMap {
+  return ParseMetrics(json);
+}
+
+export function CanonicalMetricKey(rawKey: string): PSMetricKey | null {
   const exact = PS_KNOWN_METRIC_KEYS.find((k) => k === rawKey);
   if (exact) return exact;
   return METRIC_ALIASES[rawKey.trim().toLowerCase()] ?? null;
 }
 
-export function formatMetricValue(key: PSMetricKey | string, val: number): string {
+/** @deprecated Use {@link CanonicalMetricKey}. */
+export function canonicalMetricKey(rawKey: string): PSMetricKey | null {
+  return CanonicalMetricKey(rawKey);
+}
+
+export function FormatMetricValue(key: PSMetricKey | string, val: number): string {
   if (!Number.isFinite(val)) return '—';
   switch (key) {
     case 'AUC':
@@ -133,12 +148,17 @@ export function formatMetricValue(key: PSMetricKey | string, val: number): strin
   }
 }
 
-export function primaryModelScore(
+/** @deprecated Use {@link FormatMetricValue}. */
+export function formatMetricValue(key: PSMetricKey | string, val: number): string {
+  return FormatMetricValue(key, val);
+}
+
+export function PrimaryModelScore(
   model: { Metrics?: string | null; HoldoutMetrics?: string | null; ProblemType?: string | null },
 ): { key: PSMetricKey; label: string; value: number } | null {
   const isReg = (model.ProblemType ?? '').toLowerCase() === 'regression';
-  const holdout = parseMetrics(model.HoldoutMetrics);
-  const train = parseMetrics(model.Metrics);
+  const holdout = ParseMetrics(model.HoldoutMetrics);
+  const train = ParseMetrics(model.Metrics);
 
   if (isReg) {
     for (const k of ['R2', 'RMSE', 'MAE'] as const) {
@@ -158,7 +178,14 @@ export function primaryModelScore(
   return null;
 }
 
-export function metricsToDisplay(metrics: PSMetricMap, options: { excludeAuc?: boolean } = {}): PSMetricDisplay[] {
+/** @deprecated Use {@link PrimaryModelScore}. */
+export function primaryModelScore(
+  model: { Metrics?: string | null; HoldoutMetrics?: string | null; ProblemType?: string | null },
+): { key: PSMetricKey; label: string; value: number } | null {
+  return PrimaryModelScore(model);
+}
+
+export function MetricsToDisplay(metrics: PSMetricMap, options: { excludeAuc?: boolean } = {}): PSMetricDisplay[] {
   const out: PSMetricDisplay[] = [];
   for (const k of PS_KNOWN_METRIC_KEYS) {
     if (options.excludeAuc && k === 'AUC') continue;
@@ -167,7 +194,7 @@ export function metricsToDisplay(metrics: PSMetricMap, options: { excludeAuc?: b
       out.push({
         key: k,
         label: METRIC_LABELS[k] ?? k,
-        value: formatMetricValue(k, v),
+        value: FormatMetricValue(k, v),
         raw: v,
       });
     }
@@ -175,7 +202,12 @@ export function metricsToDisplay(metrics: PSMetricMap, options: { excludeAuc?: b
   return out;
 }
 
-export function parseFeatureImportance(raw: string | null | undefined, topN: number = 6): PSFeatureBar[] {
+/** @deprecated Use {@link MetricsToDisplay}. */
+export function metricsToDisplay(metrics: PSMetricMap, options: { excludeAuc?: boolean } = {}): PSMetricDisplay[] {
+  return MetricsToDisplay(metrics, options);
+}
+
+export function ParseFeatureImportance(raw: string | null | undefined, topN: number = 6): PSFeatureBar[] {
   if (!raw) return [];
   let parsed: unknown;
   try {
@@ -218,16 +250,26 @@ export function parseFeatureImportance(raw: string | null | undefined, topN: num
   }));
 }
 
-export function maxFeatureImportance(raw: string | null | undefined): number | null {
-  const bars = parseFeatureImportance(raw, 1);
+/** @deprecated Use {@link ParseFeatureImportance}. */
+export function parseFeatureImportance(raw: string | null | undefined, topN: number = 6): PSFeatureBar[] {
+  return ParseFeatureImportance(raw, topN);
+}
+
+export function MaxFeatureImportance(raw: string | null | undefined): number | null {
+  const bars = ParseFeatureImportance(raw, 1);
   if (bars.length === 0) return null;
   const num = parseFloat(bars[0].value);
   return Number.isFinite(num) ? num : null;
 }
 
-export function overfitGap(model: { Metrics?: string | null; HoldoutMetrics?: string | null }): number | null {
-  const train = parseMetrics(model.Metrics);
-  const holdout = parseMetrics(model.HoldoutMetrics);
+/** @deprecated Use {@link MaxFeatureImportance}. */
+export function maxFeatureImportance(raw: string | null | undefined): number | null {
+  return MaxFeatureImportance(raw);
+}
+
+export function OverfitGap(model: { Metrics?: string | null; HoldoutMetrics?: string | null }): number | null {
+  const train = ParseMetrics(model.Metrics);
+  const holdout = ParseMetrics(model.HoldoutMetrics);
   if (train.AUC != null && holdout.AUC != null) {
     return train.AUC - holdout.AUC;
   }
@@ -235,4 +277,9 @@ export function overfitGap(model: { Metrics?: string | null; HoldoutMetrics?: st
     return train.R2 - holdout.R2;
   }
   return null;
+}
+
+/** @deprecated Use {@link OverfitGap}. */
+export function overfitGap(model: { Metrics?: string | null; HoldoutMetrics?: string | null }): number | null {
+  return OverfitGap(model);
 }

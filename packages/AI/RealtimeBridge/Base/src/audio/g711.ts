@@ -99,12 +99,17 @@ function decodeSample(muLawByte: number): number {
  * @param mulaw The μ-law bytes (one byte per sample, e.g. a Twilio Media Streams payload).
  * @returns An `Int16Array` of the decoded linear samples (same length as the input).
  */
-export function muLawToPcm16(mulaw: Uint8Array): Int16Array {
+export function MuLawToPcm16(mulaw: Uint8Array): Int16Array {
     const out = new Int16Array(mulaw.length);
     for (let i = 0; i < mulaw.length; i++) {
         out[i] = decodeSample(mulaw[i]);
     }
     return out;
+}
+
+/** @deprecated Use {@link MuLawToPcm16}. */
+export function muLawToPcm16(mulaw: Uint8Array): Int16Array {
+    return MuLawToPcm16(mulaw);
 }
 
 /**
@@ -113,12 +118,17 @@ export function muLawToPcm16(mulaw: Uint8Array): Int16Array {
  * @param pcm The signed 16-bit linear samples to encode.
  * @returns A `Uint8Array` of μ-law codes (one byte per sample).
  */
-export function pcm16ToMuLaw(pcm: Int16Array): Uint8Array {
+export function Pcm16ToMuLaw(pcm: Int16Array): Uint8Array {
     const out = new Uint8Array(pcm.length);
     for (let i = 0; i < pcm.length; i++) {
         out[i] = encodeSample(pcm[i]);
     }
     return out;
+}
+
+/** @deprecated Use {@link Pcm16ToMuLaw}. */
+export function pcm16ToMuLaw(pcm: Int16Array): Uint8Array {
+    return Pcm16ToMuLaw(pcm);
 }
 
 /**
@@ -128,11 +138,16 @@ export function pcm16ToMuLaw(pcm: Int16Array): Uint8Array {
  * @param mulaw An `ArrayBuffer` of μ-law bytes (one byte per sample).
  * @returns An `ArrayBuffer` of little-endian signed-16-bit PCM (2 bytes per sample).
  */
-export function muLawToPcm16Buffer(mulaw: ArrayBuffer): ArrayBuffer {
-    const samples = muLawToPcm16(new Uint8Array(mulaw));
+export function MuLawToPcm16Buffer(mulaw: ArrayBuffer): ArrayBuffer {
+    const samples = MuLawToPcm16(new Uint8Array(mulaw));
     // Int16Array view over a fresh buffer is little-endian on every platform JS targets in practice;
     // build it explicitly via DataView so the byte order is correct regardless of host endianness.
     return pcm16ToLittleEndianBuffer(samples);
+}
+
+/** @deprecated Use {@link MuLawToPcm16Buffer}. */
+export function muLawToPcm16Buffer(mulaw: ArrayBuffer): ArrayBuffer {
+    return MuLawToPcm16Buffer(mulaw);
 }
 
 /**
@@ -143,12 +158,17 @@ export function muLawToPcm16Buffer(mulaw: ArrayBuffer): ArrayBuffer {
  *   byte is ignored).
  * @returns An `ArrayBuffer` of μ-law bytes (one byte per sample).
  */
-export function pcm16ToMuLawBuffer(pcm: ArrayBuffer): ArrayBuffer {
+export function Pcm16ToMuLawBuffer(pcm: ArrayBuffer): ArrayBuffer {
     const samples = littleEndianBufferToPcm16(pcm);
-    const mulaw = pcm16ToMuLaw(samples);
+    const mulaw = Pcm16ToMuLaw(samples);
     const buffer = new ArrayBuffer(mulaw.length);
     new Uint8Array(buffer).set(mulaw);
     return buffer;
+}
+
+/** @deprecated Use {@link Pcm16ToMuLawBuffer}. */
+export function pcm16ToMuLawBuffer(pcm: ArrayBuffer): ArrayBuffer {
+    return Pcm16ToMuLawBuffer(pcm);
 }
 
 /** Reads a little-endian PCM16 `ArrayBuffer` into an `Int16Array` (drops a trailing odd byte). */

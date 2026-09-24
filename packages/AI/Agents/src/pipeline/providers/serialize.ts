@@ -13,7 +13,7 @@ import { PipeValue } from '../pipeline.types';
  * name; none → the Message. String values that are clearly JSON are parsed so structured operators
  * work on real action payloads (e.g. a RunView that returns its rows as a JSON string).
  */
-export function structureActionResult(result: ActionResult): PipeValue {
+export function StructureActionResult(result: ActionResult): PipeValue {
     const outputs = (result.Params ?? []).filter((p) => p.Type === 'Output');
     if (outputs.length === 1) {
         return coerceMaybeJson(outputs[0].Value);
@@ -27,13 +27,18 @@ export function structureActionResult(result: ActionResult): PipeValue {
     return result.Message ?? null;
 }
 
+/** @deprecated Use {@link StructureActionResult}. */
+export function structureActionResult(result: ActionResult): PipeValue {
+    return StructureActionResult(result);
+}
+
 /**
  * Structure arbitrary artifact-tool `data` as a value. `get_full` returns a
  * `{ content, encoding, sizeBytes }` envelope — unwrap it to the real content (parsing JSON text)
  * so a `get_full` source composes directly with the operators (`where`/`select`/…). Other tools
  * return their data directly.
  */
-export function structureArtifactData(data: unknown): PipeValue {
+export function StructureArtifactData(data: unknown): PipeValue {
     if (isGetFullEnvelope(data)) {
         const env = data as { content: unknown; encoding?: string };
         if (typeof env.content === 'string' && env.encoding !== 'base64') {
@@ -46,6 +51,11 @@ export function structureArtifactData(data: unknown): PipeValue {
         return rows;
     }
     return coerceMaybeJson(data);
+}
+
+/** @deprecated Use {@link StructureArtifactData}. */
+export function structureArtifactData(data: unknown): PipeValue {
+    return StructureArtifactData(data);
 }
 
 /**

@@ -13,7 +13,7 @@
  * Returns the CSS styles for OAuth UI pages.
  * Uses MemberJunction brand colors and modern design patterns.
  */
-export function getOAuthStyles(): string {
+export function GetOAuthStyles(): string {
   return `
     :root {
       /* MemberJunction brand colors - matching MJExplorer */
@@ -767,4 +767,9 @@ export function getOAuthStyles(): string {
       }
     }
   `;
+}
+
+/** @deprecated Use {@link GetOAuthStyles}. */
+export function getOAuthStyles(): string {
+  return GetOAuthStyles();
 }

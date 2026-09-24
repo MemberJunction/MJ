@@ -2,7 +2,7 @@ import { SQLParser } from '@memberjunction/sql-parser';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
 import type { ParamRole } from './materializationAnalysis';
 import {
-    COMPARISON_OPS, isObject, nodeType, isLiteralNode, columnName, isAllLiteralBag,
+    COMPARISON_OPS, IsObject, NodeType, IsLiteralNode, ColumnName, IsAllLiteralBag,
     type AstNode, type AstObject,
 } from './materializationSqlAst';
 
@@ -48,20 +48,20 @@ export type FilterKind = 'scalar' | 'list';
 /** The verifier's verdict for a single parameter. */
 export interface VerifiedParamRole {
     /** Proven role under the §10 asymmetric-risk posture. */
-    role: ParamRole;
+    role: ParamRole;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** For `RowFilter`: the single column the value filters on (as written in the predicate). */
-    filterColumn?: string;
+    filterColumn?: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /**
      * For `RowFilter`: the comparison operator, **normalized to the `column <op> value` reading** — if the
      * predicate was written `value < column`, the operator is flipped (`>`) so read-time injection can emit
      * `column > value` faithfully. This is the Phase-2 metadata that `filterColumn` alone cannot supply
      * (`Score >= x` vs `Score = x` are otherwise indistinguishable). Absent for non-RowFilter verdicts.
      */
-    filterOperator?: FilterOperator;
+    filterOperator?: FilterOperator;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** For `RowFilter`: whether the value is a single scalar or an `IN`/`NOT IN` list bag. */
-    filterKind?: FilterKind;
+    filterKind?: FilterKind;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Human-readable justification (logged; never guessed past). */
-    reason: string;
+    reason: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Flips a scalar comparison operator so a `value <op> column` predicate reads canonically as `column <flip> value`. */
@@ -145,7 +145,7 @@ function bagVaries(a: AstObject, b: AstObject): boolean {
     for (let i = 0; i < av.length; i++) {
         const ai = av[i];
         const bi = bv[i];
-        if (isObject(ai) && isObject(bi) && ai.value !== bi.value) {
+        if (IsObject(ai) && IsObject(bi) && ai.value !== bi.value) {
             return true;
         }
     }
@@ -162,21 +162,21 @@ function walk(a: AstNode, b: AstNode, ctx: WalkCtx, sites: VaryingSite[]): boole
         return false;
     }
     // Scalars (operator names, aliases, flags). A mismatch here is a structural difference.
-    if (!isObject(a) && !Array.isArray(a)) {
+    if (!IsObject(a) && !Array.isArray(a)) {
         return a === b;
     }
     if (Array.isArray(a) || Array.isArray(b)) {
         return walkArray(a, b, ctx, sites);
     }
     // Both objects from here on.
-    if (isLiteralNode(a) && isLiteralNode(b)) {
+    if (IsLiteralNode(a) && IsLiteralNode(b)) {
         return walkLiteral(a as AstObject, b as AstObject, ctx, sites);
     }
-    if (isAllLiteralBag(a) && isAllLiteralBag(b)) {
+    if (IsAllLiteralBag(a) && IsAllLiteralBag(b)) {
         return walkBag(a as AstObject, b as AstObject, ctx, sites);
     }
-    const ta = nodeType(a);
-    const tb = nodeType(b);
+    const ta = NodeType(a);
+    const tb = NodeType(b);
     if (ta !== tb) {
         return false; // shape change (e.g., column_ref → number, select → binary_expr)
     }
@@ -262,8 +262,8 @@ function walkBinaryExpr(a: AstObject, b: AstObject, ctx: WalkCtx, sites: Varying
 
 function walkComparison(a: AstObject, b: AstObject, ctx: WalkCtx, sites: VaryingSite[]): boolean {
     const op = typeof a.operator === 'string' ? a.operator : null;
-    const leftCol = columnName(a.left);
-    const rightCol = columnName(a.right);
+    const leftCol = ColumnName(a.left);
+    const rightCol = ColumnName(a.right);
     let leftCtx = plainOperandCtx(ctx);
     let rightCtx = plainOperandCtx(ctx);
     // Attach the predicate column + operator to the *value* side only when exactly one side is a plain
@@ -293,7 +293,7 @@ function walkObjectKeys(a: AstObject, b: AstObject, childCtx: WalkCtx, sites: Va
 
 /** True for a single plain SELECT that can host a clean top-level WHERE (not a set-op / SELECT INTO). */
 function isSimpleSelect(node: AstNode): boolean {
-    if (nodeType(node) !== 'select' || !isObject(node)) {
+    if (NodeType(node) !== 'select' || !IsObject(node)) {
         return false;
     }
     if (node.set_op != null || node._next != null) {
@@ -302,7 +302,7 @@ function isSimpleSelect(node: AstNode): boolean {
     // node-sql-parser always emits `into: { position: null }` on a plain SELECT; only a real
     // SELECT ... INTO sets `into.position`. Treat only the latter as disqualifying.
     const into = node.into;
-    if (isObject(into) && into.position != null) {
+    if (IsObject(into) && into.position != null) {
         return false;
     }
     return true;
@@ -310,10 +310,10 @@ function isSimpleSelect(node: AstNode): boolean {
 
 /** Diffs the two statement roots, applying top-WHERE context only to a simple SELECT's `where`. */
 function walkRoot(a: AstNode, b: AstNode, sites: VaryingSite[]): boolean {
-    if (nodeType(a) !== nodeType(b)) {
+    if (NodeType(a) !== NodeType(b)) {
         return false;
     }
-    if (isSimpleSelect(a) && isSimpleSelect(b) && isObject(a) && isObject(b)) {
+    if (isSimpleSelect(a) && isSimpleSelect(b) && IsObject(a) && IsObject(b)) {
         const keys = new Set<string>([...Object.keys(a), ...Object.keys(b)]);
         keys.delete('loc');
         let ok = true;
@@ -372,7 +372,7 @@ function diffVariantPair(sqlA: string, sqlB: string, dialect: SQLParserDialect):
  *  - varying literals touch >1 column → `Unbounded` (multi-column not modeled in v1).
  *  - else → `RowFilter` on the single bound column.
  */
-export function verifyParamRole(variants: string[], dialect: SQLParserDialect): VerifiedParamRole {
+export function VerifyParamRole(variants: string[], dialect: SQLParserDialect): VerifiedParamRole {
     if (!variants || variants.length < 2) {
         return { role: 'Unbounded', reason: 'need at least 2 distinct rendered variants to verify a parameter' };
     }
@@ -423,4 +423,9 @@ export function verifyParamRole(variants: string[], dialect: SQLParserDialect): 
     const filterOperator = [...distinctOps][0] as FilterOperator;
     const filterKind = [...distinctKinds][0];
     return { role: 'RowFilter', filterColumn, filterOperator, filterKind, reason: `value varies only a literal at a clean top-level WHERE predicate "${filterColumn} ${filterOperator} <value>" (${filterKind})` };
+}
+
+/** @deprecated Use {@link VerifyParamRole}. */
+export function verifyParamRole(variants: string[], dialect: SQLParserDialect): VerifiedParamRole {
+    return VerifyParamRole(variants, dialect);
 }

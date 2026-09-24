@@ -12,7 +12,7 @@ export class JSONParamHelper {
      * @param paramName - The base parameter name (without String suffix)
      * @returns The parsed value or undefined
      */
-    static getJSONParam(params: RunActionParams, paramName: string): any {
+    static GetJSONParam(params: RunActionParams, paramName: string): any {
         // First check for the object parameter
         const objectParam = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.toLowerCase());
         if (objectParam?.Value !== undefined && objectParam?.Value !== null) {
@@ -32,6 +32,11 @@ export class JSONParamHelper {
         return undefined;
     }
 
+    /** @deprecated Use {@link GetJSONParam}. */
+    static getJSONParam(params: RunActionParams, paramName: string): any {
+        return this.GetJSONParam(params, paramName);
+    }
+
     /**
      * Check if a JSON parameter exists (either as object or string)
      * 
@@ -39,7 +44,7 @@ export class JSONParamHelper {
      * @param paramName - The base parameter name (without String suffix)
      * @returns True if the parameter exists
      */
-    static hasJSONParam(params: RunActionParams, paramName: string): boolean {
+    static HasJSONParam(params: RunActionParams, paramName: string): boolean {
         const objectParam = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.toLowerCase());
         if (objectParam?.Value !== undefined && objectParam?.Value !== null) {
             return true;
@@ -47,6 +52,11 @@ export class JSONParamHelper {
 
         const stringParam = params.Params.find(p => p.Name.trim().toLowerCase() === `${paramName}string`.toLowerCase());
         return stringParam?.Value !== undefined && stringParam?.Value !== null;
+    }
+
+    /** @deprecated Use {@link HasJSONParam}. */
+    static hasJSONParam(params: RunActionParams, paramName: string): boolean {
+        return this.HasJSONParam(params, paramName);
     }
 
     /**
@@ -57,11 +67,16 @@ export class JSONParamHelper {
      * @returns The parsed value
      * @throws Error if parameter is not found
      */
-    static getRequiredJSONParam(params: RunActionParams, paramName: string): any {
-        const value = this.getJSONParam(params, paramName);
+    static GetRequiredJSONParam(params: RunActionParams, paramName: string): any {
+        const value = this.GetJSONParam(params, paramName);
         if (value === undefined) {
             throw new Error(`${paramName} parameter is required (can be provided as ${paramName} object or ${paramName}String)`);
         }
         return value;
+    }
+
+    /** @deprecated Use {@link GetRequiredJSONParam}. */
+    static getRequiredJSONParam(params: RunActionParams, paramName: string): any {
+        return this.GetRequiredJSONParam(params, paramName);
     }
 }
