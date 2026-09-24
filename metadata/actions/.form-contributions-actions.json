@@ -1,0 +1,1092 @@
+[
+  {
+    "fields": {
+      "Name": "Create Form Contribution",
+      "Description": "Persists a net-new form contribution: lints the ComponentSpec (must declare componentRole='form-panel' and a formContribution block), inserts a Type='Widget' Component v1.0.0, and creates a Pending, User-scoped MJ: Entity Form Contributions row at the declared slot with any related-grid claim or replacesSectionKey. Returns ALREADY_EXISTS when the caller already has an Active or Pending row with the same ContributionKey — use 'Modify Form Contribution' then. Scope is always clamped to User.",
+      "DriverClass": "__CreateFormContribution",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-puzzle-piece",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Parent form entity, e.g. 'MJ_BizApps_Common: People'.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "34924179-3252-499B-98B1-9A8CEF565172"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human label for the contribution row (version lineage label).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "FB76443F-058B-4AF6-9221-500B2FFF718E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Spec",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "ComponentSpec with componentRole='form-panel', location='embedded', code, and a formContribution block { slot, presentation, title, contributionKey?, relatedEntity?, relatedJoinField?, replacesSectionKey?, replacesSectionKeys?, replacesFieldNames?, inSectionKey?, sectionPosition? ('start' | 'end'), inclusion?, chromeGroup?, sortKey?, icon?, configuration? }. Make at most one claim: a related grid, one section (replacesSectionKey), several sections of one tab (replacesSectionKeys), fields of one section (replacesFieldNames), or a place inside a section without replacing anything (inSectionKey).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "9B6DF5C7-0D23-4658-8178-D86D90624E85"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional description.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "599DDEC9-A704-4D74-86B1-847AB0C41022"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Notes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional authoring notes.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "80211C97-7954-4BA3-A329-6170FC7BC228"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Precedence",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional last-wins precedence against a compiled contribution with the same key. The apply flow passes incumbent + 1 after the user confirms. Default 0.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "85B6D273-E0FE-4C80-981A-820B0947D55F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContributionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New MJ: Entity Form Contributions row ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BEC9AFFB-BD39-4C6D-B89A-373A1E6B6FC6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New MJ: Components row ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "42986290-6123-41E7-BD7D-45B10C852F6F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Always 1.0.0 for Create.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8794A3AB-77D8-4DB3-9B21-B6E92938A080"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Component and contribution row created (Pending)."
+          },
+          "primaryKey": {
+            "ID": "0736BA4E-4AFB-4659-A59C-49459A206757"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "EntityName, Name or Spec missing."
+          },
+          "primaryKey": {
+            "ID": "1AA74A24-24E7-4447-81BA-E462B977CED1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "Description": "EntityName is not registered."
+          },
+          "primaryKey": {
+            "ID": "E7C097A9-E2EF-4C1E-A6BA-394E851F7C4F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RELATED_ENTITY_NOT_FOUND",
+            "Description": "formContribution.relatedEntity is not registered."
+          },
+          "primaryKey": {
+            "ID": "6F2CEF38-193D-49A9-B441-310127049FFE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LINT_FAILED",
+            "Description": "Spec is not a form panel or its code failed linting; message carries the violations."
+          },
+          "primaryKey": {
+            "ID": "01E70F95-CDD6-4136-8F05-786EA238F1C0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ALREADY_EXISTS",
+            "Description": "An Active or Pending User-scope row with this ContributionKey exists; use Modify."
+          },
+          "primaryKey": {
+            "ID": "15BA73AC-C47E-42DB-B5B6-F72CD0A2DBAD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CONTRIBUTION_KEY",
+            "Description": "The contribution key contains characters outside [A-Za-z0-9:._- ] or exceeds 256 characters."
+          },
+          "primaryKey": {
+            "ID": "A18EF481-202D-4FCE-9499-C50A6456A4FC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERSIST_FAILED",
+            "Description": "Component or contribution insert failed."
+          },
+          "primaryKey": {
+            "ID": "5E427A9F-587A-4814-9D64-8EC45A4D67BE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "E8A5D1AC-F87D-4406-AE83-6C1C5E52F6BC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "No ContextUser."
+          },
+          "primaryKey": {
+            "ID": "5B783448-4635-4718-A6FC-2251A7791EA7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "Description": "Unhandled exception."
+          },
+          "primaryKey": {
+            "ID": "B4B049A3-2B99-430A-8171-035E8C71590E"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BC96E7C5-C69D-413B-BCE5-515F9C567EB4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Form Contribution",
+      "Description": "Refines an existing form contribution. Pending source + in-place (default) overwrites the draft; Active source (default minor) or any explicit patch/minor/major bump inserts a new Pending Component + row and leaves the source alone (a Pending source being bumped is demoted to Inactive). Refreshes the row's slot/key/claims/title from the spec's formContribution block. Always writes User scope. Caller must own the source row.",
+      "DriverClass": "__ModifyFormContribution",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-pen-to-square",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContributionID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "MJ: Entity Form Contributions row to modify.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "86993EB6-7DC0-414E-A2EA-AF85CC4BE540"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.152Z",
+            "checksum": "5f31faf05629e22945c973f13a5c46d6873447fc56556cec51055f47183a64e0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Spec",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The new form-panel ComponentSpec.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "84631700-02F2-46BD-BAFE-C3E16166E948"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Notes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Appended to the row's Notes.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C879335E-D3DB-4A73-88DF-8723EC250E00"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VersionBumpKind",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "in-place | patch | minor | major. Default: Pending→in-place, Active→minor, Inactive→patch.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1FC1DCA3-5BC2-4A91-9A67-EE935E7FD3EE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Component that now holds the spec.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C2817A19-BA66-4FBF-8B03-23510C37F932"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.221Z",
+            "checksum": "92663ec12bdf938f2f3db089ac4e919888b3ef9d654aba8b4c08f5b696303ad1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resulting component version.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C026E339-35F5-4EEE-AD44-20DE27C4D46C"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.276Z",
+            "checksum": "b22bc5c31274b1f8ac40e37f3e7c5f81450b2bb9b2f4586f200d9fa613cf4456"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Mode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "in-place | new-version.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2361DD98-9F36-40BD-A791-0CBA4E566E42"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.327Z",
+            "checksum": "bd5ed6b05a22868dabbea8a54cca5cf2dd10180dcafccc98ec72a7a01452b056"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Modified."
+          },
+          "primaryKey": {
+            "ID": "2B8C7812-5E68-4E73-9C8A-DF7F1A1D8AEC"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.369Z",
+            "checksum": "b3de8e9ba5d54e8d6522c262017258b19e712c5a3a8ee3763273c1f06456e2d2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "ContributionID or Spec missing."
+          },
+          "primaryKey": {
+            "ID": "A768CEE9-E102-4B77-9095-B8607C7D25B3"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.407Z",
+            "checksum": "2a64aa43cab0f82c498feba6226df21375b2b31f902092d88a90c1730f4250b5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETER",
+            "Description": "VersionBumpKind not recognized."
+          },
+          "primaryKey": {
+            "ID": "F14C6372-C8BD-48EB-A523-3DD7CAFC5D64"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.447Z",
+            "checksum": "7beb705016c2cf54a37019f7aef9a313c2bad64db2ce88eceba454a4629adff3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONTRIBUTION_NOT_FOUND",
+            "Description": "No such row."
+          },
+          "primaryKey": {
+            "ID": "86FFEFAB-F79C-40E4-AED6-3BD94D9E0202"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.484Z",
+            "checksum": "846fa7a5629ff83ab6c5cc0be78f5cfc615850cff9144d3108ff7a10451fd826"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPONENT_NOT_FOUND",
+            "Description": "Row points at a missing Component."
+          },
+          "primaryKey": {
+            "ID": "24BA36A3-B927-4A87-AEBC-0C10A9BAFC6C"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.519Z",
+            "checksum": "58886bf350fe1d92fed98ffae0dc77e0564ec3e92fbd710197300ecfa647c182"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RELATED_ENTITY_NOT_FOUND",
+            "Description": "formContribution.relatedEntity is not registered."
+          },
+          "primaryKey": {
+            "ID": "707A2F34-9453-4718-8BA9-83AE83E2C406"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.555Z",
+            "checksum": "4764101f5085580dc37787f8b3d31512dc5d75b1ec8b0de19e8717c333b56ca2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CONTRIBUTION_KEY",
+            "Description": "The contribution key contains characters outside [A-Za-z0-9:._- ] or exceeds 256 characters."
+          },
+          "primaryKey": {
+            "ID": "3E96BB2F-E271-45AA-87A4-D71F5B48BFF8"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.593Z",
+            "checksum": "cc7a711e0a20faba5baac093de99bf24ed5586fd57c873b7d793f3275a74ab26"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "Description": "Caller does not own the row."
+          },
+          "primaryKey": {
+            "ID": "D8E56214-283B-4267-B697-50A02728E384"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.629Z",
+            "checksum": "28c6291519c9700f22fbc4bca970edd54b1a06038eb70f419adc8cd89d4eff54"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_BUMP_FOR_STATUS",
+            "Description": "in-place requested on a non-Pending row."
+          },
+          "primaryKey": {
+            "ID": "9EA525F8-DD99-4B01-B25E-DD8A12F4FC92"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.666Z",
+            "checksum": "c525b25f5eb0406d16b7d569b2485890efe2471315b5b66b743c42e29a986a0c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LINT_FAILED",
+            "Description": "Spec failed the form-panel lint."
+          },
+          "primaryKey": {
+            "ID": "E061A3D6-6B9B-4701-9403-DA087F4797A9"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.702Z",
+            "checksum": "db7e4052cb838e83b69491c3bd0d6cd11399482dac069f2cf057baeccaf98a24"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERSIST_FAILED",
+            "Description": "A save failed."
+          },
+          "primaryKey": {
+            "ID": "0F6C6980-A009-43B1-B2E6-2D1B03849AC8"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.738Z",
+            "checksum": "cffe99ded6ca65ca085670703f0a6f3ceb4bf576c7c96ecadfac2e787c3e53d0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "6152CF8A-44A9-42EC-9BA3-811A4E590710"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.774Z",
+            "checksum": "2c124706e73e64c50d2f816c17104ddfb18a65ffaa318ef514a9b25d4455ec48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "No ContextUser."
+          },
+          "primaryKey": {
+            "ID": "D7801E0E-4D73-4C4D-8507-4E31027784B8"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.812Z",
+            "checksum": "11c289fa7fbe21070cabeb653d990afbc570c65091babc418046a76d96fb04f4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "Description": "Unhandled exception."
+          },
+          "primaryKey": {
+            "ID": "2A4C8265-6D27-432D-83E2-3F26DC317685"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.850Z",
+            "checksum": "a849a839cc7b9e5961d8ea8396c48c05d1b59beac0ccdc5c28dc56a20af68ade"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "600EF724-0C04-40B2-AAE9-0870602933F0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Activate Form Contribution Version",
+      "Description": "Promotes a Pending form contribution to Active and demotes the Active sibling sharing its EntityID, ContributionKey and scope tuple (Component statuses follow: Published / Deprecated). Idempotent on an Active row; NOT_PENDING on an Inactive row. Caller must own the row.",
+      "DriverClass": "__ActivateFormContributionVersion",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-toggle-on",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContributionID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Pending row to activate.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A2D7B6AA-A1F0-431A-A2DF-0451E85E81DB"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.194Z",
+            "checksum": "b467fd0239568869f66ccadfd9f74e69e543259968881cce9bdb7bb41aeaf66a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Component now Published.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E0AB616D-6CF5-45DA-8338-BC1EDC5B3E1C"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.254Z",
+            "checksum": "a8706eb1fd1d66d4dcfa3742b22db82f601e69141bd20f176eafbbc0b2264f21"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousActiveContributionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Demoted sibling, or null.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4A936D4A-F1E9-402A-8F17-E50DB64E6467"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.305Z",
+            "checksum": "941317fa133ee3a6671d06fc3456191287f85c09da9fb7f0e146575b0c9296e8"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Activated (or already Active)."
+          },
+          "primaryKey": {
+            "ID": "FDF98024-6596-46FC-91EE-05EB4D0F9A5B"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.347Z",
+            "checksum": "e2d8686e89bd03efc4fc58bed763f39518f4fe7d2cc143ecd0ef81a74ed933c3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "ContributionID missing."
+          },
+          "primaryKey": {
+            "ID": "BE50569F-0657-4ACB-A4E3-3744569ECDC2"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.385Z",
+            "checksum": "d9dc175ddc2ff99726bea05975c81a96499afb2b20d75d9663ac7fa2ad06dc48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CONTRIBUTION_NOT_FOUND",
+            "Description": "No such row."
+          },
+          "primaryKey": {
+            "ID": "FC8E34E8-32D6-4688-B64E-C6AB2EEEF2C1"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.423Z",
+            "checksum": "846fa7a5629ff83ab6c5cc0be78f5cfc615850cff9144d3108ff7a10451fd826"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "COMPONENT_NOT_FOUND",
+            "Description": "Row points at a missing Component."
+          },
+          "primaryKey": {
+            "ID": "AF7100BB-5886-435D-AAEA-04C3735209CC"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.458Z",
+            "checksum": "58886bf350fe1d92fed98ffae0dc77e0564ec3e92fbd710197300ecfa647c182"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_PENDING",
+            "Description": "Row is Inactive."
+          },
+          "primaryKey": {
+            "ID": "3FC694EC-E16A-4C3A-A36B-065C3FAED750"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.494Z",
+            "checksum": "15969e28e9816777c572f820729290f482db527151d026e7987f260a1001a791"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "Description": "Caller does not own the row."
+          },
+          "primaryKey": {
+            "ID": "605104B9-02D6-401E-938D-002E5CB63ED1"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.531Z",
+            "checksum": "28c6291519c9700f22fbc4bca970edd54b1a06038eb70f419adc8cd89d4eff54"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CONTRIBUTION_KEY",
+            "Description": "The row's stored ContributionKey is not a legal key."
+          },
+          "primaryKey": {
+            "ID": "CCBA73EE-3CA8-4264-889A-FDE875D35A06"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.567Z",
+            "checksum": "e06e818a800ad4917359ad31bd9d68da296b86c8914eb7691831a68c020cefb0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_FAILED",
+            "Description": "Sibling lookup failed."
+          },
+          "primaryKey": {
+            "ID": "8C77C728-7765-4E07-831C-8EBC0D96C311"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.604Z",
+            "checksum": "4473efbdbd690f147c952af95d3178a8e9d90ce1f350479a675ec4e9d97a56e9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERSIST_FAILED",
+            "Description": "A save failed."
+          },
+          "primaryKey": {
+            "ID": "6186FA60-F5DA-4EC9-8EAE-69C1DF744A06"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.640Z",
+            "checksum": "cffe99ded6ca65ca085670703f0a6f3ceb4bf576c7c96ecadfac2e787c3e53d0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "BEBCC760-C226-4D4E-9A46-5334E5ADA7FF"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.677Z",
+            "checksum": "2c124706e73e64c50d2f816c17104ddfb18a65ffaa318ef514a9b25d4455ec48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "No ContextUser."
+          },
+          "primaryKey": {
+            "ID": "6D618770-EE7A-4C6F-A870-8E8BDE981539"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.715Z",
+            "checksum": "11c289fa7fbe21070cabeb653d990afbc570c65091babc418046a76d96fb04f4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "Description": "Unhandled exception."
+          },
+          "primaryKey": {
+            "ID": "35C44D16-55D8-4846-A876-777E052A9530"
+          },
+          "sync": {
+            "lastModified": "2026-09-17T03:48:54.751Z",
+            "checksum": "a849a839cc7b9e5961d8ea8396c48c05d1b59beac0ccdc5c28dc56a20af68ade"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "95240E0E-8C5D-4F76-8920-2FA8C61C121A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Form Contributions For Entity",
+      "Description": "Read-only. Every MJ: Entity Form Contributions row applicable to the caller (User / Role / Global) for an entity, in every status, with component name and version. Apply flows use it to decide Create vs Modify; agents use it to see what already exists.",
+      "DriverClass": "__GetFormContributionsForEntity",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list-check",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Parent form entity.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DA7C5A4A-3774-4876-917D-DF203247850C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Result",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "{ EntityName, Contributions: [{ ContributionID, ComponentID, ComponentName, ComponentVersion, Name, Scope, Status, Precedence, Slot, ContributionKey, RelatedEntity, RelatedJoinField, ReplacesSectionKey, Inclusion, Presentation, Title }] }",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0E5FB7FB-D987-46B0-AF3D-3545A8798F7B"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Rows returned (possibly empty)."
+          },
+          "primaryKey": {
+            "ID": "6FA5D065-55D6-42C7-9EE0-84DD423489D4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "EntityName missing."
+          },
+          "primaryKey": {
+            "ID": "F9BBA10B-7DFF-43C8-B047-B14C3B8E55AC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "Description": "EntityName is not registered."
+          },
+          "primaryKey": {
+            "ID": "0BBFA64D-9AAE-4743-9392-1293FBBFF896"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_FAILED",
+            "Description": "RunView failed."
+          },
+          "primaryKey": {
+            "ID": "FCD62692-EE66-4501-AF5F-E07ACAB1F43D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "F373D7CC-B7C0-43DA-94C8-C7BDC6FBD6B6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "No ContextUser."
+          },
+          "primaryKey": {
+            "ID": "294A3C2C-9080-45DD-B74C-4E73BAD3A548"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "Description": "Unhandled exception."
+          },
+          "primaryKey": {
+            "ID": "0113D346-30D2-4D04-BF56-9C3ACE62926F"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D8FA7E0E-4682-4C10-AB5A-C06C929DB023"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Form Composition For Entity",
+      "Description": "Read-only server-side fallback for agents with no browser snapshot. Returns the metadata-derivable composition of an entity's form: field sections by CodeGen rule, DisplayInForm related grids with L1 inclusion, Active metadata contributions, and the L3 rule count. Compiled BaseFormPanel contributions are browser-only and are NOT included; prefer the client snapshot (AppContext.AdditionalContext.Form) when present.",
+      "DriverClass": "__GetFormCompositionForEntity",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-table-cells-large",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Parent form entity.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5C0CEBAB-B909-46BF-9648-517656FAB95D"
+          },
+          "sync": {
+            "lastModified": "2026-09-18T20:55:41.914Z",
+            "checksum": "f35ffa940f0036e35d8de6649c1890b1ecc6938c5b8491cd092fa4225bdeb60d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Result",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "{ Entity, Layout, Sections[], Related[], Contributions[], SlotsPresent[], ChromeRuleCount, Note } — the SkipFormContext shape.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1F086F29-4AF7-487C-8928-257D9D7BD923"
+          },
+          "sync": {
+            "lastModified": "2026-09-18T20:55:41.983Z",
+            "checksum": "1a2080907c3379ae9969a17b1c852fbf5b2301260888f8fb94591f75fe427464"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Composition returned."
+          },
+          "primaryKey": {
+            "ID": "0AA8375E-7F22-4BC5-9C58-A9A77711CBB5"
+          },
+          "sync": {
+            "lastModified": "2026-09-18T20:55:42.072Z",
+            "checksum": "60314e06071dee11ab938bf09cecf0361f2737e2ec67c92b79ac561d36ab3eae"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "Description": "EntityName missing."
+          },
+          "primaryKey": {
+            "ID": "6128D918-F870-49C7-944B-6E433FFEAD5E"
+          },
+          "sync": {
+            "lastModified": "2026-09-18T20:55:42.116Z",
+            "checksum": "7e6713d5d5e021f03035489e965e393db2e5d9df6c39a38ae391348a4738a0f3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "Description": "EntityName is not registered."
+          },
+          "primaryKey": {
+            "ID": "89C34F56-69C5-446D-A796-7DD048C0A40E"
+          },
+          "sync": {
+            "lastModified": "2026-09-18T20:55:42.158Z",
+            "checksum": "3b28dc4cfecc3ae33bc45db2cfd038edf449524e2e0190c74767362c7a5a1631"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_PROVIDER",
+            "Description": "No metadata provider configured."
+          },
+          "primaryKey": {
+            "ID": "3648ACF8-2926-47BA-9B29-C64C348A204B"
+          },
+          "sync": {
+            "lastModified": "2026-09-18T20:55:42.205Z",
+            "checksum": "2c124706e73e64c50d2f816c17104ddfb18a65ffaa318ef514a9b25d4455ec48"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_USER",
+            "Description": "No ContextUser."
+          },
+          "primaryKey": {
+            "ID": "A8F62B87-8494-495C-847E-15157E079974"
+          },
+          "sync": {
+            "lastModified": "2026-09-18T20:55:42.245Z",
+            "checksum": "11c289fa7fbe21070cabeb653d990afbc570c65091babc418046a76d96fb04f4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "Description": "Unhandled exception."
+          },
+          "primaryKey": {
+            "ID": "465E00A8-C279-47B5-9F2D-677315E98514"
+          },
+          "sync": {
+            "lastModified": "2026-09-18T20:55:42.290Z",
+            "checksum": "a849a839cc7b9e5961d8ea8396c48c05d1b59beac0ccdc5c28dc56a20af68ade"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B639D955-6739-4569-89DA-EAD7210F8731"
+    },
+    "sync": {
+      "lastModified": "2026-09-18T20:55:41.831Z",
+      "checksum": "42e318b716ee65e9f7448804c422e3d2b2625ffb98eabd34575900759f6be060"
+    }
+  }
+]

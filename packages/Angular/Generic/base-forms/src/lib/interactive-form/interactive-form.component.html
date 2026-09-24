@@ -28,6 +28,9 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <!-- No panel slots: a full custom entity form owns its body. The container still
+         supplies the toolbar and the stock related grids. -->
+
     @if (loadError) {
         <mj-alert Variant="error">{{ loadError }}</mj-alert>
     } @else if (componentSpec && formHostProps) {

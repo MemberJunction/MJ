@@ -333,6 +333,103 @@ Worked examples (Orders hero, Person tickets, Sales fill-in, competing headers):
 
 Related section keys use the same camelCase as CodeGen (`FormSectionCamelCase` / `RelatedEntitySectionKey`) so hide-baked and skip-baked hit the right panel.
 
+## Metadata contributions (React form panels)
+
+`BaseFormPanel` is the compiled path. The same slots also accept **rows**: a
+`MJ: Entity Form Contributions` row pointing at a `Type='Widget'` Component whose spec declares
+`componentRole: 'form-panel'`. No Angular, no build, no deployment.
+
+A row carries the same registration bag this document describes for the compiled metadata object —
+`Slot`, `SortKey`, `ContributionKey`, `RelatedEntityID` + `RelatedJoinField`, `ReplacesSectionKey`,
+`ReplacesFieldNames`, `Inclusion`, `ChromeGroup`, `Presentation` — plus `Title`, `Icon`, a free-form
+`Configuration` JSON blob handed to the component, and scope (`User` / `Role` / `Global`) with
+status (`Active` / `Pending` / `Inactive`).
+
+### What a contribution can stand in for
+
+Five kinds of claim, largest first. A contribution makes at most one of them — the database
+enforces that, because replacing a section and one field inside it describes two different panels.
+
+| Claim | Field on the row | What goes | Where the panel draws |
+|---|---|---|---|
+| A whole rail tab | `ReplacesSectionKey` = a rail key | every panel filed under that tab | as that tab |
+| One field section | `ReplacesSectionKey` = a section key | that section's card | where the card was |
+| Several field sections | `ReplacesSectionKeys` | those sections' cards | where the first of them was |
+| Fields in one section | `ReplacesFieldNames` | those inputs | at the top or bottom of that section |
+| A related grid | `RelatedEntityID` (+ `RelatedJoinField`) | the stock grid | as that grid's section |
+
+A contribution can also be **placed inside a section without replacing anything**: `InSectionKey`
+names the section and `SectionPosition` (`start` or `end`) says where in it. That counts as its
+claim, so it cannot be combined with the five above.
+
+`ReplacesSectionKeys` and `ReplacesFieldNames` are JSON arrays, the same shape as
+`FormChromeRule.JoinFields`. Every section in a `ReplacesSectionKeys` list must be in one tab, and
+every field in a `ReplacesFieldNames` list must belong to **one** section — the panel has one place
+to draw. One section is always stored in `ReplacesSectionKey`, never as a one-item list.
+
+A panel drawn inside a section — a field claim, or one placed with `InSectionKey` — is not the
+`Slot` on the row's to position: the section decides. `<mj-collapsible-panel>` hosts two
+`<mj-form-field-panel-slot>`s, one above its fields and one below, and each mounts the panels
+whose `SectionPosition` matches it (a field claim with no position draws at the start). Claimed
+fields stop rendering through `FormContext.claimedFieldNames`.
+
+**You do not need to do anything to support this.** `CollectFormContributionRegistrations` merges
+rows and class registrations into one list before the composer runs, so a compiled panel competes
+with a row on exactly the terms it competes with another compiled panel: same `contributionKey`,
+highest rank wins, and a compiled registration wins a tie.
+
+What a panel author should know:
+
+- **A compiled panel can make the same claims.** `replacesFieldNames` sits on the registration
+  metadata beside `replacesSectionKey`, and the slot host passes the whole bag to the panel as
+  `RegistrationMetadata`, which is what `BaseFormPanel.DisplayOrder` reads. Pass that getter as
+  `[Order]` on your own `mj-collapsible-panel` or the form draws your panel last whatever slot it
+  asked for.
+- **Your panel can be replaced by a row**, but only deliberately — the apply flow asks the user
+  before writing a row whose precedence exceeds an installed contribution's.
+- **`presentation: 'bare'`** is how both sources declare a hero: a strip that draws no collapsible
+  chrome and never becomes a rail item. Set it in your metadata bag rather than relying on the slot.
+- **A row's panel is React**, hosted by `InteractiveFormPanelComponent`. It receives
+  `FormPanelHostProps` — the record snapshot, entity metadata, permissions, and the contribution's
+  own key / slot / title / configuration — and reports validation back through the same
+  `BaseFormPanel.validate()` contract your panel implements.
+
+Rows are authored by an OpenApp under `metadata/entity-form-contributions/`, or by an agent through
+the `Create` / `Modify` / `Activate Form Contribution Version` actions. See
+[Forms Architecture §7c Scenario I](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md) for the full
+picture.
+
+## Who sees a panel
+
+A contribution row, and a full custom form (`MJ: Entity Form Overrides`), is for one of three
+audiences: one user (`Scope='User'`), one role (`Role`), or everyone (`Global`). Compiled panels
+have no row, so they are for everyone who has the package installed.
+
+| Who | What they can do |
+|---|---|
+| Any user | Add, edit, switch off and remove their own personal items. Hide anything shared with them, for themselves only. |
+| Holder of `Manage Form Defaults` | Also publish an item to a role or to everyone, change a shared item's audience, and remove it. |
+| Nobody | Write another user's personal item. |
+
+The rule lives in `MJEntityFormContributionEntityServer` and `MJEntityFormOverrideEntityServer`
+(`@memberjunction/core-entities-server`), so it holds for every write path: the drawer, Form
+Builder, agent actions, `mj sync` and a direct `BaseEntity.Save()`. `UserCanManageFormDefaults`
+(`@memberjunction/core-entities`) is the same check, for a UI that wants to hide what the server
+would refuse. The grant goes to `Developer` and `Integration` by default. An `Owner` user counts as a holder.
+
+**Publishing moves the row, it does not copy it.** The item that was live for that audience under
+the same `contributionKey` is set `Inactive` in the same transaction, so the audience never sees
+two. A full form has no key, so the form that was live for that audience is set aside instead.
+
+**Hiding is per user and changes no row.** `panel-hides.ts` keeps the hidden keys in the
+`mj.formPanels.hidden.<entity>` user setting, and the collector drops those registrations after
+the merge. A compiled panel is hidden by its `contributionKey`, or by `class:<Registration.Key>`
+when it has none, so give a compiled panel a key if its users may want to hide it. A user's own
+personal row is never dropped by a hide; they switch it off instead.
+
+The "Manage this form" drawer (`panel-manager/`) shows all of this in one list, grouped as
+yours, shared with you, hidden and fixed.
+
 ## Implementation files
 
 | File                                                                                  | Role                                                          |

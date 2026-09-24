@@ -13,6 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RoleInfo } from '@memberjunction/core';
+import { UserCanManageFormDefaults } from '@memberjunction/core-entities';
 
 /**
  * Scope of an EntityFormOverride row. Mirrors the DB CHECK constraint
@@ -101,6 +102,15 @@ export interface FormOverrideDialogResult {
 
             <div class="field">
                 <label>Scope</label>
+                @if (!CanPublish) {
+                    <!-- Choosing who else sees a form is a grant, not a default. Without it the
+                         audience is shown, not offered, so there is no control that would fail. -->
+                    <p class="scope-readonly">{{ ScopeLabel }}</p>
+                    <small class="muted">
+                        Showing a form to a role or to everyone needs the Manage Form Defaults
+                        authorization.
+                    </small>
+                } @else {
                 <div class="scope-options">
                     <label class="radio">
                         <input type="radio" name="scope" [checked]="Scope === 'User'" (change)="OnScopeChange('User')" />
@@ -123,6 +133,7 @@ export interface FormOverrideDialogResult {
                         Everyone (Global)
                     </label>
                 </div>
+                }
             </div>
 
             <div class="field-row">
@@ -181,6 +192,7 @@ export interface FormOverrideDialogResult {
         .status-options { display: flex; gap: 16px; padding-top: 6px; }
         .radio { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
         .role-picker { margin-left: 24px; }
+        .scope-readonly { margin: 0; font-size: 13px; }
         .error { color: var(--mj-status-error-text, #b91c1c); background: var(--mj-status-error-bg, #fee2e2); padding: 8px 12px; border-radius: 4px; font-size: 13px; margin-top: 8px; }
         .btn { padding: 8px 16px; border: 1px solid var(--mj-border-default, #e0e0e0); border-radius: 4px; background: var(--mj-bg-surface, #fff); color: var(--mj-text-primary, #111); font-size: 14px; cursor: pointer; }
         .btn-primary { background: var(--mj-brand-primary, #5B4FE9); color: #fff; border-color: var(--mj-brand-primary, #5B4FE9); font-weight: 500; }
@@ -269,6 +281,27 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     /** @deprecated Use {@link AvailableRoles}. */
     public set availableRoles(value: RoleInfo[]) {
         this.AvailableRoles = value;
+    }
+
+    /**
+     * Whether this user may show a form to a role or to everyone.
+     *
+     * Decides only what the dialog offers. The server-side entity subclass enforces the same rule
+     * on the save, so a dialog that offered it anyway would still have the write refused.
+     */
+    public get CanPublish(): boolean {
+        const provider = this.ProviderToUse;
+        return UserCanManageFormDefaults(provider?.CurrentUser, provider);
+    }
+
+    /** The current audience in words, for a user who cannot change it. */
+    public get ScopeLabel(): string {
+        if (this.Scope === 'Global') return 'Everyone';
+        if (this.Scope === 'Role') {
+            const role = this.availableRoles.find((r) => r.ID === this.RoleID)?.Name;
+            return role ? `${role} role` : 'A role';
+        }
+        return 'Me only';
     }
 
     private readonly cd = inject(ChangeDetectorRef);

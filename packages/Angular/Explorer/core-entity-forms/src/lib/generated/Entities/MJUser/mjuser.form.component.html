@@ -2787,6 +2787,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Entity Form Contributions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityFormContributions"
+        SectionName="Entity Form Contributions"
+        Icon="fa fa-puzzle-piece"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityFormContributions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Form Contributions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Form Contributions','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJEntityFormContributions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityFormContributions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Skills Section -->
     <mj-collapsible-panel
         SectionKey="mJAISkills"

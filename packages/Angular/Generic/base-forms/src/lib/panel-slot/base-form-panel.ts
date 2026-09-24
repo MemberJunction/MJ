@@ -3,6 +3,8 @@ import { BaseEntity, ValidationResult, type FormInclusion } from '@memberjunctio
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { FormToolbarItemConfig, FormToolbarItemKey } from '../types/form-toolbar-item';
+import { ANCHORED_SLOTS, SlotAnchorSectionKey, SlotDisplayOrder } from './slot-order';
+import { ReplacedSectionKeys } from './form-contribution';
 
 /**
  * Well-known slot positions where panels can be injected into a generated
@@ -87,6 +89,21 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      */
     replacesSectionKey?: string;
     /**
+     * Fields this contribution stands in for, all within one section. The panel renders at
+     * the top of that section and the named fields are not drawn. Use instead of
+     * `replacesSectionKey` when the panel replaces some inputs rather than a whole group.
+     */
+    replacesFieldNames?: readonly string[];
+    /**
+     * Sections this contribution stands in for, all within one tab. It draws in the place of the
+     * first of them in the form's order, and the others are not drawn.
+     */
+    replacesSectionKeys?: readonly string[];
+    /** A section this contribution draws inside, replacing nothing. */
+    inSectionKey?: string;
+    /** Where inside its section it draws, for `inSectionKey` and field claims. Absent means the start. */
+    sectionPosition?: 'start' | 'end';
+    /**
      * Pin this contribution to a chrome bucket instead of its own rail item.
      * `'details'` — leftover own-fields group. `'more'` — overflow folder.
      */
@@ -98,6 +115,16 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * L3 `MJ: Form Chrome Rules` still wins. `chromeGroup` still merges.
      */
     inclusion?: FormInclusion;
+
+    /**
+     * `'bare'` = a hero strip that draws no collapsible chrome and is never a rail item.
+     * `'panel'` (default) = a normal collapsible section.
+     *
+     * This is how a compiled panel declares hero-ness, and it is the same field a
+     * `MJ: Entity Form Contributions` row carries, so the container treats both sources
+     * identically instead of guessing from a contribution key.
+     */
+    presentation?: 'panel' | 'bare';
 
     /**
      * Open a NEW (unsaved) record on this contribution instead of the first first-class group.
@@ -126,7 +153,7 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
  * Lifecycle hooks: standard Angular `ngOnInit` / `ngOnDestroy` work as usual.
  * `Record` is guaranteed to be set before the first change-detection pass.
  *
- * Optional `validate()` returns a synchronous validation result; the parent
+ * Optional `Validate()` returns a synchronous validation result; the parent
  * `BaseFormComponent.Save()` path will surface it via the existing validation
  * pipeline when called. Panels that don't validate anything beyond what the
  * record itself does can leave this method off.
@@ -149,6 +176,59 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
     @Input() FormContext?: FormContext;
 
     /**
+     * The registration this panel was mounted from. Set by the slot host.
+     *
+     * A panel reads its own slot from here, which is the only way it can know where in the
+     * form it was asked to sit: the class registration is looked up by the host, not by the
+     * panel, so nothing else on the instance carries it.
+     */
+    @Input() RegistrationMetadata?: FormPanelRegistrationMetadata;
+
+    /**
+     * The slot element the panel was mounted in, set by the slot host. It is where the panel is
+     * on the page, which {@link DisplayOrder} reads its neighbours from.
+     */
+    public SlotElement: HTMLElement | null = null;
+
+    /**
+     * The registration a subclass answers from. Overridden where the panel holds its
+     * registration somewhere other than {@link RegistrationMetadata}.
+     */
+    protected get PanelMetadata(): FormPanelRegistrationMetadata | undefined {
+        return this.RegistrationMetadata;
+    }
+
+    /**
+     * Flex order for the panel's own `mj-collapsible-panel`, to pass as `[Order]`.
+     *
+     * A panel's section key is not in the form's section order, so without this the form
+     * falls back to the section count and draws every panel at the bottom whatever slot it
+     * asked for. A panel standing in for a section takes that section's place instead, so
+     * replacing something does not also move it.
+     *
+     * A slot between the form's blocks takes the order of the section beside it on the page,
+     * so the panel draws where the slot is (see {@link SlotAnchorSectionKey}). The very top and
+     * the very bottom keep fixed bands: the bottom has to stay below the More folder.
+     */
+    public get DisplayOrder(): number {
+        const metadata = this.PanelMetadata;
+        // Standing in for several sections, it takes the place of whichever comes first.
+        const places = ReplacedSectionKeys(metadata)
+            .map((key) => this.FormComponent?.getSectionOrderIndex?.(key))
+            .filter((index): index is number => index != null);
+        if (places.length > 0) return Math.min(...places);
+        return this.anchoredOrder() ?? SlotDisplayOrder(metadata?.slot ?? 'after-everything', metadata?.sortKey ?? 0);
+    }
+
+    /** The order of the section beside the slot this panel is in, or null when there is none to read. */
+    private anchoredOrder(): number | null {
+        const slot = this.SlotElement?.getAttribute('data-form-slot') as FormPanelSlot | null | undefined;
+        if (!slot || !ANCHORED_SLOTS.has(slot) || !this.FormComponent?.getSectionDisplayOrder) return null;
+        const anchor = SlotAnchorSectionKey(this.SlotElement!);
+        return anchor ? this.FormComponent.getSectionDisplayOrder(anchor.Key) : null;
+    }
+
+    /**
      * Convenience getter for read-only / edit-mode rendering. Falls back to
      * `false` when the panel is shown outside a `BaseFormComponent` host (e.g.,
      * a dashboard quick-edit dialog reusing the same panel — see the
@@ -164,8 +244,12 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
      * `ValidationErrorInfo` entries to surface field-level errors. The default
      * implementation reports valid (panels that don't need extra validation
      * can leave this method off).
+     *
+     * May return a Promise: a panel that validates against the server has no
+     * synchronous answer. `BaseFormComponent.ValidateAsync()` awaits it, which is
+     * what Save() calls.
      */
-    public Validate(): ValidationResult {
+    public Validate(): ValidationResult | Promise<ValidationResult> {
         // Inline construction — ValidationResult is a class in @memberjunction/core,
         // not a plain interface, so callers can construct via `new`.
         const result = new ValidationResult();
@@ -174,8 +258,22 @@ export abstract class BaseFormPanel<TRecord extends BaseEntity = BaseEntity> {
     }
 
     /** @deprecated Use {@link Validate}. */
-    public validate(): ValidationResult {
+    public validate(): ValidationResult | Promise<ValidationResult> {
         return this.Validate();
+    }
+
+    /**
+     * The panel's validity as already known, with no awaiting and no work.
+     *
+     * Synchronous callers (`BaseFormComponent.Validate()`) use this; it reports valid
+     * unless the panel has cached a failing result from an earlier validation. A panel
+     * whose `Validate()` is asynchronous should override this to return its last
+     * reported state so synchronous callers are not simply blind to it.
+     */
+    public LastKnownValidation(): ValidationResult {
+        const result = new ValidationResult();
+        result.Success = true;
+        return result;
     }
 
     /**

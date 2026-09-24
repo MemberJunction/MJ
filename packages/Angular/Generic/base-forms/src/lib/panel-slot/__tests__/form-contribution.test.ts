@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import type { FormPanelRegistrationMetadata, FormPanelSlot } from '../base-form-panel';
 import {
     CollapseFormPanelRegistrations,
+    ContributionClaimedFieldNames,
     ContributionHiddenSectionKeys,
+    FormContributionEntityMatches,
     FormSectionCamelCase,
     RelatedContributionKey,
     RelatedEntitySectionKey,
@@ -11,6 +13,9 @@ import {
     StripJoinFieldBrackets,
     type FormContributionRegistration,
     type FormContributionRelationship,
+    ReplacedSectionKeys,
+    ContributionDrawsInSection,
+    ContributionSectionPosition,
 } from '../form-contribution';
 
 const PEOPLE = 'MJ_BizApps_Common: People';
@@ -397,5 +402,117 @@ describe('StripJoinFieldBrackets', () => {
     it('trims and unwraps', () => {
         expect(StripJoinFieldBrackets(' [PersonID] ')).toBe('PersonID');
         expect(StripJoinFieldBrackets(undefined)).toBe('');
+    });
+});
+
+describe('CollapseFormPanelRegistrations — source tie-break', () => {
+    const meta: FormPanelRegistrationMetadata = {
+        entity: PEOPLE,
+        slot: 'before-fields' as FormPanelSlot,
+        contributionKey: 'header',
+    };
+
+    it('keeps the compiled registration when a metadata row ties on precedence', () => {
+        const compiled = { Priority: 0, Metadata: meta, Source: 'class' as const };
+        const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([row, compiled])).toEqual([compiled]);
+        expect(CollapseFormPanelRegistrations([compiled, row])).toEqual([compiled]);
+    });
+
+    it('lets a metadata row win only with strictly higher precedence', () => {
+        const compiled = { Priority: 0, Metadata: meta, Source: 'class' as const };
+        const row = { Priority: 1, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([compiled, row])).toEqual([row]);
+    });
+
+    it('treats a registration with no Source as compiled', () => {
+        const legacy = { Priority: 0, Metadata: meta };
+        const row = { Priority: 0, Metadata: meta, Source: 'metadata' as const, ComponentID: 'c1' };
+        expect(CollapseFormPanelRegistrations([row, legacy])).toEqual([legacy]);
+    });
+});
+
+describe('FormContributionEntityMatches', () => {
+    it('is exact, case-sensitive equality or the wildcard', () => {
+        expect(FormContributionEntityMatches(PEOPLE, PEOPLE)).toBe(true);
+        expect(FormContributionEntityMatches('*', PEOPLE)).toBe(true);
+        expect(FormContributionEntityMatches('People', PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches('mj_bizapps_common: people', PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches(null, PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches(undefined, PEOPLE)).toBe(false);
+        expect(FormContributionEntityMatches('', PEOPLE)).toBe(false);
+    });
+
+    it('does not strip the MJ: prefix — that fuzzy match is what this replaces', () => {
+        expect(FormContributionEntityMatches('Users', 'MJ: Users')).toBe(false);
+        expect(FormContributionEntityMatches('MJ: Users', 'MJ: Users')).toBe(true);
+    });
+});
+
+/**
+ * Field claims are reported apart from section claims because they hide different things:
+ * a section key removes a whole card, a field name removes one input from inside one. A
+ * function that merged them would take a section off the form for a claim on one field.
+ */
+describe('ContributionClaimedFieldNames', () => {
+    it('names every field a winner stands in for', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldNames: ['LifetimeValue'] })],
+        );
+        expect(names).toEqual(['LifetimeValue']);
+    });
+
+    it('names a whole group of fields, de-duplicated across winners', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [
+                reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'addr',
+                      replacesFieldNames: ['Street', 'City', 'PostalCode'] }),
+                reg({ entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv',
+                      replacesFieldNames: ['City', 'LifetimeValue'] }),
+            ],
+        );
+        expect(names).toEqual(['Street', 'City', 'PostalCode', 'LifetimeValue']);
+    });
+
+    it('reports nothing for a contribution that claims a section instead', () => {
+        const names = ContributionClaimedFieldNames(
+            PEOPLE, [], [],
+            [reg({ entity: PEOPLE, slot: 'before-fields', contributionKey: 'hero', replacesSectionKey: 'personalIdentity' })],
+        );
+        expect(names).toEqual([]);
+    });
+
+    it('does not hide the section the claimed field lives in', () => {
+        const registrations = [reg({
+            entity: PEOPLE, slot: 'after-fields', contributionKey: 'ltv', replacesFieldNames: ['LifetimeValue'],
+        })];
+        expect(ContributionHiddenSectionKeys(PEOPLE, [], [], registrations)).toEqual([]);
+    });
+});
+
+describe('Section claims on registrations', () => {
+    it('lists every replaced section once, the single key first', () => {
+        expect(ReplacedSectionKeys({ replacesSectionKey: 'a', replacesSectionKeys: ['b', 'a', ' c '] })).toEqual(['a', 'b', 'c']);
+        expect(ReplacedSectionKeys({})).toEqual([]);
+    });
+
+    it('treats a panel placed in a section like a field claim: the section hosts it', () => {
+        expect(ContributionDrawsInSection({ inSectionKey: 'profile' })).toBe(true);
+        expect(ContributionDrawsInSection({ replacesFieldNames: ['Name'] })).toBe(true);
+        expect(ContributionDrawsInSection({})).toBe(false);
+    });
+
+    it('draws at the start of its section unless it asks for the end', () => {
+        expect(ContributionSectionPosition({})).toBe('start');
+        expect(ContributionSectionPosition({ sectionPosition: 'end' })).toBe('end');
+    });
+
+    it('hides every section a winner stands in for', () => {
+        const keys = ContributionHiddenSectionKeys('E', [], [], [
+            { Priority: 0, Metadata: { entity: 'E', slot: 'before-fields', contributionKey: 'k', replacesSectionKeys: ['identity', 'profile'] } },
+        ]);
+        expect(keys).toEqual(['identity', 'profile']);
     });
 });

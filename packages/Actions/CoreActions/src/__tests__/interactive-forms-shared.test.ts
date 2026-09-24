@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+    ApplySectionClaims,
     BumpMinorVersion,
     BumpPatchVersion,
     BumpMajorVersion,
@@ -222,5 +223,52 @@ describe('getNumberParam', () => {
         expect(GetNumberParam(p('garbage'), 'TargetVersionSequence')).toBeNull();
         expect(GetNumberParam(p(null), 'TargetVersionSequence')).toBeNull();
         expect(GetNumberParam(p(undefined), 'TargetVersionSequence')).toBeNull();
+    });
+});
+
+/**
+ * A spec's section claims land in three columns. One section always goes in the single-key
+ * column, whichever field the spec used, and a position is kept only for a panel drawn inside a
+ * section — the only case the column's CHECK constraint allows.
+ */
+describe('ApplySectionClaims', () => {
+    const blank = () => ({ ReplacesSectionKey: null as string | null, ReplacesSectionKeys: null as string | null,
+        InSectionKey: null as string | null, SectionPosition: null as 'start' | 'end' | null });
+
+    it('stores several replaced sections as a JSON array', () => {
+        const row = blank();
+        ApplySectionClaims(row, { replacesSectionKeys: ['identity', 'profile'] });
+        expect(row).toEqual({ ReplacesSectionKey: null, ReplacesSectionKeys: '["identity","profile"]', InSectionKey: null, SectionPosition: null });
+    });
+
+    it('stores one replaced section in the single-key column, from either field', () => {
+        const a = blank();
+        ApplySectionClaims(a, { replacesSectionKeys: ['identity'] });
+        const b = blank();
+        ApplySectionClaims(b, { replacesSectionKey: 'identity' });
+        expect(a).toEqual(b);
+        expect(a.ReplacesSectionKey).toBe('identity');
+        expect(a.ReplacesSectionKeys).toBeNull();
+    });
+
+    it('places a panel in a section at the position asked for', () => {
+        const row = blank();
+        ApplySectionClaims(row, { inSectionKey: 'identity', sectionPosition: 'end' });
+        expect(row).toMatchObject({ InSectionKey: 'identity', SectionPosition: 'end', ReplacesSectionKey: null });
+    });
+
+    it('keeps a position for a field claim, and drops it for anything not drawn inside a section', () => {
+        const fields = blank();
+        ApplySectionClaims(fields, { replacesFieldNames: ['Name'], sectionPosition: 'end' });
+        expect(fields.SectionPosition).toBe('end');
+        const slot = blank();
+        ApplySectionClaims(slot, { sectionPosition: 'end' });
+        expect(slot.SectionPosition).toBeNull();
+    });
+
+    it('clears claims a row had when the spec no longer makes them', () => {
+        const row = { ReplacesSectionKey: 'old', ReplacesSectionKeys: '["a","b"]', InSectionKey: 'x', SectionPosition: 'end' as const };
+        ApplySectionClaims(row, {});
+        expect(row).toEqual(blank());
     });
 });

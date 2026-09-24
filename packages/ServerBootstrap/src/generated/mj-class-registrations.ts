@@ -206,7 +206,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (418 classes)
+// @memberjunction/core-entities (419 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -429,6 +429,7 @@ import {
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1244,7 +1245,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (47 classes)
+// @memberjunction/core-entities-server (49 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1273,6 +1274,8 @@ import {
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJEntityFormContributionEntityServer,
+    MJEntityFormOverrideEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -1341,10 +1344,11 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (148 classes)
+// @memberjunction/core-actions (153 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -1365,6 +1369,7 @@ import {
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -1409,6 +1414,8 @@ import {
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
+    GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetObjectAction,
@@ -1435,6 +1442,7 @@ import {
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
@@ -1798,6 +1806,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1917,11 +1926,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSQLDialectEntity,
     MJScheduledJobEntity,
     MJScheduledJobRunEntity,
-    MJScheduledJobTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
@@ -2121,11 +2130,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferGetChannelsAction,
     BufferGetPendingPostsAction,
     BufferGetSentPostsAction,
-    BufferReorderQueueAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BufferReorderQueueAction,
     BufferSearchPostsAction,
     CreateVideoPostAction,
     FacebookBoostPostAction,
@@ -2325,11 +2334,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
@@ -2386,6 +2395,8 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJEntityFormContributionEntityServer,
+    MJEntityFormOverrideEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2430,6 +2441,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     WebSearchQueryServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -2450,6 +2462,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -2494,6 +2507,8 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
+    GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetObjectAction,
@@ -2520,8 +2535,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MoveObjectAction,
     OAuthFlowAction,
     ObjectExistsAction,
@@ -2530,10 +2550,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     PreviewDocumentAction,
     QRCodeAction,
     ReadRSSFeedAction,
@@ -2600,7 +2616,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1050;
+export const CLASS_REGISTRATIONS_COUNT = 1058;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

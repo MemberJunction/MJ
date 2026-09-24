@@ -9,7 +9,10 @@
  * (`angular-codegen.ts` `camelCase` + related-entity sectionKey). If they drift,
  * hide-baked and skip-baked miss and the user sees a double grid.
  */
+import type { ClassRegistration } from '@memberjunction/global';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { UUIDsEqual } from '@memberjunction/global';
+import type { MJEntityFormContributionEntity } from '@memberjunction/core-entities';
 import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 
 /** Minimum relationship shape the composer reads. Satisfied by EntityRelationshipInfo. */
@@ -22,9 +25,56 @@ export interface FormContributionRelationship {
     Sequence?: number | null;
 }
 
+/** Which of the two registration sources produced a contribution. */
+export type FormContributionRegistrationSource = 'class' | 'metadata';
+
 export interface FormContributionRegistration {
+    /**
+     * Rank within a `contributionKey` group, higher wins. For `'class'` registrations this
+     * is the ClassFactory registration priority; for `'metadata'` rows it is the row's
+     * `Precedence` column. Both mean the same thing here — higher wins — which is why one
+     * field carries both.
+     */
     Priority: number;
     Metadata: FormPanelRegistrationMetadata;
+
+    /** Omitted on legacy call sites, which are all compiled registrations. */
+    Source?: FormContributionRegistrationSource;
+
+    /** `MJ: Components.ID` the panel renders — metadata rows only. */
+    ComponentID?: string;
+
+    /** Parsed `Configuration` JSON for metadata rows. */
+    Configuration?: Record<string, unknown>;
+
+    Title?: string;
+    Icon?: string;
+    Presentation?: 'panel' | 'bare';
+
+    /** `MJ: Entity Form Contributions.ID` for metadata rows. */
+    RowID?: string;
+
+    /**
+     * Who a metadata row is for. Absent on compiled registrations, which apply to everyone the
+     * code puts them in front of. A `User` row a user can see is necessarily their own — the
+     * collector only returns personal rows for the current user.
+     */
+    Scope?: MJEntityFormContributionEntity['Scope'];
+
+    /** The ClassFactory registration for compiled panels — carries the component constructor. */
+    Registration?: ClassRegistration;
+
+    /**
+     * A panel the placement dialog is showing before it is saved. It draws its component when
+     * it carries one, else a placeholder. Only a form inside the dialog's preview sees one.
+     */
+    IsPreview?: boolean;
+
+    /**
+     * The component to render when it has not been saved yet, so there is no `ComponentID` to
+     * load. Only the placement preview sets it.
+     */
+    ComponentSpec?: ComponentSpec;
 }
 
 export interface ResolveFormContributionsInput {
@@ -50,8 +100,18 @@ export interface FormContributionWinner {
     RelatedJoinField?: string;
     /** Field/other section this registered winner asked to hide. */
     ReplacesSectionKey?: string;
+    /** Fields this registered winner stands in for, so they are not drawn. */
+    ReplacesFieldNames?: readonly string[];
+    /** Further sections this registered winner stands in for, beyond `ReplacesSectionKey`. */
+    ReplacesSectionKeys?: readonly string[];
     BakedSectionKey: string;
     DisplayName: string;
+
+    /** Carried through from the registration so consumers can tell the two sources apart. */
+    Source?: FormContributionRegistrationSource;
+    ComponentID?: string;
+    Title?: string;
+    Presentation?: 'panel' | 'bare';
 }
 
 export interface ResolveFormContributionsResult {
@@ -140,7 +200,15 @@ function visibleRelationships(
     });
 }
 
-function entityMatches(registeredEntity: string, formEntity: string): boolean {
+/**
+ * Strict entity match shared by the composer and the slot host. `'*'` matches every form.
+ *
+ * Exported because the slot host used to run its own prefix-insensitive variant, which
+ * mounted panels the composer then ignored — the two sides disagreed about which panels
+ * existed. One predicate, used by both.
+ */
+export function FormContributionEntityMatches(registeredEntity: string | null | undefined, formEntity: string): boolean {
+    if (!registeredEntity) return false;
     return registeredEntity === '*' || registeredEntity === formEntity;
 }
 
@@ -150,23 +218,35 @@ function applicableRegistrations(
 ): FormContributionRegistration[] {
     return registrations.filter((reg) => {
         const entity = reg.Metadata.entity;
-        if (!entity || !entityMatches(entity, entityName)) return false;
+        if (!entity || !FormContributionEntityMatches(entity, entityName)) return false;
         // A related claim on entity:'*' would hide that grid on every form.
         // Claims must name the form entity.
         // Related / field-section claims on entity:'*' would hide panels on every
         // form. Those claims must name the form entity.
-        if ((reg.Metadata.relatedEntity || reg.Metadata.replacesSectionKey) && entity === '*') {
+        if ((reg.Metadata.relatedEntity || ReplacedSectionKeys(reg.Metadata).length > 0 || reg.Metadata.inSectionKey)
+            && entity === '*') {
             return false;
         }
         return true;
     });
 }
 
+function sourceRank(source: FormContributionRegistrationSource | undefined): number {
+    // Compiled registrations win ties. A metadata row replaces an installed piece only
+    // when someone set it strictly higher, which the apply flow does after the user
+    // confirms the replacement.
+    return source === 'metadata' ? 0 : 1;
+}
+
 /**
  * Last-wins collapse by contributionKey (or derived related key).
- * Highest Priority keeps the slot. Registrations without a key never collapse.
+ * Highest Priority keeps the slot; ties go to the compiled registration. Registrations
+ * without a key never collapse.
+ *
+ * The tie-break is an explicit comparator rather than input ordering, so the result does
+ * not depend on which source the caller concatenated first.
  */
-export function CollapseFormPanelRegistrations<T extends { Priority: number; Metadata: FormPanelRegistrationMetadata }>(
+export function CollapseFormPanelRegistrations<T extends { Priority: number; Metadata: FormPanelRegistrationMetadata; Source?: FormContributionRegistrationSource }>(
     registrations: readonly T[],
 ): T[] {
     const winners = new Map<string, T>();
@@ -174,7 +254,10 @@ export function CollapseFormPanelRegistrations<T extends { Priority: number; Met
     for (const reg of registrations) {
         const key = ResolveContributionKey(reg.Metadata) || `__unique:${uniqueIndex++}`;
         const incumbent = winners.get(key);
-        if (!incumbent || reg.Priority > incumbent.Priority) {
+        const beats = !incumbent
+            || reg.Priority > incumbent.Priority
+            || (reg.Priority === incumbent.Priority && sourceRank(reg.Source) > sourceRank(incumbent.Source));
+        if (beats) {
             winners.set(key, reg);
         }
     }
@@ -226,8 +309,14 @@ function registeredWinner(
         RelatedEntity: meta.relatedEntity,
         RelatedJoinField: meta.relatedJoinField ? StripJoinFieldBrackets(meta.relatedJoinField) : undefined,
         ReplacesSectionKey: meta.replacesSectionKey?.trim() || undefined,
+        ReplacesFieldNames: meta.replacesFieldNames?.length ? [...meta.replacesFieldNames] : undefined,
+        ReplacesSectionKeys: meta.replacesSectionKeys?.length ? [...meta.replacesSectionKeys] : undefined,
         BakedSectionKey: sectionKey,
         DisplayName: displayName,
+        Source: reg.Source,
+        ComponentID: reg.ComponentID,
+        Title: reg.Title,
+        Presentation: reg.Presentation ?? meta.presentation,
     };
 }
 
@@ -323,6 +412,7 @@ export function ContributionHiddenSectionKeys(
     for (const winner of resolved.Winners) {
         if (winner.Kind !== 'registered') continue;
         if (winner.ReplacesSectionKey) keys.push(winner.ReplacesSectionKey);
+        for (const key of winner.ReplacesSectionKeys ?? []) if (key.trim()) keys.push(key.trim());
         if (!winner.RelatedEntity) continue;
         const peer = peers.find((rel) => {
             if (rel.RelatedEntity !== winner.RelatedEntity) return false;
@@ -342,4 +432,80 @@ export function ClaimedRelatedSectionKeys(
     registrations: readonly FormContributionRegistration[],
 ): string[] {
     return ContributionHiddenSectionKeys(entityName, relatedEntities, isaChildEntityIDs, registrations);
+}
+
+/**
+ * Whether this registration is hosted by a section rather than by a slot.
+ *
+ * A contribution that names fields renders at the top of the section drawing them, which
+ * `<mj-form-field-panel-slot>` mounts. It still carries a `slot`, because every row does,
+ * so a slot host that went by slot alone would mount it a second time at the bottom of the
+ * form — the same panel twice, once in the group and once as a section of its own.
+ */
+export function ContributionClaimsFields(
+    metadata: Pick<FormPanelRegistrationMetadata, 'replacesFieldNames'> | null | undefined,
+): boolean {
+    return (metadata?.replacesFieldNames ?? []).some((name) => name.trim().length > 0);
+}
+
+/**
+ * Whether this registration is drawn inside a section rather than by a slot: it stands in for
+ * fields, or it names a section to draw in. The section's own host mounts it, so a slot host
+ * must not mount it a second time.
+ */
+export function ContributionDrawsInSection(
+    metadata: Pick<FormPanelRegistrationMetadata, 'replacesFieldNames' | 'inSectionKey'> | null | undefined,
+): boolean {
+    return ContributionClaimsFields(metadata) || !!metadata?.inSectionKey?.trim();
+}
+
+/** Where inside its section a section-hosted contribution draws. */
+export function ContributionSectionPosition(
+    metadata: Pick<FormPanelRegistrationMetadata, 'sectionPosition'> | null | undefined,
+): 'start' | 'end' {
+    return metadata?.sectionPosition === 'end' ? 'end' : 'start';
+}
+
+/** Every section a contribution stands in for: the single key, then the list, without repeats. */
+export function ReplacedSectionKeys(
+    metadata: Pick<FormPanelRegistrationMetadata, 'replacesSectionKey' | 'replacesSectionKeys'> | null | undefined,
+): string[] {
+    const out: string[] = [];
+    for (const raw of [metadata?.replacesSectionKey, ...(metadata?.replacesSectionKeys ?? [])]) {
+        const key = raw?.trim();
+        if (key && !out.includes(key)) out.push(key);
+    }
+    return out;
+}
+
+/**
+ * Field names the winning contributions stand in for, so the form stops drawing them.
+ *
+ * Separate from {@link ContributionHiddenSectionKeys} because the two hide different
+ * things: a section key removes a whole card, a field name removes one input from inside
+ * one. The panel that made the claim renders at the top of the section that held those
+ * fields, which is the collapsible panel's job — this only says which fields are spoken for.
+ */
+export function ContributionClaimedFieldNames(
+    entityName: string,
+    relatedEntities: readonly FormContributionRelationship[],
+    isaChildEntityIDs: readonly string[],
+    registrations: readonly FormContributionRegistration[],
+): string[] {
+    const resolved = ResolveFormContributions({
+        EntityName: entityName,
+        RelatedEntities: relatedEntities,
+        IsaChildEntityIDs: isaChildEntityIDs,
+        Registrations: registrations,
+        BakedSectionKeys: [],
+        ShowRelatedEntities: true,
+    });
+    const names: string[] = [];
+    for (const winner of resolved.Winners) {
+        if (winner.Kind !== 'registered') continue;
+        for (const name of winner.ReplacesFieldNames ?? []) {
+            if (!names.includes(name)) names.push(name);
+        }
+    }
+    return names;
 }

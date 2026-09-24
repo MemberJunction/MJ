@@ -3,7 +3,13 @@ import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
-import { isFormRole, getDeclaredFormEntityName } from '@memberjunction/interactive-component-types/forms';
+import {
+  isFormRole, IsFormPanelRole, getDeclaredFormEntityName, GetDeclaredFormContribution,
+  type FormPanelHostProps,
+} from '@memberjunction/interactive-component-types/forms';
+import {
+  BuildFormPanelHostProps, ContributionSpecToRegistration, ResolveContributionKey,
+} from '@memberjunction/ng-base-forms';
 import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
 import { InteractiveFormComponent } from '@memberjunction/ng-base-forms';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
@@ -35,6 +41,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   set reactComponent(value: MJReactComponent | undefined) {
     this.ReactComponent = value;
   }
+  @ViewChild('panelReactComponent') PanelReactComponent?: MJReactComponent;
   @ViewChild('interactiveForm') InteractiveForm?: InteractiveFormComponent;
 
   /** @deprecated Use {@link InteractiveForm}. */
@@ -87,6 +94,12 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   public set isFormArtifact(value) {
     this.IsFormArtifact = value;
   }
+
+  /** True for `componentRole: 'form-panel'` — a single contribution, not a whole form. */
+  public IsFormPanelArtifact = false;
+
+  /** Host props for the panel preview. Null until a record is bound. */
+  public PanelPreviewProps: FormPanelHostProps | null = null;
 
   /** Entity the form targets — resolved from spec.entityName / dataRequirements. */
   public FormEntityInfo: EntityInfo | null = null;
@@ -216,11 +229,21 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   private _cachedResolvedSpec: ComponentSpec | null = null;
 
+  /**
+   * The React host currently mounted. A form panel previews through its own
+   * `<mj-react-component>`, so both branches have to be consulted — the artifact
+   * carries a registry reference without code, and only the mounted host holds
+   * the spec resolved from the registry.
+   */
+  private get liveReactComponent(): MJReactComponent | undefined {
+    return this.ReactComponent ?? this.PanelReactComponent;
+  }
+
   public get ResolvedComponentSpec(): ComponentSpec | null {
     // Prefer the live React component's resolved spec (most up-to-date),
     // then fall back to our cached copy (survives DOM destruction),
     // then fall back to the stripped local spec as last resort.
-    return this.ReactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.Component;
+    return this.liveReactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.Component;
   }
 
   /** @deprecated Use {@link ResolvedComponentSpec}. */
@@ -471,10 +494,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Emits tabsChanged so the parent panel re-evaluates allTabs and renders the new tab labels.
    */
   OnReactComponentInitialized(): void {
-    if (this.ReactComponent?.resolvedComponentSpec &&
-        this.ReactComponent.resolvedComponentSpec !== this.Component) {
+    const host = this.liveReactComponent;
+    if (host?.resolvedComponentSpec &&
+        host.resolvedComponentSpec !== this.Component) {
       // Cache the resolved spec so it's available even after the React component is destroyed
-      this._cachedResolvedSpec = this.ReactComponent.resolvedComponentSpec;
+      this._cachedResolvedSpec = host.resolvedComponentSpec;
       this.tabsChanged.emit();
 
       // Re-evaluate permissions against the resolved spec — the stripped artifact
@@ -588,6 +612,8 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   private async detectAndInitFormArtifact(): Promise<void> {
     this.IsFormArtifact = false;
+    this.IsFormPanelArtifact = false;
+    this.PanelPreviewProps = null;
     this.FormEntityInfo = null;
     this.FormRecord = null;
     this.FormRecordIsReal = false;
@@ -595,9 +621,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     this.FormInitError = null;
 
     const spec = this.Component;
-    if (!spec || !isFormRole(spec)) return;
+    if (!spec || (!isFormRole(spec) && !IsFormPanelRole(spec))) return;
 
     this.IsFormArtifact = true;
+    this.IsFormPanelArtifact = IsFormPanelRole(spec);
 
     const entityName = getDeclaredFormEntityName(spec);
     if (!entityName) {
@@ -626,6 +653,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       this.FormRecordIsReal = false;
       this.FormRecordLabel = 'Mock data';
     }
+    this.rebuildPanelPreviewProps();
     // This runs after an await on a RunView that resolves outside Angular's zone,
     // so nothing would refresh the view until the next user event — leaving the
     // "Could not bind a record" message up until the user clicks. Force CD so the
@@ -740,6 +768,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
         this.FormRecord = rec;
         this.FormRecordIsReal = true;
         this.FormRecordLabel = item.Label;
+        this.rebuildPanelPreviewProps();
         this.ShowRecordPicker = false;
         this.RecordSearchTerm = '';
         this.RecordSearchResults = [];
@@ -765,11 +794,38 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Source #2 covers the common form-artifact case where the React component lives inside
    * <mj-interactive-form> and resolvedComponentSpec falls back to the stripped local spec.
    */
+  /**
+   * Host props for a form-panel preview. There is no host form here, so permissions
+   * read false and the panel renders as if opened read-only — the preview shows what
+   * the panel looks like, not what it can do once installed.
+   */
+  private rebuildPanelPreviewProps(): void {
+    this.PanelPreviewProps = null;
+    if (!this.IsFormPanelArtifact || !this.FormRecord || !this.FormEntityInfo || !this.Component) return;
+    const contribution = GetDeclaredFormContribution(this.Component);
+    if (!contribution) return;
+    const registration = ContributionSpecToRegistration(this.FormEntityInfo.Name, contribution);
+    this.PanelPreviewProps = BuildFormPanelHostProps({
+      Record: this.FormRecord,
+      FormComponent: null,
+      Contribution: registration,
+      SectionKey: ResolveContributionKey(registration.Metadata) || `preview:${this.Component.name}`,
+      Layout: 'accordion',
+      IsExpanded: true,
+    });
+  }
+
   public async OnApplyClicked(): Promise<void> {
     if (!this.FormEntityInfo) return;
 
     const spec = await this.resolveSpecWithCode();
-    if (!spec) return;
+    if (!spec) {
+      // The artifact stores a registry reference, so the code arrives only once
+      // the preview has resolved it. Saying so beats a button that does nothing.
+      this.FormInitError = 'Component code is still loading. Try again in a moment.';
+      this.cdr.detectChanges();
+      return;
+    }
 
     this.ApplyFormRequested.emit({
       spec,
@@ -790,10 +846,16 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     const resolved = this.ResolvedComponentSpec;
     if (resolved?.code) return resolved;
 
-    // 2. For form artifacts, the React component lives inside <mj-interactive-form>.
-    //    Reach into it to get the resolved spec from the component registry.
+    // 2. For whole-form artifacts, the React component lives inside
+    //    <mj-interactive-form>. Reach into it to get the resolved spec from the
+    //    component registry.
     const formReactSpec = this.InteractiveForm?.reactComponent?.resolvedComponentSpec;
     if (formReactSpec?.code) return formReactSpec;
+
+    // 2b. A panel previews through its own React host, which is the only place
+    //     its registry-resolved spec exists.
+    const panelReactSpec = this.PanelReactComponent?.resolvedComponentSpec;
+    if (panelReactSpec?.code) return panelReactSpec;
 
     // 3. Re-parse the artifact version's Content directly — the agent stores the
     //    full spec including code. This handles the case where loadComponentSpec()

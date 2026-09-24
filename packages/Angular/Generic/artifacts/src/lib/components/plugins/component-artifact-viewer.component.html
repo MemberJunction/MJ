@@ -55,8 +55,10 @@
             type="button"
             class="form-artifact-apply-btn"
             (click)="onApplyClicked()">
-            <i class="fa-solid fa-circle-check"></i>
-            Apply to my form
+            <i class="fa-solid"
+               [class.fa-circle-check]="!IsFormPanelArtifact"
+               [class.fa-puzzle-piece]="IsFormPanelArtifact"></i>
+            {{ IsFormPanelArtifact ? 'Add to my form' : 'Apply to my form' }}
           </button>
         }
       </div>
@@ -90,11 +92,32 @@
 
       @if (formRecord && component) {
         <div class="form-artifact-form-host">
-          <mj-interactive-form
-            #interactiveForm
-            [componentSpec]="component"
-            [record]="formRecord">
-          </mj-interactive-form>
+          @if (IsFormPanelArtifact) {
+            <!-- A panel is one contribution, so preview it on its own rather than
+                 mounting a whole form around it. -->
+            @if (PanelPreviewProps) {
+              <div class="form-artifact-panel-preview">
+                <mj-react-component
+                  #panelReactComponent
+                  [component]="component"
+                  [componentProps]="PanelPreviewProps"
+                  (openEntityRecord)="onOpenEntityRecord($event)"
+                  (initialized)="onReactComponentInitialized()">
+                </mj-react-component>
+              </div>
+            } @else {
+              <div class="mj-loading-state">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                <span>Binding a record…</span>
+              </div>
+            }
+          } @else {
+            <mj-interactive-form
+              #interactiveForm
+              [componentSpec]="component"
+              [record]="formRecord">
+            </mj-interactive-form>
+          }
         </div>
       } @else {
         <div class="error-state">

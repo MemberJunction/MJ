@@ -1,7 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import type { Observable } from "rxjs";
-import type { MJComponentEntity, MJEntityFormOverrideEntity } from "../generated/entity_subclasses";
+import type { MJComponentEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity } from "../generated/entity_subclasses";
 
 /**
  * Cache of MemberJunction interactive-form metadata: the form-role
@@ -26,8 +26,13 @@ import type { MJComponentEntity, MJEntityFormOverrideEntity } from "../generated
  *      because the full Component table includes ~150MB of `Specification`
  *      JSON across non-form types (Skip artifacts, dashboards, etc.).
  *
- * This engine threads the needle: load `Type='Form'` Components only
- * (small dataset — a few dozen per typical deployment, ~5MB max) plus
+ * This engine threads the needle: load `Type='Form'` Components plus only the
+ * widgets that a `MJ: Entity Form Contributions` row actually references
+ * (small dataset — a few dozen per typical deployment, ~5MB max). It deliberately
+ * does NOT load every `Type='Widget'` row: `Widget` is an open set grown by
+ * registry sync and general authoring, unrelated to form-panel adoption, and this
+ * cache is written to client local storage on every boot. Scoping by reference
+ * keeps the set proportional to the feature's use. Plus
  * **all** `EntityFormOverride` rows (tiny). Specification is included
  * because the cockpit + Skip rendering both need it. Loaded as
  * `entity_object` so callers can call `.Save()` / `.Delete()` on the
@@ -78,8 +83,37 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
         return super.getInstance<InteractiveFormsEngine>();
     }
 
+    /**
+     * Instance-level kill switch for metadata-registered form contributions.
+     *
+     * When false the engine loads no contribution rows and keeps the Components filter
+     * narrow, so every consumer sees exactly the pre-feature behavior: compiled
+     * `BaseFormPanel` registrations only. This is the rollback path for a bad load or a
+     * misbehaving panel — no migration, no deployment of a code change.
+     *
+     * Seeded from `MJ_FORMS_METADATA_CONTRIBUTIONS=false` where an environment exists
+     * (server, CLI); a browser host can set it directly before the first `Config()`.
+     */
+    private static _metadataContributionsEnabled: boolean = InteractiveFormsEngine.readContributionsFlag();
+
+    public static get MetadataContributionsEnabled(): boolean {
+        return InteractiveFormsEngine._metadataContributionsEnabled;
+    }
+    public static set MetadataContributionsEnabled(value: boolean) {
+        InteractiveFormsEngine._metadataContributionsEnabled = value;
+    }
+
+    private static readContributionsFlag(): boolean {
+        // Guarded: this class runs in the browser too, where `process` does not exist.
+        const env = typeof process !== 'undefined' ? process?.env?.MJ_FORMS_METADATA_CONTRIBUTIONS : undefined;
+        if (env === undefined || env === null || env.trim().length === 0) return true;
+        const v = env.trim().toLowerCase();
+        return !(v === 'false' || v === '0' || v === 'off' || v === 'no');
+    }
+
     private _forms: MJComponentEntity[] = [];
     private _overrides: MJEntityFormOverrideEntity[] = [];
+    private _contributions: MJEntityFormContributionEntity[] = [];
 
     /**
      * Lazy-load the form Component + override caches. Safe to call from
@@ -90,11 +124,24 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
         contextUser?: UserInfo,
         provider?: IMetadataProvider,
     ): Promise<void> {
+        const contributionsEnabled = InteractiveFormsEngine.MetadataContributionsEnabled;
         const c: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
                 EntityName: 'MJ: Components',
                 PropertyName: '_forms',
+                // Whole forms only — deliberately NOT widened to all widgets: `Widget` is an
+                // open set grown by registry sync and general authoring, and this cache is
+                // written to client local storage on every boot.
+                //
+                // A contribution's panel Component (Type='Widget') is therefore NOT in this
+                // cache; `InteractiveFormPanelComponent` fetches the single component it needs
+                // by ID. An earlier version scoped this filter with a subquery over
+                // `vwEntityFormContributions`, which is worse in every way that matters: the
+                // view name resolves against the connecting user's default schema rather than
+                // the core schema, and a filter that fails takes the WHOLE engine down with it
+                // — every form then waits on a cache that never loads. Loading exactly the
+                // components that render, lazily, needs no cross-schema SQL at all.
                 Filter: "Type='Form'",
                 CacheLocal: true,
             },
@@ -105,6 +152,14 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
                 CacheLocal: true,
             },
         ];
+        if (contributionsEnabled) {
+            c.push({
+                Type: 'entity',
+                EntityName: 'MJ: Entity Form Contributions',
+                PropertyName: '_contributions',
+                CacheLocal: true,
+            });
+        }
         await this.Load(c, provider, forceRefresh, contextUser);
     }
 
@@ -155,6 +210,97 @@ export class InteractiveFormsEngine extends BaseEngine<InteractiveFormsEngine> {
             o.Scope === 'User' && o.UserID && UUIDsEqual(o.UserID, userID),
         );
     }
+
+    /**
+     * All cached EntityFormContribution rows (all scopes, all statuses — callers filter).
+     *
+     * Returns nothing while the kill switch is off. Dropping the entity from the load list is
+     * not enough on its own: a process that already loaded rows would keep serving them from
+     * the engine's data map, so the switch would appear to do nothing until a restart. The
+     * rollback path has to work in the process that is misbehaving.
+     */
+    public get Contributions(): MJEntityFormContributionEntity[] {
+        if (!InteractiveFormsEngine.MetadataContributionsEnabled) return [];
+        return this.GetConfigData<MJEntityFormContributionEntity>('_contributions');
+    }
+
+    /** Emits on every save / delete / remote-invalidate that touches `MJ: Entity Form Contributions`. */
+    public get Contributions$(): Observable<MJEntityFormContributionEntity[]> {
+        return this.ObserveProperty<MJEntityFormContributionEntity>('_contributions');
+    }
+
+    /**
+     * True once the contribution cache has completed its first load.
+     *
+     * Slot hosts wait on this before the first mount: rendering compiled contributions and
+     * then adding rows a tick later is visible, and for a `bare` hero that replaces a baked
+     * section it means the user watches the Details panel render and then disappear.
+     */
+    public get ContributionsReady(): boolean {
+        return this.Loaded || this.IsPermissionConstrained;
+    }
+
+    /**
+     * Entities whose forms never carry a Global or Role contribution, whatever wrote the row.
+     *
+     * A contribution places a runtime-interpreted React spec on a form; on an identity or
+     * authorization surface that is the one place it must not happen silently for other
+     * people. A user may still place a `User`-scope contribution on their own form.
+     */
+    private static readonly RESTRICTED_CONTRIBUTION_ENTITIES: ReadonlySet<string> = new Set([
+        'mj: users', 'mj: roles', 'mj: user roles', 'mj: authorizations', 'mj: authorization roles',
+    ]);
+
+    /**
+     * The clamp is applied here, on the read path, rather than at the write paths.
+     * The action family already forces `Scope='User'` on every write, so a check there can
+     * never fire, and `mj sync` — the path an OpenApp actually uses — bypasses actions
+     * altogether. Filtering where the rows are consumed covers every writer, including
+     * direct SQL, and cannot be routed around.
+     */
+    private static scopeAllowedOnEntity(entityName: string | null, scope: string): boolean {
+        if (scope === 'User') return true;
+        const name = (entityName ?? '').trim().toLowerCase();
+        return !InteractiveFormsEngine.RESTRICTED_CONTRIBUTION_ENTITIES.has(name);
+    }
+
+    /**
+     * Active contribution rows that apply to (entity, user, roles): User rows for this
+     * user, Role rows for any of the user's roles, and Global rows. Sorted by
+     * `Precedence` DESC then `SortKey` DESC. Last-wins collapse against compiled
+     * registrations happens in ng-base-forms, not here.
+     */
+    public GetApplicableContributions(
+        entityID: string,
+        userID: string,
+        roleIDs: ReadonlyArray<string>,
+    ): MJEntityFormContributionEntity[] {
+        if (!entityID) return [];
+        const rows = this.Contributions.filter(c =>
+            c.EntityID && UUIDsEqual(c.EntityID, entityID)
+            && c.Status === 'Active'
+            && InteractiveFormsEngine.scopeAllowedOnEntity(c.Entity, c.Scope)
+            && (
+                (c.Scope === 'User'   && !!c.UserID && !!userID && UUIDsEqual(c.UserID, userID)) ||
+                (c.Scope === 'Role'   && !!c.RoleID && roleIDs.some(r => UUIDsEqual(r, c.RoleID as string))) ||
+                (c.Scope === 'Global')
+            ),
+        );
+        return rows.sort((a, b) => {
+            const p = (b.Precedence ?? 0) - (a.Precedence ?? 0);
+            if (p !== 0) return p;
+            return (b.SortKey ?? 0) - (a.SortKey ?? 0);
+        });
+    }
+
+    /**
+     * Find any cached form or panel Component by ID. `FindFormByID` remains as an alias —
+     * the cache now also holds the widget Components that contributions reference.
+     */
+    public FindComponentByID(id: string): MJComponentEntity | undefined {
+        return this.FindFormByID(id);
+    }
+
 
     /**
      * Resolver-style lookup matching the runtime form-resolver's scope

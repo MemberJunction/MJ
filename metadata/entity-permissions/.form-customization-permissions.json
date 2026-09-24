@@ -1,0 +1,28 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Form Contributions",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Form Contributions&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Form Overrides",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "B725433E-F36B-1410-8595-00C8AD7ACEA2"
+    }
+  }
+]

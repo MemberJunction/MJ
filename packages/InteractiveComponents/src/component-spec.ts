@@ -2,13 +2,14 @@ import { ComponentEvent, ComponentProperty } from "./component-props-events";
 import { ComponentDataRequirements } from "./data-requirements";
 import { ComponentLibraryDependency } from "./library-dependency";
 import { ComponentTypeDefinition } from "./component-constraints";
+import type { FormContributionSpec } from "./forms/form-contribution-spec";
 
 /**
  * Contract a component commits to implementing. Hosts use this to decide how
  * to mount the component and what props/events to wire up. Authoring agents
  * use it to target a known shape.
  */
-export type ComponentRole = 'form' | 'dashboard' | 'widget' | 'report' | 'detail-pane';
+export type ComponentRole = 'form' | 'form-panel' | 'dashboard' | 'widget' | 'report' | 'detail-pane';
 
 /**
  * Tracks the current change being applied to this component.
@@ -232,11 +233,27 @@ export class ComponentSpec {
      *
      * - `form`: implements `FormHostProps` + standard form events/methods (see `@memberjunction/interactivecomponents/forms`).
      *   Hosted by `InteractiveFormComponent` against a `BaseEntity` record.
+     * - `form-panel`: one contribution on an entity form (hero, pane, related-grid claim). Implements
+     *   `FormPanelHostProps` + `FormPanelEventNames` / `FormPanelMethodNames`; hosted by
+     *   `InteractiveFormPanelComponent` inside `<mj-form-panel-slot>`.
      * - `dashboard` | `widget` | `report` | `detail-pane`: reserved for future role contracts.
      *
      * Unset = a generic component, mounted directly. No behavior change for existing components.
      */
     componentRole?: ComponentRole;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Canonical entity name a `form` or `form-panel` component binds to. Hosts resolve
+     * the entity from this first, then `dataRequirements.entities[0].name`.
+     */
+    entityName?: string;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format, written by Skip and stored in component specs
+
+    /**
+     * Registration intent for `componentRole: 'form-panel'` — where the panel mounts and
+     * what it claims. Consumers (Skip apply flow, Form Builder, `mj sync`) turn this into a
+     * `MJ: Entity Form Contributions` row. Never carries precedence; that is a host decision.
+     */
+    formContribution?: FormContributionSpec;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format, written by Skip and stored in component specs
 
     /**
      * JavaScript code

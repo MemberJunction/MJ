@@ -27,6 +27,7 @@ export * from './lib/section-indicators/form-section-field-host';
 
 // Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
 export * from './lib/resolver/form-resolver.service';
+export * from './lib/resolver/form-variants';
 
 // Presentation-agnostic form host (resolve → load → create → wire → teardown)
 export * from './lib/host/entity-form-host.component';
@@ -71,9 +72,15 @@ export * from './lib/isa-related-panel/isa-related-panel.component';
 // authoring guide.
 export * from './lib/panel-slot/base-form-panel';
 export * from './lib/panel-slot/form-panel-slot.component';
+export * from './lib/panel-slot/form-field-panel-slot.component';
+export * from './lib/panel-slot/mount-form-contribution';
 export * from './lib/panel-slot/form-slot-coordinator.service';
 export * from './lib/panel-slot/form-contribution';
 export * from './lib/panel-slot/collect-form-panel-registrations';
+export * from './lib/panel-slot/collect-form-contribution-registrations';
+export * from './lib/panel-slot/panel-hides';
+export * from './lib/panel-slot/placement-preview';
+export * from './lib/panel-slot/placement-preview-panel.component';
 export * from './lib/panel-slot/form-contributions.component';
 export * from './lib/panel-slot/related-entity-grid-panel.component';
 export * from './lib/interactive-form/interactive-form.component';
@@ -86,3 +93,15 @@ export * from './lib/chrome/load-form-chrome-rules';
 export * from './lib/chrome/form-chrome-coordinator.service';
 export * from './lib/chrome/form-chrome-rail-pref';
 export * from './lib/related-grid-height';
+export * from './lib/interactive-form/interactive-form-panel.component';
+export * from './lib/interactive-form/form-panel-host-props.builder';
+export * from './lib/chrome/form-composition-snapshot';
+export * from './lib/apply/form-placement';
+export * from './lib/apply/form-placement-dialog.component';
+export * from './lib/apply/form-placement-preview.component';
+export * from './lib/apply/form-slot-probe.service';
+
+export * from './lib/panel-manager/form-panel-inventory';
+export * from './lib/panel-manager/form-panel-admin.service';
+export * from './lib/panel-manager/form-audience';
+export * from './lib/panel-manager/panel-manager.component';

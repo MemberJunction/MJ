@@ -189,7 +189,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (418 classes)
+// @memberjunction/core-entities (419 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -412,6 +412,7 @@ import {
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1027,7 +1028,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (47 classes)
+// @memberjunction/core-entities-server (49 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1056,6 +1057,8 @@ import {
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJEntityFormContributionEntityServer,
+    MJEntityFormOverrideEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -1078,10 +1081,11 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (148 classes)
+// @memberjunction/core-actions (153 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -1102,6 +1106,7 @@ import {
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -1146,6 +1151,8 @@ import {
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
+    GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetObjectAction,
@@ -1172,6 +1179,7 @@ import {
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
@@ -1530,6 +1538,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldEntityExtended,
     MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
+    MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
@@ -1658,11 +1667,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
-    MJSearchScopePermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
@@ -1862,11 +1871,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetVideoAnalyticsAction,
     HootSuiteBulkSchedulePostsAction,
     HootSuiteCreateScheduledPostAction,
-    HootSuiteDeleteScheduledPostAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteDeleteScheduledPostAction,
     HootSuiteGetAnalyticsAction,
     HootSuiteGetScheduledPostsAction,
     HootSuiteGetSocialProfilesAction,
@@ -2050,6 +2059,8 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+    MJEntityFormContributionEntityServer,
+    MJEntityFormOverrideEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -2064,18 +2075,19 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
-    MJUserEntityServer,
-    MJUserRoleEntityServer,
-    MJUserRoutineEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
+    MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateFormContributionVersionAction,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
@@ -2096,6 +2108,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateDirectoryAction,
     CreateDocumentAction,
     CreateEmployeeAction,
+    CreateFormContributionAction,
     CreateInteractiveFormAction,
     CreateListAction,
     CreateMermaidDiagramAction,
@@ -2140,6 +2153,8 @@ const CLASS_REGISTRATIONS_4: any[] = [
     GetEntityListAction,
     GetEntitySchemaForFormAction,
     GetFileContentAction,
+    GetFormCompositionForEntityAction,
+    GetFormContributionsForEntityAction,
     GetListRecordsAction,
     GetMetadataAction,
     GetObjectAction,
@@ -2166,6 +2181,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
@@ -2245,7 +2261,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 959;
+export const CLASS_REGISTRATIONS_COUNT = 967;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -894,8 +894,17 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return this.ResolvedActionItems.filter(item => (item.Order ?? 100) >= 50);
   }
 
+  /**
+   * Items drawn beside the section controls.
+   *
+   * `overflow` is folded in: the placement is part of the public type but this toolbar
+   * draws no overflow menu, so an item registered for it used to render nowhere at all
+   * and the caller had no way to tell.
+   */
   public get ResolvedRightItems(): ResolvedToolbarItem[] {
-    return this.ResolvedToolbarItems.filter(item => item.Placement === 'right');
+    return this.ResolvedToolbarItems.filter(
+      item => item.Placement === 'right' || item.Placement === 'overflow',
+    );
   }
 
   public async OnToolbarItemClick(item: ResolvedToolbarItem, event: MouseEvent): Promise<void> {

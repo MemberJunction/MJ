@@ -5,3 +5,8 @@ export * from './create-interactive-form.action';
 export * from './modify-interactive-form.action';
 export * from './activate-interactive-form-version.action';
 export * from './revert-interactive-form.action';
+export * from './create-form-contribution.action';
+export * from './modify-form-contribution.action';
+export * from './activate-form-contribution-version.action';
+export * from './get-form-contributions-for-entity.action';
+export * from './get-form-composition-for-entity.action';

@@ -188,8 +188,15 @@ mj-record-form-container {
   resize: none;
 }
 
+/* Slot-mounted contributions (heroes, overview strips) are always visible, so
+   they sit in the same column as the active rail panel and need rhythm between
+   them. Collapsed siblings are `display: none`, so this gap only ever applies
+   between items that are actually on screen. Tighter than the accordion's 16px
+   because left-nav strips panel chrome and reads as one continuous column.
+   `mj-form-panel-slot` and the panel hosts are `display: contents`, so the gap
+   lands between the panels' own content boxes rather than around the slot. */
 .mj-forms-layout--left-nav .mj-forms-all-panels {
-  gap: 0;
+  gap: 12px;
   min-height: 0;
   overflow-y: auto;
 }

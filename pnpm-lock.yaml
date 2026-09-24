@@ -6563,6 +6563,9 @@ importers:
       '@memberjunction/ng-artifacts':
         specifier: 6.2.0-edge.0
         version: link:../artifacts
+      '@memberjunction/ng-base-forms':
+        specifier: 6.2.0-edge.0
+        version: link:../base-forms
       '@memberjunction/ng-base-types':
         specifier: 6.2.0-edge.0
         version: link:../base-types

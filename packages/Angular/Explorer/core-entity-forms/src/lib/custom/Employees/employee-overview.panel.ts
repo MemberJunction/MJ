@@ -13,9 +13,9 @@ interface DirectReportRow {
 }
 
 @RegisterClassEx(BaseFormPanel, {
-    key: 'form-panel:Employees:overview',
+    key: 'form-panel:MJ: Employees:overview',
     metadata: {
-        entity: 'Employees',
+        entity: 'MJ: Employees',
         slot: 'before-fields',
         sortKey: 10,
     },

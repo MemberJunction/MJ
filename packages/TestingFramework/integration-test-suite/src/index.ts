@@ -101,3 +101,4 @@ export * from './checks/app-behavioral.checks';
 export * from './checks/content-vectorization.checks';
 export * from './checks/materialized-read.checks';
 export * from './checks/materialized-entity-read.checks';
+export * from './checks/form-contributions.checks';
