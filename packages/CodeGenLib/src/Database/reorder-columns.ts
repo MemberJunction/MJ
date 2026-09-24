@@ -1,6 +1,6 @@
 import { CodeGenConnection } from './codeGenDatabaseProvider';
 
-export async function generateReorderTableColumnsScript(
+export async function GenerateReorderTableColumnsScript(
     tableName: string, 
     dataSource: CodeGenConnection
 ): Promise<string> {
@@ -22,6 +22,14 @@ export async function generateReorderTableColumnsScript(
 `;
 
     return sqlScript;
+}
+
+/** @deprecated Use {@link GenerateReorderTableColumnsScript}. */
+export async function generateReorderTableColumnsScript(
+    tableName: string, 
+    dataSource: CodeGenConnection
+): Promise<string> {
+    return GenerateReorderTableColumnsScript(tableName, dataSource);
 }
 
 // Step 1: Fetch schema name

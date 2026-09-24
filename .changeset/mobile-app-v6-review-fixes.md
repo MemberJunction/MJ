@@ -4,7 +4,6 @@
 "@memberjunction/ng-conversations": minor
 "@memberjunction/aiengine": minor
 "@memberjunction/server": minor
-"@memberjunction/ai-core": minor
 ---
 
 Mobile app v6: make realtime voice actually resolve on a device, route hosted applications' generic nav items, and scope the new agent-session grants with row-level security.

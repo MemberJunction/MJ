@@ -9,7 +9,7 @@
  * (`angular-codegen.ts` `camelCase` + related-entity sectionKey). If they drift,
  * hide-baked and skip-baked miss and the user sees a double grid.
  */
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { FormPanelRegistrationMetadata, FormPanelSlot } from './base-form-panel';
 
 /** Minimum relationship shape the composer reads. Satisfied by EntityRelationshipInfo. */
@@ -106,15 +106,48 @@ export function RelatedEntitySectionKey(
     relationship: FormContributionRelationship,
     displayInFormPeers: readonly FormContributionRelationship[],
 ): string {
-    const sameEntity = displayInFormPeers.filter((peer) =>
-        UUIDsEqual(peer.RelatedEntityID, relationship.RelatedEntityID),
-    );
-    if (sameEntity.length > 1) {
+    // Normalize the target once and stop at the second match. UUIDsEqual's `===` fast path
+    // misses on every peer that points elsewhere, so a filter over UUIDsEqual lowercases both
+    // sides of every comparison. To key many relationships against the same peers, use
+    // CreateRelatedEntitySectionKeyResolver instead.
+    const target = NormalizeUUID(relationship.RelatedEntityID);
+    let sameEntityCount = 0;
+    for (const peer of displayInFormPeers) {
+        if (NormalizeUUID(peer.RelatedEntityID) === target && ++sameEntityCount > 1) break;
+    }
+    return relatedSectionKey(relationship, sameEntityCount > 1);
+}
+
+function relatedSectionKey(relationship: FormContributionRelationship, sharesRelatedEntity: boolean): string {
+    if (sharesRelatedEntity) {
         return FormSectionCamelCase(
             `${relationship.RelatedEntity} ${StripJoinFieldBrackets(relationship.RelatedEntityJoinField)}`,
         );
     }
     return FormSectionCamelCase(relationship.RelatedEntity);
+}
+
+/**
+ * Builds a function that returns {@link RelatedEntitySectionKey}`(relationship, displayInFormPeers)`
+ * for any relationship, against the ONE peer set passed here. Build it once per peer set, then
+ * call it once per relationship. The relationship does not have to be in the peer set; it is keyed
+ * by how many peers share its related entity.
+ *
+ * Building counts each related entity once, so keying all n peers is O(n). Calling
+ * RelatedEntitySectionKey per peer is O(n²), which on an entity with ~150 DisplayInForm
+ * relationships (MJ: Users), resolved on every change-detection pass, pegged a CPU core.
+ * The returned function reflects the peers as they were when it was built.
+ */
+export function CreateRelatedEntitySectionKeyResolver(
+    displayInFormPeers: readonly FormContributionRelationship[],
+): (relationship: FormContributionRelationship) => string {
+    const countByEntityID = new Map<string, number>();
+    for (const peer of displayInFormPeers) {
+        const id = NormalizeUUID(peer.RelatedEntityID);
+        countByEntityID.set(id, (countByEntityID.get(id) ?? 0) + 1);
+    }
+    return (relationship) =>
+        relatedSectionKey(relationship, (countByEntityID.get(NormalizeUUID(relationship.RelatedEntityID)) ?? 0) > 1);
 }
 
 export function RelationshipDisplayName(relationship: FormContributionRelationship): string {
@@ -192,10 +225,7 @@ function collapseRegistrations(
     return winners;
 }
 
-function stockWinner(
-    relationship: FormContributionRelationship,
-    peers: readonly FormContributionRelationship[],
-): FormContributionWinner {
+function stockWinner(relationship: FormContributionRelationship, sectionKey: string): FormContributionWinner {
     const join = StripJoinFieldBrackets(relationship.RelatedEntityJoinField);
     return {
         ContributionKey: RelatedContributionKey(relationship.RelatedEntity, join),
@@ -205,7 +235,7 @@ function stockWinner(
         Kind: 'stock-grid',
         RelatedEntity: relationship.RelatedEntity,
         RelatedJoinField: join,
-        BakedSectionKey: RelatedEntitySectionKey(relationship, peers),
+        BakedSectionKey: sectionKey,
         DisplayName: RelationshipDisplayName(relationship),
     };
 }
@@ -247,6 +277,7 @@ export function ResolveFormContributions(input: ResolveFormContributionsInput): 
     const peers = visibleRelationships(input.RelatedEntities, input.IsaChildEntityIDs);
     const collapsed = collapseRegistrations(applicableRegistrations(input.EntityName, input.Registrations));
     const baked = new Set(input.BakedSectionKeys);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(peers);
 
     const claimedKeys = new Set<string>();
     const registered: FormContributionWinner[] = [];
@@ -260,7 +291,7 @@ export function ResolveFormContributions(input: ResolveFormContributionsInput): 
                   return StripJoinFieldBrackets(rel.RelatedEntityJoinField) === wantJoin;
               })
             : undefined;
-        const sectionKey = peer ? RelatedEntitySectionKey(peer, peers) : '';
+        const sectionKey = peer ? sectionKeyOf(peer) : '';
         if (related) {
             claimedKeys.add(key);
             // A claim that omits the join field covers every FK to that entity.
@@ -280,18 +311,18 @@ export function ResolveFormContributions(input: ResolveFormContributionsInput): 
     if (input.ShowRelatedEntities) {
         for (const rel of peers) {
             const key = RelatedContributionKey(rel.RelatedEntity, rel.RelatedEntityJoinField);
-            const sectionKey = RelatedEntitySectionKey(rel, peers);
+            const sectionKey = sectionKeyOf(rel);
             if (claimedKeys.has(key)) {
                 if (baked.has(sectionKey)) hiddenBaked.push(sectionKey);
                 continue;
             }
             if (baked.has(sectionKey)) continue;
-            stock.push(stockWinner(rel, peers));
+            stock.push(stockWinner(rel, sectionKey));
         }
     } else {
         for (const rel of peers) {
             const key = RelatedContributionKey(rel.RelatedEntity, rel.RelatedEntityJoinField);
-            const sectionKey = RelatedEntitySectionKey(rel, peers);
+            const sectionKey = sectionKeyOf(rel);
             if (claimedKeys.has(key) && baked.has(sectionKey)) hiddenBaked.push(sectionKey);
         }
     }
@@ -319,6 +350,7 @@ export function ContributionHiddenSectionKeys(
         ShowRelatedEntities: true,
     });
     const peers = visibleRelationships(relatedEntities, isaChildEntityIDs);
+    const sectionKeyOf = CreateRelatedEntitySectionKeyResolver(peers);
     const keys: string[] = [];
     for (const winner of resolved.Winners) {
         if (winner.Kind !== 'registered') continue;
@@ -329,7 +361,7 @@ export function ContributionHiddenSectionKeys(
             if (!winner.RelatedJoinField) return true;
             return StripJoinFieldBrackets(rel.RelatedEntityJoinField) === winner.RelatedJoinField;
         });
-        if (peer) keys.push(RelatedEntitySectionKey(peer, peers));
+        if (peer) keys.push(sectionKeyOf(peer));
     }
     return keys;
 }

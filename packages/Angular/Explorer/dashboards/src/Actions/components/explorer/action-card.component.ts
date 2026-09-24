@@ -12,11 +12,11 @@ import { RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export interface ActionExecutionStats {
-  totalExecutions: number;
-  successRate: number;
-  lastExecuted: Date | null;
-  isLoading: boolean;
-  isLoaded: boolean;
+  totalExecutions: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  lastExecuted: Date | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isLoading: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  isLoaded: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 @Component({
@@ -45,34 +45,59 @@ export class ActionCardComponent extends BaseAngularComponent {
 
   constructor(private cdr: ChangeDetectorRef) { super(); }
 
-  public onCardClick(): void {
+  public OnCardClick(): void {
     this.ActionClick.emit(this.Action);
   }
 
-  public onEditClick(event: MouseEvent): void {
+  /** @deprecated Use {@link OnCardClick}. */
+  public onCardClick(): void {
+    return this.OnCardClick();
+  }
+
+  public OnEditClick(event: MouseEvent): void {
     event.stopPropagation();
     this.EditClick.emit(this.Action);
   }
 
-  public onRunClick(event: MouseEvent): void {
+  /** @deprecated Use {@link OnEditClick}. */
+  public onEditClick(event: MouseEvent): void {
+    return this.OnEditClick(event);
+  }
+
+  public OnRunClick(event: MouseEvent): void {
     event.stopPropagation();
     this.RunClick.emit(this.Action);
   }
 
-  public onCategoryClick(event: MouseEvent): void {
+  /** @deprecated Use {@link OnRunClick}. */
+  public onRunClick(event: MouseEvent): void {
+    return this.OnRunClick(event);
+  }
+
+  public OnCategoryClick(event: MouseEvent): void {
     event.stopPropagation();
     if (this.Action.CategoryID) {
       this.CategoryClick.emit(this.Action.CategoryID);
     }
   }
 
-  public toggleExpanded(event: MouseEvent): void {
+  /** @deprecated Use {@link OnCategoryClick}. */
+  public onCategoryClick(event: MouseEvent): void {
+    return this.OnCategoryClick(event);
+  }
+
+  public ToggleExpanded(event: MouseEvent): void {
     event.stopPropagation();
     this.IsExpanded = !this.IsExpanded;
 
     if (this.IsExpanded && !this.ExecutionStats.isLoaded && !this.ExecutionStats.isLoading) {
       this.loadExecutionStats();
     }
+  }
+
+  /** @deprecated Use {@link ToggleExpanded}. */
+  public toggleExpanded(event: MouseEvent): void {
+    return this.ToggleExpanded(event);
   }
 
   private async loadExecutionStats(): Promise<void> {
@@ -146,12 +171,17 @@ export class ActionCardComponent extends BaseAngularComponent {
     this.cdr.markForCheck();
   }
 
-  public getCategoryName(): string {
+  public GetCategoryName(): string {
     if (!this.Action.CategoryID) return 'Uncategorized';
     return this.Categories.get(this.Action.CategoryID)?.Name || 'Unknown Category';
   }
 
-  public getStatusColor(): 'success' | 'warning' | 'error' | 'info' {
+  /** @deprecated Use {@link GetCategoryName}. */
+  public getCategoryName(): string {
+    return this.GetCategoryName();
+  }
+
+  public GetStatusColor(): 'success' | 'warning' | 'error' | 'info' {
     switch (this.Action.Status) {
       case 'Active': return 'success';
       case 'Pending': return 'warning';
@@ -160,7 +190,12 @@ export class ActionCardComponent extends BaseAngularComponent {
     }
   }
 
-  public getActionIcon(): string {
+  /** @deprecated Use {@link GetStatusColor}. */
+  public getStatusColor(): 'success' | 'warning' | 'error' | 'info' {
+    return this.GetStatusColor();
+  }
+
+  public GetActionIcon(): string {
     // Use custom icon if set, otherwise derive from type
     if (this.Action.IconClass) {
       return this.Action.IconClass;
@@ -172,11 +207,21 @@ export class ActionCardComponent extends BaseAngularComponent {
     }
   }
 
-  public getTypeLabel(): string {
+  /** @deprecated Use {@link GetActionIcon}. */
+  public getActionIcon(): string {
+    return this.GetActionIcon();
+  }
+
+  public GetTypeLabel(): string {
     return this.Action.Type === 'Generated' ? 'AI Generated' : 'Custom';
   }
 
-  public getApprovalStatusIcon(): string {
+  /** @deprecated Use {@link GetTypeLabel}. */
+  public getTypeLabel(): string {
+    return this.GetTypeLabel();
+  }
+
+  public GetApprovalStatusIcon(): string {
     switch (this.Action.CodeApprovalStatus) {
       case 'Approved': return 'fa-solid fa-check-circle';
       case 'Pending': return 'fa-solid fa-clock';
@@ -185,13 +230,23 @@ export class ActionCardComponent extends BaseAngularComponent {
     }
   }
 
-  public getApprovalStatusColor(): string {
+  /** @deprecated Use {@link GetApprovalStatusIcon}. */
+  public getApprovalStatusIcon(): string {
+    return this.GetApprovalStatusIcon();
+  }
+
+  public GetApprovalStatusColor(): string {
     switch (this.Action.CodeApprovalStatus) {
       case 'Approved': return 'success';
       case 'Pending': return 'warning';
       case 'Rejected': return 'error';
       default: return 'info';
     }
+  }
+
+  /** @deprecated Use {@link GetApprovalStatusColor}. */
+  public getApprovalStatusColor(): string {
+    return this.GetApprovalStatusColor();
   }
 
   public formatDate(date: Date | null): string {

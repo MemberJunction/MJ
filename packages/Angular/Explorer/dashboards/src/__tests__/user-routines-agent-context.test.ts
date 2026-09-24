@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-    buildUserRoutinesAgentContext,
-    resolveRoutineByIDOrName,
+    BuildUserRoutinesAgentContext,
+    ResolveRoutineByIDOrName,
     RoutineSummaryRow,
     USER_ROUTINE_NAME_LIST_CAP,
 } from '../UserRoutines/user-routines-agent-context';
@@ -17,7 +17,7 @@ function makeRoutines(count: number): RoutineSummaryRow[] {
 describe('buildUserRoutinesAgentContext', () => {
     it('publishes counts, filters, view state, and bounded names', () => {
         const routines = makeRoutines(3);
-        const ctx = buildUserRoutinesAgentContext({
+        const ctx = BuildUserRoutinesAgentContext({
             ActiveView: 'list',
             SearchText: 'digest',
             StatusFilter: 'Active',
@@ -36,7 +36,7 @@ describe('buildUserRoutinesAgentContext', () => {
 
     it('caps the name list and flags truncation', () => {
         const routines = makeRoutines(USER_ROUTINE_NAME_LIST_CAP + 5);
-        const ctx = buildUserRoutinesAgentContext({
+        const ctx = BuildUserRoutinesAgentContext({
             ActiveView: 'list',
             SearchText: '',
             StatusFilter: 'all',
@@ -52,7 +52,7 @@ describe('buildUserRoutinesAgentContext', () => {
 
     it('resolves the selected routine name (case-insensitive id match)', () => {
         const routines = makeRoutines(2);
-        const ctx = buildUserRoutinesAgentContext({
+        const ctx = BuildUserRoutinesAgentContext({
             ActiveView: 'history',
             SearchText: '',
             StatusFilter: 'all',
@@ -65,7 +65,7 @@ describe('buildUserRoutinesAgentContext', () => {
     });
 
     it('never publishes payload/message/recipient fields (safety shape)', () => {
-        const ctx = buildUserRoutinesAgentContext({
+        const ctx = BuildUserRoutinesAgentContext({
             ActiveView: 'list',
             SearchText: '',
             StatusFilter: 'all',
@@ -88,33 +88,33 @@ describe('resolveRoutineByIDOrName', () => {
     ];
 
     it('resolves by exact ID (case-insensitive)', () => {
-        const result = resolveRoutineByIDOrName(routines, 'AAAAAAAA-0000-0000-0000-000000000001');
+        const result = ResolveRoutineByIDOrName(routines, 'AAAAAAAA-0000-0000-0000-000000000001');
         expect(result.ok).toBe(true);
         if (result.ok) expect(result.value.Name).toBe('Morning Digest');
     });
 
     it('resolves by exact name then partial contains', () => {
-        expect(resolveRoutineByIDOrName(routines, 'morning digest').ok).toBe(true);
-        const partial = resolveRoutineByIDOrName(routines, 'renewals');
+        expect(ResolveRoutineByIDOrName(routines, 'morning digest').ok).toBe(true);
+        const partial = ResolveRoutineByIDOrName(routines, 'renewals');
         expect(partial.ok).toBe(true);
         if (partial.ok) expect(partial.value.Name).toBe('Weekly Renewals Watch');
     });
 
     it('fails tolerantly with available names on a miss', () => {
-        const result = resolveRoutineByIDOrName(routines, 'nonexistent');
+        const result = ResolveRoutineByIDOrName(routines, 'nonexistent');
         expect(result.ok).toBe(false);
         if (!result.ok) expect(result.error).toContain('Morning Digest');
     });
 
     it('fails on ambiguous partial matches listing candidates', () => {
         // 'e' appears in both routine names → ambiguous
-        const ambiguous = resolveRoutineByIDOrName(routines, 'e');
+        const ambiguous = ResolveRoutineByIDOrName(routines, 'e');
         expect(ambiguous.ok).toBe(false);
         if (!ambiguous.ok) expect(ambiguous.error).toContain('multiple');
     });
 
     it('rejects non-string input', () => {
-        expect(resolveRoutineByIDOrName(routines, 42).ok).toBe(false);
-        expect(resolveRoutineByIDOrName(routines, '').ok).toBe(false);
+        expect(ResolveRoutineByIDOrName(routines, 42).ok).toBe(false);
+        expect(ResolveRoutineByIDOrName(routines, '').ok).toBe(false);
     });
 });

@@ -22,23 +22,23 @@ import { configManager } from './lib/config-manager';
  */
 export interface MJConfig {
   /** Database platform (defaults to 'sqlserver'). Set to 'postgresql' for PG-backed MJ instances. */
-  dbPlatform?: 'sqlserver' | 'postgresql';
+  dbPlatform?: 'sqlserver' | 'postgresql';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database server hostname or IP address */
-  dbHost: string;
+  dbHost: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database server port (defaults to 1433 for SQL Server, 5432 for PostgreSQL) */
-  dbPort?: number;
+  dbPort?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database name to connect to */
-  dbDatabase: string;
+  dbDatabase: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database authentication username */
-  dbUsername: string;
+  dbUsername: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Database authentication password */
-  dbPassword: string;
+  dbPassword: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether to trust the server certificate (Y/N) */
-  dbTrustServerCertificate?: string;
+  dbTrustServerCertificate?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether to encrypt the connection (Y/N, auto-detected for Azure SQL) */
-  dbEncrypt?: string;
+  dbEncrypt?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** SQL Server instance name (for named instances) */
-  dbInstanceName?: string;
+  dbInstanceName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Per-request timeout in milliseconds for the database connection. When set, it is
    * applied to the mssql pool's `requestTimeout` (SQL Server) or the pg client's
@@ -46,7 +46,7 @@ export interface MJConfig {
    * (mssql: 15000ms). Long-running operations (e.g. `mj app remove` dropping a large
    * schema) require raising this above the default to avoid a premature request timeout.
    */
-  dbRequestTimeout?: number;
+  dbRequestTimeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
    * Startup section from mj.config.cjs. `mode` controls engine pre-warm during provider
    * bootstrap: 'full' pre-warms all @RegisterForStartup engines at boot; 'task' (the
@@ -54,11 +54,11 @@ export interface MJConfig {
    * Left as a plain string here — validation happens in ResolveStartupMode, and the
    * MJ_STARTUP_MODE env var overrides this per invocation (highest precedence).
    */
-  startup?: {
+  startup?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     mode?: string;
   };
   /** Schema name for MemberJunction core tables (defaults to __mj) */
-  mjCoreSchema?: string;
+  mjCoreSchema?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Allow additional properties for extensibility */
   [key: string]: any;
 }
@@ -71,24 +71,24 @@ export interface MJConfig {
  */
 export interface SyncConfig {
   /** Version of the sync configuration format */
-  version: string;
+  version: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Glob pattern for finding data files (defaults to "*.json") */
-  filePattern?: string;
+  filePattern?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** 
    * Directory processing order (only applies to root-level config, not inherited by subdirectories)
    * Specifies the order in which subdirectories should be processed to handle dependencies.
    * Directories not listed in this array will be processed after the ordered ones in alphabetical order.
    */
-  directoryOrder?: string[];
+  directoryOrder?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** 
    * Directories to ignore during processing
    * Can be directory names or glob patterns relative to the location of the .mj-sync.json file
    * Cumulative: subdirectories inherit and add to parent ignoreDirectories
    * Examples: ["output", "examples", "temp"]
    */
-  ignoreDirectories?: string[];
+  ignoreDirectories?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Push command configuration */
-  push?: {
+  push?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether to validate records before pushing to database */
     validateBeforePush?: boolean;
     /** Whether to require user confirmation before push */
@@ -119,7 +119,7 @@ export interface SyncConfig {
     isolatedTransactions?: boolean;
   };
   /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
-  sqlLogging?: {
+  sqlLogging?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether to enable SQL logging during push operations */
     enabled?: boolean;
     /** Directory to output SQL log files (relative to command execution directory, defaults to './sql_logging') */
@@ -150,14 +150,14 @@ export interface SyncConfig {
     variableBatchThreshold?: number;
   };
   /** Watch command configuration */
-  watch?: {
+  watch?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Milliseconds to wait before processing file changes */
     debounceMs?: number;
     /** File patterns to ignore during watch */
     ignorePatterns?: string[];
   };
   /** User role validation configuration */
-  userRoleValidation?: {
+  userRoleValidation?: {  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Whether to enable user role validation for UserID fields */
     enabled?: boolean;
     /** List of role names that are allowed to be referenced in metadata */
@@ -170,7 +170,7 @@ export interface SyncConfig {
    * When enabled, resolution information for @lookup and @parent references is written to files.
    * Defaults to false. Entity-level .mj-sync.json files can override this setting.
    */
-  emitSyncNotes?: boolean;
+  emitSyncNotes?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -398,8 +398,13 @@ export interface FolderConfig {
  * }
  * ```
  */
-export function loadMJConfig(): MJConfig | null {
+export function LoadMJConfig(): MJConfig | null {
   return configManager.loadMJConfig();
+}
+
+/** @deprecated Use {@link LoadMJConfig}. */
+export function loadMJConfig(): MJConfig | null {
+  return LoadMJConfig();
 }
 
 /**
@@ -420,7 +425,7 @@ export function loadMJConfig(): MJConfig | null {
  * }
  * ```
  */
-export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
+export async function LoadSyncConfig(dir: string): Promise<SyncConfig | null> {
   const configPath = path.join(dir, '.mj-sync.json');
   
   if (await fs.pathExists(configPath)) {
@@ -433,6 +438,11 @@ export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadSyncConfig}. */
+export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
+  return LoadSyncConfig(dir);
 }
 
 /**
@@ -453,7 +463,7 @@ export async function loadSyncConfig(dir: string): Promise<SyncConfig | null> {
  * }
  * ```
  */
-export async function loadEntityConfig(dir: string): Promise<EntityConfig | null> {
+export async function LoadEntityConfig(dir: string): Promise<EntityConfig | null> {
   const configPath = path.join(dir, '.mj-sync.json');
   
   if (await fs.pathExists(configPath)) {
@@ -468,6 +478,11 @@ export async function loadEntityConfig(dir: string): Promise<EntityConfig | null
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadEntityConfig}. */
+export async function loadEntityConfig(dir: string): Promise<EntityConfig | null> {
+  return LoadEntityConfig(dir);
 }
 
 /**
@@ -488,7 +503,7 @@ export async function loadEntityConfig(dir: string): Promise<EntityConfig | null
  * }
  * ```
  */
-export async function loadFolderConfig(dir: string): Promise<FolderConfig | null> {
+export async function LoadFolderConfig(dir: string): Promise<FolderConfig | null> {
   const configPath = path.join(dir, '.mj-folder.json');
   
   if (await fs.pathExists(configPath)) {
@@ -501,4 +516,9 @@ export async function loadFolderConfig(dir: string): Promise<FolderConfig | null
   }
   
   return null;
+}
+
+/** @deprecated Use {@link LoadFolderConfig}. */
+export async function loadFolderConfig(dir: string): Promise<FolderConfig | null> {
+  return LoadFolderConfig(dir);
 }

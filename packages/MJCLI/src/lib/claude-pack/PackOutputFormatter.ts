@@ -13,8 +13,13 @@ import chalk from 'chalk';
 import type { InstallResult } from './PackTypes.js';
 
 /** Plain `--json` output. */
-export function formatJson(result: InstallResult): string {
+export function FormatJson(result: InstallResult): string {
     return JSON.stringify(result, null, 2);
+}
+
+/** @deprecated Use {@link FormatJson}. */
+export function formatJson(result: InstallResult): string {
+    return FormatJson(result);
 }
 
 /**
@@ -31,7 +36,7 @@ export function formatJson(result: InstallResult): string {
  *
  * Failure mode: a red banner + the errors[] list.
  */
-export function formatPretty(result: InstallResult): string {
+export function FormatPretty(result: InstallResult): string {
     const lines: string[] = [];
 
     if (!result.ok) {
@@ -76,6 +81,11 @@ export function formatPretty(result: InstallResult): string {
     }
 
     return lines.join('\n');
+}
+
+/** @deprecated Use {@link FormatPretty}. */
+export function formatPretty(result: InstallResult): string {
+    return FormatPretty(result);
 }
 
 function appendBucket(

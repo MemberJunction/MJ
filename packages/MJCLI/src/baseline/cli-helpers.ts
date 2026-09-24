@@ -6,16 +6,16 @@
  * - Detect TTY for spinner vs. plain log output.
  */
 
-import { getValidatedConfig } from '../config';
+import { GetValidatedConfig } from '../config';
 import type { DbConnectionParams, DbConnectionOverrides } from './connection';
 import type { Dialect } from './types';
 
-export function resolveConnection(overrides: DbConnectionOverrides = {}, dialectFlag?: Dialect): DbConnectionParams {
-  const config = getValidatedConfig();
+export function ResolveConnection(overrides: DbConnectionOverrides = {}, dialectFlag?: Dialect): DbConnectionParams {
+  const config = GetValidatedConfig();
   const dialect: Dialect = dialectFlag
     ?? (config.dbPlatform === 'postgresql' ? 'postgres' : 'mssql');
 
-  const host = overrides.host ?? config.dbHost;
+  const host = overrides.Host ?? config.dbHost;
   const port = overrides.port ?? (config.dbPort ? Number(config.dbPort) : undefined);
   const database = overrides.database ?? config.dbDatabase;
   const user = overrides.user ?? (config as { codeGenLogin?: string }).codeGenLogin;
@@ -25,17 +25,27 @@ export function resolveConnection(overrides: DbConnectionOverrides = {}, dialect
   if (!user) throw new Error('No DB user configured (set CODEGEN_DB_USERNAME).');
   if (!password) throw new Error('No DB password configured (set CODEGEN_DB_PASSWORD).');
   return {
-    dialect,
-    host,
+    Dialect: dialect,
+    Host: host,
     port,
-    database,
-    user,
-    password,
+    Database: database,
+    User: user,
+    Password: password,
     encrypt: overrides.encrypt ?? Boolean(config.dbEncrypt),
     trustServerCertificate: overrides.trustServerCertificate ?? Boolean(config.dbTrustServerCertificate),
   };
 }
 
-export function isTty(): boolean {
+/** @deprecated Use {@link ResolveConnection}. */
+export function resolveConnection(overrides: DbConnectionOverrides = {}, dialectFlag?: Dialect): DbConnectionParams {
+  return ResolveConnection(overrides, dialectFlag);
+}
+
+export function IsTty(): boolean {
   return Boolean(process.stdout.isTTY) && process.env.CI !== 'true';
+}
+
+/** @deprecated Use {@link IsTty}. */
+export function isTty(): boolean {
+  return IsTty();
 }

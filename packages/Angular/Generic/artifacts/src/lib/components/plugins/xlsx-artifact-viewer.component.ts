@@ -161,11 +161,47 @@ interface SheetData {
 @RegisterClass(BaseArtifactViewerPluginComponent, 'XlsxArtifactViewerPlugin')
 export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
   public isLoading = true;
-  public isDownloading = false;
+  public IsDownloading = false;
+
+  /** @deprecated Use {@link IsDownloading}. */
+  public get isDownloading() {
+    return this.IsDownloading;
+  }
+  /** @deprecated Use {@link IsDownloading}. */
+  public set isDownloading(value) {
+    this.IsDownloading = value;
+  }
   public errorMessage = '';
-  public sheets: SheetData[] = [];
-  public activeSheetIndex = 0;
-  public defaultColDef: ColDef = { resizable: true, sortable: true, filter: true, minWidth: 80 };
+  public Sheets: SheetData[] = [];
+
+  /** @deprecated Use {@link Sheets}. */
+  public get sheets(): SheetData[] {
+    return this.Sheets;
+  }
+  /** @deprecated Use {@link Sheets}. */
+  public set sheets(value: SheetData[]) {
+    this.Sheets = value;
+  }
+  public ActiveSheetIndex = 0;
+
+  /** @deprecated Use {@link ActiveSheetIndex}. */
+  public get activeSheetIndex() {
+    return this.ActiveSheetIndex;
+  }
+  /** @deprecated Use {@link ActiveSheetIndex}. */
+  public set activeSheetIndex(value) {
+    this.ActiveSheetIndex = value;
+  }
+  public DefaultColDef: ColDef = { resizable: true, sortable: true, filter: true, minWidth: 80 };
+
+  /** @deprecated Use {@link DefaultColDef}. */
+  public get defaultColDef(): ColDef {
+    return this.DefaultColDef;
+  }
+  /** @deprecated Use {@link DefaultColDef}. */
+  public set defaultColDef(value: ColDef) {
+    this.DefaultColDef = value;
+  }
 
   private gridApi: GridApi | null = null;
   private downloadUrl = '';
@@ -181,38 +217,58 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return true;
   }
 
+  public get ActiveSheet(): SheetData | null {
+    return this.Sheets[this.ActiveSheetIndex] ?? null;
+  }
+
+  /** @deprecated Use {@link ActiveSheet}. */
   public get activeSheet(): SheetData | null {
-    return this.sheets[this.activeSheetIndex] ?? null;
+    return this.ActiveSheet;
   }
 
   async ngOnInit(): Promise<void> {
     await this.loadWorkbook();
   }
 
-  public onGridReady(event: GridReadyEvent): void {
+  public OnGridReady(event: GridReadyEvent): void {
     this.gridApi = event.api;
     this.gridApi.sizeColumnsToFit();
   }
 
-  public selectSheet(index: number): void {
-    this.activeSheetIndex = index;
+  /** @deprecated Use {@link OnGridReady}. */
+  public onGridReady(event: GridReadyEvent): void {
+    return this.OnGridReady(event);
+  }
+
+  public SelectSheet(index: number): void {
+    this.ActiveSheetIndex = index;
     this.cdr.markForCheck();
     // Let Angular render the new rowData/columnDefs before re-sizing
     setTimeout(() => this.gridApi?.sizeColumnsToFit(), 0);
   }
 
-  public async onDownload(): Promise<void> {
-    if (!this.downloadUrl || this.isDownloading) {
+  /** @deprecated Use {@link SelectSheet}. */
+  public selectSheet(index: number): void {
+    return this.SelectSheet(index);
+  }
+
+  public async OnDownload(): Promise<void> {
+    if (!this.downloadUrl || this.IsDownloading) {
       return;
     }
-    this.isDownloading = true;
+    this.IsDownloading = true;
     this.cdr.markForCheck();
     try {
       await this.triggerBrowserDownload(this.downloadUrl, this.artifactVersion?.FileName || 'workbook.xlsx');
     } finally {
-      this.isDownloading = false;
+      this.IsDownloading = false;
       this.cdr.markForCheck();
     }
+  }
+
+  /** @deprecated Use {@link OnDownload}. */
+  public async onDownload(): Promise<void> {
+    return this.OnDownload();
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────
@@ -247,7 +303,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
       const XLSX = (await import('xlsx')) as unknown as XlsxModuleShim;
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-      this.sheets = this.parseWorkbook(workbook, XLSX);
+      this.Sheets = this.parseWorkbook(workbook, XLSX);
       this.isLoading = false;
       this.cdr.markForCheck();
     } catch (err) {
@@ -289,10 +345,10 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
-    if (this.sheets.length === 0) return null;
+    if (this.Sheets.length === 0) return null;
 
     // Convert parsed sheets into DataTables for structured snapshot
-    const tables: DataTable[] = this.sheets.map((sheet) => {
+    const tables: DataTable[] = this.Sheets.map((sheet) => {
       const table = new DataTable();
       table.name = sheet.name;
       table.source = 'static';
@@ -310,7 +366,7 @@ export class XlsxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     });
 
     const snap = DataSnapshot.FromTables(tables, this.getDisplayTitle() ?? undefined);
-    snap.activeTab = this.sheets[this.activeSheetIndex]?.name;
+    snap.activeTab = this.Sheets[this.ActiveSheetIndex]?.name;
     return snap;
   }
 }

@@ -158,24 +158,96 @@ import { UUIDsEqual } from '@memberjunction/global';
   `]
 })
 export class ArtifactCreateModalComponent extends BaseAngularComponent implements OnChanges  {
-  @Input() isOpen: boolean = false;
-  @Input() collectionId!: string;
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() IsOpen: boolean = false;
 
-  @Output() saved = new EventEmitter<MJArtifactEntity>();
+  /** @deprecated Use {@link IsOpen}. */
+  @Input() set isOpen(value: boolean) {
+    this.IsOpen = value;
+  }
+  /** @deprecated Use {@link IsOpen}. */
+  get isOpen(): boolean {
+    return this.IsOpen;
+  }
+  @Input() collectionId!: string;
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+
+  @Output() Saved = new EventEmitter<MJArtifactEntity>();
+
+  /**
+   * @deprecated Use {@link Saved}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (saved) keeps working. Must stay AFTER Saved: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() saved = this.Saved;
   @Output() cancelled = new EventEmitter<void>();
 
-  public formData = {
+  public FormData = {
     name: '',
     description: '',
     content: '',
     selectedType: null as MJArtifactTypeEntity | null
   };
 
-  public artifactTypes: MJArtifactTypeEntity[] = [];
-  public isLoadingTypes: boolean = false;
-  public isSaving: boolean = false;
+  /** @deprecated Use {@link FormData}. */
+  public get formData() {
+    return this.FormData;
+  }
+  /** @deprecated Use {@link FormData}. */
+  public set formData(value) {
+    this.FormData = value;
+  }
+
+  public ArtifactTypes: MJArtifactTypeEntity[] = [];
+
+  /** @deprecated Use {@link ArtifactTypes}. */
+  public get artifactTypes(): MJArtifactTypeEntity[] {
+    return this.ArtifactTypes;
+  }
+  /** @deprecated Use {@link ArtifactTypes}. */
+  public set artifactTypes(value: MJArtifactTypeEntity[]) {
+    this.ArtifactTypes = value;
+  }
+  public IsLoadingTypes: boolean = false;
+
+  /** @deprecated Use {@link IsLoadingTypes}. */
+  public get isLoadingTypes(): boolean {
+    return this.IsLoadingTypes;
+  }
+  /** @deprecated Use {@link IsLoadingTypes}. */
+  public set isLoadingTypes(value: boolean) {
+    this.IsLoadingTypes = value;
+  }
+  public IsSaving: boolean = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  public get isSaving(): boolean {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  public set isSaving(value: boolean) {
+    this.IsSaving = value;
+  }
   public errorMessage: string = '';
 
   constructor(
@@ -187,20 +259,25 @@ export class ArtifactCreateModalComponent extends BaseAngularComponent implement
 
   ngOnChanges(changes: SimpleChanges) {
     this.permissionService.Provider = this.ProviderToUse;
-    if (changes['isOpen'] && this.isOpen) {
+    if (changes['isOpen'] && this.IsOpen) {
       this.resetForm();
       this.loadArtifactTypes();
     }
   }
 
+  get CanSave(): boolean {
+    return this.FormData.name.trim().length > 0 &&
+           this.FormData.content.trim().length > 0 &&
+           this.FormData.selectedType !== null;
+  }
+
+  /** @deprecated Use {@link CanSave}. */
   get canSave(): boolean {
-    return this.formData.name.trim().length > 0 &&
-           this.formData.content.trim().length > 0 &&
-           this.formData.selectedType !== null;
+    return this.CanSave;
   }
 
   private async loadArtifactTypes(): Promise<void> {
-    this.isLoadingTypes = true;
+    this.IsLoadingTypes = true;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactTypeEntity>(
@@ -211,66 +288,71 @@ export class ArtifactCreateModalComponent extends BaseAngularComponent implement
           MaxRows: 1000,
           ResultType: 'entity_object'
         },
-        this.currentUser
+        this.CurrentUser
       );
 
       if (result.Success && result.Results) {
-        this.artifactTypes = result.Results;
+        this.ArtifactTypes = result.Results;
         // Default to "Text" or first type
-        const textType = this.artifactTypes.find(t => t.Name === 'Text' || t.Name === 'Markdown');
+        const textType = this.ArtifactTypes.find(t => t.Name === 'Text' || t.Name === 'Markdown');
         if (textType) {
-          this.formData.selectedType = textType;
-        } else if (this.artifactTypes.length > 0) {
-          this.formData.selectedType = this.artifactTypes[0];
+          this.FormData.selectedType = textType;
+        } else if (this.ArtifactTypes.length > 0) {
+          this.FormData.selectedType = this.ArtifactTypes[0];
         }
       }
     } catch (error) {
       console.error('Error loading artifact types:', error);
       this.toastService.error('Failed to load artifact types');
     } finally {
-      this.isLoadingTypes = false;
+      this.IsLoadingTypes = false;
       this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
-  onTypeSelected(typeId: string): void {
-    this.formData.selectedType = this.artifactTypes.find(t => UUIDsEqual(t.ID, typeId)) || null;
+  OnTypeSelected(typeId: string): void {
+    this.FormData.selectedType = this.ArtifactTypes.find(t => UUIDsEqual(t.ID, typeId)) || null;
   }
 
-  async onSave(): Promise<void> {
-    if (!this.canSave) return;
+  /** @deprecated Use {@link OnTypeSelected}. */
+  onTypeSelected(typeId: string): void {
+    return this.OnTypeSelected(typeId);
+  }
 
-    this.isSaving = true;
+  async OnSave(): Promise<void> {
+    if (!this.CanSave) return;
+
+    this.IsSaving = true;
     this.errorMessage = '';
 
     try {
       // Validate permission to add artifacts to collection
       const md = this.ProviderToUse;
-      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
       await collection.Load(this.collectionId);
 
       // Check if user has Edit permission on collection
-      if (collection.OwnerID && !UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
+      if (collection.OwnerID && !UUIDsEqual(collection.OwnerID, this.CurrentUser.ID)) {
         const permission = await this.permissionService.checkPermission(
           this.collectionId,
-          this.currentUser.ID,
-          this.currentUser
+          this.CurrentUser.ID,
+          this.CurrentUser
         );
 
         if (!permission?.canEdit) {
           this.errorMessage = 'You do not have Edit permission to add artifacts to this collection.';
-          this.isSaving = false;
+          this.IsSaving = false;
           return;
         }
       }
 
       // Step 1: Create the artifact
-      const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
-      artifact.Name = this.formData.name.trim();
-      artifact.Description = this.formData.description.trim() || null;
-      artifact.TypeID = this.formData.selectedType!.ID;
-      artifact.EnvironmentID = this.environmentId;
-      artifact.UserID = this.currentUser.ID;
+      const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.CurrentUser);
+      artifact.Name = this.FormData.name.trim();
+      artifact.Description = this.FormData.description.trim() || null;
+      artifact.TypeID = this.FormData.selectedType!.ID;
+      artifact.EnvironmentID = this.EnvironmentId;
+      artifact.UserID = this.CurrentUser.ID;
 
       const artifactSaved = await artifact.Save();
       if (!artifactSaved) {
@@ -280,13 +362,13 @@ export class ArtifactCreateModalComponent extends BaseAngularComponent implement
       }
 
       // Step 2: Create the first version
-      const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
+      const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.CurrentUser);
       version.ArtifactID = artifact.ID;
       version.VersionNumber = 1;
-      version.Content = this.formData.content.trim();
-      version.UserID = this.currentUser.ID;
-      version.Name = this.formData.name.trim(); // Version inherits name
-      version.Description = this.formData.description.trim() || null;
+      version.Content = this.FormData.content.trim();
+      version.UserID = this.CurrentUser.ID;
+      version.Name = this.FormData.name.trim(); // Version inherits name
+      version.Description = this.FormData.description.trim() || null;
 
       const versionSaved = await version.Save();
       if (!versionSaved) {
@@ -298,7 +380,7 @@ export class ArtifactCreateModalComponent extends BaseAngularComponent implement
       }
 
       // Step 3: Add to collection
-      const collectionArtifact = await md.GetEntityObject('MJ: Collection Artifacts', this.currentUser);
+      const collectionArtifact = await md.GetEntityObject('MJ: Collection Artifacts', this.CurrentUser);
       (collectionArtifact as any).CollectionID = this.collectionId;
       (collectionArtifact as any).ArtifactVersionID = version.ID;
 
@@ -313,15 +395,20 @@ export class ArtifactCreateModalComponent extends BaseAngularComponent implement
       }
 
       this.toastService.success('Artifact created successfully');
-      this.saved.emit(artifact);
+      this.Saved.emit(artifact);
       this.resetForm();
     } catch (error) {
       console.error('Error creating artifact:', error);
       this.errorMessage = 'An unexpected error occurred';
       this.toastService.error(this.errorMessage);
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
     }
+  }
+
+  /** @deprecated Use {@link OnSave}. */
+  async onSave(): Promise<void> {
+    return this.OnSave();
   }
 
   onCancel(): void {
@@ -330,11 +417,11 @@ export class ArtifactCreateModalComponent extends BaseAngularComponent implement
   }
 
   private resetForm(): void {
-    this.formData = {
+    this.FormData = {
       name: '',
       description: '',
       content: '',
-      selectedType: this.artifactTypes.length > 0 ? this.artifactTypes[0] : null
+      selectedType: this.ArtifactTypes.length > 0 ? this.ArtifactTypes[0] : null
     };
     this.errorMessage = '';
   }

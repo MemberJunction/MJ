@@ -59,8 +59,26 @@ interface PricePerToken {
 
 class OpenAIScopeAIReranker extends AIBaseReranker {
     /** Last call's prompt+completion tokens, populated by `doRerank`. */
-    public lastPromptTokens = 0;
-    public lastCompletionTokens = 0;
+    public LastPromptTokens = 0;
+
+    /** @deprecated Use {@link LastPromptTokens}. */
+    public get lastPromptTokens() {
+        return this.LastPromptTokens;
+    }
+    /** @deprecated Use {@link LastPromptTokens}. */
+    public set lastPromptTokens(value) {
+        this.LastPromptTokens = value;
+    }
+    public LastCompletionTokens = 0;
+
+    /** @deprecated Use {@link LastCompletionTokens}. */
+    public get lastCompletionTokens() {
+        return this.LastCompletionTokens;
+    }
+    /** @deprecated Use {@link LastCompletionTokens}. */
+    public set lastCompletionTokens(value) {
+        this.LastCompletionTokens = value;
+    }
 
     constructor(apiKey: string, modelName: string) {
         super(apiKey, modelName);
@@ -95,8 +113,8 @@ class OpenAIScopeAIReranker extends AIBaseReranker {
         }
 
         const json = await response.json() as OpenAIChatResponse;
-        this.lastPromptTokens = json.usage?.prompt_tokens ?? 0;
-        this.lastCompletionTokens = json.usage?.completion_tokens ?? 0;
+        this.LastPromptTokens = json.usage?.prompt_tokens ?? 0;
+        this.LastCompletionTokens = json.usage?.completion_tokens ?? 0;
 
         const content = json.choices[0]?.message.content ?? '';
         const parsed = JSON.parse(content) as { scores?: unknown };

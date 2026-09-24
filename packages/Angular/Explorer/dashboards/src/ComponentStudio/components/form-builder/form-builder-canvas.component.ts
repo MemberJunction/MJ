@@ -10,7 +10,7 @@ import {
 import { CdkDragDrop, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import type { CuratedFormSchema } from '@memberjunction/interactive-component-types/forms';
 import type { FormCanvasElement, FormCanvasModel, FormCanvasSection } from '../../services/form-canvas-model';
-import { buildEmptySection, generateCanvasId } from '../../services/form-canvas-model';
+import { BuildEmptySection, GenerateCanvasId } from '../../services/form-canvas-model';
 
 /**
  * Visual canvas. Owns the drag-drop UX for sections + elements + palette drops.
@@ -53,8 +53,13 @@ export class FormBuilderCanvasComponent {
      * `connectedTo` can wire every section to every other section, enabling
      * cross-section drag.
      */
-    public get sectionListIds(): string[] {
+    public get SectionListIds(): string[] {
         return (this._canvas?.sections ?? []).map(s => `section-${s.id}`);
+    }
+
+    /** @deprecated Use {@link SectionListIds}. */
+    public get sectionListIds(): string[] {
+        return this.SectionListIds;
     }
 
     private readonly cdr = inject(ChangeDetectorRef);
@@ -63,7 +68,7 @@ export class FormBuilderCanvasComponent {
         if (!this._canvas) return;
         const next: FormCanvasModel = {
             ...this._canvas,
-            sections: [...this._canvas.sections, buildEmptySection()],
+            sections: [...this._canvas.sections, BuildEmptySection()],
         };
         this.CanvasChanged.emit(next);
     }
@@ -73,7 +78,7 @@ export class FormBuilderCanvasComponent {
         const next = mutateSection(this._canvas, sectionId, s => ({
             ...s,
             elements: [...s.elements, {
-                id: generateCanvasId(kind),
+                id: GenerateCanvasId(kind),
                 type: kind,
                 text: kind === 'static-text' ? 'Static text' : undefined,
                 expression: kind === 'computed' ? 'record?.ID' : undefined,
@@ -140,7 +145,7 @@ export class FormBuilderCanvasComponent {
         const next = mutateSection(this._canvas, sectionId, s => ({
             ...s,
             elements: [...s.elements, {
-                id: generateCanvasId('field'),
+                id: GenerateCanvasId('field'),
                 type: 'field',
                 fieldName,
                 span: 1,
@@ -169,7 +174,7 @@ export class FormBuilderCanvasComponent {
         this.CanvasChanged.emit({ ...this._canvas, title: v });
     }
 
-    public getLabelForElement(element: FormCanvasElement): string {
+    public GetLabelForElement(element: FormCanvasElement): string {
         if (element.type === 'static-text') return element.text ?? 'Static text';
         if (element.type === 'spacer') return 'Spacer';
         if (element.type === 'computed') return element.label ?? 'Computed';
@@ -179,7 +184,12 @@ export class FormBuilderCanvasComponent {
         return element.fieldName ?? '(unknown)';
     }
 
-    public getFieldTypeBadge(element: FormCanvasElement): string | null {
+    /** @deprecated Use {@link GetLabelForElement}. */
+    public getLabelForElement(element: FormCanvasElement): string {
+        return this.GetLabelForElement(element);
+    }
+
+    public GetFieldTypeBadge(element: FormCanvasElement): string | null {
         if (element.type === 'field' && element.fieldName) {
             const f = this.Schema?.fields.find(fld => fld.name === element.fieldName);
             return f?.type ?? null;
@@ -187,9 +197,19 @@ export class FormBuilderCanvasComponent {
         return element.type;
     }
 
-    public isFieldUnknown(element: FormCanvasElement): boolean {
+    /** @deprecated Use {@link GetFieldTypeBadge}. */
+    public getFieldTypeBadge(element: FormCanvasElement): string | null {
+        return this.GetFieldTypeBadge(element);
+    }
+
+    public IsFieldUnknown(element: FormCanvasElement): boolean {
         if (element.type !== 'field' || !element.fieldName) return false;
         return !this.Schema?.fields.some(f => f.name === element.fieldName);
+    }
+
+    /** @deprecated Use {@link IsFieldUnknown}. */
+    public isFieldUnknown(element: FormCanvasElement): boolean {
+        return this.IsFieldUnknown(element);
     }
 
     private fieldDisplayName(name: string): string {

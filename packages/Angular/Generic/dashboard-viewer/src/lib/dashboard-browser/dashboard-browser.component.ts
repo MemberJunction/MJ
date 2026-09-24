@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { MJDashboardEntity, MJDashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
-import { UUIDsEqual, EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID, EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 
 // ========================================
 // Event Types
@@ -885,7 +885,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.Dashboards.filter(d => dragData.ids.some((id: string) => UUIDsEqual(id, d.ID)));
+                    const draggedIds = new Set(dragData.ids.map((id: string) => NormalizeUUID(id)));
+                    const dashboards = this.Dashboards.filter(d => draggedIds.has(NormalizeUUID(d.ID)));
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1069,7 +1070,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.Dashboards.filter(d => dragData.ids.some((id: string) => UUIDsEqual(id, d.ID)));
+                    const draggedIds = new Set(dragData.ids.map((id: string) => NormalizeUUID(id)));
+                    const dashboards = this.Dashboards.filter(d => draggedIds.has(NormalizeUUID(d.ID)));
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1094,7 +1096,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Handle drop from breadcrumb component
      */
     public OnBreadcrumbDrop(event: { TargetCategoryId: string | null; DashboardIds: string[] }): void {
-        const dashboards = this.Dashboards.filter(d => event.DashboardIds.some(id => UUIDsEqual(id, d.ID)));
+        const droppedIds = new Set(event.DashboardIds.map(id => NormalizeUUID(id)));
+        const dashboards = this.Dashboards.filter(d => droppedIds.has(NormalizeUUID(d.ID)));
         if (dashboards.length > 0) {
             this.DashboardMove.emit({
                 Dashboards: dashboards,

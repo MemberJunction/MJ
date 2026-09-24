@@ -102,8 +102,13 @@ export class AgentPermissionsPanelComponent implements OnInit {
     // List interactions
     // =========================================================================
 
-    public trackById(_index: number, row: PermissionRow): string {
+    public TrackById(_index: number, row: PermissionRow): string {
         return row.ID;
+    }
+
+    /** @deprecated Use {@link TrackById}. */
+    public trackById(_index: number, row: PermissionRow): string {
+      return this.TrackById(_index, row);
     }
 
     public OnAddNew(): void {

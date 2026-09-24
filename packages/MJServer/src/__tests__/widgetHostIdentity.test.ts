@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { generateKeyPairSync } from 'node:crypto';
-import { verifyHostAssertion, extractHostIdentity } from '../realtimeWidget/host-identity.js';
-import { buildWidgetGuestClaims } from '../realtimeWidget/widgetCore.js';
+import { VerifyHostAssertion, ExtractHostIdentity } from '../realtimeWidget/host-identity.js';
+import { BuildWidgetGuestClaims } from '../realtimeWidget/widgetCore.js';
 
 /** A throwaway RSA keypair for signing test host assertions. */
 function keypair(): { privatePem: string; publicPem: string } {
@@ -23,54 +23,54 @@ describe('verifyHostAssertion', () => {
     it('accepts a valid host assertion and extracts the identity', () => {
         const kp = keypair();
         const token = sign(kp.privatePem, { email: 'jane@acme.com', given_name: 'Jane', family_name: 'Doe', sub: 'host-123' });
-        const result = verifyHostAssertion(token, kp.publicPem, WIDGET_KEY);
+        const result = VerifyHostAssertion(token, kp.publicPem, WIDGET_KEY);
         expect(result.ok).toBe(true);
         if (result.ok) {
-            expect(result.identity).toMatchObject({ email: 'jane@acme.com', firstName: 'Jane', lastName: 'Doe', hostUserId: 'host-123' });
+            expect(result.Identity).toMatchObject({ email: 'jane@acme.com', firstName: 'Jane', lastName: 'Doe', hostUserId: 'host-123' });
         }
     });
 
     it('rejects a missing assertion', () => {
         const kp = keypair();
-        expect(verifyHostAssertion(undefined, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'missing' });
+        expect(VerifyHostAssertion(undefined, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'missing' });
     });
 
     it('rejects when no host key is configured (fail-closed)', () => {
         const kp = keypair();
         const token = sign(kp.privatePem, { email: 'x@y.com' });
-        expect(verifyHostAssertion(token, undefined, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'no_key' });
+        expect(VerifyHostAssertion(token, undefined, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'no_key' });
     });
 
     it('rejects a signature from the wrong key', () => {
         const signer = keypair();
         const other = keypair();
         const token = sign(signer.privatePem, { email: 'x@y.com' });
-        expect(verifyHostAssertion(token, other.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'bad_signature' });
+        expect(VerifyHostAssertion(token, other.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'bad_signature' });
     });
 
     it('rejects a wrong-audience assertion', () => {
         const kp = keypair();
         const token = sign(kp.privatePem, { email: 'x@y.com' }, { audience: 'pk_live_someone_else' });
-        expect(verifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'bad_signature' });
+        expect(VerifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'bad_signature' });
     });
 
     it('rejects an expired assertion', () => {
         const kp = keypair();
         const token = sign(kp.privatePem, { email: 'x@y.com' }, { expiresIn: -10 });
-        expect(verifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'expired' });
+        expect(VerifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'expired' });
     });
 
     it('rejects an assertion with no email', () => {
         const kp = keypair();
         const token = sign(kp.privatePem, { given_name: 'NoEmail' });
-        expect(verifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'no_email' });
+        expect(VerifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'no_email' });
     });
 
     it('rejects an assertion with no exp (unbounded lifetime)', () => {
         const kp = keypair();
         // Sign directly with no expiresIn so the token carries iat but no exp.
         const token = jwt.sign({ email: 'x@y.com' }, kp.privatePem, { algorithm: 'RS256', audience: WIDGET_KEY });
-        expect(verifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'expired' });
+        expect(VerifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'expired' });
     });
 
     it('rejects an assertion older than the maxAge cap even when its exp is still in the future', () => {
@@ -81,13 +81,13 @@ describe('verifyHostAssertion', () => {
             algorithm: 'RS256',
             audience: WIDGET_KEY,
         });
-        expect(verifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'expired' });
+        expect(VerifyHostAssertion(token, kp.publicPem, WIDGET_KEY)).toEqual({ ok: false, errorCode: 'expired' });
     });
 });
 
 describe('buildWidgetGuestClaims with hostIdentity', () => {
     it('carries the host identity as INFORMATIONAL claims but keeps the Anonymous principal email', () => {
-        const claims = buildWidgetGuestClaims({
+        const claims = BuildWidgetGuestClaims({
             issuer: 'iss',
             audience: 'mj-magic-link',
             widgetId: 'W',
@@ -111,7 +111,7 @@ describe('buildWidgetGuestClaims with hostIdentity', () => {
 
 describe('extractHostIdentity', () => {
     it('tolerates firstName/lastName fallbacks', () => {
-        const id = extractHostIdentity({ email: 'a@b.com', firstName: 'Al', lastName: 'Bo' });
+        const id = ExtractHostIdentity({ email: 'a@b.com', firstName: 'Al', lastName: 'Bo' });
         expect(id).toMatchObject({ email: 'a@b.com', firstName: 'Al', lastName: 'Bo' });
     });
 });

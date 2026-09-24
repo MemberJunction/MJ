@@ -7,7 +7,7 @@
  */
 
 import { TraceStep, StepPrecondition, StepPostcondition, TraceTarget } from '../types/trace.js';
-import { resolveElementByBox } from './trace.js';
+import { ResolveElementByBox } from './trace.js';
 import {
     BrowserAction,
     ClickAction,
@@ -25,11 +25,16 @@ import {
 // ─── Action Rehydration & Guards ───────────────────────
 
 /** Substitute `%name%` placeholders with fresh values (Stagehand replay discipline). */
-export function substituteVariables(text: string | undefined, values: Record<string, string>): string | undefined {
+export function SubstituteVariables(text: string | undefined, values: Record<string, string>): string | undefined {
     if (text === undefined) {
         return undefined;
     }
     return text.replace(/%([A-Za-z0-9_]+)%/g, (whole, name: string) => (name in values ? values[name] : whole));
+}
+
+/** @deprecated Use {@link SubstituteVariables}. */
+export function substituteVariables(text: string | undefined, values: Record<string, string>): string | undefined {
+    return SubstituteVariables(text, values);
 }
 
 /**
@@ -40,7 +45,7 @@ export function substituteVariables(text: string | undefined, values: Record<str
  *   type with no recorded selector — heal territory), which the engine
  *   treats as a divergence.
  */
-export function planReplayActions(step: TraceStep, values: Record<string, string> = {}): BrowserAction[] {
+export function PlanReplayActions(step: TraceStep, values: Record<string, string> = {}): BrowserAction[] {
     const a = step.Action;
     switch (a.Method) {
         case 'click': {
@@ -61,7 +66,7 @@ export function planReplayActions(step: TraceStep, values: Record<string, string
             }
             const type = new TypeAction();
             type.Selector = sel;
-            type.Text = substituteVariables(a.Text, values) ?? '';
+            type.Text = SubstituteVariables(a.Text, values) ?? '';
             const out: BrowserAction[] = [type];
             if (a.PressEnter) {
                 const key = new KeypressAction();
@@ -76,7 +81,7 @@ export function planReplayActions(step: TraceStep, values: Record<string, string
             return key.Key ? [key] : [];
         }
         case 'navigate': {
-            const url = substituteVariables(a.Url, values);
+            const url = SubstituteVariables(a.Url, values);
             if (!url) {
                 return [];
             }
@@ -114,9 +119,19 @@ export function planReplayActions(step: TraceStep, values: Record<string, string
     }
 }
 
+/** @deprecated Use {@link PlanReplayActions}. */
+export function planReplayActions(step: TraceStep, values: Record<string, string> = {}): BrowserAction[] {
+    return PlanReplayActions(step, values);
+}
+
 /** The selector a step's precondition should wait on, or undefined when it has no DOM target. */
-export function targetSelector(step: TraceStep): string | undefined {
+export function TargetSelector(step: TraceStep): string | undefined {
     return step.Action.Target?.Selector;
+}
+
+/** @deprecated Use {@link TargetSelector}. */
+export function targetSelector(step: TraceStep): string | undefined {
+    return TargetSelector(step);
 }
 
 export interface GuardResult {
@@ -133,8 +148,13 @@ export interface GuardResult {
  * recorded). Naming both makes that a one-line read instead of another
  * instrumented run.
  */
-export function describeUrlMismatch(pattern: string, observed?: string): string {
+export function DescribeUrlMismatch(pattern: string, observed?: string): string {
     return observed ? `expected ${pattern} — saw ${observed}` : `expected pattern ${pattern}`;
+}
+
+/** @deprecated Use {@link DescribeUrlMismatch}. */
+export function describeUrlMismatch(pattern: string, observed?: string): string {
+    return DescribeUrlMismatch(pattern, observed);
 }
 
 /**
@@ -142,12 +162,12 @@ export function describeUrlMismatch(pattern: string, observed?: string): string 
  * pattern that doesn't match, or a required target that never became visible
  * within the bound, FAILS the step (the engine then heals or diverges).
  */
-export function evaluatePrecondition(
+export function EvaluatePrecondition(
     pre: StepPrecondition,
     observed: { urlMatched: boolean; targetVisible: boolean; targetChecked: boolean; url?: string }
 ): GuardResult {
     if (pre.UrlPattern && !observed.urlMatched) {
-        return { pass: false, reason: `entry URL does not match ${describeUrlMismatch(pre.UrlPattern, observed.url)}` };
+        return { pass: false, reason: `entry URL does not match ${DescribeUrlMismatch(pre.UrlPattern, observed.url)}` };
     }
     if (pre.WaitForTarget && observed.targetChecked && !observed.targetVisible) {
         return { pass: false, reason: PRECONDITION_TARGET_MISSING };
@@ -155,11 +175,19 @@ export function evaluatePrecondition(
     return { pass: true, reason: 'precondition satisfied' };
 }
 
+/** @deprecated Use {@link EvaluatePrecondition}. */
+export function evaluatePrecondition(
+    pre: StepPrecondition,
+    observed: { urlMatched: boolean; targetVisible: boolean; targetChecked: boolean; url?: string }
+): GuardResult {
+    return EvaluatePrecondition(pre, observed);
+}
+
 /**
  * Pure postcondition decision from observed facts. A missing postcondition
  * always passes (nothing recorded to assert).
  */
-export function evaluatePostcondition(
+export function EvaluatePostcondition(
     post: StepPostcondition | undefined,
     observed: { urlMatched: boolean; expectVisibleOk: boolean; expectChecked: boolean; url?: string }
 ): GuardResult {
@@ -167,12 +195,20 @@ export function evaluatePostcondition(
         return { pass: true, reason: 'no postcondition recorded' };
     }
     if (post.UrlPattern && !observed.urlMatched) {
-        return { pass: false, reason: `post-action URL does not match ${describeUrlMismatch(post.UrlPattern, observed.url)}` };
+        return { pass: false, reason: `post-action URL does not match ${DescribeUrlMismatch(post.UrlPattern, observed.url)}` };
     }
     if (post.ExpectVisible && observed.expectChecked && !observed.expectVisibleOk) {
         return { pass: false, reason: 'expected element not visible after the action' };
     }
     return { pass: true, reason: 'postcondition satisfied' };
+}
+
+/** @deprecated Use {@link EvaluatePostcondition}. */
+export function evaluatePostcondition(
+    post: StepPostcondition | undefined,
+    observed: { urlMatched: boolean; expectVisibleOk: boolean; expectChecked: boolean; url?: string }
+): GuardResult {
+    return EvaluatePostcondition(post, observed);
 }
 
 // ─── Self-Heal ─────────────────────────────────────────
@@ -217,7 +253,7 @@ function narrowByScope(candidates: InteractiveElement[], scope?: string): Intera
  *           the LLM seam must disambiguate).
  *  - 0    — nothing plausible, or the recorded target had no role/name.
  */
-export function reresolveTarget(target: TraceTarget, elements: InteractiveElement[]): HealResolution {
+export function ReresolveTarget(target: TraceTarget, elements: InteractiveElement[]): HealResolution {
     const role = target.Role?.trim().toLowerCase();
     const name = target.Name?.trim().toLowerCase();
     if (!role && !name) {
@@ -245,7 +281,7 @@ export function reresolveTarget(target: TraceTarget, elements: InteractiveElemen
         // recorded absolute XPath, the one signal a reordered list has already
         // invalidated. The recorded box says which twin the passing run clicked,
         // scored by the same hit-test that grounded it at record time.
-        const positioned = resolveElementByBox(target.BoundingBox, exact);
+        const positioned = ResolveElementByBox(target.BoundingBox, exact);
         if (positioned) {
             return {
                 selector: positioned.Selector,
@@ -267,9 +303,19 @@ export function reresolveTarget(target: TraceTarget, elements: InteractiveElemen
     return { confidence: 0, reason: 'no element matches the recorded role+name' };
 }
 
+/** @deprecated Use {@link ReresolveTarget}. */
+export function reresolveTarget(target: TraceTarget, elements: InteractiveElement[]): HealResolution {
+    return ReresolveTarget(target, elements);
+}
+
 /** Whether a re-resolution's confidence clears the acceptance gate. */
-export function shouldAcceptHeal(confidence: number, threshold: number = DEFAULT_HEAL_CONFIDENCE_THRESHOLD): boolean {
+export function ShouldAcceptHeal(confidence: number, threshold: number = DEFAULT_HEAL_CONFIDENCE_THRESHOLD): boolean {
     return confidence >= threshold;
+}
+
+/** @deprecated Use {@link ShouldAcceptHeal}. */
+export function shouldAcceptHeal(confidence: number, threshold: number = DEFAULT_HEAL_CONFIDENCE_THRESHOLD): boolean {
+    return ShouldAcceptHeal(confidence, threshold);
 }
 
 /**
@@ -289,8 +335,13 @@ export function shouldAcceptHeal(confidence: number, threshold: number = DEFAULT
  * An exclusion list also fails open — every divergence reason added later is
  * healable until someone remembers to exclude it. This fails closed.
  */
-export function isSelectorHealable(divergenceReason: string): boolean {
+export function IsSelectorHealable(divergenceReason: string): boolean {
     return divergenceReason.includes(PRECONDITION_TARGET_MISSING) || ACTION_FAILED.test(divergenceReason);
+}
+
+/** @deprecated Use {@link IsSelectorHealable}. */
+export function isSelectorHealable(divergenceReason: string): boolean {
+    return IsSelectorHealable(divergenceReason);
 }
 
 /**

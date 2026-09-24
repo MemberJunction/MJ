@@ -25,7 +25,7 @@ export interface EntityMetadataForPrompt {
  * Products: → OrderDetails, → Categories
  * ```
  */
-export function generateRelationshipGraph(entities: EntityInfo[]): string {
+export function GenerateRelationshipGraph(entities: EntityInfo[]): string {
   const lines: string[] = [];
 
   for (const entity of entities) {
@@ -44,6 +44,11 @@ export function generateRelationshipGraph(entities: EntityInfo[]): string {
   return lines.join('\n');
 }
 
+/** @deprecated Use {@link GenerateRelationshipGraph}. */
+export function generateRelationshipGraph(entities: EntityInfo[]): string {
+  return GenerateRelationshipGraph(entities);
+}
+
 /**
  * Generates a Mermaid diagram for richer visualization
  *
@@ -55,7 +60,7 @@ export function generateRelationshipGraph(entities: EntityInfo[]): string {
  *   Orders[Orders] --> OrderDetails[OrderDetails]
  * ```
  */
-export function generateMermaidDiagram(entities: EntityInfo[]): string {
+export function GenerateMermaidDiagram(entities: EntityInfo[]): string {
   const lines = ['graph LR'];
   const processedPairs = new Set<string>();
 
@@ -76,6 +81,11 @@ export function generateMermaidDiagram(entities: EntityInfo[]): string {
   return lines.join('\n');
 }
 
+/** @deprecated Use {@link GenerateMermaidDiagram}. */
+export function generateMermaidDiagram(entities: EntityInfo[]): string {
+  return GenerateMermaidDiagram(entities);
+}
+
 /**
  * Formats entity metadata for LLM prompt (concise version with key info)
  *
@@ -85,7 +95,7 @@ export function generateMermaidDiagram(entities: EntityInfo[]): string {
  * - Field count (as a proxy for data richness)
  * - Related entities with relationship types
  */
-export function formatEntitiesForPrompt(entities: EntityInfo[]): EntityMetadataForPrompt[] {
+export function FormatEntitiesForPrompt(entities: EntityInfo[]): EntityMetadataForPrompt[] {
   return entities.map(entity => ({
     Name: entity.Name,
     Description: entity.Description || 'No description available',
@@ -96,4 +106,9 @@ export function formatEntitiesForPrompt(entities: EntityInfo[]): EntityMetadataF
       type: rel.Type
     }))
   }));
+}
+
+/** @deprecated Use {@link FormatEntitiesForPrompt}. */
+export function formatEntitiesForPrompt(entities: EntityInfo[]): EntityMetadataForPrompt[] {
+  return FormatEntitiesForPrompt(entities);
 }

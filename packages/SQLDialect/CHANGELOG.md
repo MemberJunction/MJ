@@ -1,5 +1,7 @@
 # @memberjunction/sql-dialect
 
+## 6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

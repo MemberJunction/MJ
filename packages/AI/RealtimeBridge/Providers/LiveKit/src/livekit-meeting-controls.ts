@@ -42,13 +42,18 @@ function mapRole(role: LiveKitParticipantRole, isLocal: boolean | undefined): Br
 }
 
 /** Maps one LiveKit participant onto the channel's {@link BridgeMeetingParticipant} shape. */
-export function toMeetingParticipant(p: LiveKitParticipant): BridgeMeetingParticipant {
+export function ToMeetingParticipant(p: LiveKitParticipant): BridgeMeetingParticipant {
     return {
         ParticipantId: p.Identity,
         DisplayName: p.DisplayName,
         Role: mapRole(p.Role, p.IsLocal),
         IsAgent: p.IsLocal === true,
     };
+}
+
+/** @deprecated Use {@link ToMeetingParticipant}. */
+export function toMeetingParticipant(p: LiveKitParticipant): BridgeMeetingParticipant {
+    return ToMeetingParticipant(p);
 }
 
 /**
@@ -91,7 +96,7 @@ export class LiveKitMeetingControlsEventSource implements IBridgeMeetingControls
     public IngestRoster(participants: LiveKitParticipant[]): void {
         this.roster.clear();
         for (const p of participants) {
-            this.roster.set(this.key(p.Identity), toMeetingParticipant(p));
+            this.roster.set(this.key(p.Identity), ToMeetingParticipant(p));
         }
         this.emitRoster();
     }

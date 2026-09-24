@@ -1,25 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import {
-    parseExternalizePath,
-    findSubPropertyExternalizations,
-    getAtPath,
-    externalizeSubProperties,
+    ParseExternalizePath,
+    FindSubPropertyExternalizations,
+    GetAtPath,
+    ExternalizeSubProperties,
 } from '../lib/json-subproperty-externalization.js';
 
 describe('parseExternalizePath', () => {
     it('splits a dotted config field into its root field and property path', () => {
-        expect(parseExternalizePath('Configuration.ReplayScript')).toEqual({
+        expect(ParseExternalizePath('Configuration.ReplayScript')).toEqual({
             field: 'Configuration',
             path: ['ReplayScript'],
         });
     });
 
     it('yields an empty path for a whole-field config, so existing behavior is unchanged', () => {
-        expect(parseExternalizePath('TemplateText')).toEqual({ field: 'TemplateText', path: [] });
+        expect(ParseExternalizePath('TemplateText')).toEqual({ field: 'TemplateText', path: [] });
     });
 
     it('supports nesting deeper than one level', () => {
-        expect(parseExternalizePath('Configuration.replay.script')).toEqual({
+        expect(ParseExternalizePath('Configuration.replay.script')).toEqual({
             field: 'Configuration',
             path: ['replay', 'script'],
         });
@@ -35,7 +35,7 @@ describe('findSubPropertyExternalizations', () => {
     ];
 
     it('returns only the sub-property configs rooted at the given field', () => {
-        const found = findSubPropertyExternalizations('Configuration', config);
+        const found = FindSubPropertyExternalizations('Configuration', config);
         expect(found).toEqual([
             { path: ['ReplayScript'], pattern: '@file:scripts/{Name}.json' },
             { path: ['PendingReplayScript'], pattern: '@file:scripts/{Name}.pending.json' },
@@ -43,16 +43,16 @@ describe('findSubPropertyExternalizations', () => {
     });
 
     it('ignores whole-field configs — those stay on the existing code path', () => {
-        expect(findSubPropertyExternalizations('TemplateText', config)).toEqual([]);
+        expect(FindSubPropertyExternalizations('TemplateText', config)).toEqual([]);
     });
 
     it('returns nothing when the field has no sub-property config', () => {
-        expect(findSubPropertyExternalizations('Name', config)).toEqual([]);
+        expect(FindSubPropertyExternalizations('Name', config)).toEqual([]);
     });
 
     // The legacy string-array form (["TemplateText"]) can only name whole fields.
     it('tolerates the simple string-array config form', () => {
-        expect(findSubPropertyExternalizations('Configuration', ['TemplateText'])).toEqual([]);
+        expect(FindSubPropertyExternalizations('Configuration', ['TemplateText'])).toEqual([]);
     });
 });
 
@@ -60,16 +60,16 @@ describe('getAtPath', () => {
     const value = { maxSteps: 35, computerUse: { elementGrounding: true }, ReplayScript: { steps: [1] } };
 
     it('reads a leaf', () => {
-        expect(getAtPath(value, ['ReplayScript'])).toEqual({ steps: [1] });
+        expect(GetAtPath(value, ['ReplayScript'])).toEqual({ steps: [1] });
     });
 
     it('reads a nested leaf', () => {
-        expect(getAtPath(value, ['computerUse', 'elementGrounding'])).toBe(true);
+        expect(GetAtPath(value, ['computerUse', 'elementGrounding'])).toBe(true);
     });
 
     it('returns undefined for an absent leaf rather than throwing', () => {
-        expect(getAtPath(value, ['NoSuchKey'])).toBeUndefined();
-        expect(getAtPath(value, ['computerUse', 'nope', 'deeper'])).toBeUndefined();
+        expect(GetAtPath(value, ['NoSuchKey'])).toBeUndefined();
+        expect(GetAtPath(value, ['computerUse', 'nope', 'deeper'])).toBeUndefined();
     });
 });
 
@@ -90,7 +90,7 @@ describe('externalizeSubProperties', () => {
 
     it('replaces the sub-property with the reference the externalizer returned', async () => {
         const ext = fakeExternalizer();
-        const result = await externalizeSubProperties(
+        const result = await ExternalizeSubProperties(
             { maxSteps: 35, ReplayScript: { steps: [1, 2] } },
             configs,
             ext.fn
@@ -100,14 +100,14 @@ describe('externalizeSubProperties', () => {
 
     it('hands the externalizer the sub-property value, not the whole field', async () => {
         const ext = fakeExternalizer();
-        await externalizeSubProperties({ maxSteps: 35, ReplayScript: { steps: [1, 2] } }, configs, ext.fn);
+        await ExternalizeSubProperties({ maxSteps: 35, ReplayScript: { steps: [1, 2] } }, configs, ext.fn);
         expect(ext.calls).toHaveLength(1);
         expect(ext.calls[0].value).toEqual({ steps: [1, 2] });
     });
 
     it('leaves every sibling property untouched', async () => {
         const ext = fakeExternalizer();
-        const result = (await externalizeSubProperties(
+        const result = (await ExternalizeSubProperties(
             { maxSteps: 35, computerUse: { elementGrounding: true }, ReplayScript: { steps: [] } },
             configs,
             ext.fn
@@ -121,7 +121,7 @@ describe('externalizeSubProperties', () => {
     it('leaves the value alone when the sub-property is absent', async () => {
         const ext = fakeExternalizer();
         const input = { maxSteps: 35 };
-        const result = await externalizeSubProperties(input, configs, ext.fn);
+        const result = await ExternalizeSubProperties(input, configs, ext.fn);
         expect(result).toEqual({ maxSteps: 35 });
         expect('ReplayScript' in (result as object)).toBe(false);
         expect(ext.calls).toHaveLength(0);
@@ -129,14 +129,14 @@ describe('externalizeSubProperties', () => {
 
     it('does not externalize a null sub-property', async () => {
         const ext = fakeExternalizer();
-        const result = await externalizeSubProperties({ ReplayScript: null }, configs, ext.fn);
+        const result = await ExternalizeSubProperties({ ReplayScript: null }, configs, ext.fn);
         expect(ext.calls).toHaveLength(0);
         expect(result).toEqual({ ReplayScript: null });
     });
 
     it('parses a JSON-string field value and returns an object', async () => {
         const ext = fakeExternalizer();
-        const result = await externalizeSubProperties(
+        const result = await ExternalizeSubProperties(
             JSON.stringify({ maxSteps: 35, ReplayScript: { steps: [1] } }),
             configs,
             ext.fn
@@ -148,7 +148,7 @@ describe('externalizeSubProperties', () => {
     // pulls; the externalizer only honors it if we pass the existing reference through.
     it('passes the existing reference through so the externalizer can preserve its path', async () => {
         const ext = fakeExternalizer();
-        await externalizeSubProperties(
+        await ExternalizeSubProperties(
             { ReplayScript: { steps: [1] } },
             configs,
             ext.fn,
@@ -160,13 +160,13 @@ describe('externalizeSubProperties', () => {
     it('returns the value untouched when no sub-property configs apply', async () => {
         const ext = fakeExternalizer();
         const input = { maxSteps: 35, ReplayScript: { steps: [1] } };
-        expect(await externalizeSubProperties(input, [], ext.fn)).toBe(input);
+        expect(await ExternalizeSubProperties(input, [], ext.fn)).toBe(input);
         expect(ext.calls).toHaveLength(0);
     });
 
     it('leaves an unparseable string value alone rather than throwing', async () => {
         const ext = fakeExternalizer();
-        expect(await externalizeSubProperties('not json at all', configs, ext.fn)).toBe('not json at all');
+        expect(await ExternalizeSubProperties('not json at all', configs, ext.fn)).toBe('not json at all');
         expect(ext.calls).toHaveLength(0);
     });
 });

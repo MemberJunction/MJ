@@ -203,7 +203,7 @@ export class MJLexer {
      * Parses a filter chain like: "varName | filter1 | filter2('arg')"
      * into a variable name and filter array.
      */
-    static parseFilterChain(content: string): { variable: string; filters: MJFilter[] } {
+    static ParseFilterChain(content: string): { variable: string; filters: MJFilter[] } {
         const parts = MJLexer.splitPipes(content);
         const variable = parts[0].trim();
         const filters: MJFilter[] = [];
@@ -215,6 +215,11 @@ export class MJLexer {
         }
 
         return { variable, filters };
+    }
+
+    /** @deprecated Use {@link ParseFilterChain}. */
+    static parseFilterChain(content: string): { variable: string; filters: MJFilter[] } {
+        return this.ParseFilterChain(content);
     }
 
     /**

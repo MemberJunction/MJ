@@ -255,7 +255,7 @@ export function DescribeInvocationTypes(typeNames: readonly string[]): string {
         .map((n) => INVOCATION_VERBS[n.toLowerCase()] ?? n.toLowerCase());
     const unique = [...new Set(verbs)];
     if (unique.length === 0) return 'On a data change';
-    return `When a record is ${joinWithOr(unique)}`;
+    return `When a record is ${JoinWithOr(unique)}`;
 }
 
 const INVOCATION_VERBS: Record<string, string> = {
@@ -276,10 +276,15 @@ const INVOCATION_VERBS: Record<string, string> = {
 };
 
 /** `a`, `a or b`, `a, b or c` — the Oxford-free form people speak. */
-export function joinWithOr(items: readonly string[]): string {
+export function JoinWithOr(items: readonly string[]): string {
     if (items.length === 0) return '';
     if (items.length === 1) return items[0];
     return `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
+}
+
+/** @deprecated Use {@link JoinWithOr}. */
+export function joinWithOr(items: readonly string[]): string {
+    return JoinWithOr(items);
 }
 
 /**

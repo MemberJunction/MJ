@@ -51,7 +51,7 @@ export function DashboardView({
 
     const subtitle = useMemo(() => {
         if (!dashboard) return 'Loading…';
-        const count = `${dashboard.parts.length} part${dashboard.parts.length === 1 ? '' : 's'}`;
+        const count = `${dashboard.Parts.length} part${dashboard.Parts.length === 1 ? '' : 's'}`;
         const when = dashboard.updatedAt ? ` · updated ${dashboard.updatedAt.toLocaleDateString()}` : '';
         return `${count}${when}`;
     }, [dashboard]);
@@ -60,7 +60,7 @@ export function DashboardView({
         <>
             {renderHeader?.({ Name: dashboard?.name ?? 'Dashboard', Subtitle: subtitle })}
 
-            {dashboard && dashboard.desktopOnlyCount > 0 ? (
+            {dashboard && dashboard.DesktopOnlyCount > 0 ? (
                 <View style={styles.notice}>
                     <View style={{ marginTop: 1 }}>
                         <Icons.Sparkle size={14} color={Colors.warn} strokeWidth={2.2} />
@@ -77,7 +77,7 @@ export function DashboardView({
                 <View style={styles.loadingBlock}><Text style={styles.errorText}>{error.message}</Text></View>
             ) : !dashboard ? (
                 <View style={styles.loadingBlock}><Text style={styles.errorText}>Dashboard not found.</Text></View>
-            ) : dashboard.parts.length === 0 ? (
+            ) : dashboard.Parts.length === 0 ? (
                 <View style={styles.loadingBlock}>
                     <View style={styles.emptyIcon}>
                         <Icons.Sparkle size={22} color={Colors.brand} strokeWidth={2} />
@@ -91,7 +91,7 @@ export function DashboardView({
                 </View>
             ) : (
                 <ScrollView contentContainerStyle={styles.body}>
-                    {dashboard.parts.map((part) => (
+                    {dashboard.Parts.map((part) => (
                         <PartCard key={part.id} part={part} />
                     ))}
                 </ScrollView>
@@ -155,7 +155,7 @@ function QueryResultView({ result, width }: { result: QueryRunResult; width: num
                 </View>
             );
         case 'chart':
-            return <Chart spec={view.spec} width={width} />;
+            return <Chart Spec={view.spec} Width={width} />;
         case 'table':
         default:
             return <ResultTable columns={view.columns} rows={view.rows} />;
@@ -304,7 +304,7 @@ function numericColumns(columns: string[], rows: Record<string, unknown>[]): str
  * bar chart; otherwise a compact table.
  */
 function analyzeResult(result: QueryRunResult): QueryView {
-    const { columns, rows } = result;
+    const { Columns: columns, Rows: rows } = result;
     if (rows.length === 0 || columns.length === 0) return { mode: 'empty' };
 
     const numeric = numericColumns(columns, rows);
@@ -319,7 +319,7 @@ function analyzeResult(result: QueryRunResult): QueryView {
     if (labelCol && numeric.length > 0 && rows.length <= 12) {
         const valueCol = numeric[0];
         const data: ChartDatum[] = rows.map((r) => ({ label: String(r[labelCol] ?? ''), value: toNumber(r[valueCol]) ?? 0 }));
-        return { mode: 'chart', spec: { kind: 'bar', data } };
+        return { mode: 'chart', spec: { Kind: 'bar', Data: data } };
     }
 
     return { mode: 'table', columns, rows };

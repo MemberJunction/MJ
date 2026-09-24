@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import { MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
-import { parseRowDrivers, type RowDriver } from './at-risk.view-models';
+import { ParseRowDrivers, type RowDriver } from './at-risk.view-models';
 import {
   formatPredictionScore,
   resolveScoreBand,
@@ -11,29 +11,29 @@ import {
 
 /** One historical score point for an entity record produced by a model run. */
 export interface ModelScoreHistoryPoint {
-  runId: string;
-  runDate: Date;
-  score: number;
-  scoreFormatted: string;
-  riskPct: number;
-  class: string | null;
-  band: 'high' | 'medium' | 'low' | string;
-  status: string;
-  durationMs: number | null;
-  drivers: RowDriver[];
+  runId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  RunDate: Date;
+  score: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  ScoreFormatted: string;
+  riskPct: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  class: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  band: 'high' | 'medium' | 'low' | string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  status: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  DurationMs: number | null;
+  drivers: RowDriver[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Score delta compared to previous run (e.g. +0.05 or -0.12), or null for the first run. */
-  delta: number | null;
+  Delta: number | null;
 }
 
 export interface LoadScoreHistoryParams {
-  provider: IMetadataProvider;
-  user?: UserInfo;
-  entityId?: string | null;
-  recordId: string;
-  modelId?: string | null;
-  maxRuns?: number;
-  outcomeConfig?: OutcomeConfig | null;
-  problemType?: string | null;
+  provider: IMetadataProvider;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  User?: UserInfo;
+  entityId?: string | null;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  recordId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  modelId?: string | null;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  MaxRuns?: number;
+  OutcomeConfig?: OutcomeConfig | null;
+  ProblemType?: string | null;
 }
 
 function bandForScore(score: number): 'high' | 'medium' | 'low' {
@@ -52,7 +52,7 @@ export class PredictiveStudioScoreHistoryService {
    * Load the history of predictions for a specific record across all runs (ordered oldest to newest).
    */
   public async LoadRecordScoreHistory(params: LoadScoreHistoryParams): Promise<ModelScoreHistoryPoint[]> {
-    const { provider, user, entityId, recordId, modelId, maxRuns = 50, outcomeConfig, problemType } = params;
+    const { provider, User: user, entityId, recordId, modelId, MaxRuns: maxRuns = 50, OutcomeConfig: outcomeConfig, ProblemType: problemType } = params;
     if (!recordId) return [];
 
     let extraFilter = `RecordID = '${recordId.replace(/'/g, "''")}'`;
@@ -114,16 +114,16 @@ export class PredictiveStudioScoreHistoryService {
 
         points.push({
           runId: d.ProcessRunID,
-          runDate: runDate instanceof Date ? runDate : new Date(runDate),
+          RunDate: runDate instanceof Date ? runDate : new Date(runDate),
           score,
-          scoreFormatted: formatPredictionScore(score, outcomeConfig, problemType),
+          ScoreFormatted: formatPredictionScore(score, outcomeConfig, problemType),
           riskPct: Math.round(score * 100),
           class: p.class ?? null,
           band: resolvedBand?.Key ?? bandForScore(score),
           status: resolvedBand?.Label ?? d.Status ?? 'Completed',
-          durationMs: d.DurationMs ?? null,
-          drivers: parseRowDrivers(p.drivers) ?? [],
-          delta,
+          DurationMs: d.DurationMs ?? null,
+          drivers: ParseRowDrivers(p.drivers) ?? [],
+          Delta: delta,
         });
       }
 

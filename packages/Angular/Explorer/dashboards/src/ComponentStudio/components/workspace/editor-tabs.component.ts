@@ -150,14 +150,23 @@ export class EditorTabsComponent implements OnInit, OnDestroy {
   private lastFormRole = false;
 
   constructor(
-    public state: ComponentStudioStateService,
+    public State: ComponentStudioStateService,
     private cdr: ChangeDetectorRef
   ) {}
+
+  /** @deprecated Use {@link State}. */
+  public get state(): ComponentStudioStateService {
+    return this.State;
+  }
+  /** @deprecated Use {@link State}. */
+  public set state(value: ComponentStudioStateService) {
+    this.State = value;
+  }
 
   ngOnInit(): void {
     this.lastFormRole = this.IsFormRoleComponent;
     this.maybeAutoSelectFormBuilder();
-    this.stateChangedSub = this.state.StateChanged.subscribe(() => {
+    this.stateChangedSub = this.State.StateChanged.subscribe(() => {
       this.maybeAutoSelectFormBuilder();
       this.cdr.detectChanges();
     });
@@ -171,13 +180,13 @@ export class EditorTabsComponent implements OnInit, OnDestroy {
   }
 
   SelectTab(index: number): void {
-    this.state.ActiveTab = index;
+    this.State.ActiveTab = index;
     this.cdr.detectChanges();
   }
 
   /** True iff the current spec declares itself form-role. */
   public get IsFormRoleComponent(): boolean {
-    const spec: ComponentSpec | null = this.state.GetCurrentSpec();
+    const spec: ComponentSpec | null = this.State.GetCurrentSpec();
     return spec?.componentRole === 'form' || spec?.type === 'form';
   }
 
@@ -189,11 +198,11 @@ export class EditorTabsComponent implements OnInit, OnDestroy {
   private maybeAutoSelectFormBuilder(): void {
     const isForm = this.IsFormRoleComponent;
     if (isForm && !this.lastFormRole) {
-      this.state.ActiveTab = TAB_FORM_BUILDER;
+      this.State.ActiveTab = TAB_FORM_BUILDER;
     } else if (!isForm && this.lastFormRole) {
       // If we leave a form-role component, drop back to Spec.
-      if (this.state.ActiveTab === TAB_FORM_BUILDER) {
-        this.state.ActiveTab = TAB_SPEC;
+      if (this.State.ActiveTab === TAB_FORM_BUILDER) {
+        this.State.ActiveTab = TAB_SPEC;
       }
     }
     this.lastFormRole = isForm;

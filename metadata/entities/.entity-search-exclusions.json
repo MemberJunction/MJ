@@ -7,6 +7,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tags"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.471Z",
+      "checksum": "d8e89a6e4011c019617d40c213b49acc80f2625851811d533bb77c63479b2dff"
     }
   },
   {
@@ -17,6 +21,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tagged Items"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.500Z",
+      "checksum": "386cbb35949f67a865341a114b1f101c5195303685832daf11602142ac55c76d"
     }
   },
   {
@@ -27,6 +35,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tag Synonyms"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.536Z",
+      "checksum": "5fbfa218555a15ccdf1dc099c04cd29ccd32f46861335096565aff91ec2a5792"
     }
   },
   {
@@ -37,6 +49,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tag Scopes"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.568Z",
+      "checksum": "81c8df87dd564109c2f162c7b8afa8234b4a4d8c7e72a1316b58612513ec4596"
     }
   },
   {
@@ -47,6 +63,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Tag Co Occurrences"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.601Z",
+      "checksum": "e32ffa503d427910858149140ded1a791b9cd26dda93b38b4a802e60e7f7152f"
     }
   },
   {
@@ -57,6 +77,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Content Items"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.630Z",
+      "checksum": "a50c5d54bdd08420be970e730b371f6bbf4ccf0d5d33ba3aacf77748f95d0499"
     }
   },
   {
@@ -67,6 +91,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invites"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.686Z",
+      "checksum": "012e98ce1802862abc57f0e03358362b42ae09c906027477eb3c5cf37c7f4982"
     }
   },
   {
@@ -77,6 +105,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Allowed Domains"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.719Z",
+      "checksum": "55ea4ec5a9c5761a38a6503d6b73dfb677494b859c39adf06918438a9e705d9d"
     }
   },
   {
@@ -87,6 +119,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Allowed Paths"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.747Z",
+      "checksum": "5b7d5c4b6c9e37514b9a806d31b01e55b3c2c30633417585196a54f597adb6ca"
     }
   },
   {
@@ -97,6 +133,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Applications"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.777Z",
+      "checksum": "aa2b1161ccfead2976d6a8d42c19adf06cfc1f93eefc726a121aae6f6050264a"
     }
   },
   {
@@ -107,6 +147,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Invite Roles"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.806Z",
+      "checksum": "951a4710696e08f1d8c885b34fb8ebe4f20dc6554d5021586fde88bcd621cfea"
     }
   },
   {
@@ -117,6 +161,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Magic Link Redemptions"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.832Z",
+      "checksum": "918420fdd5daae54ba6725eaab0ecea2749678d3096427d6355424223595a2e8"
     }
   },
   {
@@ -127,6 +175,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Materialized Results"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.858Z",
+      "checksum": "22d9a87f21764d8db41ffa56837a573f5ace0a186591cc2927aa66b1191b2e83"
     }
   },
   {
@@ -137,6 +189,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Materialized Result Queries"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.883Z",
+      "checksum": "b87da39caa2c8c73094d4bef4630ba1b7b8ce2bad7a07880bd5b2c02298e50a3"
     }
   },
   {
@@ -147,6 +203,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: RSU Pending Works"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.910Z",
+      "checksum": "36c05fc1f2b6975aed50877de2e2f85946b92d22db561abf5249a0aaf9bd22d5"
     }
   },
   {
@@ -157,6 +217,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Skill Search Scopes"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.937Z",
+      "checksum": "f8395351761617fe1cadb9e8eff4c25bdf558a53480d51dd937639db198a8dfa"
     }
   },
   {
@@ -167,6 +231,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Cluster Analysis Clusters"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.964Z",
+      "checksum": "39a7c14ed126d911f70681c15fbe91ba25d4f3bc36d718c9497b1d4fa6a4e60a"
     }
   },
   {
@@ -177,6 +245,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Employees"
+    },
+    "sync": {
+      "lastModified": "2026-09-21T02:45:38.990Z",
+      "checksum": "2d5cd5bd45664386f3ec40459218c2c0eac1c9a4d3b6140942be6fcc802057cc"
     }
   }
 ]

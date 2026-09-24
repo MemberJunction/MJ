@@ -15,7 +15,7 @@ let warned = false;
  *
  * Called by BOTH strips (`mj-tabstrip` and `mj-workspace-tab-strip`) after view init.
  */
-export function warnIfTabChromeMissing(element: HTMLElement | null | undefined): void {
+export function WarnIfTabChromeMissing(element: HTMLElement | null | undefined): void {
   if (warned || !isDevMode() || !element || typeof getComputedStyle !== 'function') {
     return;
   }
@@ -34,4 +34,9 @@ export function warnIfTabChromeMissing(element: HTMLElement | null | undefined):
   } catch {
     // Never let diagnostics break the strip.
   }
+}
+
+/** @deprecated Use {@link WarnIfTabChromeMissing}. */
+export function warnIfTabChromeMissing(element: HTMLElement | null | undefined): void {
+  return WarnIfTabChromeMissing(element);
 }

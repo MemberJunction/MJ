@@ -315,6 +315,22 @@
               </div>
             }
           }
+          @let unroutedErrors = UnroutedValidationErrorCount;
+          @if (unroutedErrors > 0) {
+            <!-- A failed save's errors that no rail item owns. Without this row they were counted
+                 only on the collapsed spine, so an EXPANDED rail could look clean over a form
+                 the server had just refused. -->
+            <div class="mj-forms-chrome-rail-unrouted"
+                 role="note"
+                 [attr.aria-label]="RailUnroutedErrorTitle(unroutedErrors)"
+                 [title]="RailUnroutedErrorTitle(unroutedErrors)">
+              <span class="mj-forms-chrome-rail-handle is-spacer" aria-hidden="true"></span>
+              <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>
+              <span class="mj-forms-chrome-rail-label">Not in a section</span>
+              <span class="mj-forms-chrome-rail-error is-unrouted" role="img"
+                    [attr.aria-label]="RailUnroutedErrorTitle(unroutedErrors)">{{ unroutedErrors }}</span>
+            </div>
+          }
           </div>
           }
         </nav>

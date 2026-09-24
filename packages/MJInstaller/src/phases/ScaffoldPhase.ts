@@ -29,7 +29,7 @@ import { ArchiveEntryRefusedError } from '../errors/ArchiveEntryRefusedError.js'
 import { GitHubReleaseProvider } from '../adapters/GitHubReleaseProvider.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { RepoFetcher, type SparseFetchResult } from '../adapters/RepoFetcher.js';
-import { DistributionAssembler, distributionSourcePaths } from '../distribution/DistributionAssembler.js';
+import { DistributionAssembler, DistributionSourcePaths } from '../distribution/DistributionAssembler.js';
 import type { VersionInfo } from '../models/VersionInfo.js';
 
 /** Default canonical MemberJunction clone URL used for the distribution sparse fetch. */
@@ -175,7 +175,7 @@ export class ScaffoldPhase {
       fetched = await this.repoFetcher.FetchPaths({
         RepoUrl: repoUrl,
         Ref: version.Tag,
-        Paths: distributionSourcePaths(false, undefined, includeClaudePack),
+        Paths: DistributionSourcePaths(false, undefined, includeClaudePack),
       });
     } catch (err) {
       throw new InstallerError(

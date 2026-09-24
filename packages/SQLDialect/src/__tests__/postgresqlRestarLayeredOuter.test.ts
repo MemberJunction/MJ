@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-    restarLayeredOuterView,
-    buildCreateOrReplaceLayeredOuterViewSQL,
+    RestarLayeredOuterView,
+    BuildCreateOrReplaceLayeredOuterViewSQL,
     LayeredOuterRestarError,
-    splitTopLevelCommaList,
+    SplitTopLevelCommaList,
 } from '../postgresqlRestarLayeredOuter';
 
 const ORG_INNER = [
@@ -22,7 +22,7 @@ const ORG_INNER = [
 
 describe('splitTopLevelCommaList', () => {
     it('splits on commas not inside parentheses or quotes', () => {
-        expect(splitTopLevelCommaList('g."ID", COALESCE(cm."Value", g."Email") AS "PrimaryEmail"')).toEqual([
+        expect(SplitTopLevelCommaList('g."ID", COALESCE(cm."Value", g."Email") AS "PrimaryEmail"')).toEqual([
             'g."ID"',
             'COALESCE(cm."Value", g."Email") AS "PrimaryEmail"',
         ]);
@@ -51,7 +51,7 @@ describe('restarLayeredOuterView', () => {
      LEFT JOIN __mj_bizappscommon."ContactMethod" cm ON cm."OrganizationID" = g."ID"
         `.trim();
 
-        const result = restarLayeredOuterView({
+        const result = RestarLayeredOuterView({
             viewDefinition: def,
             innerViewName: 'vwOrganizationsGenerated',
             innerColumns: ORG_INNER,
@@ -89,7 +89,7 @@ describe('restarLayeredOuterView', () => {
      LEFT JOIN sales."Address" addr ON addr."ID" = g."ID"
         `.trim();
 
-        const result = restarLayeredOuterView({
+        const result = RestarLayeredOuterView({
             viewDefinition: def,
             innerViewName: 'vwOrganizationsGenerated',
             innerColumns: innerWithTemp,
@@ -107,7 +107,7 @@ describe('restarLayeredOuterView', () => {
    FROM __mj."vwVersionInstallationsGenerated" g
         `.trim();
 
-        const result = restarLayeredOuterView({
+        const result = RestarLayeredOuterView({
             viewDefinition: def,
             innerViewName: 'vwVersionInstallationsGenerated',
             innerColumns: ['ID', 'MajorVersion', 'MinorVersion', 'PatchVersion'],
@@ -131,7 +131,7 @@ describe('restarLayeredOuterView', () => {
      JOIN __mj."UserView" uv ON uvr."UserViewID" = uv."ID"
         `.trim();
 
-        const result = restarLayeredOuterView({
+        const result = RestarLayeredOuterView({
             viewDefinition: def,
             innerViewName: 'vwUserViewRunDetailsGenerated',
             innerColumns: ['ID', 'UserViewRunID', 'RecordID', 'UserViewRun'],
@@ -145,7 +145,7 @@ describe('restarLayeredOuterView', () => {
 
     it('throws when the SELECT list is not an inner-column prefix', () => {
         expect(() =>
-            restarLayeredOuterView({
+            RestarLayeredOuterView({
                 viewDefinition: 'SELECT 1 AS x FROM other.t',
                 innerViewName: 'vwInner',
                 innerColumns: ['ID'],
@@ -156,7 +156,7 @@ describe('restarLayeredOuterView', () => {
 
 describe('buildCreateOrReplaceLayeredOuterViewSQL', () => {
     it('quotes schema and view names', () => {
-        const sql = buildCreateOrReplaceLayeredOuterViewSQL('__mj', 'vwVersionInstallations', 'SELECT "g".*\nFROM __mj."vwVersionInstallationsGenerated" g');
+        const sql = BuildCreateOrReplaceLayeredOuterViewSQL('__mj', 'vwVersionInstallations', 'SELECT "g".*\nFROM __mj."vwVersionInstallationsGenerated" g');
         expect(sql).toContain('CREATE OR REPLACE VIEW "__mj"."vwVersionInstallations"');
         expect(sql).toContain('SELECT "g".*');
     });

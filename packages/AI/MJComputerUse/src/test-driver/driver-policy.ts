@@ -16,8 +16,13 @@ import { ComputerUseTestConfig } from './types';
  * coordinate click records a target with no selector and no role/name to heal
  * from, so grounding is the precondition for the replay tier existing at all.
  */
-export function usesElementGrounding(config: ComputerUseTestConfig): boolean {
+export function UsesElementGrounding(config: ComputerUseTestConfig): boolean {
     return config.elementGrounding ?? true;
+}
+
+/** @deprecated Use {@link UsesElementGrounding}. */
+export function usesElementGrounding(config: ComputerUseTestConfig): boolean {
+    return UsesElementGrounding(config);
 }
 
 /**
@@ -26,8 +31,13 @@ export function usesElementGrounding(config: ComputerUseTestConfig): boolean {
  * trust. `'off'` makes the recorded step a contract — pair it with
  * `AllowLLMFallback: false` for a run with no model in it at all.
  */
-export function resolveReplayHeal(config: ComputerUseTestConfig): ReplayHealPolicy {
+export function ResolveReplayHeal(config: ComputerUseTestConfig): ReplayHealPolicy {
     return config.replayHeal ?? 'llm';
+}
+
+/** @deprecated Use {@link ResolveReplayHeal}. */
+export function resolveReplayHeal(config: ComputerUseTestConfig): ReplayHealPolicy {
+    return ResolveReplayHeal(config);
 }
 
 /**
@@ -35,8 +45,13 @@ export function resolveReplayHeal(config: ComputerUseTestConfig): ReplayHealPoli
  * test opts out — the opt-out is for a test still being authored, or one whose
  * trajectory should not become the baseline later runs replay.
  */
-export function recordsReplayScript(config: ComputerUseTestConfig): boolean {
+export function RecordsReplayScript(config: ComputerUseTestConfig): boolean {
     return config.recordReplayScript ?? true;
+}
+
+/** @deprecated Use {@link RecordsReplayScript}. */
+export function recordsReplayScript(config: ComputerUseTestConfig): boolean {
+    return RecordsReplayScript(config);
 }
 
 // ─── Oracle gating ─────────────────────────────────────────
@@ -48,8 +63,13 @@ export function recordsReplayScript(config: ComputerUseTestConfig): boolean {
 const DEFAULT_ADVISORY_TYPES = new Set<string>(['step-count']);
 
 /** An explicit per-oracle `advisory` value wins; otherwise the type's default applies. */
-export function isOracleAdvisory(type: string, explicitAdvisory?: boolean): boolean {
+export function IsOracleAdvisory(type: string, explicitAdvisory?: boolean): boolean {
     return explicitAdvisory ?? DEFAULT_ADVISORY_TYPES.has(type);
+}
+
+/** @deprecated Use {@link IsOracleAdvisory}. */
+export function isOracleAdvisory(type: string, explicitAdvisory?: boolean): boolean {
+    return IsOracleAdvisory(type, explicitAdvisory);
 }
 
 /**
@@ -57,8 +77,13 @@ export function isOracleAdvisory(type: string, explicitAdvisory?: boolean): bool
  * Advisory results are still reported and scored, just not gating, so an
  * efficiency signal can inform the score without failing a successful run.
  */
-export function partitionGatingOracles(results: OracleResult[]): OracleResult[] {
+export function PartitionGatingOracles(results: OracleResult[]): OracleResult[] {
     return results.filter(r => r.advisory !== true);
+}
+
+/** @deprecated Use {@link PartitionGatingOracles}. */
+export function partitionGatingOracles(results: OracleResult[]): OracleResult[] {
+    return PartitionGatingOracles(results);
 }
 
 // ─── Failure-artifact retention ────────────────────────────
@@ -72,12 +97,17 @@ export function partitionGatingOracles(results: OracleResult[]): OracleResult[] 
 export type ArtifactRetentionPolicy = 'off' | 'retain-on-failure' | 'on';
 
 /** Both keeping policies must trace during the run — you cannot retain what you never captured. */
-export function shouldCaptureArtifact(policy: ArtifactRetentionPolicy): boolean {
+export function ShouldCaptureArtifact(policy: ArtifactRetentionPolicy): boolean {
     return policy !== 'off';
 }
 
+/** @deprecated Use {@link ShouldCaptureArtifact}. */
+export function shouldCaptureArtifact(policy: ArtifactRetentionPolicy): boolean {
+    return ShouldCaptureArtifact(policy);
+}
+
 /** Whether to keep a captured artifact. An unkept one is deleted rather than emitted. */
-export function shouldRetainArtifact(policy: ArtifactRetentionPolicy, passed: boolean): boolean {
+export function ShouldRetainArtifact(policy: ArtifactRetentionPolicy, passed: boolean): boolean {
     if (policy === 'on') {
         return true;
     }
@@ -85,6 +115,11 @@ export function shouldRetainArtifact(policy: ArtifactRetentionPolicy, passed: bo
         return !passed;
     }
     return false;
+}
+
+/** @deprecated Use {@link ShouldRetainArtifact}. */
+export function shouldRetainArtifact(policy: ArtifactRetentionPolicy, passed: boolean): boolean {
+    return ShouldRetainArtifact(policy, passed);
 }
 
 // ─── Signal divergence ─────────────────────────────────────
@@ -100,33 +135,38 @@ export function shouldRetainArtifact(policy: ArtifactRetentionPolicy, passed: bo
  */
 export interface DivergenceSignals {
     /** The controller believed it was done (asked for judgement, no further actions). */
-    selfReportDone: boolean;
+    SelfReportDone: boolean;
     /** The judge's final verdict was Done. */
-    judgeDone: boolean;
+    JudgeDone: boolean;
     /** Every gating oracle passed. */
-    oraclesPassed: boolean;
+    OraclesPassed: boolean;
 }
 
 /** The signals plus their pairwise agreement — stamped on the run's `actualOutput`. */
 export interface DivergenceReport extends DivergenceSignals {
-    selfVsJudgeAgree: boolean;
-    judgeVsOracleAgree: boolean;
-    selfVsOracleAgree: boolean;
+    SelfVsJudgeAgree: boolean;
+    JudgeVsOracleAgree: boolean;
+    SelfVsOracleAgree: boolean;
     /** All three agree — the healthy case. */
-    unanimous: boolean;
+    Unanimous: boolean;
 }
 
-export function computeDivergence(s: DivergenceSignals): DivergenceReport {
-    const selfVsJudgeAgree = s.selfReportDone === s.judgeDone;
-    const judgeVsOracleAgree = s.judgeDone === s.oraclesPassed;
-    const selfVsOracleAgree = s.selfReportDone === s.oraclesPassed;
+export function ComputeDivergence(s: DivergenceSignals): DivergenceReport {
+    const selfVsJudgeAgree = s.SelfReportDone === s.JudgeDone;
+    const judgeVsOracleAgree = s.JudgeDone === s.OraclesPassed;
+    const selfVsOracleAgree = s.SelfReportDone === s.OraclesPassed;
     return {
         ...s,
-        selfVsJudgeAgree,
-        judgeVsOracleAgree,
-        selfVsOracleAgree,
-        unanimous: selfVsJudgeAgree && judgeVsOracleAgree,
+        SelfVsJudgeAgree: selfVsJudgeAgree,
+        JudgeVsOracleAgree: judgeVsOracleAgree,
+        SelfVsOracleAgree: selfVsOracleAgree,
+        Unanimous: selfVsJudgeAgree && judgeVsOracleAgree,
     };
+}
+
+/** @deprecated Use {@link ComputeDivergence}. */
+export function computeDivergence(s: DivergenceSignals): DivergenceReport {
+    return ComputeDivergence(s);
 }
 
 // ─── Console log filtering ─────────────────────────────────
@@ -147,9 +187,14 @@ const LEVELS: ConsoleLogLevel[] = ['quiet', 'normal', 'verbose'];
 export const DEFAULT_CONSOLE_LOG_LEVEL: ConsoleLogLevel = 'normal';
 
 /** Resolve `CU_LOG_LEVEL`. A bad value must never make a run noisier or crash it. */
-export function resolveConsoleLogLevel(raw: string | undefined): ConsoleLogLevel {
+export function ResolveConsoleLogLevel(raw: string | undefined): ConsoleLogLevel {
     const v = (raw ?? '').trim().toLowerCase();
     return (LEVELS as string[]).includes(v) ? (v as ConsoleLogLevel) : DEFAULT_CONSOLE_LOG_LEVEL;
+}
+
+/** @deprecated Use {@link ResolveConsoleLogLevel}. */
+export function resolveConsoleLogLevel(raw: string | undefined): ConsoleLogLevel {
+    return ResolveConsoleLogLevel(raw);
 }
 
 /** Fires every step of every test and says nothing about progress. Shown only at `verbose`. */
@@ -204,7 +249,7 @@ const MILESTONE = [
  * `warn`/`error` always pass; `verbose` passes everything; `quiet` passes only
  * milestones; `normal` passes everything except recognized chatter.
  */
-export function shouldLogToConsole(
+export function ShouldLogToConsole(
     level: 'info' | 'warn' | 'error' | 'debug',
     message: string,
     consoleLevel: ConsoleLogLevel
@@ -225,12 +270,21 @@ export function shouldLogToConsole(
     return !CHATTER.some(re => re.test(text));
 }
 
+/** @deprecated Use {@link ShouldLogToConsole}. */
+export function shouldLogToConsole(
+    level: 'info' | 'warn' | 'error' | 'debug',
+    message: string,
+    consoleLevel: ConsoleLogLevel
+): boolean {
+    return ShouldLogToConsole(level, message, consoleLevel);
+}
+
 /**
  * Short, stable tag for a test — `T045` from "T045 - Query Left-Panel Navigation".
  * Parallel workers interleave output, so without it you cannot tell which test a
  * line belongs to.
  */
-export function testTag(testName: string | undefined): string {
+export function TestTag(testName: string | undefined): string {
     const name = (testName ?? '').trim();
     const m = name.match(/^(T\d+)\b/);
     if (m) {
@@ -239,8 +293,18 @@ export function testTag(testName: string | undefined): string {
     return name ? name.slice(0, 12).trim() : '?';
 }
 
+/** @deprecated Use {@link TestTag}. */
+export function testTag(testName: string | undefined): string {
+    return TestTag(testName);
+}
+
+export function FormatConsoleLine(testName: string | undefined, message: string): string {
+    return `[${TestTag(testName)}] ${message}`;
+}
+
+/** @deprecated Use {@link FormatConsoleLine}. */
 export function formatConsoleLine(testName: string | undefined, message: string): string {
-    return `[${testTag(testName)}] ${message}`;
+    return FormatConsoleLine(testName, message);
 }
 
 // ─── Failure classification ────────────────────────────────
@@ -263,20 +327,20 @@ export type ComputerUseFailureClass =
 
 /** Signals extracted from a finished run, consumed by {@link classifyFailure}. */
 export interface FailureSignals {
-    status: ComputerUseStatus;
+    status: ComputerUseStatus;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Engine-named failure reason, when set (e.g. 'LoopDetected'). */
-    failureReason?: ComputerUseFailureReason;
-    hasCrash: boolean;
+    FailureReason?: ComputerUseFailureReason;
+    HasCrash: boolean;
     /** A severe, likely-deterministic browser fault — see {@link isSevereBrowserFault}. */
-    hasAppError: boolean;
+    HasAppError: boolean;
     /** The settle loop gave up on the final step(s) — the page never settled. */
-    settleBudgetExhausted: boolean;
+    SettleBudgetExhausted: boolean;
     /** The last few frames were perceptually stable (stuck) rather than changing. */
-    tailHashStable: boolean;
-    beaconConfigured: boolean;
-    beaconEverReady: boolean;
+    TailHashStable: boolean;
+    BeaconConfigured: boolean;
+    BeaconEverReady: boolean;
     /** At least one gating oracle failed. */
-    oraclesFailed: boolean;
+    OraclesFailed: boolean;
 }
 
 /** Requests cancelled by navigation — routine in an SPA the agent drives, not app faults. */
@@ -288,7 +352,7 @@ const BENIGN_ABORT_RE = /ERR_ABORTED|NS_BINDING_ABORTED|ERR_CANCELL?ED/i;
  * navigation — and neither do navigation-aborted requests. `crash` is handled
  * upstream as `infra`.
  */
-export function isSevereBrowserFault(d: BrowserDiagnosticEvent): boolean {
+export function IsSevereBrowserFault(d: BrowserDiagnosticEvent): boolean {
     if (d.type === 'pageerror') {
         return true;
     }
@@ -296,6 +360,11 @@ export function isSevereBrowserFault(d: BrowserDiagnosticEvent): boolean {
         return !BENIGN_ABORT_RE.test(d.message ?? '');
     }
     return false;
+}
+
+/** @deprecated Use {@link IsSevereBrowserFault}. */
+export function isSevereBrowserFault(d: BrowserDiagnosticEvent): boolean {
+    return IsSevereBrowserFault(d);
 }
 
 /**
@@ -308,21 +377,21 @@ export function isSevereBrowserFault(d: BrowserDiagnosticEvent): boolean {
  * verdicts as `app-error` — and because `app-error` gets zero retries, that turned
  * flaky agent loops and timeouts into hard failures and cratered the pass rate.
  */
-export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | null {
+export function ClassifyFailure(s: FailureSignals): ComputerUseFailureClass | null {
     if (s.status === 'Completed') {
         return null;
     }
     // A crashed renderer or engine-level error is the authoritative root cause.
-    if (s.hasCrash || s.status === 'Error') {
+    if (s.HasCrash || s.status === 'Error') {
         return 'infra';
     }
     // Likewise an auth detour past the watchdog's cap: its own 401/403s are the
     // symptom, so this must outrank the `app-error` they would register as.
-    if (s.failureReason === 'AuthDetour') {
+    if (s.FailureReason === 'AuthDetour') {
         return 'auth-detour';
     }
     // An explicit engine verdict, and a retryable one, so it beats incidental app noise.
-    if (s.failureReason === 'LoopDetected') {
+    if (s.FailureReason === 'LoopDetected') {
         return 'loop-detected';
     }
     if (s.status === 'Cancelled') {
@@ -333,19 +402,19 @@ export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | nu
     }
     // Split by whether the page was still changing when the budget expired.
     if (s.status === 'TimeBudgetExceeded') {
-        return s.tailHashStable ? 'timeout-stuck' : 'timeout-progressing';
+        return s.TailHashStable ? 'timeout-stuck' : 'timeout-progressing';
     }
     // No more-specific verdict above, and still the likelier root cause than the
     // soft symptom heuristics below.
-    if (s.hasAppError) {
+    if (s.HasAppError) {
         return 'app-error';
     }
-    if (s.settleBudgetExhausted && s.tailHashStable) {
+    if (s.SettleBudgetExhausted && s.TailHashStable) {
         return 'stuck-page';
     }
     // A declared beacon that never fired, with no app errors: the app never became
     // ready, which is distinct from the agent getting lost.
-    if (s.beaconConfigured && !s.beaconEverReady) {
+    if (s.BeaconConfigured && !s.BeaconEverReady) {
         return 'env-stall';
     }
     // The engine terminated the run Failed — e.g. the controller declared completion
@@ -353,10 +422,15 @@ export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | nu
     if (s.status === 'Failed') {
         return 'judge-disagreement';
     }
-    if (s.oraclesFailed) {
+    if (s.OraclesFailed) {
         return 'assertion';
     }
     return 'unknown';
+}
+
+/** @deprecated Use {@link ClassifyFailure}. */
+export function classifyFailure(s: FailureSignals): ComputerUseFailureClass | null {
+    return ClassifyFailure(s);
 }
 
 // ─── Suite-level configuration ─────────────────────────────
@@ -375,7 +449,7 @@ export type ComputerUseSuiteConfig = Partial<ComputerUseTestConfig>;
  * block isn't a plain object — a malformed value is ignored rather than thrown,
  * so the run proceeds on per-test config plus baked defaults.
  */
-export function readSuiteComputerUseConfig(
+export function ReadSuiteComputerUseConfig(
     suiteContext: { [key: string]: unknown } | undefined
 ): ComputerUseSuiteConfig | undefined {
     const raw = suiteContext?.computerUse;
@@ -385,13 +459,20 @@ export function readSuiteComputerUseConfig(
     return undefined;
 }
 
+/** @deprecated Use {@link ReadSuiteComputerUseConfig}. */
+export function readSuiteComputerUseConfig(
+    suiteContext: { [key: string]: unknown } | undefined
+): ComputerUseSuiteConfig | undefined {
+    return ReadSuiteComputerUseConfig(suiteContext);
+}
+
 /**
  * Merge a suite block UNDER a per-test config, so a test can always override a
  * suite-wide default. `generation` and `appProfile` deep-merge one level, so a
  * suite-set leaf survives when a test sets a different leaf; anything deeper
  * inside `appProfile` replaces wholesale.
  */
-export function mergeComputerUseConfig(
+export function MergeComputerUseConfig(
     suite: ComputerUseSuiteConfig,
     perTest: ComputerUseTestConfig
 ): ComputerUseTestConfig {
@@ -403,4 +484,12 @@ export function mergeComputerUseConfig(
         merged.appProfile = { ...suite.appProfile, ...perTest.appProfile };
     }
     return merged;
+}
+
+/** @deprecated Use {@link MergeComputerUseConfig}. */
+export function mergeComputerUseConfig(
+    suite: ComputerUseSuiteConfig,
+    perTest: ComputerUseTestConfig
+): ComputerUseTestConfig {
+    return MergeComputerUseConfig(suite, perTest);
 }

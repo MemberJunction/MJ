@@ -47,7 +47,7 @@ const DOCUSIGN_LETTER_WIDTH_PT = 612;
 const DOCUSIGN_LETTER_HEIGHT_PT = 792;
 
 /** Maps a DocuSign envelope/recipient status string onto our normalized lifecycle. */
-export function mapDocuSignStatus(status: string): EnvelopeStatus {
+export function MapDocuSignStatus(status: string): EnvelopeStatus {
     switch ((status || '').toLowerCase()) {
         case 'created':
             return 'Draft';
@@ -66,6 +66,11 @@ export function mapDocuSignStatus(status: string): EnvelopeStatus {
         default:
             return 'Unknown';
     }
+}
+
+/** @deprecated Use {@link MapDocuSignStatus}. */
+export function mapDocuSignStatus(status: string): EnvelopeStatus {
+    return MapDocuSignStatus(status);
 }
 
 /**
@@ -154,7 +159,7 @@ export class DocuSignSignatureProvider extends BaseSignatureProvider {
             return {
                 Success: true,
                 externalEnvelopeId: json.envelopeId,
-                status: mapDocuSignStatus(json.status || (req.sendImmediately === false ? 'created' : 'sent')),
+                status: MapDocuSignStatus(json.status || (req.sendImmediately === false ? 'created' : 'sent')),
             };
         } catch (e) {
             return { Success: false, ErrorMessage: this.errorMessage(e) };
@@ -176,7 +181,7 @@ export class DocuSignSignatureProvider extends BaseSignatureProvider {
             }
             const json = (await resp.json()) as { status?: string };
             const recipients = await this.fetchRecipientStatuses(base, accessToken);
-            return { Success: true, status: mapDocuSignStatus(json.status || ''), recipients };
+            return { Success: true, status: MapDocuSignStatus(json.status || ''), recipients };
         } catch (e) {
             return { Success: false, status: 'Unknown', ErrorMessage: this.errorMessage(e) };
         }
@@ -268,7 +273,7 @@ export class DocuSignSignatureProvider extends BaseSignatureProvider {
 
         return {
             externalEnvelopeId: envelopeId,
-            status: mapDocuSignStatus(rawStatus),
+            status: MapDocuSignStatus(rawStatus),
             occurredAt,
             raw: payload,
         };
@@ -505,7 +510,7 @@ export class DocuSignSignatureProvider extends BaseSignatureProvider {
         return json.signers.map((s) => ({
             email: s.email,
             name: s.name,
-            status: mapDocuSignStatus(s.status || ''),
+            status: MapDocuSignStatus(s.status || ''),
             externalRecipientId: s.recipientId,
             signedAt: s.signedDateTime,
         }));
