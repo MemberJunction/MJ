@@ -37,3 +37,6 @@ export * from './engine/driverResolution';
 export * from './engine/PublishListenerSet';
 export * from './WorkQueueEngine';
 export * from './testing/DatabaseConformanceHarness';
+export * from './handlers/BaseWorkHandler';
+export * from './handlers/ResolveWorkHandler';
+export * from './handlers/BoundWorkHandler';
