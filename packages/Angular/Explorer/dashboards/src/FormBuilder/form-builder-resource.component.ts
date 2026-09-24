@@ -6,7 +6,7 @@ import {
     OnDestroy,
     inject,
 } from '@angular/core';
-import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, ResolveEntityEventRow, RunView } from '@memberjunction/core';
 import { MJGlobal, MJEventType, MJEvent } from '@memberjunction/global';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ResourceData, MJEnvironmentEntityExtended, UserInfoEngine, ComponentMetadataEngine, InteractiveFormsEngine } from '@memberjunction/core-entities';
@@ -633,7 +633,7 @@ export class FormBuilderResourceComponent
      * — this listener runs for every entity save in the entire app, so
      * cheapness matters.
      */
-    private handleEntityEvent(mjEvent: MJEvent): void {
+    private async handleEntityEvent(mjEvent: MJEvent): Promise<void> {
         try {
             if (mjEvent.event !== MJEventType.ComponentEvent) return;
             if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
@@ -662,8 +662,21 @@ export class FormBuilderResourceComponent
                 // same Name (Active path → new Pending sibling row in the
                 // form's lineage). Either way the cockpit should refresh.
                 const sameID = savedID && this.SelectedFormID && UUIDsEqual(savedID, this.SelectedFormID);
-                const sameLineage = savedName && this.SelectedFormName && savedName === this.SelectedFormName;
-                if (sameID || sameLineage) {
+                if (sameID) {
+                    void this.handleAgentEditedActiveForm();
+                    return;
+                }
+                // Only now pay for the Name. A remote event carries the row only for entities the
+                // deployment allowlisted for broadcast; otherwise this re-reads the one record.
+                // Deliberately last: this listener runs for every entity save in the app, so the
+                // read sits behind the entity filter, the loaded-form check and the id match —
+                // strictly fewer reads than the cheapest path that would get Name any other way.
+                // The guard above lets an override-only session through with no SelectedFormName,
+                // and a name we cannot compare against is not worth a read.
+                if (!this.SelectedFormName) return;
+                const lineageName =
+                    savedName ?? ((await this.resolveEventRow(evt))?.['Name'] as string | undefined);
+                if (lineageName && lineageName === this.SelectedFormName) {
                     void this.handleAgentEditedActiveForm();
                 }
             } else if (entityName === 'MJ: Entity Form Overrides') {
@@ -729,6 +742,18 @@ export class FormBuilderResourceComponent
             // ditto
         }
         return { savedID, savedName };
+    }
+
+    /**
+     * The row behind an event, when a field the primary key cannot carry is actually needed.
+     *
+     * Kept separate from {@link resolveEntityEventIdentity} because that one is free and this one
+     * may cost a read: a remote event only carries the row for entities a deployment opted into
+     * broadcasting, so otherwise this re-reads that single record as the signed-in user. Call it
+     * behind the cheap filters, never before them.
+     */
+    private async resolveEventRow(evt: BaseEntityEvent): Promise<Record<string, unknown> | null> {
+        return await ResolveEntityEventRow(evt, this.ProviderToUse);
     }
 
     /**

@@ -3291,7 +3291,15 @@ export class AIPromptRunner {
           break;
         }
 
-        // If we reach here, the result was successful
+        // A failure that is not eligible for failover (structural error, or none diagnosed) is
+        // returned as-is — but never silently: callers often see only an empty result.
+        if (!result.success) {
+          this.logError(
+            `Model call failed and is not eligible for failover (${result.errorInfo?.errorType ?? 'undiagnosed'}): ${result.errorMessage ?? 'no error message'}`,
+            { prompt, model: candidate.model, metadata: { vendorId: candidate.vendorId, driverClass: candidate.driverClass } }
+          );
+        }
+
         // Update promptRun with failover information if we had prior failures
         if (failoverAttempts.length > 0 && promptRun) {
           this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);

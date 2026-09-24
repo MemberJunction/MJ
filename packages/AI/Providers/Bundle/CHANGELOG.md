@@ -1,5 +1,44 @@
 # @memberjunction/ai-provider-bundle
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [b87e4ac]
+- Updated dependencies [d665a6e]
+- Updated dependencies [575bfae]
+- Updated dependencies [2cd8411]
+- Updated dependencies [e962151]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai-gemini@6.2.0-edge.0
+  - @memberjunction/ai-openai@6.2.0-edge.0
+  - @memberjunction/ai-anthropic@6.2.0-edge.0
+  - @memberjunction/ai-assemblyai@6.2.0-edge.0
+  - @memberjunction/ai-azure@6.2.0-edge.0
+  - @memberjunction/ai-bedrock@6.2.0-edge.0
+  - @memberjunction/ai-betty-bot@6.2.0-edge.0
+  - @memberjunction/ai-blackforestlabs@6.2.0-edge.0
+  - @memberjunction/ai-cerebras@6.2.0-edge.0
+  - @memberjunction/ai-cohere@6.2.0-edge.0
+  - @memberjunction/ai-elevenlabs@6.2.0-edge.0
+  - @memberjunction/ai-fireworks@6.2.0-edge.0
+  - @memberjunction/ai-groq@6.2.0-edge.0
+  - @memberjunction/ai-heygen@6.2.0-edge.0
+  - @memberjunction/ai-inception@6.2.0-edge.0
+  - @memberjunction/ai-inworld@6.2.0-edge.0
+  - @memberjunction/ai-lmstudio@6.2.0-edge.0
+  - @memberjunction/ai-llamacpp@6.2.0-edge.0
+  - @memberjunction/ai-local-embeddings@6.2.0-edge.0
+  - @memberjunction/ai-minimax@6.2.0-edge.0
+  - @memberjunction/ai-mistral@6.2.0-edge.0
+  - @memberjunction/ai-ollama@6.2.0-edge.0
+  - @memberjunction/ai-openrouter@6.2.0-edge.0
+  - @memberjunction/ai-recommendations-rex@6.2.0-edge.0
+  - @memberjunction/ai-vertex@6.2.0-edge.0
+  - @memberjunction/ai-zhipu@6.2.0-edge.0
+  - @memberjunction/ai-xai@6.2.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

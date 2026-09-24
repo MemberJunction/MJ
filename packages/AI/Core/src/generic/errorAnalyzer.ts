@@ -150,6 +150,7 @@ export class ErrorAnalyzer {
             errorString.includes('payment') ||      // Payment required errors
             errorString.includes('insufficient funds') ||
             errorString.includes('quota exceeded') ||
+            errorString.includes('usage limits') || // Anthropic spend cap — sent as a 400 invalid_request_error, which the status fallback would misread as a malformed request
             errorString.includes('balance') ||      // Account balance issues
             errorString.includes('no funds')) {
             return 'NoCredit';

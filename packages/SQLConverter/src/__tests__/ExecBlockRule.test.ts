@@ -113,3 +113,53 @@ SET
     });
   });
 });
+
+// Since the 6.2 cycle mj-sync emits a record it may or may not already hold as a create-or-update:
+// the last SET is followed (on the same line) by IF NOT EXISTS (…) BEGIN EXEC spCreate… END ELSE
+// BEGIN EXEC spUpdate… END. The rule only knew one EXEC per block, so the guard was swallowed into
+// the preceding SET value and raw T-SQL reached the PL/pgSQL output — 64 blocks across the two
+// 6.2.0-edge.0 Metadata_Syncs, and neither file applied on PostgreSQL.
+describe('ExecBlockRule — mj-sync create-or-update (IF NOT EXISTS … ELSE …)', () => {
+  const upsert = [
+    '-- Save MJ: AI Vendors (core SP call only)',
+    'DECLARE @ID_af78 UNIQUEIDENTIFIER,',
+    '@Name_af78 NVARCHAR(50),',
+    '@CredentialTypeID_af78 UNIQUEIDENTIFIER',
+    'SET',
+    "  @ID_af78 = '5F935B01-EC5F-4409-AADC-8063A94936D6'",
+    'SET',
+    "  @Name_af78 = N'Sakana AI'",
+    'SET',
+    "  @CredentialTypeID_af78 = '3F0C13AB-EF5F-4260-A50A-D66DDEC25270' IF NOT EXISTS (",
+    '    SELECT',
+    '      1',
+    '    FROM',
+    '      [__mj].[AIVendor]',
+    '    WHERE',
+    '      [ID] = @ID_af78',
+    '  )',
+    'BEGIN',
+    'EXEC [__mj].spCreateAIVendor @ID = @ID_af78,',
+    '  @Name = @Name_af78,',
+    '  @CredentialTypeID = @CredentialTypeID_af78',
+    'END ELSE',
+    'BEGIN',
+    'EXEC [__mj].spUpdateAIVendor @ID = @ID_af78,',
+    '  @Name = @Name_af78,',
+    '  @CredentialTypeID = @CredentialTypeID_af78',
+    'END;',
+  ].join('\n');
+
+  it('keeps the last SET value clean — the guard is not swallowed into it', () => {
+    const out = convert(upsert);
+    expect(out).toContain("p_CredentialTypeID_af78 := '3F0C13AB-EF5F-4260-A50A-D66DDEC25270';");
+  });
+
+  it('emits a PL/pgSQL IF NOT EXISTS … THEN create … ELSE update … END IF with no T-SQL left', () => {
+    const out = convert(upsert);
+    expect(out).toMatch(/IF NOT EXISTS \(SELECT 1 FROM __mj\."AIVendor" WHERE "ID" = p_ID_af78\) THEN/);
+    expect(out).toMatch(/THEN[\s\S]*PERFORM __mj\."spCreateAIVendor"\([\s\S]*ELSE[\s\S]*PERFORM __mj\."spUpdateAIVendor"\([\s\S]*END IF;/);
+    expect(out).not.toMatch(/\[__mj\]|\bEXEC\b|\bBEGIN\s*\n\s*EXEC/);
+    expect(out).not.toContain('SKIPPED');
+  });
+});

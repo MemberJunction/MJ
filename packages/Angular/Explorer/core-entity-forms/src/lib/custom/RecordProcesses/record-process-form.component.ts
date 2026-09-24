@@ -1,8 +1,8 @@
 import { Component, OnInit } from '@angular/core';
-import { RegisterClass, RegisterClassEx, SafeJSONParse, LogError, EscapeSQLString } from '@memberjunction/global';
+import { RegisterClass, RegisterClassEx, SafeJSONParse, EscapeSQLString } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormPolicy, FormChromeContext, FormChromeSpec, DETAILS_SECTION_KEY } from '@memberjunction/ng-base-forms';
 import { MJRecordProcessFormComponent } from '../../generated/Entities/MJRecordProcess/mjrecordprocess.form.component';
-import { EntityInfo, RunView } from '@memberjunction/core';
+import { EntityInfo, RunView, LogError } from '@memberjunction/core';
 import type { DataFeatureSpec, SpecValidationIssue, EntityMetadataStub } from '@memberjunction/feature-pipelines';
 import { validateSpec } from '@memberjunction/feature-pipelines';
 
