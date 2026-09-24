@@ -1,4 +1,5 @@
 import type { SqlBuilderContext, SqlStatement } from '../sql/WorkQueueSqlExecutor';
+import { WorkQueueConsumeSql } from '../sql/WorkQueueConsumeSql';
 import { WorkQueuePublishSql } from '../sql/WorkQueuePublishSql';
 
 export const TOPIC = 'AAAAAAAA-0000-0000-0000-000000000001';
@@ -19,6 +20,7 @@ export interface SampleCall {
  */
 export function SampleCalls(context: SqlBuilderContext): SampleCall[] {
     const publish = new WorkQueuePublishSql(context);
+    const consume = new WorkQueueConsumeSql(context);
     return [
         { Method: 'Publish.AcquirePublishOrderLock', Statement: publish.AcquirePublishOrderLock(TOPIC, 'venue-42', 5000) },
         { Method: 'Publish.InsertMessage', Statement: publish.InsertMessage({
@@ -32,5 +34,17 @@ export function SampleCalls(context: SqlBuilderContext): SampleCall[] {
         { Method: 'Publish.ConfirmDeduplication', Statement: publish.ConfirmDeduplication(TOPIC, 'k1', MSG, 86400) },
         { Method: 'Publish.ReleaseDeduplication', Statement: publish.ReleaseDeduplication(TOPIC, 'k1', MSG) },
         { Method: 'Publish.PurgeExpiredDeduplications', Statement: publish.PurgeExpiredDeduplications(500) },
+        { Method: 'Consume.ExpireLeases', Statement: consume.ExpireLeases(SUB, 5) },
+        { Method: 'Consume.SubscriptionBacklog', Statement: consume.SubscriptionBacklog(SUB, 'Ordered', 1000) },
+        { Method: 'Consume.ClaimUnpartitioned', Statement: consume.ClaimUnpartitioned(SUB, 'worker-1', 60, 10) },
+        { Method: 'Consume.SelectPartitionCandidates', Statement: consume.SelectPartitionCandidates(SUB, 'Exclusive', 10) },
+        { Method: 'Consume.ClaimPartitionCandidate', Statement: consume.ClaimPartitionCandidate(SUB, DELIVERY, 'Ordered', 'worker-1', 60) },
+        { Method: 'Consume.ExtendLease', Statement: consume.ExtendLease(DELIVERY, TOKEN, 60, null) },
+        { Method: 'Consume.SelectLeaseState', Statement: consume.SelectLeaseState(DELIVERY, TOKEN) },
+        { Method: 'Consume.CompleteDelivery', Statement: consume.CompleteDelivery(DELIVERY, TOKEN) },
+        { Method: 'Consume.RetryDelivery', Statement: consume.RetryDelivery(DELIVERY, TOKEN, 30, 'boom') },
+        { Method: 'Consume.DeadLetterDelivery', Statement: consume.DeadLetterDelivery(DELIVERY, TOKEN, 'MaxAttempts', 'boom') },
+        { Method: 'Consume.ReleaseDelivery', Statement: consume.ReleaseDelivery(DELIVERY, TOKEN) },
+        { Method: 'Consume.AcknowledgeCancel', Statement: consume.AcknowledgeCancel(DELIVERY, TOKEN) },
     ];
 }

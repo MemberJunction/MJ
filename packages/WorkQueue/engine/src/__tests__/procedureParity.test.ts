@@ -14,12 +14,8 @@ const migration = ReadMigrationProcedures();
 const sqlServerCalls = SampleCalls(new RecordingExecutor('sqlserver'));
 const postgresCalls = SampleCalls(new RecordingExecutor('postgresql'));
 
-/** Procedures that no builder calls yet; Tasks 4 and 5 add the consume and operator builders and empty this list. */
+/** Procedures that no builder calls yet; Task 5 adds the operator builder and empties this list. */
 const NOT_YET_BUILT = new Set<string>([
-    WorkQueueProcedures.ExpireLeases, WorkQueueProcedures.SubscriptionBacklog, WorkQueueProcedures.ClaimUnpartitioned,
-    WorkQueueProcedures.SelectPartitionCandidates, WorkQueueProcedures.ClaimPartitionCandidate, WorkQueueProcedures.ExtendLease,
-    WorkQueueProcedures.SelectLeaseState, WorkQueueProcedures.CompleteDelivery, WorkQueueProcedures.RetryDelivery,
-    WorkQueueProcedures.DeadLetterDelivery, WorkQueueProcedures.ReleaseDelivery, WorkQueueProcedures.AcknowledgeCancel,
     WorkQueueProcedures.SubscriptionStats, WorkQueueProcedures.ListDeadLetters, WorkQueueProcedures.ListPartitions,
     WorkQueueProcedures.ReplayDelivery, WorkQueueProcedures.DiscardDelivery, WorkQueueProcedures.CancelInFlightDelivery,
     WorkQueueProcedures.ExpireLeasesAll, WorkQueueProcedures.AcquireSweepLock, WorkQueueProcedures.ReadCommittedSnapshotState,
