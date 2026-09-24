@@ -29,6 +29,9 @@ on:
       - '.github/scripts/backstop-alarm.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # The seed job in publish.yml verifies a new package's attestation through this script;
+      # its vitest suite lives in __tests__, so an edit to the script alone must still run it.
+      - '.github/scripts/verify-seed-attestation.mjs'
       # The release-notes shape gate runs inside generate-release-notes.yml, not here, but
       # its vitest suite lives in __tests__ — so an edit to the gate script alone must still
       # run it. Without this entry the one change that most needs the suite skips it.
