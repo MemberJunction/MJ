@@ -5,12 +5,15 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
+import { RSUPostRestartProgressSession } from './integration/RSUPostRestartProgress.js';
+import type { RSUPostRestartProgress } from './integration/RSUPostRestartProgress.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -1704,9 +1707,18 @@ async function processRSUPendingWork(): Promise<void> {
   // Wait a moment for metadata to be fully loaded
   await new Promise(resolve => setTimeout(resolve, 3000));
 
+  // The RSU run these items belong to is still open: the pre-restart process was killed inside its
+  // own RestartMJAPI step, so it never wrote a terminal result. This session re-attaches to that run
+  // and reports the two steps that only ever happen here — CreateEntityMaps and StartSync — into the
+  // SAME event stream, so a client that has been tailing since before the restart keeps its cursor
+  // and finally learns whether the connector went live. Purely observational: every failure below is
+  // swallowed, and the work proceeds whether or not a run was found to report into.
+  const progressSession = new RSUPostRestartProgressSession();
+
   for (const pending of pendingItems) {
     const pendingWorkID = pending.ID;
     const item = pending.Work;
+    let progress: RSUPostRestartProgress | null = null;
     // Declared outside the try so the catch can narrow a retry to what is still outstanding: what
     // actually got mapped this attempt. Each retry is then strictly smaller, and one poison object
     // cannot keep re-running its healthy siblings.
@@ -1728,6 +1740,10 @@ async function processRSUPendingWork(): Promise<void> {
         continue;
       }
 
+      // Attached only for apply-objects work: promote-columns is a follow-up to a DIFFERENT run
+      // shape that has no CreateEntityMaps/StartSync steps to report.
+      progress = await progressSession.For(item.CompanyIntegrationID);
+
       // Resolve connector
       const rv = new RunView();
       const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
@@ -1737,8 +1753,10 @@ async function processRSUPendingWork(): Promise<void> {
       }, systemUser);
       const companyIntegration = ciResult.Results[0];
       if (!companyIntegration) {
-        await rsm.FailPendingWork(pendingWorkID, `CompanyIntegration ${item.CompanyIntegrationID} not found`, systemUser);
-        console.warn(`[RSU] CompanyIntegration ${item.CompanyIntegrationID} not found`);
+        const missingCI = `CompanyIntegration ${item.CompanyIntegrationID} not found`;
+        progress?.FailEntityMaps(missingCI, item.SourceObjectNames ?? []);
+        await rsm.FailPendingWork(pendingWorkID, missingCI, systemUser);
+        console.warn(`[RSU] ${missingCI}`);
         continue;
       }
 
@@ -1750,14 +1768,18 @@ async function processRSUPendingWork(): Promise<void> {
       }, systemUser);
       const integrationEntity = integrationResult.Results[0];
       if (!integrationEntity) {
-        await rsm.FailPendingWork(pendingWorkID, `Integration entity for ${integrationName} not found`, systemUser);
-        console.warn(`[RSU] Integration entity for ${integrationName} not found`);
+        const missingIntegration = `Integration entity for ${integrationName} not found`;
+        progress?.FailEntityMaps(missingIntegration, item.SourceObjectNames ?? []);
+        await rsm.FailPendingWork(pendingWorkID, missingIntegration, systemUser);
+        console.warn(`[RSU] ${missingIntegration}`);
         continue;
       }
       const connector = ConnectorFactory.Resolve(integrationEntity);
       if (!connector) {
-        await rsm.FailPendingWork(pendingWorkID, `Connector for ${integrationName} not found`, systemUser);
-        console.warn(`[RSU] Connector for ${integrationName} not found`);
+        const missingConnector = `Connector for ${integrationName} not found`;
+        progress?.FailEntityMaps(missingConnector, item.SourceObjectNames ?? []);
+        await rsm.FailPendingWork(pendingWorkID, missingConnector, systemUser);
+        console.warn(`[RSU] ${missingConnector}`);
         continue;
       }
 
@@ -1770,6 +1792,9 @@ async function processRSUPendingWork(): Promise<void> {
       const introspect = connector.IntrospectSchema.bind(connector) as
         (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string; IsPrimaryKey?: boolean; IsRequired?: boolean }> }> }>;
       const schema = await introspect(companyIntegration, systemUser);
+
+      const objectsToMap = item.SourceObjectNames.length;
+      progress?.BeginEntityMaps(objectsToMap);
 
       for (const objName of item.SourceObjectNames) {
         const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
@@ -1875,7 +1900,14 @@ async function processRSUPendingWork(): Promise<void> {
         } catch (fieldErr) {
           console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
         }
+
+        progress?.ObjectMapped(objName, mappedObjectNames.size, objectsToMap);
       }
+
+      // The applied rollup for this half of the run, in OBJECTS. `mappedObjectNames` is the same set
+      // the retry path narrows against, so what is reported succeeded here is exactly what a retry
+      // would NOT redo.
+      progress?.CompleteEntityMaps(objectsToMap, mappedObjectNames.size, objectsToMap - mappedObjectNames.size);
 
       // Remove-as-disable: entity maps whose object is NOT in this apply's selection
       // are disabled (data kept; re-selection re-enables). 'ignore' opts out for subset applies.
@@ -1892,8 +1924,11 @@ async function processRSUPendingWork(): Promise<void> {
         }
       }
 
-      // Start sync if requested
+      // Start sync if requested. This is the step the setup journey is actually waiting on — the
+      // connector is not live until it begins — so it is a stage of its own rather than a footnote
+      // on entity-map creation.
       if (item.StartSync !== false) {
+        progress?.BeginStartSync();
         try {
           await IntegrationEngine.Instance.Config(false, systemUser);
           const syncOptions: IntegrationSyncOptions = {};
@@ -1903,11 +1938,18 @@ async function processRSUPendingWork(): Promise<void> {
           const opts = Object.keys(syncOptions).length > 0 ? syncOptions : undefined;
           IntegrationEngine.Instance.RunSync(item.CompanyIntegrationID, systemUser, 'Manual', undefined, undefined, opts);
           console.log(`[RSU] Sync started for ${item.CompanyIntegrationID} (EntityMaps: ${createdEntityMapIDs.length}, FullSync: ${!!item.FullSync}, SyncDirection: ${item.SyncDirection ?? 'entity-map default'})`);
+          // Looked up rather than returned: RunSync resolves only when the whole sync finishes, and
+          // this stage closes when the sync STARTS. A null id closes the stage anyway — the sync did
+          // start; only the hand-off to its own stream is missing.
+          progress?.CompleteStartSync(await FindStartedSyncRunID(item.CompanyIntegrationID, systemUser));
         } catch (syncErr) {
           console.warn(`[RSU] Sync start failed: ${syncErr}`);
+          progress?.FailStartSync(`Sync start failed: ${syncErr instanceof Error ? syncErr.message : String(syncErr)}`);
         }
       } else {
         console.log(`[RSU] Sync skipped for ${item.CompanyIntegrationID} (StartSync=false)`);
+        progress?.BeginStartSync();
+        progress?.SkipStartSync('the caller asked for no initial sync (StartSync=false)');
       }
 
       // Create or update schedule if CronExpression provided
@@ -1994,6 +2036,16 @@ async function processRSUPendingWork(): Promise<void> {
       // Failing terminally on the first error means the objects this item would have mapped are
       // silently never mapped, and the only recovery is someone noticing and re-applying by hand.
       const remaining = (item.SourceObjectNames ?? []).filter(n => !mappedObjectNames.has(n));
+      // Same list the retry narrows to, reported into the run stream: when this half fails, those
+      // objects have tables and no way to sync into them, and this is the client's only signal.
+      //
+      // Reported under CreateEntityMaps because that is where the overwhelming majority of this
+      // block's work — and so its failures — lives. A throw from further down (schedule creation,
+      // say) lands here too, with an empty `remaining`; the stage attribution is then approximate
+      // but the message is the real error and the run is correctly marked failed, which is what the
+      // operator needs. The alternative — inventing a stage that is not in the pipeline's step list
+      // — would break the determinate stepper for the sake of a nicer label.
+      progress?.FailEntityMaps(message, remaining);
       const requeued = await rsm.RetryPendingWork(pendingWorkID, item, remaining, systemUser);
       if (!requeued) {
         // Budget spent, or nothing left to retry. This message is the operator's only signal, so
@@ -2004,7 +2056,39 @@ async function processRSUPendingWork(): Promise<void> {
     }
   }
 
+  // Terminates every RSU run this pass re-attached to. Until this lands, those runs have been
+  // flagged in-flight since before the restart — which is exactly the state this whole mechanism
+  // exists to end.
+  await progressSession.FinishAll();
+
   console.log(`[RSU] Pending work processing complete`);
+}
+
+/**
+ * The ID of the sync run a just-launched sync created, or null if it is not readable yet.
+ *
+ * `RunSync` resolves only when the entire sync FINISHES, so it cannot be awaited for this — the
+ * StartSync stage closes when the sync begins, not when it ends. The run row is written early in
+ * the sync's own startup, so a short settle plus a newest-first lookup finds it. Null is a normal
+ * outcome under load and is reported as such; it never fails anything.
+ */
+async function FindStartedSyncRunID(companyIntegrationID: string, systemUser: UserInfo): Promise<string | null> {
+  try {
+    await new Promise(resolve => setTimeout(resolve, 200));
+    const rv = new RunView();
+    const runResult = await rv.RunView<{ ID: string }>({
+      EntityName: 'MJ: Company Integration Runs',
+      ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status='In Progress'`,
+      OrderBy: '__mj_CreatedAt DESC',
+      MaxRows: 1,
+      ResultType: 'simple',
+      Fields: ['ID'],
+    }, systemUser);
+    return runResult.Success && runResult.Results.length > 0 ? runResult.Results[0].ID : null;
+  } catch (e) {
+    console.warn(`[RSU] Could not resolve the started sync run id for ${companyIntegrationID}: ${e}`);
+    return null;
+  }
 }
 
 /**
