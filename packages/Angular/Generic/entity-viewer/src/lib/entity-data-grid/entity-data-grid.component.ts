@@ -18,6 +18,7 @@ import { debounceTime, takeUntil } from 'rxjs/operators';
 import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
+import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, canonicalizeColumnFields, computeFieldsList } from '../utils/record.util';
 import {
@@ -162,6 +163,8 @@ const AUTO_WIDTH_COLUMN_MIN_PX = 160;
 
 /** Column id of the inert width-filler appended when `FillWidth` is on. See `buildFillerColumnDef`. */
 const FILLER_COLUMN_ID = '__mjFill';
+/** Field (and column id) of the row-number column added when `ShowRowNumbers` is on. */
+const ROW_NUMBER_FIELD = '__rowNumber';
 
 /**
  * Flex weight given to a `width: 'auto'` column so it outranks the filler when leftover row width is
@@ -973,6 +976,45 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
   get ShowCommunicationButton(): boolean {
     return this._showCommunicationButton;
+  }
+
+  private _entitySupportsCommunication = false;
+  private _communicationCheckedForEntityID: string | null = null;
+  /**
+   * True when the current entity has at least one active Entity Communication Message Type. "Send
+   * Message" is offered — as a toolbar button or in the overflow menu — only when this is true, so an
+   * entity with no communication setup never shows a control that cannot do anything.
+   */
+  get EntitySupportsCommunication(): boolean {
+    return this._entitySupportsCommunication;
+  }
+
+  /** Resolves {@link EntitySupportsCommunication} for the current entity, once per entity. */
+  private async resolveCommunicationSupport(): Promise<void> {
+    const entity = this._entityInfo;
+    if (!entity) {
+      this._entitySupportsCommunication = false;
+      this._communicationCheckedForEntityID = null;
+      return;
+    }
+    if (this._communicationCheckedForEntityID && UUIDsEqual(this._communicationCheckedForEntityID, entity.ID)) {
+      return;
+    }
+    this._communicationCheckedForEntityID = entity.ID;
+    this._entitySupportsCommunication = false;
+    try {
+      const provider = this.ProviderToUse;
+      await CommunicationEngineBase.Instance.Config(false, provider?.CurrentUser, provider);
+      if (this._entityInfo !== entity) {
+        return; // the grid moved to another entity while the engine loaded
+      }
+      this._entitySupportsCommunication = CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes
+        .some(m => m.IsActive && UUIDsEqual(m.EntityID, entity.ID));
+      this.cdr.detectChanges();
+    } catch {
+      // Non-fatal: leave Send Message hidden, and retry on the next entity resolution.
+      this._communicationCheckedForEntityID = null;
+    }
   }
 
   // ========================================
@@ -1846,6 +1888,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       this._suppressPersist = false;
       // Entity is resolved by now — self-load its actions if auto-load is enabled.
       void this.maybeAutoLoadEntityActions();
+      void this.resolveCommunicationSupport();
     }
   }
 
@@ -2480,7 +2523,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     if (this._showRowNumbers && this.agColumnDefs.length > 0) {
       this.agColumnDefs.unshift({
         headerName: '#',
-        field: '__rowNumber',
+        field: ROW_NUMBER_FIELD,
         width: 60,
         minWidth: 50,
         maxWidth: 80,
@@ -4224,7 +4267,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
     for (let i = 0; i < columnState.length; i++) {
       const col = columnState[i];
-      if (col.colId === '__rowNumber') continue; // Skip row number column
+      if (col.colId === ROW_NUMBER_FIELD) continue; // Skip row number column
 
       // Case-insensitive: `colId` originates from a colDef's `field`, which for host-supplied
       // columns is whatever the page wrote. `canonicalizeHostColumns()` normally settles that
@@ -4606,7 +4649,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     } finally {
       this.IsPreparingExport = false;
     }
-    const columns = this.getExportColumns();
+    const columns = this.GetExportColumns();
     const fileName = this.getDefaultExportFileName();
 
     this.exportDialogConfig = {
@@ -4641,7 +4684,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
    */
   async Export(options?: Partial<ExportOptions>, download: boolean = true): Promise<ExportResult> {
     const data = await this.resolveExportData();
-    const columns = this.getExportColumns();
+    const columns = this.GetExportColumns();
     const fileName = options?.fileName || this.getDefaultExportFileName();
 
     const exportOptions: Partial<ExportOptions> = {
@@ -4712,36 +4755,40 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   }
 
   /**
-   * Get column definitions for export based on current grid columns
+   * The columns the grid is showing, in the order it shows them, with the headers it shows. This is the
+   * single source for every export path — the toolbar's Export button, {@link Export}, and hosts such as
+   * the view workspace — so an export always matches the screen. It reads the rendered AG Grid columns
+   * rather than the host-declared `Columns` or a saved grid state, because either of those can differ
+   * from the screen in order, visibility or header text. Before the grid has rendered, it falls back to
+   * the column definitions it is about to render.
    */
-  private getExportColumns(): ExportColumn[] {
-    if (!this._entityInfo) {
-      // Fallback: use AG Grid column definitions
-      return this.agColumnDefs
-        .filter(col => col.field && !col.hide)
-        .map(col => ({
-          name: col.field as string,
-          displayName: (col.headerName || col.field) as string
-        }));
-    }
+  public GetExportColumns(): ExportColumn[] {
+    const displayed = this.gridApi?.getAllDisplayedColumns() ?? [];
+    const defs = displayed.length > 0
+      ? displayed.map(c => ({ def: c.getColDef(), width: c.getActualWidth() }))
+      : this.agColumnDefs.filter(d => !d.hide).map(d => ({ def: d, width: typeof d.width === 'number' ? d.width : undefined }));
 
-    // Use entity field info for better column metadata
-    return this._columns
-      .filter(col => col.visible !== false)
-      .map(col => {
+    return defs
+      .filter(({ def }) => this.isExportableColumn(def))
+      .map(({ def, width }) => {
+        const colField = def.field as string;
         // Case-insensitive, matching how col defs and auto-width resolve a host's field name.
-        // An exact-case match here silently cost the export column its data type.
-        const field = this._entityInfo?.Fields.find(f => f.Name.toLowerCase() === col.field.toLowerCase());
+        const field = this._entityInfo?.Fields.find(f => f.Name.toLowerCase() === colField.toLowerCase());
         return {
           // The entity's spelling, because `name` is the KEY the export engine reads each row by
           // (`row[col.name]`) and rows are keyed from entity metadata. The host's spelling here
           // exported a correctly-headed column of blank cells.
-          name: field?.Name ?? col.field,
-          displayName: col.title || field?.DisplayName || col.field,
+          name: field?.Name ?? colField,
+          displayName: def.headerName || field?.DisplayNameOrName || colField,
           dataType: this.mapFieldTypeToExportType(field?.Type),
-          width: typeof col.width === 'number' ? col.width : undefined
+          width
         };
       });
+  }
+
+  /** A data column: not the layout filler, not the row-number column, and bound to a field. */
+  private isExportableColumn(def: ColDef): boolean {
+    return !!def.field && def.field !== ROW_NUMBER_FIELD && def.colId !== FILLER_COLUMN_ID;
   }
 
   /**
@@ -5022,7 +5069,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
 
   get showCommunicationInOverflow(): boolean {
     // Communication is in overflow when it's not shown as a primary button
-    return !this.ShowCommunicationButton && this.HasSelection;
+    return !this.ShowCommunicationButton && this.HasSelection && this.EntitySupportsCommunication;
   }
 
   // ========================================

@@ -7003,6 +7003,9 @@ importers:
       '@memberjunction/actions-base':
         specifier: 6.1.3
         version: link:../../../Actions/Base
+      '@memberjunction/communication-types':
+        specifier: 6.1.3
+        version: link:../../../Communication/base-types
       '@memberjunction/core':
         specifier: 6.1.3
         version: link:../../../MJCore

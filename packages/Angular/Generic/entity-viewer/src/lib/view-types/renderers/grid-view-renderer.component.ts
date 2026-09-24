@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, inject } from '@angular/core';
 import { EntityInfo, RunViewParams, LogError, CompositeKey } from '@memberjunction/core';
+import { ExportColumn } from '@memberjunction/export-engine';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -283,6 +284,11 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
     }
     const result = await this.grid.Export(format ? { format } : undefined, true);
     return !!result?.success;
+  }
+
+  /** The hosted grid's on-screen columns ({@link IViewRenderer.GetExportColumns}); empty before it mounts. */
+  GetExportColumns(): ExportColumn[] {
+    return this.grid?.GetExportColumns() ?? [];
   }
 
   // ================================================================

@@ -504,18 +504,36 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.cdr.detectChanges();
   }
 
-  /** Columns to export — from the active grid state, else the view's columns, else the entity fields. */
+  /**
+   * Columns to export: what the active renderer shows on screen (the grid), else the view's saved
+   * columns, else the entity fields. The saved columns are read the way the grid renders them —
+   * sorted by `orderIndex`, headed by the user's rename, and resolved to the entity's field spelling
+   * (the export engine reads each row by that key) — so Cards, Map and Timeline export the columns a
+   * grid of this view would show.
+   */
   private buildExportColumns(): ExportColumn[] {
-    if (!this._entity) {
+    const entity = this._entity;
+    if (!entity) {
       return [];
+    }
+    const onScreen = this.entityViewerRef?.GetExportColumns() ?? [];
+    if (onScreen.length > 0) {
+      return onScreen;
     }
     const gridCols = this.currentGridState?.columnSettings;
     if (gridCols && gridCols.length > 0) {
-      return gridCols
+      return [...gridCols]
         .filter(c => c.hidden !== true)
-        .map(c => ({ name: c.Name, displayName: c.DisplayName || c.Name }));
+        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+        .map(c => {
+          const field = entity.Fields.find(f => f.Name.toLowerCase() === c.Name.toLowerCase());
+          return {
+            name: field?.Name ?? c.Name,
+            displayName: c.userDisplayName || c.DisplayName || field?.DisplayNameOrName || c.Name
+          };
+        });
     }
-    return this._entity.Fields
+    return entity.Fields
       .filter(f => !f.IsVirtual)
       .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
   }
