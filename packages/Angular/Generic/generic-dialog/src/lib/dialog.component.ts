@@ -110,9 +110,18 @@ export class GenericDialogComponent implements AfterContentInit {
     return this._hasCustomActions;
   }
 
-  @ContentChild('custom-actions', { static: false }) customActions!: ElementRef;
+  @ContentChild('custom-actions', { static: false }) CustomActions!: ElementRef;
+
+  /** @deprecated Use {@link CustomActions}. */
+  get customActions(): ElementRef {
+    return this.CustomActions;
+  }
+  /** @deprecated Use {@link CustomActions}. */
+  set customActions(value: ElementRef) {
+    this.CustomActions = value;
+  }
 
   ngAfterContentInit() {
-      this._hasCustomActions = !!this.customActions;
+      this._hasCustomActions = !!this.CustomActions;
   }
 }

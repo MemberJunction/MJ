@@ -227,7 +227,7 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
    * the server's `RequestedSkills` guard is the backstop.
    * @returns Filtered and ranked suggestions
    */
-  getSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@', targetAgentId: string | null = null): MentionSuggestion[] {
+  GetSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@', targetAgentId: string | null = null): MentionSuggestion[] {
     // The '#' trigger searches entities + queries; '/' searches skills; '@' searches agents + users
     if (trigger === '#') {
       return this.getEntityAndQuerySuggestions(query);
@@ -286,6 +286,11 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
       // Otherwise alphabetically
       return a.name.localeCompare(b.name);
     });
+  }
+
+  /** @deprecated Use {@link GetSuggestions}. */
+  getSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@', targetAgentId: string | null = null): MentionSuggestion[] {
+    return this.GetSuggestions(query, includeUsers, trigger, targetAgentId);
   }
 
   /**
@@ -465,45 +470,75 @@ export class MentionAutocomplete extends BaseSingleton<MentionAutocomplete> {
   /**
    * Get available agents for parsing
    */
-  getAvailableAgents(): MJAIAgentEntityExtended[] {
+  GetAvailableAgents(): MJAIAgentEntityExtended[] {
     return this.agentsCache;
+  }
+
+  /** @deprecated Use {@link GetAvailableAgents}. */
+  getAvailableAgents(): MJAIAgentEntityExtended[] {
+    return this.GetAvailableAgents();
   }
 
   /**
    * Get available users for parsing
    */
-  getAvailableUsers(): UserInfo[] {
+  GetAvailableUsers(): UserInfo[] {
     return this.usersCache;
+  }
+
+  /** @deprecated Use {@link GetAvailableUsers}. */
+  getAvailableUsers(): UserInfo[] {
+    return this.GetAvailableUsers();
   }
 
   /**
    * Get available entities for parsing
    */
-  getAvailableEntities(): EntityInfo[] {
+  GetAvailableEntities(): EntityInfo[] {
     return this.entitiesCache;
+  }
+
+  /** @deprecated Use {@link GetAvailableEntities}. */
+  getAvailableEntities(): EntityInfo[] {
+    return this.GetAvailableEntities();
   }
 
   /**
    * Get available queries for parsing
    */
-  getAvailableQueries(): QueryInfo[] {
+  GetAvailableQueries(): QueryInfo[] {
     return this.queriesCache;
+  }
+
+  /** @deprecated Use {@link GetAvailableQueries}. */
+  getAvailableQueries(): QueryInfo[] {
+    return this.GetAvailableQueries();
   }
 
   /**
    * Get the generic icon used for all query mentions.
    */
-  getQueriesEntityIcon(): string {
+  GetQueriesEntityIcon(): string {
     return this.queriesEntityIcon;
+  }
+
+  /** @deprecated Use {@link GetQueriesEntityIcon}. */
+  getQueriesEntityIcon(): string {
+    return this.GetQueriesEntityIcon();
   }
 
   /**
    * Refresh the caches
    * Resets initialization state and reloads agents
    */
-  async refresh(currentUser: UserInfo): Promise<void> {
+  async Refresh(currentUser: UserInfo): Promise<void> {
     this.isInitialized = false;
     this.initializationPromise = null;
     await this.initialize(currentUser);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  async refresh(currentUser: UserInfo): Promise<void> {
+    return this.Refresh(currentUser);
   }
 }

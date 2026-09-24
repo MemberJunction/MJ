@@ -154,7 +154,7 @@ describe('UserInfoEngine — CreateDefaultApplications DB Repair', () => {
         mockSaveResults = [true, true];
 
         // Default: empty _UserApplications (simulates load failure)
-        (engine as unknown as { _UserApplications: unknown[] })._UserApplications = [];
+        (engine as unknown as { _userApplications: unknown[] })._userApplications = [];
         // Set _loadedForUserId so the engine thinks it loaded for this user
         (engine as unknown as { _loadedForUserId: string })._loadedForUserId = USER_ID;
         // Empty app roles so all apps are open access
@@ -196,13 +196,13 @@ describe('UserInfoEngine — CreateDefaultApplications DB Repair', () => {
         // Should return the DB records (not newly created ones)
         expect(result).toEqual(dbRecords);
         // _UserApplications should be repaired
-        const userApps = (engine as unknown as { _UserApplications: unknown[] })._UserApplications;
+        const userApps = (engine as unknown as { _userApplications: unknown[] })._userApplications;
         expect(userApps).toEqual(dbRecords);
     });
 
     it('should NOT query the database when _UserApplications already has records for the user', async () => {
         // Pre-populate with existing records
-        (engine as unknown as { _UserApplications: unknown[] })._UserApplications = [
+        (engine as unknown as { _userApplications: unknown[] })._userApplications = [
             makeUserAppRecord('APP-1', 0),
             makeUserAppRecord('APP-2', 1),
         ];

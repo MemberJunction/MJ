@@ -20,7 +20,7 @@ export const MAX_LABEL_STAGES = 6;
  * after compaction (mirrors how artifact-tool results name their tool). Elides the middle when there
  * are many stages so the label never bloats the context it's meant to economize.
  */
-export function summarizePipelineStages(steps: PipelineStepRecord[]): string {
+export function SummarizePipelineStages(steps: PipelineStepRecord[]): string {
     const names = steps.map((s) => s.toolName);
     if (names.length === 0) {
         return 'empty pipeline';
@@ -32,23 +32,43 @@ export function summarizePipelineStages(steps: PipelineStepRecord[]): string {
     return `${head} → …(${names.length - (MAX_LABEL_STAGES - 1)} more)`;
 }
 
+/** @deprecated Use {@link SummarizePipelineStages}. */
+export function summarizePipelineStages(steps: PipelineStepRecord[]): string {
+    return SummarizePipelineStages(steps);
+}
+
 /** Compact text form: strings pass through raw; null/undefined → ''; everything else → compact JSON. */
-export function valueToText(v: PipeValue): string {
+export function ValueToText(v: PipeValue): string {
     if (v == null) {
         return '';
     }
     return typeof v === 'string' ? v : JSON.stringify(v);
 }
 
+/** @deprecated Use {@link ValueToText}. */
+export function valueToText(v: PipeValue): string {
+    return ValueToText(v);
+}
+
 /** Byte size of a value's serialized form (for logging / context-saved accounting). */
+export function SizeOf(v: PipeValue): number {
+    return Buffer.byteLength(ValueToText(v), 'utf8');
+}
+
+/** @deprecated Use {@link SizeOf}. */
 export function sizeOf(v: PipeValue): number {
-    return Buffer.byteLength(valueToText(v), 'utf8');
+    return SizeOf(v);
 }
 
 /** Truncated debug preview of a value. */
-export function previewOf(v: PipeValue): string {
-    const text = valueToText(v);
+export function PreviewOf(v: PipeValue): string {
+    const text = ValueToText(v);
     return text.length <= PREVIEW_LIMIT ? text : `${text.slice(0, PREVIEW_LIMIT)}…`;
+}
+
+/** @deprecated Use {@link PreviewOf}. */
+export function previewOf(v: PipeValue): string {
+    return PreviewOf(v);
 }
 
 /**
@@ -56,14 +76,19 @@ export function previewOf(v: PipeValue): string {
  * explicit note (never silently). A short type/shape tag prefixes structured values so the agent
  * knows what it got without the full payload.
  */
-export function formatFinalOutput(v: PipeValue, limit: number = FINAL_OUTPUT_LIMIT): string {
+export function FormatFinalOutput(v: PipeValue, limit: number = FINAL_OUTPUT_LIMIT): string {
     const body = typeof v === 'string' ? v : JSON.stringify(v, null, 2);
-    const tag = shapeTag(v);
+    const tag = ShapeTag(v);
     const head = tag ? `${tag}\n` : '';
     if (body.length <= limit) {
         return head + body;
     }
     return `${head}${body.slice(0, limit)}\n…[truncated ${body.length - limit} chars — narrow the pipeline (select/first/count) to return less]`;
+}
+
+/** @deprecated Use {@link FormatFinalOutput}. */
+export function formatFinalOutput(v: PipeValue, limit: number = FINAL_OUTPUT_LIMIT): string {
+    return FormatFinalOutput(v, limit);
 }
 
 /**
@@ -72,7 +97,7 @@ export function formatFinalOutput(v: PipeValue, limit: number = FINAL_OUTPUT_LIM
  * with its distinct values present (capped). E.g. "matched 0 of 150 items. Values present:
  * status=[Open, Pending, Closed]; priority=[Low, Medium, High, Critical]".
  */
-export function describeEmptyMatch(input: PipeValue): string {
+export function DescribeEmptyMatch(input: PipeValue): string {
     if (!Array.isArray(input) || input.length === 0) {
         return '';
     }
@@ -97,8 +122,13 @@ export function describeEmptyMatch(input: PipeValue): string {
     return `matched 0 of ${input.length} items. Field values present — ${parts.join('; ')}. Check your field names/values (case-sensitive) against these.`;
 }
 
+/** @deprecated Use {@link DescribeEmptyMatch}. */
+export function describeEmptyMatch(input: PipeValue): string {
+    return DescribeEmptyMatch(input);
+}
+
 /** A one-line shape hint, e.g. `[array: 50 items]` or `[object: ID, Name, Status]`. */
-export function shapeTag(v: PipeValue): string {
+export function ShapeTag(v: PipeValue): string {
     if (Array.isArray(v)) {
         const sample = v.find((x) => x !== null && typeof x === 'object' && !Array.isArray(x));
         const keys = sample ? Object.keys(sample as Record<string, unknown>).slice(0, 8).join(', ') : '';
@@ -108,4 +138,9 @@ export function shapeTag(v: PipeValue): string {
         return `[object: ${Object.keys(v).slice(0, 12).join(', ')}]`;
     }
     return '';
+}
+
+/** @deprecated Use {@link ShapeTag}. */
+export function shapeTag(v: PipeValue): string {
+    return ShapeTag(v);
 }

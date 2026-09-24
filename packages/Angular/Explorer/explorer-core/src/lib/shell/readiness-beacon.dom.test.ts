@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { setReadinessBeacon } from './readiness-beacon';
+import { SetReadinessBeacon } from './readiness-beacon';
 
 /**
  * The readiness beacon is a contract with `@memberjunction/computer-use`: its settle
@@ -16,14 +16,14 @@ describe('setReadinessBeacon', () => {
     });
 
     it('publishes the beacon the settle loop polls for once the route is ready', () => {
-        setReadinessBeacon(true);
+        SetReadinessBeacon(true);
 
         expect(document.querySelector(BEACON_SELECTOR)).toBe(document.documentElement);
     });
 
     it('clears the beacon while the shell is loading, so a stale ready is never observed', () => {
-        setReadinessBeacon(true);
-        setReadinessBeacon(false);
+        SetReadinessBeacon(true);
+        SetReadinessBeacon(false);
 
         expect(document.querySelector(BEACON_SELECTOR)).toBeNull();
         // Removed outright rather than set to "false" — the selector matches on the
@@ -35,7 +35,7 @@ describe('setReadinessBeacon', () => {
     it('targets an explicitly supplied root, so it is not bound to the live document', () => {
         const root = document.createElement('div');
 
-        setReadinessBeacon(true, root);
+        SetReadinessBeacon(true, root);
 
         expect(root.getAttribute('data-mj-ready')).toBe('true');
         expect(document.documentElement.hasAttribute('data-mj-ready')).toBe(false);

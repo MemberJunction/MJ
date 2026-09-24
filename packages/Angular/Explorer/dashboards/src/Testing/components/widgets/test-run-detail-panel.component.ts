@@ -376,26 +376,134 @@ import { OracleResult } from './oracle-breakdown-table.component';
   `]
 })
 export class TestRunDetailPanelComponent {
-  @Input() testRun!: TestRunSummary;
-  @Input() oracleResults: OracleResult[] = [];
-  @Input() resultDetails: any = null;
-  @Input() closeable = true;
+  @Input() TestRun!: TestRunSummary;
 
-  @Output() close = new EventEmitter<void>();
-  @Output() viewTarget = new EventEmitter<{ type: string; id: string }>();
-  @Output() submitFeedback = new EventEmitter<{
+  /** @deprecated Use {@link TestRun}. */
+  @Input() set testRun(value: TestRunSummary) {
+    this.TestRun = value;
+  }
+  /** @deprecated Use {@link TestRun}. */
+  get testRun(): TestRunSummary {
+    return this.TestRun;
+  }
+  @Input() OracleResults: OracleResult[] = [];
+
+  /** @deprecated Use {@link OracleResults}. */
+  @Input() set oracleResults(value: OracleResult[]) {
+    this.OracleResults = value;
+  }
+  /** @deprecated Use {@link OracleResults}. */
+  get oracleResults(): OracleResult[] {
+    return this.OracleResults;
+  }
+  @Input() ResultDetails: any = null;
+
+  /** @deprecated Use {@link ResultDetails}. */
+  @Input() set resultDetails(value: any) {
+    this.ResultDetails = value;
+  }
+  /** @deprecated Use {@link ResultDetails}. */
+  get resultDetails(): any {
+    return this.ResultDetails;
+  }
+  @Input() Closeable = true;
+
+  /** @deprecated Use {@link Closeable}. */
+  @Input() set closeable(value: TestRunDetailPanelComponent['Closeable']) {
+    this.Closeable = value;
+  }
+  /** @deprecated Use {@link Closeable}. */
+  get closeable(): TestRunDetailPanelComponent['Closeable'] {
+    return this.Closeable;
+  }
+
+  @Output() Close = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link Close}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (close) keeps working. Must stay AFTER Close: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() close = this.Close;
+  @Output() ViewTarget = new EventEmitter<{ type: string; id: string }>();
+
+  /**
+   * @deprecated Use {@link ViewTarget}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (viewTarget) keeps working. Must stay AFTER ViewTarget: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() viewTarget = this.ViewTarget;
+  @Output() SubmitFeedback = new EventEmitter<{
     rating: number;
     isCorrect: boolean;
     comments: string;
   }>();
 
-  showResultDetails = false;
-  feedbackRating = 5;
-  feedbackIsCorrect = true;
-  feedbackComments = '';
-  submittingFeedback = false;
+  /**
+   * @deprecated Use {@link SubmitFeedback}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (submitFeedback) keeps working. Must stay AFTER SubmitFeedback: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() submitFeedback = this.SubmitFeedback;
 
-  formatDuration(milliseconds: number): string {
+  ShowResultDetails = false;
+
+  /** @deprecated Use {@link ShowResultDetails}. */
+  get showResultDetails() {
+    return this.ShowResultDetails;
+  }
+  /** @deprecated Use {@link ShowResultDetails}. */
+  set showResultDetails(value) {
+    this.ShowResultDetails = value;
+  }
+  FeedbackRating = 5;
+
+  /** @deprecated Use {@link FeedbackRating}. */
+  get feedbackRating() {
+    return this.FeedbackRating;
+  }
+  /** @deprecated Use {@link FeedbackRating}. */
+  set feedbackRating(value) {
+    this.FeedbackRating = value;
+  }
+  FeedbackIsCorrect = true;
+
+  /** @deprecated Use {@link FeedbackIsCorrect}. */
+  get feedbackIsCorrect() {
+    return this.FeedbackIsCorrect;
+  }
+  /** @deprecated Use {@link FeedbackIsCorrect}. */
+  set feedbackIsCorrect(value) {
+    this.FeedbackIsCorrect = value;
+  }
+  FeedbackComments = '';
+
+  /** @deprecated Use {@link FeedbackComments}. */
+  get feedbackComments() {
+    return this.FeedbackComments;
+  }
+  /** @deprecated Use {@link FeedbackComments}. */
+  set feedbackComments(value) {
+    this.FeedbackComments = value;
+  }
+  SubmittingFeedback = false;
+
+  /** @deprecated Use {@link SubmittingFeedback}. */
+  get submittingFeedback() {
+    return this.SubmittingFeedback;
+  }
+  /** @deprecated Use {@link SubmittingFeedback}. */
+  set submittingFeedback(value) {
+    this.SubmittingFeedback = value;
+  }
+
+  FormatDuration(milliseconds: number): string {
     if (milliseconds < 1000) {
       return `${milliseconds}ms`;
     }
@@ -409,7 +517,12 @@ export class TestRunDetailPanelComponent {
     return `${seconds}s`;
   }
 
-  formatJSON(obj: any): string {
+  /** @deprecated Use {@link FormatDuration}. */
+  formatDuration(milliseconds: number): string {
+    return this.FormatDuration(milliseconds);
+  }
+
+  FormatJSON(obj: any): string {
     try {
       return JSON.stringify(obj, null, 2);
     } catch (error) {
@@ -417,37 +530,57 @@ export class TestRunDetailPanelComponent {
     }
   }
 
+  /** @deprecated Use {@link FormatJSON}. */
+  formatJSON(obj: any): string {
+    return this.FormatJSON(obj);
+  }
+
   // toggleResultDetails() removed — the Result Details disclosure is now an
   // <mj-accordion-panel> bound via [(Expanded)]="showResultDetails" (pure flip,
   // default change detection), so no explicit toggle handler is needed.
 
-  onClose(): void {
-    this.close.emit();
+  OnClose(): void {
+    this.Close.emit();
   }
 
-  onViewTarget(): void {
-    if (this.testRun.targetType && this.testRun.targetLogID) {
-      this.viewTarget.emit({
-        type: this.testRun.targetType,
-        id: this.testRun.targetLogID
+  /** @deprecated Use {@link OnClose}. */
+  onClose(): void {
+    return this.OnClose();
+  }
+
+  OnViewTarget(): void {
+    if (this.TestRun.targetType && this.TestRun.targetLogID) {
+      this.ViewTarget.emit({
+        type: this.TestRun.targetType,
+        id: this.TestRun.targetLogID
       });
     }
   }
 
-  async onSubmitFeedback(): Promise<void> {
-    this.submittingFeedback = true;
-    this.submitFeedback.emit({
-      rating: this.feedbackRating,
-      isCorrect: this.feedbackIsCorrect,
-      comments: this.feedbackComments
+  /** @deprecated Use {@link OnViewTarget}. */
+  onViewTarget(): void {
+    return this.OnViewTarget();
+  }
+
+  async OnSubmitFeedback(): Promise<void> {
+    this.SubmittingFeedback = true;
+    this.SubmitFeedback.emit({
+      rating: this.FeedbackRating,
+      isCorrect: this.FeedbackIsCorrect,
+      comments: this.FeedbackComments
     });
 
     // Reset after submission
     setTimeout(() => {
-      this.submittingFeedback = false;
-      this.feedbackRating = 5;
-      this.feedbackIsCorrect = true;
-      this.feedbackComments = '';
+      this.SubmittingFeedback = false;
+      this.FeedbackRating = 5;
+      this.FeedbackIsCorrect = true;
+      this.FeedbackComments = '';
     }, 1000);
+  }
+
+  /** @deprecated Use {@link OnSubmitFeedback}. */
+  async onSubmitFeedback(): Promise<void> {
+    return this.OnSubmitFeedback();
   }
 }

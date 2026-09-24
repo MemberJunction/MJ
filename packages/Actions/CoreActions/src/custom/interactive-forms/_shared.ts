@@ -17,44 +17,74 @@ import { ComponentLinter } from "@memberjunction/react-linter";
 
 // ── parameter helpers ────────────────────────────────────────────────────
 
-export function getParam(params: RunActionParams, name: string): unknown {
+export function GetParam(params: RunActionParams, name: string): unknown {
     const p = params.Params.find(x =>
         x.Name?.trim().toLowerCase() === name.toLowerCase());
     return p?.Value;
 }
 
-export function getStringParam(params: RunActionParams, name: string): string | null {
-    const v = getParam(params, name);
+/** @deprecated Use {@link GetParam}. */
+export function getParam(params: RunActionParams, name: string): unknown {
+    return GetParam(params, name);
+}
+
+export function GetStringParam(params: RunActionParams, name: string): string | null {
+    const v = GetParam(params, name);
     if (v == null) return null;
     const s = String(v).trim();
     return s.length > 0 ? s : null;
 }
 
-export function getNumberParam(params: RunActionParams, name: string): number | null {
-    const v = getParam(params, name);
+/** @deprecated Use {@link GetStringParam}. */
+export function getStringParam(params: RunActionParams, name: string): string | null {
+    return GetStringParam(params, name);
+}
+
+export function GetNumberParam(params: RunActionParams, name: string): number | null {
+    const v = GetParam(params, name);
     if (v == null) return null;
     const n = typeof v === 'number' ? v : Number(String(v));
     return Number.isFinite(n) ? n : null;
 }
 
-export function addOutput(params: RunActionParams, name: string, value: unknown): void {
+/** @deprecated Use {@link GetNumberParam}. */
+export function getNumberParam(params: RunActionParams, name: string): number | null {
+    return GetNumberParam(params, name);
+}
+
+export function AddOutput(params: RunActionParams, name: string, value: unknown): void {
     params.Params.push({ Name: name, Type: "Output", Value: value });
+}
+
+/** @deprecated Use {@link AddOutput}. */
+export function addOutput(params: RunActionParams, name: string, value: unknown): void {
+    return AddOutput(params, name, value);
 }
 
 // ── result helpers ───────────────────────────────────────────────────────
 
-export function failure(resultCode: string, message: string): ActionResultSimple {
+export function Failure(resultCode: string, message: string): ActionResultSimple {
     return { Success: false, ResultCode: resultCode, Message: message };
 }
 
-export function success(message: string): ActionResultSimple {
+/** @deprecated Use {@link Failure}. */
+export function failure(resultCode: string, message: string): ActionResultSimple {
+    return Failure(resultCode, message);
+}
+
+export function Success(message: string): ActionResultSimple {
     return { Success: true, ResultCode: "SUCCESS", Message: message };
+}
+
+/** @deprecated Use {@link Success}. */
+export function success(message: string): ActionResultSimple {
+    return Success(message);
 }
 
 // ── spec parsing + linting ───────────────────────────────────────────────
 
 /** Parse a Spec param that may arrive as object or stringified JSON. */
-export function parseSpecParam(raw: unknown): ComponentSpec | { error: string } {
+export function ParseSpecParam(raw: unknown): ComponentSpec | { error: string } {
     try {
         if (typeof raw === "string") {
             return JSON.parse(raw) as ComponentSpec;
@@ -65,6 +95,11 @@ export function parseSpecParam(raw: unknown): ComponentSpec | { error: string } 
     }
 }
 
+/** @deprecated Use {@link ParseSpecParam}. */
+export function parseSpecParam(raw: unknown): ComponentSpec | { error: string } {
+    return ParseSpecParam(raw);
+}
+
 /**
  * Lint a form-role ComponentSpec. Returns null on success, a fail-fast
  * ActionResultSimple on failure. Two rules are suppressed for form-role
@@ -72,21 +107,21 @@ export function parseSpecParam(raw: unknown): ComponentSpec | { error: string } 
  * lint comments in the original create-interactive-form action for the
  * rationale.
  */
-export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): Promise<ActionResultSimple | null> {
+export async function LintFormSpec(spec: ComponentSpec, contextUser: UserInfo): Promise<ActionResultSimple | null> {
     if (!isFormRole(spec)) {
-        return failure(
+        return Failure(
             "LINT_FAILED",
             `Spec must declare componentRole='form'. Got '${spec.componentRole ?? "(unset)"}'. The InteractiveForm runtime refuses to mount any other role.`,
         );
     }
     if (!spec.name || spec.name.trim().length === 0) {
-        return failure("LINT_FAILED", "Spec.name is required.");
+        return Failure("LINT_FAILED", "Spec.name is required.");
     }
     if (typeof spec.code !== "string" || spec.code.trim().length === 0) {
-        return failure("LINT_FAILED", "Spec.code must be a non-empty JSX string.");
+        return Failure("LINT_FAILED", "Spec.code must be a non-empty JSX string.");
     }
     if (!spec.location) {
-        return failure(
+        return Failure(
             "LINT_FAILED",
             "Spec.location is required (use 'embedded' for inline JSX or 'registry' to reference a published component).",
         );
@@ -116,13 +151,13 @@ export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): 
                 .slice(0, 5)
                 .map(v => `  [${v.severity}] ${v.rule ?? "lint"}: ${v.message}${v.line ? ` (line ${v.line})` : ""}`)
                 .join("\n");
-            return failure(
+            return Failure(
                 "LINT_FAILED",
                 `Spec code failed linting:\n${messages}${blocking.length > 5 ? `\n  (+${blocking.length - 5} more)` : ""}`,
             );
         }
     } catch (err) {
-        return failure(
+        return Failure(
             "LINT_FAILED",
             `Linter could not parse spec code: ${err instanceof Error ? err.message : String(err)}`,
         );
@@ -130,10 +165,15 @@ export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): 
     return null;
 }
 
+/** @deprecated Use {@link LintFormSpec}. */
+export async function lintFormSpec(spec: ComponentSpec, contextUser: UserInfo): Promise<ActionResultSimple | null> {
+    return LintFormSpec(spec, contextUser);
+}
+
 // ── component / override fetch + write helpers ───────────────────────────
 
 /** Load a Component entity object by primary key. */
-export async function loadComponent(
+export async function LoadComponent(
     provider: IMetadataProvider, user: UserInfo, componentID: string,
 ): Promise<MJComponentEntity | null> {
     const c = await provider.GetEntityObject<MJComponentEntity>("MJ: Components", user);
@@ -141,13 +181,27 @@ export async function loadComponent(
     return loaded ? c : null;
 }
 
+/** @deprecated Use {@link LoadComponent}. */
+export async function loadComponent(
+    provider: IMetadataProvider, user: UserInfo, componentID: string,
+): Promise<MJComponentEntity | null> {
+    return LoadComponent(provider, user, componentID);
+}
+
 /** Load an Override entity object by primary key. */
-export async function loadOverride(
+export async function LoadOverride(
     provider: IMetadataProvider, user: UserInfo, overrideID: string,
 ): Promise<MJEntityFormOverrideEntity | null> {
     const o = await provider.GetEntityObject<MJEntityFormOverrideEntity>("MJ: Entity Form Overrides", user);
     const loaded = await o.Load(overrideID);
     return loaded ? o : null;
+}
+
+/** @deprecated Use {@link LoadOverride}. */
+export async function loadOverride(
+    provider: IMetadataProvider, user: UserInfo, overrideID: string,
+): Promise<MJEntityFormOverrideEntity | null> {
+    return LoadOverride(provider, user, overrideID);
 }
 
 /**
@@ -167,7 +221,7 @@ export async function loadOverride(
  *
  * Returns `null` on success; a `FORBIDDEN` failure result on rejection.
  */
-export function checkOverrideOwnership(
+export function CheckOverrideOwnership(
     override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
     user: UserInfo,
 ): ActionResultSimple | null {
@@ -175,7 +229,7 @@ export function checkOverrideOwnership(
     switch (override.Scope) {
         case 'User': {
             if (!UUIDsEqual(override.UserID, user.ID)) {
-                return failure(
+                return Failure(
                     "FORBIDDEN",
                     `Override ${ID} is User-scoped to a different user. Only the owning user can mutate it.`,
                 );
@@ -186,7 +240,7 @@ export function checkOverrideOwnership(
             const userRoleIds = ((user as { UserRoles?: { RoleID?: string }[] }).UserRoles ?? [])
                 .map(r => r.RoleID).filter((x): x is string => !!x);
             if (!override.RoleID || !userRoleIds.includes(override.RoleID)) {
-                return failure(
+                return Failure(
                     "FORBIDDEN",
                     `Override ${ID} is Role-scoped (${override.RoleID}). Only members of that role can mutate it.`,
                 );
@@ -200,7 +254,7 @@ export function checkOverrideOwnership(
             // everyone else is rejected.
             const isOwner = ((user as { Type?: string }).Type ?? '').toLowerCase() === 'owner';
             if (!isOwner) {
-                return failure(
+                return Failure(
                     "FORBIDDEN",
                     `Override ${ID} is Global. Only Owner-type users can mutate Global overrides; promote / demote them via Component Studio with appropriate privileges.`,
                 );
@@ -208,11 +262,19 @@ export function checkOverrideOwnership(
             return null;
         }
         default:
-            return failure(
+            return Failure(
                 "FORBIDDEN",
                 `Override ${ID} has an unrecognized Scope ('${override.Scope}').`,
             );
     }
+}
+
+/** @deprecated Use {@link CheckOverrideOwnership}. */
+export function checkOverrideOwnership(
+    override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
+    user: UserInfo,
+): ActionResultSimple | null {
+    return CheckOverrideOwnership(override, user);
 }
 
 /**
@@ -225,20 +287,30 @@ export function checkOverrideOwnership(
  * (Draft), or an archived version (Deprecated).
  */
 export type FormLifecycle = 'Active' | 'Pending' | 'Inactive';
-export function mapToComponentStatus(lifecycle: FormLifecycle): 'Published' | 'Draft' | 'Deprecated' {
+export function MapToComponentStatus(lifecycle: FormLifecycle): 'Published' | 'Draft' | 'Deprecated' {
     switch (lifecycle) {
         case 'Active':   return 'Published';
         case 'Pending':  return 'Draft';
         case 'Inactive': return 'Deprecated';
     }
 }
-export function mapFromComponentStatus(status: string | null | undefined): FormLifecycle {
+
+/** @deprecated Use {@link MapToComponentStatus}. */
+export function mapToComponentStatus(lifecycle: FormLifecycle): 'Published' | 'Draft' | 'Deprecated' {
+    return MapToComponentStatus(lifecycle);
+}
+export function MapFromComponentStatus(status: string | null | undefined): FormLifecycle {
     switch ((status ?? '').toLowerCase()) {
         case 'published': return 'Active';
         case 'draft':     return 'Pending';
         case 'deprecated': return 'Inactive';
         default:          return 'Inactive';   // unknown values treated as terminal
     }
+}
+
+/** @deprecated Use {@link MapFromComponentStatus}. */
+export function mapFromComponentStatus(status: string | null | undefined): FormLifecycle {
+    return MapFromComponentStatus(status);
 }
 
 /**
@@ -252,7 +324,7 @@ export function mapFromComponentStatus(status: string | null | undefined): FormL
  *    ('Active' or 'Pending') — translated to the Component table's union via
  *    {@link mapToComponentStatus}.
  */
-export async function insertComponent(opts: {
+export async function InsertComponent(opts: {
     provider: IMetadataProvider;
     user: UserInfo;
     spec: ComponentSpec;
@@ -269,14 +341,14 @@ export async function insertComponent(opts: {
     component.Title = spec.title ?? fallbackName;
     component.Description = description ?? spec.description ?? null;
     component.Type = "Form";
-    component.Status = mapToComponentStatus(componentStatus);
+    component.Status = MapToComponentStatus(componentStatus);
     component.Version = version;
     component.VersionSequence = versionSequence;
     component.Specification = JSON.stringify(spec);
     component.DeveloperName = user.Name ?? null;
     const saved = await component.Save();
     if (!saved) {
-        return { error: failure(
+        return { error: Failure(
             "PERSIST_FAILED",
             `Component insert failed: ${component.LatestResult?.CompleteMessage ?? "unknown error"}`,
         ) };
@@ -284,12 +356,26 @@ export async function insertComponent(opts: {
     return { id: component.ID };
 }
 
+/** @deprecated Use {@link InsertComponent}. */
+export async function insertComponent(opts: {
+    provider: IMetadataProvider;
+    user: UserInfo;
+    spec: ComponentSpec;
+    fallbackName: string;
+    description: string | null;
+    version: string;
+    versionSequence: number;
+    componentStatus: FormLifecycle;
+}): Promise<{ id: string } | { error: ActionResultSimple }> {
+    return InsertComponent(opts);
+}
+
 /**
  * Insert a new EntityFormOverride row. Always User-scoped (security clamp)
  * unless `allowGlobalOrRole` is explicitly true — which is reserved for the
  * future "promote variant" UI path, not the agent.
  */
-export async function insertOverride(opts: {
+export async function InsertOverride(opts: {
     provider: IMetadataProvider;
     user: UserInfo;
     entityID: string;
@@ -320,12 +406,27 @@ export async function insertOverride(opts: {
     override.Status = status;
     const saved = await override.Save();
     if (!saved) {
-        return { error: failure(
+        return { error: Failure(
             "PERSIST_FAILED",
             `Override insert failed: ${override.LatestResult?.CompleteMessage ?? "unknown error"}`,
         ) };
     }
     return { id: override.ID };
+}
+
+/** @deprecated Use {@link InsertOverride}. */
+export async function insertOverride(opts: {
+    provider: IMetadataProvider;
+    user: UserInfo;
+    entityID: string;
+    componentID: string;
+    name: string;
+    description: string | null;
+    notes?: string | null;
+    status: 'Active' | 'Pending';
+    priority?: number;
+}): Promise<{ id: string } | { error: ActionResultSimple }> {
+    return InsertOverride(opts);
 }
 
 /**
@@ -351,9 +452,14 @@ function parseSemver(current: string | null | undefined): { major: number; minor
  * "1.0.0" → "1.0.1", "1.7.3" → "1.7.4". Used for small/defect-style edits
  * that deserve a rollback checkpoint but aren't a meaningful UX change.
  */
-export function bumpPatchVersion(current: string | null | undefined): string {
+export function BumpPatchVersion(current: string | null | undefined): string {
     const v = parseSemver(current);
     return `${v.major}.${v.minor}.${v.patch + 1}`;
+}
+
+/** @deprecated Use {@link BumpPatchVersion}. */
+export function bumpPatchVersion(current: string | null | undefined): string {
+    return BumpPatchVersion(current);
 }
 
 /**
@@ -361,18 +467,28 @@ export function bumpPatchVersion(current: string | null | undefined): string {
  * "1.0.0" → "1.1.0", "1.7.3" → "1.8.0". Used for feature additions —
  * new fields, sections, charts, tabs.
  */
-export function bumpMinorVersion(current: string | null | undefined): string {
+export function BumpMinorVersion(current: string | null | undefined): string {
     const v = parseSemver(current);
     return `${v.major}.${v.minor + 1}.0`;
+}
+
+/** @deprecated Use {@link BumpMinorVersion}. */
+export function bumpMinorVersion(current: string | null | undefined): string {
+    return BumpMinorVersion(current);
 }
 
 /**
  * "1.7.3" → "2.0.0", "3.4.5" → "4.0.0". Used for radical redesigns or
  * when the user explicitly asks for a new major version.
  */
-export function bumpMajorVersion(current: string | null | undefined): string {
+export function BumpMajorVersion(current: string | null | undefined): string {
     const v = parseSemver(current);
     return `${v.major + 1}.0.0`;
+}
+
+/** @deprecated Use {@link BumpMajorVersion}. */
+export function bumpMajorVersion(current: string | null | undefined): string {
+    return BumpMajorVersion(current);
 }
 
 /**
@@ -380,13 +496,18 @@ export function bumpMajorVersion(current: string | null | undefined): string {
  * `'in-place'` returns the same version unchanged — caller should branch
  * separately (no new Component row is written).
  */
-export function bumpVersion(current: string | null | undefined, kind: VersionBumpKind): string {
+export function BumpVersion(current: string | null | undefined, kind: VersionBumpKind): string {
     switch (kind) {
-        case 'patch': return bumpPatchVersion(current);
-        case 'minor': return bumpMinorVersion(current);
-        case 'major': return bumpMajorVersion(current);
+        case 'patch': return BumpPatchVersion(current);
+        case 'minor': return BumpMinorVersion(current);
+        case 'major': return BumpMajorVersion(current);
         case 'in-place': return current ?? '1.0.0';
     }
+}
+
+/** @deprecated Use {@link BumpVersion}. */
+export function bumpVersion(current: string | null | undefined, kind: VersionBumpKind): string {
+    return BumpVersion(current, kind);
 }
 
 /**
@@ -395,7 +516,7 @@ export function bumpVersion(current: string | null | undefined, kind: VersionBum
  * the input doesn't map to a known kind, so callers can decide whether
  * to default or reject.
  */
-export function parseVersionBumpKind(raw: unknown): VersionBumpKind | null {
+export function ParseVersionBumpKind(raw: unknown): VersionBumpKind | null {
     if (raw == null) return null;
     const s = String(raw).trim().toLowerCase();
     if (!s) return null;
@@ -404,4 +525,9 @@ export function parseVersionBumpKind(raw: unknown): VersionBumpKind | null {
     if (s === 'minor') return 'minor';
     if (s === 'major') return 'major';
     return null;
+}
+
+/** @deprecated Use {@link ParseVersionBumpKind}. */
+export function parseVersionBumpKind(raw: unknown): VersionBumpKind | null {
+    return ParseVersionBumpKind(raw);
 }

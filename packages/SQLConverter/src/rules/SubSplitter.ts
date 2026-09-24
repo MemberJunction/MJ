@@ -99,7 +99,7 @@ const IF_CONDITION_PATTERN = /^IF\s+(NOT\s+EXISTS|EXISTS|OBJECT_ID|@@)/i;
  * apostrophes in `-- we're checking` comments) are NOT treated as
  * statement boundaries.
  */
-export function subSplitCompoundBatch(batch: string): string[] {
+export function SubSplitCompoundBatch(batch: string): string[] {
   const lines = batch.split('\n');
   const upper = batch.trimStart().toUpperCase();
 
@@ -216,6 +216,11 @@ export function subSplitCompoundBatch(batch: string): string[] {
   }
 
   return statements.length > 0 ? statements : [batch];
+}
+
+/** @deprecated Use {@link SubSplitCompoundBatch}. */
+export function subSplitCompoundBatch(batch: string): string[] {
+  return SubSplitCompoundBatch(batch);
 }
 
 /** Check if a CREATE TABLE batch is followed by other top-level statements

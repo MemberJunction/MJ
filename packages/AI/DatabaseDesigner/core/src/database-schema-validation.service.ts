@@ -58,7 +58,7 @@ export class DatabaseSchemaValidationService {
      *   alter requires it to exist.
      * @returns Aggregated validation result with all errors and warnings.
      */
-    public async validate(
+    public async Validate(
         tableDefinition: TableDefinition,
         contextUser: UserInfo | undefined,
         modificationType: 'create' | 'alter' = 'create'
@@ -88,6 +88,15 @@ export class DatabaseSchemaValidationService {
         return { Valid: errors.length === 0, Errors: errors, Warnings: warnings };
     }
 
+    /** @deprecated Use {@link Validate}. */
+    public async validate(
+        tableDefinition: TableDefinition,
+        contextUser: UserInfo | undefined,
+        modificationType: 'create' | 'alter' = 'create'
+    ): Promise<EntityValidationResult> {
+        return this.Validate(tableDefinition, contextUser, modificationType);
+    }
+
     /**
      * Run validation for all tables in a batch (SchemaDesignSection.Tables[]).
      * Each entry is validated individually via the existing `validate()` method;
@@ -99,7 +108,7 @@ export class DatabaseSchemaValidationService {
      * @param contextUser The requesting user, forwarded to RunView for DB checks.
      * @returns Aggregated result — Valid is false if ANY table has errors.
      */
-    public async validateBatch(
+    public async ValidateBatch(
         tables: SchemaDesignEntry[],
         contextUser: UserInfo | undefined
     ): Promise<EntityValidationResult> {
@@ -109,7 +118,7 @@ export class DatabaseSchemaValidationService {
 
         // Single-table shortcut — avoid cross-table overhead for the common case
         if (tables.length === 1) {
-            return this.validate(
+            return this.Validate(
                 tables[0].TableDefinition,
                 contextUser,
                 tables[0].ModificationType ?? 'create'
@@ -127,7 +136,7 @@ export class DatabaseSchemaValidationService {
         const allWarnings: string[] = [];
 
         for (const entry of tables) {
-            const result = await this.validate(
+            const result = await this.Validate(
                 entry.TableDefinition,
                 contextUser,
                 entry.ModificationType ?? 'create'
@@ -146,6 +155,14 @@ export class DatabaseSchemaValidationService {
         }
 
         return { Valid: allErrors.length === 0, Errors: allErrors, Warnings: allWarnings };
+    }
+
+    /** @deprecated Use {@link ValidateBatch}. */
+    public async validateBatch(
+        tables: SchemaDesignEntry[],
+        contextUser: UserInfo | undefined
+    ): Promise<EntityValidationResult> {
+        return this.ValidateBatch(tables, contextUser);
     }
 
     // ─── Batch helpers ────────────────────────────────────────────────────────

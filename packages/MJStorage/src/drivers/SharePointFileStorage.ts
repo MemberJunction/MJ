@@ -20,7 +20,7 @@ import {
   StorageObjectMetadata,
   UnsupportedOperationError,
 } from '../generic/FileStorageBase';
-import { getProviderConfig } from '../config';
+import { GetProviderConfig } from '../config';
 
 // Define types for Microsoft OAuth token response
 interface MicrosoftTokenResponse {
@@ -412,7 +412,7 @@ export class SharePointFileStorage extends FileStorageBase {
     super();
 
     // Try to get config from centralized configuration
-    const config = getProviderConfig('sharePoint');
+    const config = GetProviderConfig('sharePoint');
 
     // Extract values from config, fall back to env vars (don't require them - initialize() may be called later)
     const clientId = config?.clientID || env.get('STORAGE_SHAREPOINT_CLIENT_ID').asString();

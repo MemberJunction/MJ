@@ -1,4 +1,4 @@
-import { traverse, NodePath, createViolation, truncateCode, findClosestMatch, findCaseMismatch, NUMERIC_COERCION_FUNCTIONS } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode, FindClosestMatch, FindCaseMismatch, NUMERIC_COERCION_FUNCTIONS } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -124,7 +124,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
     for (const queryReq of componentSpec.dataRequirements.queries) {
       if (!queryFieldsMap.has(queryReq.name)) {
         violations.push(
-          createViolation(
+          CreateViolation(
             'query-result-field-access-validation',
             'low',
             null,
@@ -164,10 +164,10 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
       if (validFields.has(propertyName)) return;
 
       // Check for case mismatch first (medium severity)
-      const caseFix = findCaseMismatch(propertyName, validFields);
+      const caseFix = FindCaseMismatch(propertyName, validFields);
       if (caseFix) {
         violations.push(
-          createViolation(
+          CreateViolation(
             'query-result-field-access-validation',
             'medium',
             node,
@@ -183,13 +183,13 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
       }
 
       // Check for close typo via Levenshtein (high severity)
-      const closest = findClosestMatch(propertyName, validFields);
+      const closest = FindClosestMatch(propertyName, validFields);
       const availableFields = Array.from(validFields).slice(0, 10);
       const moreText = validFields.size > 10 ? ` and ${validFields.size - 10} more` : '';
 
       if (closest) {
         violations.push(
-          createViolation(
+          CreateViolation(
             'query-result-field-access-validation',
             'high',
             node,
@@ -203,7 +203,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
         );
       } else {
         violations.push(
-          createViolation(
+          CreateViolation(
             'query-result-field-access-validation',
             'high',
             node,
@@ -242,12 +242,12 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
 
       if (typeof sqlType === 'string' && sqlType.toLowerCase() === 'uniqueidentifier') {
         violations.push(
-          createViolation(
+          CreateViolation(
             'query-result-field-access-validation',
             'medium',
             callNode,
             `${callNode.callee.name}(${access.objectName}.${access.propertyName}) coerces a uniqueidentifier (GUID) to a number. GUIDs are strings, not numeric values.`,
-            truncateCode(`${callNode.callee.name}(${access.objectName}.${access.propertyName})`),
+            TruncateCode(`${callNode.callee.name}(${access.objectName}.${access.propertyName})`),
             {
               text: `"${access.propertyName}" is a uniqueidentifier field. Use it as a string directly.`,
               example: `// Instead of:\n${callNode.callee.name}(${access.objectName}.${access.propertyName})\n// Use:\n${access.objectName}.${access.propertyName}  // Already a string`,
@@ -270,7 +270,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
         queryRowParams.set(p, queryName);
       }
 
-      traverse(body, {
+      Traverse(body, {
         MemberExpression(innerPath: NodePath<t.MemberExpression>) {
           const objName = t.isIdentifier(innerPath.node.object) ? innerPath.node.object.name : null;
           if (objName && queryRowParams.has(objName)) {
@@ -291,7 +291,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
     }
 
     // Main traversal
-    traverse(ast, {
+    Traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         if (!t.isIdentifier(path.node.id)) return;
         const varName = path.node.id.name;

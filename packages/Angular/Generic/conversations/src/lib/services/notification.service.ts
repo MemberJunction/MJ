@@ -31,13 +31,33 @@ export class NotificationService {
   private _changeEvents$ = new Subject<NotificationChangeEvent>();
 
   // Public observables
-  public readonly notifications$ = this._notifications$.asObservable();
-  public readonly preferences$ = this._preferences$.asObservable();
-  public readonly notificationItems$ = this._notificationItems$.asObservable();
-  public readonly changeEvents$ = this._changeEvents$.asObservable();
+  public readonly Notifications$ = this._notifications$.asObservable();
+
+  /** @deprecated Use {@link Notifications$}. */
+  public get notifications$() {
+    return this.Notifications$;
+  }
+  public readonly Preferences$ = this._preferences$.asObservable();
+
+  /** @deprecated Use {@link Preferences$}. */
+  public get preferences$() {
+    return this.Preferences$;
+  }
+  public readonly NotificationItems$ = this._notificationItems$.asObservable();
+
+  /** @deprecated Use {@link NotificationItems$}. */
+  public get notificationItems$() {
+    return this.NotificationItems$;
+  }
+  public readonly ChangeEvents$ = this._changeEvents$.asObservable();
+
+  /** @deprecated Use {@link ChangeEvents$}. */
+  public get changeEvents$() {
+    return this.ChangeEvents$;
+  }
 
   // Derived observables
-  public readonly totalUnreadCount$: Observable<number> = this.notifications$.pipe(
+  public readonly TotalUnreadCount$: Observable<number> = this.Notifications$.pipe(
     map(notifications => {
       return Object.values(notifications).reduce(
         (sum, notif) => sum + notif.unreadMessageCount,
@@ -47,10 +67,20 @@ export class NotificationService {
     shareReplay(1)
   );
 
-  public readonly hasAnyNotifications$: Observable<boolean> = this.totalUnreadCount$.pipe(
+  /** @deprecated Use {@link TotalUnreadCount$}. */
+  public get totalUnreadCount$(): Observable<number> {
+    return this.TotalUnreadCount$;
+  }
+
+  public readonly HasAnyNotifications$: Observable<boolean> = this.TotalUnreadCount$.pipe(
     map(count => count > 0),
     shareReplay(1)
   );
+
+  /** @deprecated Use {@link HasAnyNotifications$}. */
+  public get hasAnyNotifications$(): Observable<boolean> {
+    return this.HasAnyNotifications$;
+  }
 
   constructor(private ngZone: NgZone) {
     this.loadFromStorage();
@@ -60,25 +90,35 @@ export class NotificationService {
   /**
    * Gets notification state for a specific conversation
    */
-  getConversationNotification(conversationId: string): ConversationNotification | null {
+  GetConversationNotification(conversationId: string): ConversationNotification | null {
     return this._notifications$.value[conversationId] || null;
+  }
+
+  /** @deprecated Use {@link GetConversationNotification}. */
+  getConversationNotification(conversationId: string): ConversationNotification | null {
+    return this.GetConversationNotification(conversationId);
   }
 
   /**
    * Gets notification observable for a specific conversation
    */
-  getConversationNotification$(conversationId: string): Observable<ConversationNotification | null> {
-    return this.notifications$.pipe(
+  GetConversationNotification$(conversationId: string): Observable<ConversationNotification | null> {
+    return this.Notifications$.pipe(
       map(notifications => notifications[conversationId] || null),
       shareReplay(1)
     );
   }
 
+  /** @deprecated Use {@link GetConversationNotification$}. */
+  getConversationNotification$(conversationId: string): Observable<ConversationNotification | null> {
+    return this.GetConversationNotification$(conversationId);
+  }
+
   /**
    * Gets badge configuration for a conversation
    */
-  getBadgeConfig(conversationId: string): BadgeConfig {
-    const notification = this.getConversationNotification(conversationId);
+  GetBadgeConfig(conversationId: string): BadgeConfig {
+    const notification = this.GetConversationNotification(conversationId);
 
     if (!notification) {
       return { show: false };
@@ -124,20 +164,30 @@ export class NotificationService {
     };
   }
 
+  /** @deprecated Use {@link GetBadgeConfig}. */
+  getBadgeConfig(conversationId: string): BadgeConfig {
+    return this.GetBadgeConfig(conversationId);
+  }
+
   /**
    * Gets badge configuration observable for a conversation
    */
-  getBadgeConfig$(conversationId: string): Observable<BadgeConfig> {
-    return this.notifications$.pipe(
-      map(() => this.getBadgeConfig(conversationId)),
+  GetBadgeConfig$(conversationId: string): Observable<BadgeConfig> {
+    return this.Notifications$.pipe(
+      map(() => this.GetBadgeConfig(conversationId)),
       shareReplay(1)
     );
+  }
+
+  /** @deprecated Use {@link GetBadgeConfig$}. */
+  getBadgeConfig$(conversationId: string): Observable<BadgeConfig> {
+    return this.GetBadgeConfig$(conversationId);
   }
 
   /**
    * Tracks a new message in a conversation
    */
-  trackNewMessage(conversationId: string, messageTimestamp: Date, priority: NotificationPriority = 'normal'): void {
+  TrackNewMessage(conversationId: string, messageTimestamp: Date, priority: NotificationPriority = 'normal'): void {
     const notifications = { ...this._notifications$.value };
     const existing = notifications[conversationId];
 
@@ -162,10 +212,15 @@ export class NotificationService {
     this.playNotificationSound();
   }
 
+  /** @deprecated Use {@link TrackNewMessage}. */
+  trackNewMessage(conversationId: string, messageTimestamp: Date, priority: NotificationPriority = 'normal'): void {
+    return this.TrackNewMessage(conversationId, messageTimestamp, priority);
+  }
+
   /**
    * Tracks multiple new messages at once (batch operation)
    */
-  trackNewMessages(conversationId: string, count: number, latestTimestamp: Date, priority: NotificationPriority = 'normal'): void {
+  TrackNewMessages(conversationId: string, count: number, latestTimestamp: Date, priority: NotificationPriority = 'normal'): void {
     const notifications = { ...this._notifications$.value };
     const existing = notifications[conversationId];
 
@@ -190,10 +245,15 @@ export class NotificationService {
     this.playNotificationSound();
   }
 
+  /** @deprecated Use {@link TrackNewMessages}. */
+  trackNewMessages(conversationId: string, count: number, latestTimestamp: Date, priority: NotificationPriority = 'normal'): void {
+    return this.TrackNewMessages(conversationId, count, latestTimestamp, priority);
+  }
+
   /**
    * Tracks a new artifact notification
    */
-  trackNewArtifact(conversationId: string): void {
+  TrackNewArtifact(conversationId: string): void {
     const notifications = { ...this._notifications$.value };
     const existing = notifications[conversationId];
 
@@ -215,10 +275,15 @@ export class NotificationService {
     this.emitChangeEvent(conversationId, 'artifact', 'added');
   }
 
+  /** @deprecated Use {@link TrackNewArtifact}. */
+  trackNewArtifact(conversationId: string): void {
+    return this.TrackNewArtifact(conversationId);
+  }
+
   /**
    * Tracks an active agent process
    */
-  trackAgentProcess(conversationId: string, isActive: boolean): void {
+  TrackAgentProcess(conversationId: string, isActive: boolean): void {
     const notifications = { ...this._notifications$.value };
     const existing = notifications[conversationId];
 
@@ -241,10 +306,15 @@ export class NotificationService {
     this.emitChangeEvent(conversationId, 'agent_process', isActive ? 'added' : 'cleared');
   }
 
+  /** @deprecated Use {@link TrackAgentProcess}. */
+  trackAgentProcess(conversationId: string, isActive: boolean): void {
+    return this.TrackAgentProcess(conversationId, isActive);
+  }
+
   /**
    * Marks a conversation as read (clears unread message count)
    */
-  markConversationAsRead(conversationId: string): void {
+  MarkConversationAsRead(conversationId: string): void {
     const notifications = { ...this._notifications$.value };
     const existing = notifications[conversationId];
 
@@ -260,10 +330,15 @@ export class NotificationService {
     }
   }
 
+  /** @deprecated Use {@link MarkConversationAsRead}. */
+  markConversationAsRead(conversationId: string): void {
+    return this.MarkConversationAsRead(conversationId);
+  }
+
   /**
    * Clears artifact notifications for a conversation
    */
-  clearArtifactNotifications(conversationId: string): void {
+  ClearArtifactNotifications(conversationId: string): void {
     const notifications = { ...this._notifications$.value };
     const existing = notifications[conversationId];
 
@@ -279,10 +354,15 @@ export class NotificationService {
     }
   }
 
+  /** @deprecated Use {@link ClearArtifactNotifications}. */
+  clearArtifactNotifications(conversationId: string): void {
+    return this.ClearArtifactNotifications(conversationId);
+  }
+
   /**
    * Clears all notifications for a conversation
    */
-  clearAllNotifications(conversationId: string): void {
+  ClearAllNotifications(conversationId: string): void {
     const notifications = { ...this._notifications$.value };
 
     if (notifications[conversationId]) {
@@ -292,56 +372,86 @@ export class NotificationService {
     }
   }
 
+  /** @deprecated Use {@link ClearAllNotifications}. */
+  clearAllNotifications(conversationId: string): void {
+    return this.ClearAllNotifications(conversationId);
+  }
+
   /**
    * Clears all notifications across all conversations
    */
-  clearAllNotificationsGlobal(): void {
+  ClearAllNotificationsGlobal(): void {
     this.updateNotifications({});
+  }
+
+  /** @deprecated Use {@link ClearAllNotificationsGlobal}. */
+  clearAllNotificationsGlobal(): void {
+    return this.ClearAllNotificationsGlobal();
   }
 
   /**
    * Updates notification preferences
    */
-  updatePreferences(preferences: Partial<NotificationPreferences>): void {
+  UpdatePreferences(preferences: Partial<NotificationPreferences>): void {
     const current = this._preferences$.value;
     const updated = { ...current, ...preferences };
     this._preferences$.next(updated);
     this.saveToStorage();
   }
 
+  /** @deprecated Use {@link UpdatePreferences}. */
+  updatePreferences(preferences: Partial<NotificationPreferences>): void {
+    return this.UpdatePreferences(preferences);
+  }
+
   /**
    * Mutes a conversation
    */
-  muteConversation(conversationId: string): void {
+  MuteConversation(conversationId: string): void {
     const prefs = this._preferences$.value;
     if (!prefs.mutedConversations.includes(conversationId)) {
-      this.updatePreferences({
+      this.UpdatePreferences({
         mutedConversations: [...prefs.mutedConversations, conversationId]
       });
     }
   }
 
+  /** @deprecated Use {@link MuteConversation}. */
+  muteConversation(conversationId: string): void {
+    return this.MuteConversation(conversationId);
+  }
+
   /**
    * Unmutes a conversation
    */
-  unmuteConversation(conversationId: string): void {
+  UnmuteConversation(conversationId: string): void {
     const prefs = this._preferences$.value;
-    this.updatePreferences({
+    this.UpdatePreferences({
       mutedConversations: prefs.mutedConversations.filter(id => id !== conversationId)
     });
+  }
+
+  /** @deprecated Use {@link UnmuteConversation}. */
+  unmuteConversation(conversationId: string): void {
+    return this.UnmuteConversation(conversationId);
   }
 
   /**
    * Checks if a conversation is muted
    */
-  isConversationMuted(conversationId: string): boolean {
+  IsConversationMuted(conversationId: string): boolean {
     return this._preferences$.value.mutedConversations.includes(conversationId);
+  }
+
+  /** @deprecated Use {@link IsConversationMuted}. */
+  isConversationMuted(conversationId: string): boolean {
+    return this.IsConversationMuted(conversationId);
   }
 
   /**
    * Requests desktop notification permission
    */
-  async requestDesktopPermission(): Promise<boolean> {
+  async RequestDesktopPermission(): Promise<boolean> {
     if (!('Notification' in window)) {
       console.warn('Desktop notifications not supported');
       return false;
@@ -359,10 +469,15 @@ export class NotificationService {
     return false;
   }
 
+  /** @deprecated Use {@link RequestDesktopPermission}. */
+  async requestDesktopPermission(): Promise<boolean> {
+    return this.RequestDesktopPermission();
+  }
+
   /**
    * Shows a desktop notification
    */
-  showDesktopNotification(title: string, body: string, conversationId: string): void {
+  ShowDesktopNotification(title: string, body: string, conversationId: string): void {
     if (!this._preferences$.value.enableDesktopNotifications) {
       return;
     }
@@ -381,6 +496,11 @@ export class NotificationService {
         notification.close();
       };
     }
+  }
+
+  /** @deprecated Use {@link ShowDesktopNotification}. */
+  showDesktopNotification(title: string, body: string, conversationId: string): void {
+    return this.ShowDesktopNotification(title, body, conversationId);
   }
 
   // Private helper methods

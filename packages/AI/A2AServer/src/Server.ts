@@ -243,7 +243,7 @@ interface RequestWithUser extends Request {
 export const A2A_SERVER_PROCESS_ID = 'a2a';
 
 // Initialize A2A server
-export async function initializeA2AServer() {
+export async function InitializeA2AServer() {
     try {
         if (!a2aServerSettings?.enableA2AServer) {
             console.log("A2A Server is disabled in the configuration.");
@@ -276,6 +276,11 @@ export async function initializeA2AServer() {
     } catch (error) {
         console.error("Failed to initialize A2A server:", error);
     }
+}
+
+/** @deprecated Use {@link InitializeA2AServer}. */
+export async function initializeA2AServer() {
+    return InitializeA2AServer();
 }
 
 function setupRoutes() {

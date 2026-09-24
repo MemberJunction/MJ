@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 
 /**
  * Interface for a Customer from Business Central
@@ -42,7 +42,7 @@ export interface BCAddress {
 /**
  * Action to retrieve customers from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetCustomers, ERP_INTEGRATION.BusinessCentral))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.GetCustomers, ERP_INTEGRATION.BusinessCentral))
 @RegisterClass(BaseAction, 'GetBusinessCentralCustomersAction')
 export class GetBusinessCentralCustomersAction extends BusinessCentralBaseAction {
     

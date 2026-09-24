@@ -10,9 +10,9 @@ import { EntityInfo, EntityRelationshipInfo, UserInfo, LogStatus } from '@member
 import { AIEngine } from '@memberjunction/aiengine';
 import { EntityGroup } from '../data/schema';
 import { QueryGenConfig } from '../cli/config';
-import { generateRelationshipGraph, formatEntitiesForPrompt } from '../utils/graph-helpers';
-import { extractErrorMessage } from '../utils/error-handlers';
-import { executePromptWithOverrides } from '../utils/prompt-helpers';
+import { GenerateRelationshipGraph, FormatEntitiesForPrompt } from '../utils/graph-helpers';
+import { ExtractErrorMessage } from '../utils/error-handlers';
+import { ExecutePromptWithOverrides } from '../utils/prompt-helpers';
 
 /**
  * LLM response format from Entity Group Generator prompt
@@ -54,7 +54,7 @@ export class EntityGrouper {
    * @param contextUser - User context for server-side operations
    * @returns Array of validated entity groups with business context
    */
-  async generateEntityGroups(
+  async GenerateEntityGroups(
     entities: EntityInfo[],
     contextUser: UserInfo
   ): Promise<EntityGroup[]> {
@@ -109,8 +109,16 @@ export class EntityGrouper {
 
       return deduplicatedGroups;
     } catch (error: unknown) {
-      throw new Error(extractErrorMessage(error, 'EntityGrouper.generateEntityGroups'));
+      throw new Error(ExtractErrorMessage(error, 'EntityGrouper.generateEntityGroups'));
     }
+  }
+
+  /** @deprecated Use {@link GenerateEntityGroups}. */
+  async generateEntityGroups(
+    entities: EntityInfo[],
+    contextUser: UserInfo
+  ): Promise<EntityGroup[]> {
+    return this.GenerateEntityGroups(entities, contextUser);
   }
 
   /**
@@ -139,8 +147,8 @@ export class EntityGrouper {
    * @param schemaName - Name of the schema being processed
    */
   private prepareSchemaData(entities: EntityInfo[], schemaName: string): Record<string, unknown> {
-    const formattedEntities = formatEntitiesForPrompt(entities);
-    const relationshipGraph = generateRelationshipGraph(entities);
+    const formattedEntities = FormatEntitiesForPrompt(entities);
+    const relationshipGraph = GenerateRelationshipGraph(entities);
 
     // Calculate target group count using graph theory metrics
     // This approach uses actual schema connectivity instead of arbitrary thresholds
@@ -217,7 +225,7 @@ export class EntityGrouper {
     }
 
     // Execute with model/vendor overrides if specified in config
-    const result = await executePromptWithOverrides<LLMEntityGroupResponse>(
+    const result = await ExecutePromptWithOverrides<LLMEntityGroupResponse>(
       prompt,
       schemaData,
       contextUser,
@@ -329,7 +337,7 @@ export class EntityGrouper {
         }
       } catch (error: unknown) {
         if (this.config.verbose) {
-          LogStatus(`  ✗ Group validation error: ${extractErrorMessage(error, 'Group Validation')}`);
+          LogStatus(`  ✗ Group validation error: ${ExtractErrorMessage(error, 'Group Validation')}`);
         }
       }
     }

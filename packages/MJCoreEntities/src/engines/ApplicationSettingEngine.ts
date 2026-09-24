@@ -63,7 +63,7 @@ export class ApplicationSettingEngine extends BaseEngine<ApplicationSettingEngin
   }
 
   // Private storage for the application setting cache (all rows, global + app-scoped)
-  private _ApplicationSettings: MJApplicationSettingEntity[] = [];
+  private _applicationSettings: MJApplicationSettingEntity[] = [];
 
   // ========================================================================
   // DEBOUNCED SETTINGS SUPPORT
@@ -109,7 +109,7 @@ export class ApplicationSettingEngine extends BaseEngine<ApplicationSettingEngin
       {
         Type: 'entity',
         EntityName: 'MJ: Application Settings',
-        PropertyName: '_ApplicationSettings',
+        PropertyName: '_applicationSettings',
         CacheLocal: true,
         // Global reference data — no user filter
       },
@@ -128,7 +128,7 @@ export class ApplicationSettingEngine extends BaseEngine<ApplicationSettingEngin
    * refresh).
    */
   public get ApplicationSettings$(): Observable<MJApplicationSettingEntity[]> {
-    return this.ObserveProperty<MJApplicationSettingEntity>('_ApplicationSettings');
+    return this.ObserveProperty<MJApplicationSettingEntity>('_applicationSettings');
   }
 
   // ========================================================================
@@ -139,7 +139,7 @@ export class ApplicationSettingEngine extends BaseEngine<ApplicationSettingEngin
    * Get all application settings in the cache (global + app-scoped, unfiltered).
    */
   public get ApplicationSettings(): MJApplicationSettingEntity[] {
-    return this.GetConfigData<MJApplicationSettingEntity>('_ApplicationSettings');
+    return this.GetConfigData<MJApplicationSettingEntity>('_applicationSettings');
   }
 
   /**
@@ -258,8 +258,8 @@ export class ApplicationSettingEngine extends BaseEngine<ApplicationSettingEngin
 
       const saved = await setting.Save();
       if (saved) {
-        if (!this._ApplicationSettings.some((s) => UUIDsEqual(s.ID, setting!.ID))) {
-          this._ApplicationSettings.push(setting);
+        if (!this._applicationSettings.some((s) => UUIDsEqual(s.ID, setting!.ID))) {
+          this._applicationSettings.push(setting);
         }
         return true;
       } else {
@@ -290,9 +290,9 @@ export class ApplicationSettingEngine extends BaseEngine<ApplicationSettingEngin
     try {
       const deleted = await setting.Delete();
       if (deleted) {
-        const index = this._ApplicationSettings.findIndex((s) => UUIDsEqual(s.ID, setting.ID));
+        const index = this._applicationSettings.findIndex((s) => UUIDsEqual(s.ID, setting.ID));
         if (index >= 0) {
-          this._ApplicationSettings.splice(index, 1);
+          this._applicationSettings.splice(index, 1);
         }
         return true;
       } else {

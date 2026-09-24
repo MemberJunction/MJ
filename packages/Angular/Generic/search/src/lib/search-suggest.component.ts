@@ -160,7 +160,7 @@ export class SearchSuggestComponent implements OnInit {
     public SelectHighlighted(): void {
         if (this.HighlightedIndex < 0) return;
 
-        if (this.showRecentSection) {
+        if (this.ShowRecentSection) {
             // Navigating recent searches
             const visibleRecent = this.VisibleRecentSearches;
             if (this.HighlightedIndex < visibleRecent.length) {
@@ -169,9 +169,9 @@ export class SearchSuggestComponent implements OnInit {
             }
         }
 
-        if (this.showRecentRecordsSection) {
+        if (this.ShowRecentRecordsSection) {
             // Navigating recently opened records (indexes continue after recents)
-            const offset = this.showRecentSection ? this.VisibleRecentSearches.length : 0;
+            const offset = this.ShowRecentSection ? this.VisibleRecentSearches.length : 0;
             const recordIndex = this.HighlightedIndex - offset;
             const visibleRecords = this.VisibleRecentRecords;
             if (recordIndex >= 0 && recordIndex < visibleRecords.length) {
@@ -180,9 +180,9 @@ export class SearchSuggestComponent implements OnInit {
             }
         }
 
-        if (this.showPreviewSection) {
+        if (this.ShowPreviewSection) {
             // Navigating preview results
-            const offset = this.showRecentSection ? this.VisibleRecentSearches.length : 0;
+            const offset = this.ShowRecentSection ? this.VisibleRecentSearches.length : 0;
             const resultIndex = this.HighlightedIndex - offset;
             const visibleResults = this.VisiblePreviewResults;
             if (resultIndex >= 0 && resultIndex < visibleResults.length) {
@@ -191,7 +191,7 @@ export class SearchSuggestComponent implements OnInit {
             }
 
             // "See all" footer
-            if (resultIndex === visibleResults.length && this.showSeeAllFooter) {
+            if (resultIndex === visibleResults.length && this.ShowSeeAllFooter) {
                 this.OnSeeAllClick();
             }
         }
@@ -212,18 +212,33 @@ export class SearchSuggestComponent implements OnInit {
     // --- Template getters ---
 
     /** Whether to show recent searches section */
-    public get showRecentSection(): boolean {
+    public get ShowRecentSection(): boolean {
         return this.ShowRecent && this.Query.length < this.MinQueryLength && this.RecentSearches.length > 0;
     }
 
+    /** @deprecated Use {@link ShowRecentSection}. */
+    public get showRecentSection(): boolean {
+        return this.ShowRecentSection;
+    }
+
     /** Whether to show preview results section */
-    public get showPreviewSection(): boolean {
+    public get ShowPreviewSection(): boolean {
         return this.Query.length >= this.MinQueryLength;
     }
 
+    /** @deprecated Use {@link ShowPreviewSection}. */
+    public get showPreviewSection(): boolean {
+        return this.ShowPreviewSection;
+    }
+
     /** Whether to show the recently-opened-records section (idle state only) */
-    public get showRecentRecordsSection(): boolean {
+    public get ShowRecentRecordsSection(): boolean {
         return this.Query.length < this.MinQueryLength && this.RecentRecords.length > 0;
+    }
+
+    /** @deprecated Use {@link ShowRecentRecordsSection}. */
+    public get showRecentRecordsSection(): boolean {
+        return this.ShowRecentRecordsSection;
     }
 
     /** Visible recently opened records (capped at 3) */
@@ -232,8 +247,13 @@ export class SearchSuggestComponent implements OnInit {
     }
 
     /** Whether to show the "See all N results" footer */
+    public get ShowSeeAllFooter(): boolean {
+        return this.ShowPreviewSection && this.TotalCount > 0;
+    }
+
+    /** @deprecated Use {@link ShowSeeAllFooter}. */
     public get showSeeAllFooter(): boolean {
-        return this.showPreviewSection && this.TotalCount > 0;
+        return this.ShowSeeAllFooter;
     }
 
     /** Visible recent searches (capped at 5) */
@@ -339,15 +359,15 @@ export class SearchSuggestComponent implements OnInit {
 
     private getNavigableItemCount(): number {
         let count = 0;
-        if (this.showRecentSection) {
+        if (this.ShowRecentSection) {
             count += this.VisibleRecentSearches.length;
         }
-        if (this.showRecentRecordsSection) {
+        if (this.ShowRecentRecordsSection) {
             count += this.VisibleRecentRecords.length;
         }
-        if (this.showPreviewSection) {
+        if (this.ShowPreviewSection) {
             count += this.VisiblePreviewResults.length;
-            if (this.showSeeAllFooter) {
+            if (this.ShowSeeAllFooter) {
                 count += 1; // "See all" item
             }
         }

@@ -33,7 +33,7 @@ export class LibraryDependencyResolver {
    * @param json - JSON string containing dependencies
    * @returns Map of library name to version specification
    */
-  parseDependencies(json: string | null): Map<string, string> {
+  ParseDependencies(json: string | null): Map<string, string> {
     const dependencies = new Map<string, string>();
     
     if (!json || json.trim() === '') {
@@ -56,18 +56,23 @@ export class LibraryDependencyResolver {
     return dependencies;
   }
 
+  /** @deprecated Use {@link ParseDependencies}. */
+  parseDependencies(json: string | null): Map<string, string> {
+    return this.ParseDependencies(json);
+  }
+
   /**
    * Build a dependency graph from a collection of libraries
    * @param libraries - All available libraries
    * @returns Dependency graph structure
    */
-  buildDependencyGraph(libraries: MJComponentLibraryEntity[]): DependencyGraph {
+  BuildDependencyGraph(libraries: MJComponentLibraryEntity[]): DependencyGraph {
     const nodes = new Map<string, DependencyNode>();
     const roots = new Set<string>();
 
     // First pass: create nodes for all libraries
     for (const library of libraries) {
-      const dependencies = this.parseDependencies(library.Dependencies);
+      const dependencies = this.ParseDependencies(library.Dependencies);
       nodes.set(library.Name, {
         library,
         dependencies,
@@ -95,12 +100,17 @@ export class LibraryDependencyResolver {
     return { nodes, roots };
   }
 
+  /** @deprecated Use {@link BuildDependencyGraph}. */
+  buildDependencyGraph(libraries: MJComponentLibraryEntity[]): DependencyGraph {
+    return this.BuildDependencyGraph(libraries);
+  }
+
   /**
    * Detect circular dependencies in the graph
    * @param graph - Dependency graph
    * @returns Array of cycles found
    */
-  detectCycles(graph: DependencyGraph): string[][] {
+  DetectCycles(graph: DependencyGraph): string[][] {
     const cycles: string[][] = [];
     const visited = new Set<string>();
     const recursionStack = new Set<string>();
@@ -139,12 +149,17 @@ export class LibraryDependencyResolver {
     return cycles;
   }
 
+  /** @deprecated Use {@link DetectCycles}. */
+  detectCycles(graph: DependencyGraph): string[][] {
+    return this.DetectCycles(graph);
+  }
+
   /**
    * Perform topological sort to determine load order
    * @param graph - Dependency graph
    * @returns Sorted array of libraries to load in order
    */
-  topologicalSort(graph: DependencyGraph): MJComponentLibraryEntity[] {
+  TopologicalSort(graph: DependencyGraph): MJComponentLibraryEntity[] {
     const result: MJComponentLibraryEntity[] = [];
     const visited = new Set<string>();
     const tempMarked = new Set<string>();
@@ -188,6 +203,11 @@ export class LibraryDependencyResolver {
     }
 
     return result;
+  }
+
+  /** @deprecated Use {@link TopologicalSort}. */
+  topologicalSort(graph: DependencyGraph): MJComponentLibraryEntity[] {
+    return this.TopologicalSort(graph);
   }
 
   /**
@@ -332,7 +352,7 @@ export class LibraryDependencyResolver {
    * @param availableLibraries - All available libraries to choose from
    * @returns Resolved version information
    */
-  resolveVersionConflicts(
+  ResolveVersionConflicts(
     requirements: VersionRequirement[],
     availableLibraries: MJComponentLibraryEntity[]
   ): ResolvedVersion {
@@ -405,6 +425,14 @@ export class LibraryDependencyResolver {
     };
   }
 
+  /** @deprecated Use {@link ResolveVersionConflicts}. */
+  resolveVersionConflicts(
+    requirements: VersionRequirement[],
+    availableLibraries: MJComponentLibraryEntity[]
+  ): ResolvedVersion {
+    return this.ResolveVersionConflicts(requirements, availableLibraries);
+  }
+
   /**
    * Get the load order for a set of requested libraries
    * @param requestedLibs - Library names requested
@@ -412,7 +440,7 @@ export class LibraryDependencyResolver {
    * @param options - Resolution options
    * @returns Load order result
    */
-  getLoadOrder(
+  GetLoadOrder(
     requestedLibs: string[],
     allLibs: MJComponentLibraryEntity[],
     options?: DependencyResolutionOptions
@@ -492,7 +520,7 @@ export class LibraryDependencyResolver {
 
       // For now, use the first version found (should be resolved properly)
       const lib = libVersions[0];
-      const deps = this.parseDependencies(lib.Dependencies);
+      const deps = this.ParseDependencies(lib.Dependencies);
       
       if ((this.debug || options?.debug) && deps.size > 0) {
         console.log(`    📌 ${current} requires:`, Array.from(deps.entries()));
@@ -537,7 +565,7 @@ export class LibraryDependencyResolver {
 
       if (requirements.length > 0) {
         try {
-          const resolved = this.resolveVersionConflicts(requirements, versions);
+          const resolved = this.ResolveVersionConflicts(requirements, versions);
           const selectedLib = versions.find(lib => lib.Version === resolved.version);
           if (selectedLib) {
             resolvedLibraries.push(selectedLib);
@@ -557,10 +585,10 @@ export class LibraryDependencyResolver {
     }
 
     // Build dependency graph with resolved libraries
-    const graph = this.buildDependencyGraph(resolvedLibraries);
+    const graph = this.BuildDependencyGraph(resolvedLibraries);
 
     // Check for cycles
-    const cycles = this.detectCycles(graph);
+    const cycles = this.DetectCycles(graph);
     if (cycles.length > 0) {
       errors.push(`Circular dependencies detected: ${cycles.map(c => c.join(' -> ')).join(', ')}`);
       return {
@@ -572,7 +600,7 @@ export class LibraryDependencyResolver {
     }
 
     // Perform topological sort
-    const sorted = this.topologicalSort(graph);
+    const sorted = this.TopologicalSort(graph);
 
     if (this.debug || options?.debug) {
       console.log('✅ Load order determined:', sorted.map(lib => `${lib.Name}@${lib.Version}`));
@@ -586,13 +614,27 @@ export class LibraryDependencyResolver {
     };
   }
 
+  /** @deprecated Use {@link GetLoadOrder}. */
+  getLoadOrder(
+    requestedLibs: string[],
+    allLibs: MJComponentLibraryEntity[],
+    options?: DependencyResolutionOptions
+  ): LoadOrderResult {
+    return this.GetLoadOrder(requestedLibs, allLibs, options);
+  }
+
   /**
    * Get direct dependencies of a library
    * @param library - Library to get dependencies for
    * @returns Map of dependency names to version specs
    */
+  GetDirectDependencies(library: MJComponentLibraryEntity): Map<string, string> {
+    return this.ParseDependencies(library.Dependencies);
+  }
+
+  /** @deprecated Use {@link GetDirectDependencies}. */
   getDirectDependencies(library: MJComponentLibraryEntity): Map<string, string> {
-    return this.parseDependencies(library.Dependencies);
+    return this.GetDirectDependencies(library);
   }
 
   /**
@@ -602,7 +644,7 @@ export class LibraryDependencyResolver {
    * @param maxDepth - Maximum depth to traverse
    * @returns Set of all dependency names (including transitive)
    */
-  getTransitiveDependencies(
+  GetTransitiveDependencies(
     libraryName: string,
     allLibs: MJComponentLibraryEntity[],
     maxDepth: number = 10
@@ -626,7 +668,7 @@ export class LibraryDependencyResolver {
       const lib = libMap.get(current.toLowerCase());
       if (!lib) continue;
 
-      const deps = this.parseDependencies(lib.Dependencies);
+      const deps = this.ParseDependencies(lib.Dependencies);
       for (const [depName] of deps) {
         dependencies.add(depName);
         if (!processed.has(depName)) {
@@ -638,5 +680,14 @@ export class LibraryDependencyResolver {
     }
 
     return dependencies;
+  }
+
+  /** @deprecated Use {@link GetTransitiveDependencies}. */
+  getTransitiveDependencies(
+    libraryName: string,
+    allLibs: MJComponentLibraryEntity[],
+    maxDepth: number = 10
+  ): Set<string> {
+    return this.GetTransitiveDependencies(libraryName, allLibs, maxDepth);
   }
 }

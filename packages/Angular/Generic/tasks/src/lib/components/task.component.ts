@@ -155,30 +155,153 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
   `]
 })
 export class TaskComponent {
-  @Input() tasks: MJTaskEntity[] = [];
-  @Input() ganttTasks?: MJTaskEntity[]; // Optional separate task list for Gantt (includes parent)
-  @Input() taskDependencies?: MJTaskDependencyEntity[]; // Task dependencies for Gantt links
-  @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
-  @Input() title?: string;
-  @Input() description?: string;
-  @Input() showHeader: boolean = true;
-  @Input() showViewToggle: boolean = true; // Show Gantt/List toggle
-  @Input() viewMode: TaskViewMode = 'simple';
+  @Input() Tasks: MJTaskEntity[] = [];
 
-  @Output() viewModeChanged = new EventEmitter<TaskViewMode>();
-  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  /** @deprecated Use {@link Tasks}. */
+  @Input() set tasks(value: MJTaskEntity[]) {
+    this.Tasks = value;
+  }
+  /** @deprecated Use {@link Tasks}. */
+  get tasks(): MJTaskEntity[] {
+    return this.Tasks;
+  }
+  @Input() GanttTasks?: MJTaskEntity[];
 
+  /** @deprecated Use {@link GanttTasks}. */
+  @Input() set ganttTasks(value: MJTaskEntity[] | undefined) {
+    this.GanttTasks = value;
+  }
+  /** @deprecated Use {@link GanttTasks}. */
+  get ganttTasks(): MJTaskEntity[] | undefined {
+    return this.GanttTasks;
+  } // Optional separate task list for Gantt (includes parent)
+  @Input() TaskDependencies?: MJTaskDependencyEntity[];
+
+  /** @deprecated Use {@link TaskDependencies}. */
+  @Input() set taskDependencies(value: MJTaskDependencyEntity[] | undefined) {
+    this.TaskDependencies = value;
+  }
+  /** @deprecated Use {@link TaskDependencies}. */
+  get taskDependencies(): MJTaskDependencyEntity[] | undefined {
+    return this.TaskDependencies;
+  } // Task dependencies for Gantt links
+  @Input() AgentRunMap?: Map<string, string>;
+
+  /** @deprecated Use {@link AgentRunMap}. */
+  @Input() set agentRunMap(value: Map<string, string> | undefined) {
+    this.AgentRunMap = value;
+  }
+  /** @deprecated Use {@link AgentRunMap}. */
+  get agentRunMap(): Map<string, string> | undefined {
+    return this.AgentRunMap;
+  } // Maps TaskID -> AgentRunID
+  @Input() Title?: string;
+
+  /** @deprecated Use {@link Title}. */
+  @Input() set title(value: string | undefined) {
+    this.Title = value;
+  }
+  /** @deprecated Use {@link Title}. */
+  get title(): string | undefined {
+    return this.Title;
+  }
+  @Input() Description?: string;
+
+  /** @deprecated Use {@link Description}. */
+  @Input() set description(value: string | undefined) {
+    this.Description = value;
+  }
+  /** @deprecated Use {@link Description}. */
+  get description(): string | undefined {
+    return this.Description;
+  }
+  @Input() ShowHeader: boolean = true;
+
+  /** @deprecated Use {@link ShowHeader}. */
+  @Input() set showHeader(value: boolean) {
+    this.ShowHeader = value;
+  }
+  /** @deprecated Use {@link ShowHeader}. */
+  get showHeader(): boolean {
+    return this.ShowHeader;
+  }
+  @Input() ShowViewToggle: boolean = true;
+
+  /** @deprecated Use {@link ShowViewToggle}. */
+  @Input() set showViewToggle(value: boolean) {
+    this.ShowViewToggle = value;
+  }
+  /** @deprecated Use {@link ShowViewToggle}. */
+  get showViewToggle(): boolean {
+    return this.ShowViewToggle;
+  } // Show Gantt/List toggle
+  @Input() ViewMode: TaskViewMode = 'simple';
+
+  /** @deprecated Use {@link ViewMode}. */
+  @Input() set viewMode(value: TaskViewMode) {
+    this.ViewMode = value;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  get viewMode(): TaskViewMode {
+    return this.ViewMode;
+  }
+
+  @Output() ViewModeChanged = new EventEmitter<TaskViewMode>();
+
+  /**
+   * @deprecated Use {@link ViewModeChanged}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (viewModeChanged) keeps working. Must stay AFTER ViewModeChanged: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() viewModeChanged = this.ViewModeChanged;
+  @Output() TaskClicked = new EventEmitter<MJTaskEntity>();
+
+  /**
+   * @deprecated Use {@link TaskClicked}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (taskClicked) keeps working. Must stay AFTER TaskClicked: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() taskClicked = this.TaskClicked;
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
+
+  public SetViewMode(mode: TaskViewMode): void {
+    this.ViewMode = mode;
+    this.ViewModeChanged.emit(mode);
+  }
+
+  /** @deprecated Use {@link SetViewMode}. */
   public setViewMode(mode: TaskViewMode): void {
-    this.viewMode = mode;
-    this.viewModeChanged.emit(mode);
+    return this.SetViewMode(mode);
   }
 
+  public OnTaskClicked(task: MJTaskEntity): void {
+    this.TaskClicked.emit(task);
+  }
+
+  /** @deprecated Use {@link OnTaskClicked}. */
   public onTaskClicked(task: MJTaskEntity): void {
-    this.taskClicked.emit(task);
+    return this.OnTaskClicked(task);
   }
 
+  public OnOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+    this.OpenEntityRecord.emit(event);
+  }
+
+  /** @deprecated Use {@link OnOpenEntityRecord}. */
   public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
-    this.openEntityRecord.emit(event);
+    return this.OnOpenEntityRecord(event);
   }
 }

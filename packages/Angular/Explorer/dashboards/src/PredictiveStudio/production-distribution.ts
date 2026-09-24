@@ -12,22 +12,22 @@ export const PRODUCTION_SAMPLE_CAP = 5000;
 /** One bucket in a written-column distribution (a tercile band or a class value). */
 export interface DistributionBucket {
   /** Display label for the bucket (band name or class value). */
-  label: string;
+  label: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Number of records in this bucket. */
-  count: number;
+  count: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Share of the sampled population, 0..100 (rounded for display). */
-  pct: number;
+  pct: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Result of bucketing a written column's current values across the population. */
 export interface DistributionResult {
   /** 'numeric' → neutral terciles (Low/Mid/High bands); 'categorical' → group-by-value. */
-  kind: 'numeric' | 'categorical';
-  buckets: DistributionBucket[];
+  Kind: 'numeric' | 'categorical';
+  Buckets: DistributionBucket[];
   /** Total records sampled (post NOT-NULL filter, pre-cap if the population is larger). */
-  sampled: number;
+  Sampled: number;
   /** True when the population hit {@link PRODUCTION_SAMPLE_CAP} and the distribution is a sample. */
-  capped: boolean;
+  Capped: boolean;
 }
 
 /**
@@ -42,16 +42,21 @@ export interface DistributionResult {
  * @param values raw column values (may contain null/undefined/empty — those are dropped)
  * @param numeric whether the bound column is numeric (caller derives this from entity field metadata)
  */
-export function buildDistribution(values: ReadonlyArray<unknown>, numeric: boolean): DistributionResult {
+export function BuildDistribution(values: ReadonlyArray<unknown>, numeric: boolean): DistributionResult {
   const cleaned = values.filter((v) => v !== null && v !== undefined && v !== '');
   const sampled = cleaned.length;
   const capped = sampled >= PRODUCTION_SAMPLE_CAP;
   if (sampled === 0) {
-    return { kind: numeric ? 'numeric' : 'categorical', buckets: [], sampled: 0, capped: false };
+    return { Kind: numeric ? 'numeric' : 'categorical', Buckets: [], Sampled: 0, Capped: false };
   }
   return numeric
     ? buildNumericTerciles(cleaned, sampled, capped)
     : buildCategorical(cleaned, sampled, capped);
+}
+
+/** @deprecated Use {@link BuildDistribution}. */
+export function buildDistribution(values: ReadonlyArray<unknown>, numeric: boolean): DistributionResult {
+  return BuildDistribution(values, numeric);
 }
 
 const MAX_CATEGORICAL_BUCKETS = 8;
@@ -68,10 +73,10 @@ function buildNumericTerciles(values: ReadonlyArray<unknown>, sampled: number, c
   // Degenerate range (all identical) → a single band.
   if (span === 0) {
     return {
-      kind: 'numeric',
-      buckets: [{ label: `${formatNum(min)}`, count: nums.length, pct: 100 }],
-      sampled,
-      capped,
+      Kind: 'numeric',
+      Buckets: [{ label: `${formatNum(min)}`, count: nums.length, pct: 100 }],
+      Sampled: sampled,
+      Capped: capped,
     };
   }
   const third = span / 3;
@@ -91,7 +96,7 @@ function buildNumericTerciles(values: ReadonlyArray<unknown>, sampled: number, c
     { label: `Middle third (${formatNum(b1)}–${formatNum(b2)})`, count: mid, pct: pct(mid, total) },
     { label: `Upper third (${formatNum(b2)}–${formatNum(max)})`, count: high, pct: pct(high, total) },
   ];
-  return { kind: 'numeric', buckets, sampled, capped };
+  return { Kind: 'numeric', Buckets: buckets, Sampled: sampled, Capped: capped };
 }
 
 function buildCategorical(values: ReadonlyArray<unknown>, sampled: number, capped: boolean): DistributionResult {
@@ -111,7 +116,7 @@ function buildCategorical(values: ReadonlyArray<unknown>, sampled: number, cappe
     buckets = top.map(([label, count]) => ({ label, count, pct: pct(count, total) }));
     buckets.push({ label: 'Other', count: otherCount, pct: pct(otherCount, total) });
   }
-  return { kind: 'categorical', buckets, sampled, capped };
+  return { Kind: 'categorical', Buckets: buckets, Sampled: sampled, Capped: capped };
 }
 
 function toNumber(v: unknown): number | null {
@@ -141,7 +146,7 @@ function formatNum(n: number): string {
  *
  * Field order: [second?] minute hour dayOfMonth month dayOfWeek
  */
-export function humanizeCron(cron: string | null | undefined): string | null {
+export function HumanizeCron(cron: string | null | undefined): string | null {
   if (!cron) return null;
   const raw = cron.trim();
   if (!raw) return null;
@@ -192,6 +197,11 @@ export function humanizeCron(cron: string | null | undefined): string | null {
   return raw;
 }
 
+/** @deprecated Use {@link HumanizeCron}. */
+export function humanizeCron(cron: string | null | undefined): string | null {
+  return HumanizeCron(cron);
+}
+
 /** True when a cron field is a single integer literal (no `*`, ranges, lists, or steps). */
 function isNumericField(field: string): boolean {
   return /^\d+$/.test(field);
@@ -238,17 +248,22 @@ export type StatusVariant = 'green' | 'amber' | 'red' | 'gray' | 'blue';
  * @param pipeline denormalized pipeline name (may be null/empty/whitespace)
  * @param version  model version number (null when the model couldn't be resolved)
  */
-export function modelLabel(pipeline: string | null | undefined, version: number | null | undefined): string {
+export function ModelLabel(pipeline: string | null | undefined, version: number | null | undefined): string {
   if (version == null) return 'Unknown model';
   const name = pipeline?.trim();
   return name ? `${name} v${version}` : `Model v${version}`;
+}
+
+/** @deprecated Use {@link ModelLabel}. */
+export function modelLabel(pipeline: string | null | undefined, version: number | null | undefined): string {
+  return ModelLabel(pipeline, version);
 }
 
 /**
  * Map a Process-Run status to a {@link StatusVariant} pill colour. Unknown/empty statuses fall back
  * to neutral gray so a new run state never renders an undefined badge.
  */
-export function runStatusVariant(status: string | null | undefined): StatusVariant {
+export function RunStatusVariant(status: string | null | undefined): StatusVariant {
   switch (status) {
     case 'Completed':
       return 'green';
@@ -266,8 +281,13 @@ export function runStatusVariant(status: string | null | undefined): StatusVaria
   }
 }
 
+/** @deprecated Use {@link RunStatusVariant}. */
+export function runStatusVariant(status: string | null | undefined): StatusVariant {
+  return RunStatusVariant(status);
+}
+
 /** Map a scoring mode to its badge colour. OnDemand/unknown → neutral gray. */
-export function modeBadgeClass(mode: string | null | undefined): StatusVariant {
+export function ModeBadgeClass(mode: string | null | undefined): StatusVariant {
   switch (mode) {
     case 'Scheduled':
       return 'blue';
@@ -276,6 +296,11 @@ export function modeBadgeClass(mode: string | null | undefined): StatusVariant {
     default:
       return 'gray';
   }
+}
+
+/** @deprecated Use {@link ModeBadgeClass}. */
+export function modeBadgeClass(mode: string | null | undefined): StatusVariant {
+  return ModeBadgeClass(mode);
 }
 
 /** Minimal raw shape of a Process Run consumed by {@link summarizeRun} (decoupled from the entity). */
@@ -291,13 +316,13 @@ export interface RawRun {
 
 /** A summarized last-run view-model rendered in the panel's "Last run" cell. */
 export interface RunSummary {
-  status: string;
-  statusVariant: StatusVariant;
+  Status: string;
+  StatusVariant: StatusVariant;
   /** Best available timestamp: EndTime → StartTime → CreatedAt → null. */
-  when: Date | null;
-  successCount: number;
-  errorCount: number;
-  totalCount: number | null;
+  When: Date | null;
+  SuccessCount: number;
+  ErrorCount: number;
+  TotalCount: number | null;
 }
 
 /**
@@ -307,14 +332,19 @@ export interface RunSummary {
  *
  * @param run the latest run, or null/undefined when the binding has never run
  */
-export function summarizeRun(run: RawRun | null | undefined): RunSummary | null {
+export function SummarizeRun(run: RawRun | null | undefined): RunSummary | null {
   if (!run) return null;
   return {
-    status: run.Status,
-    statusVariant: runStatusVariant(run.Status),
-    when: run.EndTime ?? run.StartTime ?? run.CreatedAt ?? null,
-    successCount: run.SuccessCount ?? 0,
-    errorCount: run.ErrorCount ?? 0,
-    totalCount: run.TotalItemCount ?? null,
+    Status: run.Status,
+    StatusVariant: RunStatusVariant(run.Status),
+    When: run.EndTime ?? run.StartTime ?? run.CreatedAt ?? null,
+    SuccessCount: run.SuccessCount ?? 0,
+    ErrorCount: run.ErrorCount ?? 0,
+    TotalCount: run.TotalItemCount ?? null,
   };
+}
+
+/** @deprecated Use {@link SummarizeRun}. */
+export function summarizeRun(run: RawRun | null | undefined): RunSummary | null {
+  return SummarizeRun(run);
 }

@@ -26,7 +26,7 @@ function isPlainObject(value: unknown): value is JsonObject {
  * Strip `//` line comments and block comments from JSON-with-comments
  * (tsconfig.json style) while preserving string contents verbatim.
  */
-export function stripJsonComments(jsonString: string): string {
+export function StripJsonComments(jsonString: string): string {
   let result = '';
   let i = 0;
   const len = jsonString.length;
@@ -57,31 +57,46 @@ export function stripJsonComments(jsonString: string): string {
   return result;
 }
 
+/** @deprecated Use {@link StripJsonComments}. */
+export function stripJsonComments(jsonString: string): string {
+  return StripJsonComments(jsonString);
+}
+
 /** Parse JSON that may contain comments (tsconfig.json style). */
-export function parseJsonc(content: string): JsonObject {
-  const parsed: unknown = JSON.parse(stripJsonComments(content));
+export function ParseJsonc(content: string): JsonObject {
+  const parsed: unknown = JSON.parse(StripJsonComments(content));
   if (!isPlainObject(parsed)) {
     throw new Error('Expected a JSON object at the top level');
   }
   return parsed;
 }
 
+/** @deprecated Use {@link ParseJsonc}. */
+export function parseJsonc(content: string): JsonObject {
+  return ParseJsonc(content);
+}
+
 /**
  * Deep-merge `source` onto `base`. Plain objects are merged recursively; every
  * other value (including arrays) from `source` replaces the one in `base`.
  */
-export function deepMerge(base: JsonObject, source: JsonObject): JsonObject {
+export function DeepMerge(base: JsonObject, source: JsonObject): JsonObject {
   const result: JsonObject = { ...base };
   for (const key of Object.keys(source)) {
     const sourceValue = source[key];
     const baseValue = result[key];
     if (isPlainObject(sourceValue) && isPlainObject(baseValue)) {
-      result[key] = deepMerge(baseValue, sourceValue);
+      result[key] = DeepMerge(baseValue, sourceValue);
     } else {
       result[key] = sourceValue;
     }
   }
   return result;
+}
+
+/** @deprecated Use {@link DeepMerge}. */
+export function deepMerge(base: JsonObject, source: JsonObject): JsonObject {
+  return DeepMerge(base, source);
 }
 
 /**
@@ -91,11 +106,16 @@ export function deepMerge(base: JsonObject, source: JsonObject): JsonObject {
  * @param packageTsconfig - Raw contents of the package's `tsconfig.json` (may have comments).
  * @param baseTsconfig - Raw contents of the base config it `extends` (may have comments).
  */
-export function flattenTsconfig(packageTsconfig: string, baseTsconfig: string): JsonObject {
-  const pkg = parseJsonc(packageTsconfig);
-  const base = parseJsonc(baseTsconfig);
+export function FlattenTsconfig(packageTsconfig: string, baseTsconfig: string): JsonObject {
+  const pkg = ParseJsonc(packageTsconfig);
+  const base = ParseJsonc(baseTsconfig);
   delete pkg.extends;
-  return deepMerge(base, pkg);
+  return DeepMerge(base, pkg);
+}
+
+/** @deprecated Use {@link FlattenTsconfig}. */
+export function flattenTsconfig(packageTsconfig: string, baseTsconfig: string): JsonObject {
+  return FlattenTsconfig(packageTsconfig, baseTsconfig);
 }
 
 /**
@@ -105,8 +125,8 @@ export function flattenTsconfig(packageTsconfig: string, baseTsconfig: string): 
  *
  * @returns Pretty-printed JSON (2-space indent).
  */
-export function transformServerTsconfig(packageTsconfig: string, baseTsconfig: string): string {
-  const merged = flattenTsconfig(packageTsconfig, baseTsconfig);
+export function TransformServerTsconfig(packageTsconfig: string, baseTsconfig: string): string {
+  const merged = FlattenTsconfig(packageTsconfig, baseTsconfig);
   const exclude = merged.exclude;
   if (Array.isArray(exclude)) {
     merged.exclude = exclude.filter(
@@ -116,6 +136,11 @@ export function transformServerTsconfig(packageTsconfig: string, baseTsconfig: s
   return JSON.stringify(merged, null, 2);
 }
 
+/** @deprecated Use {@link TransformServerTsconfig}. */
+export function transformServerTsconfig(packageTsconfig: string, baseTsconfig: string): string {
+  return TransformServerTsconfig(packageTsconfig, baseTsconfig);
+}
+
 /**
  * Transform the MJExplorer `tsconfig.json`: flatten the `extends` base, then
  * remove monorepo-only path aliases that point at local workspace packages
@@ -123,8 +148,8 @@ export function transformServerTsconfig(packageTsconfig: string, baseTsconfig: s
  *
  * @returns Pretty-printed JSON (2-space indent).
  */
-export function transformAngularTsconfig(packageTsconfig: string, baseTsconfig: string): string {
-  const merged = flattenTsconfig(packageTsconfig, baseTsconfig);
+export function TransformAngularTsconfig(packageTsconfig: string, baseTsconfig: string): string {
+  const merged = FlattenTsconfig(packageTsconfig, baseTsconfig);
   const compilerOptions = merged.compilerOptions;
   if (isPlainObject(compilerOptions) && isPlainObject(compilerOptions.paths)) {
     const paths = compilerOptions.paths;
@@ -138,6 +163,11 @@ export function transformAngularTsconfig(packageTsconfig: string, baseTsconfig: 
   return JSON.stringify(merged, null, 2);
 }
 
+/** @deprecated Use {@link TransformAngularTsconfig}. */
+export function transformAngularTsconfig(packageTsconfig: string, baseTsconfig: string): string {
+  return TransformAngularTsconfig(packageTsconfig, baseTsconfig);
+}
+
 /**
  * Remove `&& tsc-alias ...` from every `package.json` build script. Server
  * distribution packages don't use path aliases and `tsc-alias` is only a
@@ -145,7 +175,7 @@ export function transformAngularTsconfig(packageTsconfig: string, baseTsconfig: 
  *
  * @returns Pretty-printed JSON (2-space indent).
  */
-export function stripTscAliasFromPackageJson(packageJson: string): string {
+export function StripTscAliasFromPackageJson(packageJson: string): string {
   const pkg = JSON.parse(packageJson) as JsonObject;
   const scripts = pkg.scripts;
   if (isPlainObject(scripts)) {
@@ -158,6 +188,11 @@ export function stripTscAliasFromPackageJson(packageJson: string): string {
   return JSON.stringify(pkg, null, 2);
 }
 
+/** @deprecated Use {@link StripTscAliasFromPackageJson}. */
+export function stripTscAliasFromPackageJson(packageJson: string): string {
+  return StripTscAliasFromPackageJson(packageJson);
+}
+
 /**
  * Remove `--port NNNN` flags from every `package.json` script. The monorepo uses
  * non-default ports (e.g. 4201) to avoid conflicts; a distribution should use the
@@ -165,7 +200,7 @@ export function stripTscAliasFromPackageJson(packageJson: string): string {
  *
  * @returns Pretty-printed JSON (2-space indent).
  */
-export function removePortFlagsFromPackageJson(packageJson: string): string {
+export function RemovePortFlagsFromPackageJson(packageJson: string): string {
   const pkg = JSON.parse(packageJson) as JsonObject;
   const scripts = pkg.scripts;
   if (isPlainObject(scripts)) {
@@ -176,4 +211,9 @@ export function removePortFlagsFromPackageJson(packageJson: string): string {
     }
   }
   return JSON.stringify(pkg, null, 2);
+}
+
+/** @deprecated Use {@link RemovePortFlagsFromPackageJson}. */
+export function removePortFlagsFromPackageJson(packageJson: string): string {
+  return RemovePortFlagsFromPackageJson(packageJson);
 }

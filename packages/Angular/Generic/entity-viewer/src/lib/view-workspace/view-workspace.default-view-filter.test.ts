@@ -9,7 +9,7 @@ import { ColumnConfig, SortItem, ViewSaveEvent } from '../view-config-panel/view
 /**
  * Issue #4220 — "Save" on the default (unsaved) view silently dropped Smart/Traditional filters.
  *
- * The config panel always emitted the filter fields; `onSaveDefaultViewSettings` threw them away,
+ * The config panel always emitted the filter fields; `OnSaveDefaultViewSettings` threw them away,
  * because the `default-view-setting/<Entity>` user setting it writes is a `IGridState` with no
  * filter slot. A default-view Save that carries a filter is really a *view creation missing a
  * name*, so it now forks into the existing quick-save → `persistNewView` flow instead.
@@ -130,80 +130,80 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
 
   describe('no filter configured — unchanged preferences save', () => {
     it('writes the default-view user setting and creates no view', async () => {
-      await component.onSaveDefaultViewSettings(makeSaveEvent());
+      await component.OnSaveDefaultViewSettings(makeSaveEvent());
 
       expect(setSetting).toHaveBeenCalledTimes(1);
       expect(setSetting.mock.calls[0][0]).toBe('default-view-setting/Accounts');
       expect(getEntityObject).not.toHaveBeenCalled();
-      expect(component.showQuickSaveDialog).toBe(false);
+      expect(component.ShowQuickSaveDialog).toBe(false);
     });
 
     it('treats a smart filter with a blank prompt as no filter', async () => {
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: '   ' })
       );
 
       expect(setSetting).toHaveBeenCalledTimes(1);
-      expect(component.showQuickSaveDialog).toBe(false);
+      expect(component.ShowQuickSaveDialog).toBe(false);
     });
 
     it('treats an empty traditional filter list as no filter', async () => {
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ FilterState: { logic: 'and', filters: [] } as unknown as CompositeFilterDescriptor })
       );
 
       expect(setSetting).toHaveBeenCalledTimes(1);
-      expect(component.showQuickSaveDialog).toBe(false);
+      expect(component.ShowQuickSaveDialog).toBe(false);
     });
   });
 
   describe('filter configured — promotes to a named view', () => {
     it('opens the name prompt instead of writing preferences (traditional filter)', async () => {
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
 
       expect(setSetting).not.toHaveBeenCalled();
       expect(getEntityObject).not.toHaveBeenCalled();
-      expect(component.showQuickSaveDialog).toBe(true);
-      expect(component.isConfigPanelOpen).toBe(false);
+      expect(component.ShowQuickSaveDialog).toBe(true);
+      expect(component.IsConfigPanelOpen).toBe(false);
     });
 
     it('opens the name prompt instead of writing preferences (smart filter)', async () => {
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: 'active west coast accounts' })
       );
 
       expect(setSetting).not.toHaveBeenCalled();
-      expect(component.showQuickSaveDialog).toBe(true);
+      expect(component.ShowQuickSaveDialog).toBe(true);
     });
 
     it('suggests a name so the user can just click Save', async () => {
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
 
-      expect(component.quickSaveSuggestedName).toBe('Accounts — Filtered');
+      expect(component.QuickSaveSuggestedName).toBe('Accounts — Filtered');
     });
 
     it('suggests a name built from the smart prompt when there is one', async () => {
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: 'active west coast accounts' })
       );
 
-      expect(component.quickSaveSuggestedName).toBe('Accounts — active west coast accounts');
+      expect(component.QuickSaveSuggestedName).toBe('Accounts — active west coast accounts');
     });
 
     it('truncates an overlong smart prompt in the suggested name', async () => {
       const longPrompt = 'accounts in california oregon and washington with an open balance over ten thousand';
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: longPrompt })
       );
 
-      expect(component.quickSaveSuggestedName.length).toBeLessThanOrEqual(60);
-      expect(component.quickSaveSuggestedName).toMatch(/…$/);
+      expect(component.QuickSaveSuggestedName.length).toBeLessThanOrEqual(60);
+      expect(component.QuickSaveSuggestedName).toMatch(/…$/);
     });
 
     it('persists the traditional filter onto the new view once the name is confirmed', async () => {
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
 
-      await component.onQuickSave({
+      await component.OnQuickSave({
         Name: 'Active Accounts',
         Description: 'Just the active ones',
         IsShared: false,
@@ -218,11 +218,11 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
     });
 
     it('persists the smart filter onto the new view once the name is confirmed', async () => {
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: 'active west coast accounts' })
       );
 
-      await component.onQuickSave({
+      await component.OnQuickSave({
         Name: 'West Coast',
         Description: '',
         IsShared: false,
@@ -245,11 +245,11 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
       };
       const sortItems: SortItem[] = [{ field: 'AccountName', direction: 'desc' }];
 
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ FilterState: traditionalFilter, Columns: [statusColumn], SortItems: sortItems })
       );
 
-      await component.onQuickSave({ Name: 'Named', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnQuickSave({ Name: 'Named', Description: '', IsShared: false, SaveAsNew: true });
 
       const gridState = createdView.GridStateObject as { columnSettings: Array<{ Name: string }> };
       expect(gridState.columnSettings.map(c => c.Name)).toEqual(['Status']);
@@ -263,8 +263,8 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
       const defaultsRequested: ViewSaveEvent[] = [];
       component.SaveDefaultsRequested.subscribe(e => defaultsRequested.push(e));
 
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
-      await component.onQuickSave({ Name: 'Hosted', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      await component.OnQuickSave({ Name: 'Hosted', Description: '', IsShared: false, SaveAsNew: true });
 
       expect(defaultsRequested).toHaveLength(0);
       expect(requested).toHaveLength(1);
@@ -274,15 +274,15 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
     });
 
     it('discards the staged config when the name prompt is cancelled', async () => {
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
-      component.onQuickSaveClose();
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      component.OnQuickSaveClose();
 
-      expect(component.showQuickSaveDialog).toBe(false);
+      expect(component.ShowQuickSaveDialog).toBe(false);
       expect(setSetting).not.toHaveBeenCalled();
       expect(getEntityObject).not.toHaveBeenCalled();
 
       // A later quick-save must not inherit the abandoned filter.
-      await component.onQuickSave({ Name: 'Unrelated', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnQuickSave({ Name: 'Unrelated', Description: '', IsShared: false, SaveAsNew: true });
       expect(createdView.SmartFilterEnabled).toBe(false);
       expect(JSON.parse(createdView.FilterState)).toEqual({ logic: 'and', filters: [] });
     });
@@ -296,37 +296,37 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
    */
   describe('returning to the config panel from the name prompt', () => {
     it('hands the traditional filter back to the panel', async () => {
-      // In the real flow the panel emitted this very object, which it got from filterDialogState —
-      // so re-assigning filterDialogState is a no-op the panel never sees. It needs its own input.
-      component.filterDialogState = traditionalFilter;
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      // In the real flow the panel emitted this very object, which it got from FilterDialogState —
+      // so re-assigning FilterDialogState is a no-op the panel never sees. It needs its own input.
+      component.FilterDialogState = traditionalFilter;
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
 
-      component.onQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
+      component.OnQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
 
-      expect(component.isConfigPanelOpen).toBe(true);
-      expect(component.showQuickSaveDialog).toBe(false);
-      expect(component.pendingNewViewFilterState).toBe(traditionalFilter);
+      expect(component.IsConfigPanelOpen).toBe(true);
+      expect(component.ShowQuickSaveDialog).toBe(false);
+      expect(component.PendingNewViewFilterState).toBe(traditionalFilter);
     });
 
     it('hands the smart filter back to the panel', async () => {
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: 'active west coast accounts' })
       );
 
-      component.onQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
+      component.OnQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
 
-      expect(component.pendingNewViewSmartFilterEnabled).toBe(true);
-      expect(component.pendingNewViewSmartFilterPrompt).toBe('active west coast accounts');
+      expect(component.PendingNewViewSmartFilterEnabled).toBe(true);
+      expect(component.PendingNewViewSmartFilterPrompt).toBe('active west coast accounts');
     });
 
     it('keeps the staged save available so a later Create View still carries the filter', async () => {
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: 'active west coast accounts' })
       );
-      component.onQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
+      component.OnQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
 
       // The panel's own "Create View" emits a complete event of its own — it must win outright.
-      await component.onSaveView(
+      await component.OnSaveView(
         makeSaveEvent({
           Name: 'From Panel',
           SaveAsNew: true,
@@ -340,30 +340,30 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
     });
 
     it('clears the carried-over smart filter once the panel is closed', async () => {
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: 'active west coast accounts' })
       );
-      component.onQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
-      component.onCloseConfigPanel();
+      component.OnQuickSaveOpenAdvanced({ Name: 'Partial', Description: '', IsShared: false });
+      component.OnCloseConfigPanel();
 
-      expect(component.pendingNewViewSmartFilterEnabled).toBe(false);
-      expect(component.pendingNewViewSmartFilterPrompt).toBe('');
-      expect(component.pendingNewViewFilterState).toBeNull();
+      expect(component.PendingNewViewSmartFilterEnabled).toBe(false);
+      expect(component.PendingNewViewSmartFilterPrompt).toBe('');
+      expect(component.PendingNewViewFilterState).toBeNull();
     });
   });
 
   describe('an entity change abandons the staged save', () => {
     it('does not carry the old entity\'s staged filter or suggested name into the new entity', async () => {
       component.ngOnInit();
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
 
       component.Entity = { ...makeEntity(), ID: 'entity-2', Name: 'Contacts', DisplayNameOrName: 'Contacts' } as unknown as EntityInfo;
 
-      expect(component.showQuickSaveDialog).toBe(false);
-      expect(component.quickSaveSuggestedName).toBe('');
-      expect(component.defaultSaveAsNew).toBe(false);
+      expect(component.ShowQuickSaveDialog).toBe(false);
+      expect(component.QuickSaveSuggestedName).toBe('');
+      expect(component.DefaultSaveAsNew).toBe(false);
 
-      await component.onQuickSave({ Name: 'Contacts View', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnQuickSave({ Name: 'Contacts View', Description: '', IsShared: false, SaveAsNew: true });
       expect(JSON.parse(createdView.FilterState)).toEqual({ logic: 'and', filters: [] });
     });
   });
@@ -371,54 +371,54 @@ describe('ViewWorkspaceComponent — default-view Save with a filter (#4220)', (
   describe('a failed save keeps the staged filter', () => {
     it('reopens the name prompt with the staged filter intact when Save() fails', async () => {
       createdView.Save.mockResolvedValueOnce(false);
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
 
-      await component.onQuickSave({ Name: 'Active Accounts', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnQuickSave({ Name: 'Active Accounts', Description: '', IsShared: false, SaveAsNew: true });
 
-      expect(component.showQuickSaveDialog).toBe(true);
-      expect(component.quickSaveSuggestedName).toBe('Active Accounts');
+      expect(component.ShowQuickSaveDialog).toBe(true);
+      expect(component.QuickSaveSuggestedName).toBe('Active Accounts');
 
       // Retrying from the reopened prompt still carries the filter.
-      await component.onQuickSave({ Name: 'Active Accounts', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnQuickSave({ Name: 'Active Accounts', Description: '', IsShared: false, SaveAsNew: true });
       expect(createdView.Save).toHaveBeenCalledTimes(2);
       expect(JSON.parse(createdView.FilterState)).toEqual(traditionalFilter);
-      expect(component.showQuickSaveDialog).toBe(false);
-      expect(component.quickSaveSuggestedName).toBe('');
+      expect(component.ShowQuickSaveDialog).toBe(false);
+      expect(component.QuickSaveSuggestedName).toBe('');
     });
 
     it('reopens the name prompt when a host cancels BeforeViewSave', async () => {
       component.BeforeViewSave.subscribe(e => { e.Cancel = true; });
-      await component.onSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
+      await component.OnSaveDefaultViewSettings(makeSaveEvent({ FilterState: traditionalFilter }));
 
-      await component.onQuickSave({ Name: 'Blocked', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnQuickSave({ Name: 'Blocked', Description: '', IsShared: false, SaveAsNew: true });
 
       expect(createdView.Save).not.toHaveBeenCalled();
-      expect(component.showQuickSaveDialog).toBe(true);
+      expect(component.ShowQuickSaveDialog).toBe(true);
 
       // Cancelling from there abandons it cleanly.
-      component.onQuickSaveClose();
-      expect(component.quickSaveSuggestedName).toBe('');
-      expect(component.defaultSaveAsNew).toBe(false);
+      component.OnQuickSaveClose();
+      expect(component.QuickSaveSuggestedName).toBe('');
+      expect(component.DefaultSaveAsNew).toBe(false);
     });
   });
 
   describe('quick-save no longer hard-codes the smart-filter fields', () => {
     it('carries a staged smart filter through the plain quick-save path', async () => {
       // Panel stages a smart filter, then the user picks the plain quick-save route.
-      await component.onSaveDefaultViewSettings(
+      await component.OnSaveDefaultViewSettings(
         makeSaveEvent({ SmartFilterEnabled: true, SmartFilterPrompt: 'open opportunities' })
       );
 
-      await component.onQuickSave({ Name: 'Open Opps', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnQuickSave({ Name: 'Open Opps', Description: '', IsShared: false, SaveAsNew: true });
 
       expect(createdView.SmartFilterEnabled).toBe(true);
       expect(createdView.SmartFilterPrompt).toBe('open opportunities');
     });
 
     it('still honours the filter dialog state when nothing is staged', async () => {
-      component.filterDialogState = traditionalFilter;
+      component.FilterDialogState = traditionalFilter;
 
-      await component.onQuickSave({ Name: 'From Dialog', Description: '', IsShared: false, SaveAsNew: true });
+      await component.OnQuickSave({ Name: 'From Dialog', Description: '', IsShared: false, SaveAsNew: true });
 
       expect(JSON.parse(createdView.FilterState)).toEqual(traditionalFilter);
       expect(createdView.SmartFilterEnabled).toBe(false);

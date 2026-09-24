@@ -96,11 +96,25 @@ export class MJPageSearchComponent {
   @Input() Icon: string = 'fa-solid fa-search';
   @Output() ValueChange = new EventEmitter<string>();
 
-  public focused: boolean = false;
+  public Focused: boolean = false;
 
-  public onInput(event: Event): void {
+  /** @deprecated Use {@link Focused}. */
+  public get focused(): boolean {
+    return this.Focused;
+  }
+  /** @deprecated Use {@link Focused}. */
+  public set focused(value: boolean) {
+    this.Focused = value;
+  }
+
+  public OnInput(event: Event): void {
     const v = (event.target as HTMLInputElement).value;
     this.Value = v;
     this.ValueChange.emit(v);
+  }
+
+  /** @deprecated Use {@link OnInput}. */
+  public onInput(event: Event): void {
+    return this.OnInput(event);
   }
 }

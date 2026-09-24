@@ -3,9 +3,9 @@ import { LogError } from '@memberjunction/core';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { JournalEntryLine } from '../../../types';
-import { journalEntryBalanceError, parseAndValidateJournalEntryLines, totalDebits } from '../../../journal-entry';
+import { JournalEntryBalanceError, ParseAndValidateJournalEntryLines, TotalDebits } from '../../../journal-entry';
 
 interface BCJournal {
     id: string;
@@ -23,7 +23,7 @@ interface BCJournalLineResult {
  * Posts a balanced journal entry to Business Central (v2.0 OData).
  * Lines go to journals({id})/journalLines, then Microsoft.NAV.post posts the batch.
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.BusinessCentral))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.BusinessCentral))
 export class CreateBusinessCentralJournalEntryAction extends BusinessCentralBaseAction {
 
     public get Description(): string {
@@ -51,10 +51,10 @@ export class CreateBusinessCentralJournalEntryAction extends BusinessCentralBase
             const description = this.getParamValue(params.Params, 'PrivateNote')
                 || this.getParamValue(params.Params, 'Description');
             const journalCode = this.getParamValue(params.Params, 'JournalCode');
-            const lines = parseAndValidateJournalEntryLines(this.getParamValue(params.Params, 'Lines'));
+            const lines = ParseAndValidateJournalEntryLines(this.getParamValue(params.Params, 'Lines'));
 
             if (!this.validateJournalEntryBalance(lines)) {
-                return journalEntryBalanceError(params.Params);
+                return JournalEntryBalanceError(params.Params);
             }
 
             const resolved = await this.resolveGeneralJournal(journalCode, contextUser);
@@ -94,7 +94,7 @@ export class CreateBusinessCentralJournalEntryAction extends BusinessCentralBase
                 const outputParams: ActionParam[] = [
                     { Name: 'JournalEntryID', Value: journal.id, Type: 'Output' },
                     { Name: 'DocNumber', Value: outputDoc, Type: 'Output' },
-                    { Name: 'TotalAmount', Value: totalDebits(lines), Type: 'Output' }
+                    { Name: 'TotalAmount', Value: TotalDebits(lines), Type: 'Output' }
                 ];
 
                 return {

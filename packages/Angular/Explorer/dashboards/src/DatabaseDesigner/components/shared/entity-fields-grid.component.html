@@ -88,8 +88,8 @@
                 [value]="row.Type ?? 'string'"
                 (change)="OnTypeChange(row.rowIndex, $any($event.target).value)"
                 (focus)="ActiveRowIndex = row.rowIndex">
-                @for (opt of FieldTypeOptions; track opt.value) {
-                  <option [value]="opt.value">{{ opt.label }}</option>
+                @for (opt of FieldTypeOptions; track opt.Value) {
+                  <option [value]="opt.Value">{{ opt.Label }}</option>
                 }
               </select>
             </td>

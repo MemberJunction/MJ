@@ -43,7 +43,7 @@ export class CollectionPermissionService {
     /**
      * Load all permissions for a collection
      */
-    async loadPermissions(collectionId: string, currentUser: UserInfo): Promise<CollectionPermission[]> {
+    async LoadPermissions(collectionId: string, currentUser: UserInfo): Promise<CollectionPermission[]> {
         const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJCollectionPermissionEntity>({
             EntityName: 'MJ: Collection Permissions',
@@ -58,10 +58,15 @@ export class CollectionPermissionService {
         return [];
     }
 
+    /** @deprecated Use {@link LoadPermissions}. */
+    async loadPermissions(collectionId: string, currentUser: UserInfo): Promise<CollectionPermission[]> {
+        return this.LoadPermissions(collectionId, currentUser);
+    }
+
     /**
      * Check if user has permission for a collection
      */
-    async checkPermission(
+    async CheckPermission(
         collectionId: string,
         userId: string,
         currentUser: UserInfo
@@ -80,10 +85,19 @@ export class CollectionPermissionService {
         return null;
     }
 
+    /** @deprecated Use {@link CheckPermission}. */
+    async checkPermission(
+        collectionId: string,
+        userId: string,
+        currentUser: UserInfo
+    ): Promise<CollectionPermission | null> {
+        return this.CheckPermission(collectionId, userId, currentUser);
+    }
+
     /**
      * Check permissions for multiple collections at once (efficient bulk loading)
      */
-    async checkBulkPermissions(
+    async CheckBulkPermissions(
         collectionIds: string[],
         userId: string,
         currentUser: UserInfo
@@ -113,10 +127,19 @@ export class CollectionPermissionService {
         return resultMap;
     }
 
+    /** @deprecated Use {@link CheckBulkPermissions}. */
+    async checkBulkPermissions(
+        collectionIds: string[],
+        userId: string,
+        currentUser: UserInfo
+    ): Promise<Map<string, CollectionPermission>> {
+        return this.CheckBulkPermissions(collectionIds, userId, currentUser);
+    }
+
     /**
      * Grant permission to a user
      */
-    async grantPermission(
+    async GrantPermission(
         collectionId: string,
         userId: string,
         permissions: PermissionSet,
@@ -145,10 +168,21 @@ export class CollectionPermissionService {
         return permission;
     }
 
+    /** @deprecated Use {@link GrantPermission}. */
+    async grantPermission(
+        collectionId: string,
+        userId: string,
+        permissions: PermissionSet,
+        sharedByUserId: string,
+        currentUser: UserInfo
+    ): Promise<MJCollectionPermissionEntity> {
+        return this.GrantPermission(collectionId, userId, permissions, sharedByUserId, currentUser);
+    }
+
     /**
      * Grant permission and cascade to all child collections
      */
-    async grantPermissionCascade(
+    async GrantPermissionCascade(
         collectionId: string,
         userId: string,
         permissions: PermissionSet,
@@ -156,10 +190,21 @@ export class CollectionPermissionService {
         currentUser: UserInfo
     ): Promise<void> {
         // Grant permission on current collection
-        await this.grantPermission(collectionId, userId, permissions, sharedByUserId, currentUser);
+        await this.GrantPermission(collectionId, userId, permissions, sharedByUserId, currentUser);
 
         // Grant permissions on all child collections recursively
         await this.grantChildPermissions(collectionId, userId, permissions, sharedByUserId, currentUser);
+    }
+
+    /** @deprecated Use {@link GrantPermissionCascade}. */
+    async grantPermissionCascade(
+        collectionId: string,
+        userId: string,
+        permissions: PermissionSet,
+        sharedByUserId: string,
+        currentUser: UserInfo
+    ): Promise<void> {
+        return this.GrantPermissionCascade(collectionId, userId, permissions, sharedByUserId, currentUser);
     }
 
     /**
@@ -182,14 +227,14 @@ export class CollectionPermissionService {
         if (childrenResult.Success && childrenResult.Results) {
             for (const child of childrenResult.Results) {
                 // Check if permission already exists
-                const existing = await this.checkPermission(child.ID, userId, currentUser);
+                const existing = await this.CheckPermission(child.ID, userId, currentUser);
 
                 if (existing) {
                     // Permission exists, update it instead
-                    await this.updatePermission(existing.id, permissions, currentUser);
+                    await this.UpdatePermission(existing.id, permissions, currentUser);
                 } else {
                     // Grant new permission
-                    await this.grantPermission(child.ID, userId, permissions, sharedByUserId, currentUser);
+                    await this.GrantPermission(child.ID, userId, permissions, sharedByUserId, currentUser);
                 }
 
                 // Recursively grant to grandchildren
@@ -201,7 +246,7 @@ export class CollectionPermissionService {
     /**
      * Update existing permission
      */
-    async updatePermission(
+    async UpdatePermission(
         permissionId: string,
         permissions: PermissionSet,
         currentUser: UserInfo
@@ -221,23 +266,42 @@ export class CollectionPermissionService {
         return await permission.Save();
     }
 
+    /** @deprecated Use {@link UpdatePermission}. */
+    async updatePermission(
+        permissionId: string,
+        permissions: PermissionSet,
+        currentUser: UserInfo
+    ): Promise<boolean> {
+        return this.UpdatePermission(permissionId, permissions, currentUser);
+    }
+
     /**
      * Update permission and cascade to all child collections
      */
-    async updatePermissionCascade(
+    async UpdatePermissionCascade(
         collectionId: string,
         userId: string,
         permissions: PermissionSet,
         currentUser: UserInfo
     ): Promise<void> {
         // Update permission on current collection
-        const permission = await this.checkPermission(collectionId, userId, currentUser);
+        const permission = await this.CheckPermission(collectionId, userId, currentUser);
         if (permission) {
-            await this.updatePermission(permission.id, permissions, currentUser);
+            await this.UpdatePermission(permission.id, permissions, currentUser);
         }
 
         // Get all child collections and update recursively
         await this.updateChildPermissions(collectionId, userId, permissions, currentUser);
+    }
+
+    /** @deprecated Use {@link UpdatePermissionCascade}. */
+    async updatePermissionCascade(
+        collectionId: string,
+        userId: string,
+        permissions: PermissionSet,
+        currentUser: UserInfo
+    ): Promise<void> {
+        return this.UpdatePermissionCascade(collectionId, userId, permissions, currentUser);
     }
 
     /**
@@ -259,9 +323,9 @@ export class CollectionPermissionService {
         if (childrenResult.Success && childrenResult.Results) {
             for (const child of childrenResult.Results) {
                 // Update permission if it exists for this user on the child collection
-                const childPermission = await this.checkPermission(child.ID, userId, currentUser);
+                const childPermission = await this.CheckPermission(child.ID, userId, currentUser);
                 if (childPermission) {
-                    await this.updatePermission(childPermission.id, permissions, currentUser);
+                    await this.UpdatePermission(childPermission.id, permissions, currentUser);
                 }
 
                 // Recursively update grandchildren
@@ -273,7 +337,7 @@ export class CollectionPermissionService {
     /**
      * Revoke permission
      */
-    async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
+    async RevokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
         const md = this.Provider;
         const permission = await md.GetEntityObject<MJCollectionPermissionEntity>(
             'MJ: Collection Permissions',
@@ -284,22 +348,36 @@ export class CollectionPermissionService {
         return await permission.Delete();
     }
 
+    /** @deprecated Use {@link RevokePermission}. */
+    async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
+        return this.RevokePermission(permissionId, currentUser);
+    }
+
     /**
      * Revoke permission and cascade to all child collections
      */
-    async revokePermissionCascade(
+    async RevokePermissionCascade(
         collectionId: string,
         userId: string,
         currentUser: UserInfo
     ): Promise<void> {
         // Revoke permission on current collection
-        const permission = await this.checkPermission(collectionId, userId, currentUser);
+        const permission = await this.CheckPermission(collectionId, userId, currentUser);
         if (permission) {
-            await this.revokePermission(permission.id, currentUser);
+            await this.RevokePermission(permission.id, currentUser);
         }
 
         // Revoke permissions on all child collections recursively
         await this.revokeChildPermissions(collectionId, userId, currentUser);
+    }
+
+    /** @deprecated Use {@link RevokePermissionCascade}. */
+    async revokePermissionCascade(
+        collectionId: string,
+        userId: string,
+        currentUser: UserInfo
+    ): Promise<void> {
+        return this.RevokePermissionCascade(collectionId, userId, currentUser);
     }
 
     /**
@@ -320,9 +398,9 @@ export class CollectionPermissionService {
         if (childrenResult.Success && childrenResult.Results) {
             for (const child of childrenResult.Results) {
                 // Revoke permission if it exists for this user on the child collection
-                const childPermission = await this.checkPermission(child.ID, userId, currentUser);
+                const childPermission = await this.CheckPermission(child.ID, userId, currentUser);
                 if (childPermission) {
-                    await this.revokePermission(childPermission.id, currentUser);
+                    await this.RevokePermission(childPermission.id, currentUser);
                 }
 
                 // Recursively revoke from grandchildren
@@ -334,7 +412,7 @@ export class CollectionPermissionService {
     /**
      * Validate that requested permissions don't exceed granter's permissions
      */
-    validatePermissions(
+    ValidatePermissions(
         requested: PermissionSet,
         granter: PermissionSet,
         isOwner: boolean
@@ -349,10 +427,19 @@ export class CollectionPermissionService {
         return true;
     }
 
+    /** @deprecated Use {@link ValidatePermissions}. */
+    validatePermissions(
+        requested: PermissionSet,
+        granter: PermissionSet,
+        isOwner: boolean
+    ): boolean {
+        return this.ValidatePermissions(requested, granter, isOwner);
+    }
+
     /**
      * Get available permissions for a user to grant based on their own permissions
      */
-    getAvailablePermissions(userPermissions: PermissionSet, isOwner: boolean): string[] {
+    GetAvailablePermissions(userPermissions: PermissionSet, isOwner: boolean): string[] {
         if (isOwner) {
             return ['Read', 'Share', 'Edit', 'Delete'];
         }
@@ -365,19 +452,24 @@ export class CollectionPermissionService {
         return available;
     }
 
+    /** @deprecated Use {@link GetAvailablePermissions}. */
+    getAvailablePermissions(userPermissions: PermissionSet, isOwner: boolean): string[] {
+        return this.GetAvailablePermissions(userPermissions, isOwner);
+    }
+
     /**
      * Copy all permissions from parent collection to child collection
      */
-    async copyParentPermissions(
+    async CopyParentPermissions(
         parentCollectionId: string,
         childCollectionId: string,
         currentUser: UserInfo
     ): Promise<void> {
-        const parentPermissions = await this.loadPermissions(parentCollectionId, currentUser);
+        const parentPermissions = await this.LoadPermissions(parentCollectionId, currentUser);
 
         for (const perm of parentPermissions) {
             // Check if permission already exists for this user on the child collection
-            const existing = await this.checkPermission(childCollectionId, perm.userId, currentUser);
+            const existing = await this.CheckPermission(childCollectionId, perm.userId, currentUser);
 
             if (existing) {
                 // Permission already exists (e.g., owner permission), skip to avoid duplicate
@@ -385,7 +477,7 @@ export class CollectionPermissionService {
                 continue;
             }
 
-            await this.grantPermission(
+            await this.GrantPermission(
                 childCollectionId,
                 perm.userId,
                 {
@@ -400,26 +492,40 @@ export class CollectionPermissionService {
         }
     }
 
+    /** @deprecated Use {@link CopyParentPermissions}. */
+    async copyParentPermissions(
+        parentCollectionId: string,
+        childCollectionId: string,
+        currentUser: UserInfo
+    ): Promise<void> {
+        return this.CopyParentPermissions(parentCollectionId, childCollectionId, currentUser);
+    }
+
     /**
      * Delete all permissions for a collection
      */
-    async deleteAllPermissions(collectionId: string, currentUser: UserInfo): Promise<void> {
-        const permissions = await this.loadPermissions(collectionId, currentUser);
+    async DeleteAllPermissions(collectionId: string, currentUser: UserInfo): Promise<void> {
+        const permissions = await this.LoadPermissions(collectionId, currentUser);
 
         for (const perm of permissions) {
-            await this.revokePermission(perm.id, currentUser);
+            await this.RevokePermission(perm.id, currentUser);
         }
+    }
+
+    /** @deprecated Use {@link DeleteAllPermissions}. */
+    async deleteAllPermissions(collectionId: string, currentUser: UserInfo): Promise<void> {
+        return this.DeleteAllPermissions(collectionId, currentUser);
     }
 
     /**
      * Create owner permission record (all permissions enabled)
      */
-    async createOwnerPermission(
+    async CreateOwnerPermission(
         collectionId: string,
         ownerId: string,
         currentUser: UserInfo
     ): Promise<void> {
-        await this.grantPermission(
+        await this.GrantPermission(
             collectionId,
             ownerId,
             {
@@ -431,6 +537,15 @@ export class CollectionPermissionService {
             ownerId, // Owner grants to themselves
             currentUser
         );
+    }
+
+    /** @deprecated Use {@link CreateOwnerPermission}. */
+    async createOwnerPermission(
+        collectionId: string,
+        ownerId: string,
+        currentUser: UserInfo
+    ): Promise<void> {
+        return this.CreateOwnerPermission(collectionId, ownerId, currentUser);
     }
 
     private mapToPermission(entity: MJCollectionPermissionEntity): CollectionPermission {

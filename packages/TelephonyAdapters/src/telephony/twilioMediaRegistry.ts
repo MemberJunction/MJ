@@ -26,9 +26,9 @@ import type { ITwilioMediaPump } from '@memberjunction/ai-bridge-twilio';
  */
 export interface ITelephonyMediaSocket {
     /** Sends a serialized outbound Media-Streams frame on the call's socket. */
-    send(data: string): void;
+    send(data: string): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Closes the socket (best-effort; called on call end). */
-    close(): void;
+    close(): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** One call's media channel: its socket (once connected), captured stream SID, handlers, and pending sends. */

@@ -6,9 +6,9 @@ import { PageRecordsParams } from "../generic/VectorCore.types";
 import { MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 
 export class VectorBase {
-    _runView: RunView;
-    _metadata: Metadata;
-    _currentUser: UserInfo;
+    _runView: RunView;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _metadata: Metadata;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+    _currentUser: UserInfo;  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     protected _provider: IMetadataProvider | null = null;
 
     /**

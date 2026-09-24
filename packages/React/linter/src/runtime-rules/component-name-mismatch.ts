@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -28,7 +28,7 @@ export class ComponentNameMismatchRule extends BaseLintRule {
     // Find the main function declaration
     let foundMainFunction = false;
 
-    traverse(ast, {
+    Traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         // Only check top-level function declarations
         if (path.parent === ast.program && path.node.id) {

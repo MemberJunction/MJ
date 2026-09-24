@@ -12,7 +12,7 @@ import { SQLMaxLength } from '@memberjunction/core';
 import {
   type DataFeatureSpec,
   type SpecValidationIssue,
-  validateSpec,
+  ValidateSpec,
 } from '../spec/data-feature-spec.js';
 import type { ValueConstraint } from '../spec/value-constraint.js';
 
@@ -83,7 +83,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * @param targetEntityIDOrName Entity ID or Entity Name of the record set being processed.
  * @returns Array of validation issues with path, message, fix recommendation, and severity.
  */
-export function validateMaterializationTargets(
+export function ValidateMaterializationTargets(
   spec: DataFeatureSpec,
   provider: TargetValidationMetadataProvider,
   targetEntityIDOrName: string
@@ -102,7 +102,7 @@ export function validateMaterializationTargets(
   }
 
   // Run base spec validation with target entity metadata
-  const baseIssues = validateSpec(spec, {
+  const baseIssues = ValidateSpec(spec, {
     Name: targetEntity.Name,
     Fields: targetEntity.Fields.map((f) => ({
       Name: f.Name,
@@ -173,6 +173,15 @@ export function validateMaterializationTargets(
   }
 
   return issues;
+}
+
+/** @deprecated Use {@link ValidateMaterializationTargets}. */
+export function validateMaterializationTargets(
+  spec: DataFeatureSpec,
+  provider: TargetValidationMetadataProvider,
+  targetEntityIDOrName: string
+): SpecValidationIssue[] {
+  return ValidateMaterializationTargets(spec, provider, targetEntityIDOrName);
 }
 
 function parsePrecisionAndScale(field: FieldInfoLike): { precision?: number; scale?: number } {

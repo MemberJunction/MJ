@@ -28,7 +28,7 @@ import {
     OAuthAuthorizationRequiredError,
     OAuthReauthorizationRequiredError
 } from './types.js';
-import { getOAuthAuditLogger } from './OAuthAuditLogger.js';
+import { GetOAuthAuditLogger } from './OAuthAuditLogger.js';
 
 /** Entity name for OAuth authorization states */
 const ENTITY_OAUTH_AUTHORIZATION_STATES = 'MJ: O Auth Authorization States';
@@ -96,7 +96,7 @@ export class OAuthManager {
      * @throws OAuthAuthorizationRequiredError if user authorization is needed
      * @throws OAuthReauthorizationRequiredError if refresh failed and re-auth is needed
      */
-    public async getAccessToken(
+    public async GetAccessToken(
         connectionId: string,
         serverId: string,
         oauthConfig: MCPServerOAuthConfig,
@@ -152,7 +152,7 @@ export class OAuthManager {
 
                     if (refreshResult.requiresReauthorization) {
                         // Initiate a new auth flow for re-authorization
-                        const reAuthResult = await this.initiateAuthorizationFlow(
+                        const reAuthResult = await this.InitiateAuthorizationFlow(
                             connectionId,
                             serverId,
                             oauthConfig,
@@ -178,7 +178,7 @@ export class OAuthManager {
         }
 
         // Need user authorization - initiate the flow
-        const result = await this.initiateAuthorizationFlow(
+        const result = await this.InitiateAuthorizationFlow(
             connectionId,
             serverId,
             oauthConfig,
@@ -198,6 +198,17 @@ export class OAuthManager {
         );
     }
 
+    /** @deprecated Use {@link GetAccessToken}. */
+    public async getAccessToken(
+        connectionId: string,
+        serverId: string,
+        oauthConfig: MCPServerOAuthConfig,
+        publicUrl: string,
+        contextUser: UserInfo
+    ): Promise<string> {
+        return this.GetAccessToken(connectionId, serverId, oauthConfig, publicUrl, contextUser);
+    }
+
     /**
      * Initiates an OAuth authorization flow.
      *
@@ -214,7 +225,7 @@ export class OAuthManager {
      * @param options.frontendCallbackUrl - URL to use as redirect_uri (frontend handles the callback)
      * @returns Authorization initiation result with URL
      */
-    public async initiateAuthorizationFlow(
+    public async InitiateAuthorizationFlow(
         connectionId: string,
         serverId: string,
         oauthConfig: MCPServerOAuthConfig,
@@ -298,7 +309,7 @@ export class OAuthManager {
             LogStatus(`[OAuth] Initiated authorization flow for connection ${connectionId}`);
 
             // Audit log: Authorization initiated (T047)
-            const auditLogger = getOAuthAuditLogger();
+            const auditLogger = GetOAuthAuditLogger();
             await auditLogger.logAuthorizationInitiated({
                 connectionId,
                 serverId,
@@ -326,6 +337,18 @@ export class OAuthManager {
         }
     }
 
+    /** @deprecated Use {@link InitiateAuthorizationFlow}. */
+    public async initiateAuthorizationFlow(
+        connectionId: string,
+        serverId: string,
+        oauthConfig: MCPServerOAuthConfig,
+        publicUrl: string,
+        contextUser: UserInfo,
+        options?: { frontendReturnUrl?: string; frontendCallbackUrl?: string }
+    ): Promise<InitiateAuthorizationResult> {
+        return this.InitiateAuthorizationFlow(connectionId, serverId, oauthConfig, publicUrl, contextUser, options);
+    }
+
     /**
      * Completes an OAuth authorization flow by exchanging the code for tokens.
      *
@@ -336,7 +359,7 @@ export class OAuthManager {
      * @param contextUser - User context
      * @returns Completion result
      */
-    public async completeAuthorizationFlow(
+    public async CompleteAuthorizationFlow(
         stateParameter: string,
         code: string,
         contextUser: UserInfo
@@ -422,7 +445,7 @@ export class OAuthManager {
             LogStatus(`[OAuth] Completed authorization flow for connection ${state.connectionId}`);
 
             // Audit log: Authorization completed (T048)
-            const auditLogger = getOAuthAuditLogger();
+            const auditLogger = GetOAuthAuditLogger();
             await auditLogger.logAuthorizationCompleted({
                 connectionId: state.connectionId,
                 issuerUrl: serverConfig.OAuthIssuerURL!,
@@ -445,7 +468,7 @@ export class OAuthManager {
 
             // Audit log: Authorization failed (part of T048)
             try {
-                const auditLogger = getOAuthAuditLogger();
+                const auditLogger = GetOAuthAuditLogger();
                 await auditLogger.logAuthorizationFailed({
                     connectionId: stateParameter, // Use state param as connection ID may not be available
                     errorCode: errorMessage,
@@ -465,6 +488,15 @@ export class OAuthManager {
         }
     }
 
+    /** @deprecated Use {@link CompleteAuthorizationFlow}. */
+    public async completeAuthorizationFlow(
+        stateParameter: string,
+        code: string,
+        contextUser: UserInfo
+    ): Promise<CompleteAuthorizationResult> {
+        return this.CompleteAuthorizationFlow(stateParameter, code, contextUser);
+    }
+
     /**
      * Handles an OAuth callback error.
      *
@@ -473,7 +505,7 @@ export class OAuthManager {
      * @param errorDescription - Error description
      * @param contextUser - User context
      */
-    public async handleAuthorizationError(
+    public async HandleAuthorizationError(
         stateParameter: string,
         errorCode: string,
         errorDescription: string | undefined,
@@ -495,6 +527,16 @@ export class OAuthManager {
         }
     }
 
+    /** @deprecated Use {@link HandleAuthorizationError}. */
+    public async handleAuthorizationError(
+        stateParameter: string,
+        errorCode: string,
+        errorDescription: string | undefined,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.HandleAuthorizationError(stateParameter, errorCode, errorDescription, contextUser);
+    }
+
     /**
      * Gets the OAuth connection status.
      *
@@ -503,7 +545,7 @@ export class OAuthManager {
      * @param contextUser - User context
      * @returns Connection status
      */
-    public async getConnectionStatus(
+    public async GetConnectionStatus(
         connectionId: string,
         oauthConfig: MCPServerOAuthConfig,
         contextUser: UserInfo
@@ -540,6 +582,15 @@ export class OAuthManager {
         return status;
     }
 
+    /** @deprecated Use {@link GetConnectionStatus}. */
+    public async getConnectionStatus(
+        connectionId: string,
+        oauthConfig: MCPServerOAuthConfig,
+        contextUser: UserInfo
+    ): Promise<OAuthConnectionStatus> {
+        return this.GetConnectionStatus(connectionId, oauthConfig, contextUser);
+    }
+
     /**
      * Validates OAuth configuration for an MCP server.
      *
@@ -547,7 +598,7 @@ export class OAuthManager {
      * @param contextUser - User context
      * @returns Validation result
      */
-    public async validateOAuthConfiguration(
+    public async ValidateOAuthConfiguration(
         oauthConfig: MCPServerOAuthConfig,
         contextUser: UserInfo
     ): Promise<{ valid: boolean; error?: string }> {
@@ -589,6 +640,14 @@ export class OAuthManager {
         }
     }
 
+    /** @deprecated Use {@link ValidateOAuthConfiguration}. */
+    public async validateOAuthConfiguration(
+        oauthConfig: MCPServerOAuthConfig,
+        contextUser: UserInfo
+    ): Promise<{ valid: boolean; error?: string }> {
+        return this.ValidateOAuthConfiguration(oauthConfig, contextUser);
+    }
+
     /**
      * Marks a connection as requiring re-authorization.
      *
@@ -598,7 +657,7 @@ export class OAuthManager {
      * @param reason - Reason for re-authorization
      * @param contextUser - User context
      */
-    public async markRequiresReauthorization(
+    public async MarkRequiresReauthorization(
         connectionId: string,
         reason: string,
         contextUser: UserInfo
@@ -611,13 +670,22 @@ export class OAuthManager {
         }
     }
 
+    /** @deprecated Use {@link MarkRequiresReauthorization}. */
+    public async markRequiresReauthorization(
+        connectionId: string,
+        reason: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        return this.MarkRequiresReauthorization(connectionId, reason, contextUser);
+    }
+
     /**
      * Clears expired authorization states for cleanup.
      *
      * @param contextUser - User context
      * @returns Number of states cleared
      */
-    public async clearExpiredAuthorizationStates(contextUser: UserInfo, provider?: IMetadataProvider): Promise<number> {
+    public async ClearExpiredAuthorizationStates(contextUser: UserInfo, provider?: IMetadataProvider): Promise<number> {
         try {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const rv = RunView.FromMetadataProvider(md);
@@ -661,6 +729,11 @@ export class OAuthManager {
             LogError(`[OAuth] Failed to clear expired states: ${error}`);
             return 0;
         }
+    }
+
+    /** @deprecated Use {@link ClearExpiredAuthorizationStates}. */
+    public async clearExpiredAuthorizationStates(contextUser: UserInfo, provider?: IMetadataProvider): Promise<number> {
+        return this.ClearExpiredAuthorizationStates(contextUser, provider);
     }
 
     // ========================================

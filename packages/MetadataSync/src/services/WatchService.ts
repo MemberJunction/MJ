@@ -3,8 +3,8 @@ import path from 'path';
 import chokidar, { type FSWatcher } from 'chokidar';
 import { BaseEntity, Metadata } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { loadEntityConfig, loadSyncConfig } from '../config';
-import { findEntityDirectories } from '../lib/provider-utils';
+import { LoadEntityConfig, LoadSyncConfig } from '../config';
+import { FindEntityDirectories } from '../lib/provider-utils';
 import { configManager } from '../lib/config-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import type { SqlLoggingSession } from '@memberjunction/generic-database-provider';
@@ -41,8 +41,8 @@ export class WatchService {
     this.syncEngine = syncEngine;
   }
   
-  async watch(options: WatchOptions = {}, callbacks?: WatchCallbacks): Promise<WatchResult> {
-    const entityDirs = findEntityDirectories(process.cwd(), options.dir);
+  async Watch(options: WatchOptions = {}, callbacks?: WatchCallbacks): Promise<WatchResult> {
+    const entityDirs = FindEntityDirectories(process.cwd(), options.dir);
     
     if (entityDirs.length === 0) {
       throw new Error('No entity directories found');
@@ -57,7 +57,7 @@ export class WatchService {
     const watchers: FSWatcher[] = [];
     
     for (const entityDir of entityDirs) {
-      const entityConfig = await loadEntityConfig(entityDir);
+      const entityConfig = await LoadEntityConfig(entityDir);
       if (!entityConfig) {
         callbacks?.onWarn?.(`Skipping ${entityDir} - no valid entity configuration`);
         continue;
@@ -131,6 +131,11 @@ export class WatchService {
         }
       }
     };
+  }
+
+  /** @deprecated Use {@link Watch}. */
+  async watch(options: WatchOptions = {}, callbacks?: WatchCallbacks): Promise<WatchResult> {
+    return this.Watch(options, callbacks);
   }
   
   private handleFileChange(
@@ -345,7 +350,7 @@ export class WatchService {
   private async setupSqlLogging(callbacks?: WatchCallbacks): Promise<void> {
     try {
       // Load sync config for SQL logging settings
-      const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+      const syncConfig = await LoadSyncConfig(configManager.getOriginalCwd());
       
       if (syncConfig?.sqlLogging?.enabled) {
         const provider = Metadata.Provider as any; // SQLServerDataProvider // global-provider-ok: metadata sync operates on the configured provider only

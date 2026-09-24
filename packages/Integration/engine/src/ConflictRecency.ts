@@ -15,7 +15,7 @@
 export type RecencyWinner = 'mj' | 'external';
 
 /** Parses a Date / epoch-number / ISO-string into epoch ms; null if not a usable timestamp. */
-export function parseTimestamp(v: unknown): number | null {
+export function ParseTimestamp(v: unknown): number | null {
     if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.getTime();
     if (typeof v === 'number') return Number.isFinite(v) ? v : null;
     if (typeof v === 'string' && v.length > 0) {
@@ -25,14 +25,24 @@ export function parseTimestamp(v: unknown): number | null {
     return null;
 }
 
+/** @deprecated Use {@link ParseTimestamp}. */
+export function parseTimestamp(v: unknown): number | null {
+    return ParseTimestamp(v);
+}
+
 /**
  * Returns which side wins under MostRecent, or null when the comparison can't be made.
  * Ties go to 'mj' (DestWins-style tiebreak) — the local edit is assumed authoritative
  * when both stamps are equal.
  */
-export function mostRecentWinner(mjUpdatedAt: unknown, externalModifiedAt: unknown): RecencyWinner | null {
-    const mjTs = parseTimestamp(mjUpdatedAt);
-    const extTs = parseTimestamp(externalModifiedAt);
+export function MostRecentWinner(mjUpdatedAt: unknown, externalModifiedAt: unknown): RecencyWinner | null {
+    const mjTs = ParseTimestamp(mjUpdatedAt);
+    const extTs = ParseTimestamp(externalModifiedAt);
     if (mjTs == null || extTs == null) return null;
     return mjTs >= extTs ? 'mj' : 'external';
+}
+
+/** @deprecated Use {@link MostRecentWinner}. */
+export function mostRecentWinner(mjUpdatedAt: unknown, externalModifiedAt: unknown): RecencyWinner | null {
+    return MostRecentWinner(mjUpdatedAt, externalModifiedAt);
 }

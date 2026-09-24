@@ -16,7 +16,7 @@ import { ArchiveRunResult } from '@memberjunction/archiving-engine';
 export class RunAllActiveArchivesAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const configIds = await this.LoadActiveConfigurationIds(params);
+            const configIds = await this.loadActiveConfigurationIds(params);
             if (configIds.length === 0) {
                 return {
                     Success: true,
@@ -27,8 +27,8 @@ export class RunAllActiveArchivesAction extends BaseAction {
 
             LogStatus(`RunAllActiveArchives: Found ${configIds.length} active configuration(s). Starting execution...`);
 
-            const results = await this.ExecuteAllConfigurations(configIds, params);
-            return this.BuildSummaryResult(results);
+            const results = await this.executeAllConfigurations(configIds, params);
+            return this.buildSummaryResult(results);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`RunAllActiveArchives failed: ${message}`);
@@ -43,7 +43,7 @@ export class RunAllActiveArchivesAction extends BaseAction {
     /**
      * Queries the database for all active ArchiveConfiguration IDs.
      */
-    private async LoadActiveConfigurationIds(params: RunActionParams): Promise<string[]> {
+    private async loadActiveConfigurationIds(params: RunActionParams): Promise<string[]> {
         const rv = new RunView();
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Archive Configurations',
@@ -63,7 +63,7 @@ export class RunAllActiveArchivesAction extends BaseAction {
      * Executes all configurations sequentially. Sequential execution prevents
      * overwhelming the storage backend and database with concurrent archive runs.
      */
-    private async ExecuteAllConfigurations(
+    private async executeAllConfigurations(
         configIds: string[],
         params: RunActionParams
     ): Promise<ConfigRunOutcome[]> {
@@ -99,7 +99,7 @@ export class RunAllActiveArchivesAction extends BaseAction {
     /**
      * Aggregates individual run results into a single ActionResultSimple.
      */
-    private BuildSummaryResult(outcomes: ConfigRunOutcome[]): ActionResultSimple {
+    private buildSummaryResult(outcomes: ConfigRunOutcome[]): ActionResultSimple {
         const succeeded = outcomes.filter(o => o.Result.Success).length;
         const failed = outcomes.length - succeeded;
         const totalArchived = outcomes.reduce((sum, o) => sum + o.Result.ArchivedRecords, 0);
