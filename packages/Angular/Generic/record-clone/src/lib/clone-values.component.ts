@@ -171,95 +171,95 @@ import type {
         .clone-values-container {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-lg, 20px);
-            padding: var(--mj-spacing-xs, 4px) 0;
+            gap: var(--mj-space-5);
+            padding: var(--mj-space-1) 0;
         }
 
         .control-group {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-xs, 4px);
+            gap: var(--mj-space-1);
         }
 
         .control-label {
-            font-size: var(--mj-font-size-sm, 12px);
+            font-size: var(--mj-text-xs);
             font-weight: 600;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
         }
 
         .required-asterisk {
-            color: var(--mj-status-error-text, #dc2626);
+            color: var(--mj-status-error-text);
             font-weight: 700;
         }
 
         .optional-label {
             font-weight: 400;
-            color: var(--mj-text-muted, #94a3b8);
-            font-size: var(--mj-font-size-xs, 11px);
+            color: var(--mj-text-muted);
+            font-size: var(--mj-text-xs);
         }
 
         .control-hint {
-            font-size: var(--mj-font-size-xs, 11px);
-            color: var(--mj-text-muted, #64748b);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
         }
 
         .naming-hint {
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            color: var(--mj-brand-primary, #2563eb);
+            color: var(--mj-brand-primary);
             margin-top: 2px;
         }
 
         .mj-input, .mj-textarea {
-            padding: var(--mj-spacing-xs, 6px) var(--mj-spacing-sm, 10px);
-            border: 1px solid var(--mj-border-color, #cbd5e1);
-            border-radius: var(--mj-border-radius-sm, 4px);
-            background: var(--mj-bg-surface, #ffffff);
-            color: var(--mj-text-primary, #1e293b);
-            font-size: var(--mj-font-size-sm, 13px);
+            padding: var(--mj-space-1-5) var(--mj-space-2-5);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-sm);
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-primary);
+            font-size: var(--mj-text-sm);
             outline: none;
             transition: border-color 0.15s ease-in-out;
             font-family: inherit;
         }
 
         .mj-input:focus, .mj-textarea:focus {
-            border-color: var(--mj-brand-primary, #2563eb);
+            border-color: var(--mj-brand-primary);
         }
 
         .root-name-input {
-            font-size: var(--mj-font-size-md, 14px);
+            font-size: var(--mj-text-sm);
             font-weight: 500;
         }
 
         .section-group {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-sm, 8px);
-            padding: var(--mj-spacing-md, 12px);
-            background: var(--mj-bg-surface-soft, #f8fafc);
-            border: 1px solid var(--mj-border-color, #e2e8f0);
-            border-radius: var(--mj-border-radius-sm, 4px);
+            gap: var(--mj-space-2);
+            padding: var(--mj-space-3);
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-sm);
         }
 
         .section-title {
             margin: 0;
-            font-size: var(--mj-font-size-sm, 13px);
+            font-size: var(--mj-text-sm);
             font-weight: 600;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
         }
 
         .section-description {
             margin: 0;
-            font-size: var(--mj-font-size-xs, 12px);
-            color: var(--mj-text-secondary, #64748b);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-secondary);
         }
 
         .fields-grid, .retarget-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: var(--mj-spacing-md, 12px);
-            margin-top: var(--mj-spacing-xs, 4px);
+            gap: var(--mj-space-3);
+            margin-top: var(--mj-space-1);
         }
 
         @media (max-width: 640px) {
@@ -271,19 +271,19 @@ import type {
         .switch-field-row {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-sm, 8px);
+            gap: var(--mj-space-2);
             padding: 4px 0;
         }
 
         .switch-field-label {
-            font-size: var(--mj-font-size-sm, 12px);
-            color: var(--mj-text-secondary, #475569);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-secondary);
         }
 
         .related-entity-tag {
             font-size: 11px;
             font-weight: 400;
-            color: var(--mj-text-muted, #94a3b8);
+            color: var(--mj-text-muted);
         }
 
         .mj-textarea {
@@ -299,20 +299,32 @@ import type {
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CloneValuesComponent implements OnInit, OnChanges {
+    /** Entity being cloned; used in labels. */
     @Input() EntityName = 'Record';
+    /** Name the clone will get. Pre-filled from the naming strategy; editable. */
     @Input() RootName = '';
+    /** Why the suggested name was chosen (e.g. the source name already exists). */
     @Input() NamingStrategyReason?: string;
+    /** Fields the entity's `Clone.Fields.PromptFor` requires the user to fill. */
     @Input() PromptedFields: ClonePromptFieldItem[] = [];
+    /** Current values for the prompted fields, keyed by field name. */
     @Input() PromptedValues: Record<string, string | number | boolean | null> = {};
+    /** Foreign keys from `Clone.UI.RetargetFields` the user may point at a different record. */
     @Input() RetargetFields: CloneRetargetFieldItem[] = [];
+    /** Free-text reason stored on the clone log. */
     @Input() Reason = '';
 
     public HasUserEditedRootName = false;
 
+    /** Fires as the user edits the clone's name. */
     @Output() RootNameChange = new EventEmitter<string>();
+    /** Fires with the full value map whenever a prompted field changes. */
     @Output() PromptedValuesChange = new EventEmitter<Record<string, string | number | boolean | null>>();
+    /** Fires when a retarget picker changes. */
     @Output() RetargetFieldsChange = new EventEmitter<CloneRetargetFieldItem[]>();
+    /** Fires as the user edits the reason. */
     @Output() ReasonChange = new EventEmitter<string>();
+    /** Fires when the step becomes valid or invalid (every required prompted field filled). */
     @Output() ValidityChange = new EventEmitter<boolean>();
 
     public ngOnInit(): void {

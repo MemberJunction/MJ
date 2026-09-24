@@ -193,10 +193,10 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
         .plan-tree-container {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-sm, 8px);
-            background: var(--mj-bg-surface, #ffffff);
-            border: 1px solid var(--mj-border-color, #cbd5e1);
-            border-radius: var(--mj-border-radius-md, 6px);
+            gap: var(--mj-space-2);
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-md);
             overflow: hidden;
         }
 
@@ -204,10 +204,10 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: var(--mj-spacing-sm, 8px);
-            padding: var(--mj-spacing-sm, 8px) var(--mj-spacing-md, 12px);
-            background: var(--mj-bg-surface-soft, #f8fafc);
-            border-bottom: 1px solid var(--mj-border-color, #e2e8f0);
+            gap: var(--mj-space-2);
+            padding: var(--mj-space-2) var(--mj-space-3);
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
         }
 
         .search-box {
@@ -221,24 +221,24 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
         .search-icon {
             position: absolute;
             left: 10px;
-            font-size: var(--mj-font-size-xs, 12px);
-            color: var(--mj-text-muted, #94a3b8);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
             pointer-events: none;
         }
 
         .search-input {
             width: 100%;
             padding: 5px 28px 5px 30px;
-            font-size: var(--mj-font-size-sm, 12px);
-            border: 1px solid var(--mj-border-color, #cbd5e1);
-            border-radius: var(--mj-border-radius-sm, 4px);
-            background: var(--mj-bg-surface, #ffffff);
-            color: var(--mj-text-primary, #1e293b);
+            font-size: var(--mj-text-xs);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-sm);
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-primary);
             outline: none;
         }
 
         .search-input:focus {
-            border-color: var(--mj-brand-primary, #2563eb);
+            border-color: var(--mj-brand-primary);
         }
 
         .clear-search-btn {
@@ -246,25 +246,25 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
             right: 8px;
             background: none;
             border: none;
-            color: var(--mj-text-muted, #94a3b8);
+            color: var(--mj-text-muted);
             cursor: pointer;
             padding: 2px;
         }
 
         .tree-actions {
             display: flex;
-            gap: var(--mj-spacing-xs, 6px);
+            gap: var(--mj-space-1-5);
         }
 
         .counts-bar {
             display: flex;
             align-items: center;
             flex-wrap: wrap;
-            gap: var(--mj-spacing-md, 12px);
-            padding: 6px var(--mj-spacing-md, 12px);
-            background: var(--mj-bg-surface, #ffffff);
-            border-bottom: 1px solid var(--mj-border-color, #e2e8f0);
-            font-size: var(--mj-font-size-xs, 12px);
+            gap: var(--mj-space-3);
+            padding: 6px var(--mj-space-3);
+            background: var(--mj-bg-surface);
+            border-bottom: 1px solid var(--mj-border-default);
+            font-size: var(--mj-text-xs);
         }
 
         .count-item {
@@ -274,19 +274,19 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
         }
 
         .count-item.create {
-            color: var(--mj-status-success-text, #16a34a);
+            color: var(--mj-status-success-text);
         }
 
         .count-item.reference {
-            color: var(--mj-status-info-text, #0284c7);
+            color: var(--mj-status-info-text);
         }
 
         .count-item.skip {
-            color: var(--mj-text-muted, #64748b);
+            color: var(--mj-text-muted);
         }
 
         .count-item.blocked {
-            color: var(--mj-status-error-text, #dc2626);
+            color: var(--mj-status-error-text);
         }
 
         .tree-content {
@@ -294,23 +294,23 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
             flex-direction: column;
             max-height: 480px;
             overflow-y: auto;
-            padding: var(--mj-spacing-xs, 4px) 0;
+            padding: var(--mj-space-1) 0;
         }
 
         .empty-tree-message {
-            padding: var(--mj-spacing-lg, 24px);
+            padding: var(--mj-space-6);
             text-align: center;
-            color: var(--mj-text-muted, #64748b);
-            font-size: var(--mj-font-size-sm, 13px);
+            color: var(--mj-text-muted);
+            font-size: var(--mj-text-sm);
         }
 
         .tree-row {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-sm, 8px);
+            gap: var(--mj-space-2);
             padding-top: 6px;
             padding-bottom: 6px;
-            padding-right: var(--mj-spacing-md, 12px);
+            padding-right: var(--mj-space-3);
             cursor: pointer;
             user-select: none;
             border-left: 3px solid transparent;
@@ -318,12 +318,12 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
         }
 
         .tree-row:hover {
-            background: var(--mj-bg-surface-hover, #f1f5f9);
+            background: var(--mj-bg-surface-hover);
         }
 
         .tree-row.selected {
-            background: var(--mj-bg-surface-selected, #e0f2fe);
-            border-left-color: var(--mj-brand-primary, #0284c7);
+            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+            border-left-color: var(--mj-brand-primary);
         }
 
         .tree-row.is-subtype {
@@ -340,7 +340,7 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
         .chevron-btn {
             background: none;
             border: none;
-            color: var(--mj-text-muted, #64748b);
+            color: var(--mj-text-muted);
             cursor: pointer;
             padding: 2px;
             font-size: 11px;
@@ -367,18 +367,18 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
         }
 
         .policy-pill.policy-deep {
-            background: var(--mj-status-success-bg, #dcfce7);
-            color: var(--mj-status-success-text, #15803d);
+            background: var(--mj-status-success-bg);
+            color: var(--mj-status-success-text);
         }
 
         .policy-pill.policy-ref {
-            background: var(--mj-status-info-bg, #e0f2fe);
-            color: var(--mj-status-info-text, #0369a1);
+            background: var(--mj-status-info-bg);
+            color: var(--mj-status-info-text);
         }
 
         .policy-pill.policy-skip {
-            background: var(--mj-bg-surface-muted, #f1f5f9);
-            color: var(--mj-text-muted, #64748b);
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-muted);
         }
 
         .lock-icon {
@@ -393,35 +393,35 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
         .action-badge {
             display: inline-block;
             padding: 2px 6px;
-            border-radius: var(--mj-border-radius-sm, 4px);
+            border-radius: var(--mj-radius-sm);
             font-size: 11px;
             font-weight: 600;
         }
 
         .action-badge.action-create {
-            background: var(--mj-status-success-bg, #dcfce7);
-            color: var(--mj-status-success-text, #15803d);
+            background: var(--mj-status-success-bg);
+            color: var(--mj-status-success-text);
         }
 
         .action-badge.action-ref {
-            background: var(--mj-status-info-bg, #e0f2fe);
-            color: var(--mj-status-info-text, #0369a1);
+            background: var(--mj-status-info-bg);
+            color: var(--mj-status-info-text);
         }
 
         .action-badge.action-skip {
-            background: var(--mj-bg-surface-muted, #f1f5f9);
-            color: var(--mj-text-muted, #64748b);
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-muted);
         }
 
         .action-badge.action-blocked {
-            background: var(--mj-status-error-bg, #fee2e2);
-            color: var(--mj-status-error-text, #b91c1c);
+            background: var(--mj-status-error-bg);
+            color: var(--mj-status-error-text);
         }
 
         .node-label-cell {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-xs, 6px);
+            gap: var(--mj-space-1-5);
             flex: 1;
             min-width: 0;
         }
@@ -429,16 +429,16 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
         .entity-badge {
             font-size: 11px;
             font-weight: 500;
-            color: var(--mj-text-secondary, #475569);
-            background: var(--mj-bg-surface-soft, #f1f5f9);
+            color: var(--mj-text-secondary);
+            background: var(--mj-bg-surface-card);
             padding: 1px 6px;
-            border-radius: var(--mj-border-radius-sm, 4px);
+            border-radius: var(--mj-radius-sm);
             white-space: nowrap;
         }
 
         .record-title {
-            font-size: var(--mj-font-size-sm, 13px);
-            color: var(--mj-text-primary, #1e293b);
+            font-size: var(--mj-text-sm);
+            color: var(--mj-text-primary);
             font-weight: 500;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -450,8 +450,8 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
             align-items: center;
             gap: 3px;
             font-size: 10px;
-            color: var(--mj-status-warning-text, #b45309);
-            background: var(--mj-status-warning-bg, #fef3c7);
+            color: var(--mj-status-warning-text);
+            background: var(--mj-status-warning-bg);
             padding: 1px 5px;
             border-radius: 8px;
             margin-left: 4px;
@@ -468,6 +468,7 @@ export class ClonePlanTreeComponent {
     private _plan: RecordClonePlanDetails | null = null;
     private cdr = inject(ChangeDetectorRef);
 
+    /** The plan to render. Setting it rebuilds the tree. */
     @Input()
     set Plan(value: RecordClonePlanDetails | null) {
         this._plan = value;
@@ -477,10 +478,11 @@ export class ClonePlanTreeComponent {
         return this._plan;
     }
 
+    /** Key of the node to highlight, e.g. when the review step links back to it. */
     @Input() SelectedNodeKey: string | null = null;
 
+    /** Fires when the user selects a node row. */
     @Output() NodeSelected = new EventEmitter<RecordClonePlanNode>();
-    @Output() EdgePolicyChanged = new EventEmitter<{ RelationshipID?: string; Policy: 'Deep' | 'Reference' | 'Skip' }>();
 
     public SearchTerm = '';
     public TreeNodes: CloneTreeNodeViewModel[] = [];

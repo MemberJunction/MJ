@@ -2,7 +2,7 @@
  * @fileoverview Type definitions for the record cloning Angular UI layer.
  */
 
-import type { BaseEntity } from '@memberjunction/core';
+import type { BaseEntity, CompositeKey } from '@memberjunction/core';
 import type {
     RecordCloneKey,
     RecordCloneKeyValuePair,
@@ -16,7 +16,7 @@ import type {
 /** Active step in the clone wizard. */
 export type RecordCloneStep = 'scope' | 'values' | 'review';
 
-/** State of the clone slide panel. */
+/** State of the clone wizard. */
 export type RecordClonePanelState =
     | 'loading'
     | 'scope'
@@ -38,10 +38,23 @@ export interface CloneCompletedEvent {
     Result?: RecordCloneExecuteOutput;
 }
 
-/** Navigation event emitted to the host container (e.g. Explorer) to open a record. */
-export interface FormNavigationEvent {
+/** Emitted when describe, plan or execute fails. */
+export interface CloneFailedEvent {
+    EntityName: string;
+    /** The message the panel shows; names the failing node when the server reports one. */
+    Message: string;
+    /** Server result code, e.g. `PLAN_CHANGED`, `FORBIDDEN`, `EXECUTION_ERROR`, when there is one. */
+    ResultCode?: string;
+}
+
+/**
+ * Asks the host to open a record. The clone widgets never navigate themselves; a host maps
+ * this onto its own navigation (base-forms turns it into a `FormNavigationEvent`).
+ */
+export interface CloneNavigationEvent {
     Kind: 'record';
     EntityName: string;
+    /** Record-id string in compact URL-segment form; parse with `CompositeKey.FromURLSegment`. */
     RecordKey: string;
 }
 
@@ -89,10 +102,13 @@ export interface CloneProgressUpdate {
     CloneLogID?: string;
 }
 
-/** Helper to build a single-field RecordCloneKey from field name and value */
-export function StringToRecordCloneKey(fieldName: string, value: string): RecordCloneKey {
+/** Converts a CompositeKey (any number of primary key columns) to the wire-level RecordCloneKey. */
+export function CompositeKeyToRecordCloneKey(key: CompositeKey): RecordCloneKey {
     return {
-        KeyValuePairs: [{ FieldName: fieldName, Value: value }],
+        KeyValuePairs: key.KeyValuePairs.map((p) => ({
+            FieldName: p.FieldName,
+            Value: String(p.Value ?? ''),
+        })),
     };
 }
 

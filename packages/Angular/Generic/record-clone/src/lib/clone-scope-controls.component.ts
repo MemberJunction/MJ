@@ -116,67 +116,67 @@ import type { RecordClonePlanOptions } from '@memberjunction/core-entities';
         .scope-controls-container {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-md, 16px);
-            padding: var(--mj-spacing-sm, 8px) 0;
+            gap: var(--mj-space-4);
+            padding: var(--mj-space-2) 0;
         }
 
         .control-group {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-xs, 4px);
+            gap: var(--mj-space-1);
         }
 
         .control-label {
-            font-size: var(--mj-font-size-sm, 12px);
+            font-size: var(--mj-text-xs);
             font-weight: 600;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
         }
 
         .control-hint {
-            font-size: var(--mj-font-size-xs, 11px);
-            color: var(--mj-text-muted, #64748b);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
         }
 
         .mj-select, .mj-input {
-            padding: var(--mj-spacing-xs, 6px) var(--mj-spacing-sm, 10px);
-            border: 1px solid var(--mj-border-color, #cbd5e1);
-            border-radius: var(--mj-border-radius-sm, 4px);
-            background: var(--mj-bg-surface, #ffffff);
-            color: var(--mj-text-primary, #1e293b);
-            font-size: var(--mj-font-size-sm, 13px);
+            padding: var(--mj-space-1-5) var(--mj-space-2-5);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-sm);
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-primary);
+            font-size: var(--mj-text-sm);
             outline: none;
             transition: border-color 0.15s ease-in-out;
         }
 
         .mj-select:focus, .mj-input:focus {
-            border-color: var(--mj-brand-primary, #2563eb);
+            border-color: var(--mj-brand-primary);
         }
 
         .depth-row {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-md, 16px);
+            gap: var(--mj-space-4);
         }
 
         .depth-slider {
             flex: 1;
-            accent-color: var(--mj-brand-primary, #2563eb);
+            accent-color: var(--mj-brand-primary);
             cursor: pointer;
         }
 
         .depth-value {
-            font-size: var(--mj-font-size-sm, 13px);
+            font-size: var(--mj-text-sm);
             font-weight: 600;
             min-width: 24px;
             text-align: right;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
         }
 
         .toggles-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: var(--mj-spacing-md, 16px);
-            padding: var(--mj-spacing-sm, 8px) 0;
+            gap: var(--mj-space-4);
+            padding: var(--mj-space-2) 0;
         }
 
         @media (max-width: 640px) {
@@ -188,12 +188,12 @@ import type { RecordClonePlanOptions } from '@memberjunction/core-entities';
         .toggle-item {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-sm, 8px);
+            gap: var(--mj-space-2);
         }
 
         .toggle-label {
-            font-size: var(--mj-font-size-sm, 13px);
-            color: var(--mj-text-primary, #1e293b);
+            font-size: var(--mj-text-sm);
+            color: var(--mj-text-primary);
             cursor: pointer;
             user-select: none;
         }
@@ -210,16 +210,26 @@ import type { RecordClonePlanOptions } from '@memberjunction/core-entities';
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CloneScopeControlsComponent {
+    /** Preset names from the entity's `Clone.Presets`. */
     @Input() Presets: string[] = [];
+    /** The preset currently applied, if any. */
     @Input() SelectedPreset?: string;
+    /** How many relationship levels below the root the planner walks. */
     @Input() MaxDepth = 3;
+    /** Whether IS-A subtype rows are cloned with their parent. */
     @Input() Subtypes: 'include' | 'exclude' = 'include';
+    /** For self-referencing hierarchies: copy the whole subtree, or only this node. */
     @Input() Hierarchy: 'subtree' | 'node' = 'subtree';
+    /** Whether polymorphic EntityID/RecordID rows (tags, attachments, notes) are cloned. */
     @Input() SoftLinks: 'skip' | 'include' = 'skip';
+    /** Whether Entity Actions run during the clone's saves. */
     @Input() EntityActions: 'suppress' | 'fire' = 'suppress';
+    /** Show the Fire Entity Actions toggle. Only true for users authorized to fire hooks. */
     @Input() CanFireHooks = false;
+    /** Cap on records the clone may create; a larger plan is blocked. */
     @Input() MaxRecords = 500;
 
+    /** Fires with the full option set whenever any control changes. */
     @Output() ScopeChanged = new EventEmitter<RecordClonePlanOptions>();
 
     public OnPresetChange(preset: string): void {

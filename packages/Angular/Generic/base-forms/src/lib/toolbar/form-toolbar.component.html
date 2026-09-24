@@ -261,6 +261,22 @@
 }
 
 <!-- ============================================
+     RECORD CLONE SLIDE-IN (ng-record-clone)
+     Created only when the Clone action is available; navigation it
+     requests leaves through this toolbar's Navigate output.
+     ============================================ -->
+@if (ShowCloneAction) {
+  <mj-record-clone-slide-in
+    [Provider]="Provider"
+    [Record]="Record"
+    [Visible]="IsClonePanelOpen"
+    (VisibleChange)="OnClonePanelVisibleChange($event)"
+    (CloneCompleted)="OnCloneCompleted($event)"
+    (NavigateToRecord)="OnCloneNavigate($event)">
+  </mj-record-clone-slide-in>
+}
+
+<!-- ============================================
      DISCARD CHANGES CONFIRMATION DIALOG
      ============================================ -->
 @if (ShowDiscardDialog) {

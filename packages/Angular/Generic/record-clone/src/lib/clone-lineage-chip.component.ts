@@ -22,8 +22,10 @@ import type {
     RecordCloneGetLineageOutput,
     RecordCloneLineageItem,
 } from '@memberjunction/core-entities';
+import { CompositeKey } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RecordCloneService } from './record-clone.service';
-import type { FormNavigationEvent } from './record-clone-types';
+import { CompositeKeyToRecordCloneKey, type CloneNavigationEvent } from './record-clone-types';
 
 @Component({
     standalone: true,
@@ -158,20 +160,20 @@ import type { FormNavigationEvent } from './record-clone-types';
             align-items: center;
             gap: 5px;
             padding: 2px 8px;
-            background: var(--mj-bg-surface-soft, #f1f5f9);
-            border: 1px solid var(--mj-border-color, #cbd5e1);
-            border-radius: var(--mj-border-radius-lg, 12px);
-            font-size: var(--mj-font-size-xs, 11px);
-            color: var(--mj-text-secondary, #475569);
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-lg);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-secondary);
             cursor: pointer;
             transition: all 0.15s ease-in-out;
             user-select: none;
         }
 
         .lineage-chip-btn:hover, .lineage-chip-btn.active {
-            background: var(--mj-bg-surface-selected, #e0f2fe);
-            border-color: var(--mj-brand-primary, #0284c7);
-            color: var(--mj-brand-primary, #0369a1);
+            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+            border-color: var(--mj-brand-primary);
+            color: var(--mj-brand-primary);
         }
 
         .chip-label {
@@ -188,10 +190,10 @@ import type { FormNavigationEvent } from './record-clone-types';
             left: 0;
             margin-top: 4px;
             width: 280px;
-            background: var(--mj-bg-surface, #ffffff);
-            border: 1px solid var(--mj-border-color, #cbd5e1);
-            border-radius: var(--mj-border-radius-md, 6px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-md);
+            box-shadow: var(--mj-shadow-md);
             z-index: 1000;
             display: flex;
             flex-direction: column;
@@ -203,14 +205,14 @@ import type { FormNavigationEvent } from './record-clone-types';
             align-items: center;
             justify-content: space-between;
             padding: 8px 12px;
-            background: var(--mj-bg-surface-soft, #f8fafc);
-            border-bottom: 1px solid var(--mj-border-color, #e2e8f0);
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
         }
 
         .popover-title {
-            font-size: var(--mj-font-size-xs, 12px);
+            font-size: var(--mj-text-xs);
             font-weight: 600;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
             display: flex;
             align-items: center;
             gap: 6px;
@@ -219,7 +221,7 @@ import type { FormNavigationEvent } from './record-clone-types';
         .popover-close-btn {
             background: none;
             border: none;
-            color: var(--mj-text-muted, #94a3b8);
+            color: var(--mj-text-muted);
             cursor: pointer;
             padding: 2px;
             font-size: 11px;
@@ -245,7 +247,7 @@ import type { FormNavigationEvent } from './record-clone-types';
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: var(--mj-text-muted, #94a3b8);
+            color: var(--mj-text-muted);
         }
 
         .lineage-items-list {
@@ -266,11 +268,11 @@ import type { FormNavigationEvent } from './record-clone-types';
         }
 
         .ancestor-icon {
-            color: var(--mj-brand-primary, #0284c7);
+            color: var(--mj-brand-primary);
         }
 
         .clone-icon {
-            color: var(--mj-status-success-text, #16a34a);
+            color: var(--mj-status-success-text);
         }
 
         .item-content {
@@ -287,9 +289,9 @@ import type { FormNavigationEvent } from './record-clone-types';
             padding: 0;
             margin: 0;
             text-align: left;
-            font-size: var(--mj-font-size-xs, 12px);
+            font-size: var(--mj-text-xs);
             font-weight: 500;
-            color: var(--mj-brand-primary, #2563eb);
+            color: var(--mj-brand-primary);
             cursor: pointer;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -302,7 +304,7 @@ import type { FormNavigationEvent } from './record-clone-types';
 
         .item-meta {
             font-size: 10px;
-            color: var(--mj-text-muted, #64748b);
+            color: var(--mj-text-muted);
         }
     `],
     imports: [
@@ -310,16 +312,21 @@ import type { FormNavigationEvent } from './record-clone-types';
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class CloneLineageChipComponent implements OnInit {
+export class CloneLineageChipComponent extends BaseAngularComponent implements OnInit {
     private cloneService = inject(RecordCloneService);
     private cdr = inject(ChangeDetectorRef);
 
+    /** Entity of the record whose lineage to show. */
     @Input() EntityName = '';
+    /** Key of the record: a RecordCloneKey or a record-id string (`CompositeKey.FromURLSegment` form). */
     @Input() RecordKey: RecordCloneKey | string = '';
+    /** Load lineage on init. Set false and call `LoadLineage()` to control timing. */
     @Input() AutoLoad = true;
+    /** Pre-loaded lineage; skips the server call when set. */
     @Input() LineageData: RecordCloneGetLineageOutput | null = null;
 
-    @Output() NavigateToRecord = new EventEmitter<FormNavigationEvent>();
+    /** Asks the host to open an ancestor or clone from the popover. */
+    @Output() NavigateToRecord = new EventEmitter<CloneNavigationEvent>();
 
     public IsOpen = false;
     public IsLoading = false;
@@ -376,14 +383,19 @@ export class CloneLineageChipComponent implements OnInit {
         this.cdr.markForCheck();
         try {
             const key: RecordCloneKey = typeof this.RecordKey === 'string'
-                ? { KeyValuePairs: [{ FieldName: 'ID', Value: this.RecordKey }] }
+                ? CompositeKeyToRecordCloneKey(
+                      CompositeKey.FromURLSegment(this.ProviderToUse?.EntityByName(this.EntityName), this.RecordKey)
+                  )
                 : this.RecordKey;
 
-            this.LineageData = await this.cloneService.GetLineage({
-                EntityName: this.EntityName,
-                Key: key,
-                Direction: 'both',
-            });
+            this.LineageData = await this.cloneService.GetLineage(
+                {
+                    EntityName: this.EntityName,
+                    Key: key,
+                    Direction: 'both',
+                },
+                this.ProviderToUse
+            );
         } catch {
             this.LineageData = null;
         } finally {

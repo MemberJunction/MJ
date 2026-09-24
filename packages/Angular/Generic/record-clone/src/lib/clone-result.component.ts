@@ -23,7 +23,7 @@ import type {
     RecordCloneKey,
 } from '@memberjunction/core-entities';
 import { CompositeKey } from '@memberjunction/core';
-import type { FormNavigationEvent } from './record-clone-types';
+import type { CloneNavigationEvent } from './record-clone-types';
 
 @Component({
     standalone: true,
@@ -156,8 +156,8 @@ import type { FormNavigationEvent } from './record-clone-types';
             flex-direction: column;
             align-items: center;
             text-align: center;
-            padding: var(--mj-spacing-xl, 32px) var(--mj-spacing-md, 16px);
-            gap: var(--mj-spacing-md, 16px);
+            padding: var(--mj-space-8) var(--mj-space-4);
+            gap: var(--mj-space-4);
         }
 
         .result-icon-wrapper {
@@ -170,13 +170,13 @@ import type { FormNavigationEvent } from './record-clone-types';
         }
 
         .result-icon-wrapper.success {
-            background: var(--mj-status-success-bg, #dcfce7);
-            color: var(--mj-status-success-text, #16a34a);
+            background: var(--mj-status-success-bg);
+            color: var(--mj-status-success-text);
         }
 
         .result-icon-wrapper.failure {
-            background: var(--mj-status-error-bg, #fee2e2);
-            color: var(--mj-status-error-text, #dc2626);
+            background: var(--mj-status-error-bg);
+            color: var(--mj-status-error-text);
         }
 
         .result-icon {
@@ -185,47 +185,47 @@ import type { FormNavigationEvent } from './record-clone-types';
 
         .result-title {
             margin: 0;
-            font-size: var(--mj-font-size-lg, 18px);
+            font-size: var(--mj-text-lg);
             font-weight: 700;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
         }
 
         .failure-text {
-            color: var(--mj-status-error-text, #dc2626);
+            color: var(--mj-status-error-text);
         }
 
         .result-subtitle {
             margin: 0;
-            font-size: var(--mj-font-size-sm, 13px);
-            color: var(--mj-text-secondary, #475569);
+            font-size: var(--mj-text-sm);
+            color: var(--mj-text-secondary);
             max-width: 440px;
         }
 
         .failure-message {
-            color: var(--mj-status-error-text, #b91c1c);
+            color: var(--mj-status-error-text);
         }
 
         .result-stats {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-sm, 8px);
-            margin: var(--mj-spacing-xs, 4px) 0;
+            gap: var(--mj-space-2);
+            margin: var(--mj-space-1) 0;
         }
 
         .result-warnings-box {
             text-align: left;
-            background: var(--mj-status-warning-bg, #fef3c7);
-            border: 1px solid var(--mj-status-warning-border, #fcd34d);
-            border-radius: var(--mj-border-radius-sm, 4px);
-            padding: var(--mj-spacing-sm, 8px) var(--mj-spacing-md, 12px);
+            background: var(--mj-status-warning-bg);
+            border: 1px solid var(--mj-status-warning-border);
+            border-radius: var(--mj-radius-sm);
+            padding: var(--mj-space-2) var(--mj-space-3);
             max-width: 440px;
             width: 100%;
         }
 
         .warnings-title {
-            font-size: var(--mj-font-size-xs, 12px);
+            font-size: var(--mj-text-xs);
             font-weight: 600;
-            color: var(--mj-status-warning-text, #b45309);
+            color: var(--mj-status-warning-text);
             display: flex;
             align-items: center;
             gap: 6px;
@@ -234,29 +234,29 @@ import type { FormNavigationEvent } from './record-clone-types';
         .warnings-list {
             margin: 4px 0 0;
             padding-left: 18px;
-            font-size: var(--mj-font-size-xs, 11px);
-            color: var(--mj-status-warning-text, #92400e);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-status-warning-text);
         }
 
         .result-actions {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-sm, 8px);
-            margin-top: var(--mj-spacing-sm, 8px);
+            gap: var(--mj-space-2);
+            margin-top: var(--mj-space-2);
             flex-wrap: wrap;
             justify-content: center;
         }
 
         .audit-log-footer {
-            margin-top: var(--mj-spacing-sm, 8px);
+            margin-top: var(--mj-space-2);
         }
 
         .audit-link-btn {
             background: none;
             border: none;
-            color: var(--mj-brand-primary, #2563eb);
+            color: var(--mj-brand-primary);
             cursor: pointer;
-            font-size: var(--mj-font-size-xs, 12px);
+            font-size: var(--mj-text-xs);
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -264,7 +264,7 @@ import type { FormNavigationEvent } from './record-clone-types';
         }
 
         .audit-link-btn:hover {
-            color: var(--mj-brand-primary-hover, #1d4ed8);
+            color: var(--mj-brand-primary-hover);
         }
     `],
     imports: [
@@ -275,16 +275,25 @@ import type { FormNavigationEvent } from './record-clone-types';
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CloneResultComponent {
+    /** Execute output to summarize. */
     @Input() Result: RecordCloneExecuteOutput | null = null;
+    /** Entity of the root clone. */
     @Input() EntityName = 'Record';
+    /** Record-id string of the root clone; falls back to `Result.Roots[0].TargetKey`. */
     @Input() TargetKey: string | null = null;
+    /** Display name of the new root record. */
     @Input() RootRecordName?: string;
 
+    /** Fires with the root clone's key when the user opens it. `NavigateToRecord` fires too. */
     @Output() OpenClone = new EventEmitter<string>();
+    /** The user wants to clone the source again. */
     @Output() CloneAnother = new EventEmitter<void>();
+    /** The user closed the result. */
     @Output() Close = new EventEmitter<void>();
+    /** Fires with the clone log ID when the user opens the log. `NavigateToRecord` fires too. */
     @Output() OpenCloneLog = new EventEmitter<string>();
-    @Output() NavigateToRecord = new EventEmitter<FormNavigationEvent>();
+    /** Asks the host to open the clone or the clone log record. */
+    @Output() NavigateToRecord = new EventEmitter<CloneNavigationEvent>();
 
     public get CreatedCount(): number {
         return this.Result?.Created?.length ?? this.Result?.Counts?.Create ?? 1;
@@ -323,7 +332,7 @@ export class CloneResultComponent {
             this.OpenCloneLog.emit(this.Result.CloneLogID);
             this.NavigateToRecord.emit({
                 Kind: 'record',
-                EntityName: 'Record Clone Logs',
+                EntityName: 'MJ: Record Clone Logs',
                 RecordKey: this.Result.CloneLogID,
             });
         }

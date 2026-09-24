@@ -215,54 +215,54 @@ interface NodeFieldChangesSummary {
         .clone-review-container {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-md, 16px);
-            padding: var(--mj-spacing-xs, 4px) 0;
+            gap: var(--mj-space-4);
+            padding: var(--mj-space-1) 0;
         }
 
         .stat-badges-row {
             display: flex;
             align-items: center;
             flex-wrap: wrap;
-            gap: var(--mj-spacing-sm, 8px);
-            padding: var(--mj-spacing-xs, 4px) 0;
+            gap: var(--mj-space-2);
+            padding: var(--mj-space-1) 0;
         }
 
         .blocked-banner {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-xs, 6px);
-            padding: var(--mj-spacing-md, 12px) var(--mj-spacing-md, 16px);
-            background: var(--mj-status-error-bg, #fee2e2);
-            border: 1px solid var(--mj-status-error-border, #fca5a5);
-            border-radius: var(--mj-border-radius-md, 6px);
-            color: var(--mj-status-error-text, #991b1b);
+            gap: var(--mj-space-1-5);
+            padding: var(--mj-space-3) var(--mj-space-4);
+            background: var(--mj-status-error-bg);
+            border: 1px solid var(--mj-status-error-border);
+            border-radius: var(--mj-radius-md);
+            color: var(--mj-status-error-text);
         }
 
         .blocked-banner-header {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-xs, 6px);
+            gap: var(--mj-space-1-5);
         }
 
         .blocked-icon {
-            font-size: var(--mj-font-size-md, 16px);
-            color: var(--mj-status-error-text, #dc2626);
+            font-size: var(--mj-text-base);
+            color: var(--mj-status-error-text);
         }
 
         .blocked-title {
-            font-size: var(--mj-font-size-sm, 13px);
+            font-size: var(--mj-text-sm);
             font-weight: 700;
         }
 
         .blocked-description {
             margin: 0;
-            font-size: var(--mj-font-size-xs, 12px);
+            font-size: var(--mj-text-xs);
         }
 
         .blocked-reasons-list {
             margin: 0;
             padding-left: 20px;
-            font-size: var(--mj-font-size-xs, 12px);
+            font-size: var(--mj-text-xs);
             display: flex;
             flex-direction: column;
             gap: 4px;
@@ -271,7 +271,7 @@ interface NodeFieldChangesSummary {
         .review-section {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-xs, 6px);
+            gap: var(--mj-space-1-5);
         }
 
         .section-title {
@@ -279,40 +279,40 @@ interface NodeFieldChangesSummary {
             display: flex;
             align-items: center;
             gap: 6px;
-            font-size: var(--mj-font-size-sm, 13px);
+            font-size: var(--mj-text-sm);
             font-weight: 600;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
         }
 
         .section-description {
             margin: 0;
-            font-size: var(--mj-font-size-xs, 12px);
-            color: var(--mj-text-secondary, #64748b);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-secondary);
         }
 
         .warning-icon {
-            color: var(--mj-status-warning-text, #d97706);
+            color: var(--mj-status-warning-text);
         }
 
         .diff-icon {
-            color: var(--mj-brand-primary, #2563eb);
+            color: var(--mj-brand-primary);
         }
 
         .warnings-list {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-xs, 6px);
+            gap: var(--mj-space-1-5);
         }
 
         .warning-item {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-sm, 8px);
+            gap: var(--mj-space-2);
             padding: 6px 10px;
-            background: var(--mj-bg-surface-soft, #f8fafc);
-            border: 1px solid var(--mj-border-color, #e2e8f0);
-            border-radius: var(--mj-border-radius-sm, 4px);
-            font-size: var(--mj-font-size-xs, 12px);
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-sm);
+            font-size: var(--mj-text-xs);
         }
 
         .warning-badge {
@@ -321,19 +321,19 @@ interface NodeFieldChangesSummary {
             text-transform: uppercase;
             padding: 1px 6px;
             border-radius: 8px;
-            background: var(--mj-status-warning-bg, #fef3c7);
-            color: var(--mj-status-warning-text, #b45309);
+            background: var(--mj-status-warning-bg);
+            color: var(--mj-status-warning-text);
         }
 
         .warning-message {
             flex: 1;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
         }
 
         .node-link-btn {
             background: none;
             border: none;
-            color: var(--mj-brand-primary, #2563eb);
+            color: var(--mj-brand-primary);
             cursor: pointer;
             padding: 0 4px;
             font-size: 11px;
@@ -341,44 +341,44 @@ interface NodeFieldChangesSummary {
         }
 
         .node-link-btn:hover {
-            color: var(--mj-brand-primary-hover, #1d4ed8);
+            color: var(--mj-brand-primary-hover);
         }
 
         .diff-nodes-list {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-sm, 8px);
+            gap: var(--mj-space-2);
         }
 
         .diff-node-card {
-            background: var(--mj-bg-surface, #ffffff);
-            border: 1px solid var(--mj-border-color, #e2e8f0);
-            border-radius: var(--mj-border-radius-sm, 4px);
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: var(--mj-radius-sm);
             overflow: hidden;
         }
 
         .diff-node-header {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-xs, 6px);
+            gap: var(--mj-space-1-5);
             padding: 6px 10px;
-            background: var(--mj-bg-surface-soft, #f8fafc);
-            border-bottom: 1px solid var(--mj-border-color, #e2e8f0);
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
         }
 
         .diff-entity-badge {
             font-size: 11px;
             font-weight: 600;
-            color: var(--mj-text-secondary, #475569);
-            background: var(--mj-bg-surface-muted, #f1f5f9);
+            color: var(--mj-text-secondary);
+            background: var(--mj-bg-surface-sunken);
             padding: 1px 5px;
             border-radius: 3px;
         }
 
         .diff-node-title {
-            font-size: var(--mj-font-size-xs, 12px);
+            font-size: var(--mj-text-xs);
             font-weight: 500;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
             flex: 1;
         }
 
@@ -390,10 +390,10 @@ interface NodeFieldChangesSummary {
         .diff-row {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-md, 12px);
+            gap: var(--mj-space-3);
             padding: 6px 10px;
-            border-bottom: 1px solid var(--mj-border-color, #f1f5f9);
-            font-size: var(--mj-font-size-xs, 12px);
+            border-bottom: 1px solid var(--mj-border-default);
+            font-size: var(--mj-text-xs);
         }
 
         .diff-row:last-child {
@@ -402,14 +402,14 @@ interface NodeFieldChangesSummary {
 
         .diff-field-name {
             font-weight: 600;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
             min-width: 120px;
         }
 
         .diff-kind-chip {
             font-size: 10px;
-            background: var(--mj-bg-surface-soft, #f1f5f9);
-            color: var(--mj-text-secondary, #64748b);
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-secondary);
             padding: 1px 6px;
             border-radius: 10px;
             text-transform: capitalize;
@@ -424,7 +424,7 @@ interface NodeFieldChangesSummary {
         }
 
         .diff-old-val {
-            color: var(--mj-status-error-text, #b91c1c);
+            color: var(--mj-status-error-text);
             text-decoration: line-through;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -434,11 +434,11 @@ interface NodeFieldChangesSummary {
 
         .diff-arrow {
             font-size: 10px;
-            color: var(--mj-text-muted, #94a3b8);
+            color: var(--mj-text-muted);
         }
 
         .diff-new-val {
-            color: var(--mj-status-success-text, #15803d);
+            color: var(--mj-status-success-text);
             font-weight: 600;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -449,10 +449,10 @@ interface NodeFieldChangesSummary {
         .actions-bar {
             display: flex;
             align-items: center;
-            gap: var(--mj-spacing-sm, 8px);
-            padding-top: var(--mj-spacing-md, 12px);
-            border-top: 1px solid var(--mj-border-color, #e2e8f0);
-            margin-top: var(--mj-spacing-xs, 4px);
+            gap: var(--mj-space-2);
+            padding-top: var(--mj-space-3);
+            border-top: 1px solid var(--mj-border-default);
+            margin-top: var(--mj-space-1);
         }
     `],
     imports: [
@@ -463,13 +463,20 @@ interface NodeFieldChangesSummary {
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CloneReviewComponent {
+    /** The plan to review: counts, warnings, blocked reasons and per-node field changes. */
     @Input() Plan: RecordClonePlanDetails | null = null;
+    /** Name the root clone will get. */
     @Input() RootName = '';
+    /** Reason the user entered, shown for confirmation. */
     @Input() Reason = '';
+    /** Disables Confirm while the clone runs. */
     @Input() IsExecuting = false;
 
+    /** The user confirmed; the host executes the plan. */
     @Output() Confirm = new EventEmitter<void>();
+    /** The user backed out of the clone. */
     @Output() Cancel = new EventEmitter<void>();
+    /** Fires with a node key when the user clicks a warning or node to inspect it. */
     @Output() NodeClicked = new EventEmitter<string>();
 
     public get IsBlocked(): boolean {

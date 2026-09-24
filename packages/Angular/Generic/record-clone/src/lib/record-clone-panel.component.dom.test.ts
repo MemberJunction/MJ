@@ -7,7 +7,7 @@ import type {
     RecordClonePlanOutput,
     RecordCloneExecuteOutput,
 } from '@memberjunction/core-entities';
-import type { CloneCompletedEvent, FormNavigationEvent } from './record-clone-types';
+import type { CloneCompletedEvent, CloneFailedEvent, CloneNavigationEvent } from './record-clone-types';
 
 const MOCK_DESCRIBE: RecordCloneDescribeOutput = {
     CanClone: true,
@@ -92,13 +92,12 @@ describe('RecordClonePanelComponent (DOM)', () => {
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],
             inputs: {
-                IsOpen: true,
                 EntityName: 'SystemSettings',
                 RecordKey: 'sys-1',
             },
         });
 
-        await fixture.componentInstance.InitializationPromise;
+        await fixture.componentInstance.Start();
         fixture.detectChanges();
 
         expect(query(fixture, '.not-cloneable-card')).not.toBeNull();
@@ -109,13 +108,12 @@ describe('RecordClonePanelComponent (DOM)', () => {
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],
             inputs: {
-                IsOpen: true,
                 EntityName: 'Users',
                 RecordKey: 'u-1',
             },
         });
 
-        await fixture.componentInstance.InitializationPromise;
+        await fixture.componentInstance.Start();
         fixture.detectChanges();
 
         expect(fixture.componentInstance.CurrentStep).toBe('scope');
@@ -141,13 +139,12 @@ describe('RecordClonePanelComponent (DOM)', () => {
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],
             inputs: {
-                IsOpen: true,
                 EntityName: 'Users',
                 RecordKey: 'u-1',
             },
         });
 
-        await fixture.componentInstance.InitializationPromise;
+        await fixture.componentInstance.Start();
         fixture.detectChanges();
 
         let completedEvent: CloneCompletedEvent | null = null;
@@ -174,7 +171,7 @@ describe('RecordClonePanelComponent (DOM)', () => {
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],
             inputs: {
-                IsOpen: true,
+                AutoStart: false,
                 EntityName: 'Users',
             },
         });
@@ -186,6 +183,117 @@ describe('RecordClonePanelComponent (DOM)', () => {
 
         fixture.componentInstance.OnClose();
         expect(closeEmitted).toBe(true);
-        expect(fixture.componentInstance.IsOpen).toBe(false);
+    });
+
+    it('starts on its own once a source is set, and reports each state', async () => {
+        const states: string[] = [];
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        fixture.componentInstance.StateChange.subscribe((s) => states.push(s));
+
+        await new Promise((r) => queueMicrotask(() => r(undefined)));
+        await fixture.componentInstance.InitializationPromise;
+
+        expect(mockService.DescribeRecord).toHaveBeenCalledTimes(1);
+        expect(fixture.componentInstance.CurrentState).toBe('scope');
+        expect(states).toContain('scope');
+    });
+
+    it('does not start on its own when AutoStart is false', async () => {
+        renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        await new Promise((r) => queueMicrotask(() => r(undefined)));
+        expect(mockService.DescribeRecord).not.toHaveBeenCalled();
+    });
+
+    it('parses a record-id string with every key column (composite keys included)', () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Order Lines', RecordKey: 'OrderID|o-1||LineNo|3' },
+        });
+        expect(fixture.componentInstance.EffectiveRecordKey).toEqual({
+            KeyValuePairs: [
+                { FieldName: 'OrderID', Value: 'o-1' },
+                { FieldName: 'LineNo', Value: '3' },
+            ],
+        });
+    });
+
+    it('emits CloneFailed with the server message when execution fails', async () => {
+        vi.spyOn(mockService, 'ExecuteClone').mockResolvedValue({
+            ...MOCK_EXECUTE,
+            Success: false,
+            ResultCode: 'PLAN_CHANGED',
+            ErrorMessage: 'The plan changed since review.',
+        });
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        await fixture.componentInstance.Start();
+
+        let failed: CloneFailedEvent | null = null;
+        fixture.componentInstance.CloneFailed.subscribe((e) => (failed = e));
+        await fixture.componentInstance.ExecuteClone();
+
+        expect(fixture.componentInstance.CurrentState).toBe('failed');
+        expect(failed).toEqual({ EntityName: 'Users', Message: 'The plan changed since review.', ResultCode: 'PLAN_CHANGED' });
+    });
+
+    it('re-emits navigation requests and asks the host to close', () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users' },
+        });
+        let nav: CloneNavigationEvent | null = null;
+        let closed = false;
+        fixture.componentInstance.NavigateToRecord.subscribe((e) => (nav = e));
+        fixture.componentInstance.CloseRequested.subscribe(() => (closed = true));
+
+        fixture.componentInstance.OnNavigateToRecord({ Kind: 'record', EntityName: 'Users', RecordKey: 'u-copy-1' });
+
+        expect(nav).toEqual({ Kind: 'record', EntityName: 'Users', RecordKey: 'u-copy-1' });
+        expect(closed).toBe(true);
+    });
+
+    it('Reset drops values folded into the options by the previous run', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        panel.OnPromptedValuesChange({ Email: 'old@example.com' });
+        panel.GoToStep('review');
+        expect(panel.ScopeOptions.PromptedValues).toEqual({ Email: 'old@example.com' });
+
+        await panel.Reset();
+
+        expect(panel.ScopeOptions.PromptedValues).toBeUndefined();
+        expect(panel.ScopeOptions.FieldOverrides).toBeUndefined();
+        const lastPlanCall = vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0];
+        expect(lastPlanCall.Options?.PromptedValues).toBeUndefined();
+    });
+
+    it('moves to failed and emits CloneFailed when a re-plan from the UI fails', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        vi.mocked(mockService.PlanClone).mockRejectedValueOnce(new Error('FORBIDDEN: soft links'));
+        let failed: CloneFailedEvent | null = null;
+        panel.CloneFailed.subscribe((e) => (failed = e));
+
+        panel.OnScopeOptionsChanged({ ...panel.ScopeOptions, SoftLinks: 'include' });
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(panel.CurrentState).toBe('failed');
+        expect(failed).toMatchObject({ Message: 'FORBIDDEN: soft links' });
     });
 });

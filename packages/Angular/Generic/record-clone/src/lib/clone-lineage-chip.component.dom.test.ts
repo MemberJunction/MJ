@@ -3,7 +3,7 @@ import { renderComponentFixture, query, queryAll, text } from '@memberjunction/n
 import { CloneLineageChipComponent } from './clone-lineage-chip.component';
 import { RecordCloneService } from './record-clone.service';
 import type { RecordCloneGetLineageOutput } from '@memberjunction/core-entities';
-import type { FormNavigationEvent } from './record-clone-types';
+import type { CloneNavigationEvent } from './record-clone-types';
 
 describe('CloneLineageChipComponent (DOM)', () => {
     const LINEAGE_WITH_SOURCE: RecordCloneGetLineageOutput = {
@@ -82,7 +82,7 @@ describe('CloneLineageChipComponent (DOM)', () => {
         const groupLabels = queryAll(fixture, '.group-label');
         expect(groupLabels.length).toBe(2);
 
-        let navEvent: FormNavigationEvent | null = null;
+        let navEvent: CloneNavigationEvent | null = null;
         fixture.componentInstance.NavigateToRecord.subscribe((e) => { navEvent = e; });
 
         // Click first ancestor link

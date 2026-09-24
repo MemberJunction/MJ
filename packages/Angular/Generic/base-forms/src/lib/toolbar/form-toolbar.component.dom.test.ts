@@ -1,8 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { BaseEntity, EntityInfo } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjFormToolbarComponent } from './form-toolbar.component';
-import type { BeforeSaveEventArgs, BeforeRefreshEventArgs } from '../types/form-events';
+import type { BeforeSaveEventArgs, BeforeRefreshEventArgs, BeforeCloneEventArgs } from '../types/form-events';
+import { RecordCloneService, RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
+import type { RecordNavigationEvent } from '../types/navigation-events';
 
 /**
  * DOM coverage for <mj-form-toolbar> — the action bar CodeGen renders on every entity form (~6× direct,
@@ -235,6 +237,103 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const clear = queryAll(f, '.mj-clear-search')[0] as HTMLElement;
       clear.click();
       expect(out).toEqual(['']);
+    });
+  });
+
+  describe('record cloning', () => {
+    const CLONE_ENTITY = { ...ENTITY_INFO, Name: 'MJ: Users', DisplayNameOrName: 'Users', CloneConfig: { Enabled: true } } as unknown as EntityInfo;
+    const CLONE_RECORD = { ...RECORD, EntityInfo: CLONE_ENTITY } as unknown as BaseEntity;
+    const CLONE_ON = { ShowCloneButton: true, ShowEditButton: true };
+
+    const renderClone = (canClone: boolean, inputs: Record<string, unknown> = {}) => {
+      const service = {
+        DescribeRecord: vi.fn().mockResolvedValue({ CanClone: canClone, Relationships: [] }),
+        PlanClone: vi.fn(),
+        ExecuteClone: vi.fn(),
+        GetLineage: vi.fn(),
+      };
+      const f = renderComponentFixture(MjFormToolbarComponent, {
+        declarations: [MjFormToolbarComponent],
+        imports: [RecordCloneSlideInComponent],
+        providers: [{ provide: RecordCloneService, useValue: service }],
+        inputs: { Record: CLONE_RECORD, EntityInfo: CLONE_ENTITY, UserCanEdit: true, Config: CLONE_ON, ...inputs },
+      });
+      return { f, service };
+    };
+    const settle = async (f: Fx) => { f.detectChanges(); await tick(); f.detectChanges(); };
+    const cloneBtn = (f: Fx) => btn(f, 'button[title^="Clone this"]');
+
+    it('shows Clone when the config turns it on and Describe allows it', async () => {
+      const { f, service } = renderClone(true);
+      await settle(f);
+      expect(service.DescribeRecord.mock.calls[0][0]).toEqual({ EntityName: 'MJ: Users' });
+      expect(cloneBtn(f)).not.toBeNull();
+    });
+
+    it('hides Clone when Describe refuses', async () => {
+      const { f } = renderClone(false);
+      await settle(f);
+      expect(cloneBtn(f)).toBeNull();
+    });
+
+    it('hides Clone and skips the server call when ShowCloneButton is off', async () => {
+      const { f, service } = renderClone(true, { Config: { ShowEditButton: true } });
+      await settle(f);
+      expect(service.DescribeRecord).not.toHaveBeenCalled();
+      expect(cloneBtn(f)).toBeNull();
+    });
+
+    it('skips the server call for entities whose clone config is not enabled', async () => {
+      const entity = { ...CLONE_ENTITY, CloneConfig: null } as unknown as EntityInfo;
+      const { f, service } = renderClone(true, { Record: { ...RECORD, EntityInfo: entity }, EntityInfo: entity });
+      await settle(f);
+      expect(service.DescribeRecord).not.toHaveBeenCalled();
+    });
+
+    it('hides Clone for unsaved records', async () => {
+      const { f } = renderClone(true, { Record: { ...CLONE_RECORD, IsSaved: false } });
+      await settle(f);
+      expect(cloneBtn(f)).toBeNull();
+    });
+
+    it('opens the slide-in on click unless BeforeClone cancels', async () => {
+      const { f } = renderClone(true);
+      await settle(f);
+
+      const sub = f.componentInstance.BeforeClone.subscribe((e: BeforeCloneEventArgs) => (e.Cancel = true));
+      cloneBtn(f)!.click();
+      expect(f.componentInstance.IsClonePanelOpen).toBe(false);
+
+      sub.unsubscribe();
+      cloneBtn(f)!.click();
+      expect(f.componentInstance.IsClonePanelOpen).toBe(true);
+    });
+
+    it('does not reopen the slide-in by itself after the record switches entity', async () => {
+      const { f } = renderClone(true);
+      await settle(f);
+      cloneBtn(f)!.click();
+      expect(f.componentInstance.IsClonePanelOpen).toBe(true);
+
+      const other = { ...CLONE_ENTITY, Name: 'MJ: Roles' } as unknown as EntityInfo;
+      f.componentInstance.Record = { ...RECORD, EntityInfo: other } as unknown as BaseEntity;
+      await settle(f);
+
+      expect(f.componentInstance.IsClonePanelOpen).toBe(false);
+    });
+
+    it('turns a clone navigation request into a record Navigate event', async () => {
+      const { f } = renderClone(true);
+      await settle(f);
+      const out = capture(f.componentInstance.Navigate);
+
+      f.componentInstance.OnCloneNavigate({ Kind: 'record', EntityName: 'MJ: Users', RecordKey: 'ID|u-2' });
+
+      const nav = out[0] as RecordNavigationEvent;
+      expect(nav.Kind).toBe('record');
+      expect(nav.EntityName).toBe('MJ: Users');
+      expect(nav.OpenInNewTab).toBe(true);
+      expect(nav.PrimaryKey.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: 'u-2' }]);
     });
   });
 

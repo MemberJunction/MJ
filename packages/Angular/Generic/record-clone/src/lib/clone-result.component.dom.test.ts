@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { CloneResultComponent } from './clone-result.component';
 import type { RecordCloneExecuteOutput } from '@memberjunction/core-entities';
-import type { FormNavigationEvent } from './record-clone-types';
+import type { CloneNavigationEvent } from './record-clone-types';
 
 describe('CloneResultComponent (DOM)', () => {
     const SUCCESS_RESULT: RecordCloneExecuteOutput = {
@@ -68,7 +68,7 @@ describe('CloneResultComponent (DOM)', () => {
         });
 
         let emittedKey: unknown = null;
-        let navEvent: FormNavigationEvent | null = null;
+        let navEvent: CloneNavigationEvent | null = null;
         fixture.componentInstance.OpenClone.subscribe((k) => { emittedKey = k; });
         fixture.componentInstance.NavigateToRecord.subscribe((e) => { navEvent = e; });
 
@@ -92,7 +92,7 @@ describe('CloneResultComponent (DOM)', () => {
             },
         });
 
-        let navEvent: FormNavigationEvent | null = null;
+        let navEvent: CloneNavigationEvent | null = null;
         fixture.componentInstance.NavigateToRecord.subscribe((e) => { navEvent = e; });
 
         const logBtn = query(fixture, '.audit-link-btn') as HTMLButtonElement;
@@ -100,7 +100,7 @@ describe('CloneResultComponent (DOM)', () => {
 
         expect(navEvent).toEqual({
             Kind: 'record',
-            EntityName: 'Record Clone Logs',
+            EntityName: 'MJ: Record Clone Logs',
             RecordKey: 'log-uuid-456',
         });
     });

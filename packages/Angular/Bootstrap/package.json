@@ -56,7 +56,6 @@
     "@memberjunction/ng-explorer-core": "6.2.0-edge.0",
     "@memberjunction/ng-explorer-settings": "6.2.0-edge.0",
     "@memberjunction/ng-file-storage": "6.2.0-edge.0",
-    "@memberjunction/ng-record-clone": "6.2.0-edge.0",
     "@memberjunction/ng-shared": "6.2.0-edge.0",
     "@memberjunction/tag-engine-base": "6.2.0-edge.0",
     "rxjs": "^7.8.2",

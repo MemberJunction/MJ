@@ -4,7 +4,7 @@
  * Implements §11.5 and §12.3 of the Record Cloning architectural blueprint. Resolves
  * the IMetadataProvider (multi-provider aware), delegates directly to the typed
  * BaseRemotableOperation subclasses emitted into @memberjunction/core-entities, and
- * maintains an in-memory session cache of Describe results per entity.
+ * maintains an in-memory session cache of Describe results per provider and entity.
  */
 
 import { Injectable } from '@angular/core';
@@ -24,41 +24,48 @@ import {
     type RecordCloneGetLineageOutput,
 } from '@memberjunction/core-entities';
 
+/** Cache bucket used when no provider can be resolved (tests, early bootstrap). */
+const NO_PROVIDER = {};
+
+/**
+ * Client for the four RecordClone remote operations. Every method takes an optional
+ * provider so multi-provider hosts target the right server; omitted, it uses `Metadata.Provider`.
+ */
 @Injectable({ providedIn: 'root' })
 export class RecordCloneService {
-    private readonly _describeCache = new Map<string, RecordCloneDescribeOutput>();
+    /** Describe answers per provider, then per entity. Holds the promise so concurrent callers share one request. */
+    private readonly _describeCache = new WeakMap<object, Map<string, Promise<RecordCloneDescribeOutput>>>();
 
     /**
      * Inspect an entity (and optionally a specific record key) to discover cloning
      * capabilities, default options, user-editable knobs, and relationship policies.
-     * Caches the result per entity name for the duration of the browser session unless
-     * `forceRefresh` is true or a specific record key is inspected.
+     * Caches the result per provider and entity name for the session unless
+     * `forceRefresh` is true or a specific record key is inspected. A failed call is not cached.
      */
     public async DescribeRecord(
         input: RecordCloneDescribeInput,
         provider?: IMetadataProvider | null,
         forceRefresh = false
     ): Promise<RecordCloneDescribeOutput> {
-        const cacheKey = input.EntityName.trim().toLowerCase();
-        const isGenericQuery = !input.Key || !input.Key.KeyValuePairs || input.Key.KeyValuePairs.length === 0;
-
-        if (!forceRefresh && isGenericQuery && this._describeCache.has(cacheKey)) {
-            return this._describeCache.get(cacheKey)!;
-        }
-
         const p = provider ?? Metadata.Provider;
-        const op = new RecordCloneDescribeOperation();
-        const result = await op.Execute(input, { provider: p ?? undefined });
-
-        if (!result.Success || !result.Output) {
-            throw new Error(result.ErrorMessage || 'Failed to inspect record cloning capability');
+        const isGenericQuery = !input.Key || !input.Key.KeyValuePairs || input.Key.KeyValuePairs.length === 0;
+        if (!isGenericQuery) {
+            return this.describe(input, p);
         }
 
-        if (isGenericQuery) {
-            this._describeCache.set(cacheKey, result.Output);
+        const bucket = this.cacheBucket(p);
+        const cacheKey = input.EntityName.trim().toLowerCase();
+        const cached = bucket.get(cacheKey);
+        if (cached && !forceRefresh) {
+            return cached;
         }
 
-        return result.Output;
+        const pending = this.describe(input, p);
+        bucket.set(cacheKey, pending);
+        pending.catch(() => {
+            if (bucket.get(cacheKey) === pending) bucket.delete(cacheKey);
+        });
+        return pending;
     }
 
     /**
@@ -121,11 +128,31 @@ export class RecordCloneService {
     /**
      * Clear the in-memory session Describe cache for a specific entity or all entities.
      */
-    public ClearDescribeCache(entityName?: string): void {
+    public ClearDescribeCache(entityName?: string, provider?: IMetadataProvider | null): void {
+        const bucket = this.cacheBucket(provider ?? Metadata.Provider);
         if (entityName) {
-            this._describeCache.delete(entityName.trim().toLowerCase());
+            bucket.delete(entityName.trim().toLowerCase());
         } else {
-            this._describeCache.clear();
+            bucket.clear();
         }
+    }
+
+    private cacheBucket(provider: IMetadataProvider | null | undefined): Map<string, Promise<RecordCloneDescribeOutput>> {
+        const owner: object = provider ?? NO_PROVIDER;
+        let bucket = this._describeCache.get(owner);
+        if (!bucket) {
+            bucket = new Map();
+            this._describeCache.set(owner, bucket);
+        }
+        return bucket;
+    }
+
+    private async describe(input: RecordCloneDescribeInput, provider: IMetadataProvider | null | undefined): Promise<RecordCloneDescribeOutput> {
+        const op = new RecordCloneDescribeOperation();
+        const result = await op.Execute(input, { provider: provider ?? undefined });
+        if (!result.Success || !result.Output) {
+            throw new Error(result.ErrorMessage || 'Failed to inspect record cloning capability');
+        }
+        return result.Output;
     }
 }

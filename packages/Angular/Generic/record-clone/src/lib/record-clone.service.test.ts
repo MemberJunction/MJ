@@ -1,3 +1,4 @@
+import type { IMetadataProvider } from '@memberjunction/core';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RecordCloneService } from './record-clone.service';
 import {
@@ -219,5 +220,36 @@ describe('RecordCloneService', () => {
         service.ClearDescribeCache();
         await service.DescribeRecord({ EntityName: 'Roles' });
         expect(mockExecute).toHaveBeenCalledTimes(4); // Roles refetched
+    });
+
+    it('keeps a separate Describe cache per provider and shares one request between concurrent callers', async () => {
+        const mockExecute = vi.fn().mockResolvedValue({ Success: true, Output: { CanClone: true, Relationships: [] } });
+        vi.mocked(RecordCloneDescribeOperation).mockImplementation(function() {
+            return { Execute: mockExecute } as unknown as RecordCloneDescribeOperation;
+        });
+        const providerA = {} as IMetadataProvider;
+        const providerB = {} as IMetadataProvider;
+
+        await Promise.all([
+            service.DescribeRecord({ EntityName: 'Users' }, providerA),
+            service.DescribeRecord({ EntityName: 'Users' }, providerA),
+        ]);
+        expect(mockExecute).toHaveBeenCalledTimes(1);
+
+        await service.DescribeRecord({ EntityName: 'Users' }, providerB);
+        expect(mockExecute).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not cache a failed Describe', async () => {
+        const mockExecute = vi.fn()
+            .mockResolvedValueOnce({ Success: false, ErrorMessage: 'offline' })
+            .mockResolvedValueOnce({ Success: true, Output: { CanClone: true, Relationships: [] } });
+        vi.mocked(RecordCloneDescribeOperation).mockImplementation(function() {
+            return { Execute: mockExecute } as unknown as RecordCloneDescribeOperation;
+        });
+
+        await expect(service.DescribeRecord({ EntityName: 'Users' })).rejects.toThrow('offline');
+        await expect(service.DescribeRecord({ EntityName: 'Users' })).resolves.toMatchObject({ CanClone: true });
+        expect(mockExecute).toHaveBeenCalledTimes(2);
     });
 });

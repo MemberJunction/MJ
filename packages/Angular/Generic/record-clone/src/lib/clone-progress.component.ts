@@ -48,8 +48,8 @@ import type { CloneProgressUpdate } from './record-clone-types';
         .clone-progress-container {
             display: flex;
             flex-direction: column;
-            gap: var(--mj-spacing-md, 16px);
-            padding: var(--mj-spacing-xl, 32px) var(--mj-spacing-md, 16px);
+            gap: var(--mj-space-4);
+            padding: var(--mj-space-8) var(--mj-space-4);
             align-items: center;
             text-align: center;
         }
@@ -66,19 +66,19 @@ import type { CloneProgressUpdate } from './record-clone-types';
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: var(--mj-font-size-md, 14px);
+            font-size: var(--mj-text-sm);
             font-weight: 600;
-            color: var(--mj-text-primary, #1e293b);
+            color: var(--mj-text-primary);
         }
 
         .progress-spinner {
-            color: var(--mj-brand-primary, #2563eb);
+            color: var(--mj-brand-primary);
         }
 
         .progress-percentage {
-            font-size: var(--mj-font-size-md, 14px);
+            font-size: var(--mj-text-sm);
             font-weight: 700;
-            color: var(--mj-brand-primary, #2563eb);
+            color: var(--mj-brand-primary);
         }
 
         mj-progress-bar {
@@ -94,13 +94,13 @@ import type { CloneProgressUpdate } from './record-clone-types';
         }
 
         .progress-message {
-            font-size: var(--mj-font-size-sm, 13px);
-            color: var(--mj-text-secondary, #475569);
+            font-size: var(--mj-text-sm);
+            color: var(--mj-text-secondary);
         }
 
         .records-counter {
-            font-size: var(--mj-font-size-xs, 12px);
-            color: var(--mj-text-muted, #64748b);
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
             font-weight: 500;
         }
     `],
@@ -111,6 +111,7 @@ import type { CloneProgressUpdate } from './record-clone-types';
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CloneProgressComponent {
+    /** Latest progress update; null shows an indeterminate bar. */
     @Input() Progress: CloneProgressUpdate | null = null;
 
     public get PercentComplete(): number {

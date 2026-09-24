@@ -1,6 +1,6 @@
 import { NgModule } from '@angular/core';
 import { RecordClonePanelComponent } from './record-clone-panel.component';
-import { RecordCloneToolbarPanel } from './record-clone-toolbar-panel.component';
+import { RecordCloneSlideInComponent } from './record-clone-slide-in.component';
 import { CloneScopeControlsComponent } from './clone-scope-controls.component';
 import { ClonePlanTreeComponent } from './clone-plan-tree.component';
 import { CloneValuesComponent } from './clone-values.component';
@@ -12,7 +12,7 @@ import { CloneLineageChipComponent } from './clone-lineage-chip.component';
 @NgModule({
     imports: [
         RecordClonePanelComponent,
-        RecordCloneToolbarPanel,
+        RecordCloneSlideInComponent,
         CloneScopeControlsComponent,
         ClonePlanTreeComponent,
         CloneValuesComponent,
@@ -23,7 +23,7 @@ import { CloneLineageChipComponent } from './clone-lineage-chip.component';
     ],
     exports: [
         RecordClonePanelComponent,
-        RecordCloneToolbarPanel,
+        RecordCloneSlideInComponent,
         CloneScopeControlsComponent,
         ClonePlanTreeComponent,
         CloneValuesComponent,
