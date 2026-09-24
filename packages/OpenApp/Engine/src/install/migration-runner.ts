@@ -5,29 +5,14 @@
  * to execute app migrations against the app's own schema, using a per-app
  * flyway_schema_history table.
  *
- * The skyway packages (`@memberjunction/skyway-core` + the platform providers) are
- * declared as optionalDependencies of this package and loaded dynamically at RUNTIME, so
- * this module loads — and fails with actionable guidance only when migrations are actually
- * run — even when they are not installed (an install run with --no-optional).
- *
- * Their TYPES are imported with `import type`, which TypeScript erases entirely: no runtime
- * dependency is added. That replaced a hand-maintained structural copy of skyway's shapes,
- * which could drift silently — a skyway change to its result shape would compile clean here
- * and just stop reporting the fields that moved. It does mean building THIS package needs
- * the optional packages present, which a normal workspace install always provides (no MJ CI
- * job installs with --no-optional), and MJCLI already imports the same types this way.
+ * The skyway packages are optionalDependencies of this package, loaded dynamically at
+ * runtime so this module still loads when they are absent (an install run with
+ * --no-optional). Their types come in via `import type`, which is erased at compile time.
  */
 import path from 'node:path';
 import type { DatabasePlatform } from '@memberjunction/core';
 import { GetDialect } from '@memberjunction/sql-dialect';
-import type {
-    DatabaseProvider,
-    MigrateResult,
-    MigrationExecutionError,
-    MigrationExecutionResult,
-    Skyway,
-    SkywayConfig,
-} from '@memberjunction/skyway-core';
+import type { DatabaseProvider, MigrateResult, MigrationExecutionResult, Skyway, SkywayConfig } from '@memberjunction/skyway-core';
 
 /**
  * Options for running migrations.
@@ -107,48 +92,8 @@ export interface SkywayDatabaseConfig {
 export type FlywayDatabaseConfig = SkywayDatabaseConfig;
 
 /**
- * True when skyway's per-migration error carries its script + batch detail. `import type`
- * cannot be used with `instanceof`, so this checks for the field skyway always sets.
- */
-function IsMigrationExecutionError(error: Error): error is MigrationExecutionError {
-    return 'Script' in error;
-}
-
-/**
- * Reads the `cause` chain off an error, outermost first, keeping only messages that add
- * information.
- *
- * Skyway wraps the driver's error: a SQL Server failure arrives as a `MigrationExecutionError`
- * (`Failed at batch 1/1 (lines 1-8): <driver text>`) whose `cause` is the `mssql` error carrying
- * the same driver text. Reporting both prints every database message twice, so a message that
- * merely wraps the next one in the chain is dropped — the batch and line range it adds are
- * reported on their own line.
- */
-function DatabaseMessages(error: Error | undefined): string[] {
-    const chain: string[] = [];
-    const seen = new Set<Error>();
-    let current: unknown = error;
-    while (current instanceof Error && !seen.has(current)) {
-        seen.add(current);
-        const message = current.message.trim();
-        if (message.length > 0 && !chain.includes(message)) {
-            chain.push(message);
-        }
-        current = current.cause;
-    }
-    return chain.filter((message, i) => i === chain.length - 1 || !message.includes(chain[i + 1]));
-}
-
-/**
- * Recovers the FIRST database error behind a driver error that reports only its last one.
- *
- * A batch-aborting SQL Server failure raises a chain — `Msg 1767, Foreign key 'FK_…' references
- * invalid table '…'` then `Msg 1750, Could not create constraint or index. See previous errors.` —
- * and `mssql` rejects with the LAST, parking the earlier ones on `precedingErrors`. Reporting the
- * rejection alone therefore says "see previous errors" without the previous errors: a pointer to
- * output nobody was shown. This walks the cause chain for that array and returns its first entry,
- * which is the error that names the actual problem. mssql-specific; other drivers have no such
- * array and this returns undefined.
+ * mssql rejects with the LAST error of a chain (`See previous errors.`) and keeps the earlier
+ * ones on `precedingErrors`; the first of those is the one that names the actual problem.
  */
 export function FirstDatabaseError(error: Error | undefined): string | undefined {
     const seen = new Set<Error>();
@@ -156,95 +101,29 @@ export function FirstDatabaseError(error: Error | undefined): string | undefined
     while (current instanceof Error && !seen.has(current)) {
         seen.add(current);
         const preceding = (current as Error & { precedingErrors?: unknown }).precedingErrors;
-        if (Array.isArray(preceding) && preceding[0] instanceof Error && preceding[0].message.trim().length > 0) {
-            return preceding[0].message.trim();
+        if (Array.isArray(preceding) && preceding[0] instanceof Error) {
+            return preceding[0].message;
         }
         current = current.cause;
     }
     return undefined;
 }
 
-/** `at batch 2 of 253, lines 50-71 (1 batch(es) succeeded first)`, or undefined without batch info. */
-function BatchLocation(error: Error | undefined): string | undefined {
-    const batch = error && IsMigrationExecutionError(error) ? error.BatchInfo : undefined;
-    if (batch?.BatchNumber === undefined) {
-        return undefined;
-    }
-    const ofTotal = batch.TotalBatches !== undefined ? ` of ${batch.TotalBatches}` : '';
-    const lines = batch.StartLine !== undefined && batch.EndLine !== undefined ? `, lines ${batch.StartLine}-${batch.EndLine}` : '';
-    // How many batches committed first is the difference between "nothing ran" and "the schema is
-    // half-built", which decides whether a retry is safe.
-    const succeeded = batch.SucceededBatches !== undefined ? ` (${batch.SucceededBatches} batch(es) succeeded first)` : '';
-    return `at batch ${batch.BatchNumber}${ofTotal}${lines}${succeeded}`;
-}
-
 /**
- * Builds the operator-facing message for a failed migration run: a one-line summary naming the
- * schema and the migration file, then indented detail lines.
+ * The caller-facing message for a failed run: Skyway's own message for the failing migration,
+ * prefixed with its file, plus the first database error when mssql hid it (MJ#3975).
  *
- * WHY THIS EXISTS (MJ#3975). A failed Open App migration used to reach the operator as the whole
- * of `Migration failed for schema 'X': Transaction has been aborted.` — no file, no SQL error, no
- * object name. Two separate losses produced that, and both are handled here:
- *
- *  1. **The per-migration `Error` was discarded.** Skyway puts the script, the failed batch and
- *     the driver error on each failing result; this module used to read none of it.
- *  2. **Skyway's own rollback can throw the result away.** In `per-migration` mode — the default
- *     for both `mj app install` and `mj migrate` — a batch-aborting error dooms the transaction,
- *     skyway's rollback then throws `Transaction has been aborted.`, that throw escapes, and
- *     `Migrate()` returns `Details: []`. Verified live against skyway-core 0.6.2. The failing
- *     result is still delivered to `OnMigrationEnd` BEFORE the rollback, which is what
- *     `captured` carries; `Details` alone reports exactly the original bug.
- *
- * Multi-line because the located message is long, and every consumer — the MJCLI stderr line,
- * the install result, the NVARCHAR(MAX) install-history column — already carries multi-line text
- * (the upgrade path appends a paragraph to it). The summary is kept to line one so anything that
- * greps or truncates to one line still gets the schema and the file.
- *
- * Degrades in steps: with no failing result it falls back to the run-level message on one line,
- * and with nothing at all it says so instead of emitting `undefined`. Pure — no I/O.
- *
- * @param schemaName the app schema the run targeted
- * @param result     the run-level result, when `Migrate()` returned
- * @param thrown     an error thrown out of `Migrate()`, when it threw instead
- * @param captured   the first failing result seen by `OnMigrationEnd`, which survives the rollback
+ * `captured` is the failure reported to `OnMigrationEnd`. In `per-migration` mode Skyway's
+ * rollback of the doomed transaction throws, and `Migrate()` then returns empty `Details` with
+ * only `Transaction has been aborted.` — so the callback is the only place the failure survives.
  */
-export function DescribeMigrationFailure(
-    schemaName: string,
-    result?: MigrateResult,
-    thrown?: unknown,
-    captured?: MigrationExecutionResult,
-): string {
-    const prefix = `Migration failed for schema '${schemaName}'`;
+export function DescribeMigrationFailure(schemaName: string, result?: MigrateResult, captured?: MigrationExecutionResult): string {
     const failed = captured ?? result?.Details?.find((detail) => !detail.Success);
-    const error = failed?.Error ?? (thrown instanceof Error ? thrown : undefined);
-    const runMessage = result?.ErrorMessage?.trim() || undefined;
-
-    if (!failed && !error) {
-        return `${prefix}: ${runMessage ?? 'no error detail was reported by the migration engine'}`;
-    }
-
-    const script = (error && IsMigrationExecutionError(error) ? error.Script : undefined) ?? failed?.Migration?.Filename;
-    const lines = [script ? `${prefix} in ${script}` : prefix];
-    const location = BatchLocation(error);
-    if (location) {
-        lines.push(`  ${location}`);
-    }
-    const messages = DatabaseMessages(error);
-    const errorLines = messages.length > 0 ? messages : runMessage ? [runMessage] : ['no error detail was reported by the migration engine'];
-    lines.push(`  error: ${errorLines[0]}`, ...errorLines.slice(1).map((m) => `    caused by: ${m}`));
-
-    const first = FirstDatabaseError(error);
-    if (first && !errorLines.some((m) => m.includes(first))) {
-        lines.push(`  first database error: ${first}`);
-    }
-    // The run-level message usually describes how the run STOPPED (a rollback that could not
-    // complete), not why it failed — keep it, labelled as such, but only when it adds anything.
-    // In per-run mode it is just the failing migration's own wrapper message, already covered.
-    const reported = [...errorLines, error?.message?.trim()].filter((m): m is string => !!m);
-    if (runMessage && !reported.some((m) => m.includes(runMessage) || runMessage.includes(m))) {
-        lines.push(`  run ended with: ${runMessage}`);
-    }
-    return lines.join('\n');
+    const file = failed ? ` in ${failed.Migration.Filename}` : '';
+    const message = failed?.Error?.message || result?.ErrorMessage || 'no error detail was reported by the migration engine';
+    const first = FirstDatabaseError(failed?.Error);
+    const firstNote = first && !message.includes(first) ? ` [first database error: ${first}]` : '';
+    return `Migration failed for schema '${schemaName}'${file}: ${message}${firstNote}`;
 }
 
 /**
@@ -287,8 +166,6 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
     const platform: DatabasePlatform = options.Platform ?? 'sqlserver';
 
     let skyway: Skyway | undefined;
-    // The first failing result skyway reports, captured before its rollback can discard it.
-    // See DescribeMigrationFailure for why `Details` alone is not enough.
     let capturedFailure: MigrationExecutionResult | undefined;
 
     try {
@@ -297,7 +174,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // npm's hoisted layout and pnpm's strict per-package layout — a bare dynamic import
         // resolves from the importing module, not the host entrypoint, so a host-provides
         // contract alone cannot work under pnpm (MJ#3677). The import stays dynamic (via
-        // ImportSkywayClass) so this module compiles and loads even when the optional
+        // ImportSkywayClass) so this module loads even when the optional
         // packages are not installed — and a genuinely-missing package gets the actionable
         // optionalDependencies guidance instead of a raw resolver error.
         const SkywayClass = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
@@ -312,8 +189,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         }
 
         skyway = new SkywayClass(config) as Skyway;
-        // OnProgress exists from skyway 0.6; checked at runtime so an older skyway degrades to
-        // Details-only reporting instead of throwing.
+        // See DescribeMigrationFailure. Runtime-checked: an older skyway has no OnProgress.
         if (typeof skyway.OnProgress === 'function') {
             skyway.OnProgress({
                 OnMigrationEnd: (migration) => {
@@ -359,21 +235,18 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             Success: result.Success,
             MigrationsApplied: result.MigrationsApplied,
             AppliedFiles: appliedFiles,
-            ErrorMessage: result.Success ? undefined : DescribeMigrationFailure(SchemaName, result, undefined, capturedFailure),
+            ErrorMessage: result.Success ? undefined : DescribeMigrationFailure(SchemaName, result, capturedFailure),
         };
     }
     catch (error: unknown) {
-        // A throw out of Migrate() can still be a MigrationExecutionError carrying the
-        // script and batch, so it goes through the same describer rather than being
-        // flattened to `error.message`.
+        const message = error instanceof Error ? error.message : String(error);
         return {
             Success: false,
             MigrationsApplied: 0,
             AppliedFiles: [],
-            ErrorMessage:
-                error instanceof Error || capturedFailure
-                    ? DescribeMigrationFailure(SchemaName, undefined, error, capturedFailure)
-                    : `Migration failed for schema '${SchemaName}': ${String(error)}`,
+            ErrorMessage: capturedFailure
+                ? DescribeMigrationFailure(SchemaName, undefined, capturedFailure)
+                : `Migration failed for schema '${SchemaName}': ${message}`,
         };
     }
     finally {
