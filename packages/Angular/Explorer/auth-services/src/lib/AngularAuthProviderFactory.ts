@@ -37,7 +37,7 @@ export class AngularAuthProviderFactory {
   /**
    * Create a provider based on configuration
    */
-  createProvider(config: AngularAuthProviderConfig): IAngularAuthProvider {
+  CreateProvider(config: AngularAuthProviderConfig): IAngularAuthProvider {
     
     const existingProvider = this.providers.get(config.type);
     if (existingProvider) {
@@ -54,7 +54,7 @@ export class AngularAuthProviderFactory {
       );
 
       if (!provider) {
-        throw new Error(`No provider registered for type: ${config.type}. Available types: ${this.getRegisteredTypes().join(', ')}`);
+        throw new Error(`No provider registered for type: ${config.type}. Available types: ${this.GetRegisteredTypes().join(', ')}`);
       }
 
       // Validate the configuration
@@ -73,43 +73,68 @@ export class AngularAuthProviderFactory {
     }
   }
 
+  /** @deprecated Use {@link CreateProvider}. */
+  createProvider(config: AngularAuthProviderConfig): IAngularAuthProvider {
+    return this.CreateProvider(config);
+  }
+
   /**
    * Get a provider by type
    */
-  getProvider(type: string): IAngularAuthProvider | undefined {
+  GetProvider(type: string): IAngularAuthProvider | undefined {
     return this.providers.get(type);
+  }
+
+  /** @deprecated Use {@link GetProvider}. */
+  getProvider(type: string): IAngularAuthProvider | undefined {
+    return this.GetProvider(type);
   }
 
   /**
    * Get all registered provider types
    */
-  getRegisteredTypes(): string[] {
+  GetRegisteredTypes(): string[] {
     const registrations = MJGlobal.Instance.ClassFactory.GetRegistrationsByRootClass(MJAuthBase);
     const types = registrations.map(reg => reg.Key).filter((key): key is string => key !== null);
     // Return unique types only, as multiple classes can be registered with the same key
     return [...new Set(types)];
   }
 
+  /** @deprecated Use {@link GetRegisteredTypes}. */
+  getRegisteredTypes(): string[] {
+    return this.GetRegisteredTypes();
+  }
+
   /**
    * Check if a provider type is registered
    */
+  IsTypeRegistered(type: string): boolean {
+    return this.GetRegisteredTypes().includes(type);
+  }
+
+  /** @deprecated Use {@link IsTypeRegistered}. */
   isTypeRegistered(type: string): boolean {
-    return this.getRegisteredTypes().includes(type);
+    return this.IsTypeRegistered(type);
   }
 
   /**
    * Clear all providers (useful for testing)
    */
-  clearProviders(): void {
+  ClearProviders(): void {
     this.providers.clear();
     this.providerConfigs.clear();
+  }
+
+  /** @deprecated Use {@link ClearProviders}. */
+  clearProviders(): void {
+    return this.ClearProviders();
   }
 
   /**
    * Get provider-specific Angular services that need to be injected
    * This uses the static angularProviderFactory property on each provider class for extensibility
    */
-  static getProviderAngularServices(type: string, environment: any): any[] {
+  static GetProviderAngularServices(type: string, environment: any): any[] {
     
     const normalizedType = type?.toLowerCase();
     
@@ -140,6 +165,11 @@ export class AngularAuthProviderFactory {
       // Provider doesn't define required Angular services (might not need any)
       return [];
     }
+  }
+
+  /** @deprecated Use {@link GetProviderAngularServices}. */
+  static getProviderAngularServices(type: string, environment: any): any[] {
+    return this.GetProviderAngularServices(type, environment);
   }
 
 }

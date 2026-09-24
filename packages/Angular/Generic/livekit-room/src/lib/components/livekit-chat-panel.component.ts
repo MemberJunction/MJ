@@ -154,7 +154,16 @@ export class LiveKitChatPanelComponent implements AfterViewChecked {
   @Output() public Close = new EventEmitter<void>();
 
   /** The current composer draft text. */
-  public draft = '';
+  public Draft = '';
+
+  /** @deprecated Use {@link Draft}. */
+  public get draft() {
+    return this.Draft;
+  }
+  /** @deprecated Use {@link Draft}. */
+  public set draft(value) {
+    this.Draft = value;
+  }
   private lastCount = 0;
 
   public ngAfterViewChecked(): void {
@@ -170,10 +179,10 @@ export class LiveKitChatPanelComponent implements AfterViewChecked {
   /** Handles the composer submit — emits the trimmed draft and clears it. */
   public send(event: Event): void {
     event.preventDefault();
-    const text = this.draft.trim();
+    const text = this.Draft.trim();
     if (text) {
       this.Send.emit(text);
-      this.draft = '';
+      this.Draft = '';
     }
   }
 }

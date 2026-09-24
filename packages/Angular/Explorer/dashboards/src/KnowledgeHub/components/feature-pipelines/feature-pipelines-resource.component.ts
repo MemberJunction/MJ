@@ -46,11 +46,11 @@ import {
   type FeaturePipelineRunStatus,
 } from './feature-pipeline.engine';
 import {
-  buildFeaturePipelinesAgentContext,
-  resolvePipeline,
-  buildPipelineNotFoundError,
+  BuildFeaturePipelinesAgentContext,
+  ResolvePipeline,
+  BuildPipelineNotFoundError,
 } from './feature-pipelines-agent-context';
-import { validateStringParam, AgentToolResult } from '../../../shared/agent-tool-validation';
+import { ValidateStringParam, AgentToolResult } from '../../../shared/agent-tool-validation';
 
 /** Stable operation key of the Run Feature Pipeline Remote Operation. */
 const RUN_FEATURE_PIPELINE_OP = 'PredictiveStudio.RunFeaturePipeline';
@@ -349,7 +349,7 @@ export class FeaturePipelinesResourceComponent
   // dialog). The agent may *open* the editor, never commit it.
 
   private emitAgentContext(): void {
-    this.navigationService.SetAgentContext(this, buildFeaturePipelinesAgentContext({
+    this.navigationService.SetAgentContext(this, BuildFeaturePipelinesAgentContext({
       AllPipelines: this.AllPipelines,
       FilteredPipelines: this.FilteredPipelines,
       SearchQuery: this.SearchQuery,
@@ -362,15 +362,15 @@ export class FeaturePipelinesResourceComponent
   private resolvePipelineOrFail(
     raw: unknown,
   ): { ok: true; pipeline: FeaturePipelineSummary } | { ok: false; result: AgentToolResult } {
-    const v = validateStringParam(raw, 'pipeline');
+    const v = ValidateStringParam(raw, 'pipeline');
     if (!v.ok) return { ok: false, result: v.result };
-    const match = resolvePipeline(v.value, this.AllPipelines);
+    const match = ResolvePipeline(v.value, this.AllPipelines);
     if (!match) {
       return {
         ok: false,
         result: {
           Success: false,
-          ErrorMessage: buildPipelineNotFoundError(v.value, this.AllPipelines.map((p) => p.Name)),
+          ErrorMessage: BuildPipelineNotFoundError(v.value, this.AllPipelines.map((p) => p.Name)),
         },
       };
     }
@@ -407,7 +407,7 @@ export class FeaturePipelinesResourceComponent
           required: ['query'],
         },
         Handler: async (params: Record<string, unknown>) => {
-          const v = validateStringParam(params['query'], 'query');
+          const v = ValidateStringParam(params['query'], 'query');
           if (!v.ok) return v.result;
           this.SearchQuery = v.value;
           this.OnSearchChanged();

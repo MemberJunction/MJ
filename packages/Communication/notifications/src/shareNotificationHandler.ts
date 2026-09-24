@@ -28,7 +28,7 @@ const NOTIFICATION_TYPE_NAME = 'Resource Shared';
  * Exported separately for testability; prefer
  * {@link RegisterResourceSharedNotificationHandler} for production wiring.
  */
-export function createResourceSharedHandler(): ShareNotificationHandler {
+export function CreateResourceSharedHandler(): ShareNotificationHandler {
     return async (input: ShareNotificationInput): Promise<boolean> => {
         try {
             // Ensure the engine is configured. Safe to call repeatedly — BaseEngine
@@ -79,13 +79,18 @@ export function createResourceSharedHandler(): ShareNotificationHandler {
     };
 }
 
+/** @deprecated Use {@link CreateResourceSharedHandler}. */
+export function createResourceSharedHandler(): ShareNotificationHandler {
+    return CreateResourceSharedHandler();
+}
+
 /**
  * Install the handler so every `CreateShareNotification` call fans through
  * `NotificationEngine.SendNotification`. Idempotent — calling again replaces
  * the previously-registered handler.
  */
 export function RegisterResourceSharedNotificationHandler(): void {
-    RegisterShareNotificationHandler(createResourceSharedHandler());
+    RegisterShareNotificationHandler(CreateResourceSharedHandler());
 }
 
 async function resolveGrantorName(input: ShareNotificationInput): Promise<string> {

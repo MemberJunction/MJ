@@ -110,10 +110,10 @@ export function MJRealtimeSessionCard({ Group, Meta, Turns, UserName = 'You' }: 
                     {Turns.map((turn) => (
                         <View key={turn.id} style={styles.turn}>
                             <Text style={styles.turnRole}>
-                                {turn.kind === 'user' ? UserName : (turn.agent.name || 'Agent')}
+                                {turn.kind === 'user' ? UserName : (turn.Agent.name || 'Agent')}
                             </Text>
                             <Text style={styles.turnText}>
-                                {turn.kind === 'user' ? turn.text : turn.body}
+                                {turn.kind === 'user' ? turn.text : turn.Body}
                             </Text>
                         </View>
                     ))}

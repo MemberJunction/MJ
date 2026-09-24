@@ -33,13 +33,13 @@ import {
 } from '@memberjunction/ng-clustering';
 import { ClusteringService, ClusterScatterComponent } from '@memberjunction/ng-clustering';
 import {
-    buildClusterAgentContext,
-    capClusterList,
-    resolveSavedVisualization,
-    buildClusterNotFoundError,
+    BuildClusterAgentContext,
+    CapClusterList,
+    ResolveSavedVisualization,
+    BuildClusterNotFoundError,
     ClusterSummary,
 } from './cluster-agent-context';
-import { validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
+import { ValidateEnumParam, ValidateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * Build an environment-scoped storage key so cluster data does not bleed
@@ -69,7 +69,16 @@ const LAST_SESSION_BASE_KEY = 'KnowledgeHub_LastClusterSession';
     styleUrls: ['./cluster-visualization-resource.component.css'],
 })
 export class ClusterVisualizationResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
-    @ViewChild('scatterPlot') scatterPlot?: ClusterScatterComponent;
+    @ViewChild('scatterPlot') ScatterPlot?: ClusterScatterComponent;
+
+    /** @deprecated Use {@link ScatterPlot}. */
+    get scatterPlot(): ClusterScatterComponent | undefined {
+        return this.ScatterPlot;
+    }
+    /** @deprecated Use {@link ScatterPlot}. */
+    set scatterPlot(value: ClusterScatterComponent | undefined) {
+        this.ScatterPlot = value;
+    }
 
     private cdr = inject(ChangeDetectorRef);
     private clusteringService = inject(ClusteringService);
@@ -173,7 +182,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         const activeSaved = this.ActiveSavedId
             ? this.SavedVisualizations.find(s => s.Id === this.ActiveSavedId)
             : undefined;
-        this.navigationService.SetAgentContext(this, buildClusterAgentContext({
+        this.navigationService.SetAgentContext(this, BuildClusterAgentContext({
             IsVisualizationLoaded: this.HasResult,
             VisualizationTitle: this.VisualizationTitle || null,
             IsRunning: this.IsRunning,
@@ -260,14 +269,14 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     required: ['entityName'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['entityName'], 'entityName');
+                    const check = ValidateStringParam(params['entityName'], 'entityName');
                     if (!check.ok) {
                         return check.result;
                     }
                     const candidates = this.EntityOptions.map(o => ({ Id: o.Name, Name: o.Name }));
-                    const match = resolveSavedVisualization(check.value, candidates);
+                    const match = ResolveSavedVisualization(check.value, candidates);
                     if (!match) {
-                        return buildClusterNotFoundError(check.value, candidates.map(c => c.Name), 'source entity');
+                        return BuildClusterNotFoundError(check.value, candidates.map(c => c.Name), 'source entity');
                     }
                     this.OnEntitySourceChanged(match.Name);
                     return { Success: true, Data: { ConfigEntityName: match.Name } };
@@ -282,7 +291,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     required: ['algorithm'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateEnumParam(params['algorithm'], ['kmeans', 'dbscan'] as const, 'algorithm');
+                    const check = ValidateEnumParam(params['algorithm'], ['kmeans', 'dbscan'] as const, 'algorithm');
                     if (!check.ok) {
                         return check.result;
                     }
@@ -318,13 +327,13 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     required: ['reference'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    const check = validateStringParam(params['reference'], 'reference');
+                    const check = ValidateStringParam(params['reference'], 'reference');
                     if (!check.ok) {
                         return check.result;
                     }
-                    const match = resolveSavedVisualization(check.value, this.SavedVisualizations);
+                    const match = ResolveSavedVisualization(check.value, this.SavedVisualizations);
                     if (!match) {
-                        return buildClusterNotFoundError(check.value, this.SavedVisualizations.map(s => s.Name), 'saved visualization');
+                        return BuildClusterNotFoundError(check.value, this.SavedVisualizations.map(s => s.Name), 'saved visualization');
                     }
                     await this.OnSelectSaved(match);
                     return { Success: true, Data: { Name: match.Name, ClusterCount: this.Result?.Clusters?.length ?? 0 } };
@@ -338,7 +347,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     return {
                         Success: true,
                         Data: {
-                            SavedVisualizations: capClusterList(this.SavedVisualizations.map(s => ({ Id: s.Id, Name: s.Name }))),
+                            SavedVisualizations: CapClusterList(this.SavedVisualizations.map(s => ({ Id: s.Id, Name: s.Name }))),
                             TotalCount: this.SavedVisualizations.length,
                         },
                     };
@@ -402,7 +411,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.RunError = null;
 
         // Auto-hide detail panel from previous visualization
-        this.scatterPlot?.CloseDetailPanel();
+        this.ScatterPlot?.CloseDetailPanel();
 
         // Update entity doc options if entity changed
         this.updateEntityDocOptions(config.EntityName);
@@ -421,7 +430,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             this.Result = await this.clusteringService.RunClustering(vectors, config);
             this.activityService.Complete(activityID, 'success', `${this.Result.Points.length} points · ${this.Result.Clusters.length} clusters`);
             this.VisualizationTitle = `${config.EntityName} — ${config.Algorithm === 'kmeans' ? 'K-Means' : 'DBSCAN'}`;
-            this.FieldPriority = this.ComputeFieldPriority(config.EntityName);
+            this.FieldPriority = this.computeFieldPriority(config.EntityName);
 
             // Fire LLM cluster naming in the background (non-blocking).
             // Clusters render immediately; labels appear when LLM responds.
@@ -494,7 +503,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             Params: { ...this.ActiveConfig },
             CreatedAt: new Date().toISOString(),
             Result: this.stripVectorsFromResult(this.Result),
-            Viewport: this.scatterPlot?.GetViewportTransform(),
+            Viewport: this.ScatterPlot?.GetViewportTransform(),
             ClusterLabels: this.ClusterLabels.length > 0 ? [...this.ClusterLabels] : undefined,
         };
 
@@ -506,7 +515,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Select a saved visualization — restore from cache if available, otherwise re-run */
     public async OnSelectSaved(saved: SavedClusterVisualization): Promise<void> {
-        this.scatterPlot?.CloseDetailPanel();
+        this.ScatterPlot?.CloseDetailPanel();
         this.ActiveSavedId = saved.Id;
         this.VisualizationTitle = saved.Name;
 
@@ -529,7 +538,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             // Restore viewport after a tick (scatter needs to render first)
             if (saved.Viewport) {
                 setTimeout(() => {
-                    this.scatterPlot?.SetViewportTransform(saved.Viewport!);
+                    this.ScatterPlot?.SetViewportTransform(saved.Viewport!);
                     this.cdr.detectChanges();
                 }, 50);
             }
@@ -554,7 +563,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /** Start a new analysis (clear current) */
     public OnNewAnalysis(): void {
-        this.scatterPlot?.CloseDetailPanel();
+        this.ScatterPlot?.CloseDetailPanel();
         this.ActiveSavedId = null;
         this.Result = null;
         this.ClusterLabels = [];
@@ -860,7 +869,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
      * Returns field names sorted: IsNameField first, then DefaultInView by Sequence,
      * then remaining fields by Sequence.
      */
-    private ComputeFieldPriority(entityName: string): string[] {
+    private computeFieldPriority(entityName: string): string[] {
         try {
             const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
@@ -946,7 +955,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                 ClusterLabels: this.ClusterLabels,
                 Config: this.ActiveConfig,
                 Title: this.VisualizationTitle,
-                Viewport: this.scatterPlot?.GetViewportTransform() ?? null,
+                Viewport: this.ScatterPlot?.GetViewportTransform() ?? null,
             };
             localStorage.setItem(buildEnvScopedKey(LAST_SESSION_BASE_KEY), JSON.stringify(session));
         } catch {
@@ -974,14 +983,14 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             this.ClusterLabels = session.ClusterLabels ?? [];
             this.ActiveConfig = session.Config;
             this.VisualizationTitle = session.Title ?? 'Restored Session';
-            this.FieldPriority = this.ComputeFieldPriority(session.Config.EntityName);
+            this.FieldPriority = this.computeFieldPriority(session.Config.EntityName);
             this.applyLabelsToResult();
             this.cdr.detectChanges();
 
             // Restore viewport after a tick to let the scatter component render
             if (session.Viewport) {
                 setTimeout(() => {
-                    this.scatterPlot?.SetViewportTransform(session.Viewport!);
+                    this.ScatterPlot?.SetViewportTransform(session.Viewport!);
                 }, 50);
             }
         } catch {

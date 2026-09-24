@@ -33,7 +33,7 @@ import type {
   PromoteModelOutcome,
 } from '../actions/promote-model.action';
 import { ProductionModelPromotionGate } from '../actions/promote-model.gate';
-import { promoteModelViaGate } from './delegation';
+import { PromoteModelViaGate } from './delegation';
 
 /**
  * Server implementation of `PredictiveStudio.PromoteModel`. Extends the
@@ -56,7 +56,7 @@ export class PredictiveStudioPromoteModelServerOperation extends PredictiveStudi
       throw new Error('targetStatus is required (one of: Validated, Published, Archived)');
     }
 
-    const outcome = await promoteModelViaGate(
+    const outcome = await PromoteModelViaGate(
       {
         modelId: input.modelId,
         targetStatus: input.targetStatus,

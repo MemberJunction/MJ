@@ -38,18 +38,18 @@ type ComponentManager = ReturnType<RuntimeModule['createReactRuntime']>['manager
 /** The initialized runtime surface the renderer needs. */
 export interface InteractiveRuntime {
     /** Compiles + registers component specs and returns executable components. */
-    manager: ComponentManager;
+    Manager: ComponentManager;
     /** Builds the standard `{ data, callbacks, utilities, styles, … }` prop bag. */
-    buildComponentProps: RuntimeModule['buildComponentProps'];
+    BuildComponentProps: RuntimeModule['buildComponentProps'];
     /** Wraps a compiled component in a React error boundary. */
-    createErrorBoundary: RuntimeModule['createErrorBoundary'];
+    CreateErrorBoundary: RuntimeModule['createErrorBoundary'];
     /**
      * Builds the `utilities` prop — `md`, `rv`, `rq`, `ai`, `geoDataEngine`, `ml`.
      *
      * The same factory `MJReactComponent` calls. It resolves through `MJGlobal.ClassFactory`, so a
      * host that registers a subclass gets its own; mobile registers none and gets the base.
      */
-    createRuntimeUtilities: RuntimeModule['createRuntimeUtilities'];
+    CreateRuntimeUtilities: RuntimeModule['createRuntimeUtilities'];
     /**
      * Derives the registry version key for a spec that carries no explicit `version`.
      *
@@ -57,7 +57,7 @@ export interface InteractiveRuntime {
      * result of this same function as `defaultVersion`, and two hosts that disagree about a
      * component's version register two copies of it.
      */
-    generateComponentHierarchyHash: RuntimeModule['generateComponentHierarchyHash'];
+    GenerateComponentHierarchyHash: RuntimeModule['generateComponentHierarchyHash'];
     /**
      * Loads the libraries declared anywhere in a spec's hierarchy into the shared runtime context.
      *
@@ -106,11 +106,11 @@ async function initializeRuntime(): Promise<InteractiveRuntime> {
     });
 
     return {
-        manager: instance.manager,
-        buildComponentProps: runtime.buildComponentProps,
-        createErrorBoundary: runtime.createErrorBoundary,
-        generateComponentHierarchyHash: runtime.generateComponentHierarchyHash,
-        createRuntimeUtilities: runtime.createRuntimeUtilities,
+        Manager: instance.manager,
+        BuildComponentProps: runtime.buildComponentProps,
+        CreateErrorBoundary: runtime.createErrorBoundary,
+        GenerateComponentHierarchyHash: runtime.generateComponentHierarchyHash,
+        CreateRuntimeUtilities: runtime.createRuntimeUtilities,
         Libraries: libraries,
         EnsureLibraries: async (
             spec: ComponentSpec,

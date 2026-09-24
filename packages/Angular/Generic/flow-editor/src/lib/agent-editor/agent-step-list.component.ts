@@ -220,7 +220,7 @@ export class AgentStepListComponent {
     return UUIDsEqual(this.SelectedStepID, step.ID);
   }
 
-  getConfiguredItem(step: MJAIAgentStepEntity): string {
+  GetConfiguredItem(step: MJAIAgentStepEntity): string {
     switch (step.StepType) {
       case 'Action': return step.Action || '—';
       case 'Prompt': return step.Prompt || '—';
@@ -229,5 +229,10 @@ export class AgentStepListComponent {
       case 'While': return `${step.LoopBodyType ?? 'Action'} loop`;
       default: return '—';
     }
+  }
+
+  /** @deprecated Use {@link GetConfiguredItem}. */
+  getConfiguredItem(step: MJAIAgentStepEntity): string {
+    return this.GetConfiguredItem(step);
   }
 }

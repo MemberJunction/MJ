@@ -38,7 +38,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
-import { classifyTurboFailures } from '../util/turboOutput.js';
+import { ClassifyTurboFailures } from '../util/turboOutput.js';
 
 /**
  * Input context for the codegen phase.
@@ -574,7 +574,7 @@ export class CodeGenPhase {
     // Codegen itself only needs server-side packages (not Angular forms).
     // turbo writes its summary to stdout, so both streams go to the classifier.
     const combinedOutput = result.Stdout + '\n' + result.Stderr;
-    const verdict = classifyTurboFailures(combinedOutput, CodeGenPhase.CODEGEN_MANAGED_PACKAGES);
+    const verdict = ClassifyTurboFailures(combinedOutput, CodeGenPhase.CODEGEN_MANAGED_PACKAGES);
 
     if (verdict.ToleratedOnly) {
       const failList = verdict.FailedPackages.join(', ');

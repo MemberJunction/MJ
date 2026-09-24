@@ -22,11 +22,11 @@ import {
     COMMUNICATION_TABS,
     COMMUNICATION_LOG_STATUSES,
     COMMUNICATION_CONTEXT_LIST_CAP,
-    isValidCommunicationTab,
-    communicationTabLabel,
-    capCommunicationList,
-    resolveCommunicationItem,
-    buildCommunicationAgentContext,
+    IsValidCommunicationTab,
+    CommunicationTabLabel,
+    CapCommunicationList,
+    ResolveCommunicationItem,
+    BuildCommunicationAgentContext,
     CommunicationItemCandidate,
     CommunicationSurfaceContext,
     CommunicationMonitorContext,
@@ -39,43 +39,43 @@ import {
 describe('isValidCommunicationTab', () => {
     it('accepts each known tab', () => {
         for (const t of COMMUNICATION_TABS) {
-            expect(isValidCommunicationTab(t)).toBe(true);
+            expect(IsValidCommunicationTab(t)).toBe(true);
         }
     });
 
     it('rejects unknown / non-string input', () => {
-        expect(isValidCommunicationTab('inbox')).toBe(false);
-        expect(isValidCommunicationTab('')).toBe(false);
-        expect(isValidCommunicationTab(undefined)).toBe(false);
-        expect(isValidCommunicationTab(7)).toBe(false);
-        expect(isValidCommunicationTab(null)).toBe(false);
+        expect(IsValidCommunicationTab('inbox')).toBe(false);
+        expect(IsValidCommunicationTab('')).toBe(false);
+        expect(IsValidCommunicationTab(undefined)).toBe(false);
+        expect(IsValidCommunicationTab(7)).toBe(false);
+        expect(IsValidCommunicationTab(null)).toBe(false);
     });
 });
 
 describe('communicationTabLabel', () => {
     it('maps known tabs to their human label', () => {
-        expect(communicationTabLabel('monitor')).toBe('Monitor');
-        expect(communicationTabLabel('logs')).toBe('Logs');
-        expect(communicationTabLabel('providers')).toBe('Providers');
-        expect(communicationTabLabel('templates')).toBe('Templates');
-        expect(communicationTabLabel('runs')).toBe('Runs');
-        expect(communicationTabLabel('settings')).toBe('Settings');
+        expect(CommunicationTabLabel('monitor')).toBe('Monitor');
+        expect(CommunicationTabLabel('logs')).toBe('Logs');
+        expect(CommunicationTabLabel('providers')).toBe('Providers');
+        expect(CommunicationTabLabel('templates')).toBe('Templates');
+        expect(CommunicationTabLabel('runs')).toBe('Runs');
+        expect(CommunicationTabLabel('settings')).toBe('Settings');
     });
 
     it('falls back for an unknown tab', () => {
-        expect(communicationTabLabel('nope')).toBe('Communication Management');
+        expect(CommunicationTabLabel('nope')).toBe('Communication Management');
     });
 });
 
 describe('capCommunicationList', () => {
     it('returns the list unchanged when under the cap', () => {
         const xs = ['a', 'b', 'c'];
-        expect(capCommunicationList(xs)).toEqual(xs);
+        expect(CapCommunicationList(xs)).toEqual(xs);
     });
 
     it('caps to COMMUNICATION_CONTEXT_LIST_CAP and never mutates the input', () => {
         const xs = Array.from({ length: COMMUNICATION_CONTEXT_LIST_CAP + 10 }, (_, i) => `n${i}`);
-        const out = capCommunicationList(xs);
+        const out = CapCommunicationList(xs);
         expect(out.length).toBe(COMMUNICATION_CONTEXT_LIST_CAP);
         expect(xs.length).toBe(COMMUNICATION_CONTEXT_LIST_CAP + 10);
         expect(out[0]).toBe('n0');
@@ -90,17 +90,17 @@ describe('resolveCommunicationItem', () => {
     ];
 
     it('matches by exact id, case-insensitively (UUID case tolerance)', () => {
-        expect(resolveCommunicationItem('aaaa1111-0000-0000-0000-000000000001', candidates)?.Name).toBe('SendGrid');
-        expect(resolveCommunicationItem('AAAA1111-0000-0000-0000-000000000001', candidates)?.Name).toBe('SendGrid');
+        expect(ResolveCommunicationItem('aaaa1111-0000-0000-0000-000000000001', candidates)?.Name).toBe('SendGrid');
+        expect(ResolveCommunicationItem('AAAA1111-0000-0000-0000-000000000001', candidates)?.Name).toBe('SendGrid');
     });
 
     it('matches by exact name, case-insensitively', () => {
-        expect(resolveCommunicationItem('twilio sms', candidates)?.ID).toBe('BBBB2222-0000-0000-0000-000000000002');
+        expect(ResolveCommunicationItem('twilio sms', candidates)?.ID).toBe('BBBB2222-0000-0000-0000-000000000002');
     });
 
     it('falls back to a contains match on the name', () => {
-        expect(resolveCommunicationItem('graph', candidates)?.Name).toBe('Microsoft Graph');
-        expect(resolveCommunicationItem('twilio', candidates)?.Name).toBe('Twilio SMS');
+        expect(ResolveCommunicationItem('graph', candidates)?.Name).toBe('Microsoft Graph');
+        expect(ResolveCommunicationItem('twilio', candidates)?.Name).toBe('Twilio SMS');
     });
 
     it('prefers an exact id over a name-contains collision', () => {
@@ -108,19 +108,19 @@ describe('resolveCommunicationItem', () => {
             { ID: 'twilio', Name: 'Some Provider' },
             { ID: 'X', Name: 'Twilio SMS' },
         ];
-        expect(resolveCommunicationItem('twilio', xs)?.ID).toBe('twilio');
+        expect(ResolveCommunicationItem('twilio', xs)?.ID).toBe('twilio');
     });
 
     it('returns null on a miss or empty input', () => {
-        expect(resolveCommunicationItem('mailchimp', candidates)).toBeNull();
-        expect(resolveCommunicationItem('   ', candidates)).toBeNull();
-        expect(resolveCommunicationItem('', candidates)).toBeNull();
+        expect(ResolveCommunicationItem('mailchimp', candidates)).toBeNull();
+        expect(ResolveCommunicationItem('   ', candidates)).toBeNull();
+        expect(ResolveCommunicationItem('', candidates)).toBeNull();
     });
 });
 
 describe('buildCommunicationAgentContext — base fields', () => {
     it('always emits active-tab / refresh / visited fields', () => {
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'settings',
             ActiveTabLabel: 'Settings',
             VisitedTabs: ['monitor', 'settings'],
@@ -139,7 +139,7 @@ describe('buildCommunicationAgentContext — base fields', () => {
 
     it('copies VisitedTabs (does not alias the input array)', () => {
         const visited = ['monitor'];
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'monitor',
             ActiveTabLabel: 'Monitor',
             VisitedTabs: visited,
@@ -165,7 +165,7 @@ describe('buildCommunicationAgentContext — monitor surface', () => {
     };
 
     it('emits the monitor KPIs + bounded panels', () => {
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'monitor',
             ActiveTabLabel: 'Monitor',
             VisitedTabs: ['monitor'],
@@ -199,7 +199,7 @@ describe('buildCommunicationAgentContext — logs surface', () => {
     };
 
     it('emits log counts, filters, selected id+name, and visible summaries', () => {
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'logs',
             ActiveTabLabel: 'Logs',
             VisitedTabs: ['logs'],
@@ -217,7 +217,7 @@ describe('buildCommunicationAgentContext — logs surface', () => {
 
     it('bounds the visible-log list and adds a companion count when truncated', () => {
         const many = Array.from({ length: COMMUNICATION_CONTEXT_LIST_CAP + 5 }, (_, i) => `log-${i}`);
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'logs',
             ActiveTabLabel: 'Logs',
             VisitedTabs: ['logs'],
@@ -230,7 +230,7 @@ describe('buildCommunicationAgentContext — logs surface', () => {
 
     it('uses every known status filter value', () => {
         for (const status of COMMUNICATION_LOG_STATUSES) {
-            const ctx = buildCommunicationAgentContext({
+            const ctx = BuildCommunicationAgentContext({
                 ActiveTab: 'logs',
                 ActiveTabLabel: 'Logs',
                 VisitedTabs: ['logs'],
@@ -252,7 +252,7 @@ describe('buildCommunicationAgentContext — providers surface', () => {
             SelectedItemId: 'PROV-2',
             SelectedItemName: 'Twilio',
         };
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'providers',
             ActiveTabLabel: 'Providers',
             VisitedTabs: ['providers'],
@@ -280,7 +280,7 @@ describe('buildCommunicationAgentContext — templates surface', () => {
             SelectedItemId: 'TPL-1',
             SelectedItemName: 'Welcome Email',
         };
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'templates',
             ActiveTabLabel: 'Templates',
             VisitedTabs: ['templates'],
@@ -310,7 +310,7 @@ describe('buildCommunicationAgentContext — runs surface', () => {
             SelectedItemId: 'RUN-1',
             SelectedItemName: 'Run #abc12345',
         };
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'runs',
             ActiveTabLabel: 'Runs',
             VisitedTabs: ['runs'],
@@ -339,7 +339,7 @@ describe('buildCommunicationAgentContext — mode isolation', () => {
             SelectedItemId: null,
             SelectedItemName: null,
         };
-        const ctx = buildCommunicationAgentContext({
+        const ctx = BuildCommunicationAgentContext({
             ActiveTab: 'logs',
             ActiveTabLabel: 'Logs',
             VisitedTabs: ['logs', 'providers'],

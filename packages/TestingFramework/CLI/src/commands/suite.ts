@@ -8,11 +8,11 @@ import { UserInfo } from '@memberjunction/core';
 import { SuiteFlags } from '../types';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
-import { loadMJConfig, loadCLIConfig } from '../utils/config-loader';
-import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
-import { parseVariableFlags } from '../utils/variable-parser';
-import { loadOraclesModule } from '../utils/oracle-module-loader';
-import { loadCheckModules } from '../utils/check-module-loader';
+import { LoadMJConfig, LoadCLIConfig } from '../utils/config-loader';
+import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
+import { ParseVariableFlags } from '../utils/variable-parser';
+import { LoadOraclesModule } from '../utils/oracle-module-loader';
+import { LoadCheckModules } from '../utils/check-module-loader';
 import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
 
 /**
@@ -28,7 +28,7 @@ export class SuiteCommand {
      * @param flags - Command flags
      * @param contextUser - Optional user context (will be fetched if not provided)
      */
-    async execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
+    async Execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
         try {
             // Integration tests must install the instrumented cache as the FIRST caller
             // (before any provider setup) or its counters are a silent no-op. Opt-in via
@@ -54,32 +54,32 @@ export class SuiteCommand {
             // `testing.checkModules`; ad-hoc form: --checks-module. Runs AFTER the
             // instrumented-cache install (first-caller invariant) and BEFORE the provider +
             // engine so bundles are registered by the time the driver resolves them.
-            const mjConfig = await loadMJConfig();
+            const mjConfig = await LoadMJConfig();
             const checkModuleSpecifiers = [
                 ...(mjConfig?.testing?.checkModules ?? []),
                 ...(flags.checksModule ? [flags.checksModule] : []),
             ];
             if (checkModuleSpecifiers.length > 0) {
-                const checkSummary = await loadCheckModules(checkModuleSpecifiers);
-                if (checkSummary.loaded.length > 0) {
-                    console.log(`Loaded check modules: ${checkSummary.loaded.join(', ')} (bundles added: ${checkSummary.newBundles.length})`);
+                const checkSummary = await LoadCheckModules(checkModuleSpecifiers);
+                if (checkSummary.Loaded.length > 0) {
+                    console.log(`Loaded check modules: ${checkSummary.Loaded.join(', ')} (bundles added: ${checkSummary.NewBundles.length})`);
                 }
-                for (const f of checkSummary.failed) {
+                for (const f of checkSummary.Failed) {
                     console.warn(`Check module '${f.specifier}' failed to load: ${f.error}`);
                 }
             }
 
             // Initialize MJ provider (database connection and metadata)
             console.log('Initializing MJ provider...');
-            await initializeMJProvider();
+            await InitializeMJProvider();
             console.log('MJ provider initialized successfully');
 
             // Get context user after initialization if not provided
             if (!contextUser) {
-                contextUser = await getContextUser();
+                contextUser = await GetContextUser();
             }
 
-            const config = loadCLIConfig();
+            const config = LoadCLIConfig();
             const format = flags.format || config.defaultFormat || 'console';
 
             // Get engine instance
@@ -96,11 +96,11 @@ export class SuiteCommand {
             // become available to every test in the suite that references the
             // matching oracle `type`.
             if (flags.oraclesModule) {
-                const summary = await loadOraclesModule(flags.oraclesModule, engine);
+                const summary = await LoadOraclesModule(flags.oraclesModule, engine);
                 console.log(
-                    `Loaded oracle module ${summary.modulePath} ` +
-                        `(registered: ${summary.registered.join(', ') || 'none'}` +
-                        (summary.skipped.length ? `; skipped: ${summary.skipped.length}` : '') +
+                    `Loaded oracle module ${summary.ModulePath} ` +
+                        `(registered: ${summary.Registered.join(', ') || 'none'}` +
+                        (summary.Skipped.length ? `; skipped: ${summary.Skipped.length}` : '') +
                         ')',
                 );
             }
@@ -138,7 +138,7 @@ export class SuiteCommand {
 
             // Parse variables from --var flags
             // Note: Suite variables apply to all tests - type conversion happens per-test
-            const variables = parseVariableFlags(flags.var);
+            const variables = ParseVariableFlags(flags.var);
 
             // Execute suite
             const flakyMsg = flags.flakyCheck && flags.flakyCheck > 1
@@ -181,7 +181,7 @@ export class SuiteCommand {
             OutputFormatter.writeToFile(fileOutput, flags.output);
 
             // Clean up resources
-            await closeMJProvider();
+            await CloseMJProvider();
 
             // Exit with appropriate code (non-zero if any test failed)
             process.exit(result.failedTests === 0 ? 0 : 1);
@@ -192,13 +192,18 @@ export class SuiteCommand {
 
             // Clean up resources before exit
             try {
-                await closeMJProvider();
+                await CloseMJProvider();
             } catch {
                 // Ignore cleanup errors
             }
 
             process.exit(1);
         }
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    async execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
+        return this.Execute(suiteId, flags, contextUser);
     }
 
     /**

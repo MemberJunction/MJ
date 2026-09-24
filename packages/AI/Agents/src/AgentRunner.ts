@@ -15,7 +15,7 @@ import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, Ru
 import { MJGlobal, UUIDsEqual, IsValidUUID, EscapeSQLString } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective } from '@memberjunction/ai-core-plus';
-import { planArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
+import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
@@ -56,11 +56,19 @@ export interface CreatedArtifactInfo {
  * Callers surface this as a single "open the artifact" affordance, so a document-generating run
  * used to point at raw JSON. With several files, the first is the primary one.
  */
-export function selectPrimaryArtifact(
+export function SelectPrimaryArtifact(
     fileArtifacts: readonly CreatedArtifactInfo[] | undefined,
     payloadArtifact: CreatedArtifactInfo | undefined
 ): CreatedArtifactInfo | undefined {
     return fileArtifacts?.[0] ?? payloadArtifact;
+}
+
+/** @deprecated Use {@link SelectPrimaryArtifact}. */
+export function selectPrimaryArtifact(
+    fileArtifacts: readonly CreatedArtifactInfo[] | undefined,
+    payloadArtifact: CreatedArtifactInfo | undefined
+): CreatedArtifactInfo | undefined {
+    return SelectPrimaryArtifact(fileArtifacts, payloadArtifact);
 }
 
 /**
@@ -318,7 +326,7 @@ export class AgentRunner {
 
                     if (!conversationName && options.userMessage) {
                         // Try to generate a name using the "Name Conversation" prompt (same as UI)
-                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser, md);
+                        const nameResult = await this.generateConversationName(options.userMessage, contextUser, md);
                         if (nameResult) {
                             conversationName = nameResult.name;
                             conversationDescription = nameResult.description;
@@ -651,7 +659,7 @@ export class AgentRunner {
             // snapshot of the agent's internal state, useful when the payload IS the deliverable
             // (a report agent) and misleading when it is not — a document run reported the
             // payload, so "open the artifact" opened raw JSON instead of the document.
-            const artifactInfo = selectPrimaryArtifact(fileArtifacts, payloadArtifact);
+            const artifactInfo = SelectPrimaryArtifact(fileArtifacts, payloadArtifact);
 
             return {
                 agentResult,
@@ -699,7 +707,7 @@ export class AgentRunner {
             const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
-                ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'GetMaxVersionForArtifact artifactId')}'`,
+                ExtraFilter: `ArtifactID='${AgentRunner.filterId(artifactId, 'GetMaxVersionForArtifact artifactId')}'`,
                 OrderBy: 'VersionNumber DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -749,7 +757,7 @@ export class AgentRunner {
         if (!Number.isFinite(latestVersion)) {
             LogError(
                 `CheckForDuplicateVersion: latestVersionNumber is not a finite number ` +
-                `("${AgentRunner.DescribeUntrustedValue(latestVersionNumber)}") — skipping the duplicate check`
+                `("${AgentRunner.describeUntrustedValue(latestVersionNumber)}") — skipping the duplicate check`
             );
             return null;
         }
@@ -757,7 +765,7 @@ export class AgentRunner {
         const rv = RunView.FromMetadataProvider(provider || this._provider);
         const result = await rv.RunView<{ ID: string; ContentHash: string }>({
             EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${latestVersion}`,
+            ExtraFilter: `ArtifactID='${AgentRunner.filterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${latestVersion}`,
             Fields: ['ID', 'ContentHash'],
             MaxRows: 1,
             ResultType: 'simple'
@@ -836,7 +844,7 @@ export class AgentRunner {
             const rv = RunView.FromMetadataProvider(provider || this._provider);
             const result = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
-                ExtraFilter: `ConversationDetailID='${AgentRunner.FilterId(conversationDetailId, 'FindPreviousArtifactForMessage conversationDetailId')}' AND Direction='Output'`,
+                ExtraFilter: `ConversationDetailID='${AgentRunner.filterId(conversationDetailId, 'FindPreviousArtifactForMessage conversationDetailId')}' AND Direction='Output'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -956,7 +964,7 @@ export class AgentRunner {
             if (!behaviorRecognized) {
                 LogError(
                     `Ignoring artifact directive from agent "${agent?.Name}": unrecognized behavior ` +
-                    `("${AgentRunner.DescribeUntrustedValue(rawDirective!.behavior)}") — using the historical chain instead`
+                    `("${AgentRunner.describeUntrustedValue(rawDirective!.behavior)}") — using the historical chain instead`
                 );
             }
             // planArtifactTarget discards a non-string targetArtifactId silently (it is pure and
@@ -969,12 +977,12 @@ export class AgentRunner {
                 if (rawTarget !== undefined && rawTarget !== null && typeof rawTarget !== 'string') {
                     LogError(
                         `Ignoring targetArtifactId from agent "${agent?.Name}": ` +
-                        `"${AgentRunner.DescribeUntrustedValue(rawTarget)}" is not a string — ` +
+                        `"${AgentRunner.describeUntrustedValue(rawTarget)}" is not a string — ` +
                         `versioning the run's sourceArtifactId instead`
                     );
                 }
             }
-            let plan = planArtifactTarget(directive, sourceArtifactId);
+            let plan = PlanArtifactTarget(directive, sourceArtifactId);
             if (plan.kind === 'suppress') {
                 LogStatus(`Skipping artifact creation - agent "${agent?.Name}" suppressed artifacts for this step`);
                 return undefined;
@@ -994,7 +1002,7 @@ export class AgentRunner {
                     break;
                 }
                 plan = plan.source === 'directive'
-                    ? planArtifactTarget(undefined, sourceArtifactId) // drop the directive, keep the caller's id
+                    ? PlanArtifactTarget(undefined, sourceArtifactId) // drop the directive, keep the caller's id
                     : { kind: 'legacy' };                             // the caller's own id failed; nothing left to try
             }
 
@@ -1057,7 +1065,7 @@ export class AgentRunner {
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
             // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
-            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.SafeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
+            if (isNewArtifact && newVersionNumber === 1 && !AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)) {
                 const nameAttr = (version as any).Attributes?.find((attr: any) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
@@ -1105,7 +1113,7 @@ export class AgentRunner {
      * @param value - Any value, however malformed.
      * @returns A short single-line description, never throwing.
      */
-    private static DescribeUntrustedValue(value: unknown): string {
+    private static describeUntrustedValue(value: unknown): string {
         let text: string;
         try {
             text = typeof value === 'string' ? value : (JSON.stringify(value) ?? Object.prototype.toString.call(value));
@@ -1131,9 +1139,9 @@ export class AgentRunner {
      * @param label - What the id is, for the warning.
      * @returns The escaped id, ready to sit inside single quotes.
      */
-    private static FilterId(id: string, label: string): string {
+    private static filterId(id: string, label: string): string {
         if (!IsValidUUID(id)) {
-            LogError(`${label} is not a UUID-shaped id ("${AgentRunner.DescribeUntrustedValue(id)}") — this query cannot match a row`);
+            LogError(`${label} is not a UUID-shaped id ("${AgentRunner.describeUntrustedValue(id)}") — this query cannot match a row`);
         }
         return EscapeSQLString(id);
     }
@@ -1151,7 +1159,7 @@ export class AgentRunner {
      * @param maxLength - Column limit to clamp to; omit for `nvarchar(MAX)` columns.
      * @returns The trimmed (and clamped) text, or `undefined` when there is nothing usable.
      */
-    private static SafeDirectiveText(value: unknown, maxLength?: number): string | undefined {
+    private static safeDirectiveText(value: unknown, maxLength?: number): string | undefined {
         if (typeof value !== 'string') {
             return undefined;
         }
@@ -1242,7 +1250,7 @@ export class AgentRunner {
         const origin = plan.source === 'directive' ? `artifact directive from agent "${agentName}"` : 'sourceArtifactId';
 
         if (typeof plan.artifactId !== 'string' || !IsValidUUID(plan.artifactId)) {
-            LogError(`Ignoring ${origin}: "${AgentRunner.DescribeUntrustedValue(plan.artifactId)}" is not a valid artifact ID`);
+            LogError(`Ignoring ${origin}: "${AgentRunner.describeUntrustedValue(plan.artifactId)}" is not a valid artifact ID`);
             return null;
         }
         const artifactId = plan.artifactId.trim();
@@ -1314,10 +1322,10 @@ export class AgentRunner {
         const agentName = agent?.Name || 'Agent';
         // Both fields are model output: coerced, trimmed, and (for Name) clamped to its column so a
         // long or non-string title cannot fail validation and take the whole artifact down with it.
-        artifact.Name = AgentRunner.SafeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)
+        artifact.Name = AgentRunner.safeDirectiveText(directive?.name, AgentRunner.ARTIFACT_NAME_MAX_LENGTH)
             || `${agentName} Payload - ${new Date().toLocaleString()}`;
         // Description is nvarchar(MAX), so there is no length to clamp to — only the type to check.
-        artifact.Description = AgentRunner.SafeDirectiveText(directive?.description)
+        artifact.Description = AgentRunner.safeDirectiveText(directive?.description)
             || `Payload returned by ${agentName}`;
 
         // Use agent's DefaultArtifactTypeID if available
@@ -1353,7 +1361,7 @@ export class AgentRunner {
      * @returns Generated conversation name and description, or null if generation failed
      * @private
      */
-    private async GenerateConversationName(
+    private async generateConversationName(
         userMessage: string,
         contextUser: UserInfo,
         provider?: IMetadataProvider

@@ -18,7 +18,7 @@
  *   { kind: 'fail', error: new Error('Rate limit exceeded') },  // real ErrorAnalyzer errorInfo
  *   { kind: 'succeed', content: 'recovered' },
  * );
- * registerTestLLM(llm, ['AnthropicLLM', 'OpenAILLM']);          // real ClassFactory resolution
+ * RegisterTestLLM(llm, ['AnthropicLLM', 'OpenAILLM']);          // real ClassFactory resolution
  * // ... drive the code under test ...
  * expect(llm.CalledModels).toEqual(['api-claude', 'api-gpt']);
  * ```
@@ -35,7 +35,7 @@ import {
   type SummarizeResult,
 } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
-import { makeDriverFailureChatResult, makeModelUsage, makeSuccessChatResult } from './chat-result-factories';
+import { MakeDriverFailureChatResult, MakeModelUsage, MakeSuccessChatResult } from './chat-result-factories';
 
 /**
  * One scripted per-call outcome for {@link TestLLM.Script}.
@@ -244,8 +244,8 @@ export class TestLLM extends BaseLLM {
     _lastChunk: string | null | undefined,
     _usage: ModelUsage | null | undefined,
   ): ChatResult {
-    return makeSuccessChatResult(accumulatedContent ?? '', {
-      usage: this.streamFinalUsage ?? makeModelUsage(),
+    return MakeSuccessChatResult(accumulatedContent ?? '', {
+      usage: this.streamFinalUsage ?? MakeModelUsage(),
       model: this.streamFinalModel,
     });
   }
@@ -265,14 +265,14 @@ export class TestLLM extends BaseLLM {
     switch (outcome.kind) {
       case 'succeed':
         await this.wait(outcome.delayMS);
-        return makeSuccessChatResult(outcome.content, {
+        return MakeSuccessChatResult(outcome.content, {
           usage: outcome.usage,
           model: outcome.model,
           thinking: outcome.thinking,
         });
       case 'fail':
         await this.wait(outcome.delayMS);
-        return makeDriverFailureChatResult(outcome.error, this.constructor.name);
+        return MakeDriverFailureChatResult(outcome.error, this.constructor.name);
       case 'failResult':
         return outcome.result;
       case 'throw':
@@ -284,7 +284,7 @@ export class TestLLM extends BaseLLM {
         });
       case 'stream':
         // Non-streaming call against a stream outcome: resolve the joined chunks.
-        return makeSuccessChatResult(outcome.chunks.join(''), { usage: outcome.usage, model: outcome.model });
+        return MakeSuccessChatResult(outcome.chunks.join(''), { usage: outcome.usage, model: outcome.model });
     }
   }
 
@@ -325,7 +325,7 @@ export class TestLLM extends BaseLLM {
  *
  * @returns `restore` — hands every name back to its previous class.
  */
-export function registerTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): () => void {
+export function RegisterTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): () => void {
   const driverClasses = Array.isArray(driverClass) ? driverClass : [driverClass];
   const factory = MJGlobal.Instance.ClassFactory;
   const previous = driverClasses.flatMap((name) => {
@@ -354,4 +354,9 @@ export function registerTestLLM(llm: TestLLM, driverClass: string | string[], pr
       factory.Register(BaseLLM, registration.SubClass, name, highest + 1);
     }
   };
+}
+
+/** @deprecated Use {@link RegisterTestLLM}. */
+export function registerTestLLM(llm: TestLLM, driverClass: string | string[], priority = 100): () => void {
+  return RegisterTestLLM(llm, driverClass, priority);
 }

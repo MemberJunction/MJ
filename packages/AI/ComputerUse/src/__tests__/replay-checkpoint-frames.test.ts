@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-    selectCheckpointFrame,
+    SelectCheckpointFrame,
     ReplayFrame,
-    latchVisualFromVerdict,
-    countMetCheckpoints,
+    LatchVisualFromVerdict,
+    CountMetCheckpoints,
     CheckpointLatch,
 } from '../engine/verdict.js';
 import { JudgeVerdict } from '../types/judge.js';
@@ -40,17 +40,17 @@ const TRAJECTORY: ReplayFrame[] = [
 
 describe('selectCheckpointFrame', () => {
     it('picks the frame captured where the checkpoint was on screen', () => {
-        const picked = selectCheckpointFrame(urlCheckpoint('Users grid', '/app/admin/Users'), TRAJECTORY);
+        const picked = SelectCheckpointFrame(urlCheckpoint('Users grid', '/app/admin/Users'), TRAJECTORY);
         expect(picked?.stepNumber).toBe(2);
     });
 
     it('does not collapse a mid-trajectory checkpoint onto the final frame', () => {
-        const picked = selectCheckpointFrame(urlCheckpoint('Users grid', '/app/admin/Users'), TRAJECTORY);
+        const picked = SelectCheckpointFrame(urlCheckpoint('Users grid', '/app/admin/Users'), TRAJECTORY);
         expect(picked?.url).not.toBe(TRAJECTORY[TRAJECTORY.length - 1].url);
     });
 
     it('prefers the LAST matching frame — the most settled view of that section', () => {
-        const picked = selectCheckpointFrame(urlCheckpoint('Roles grid', '/app/admin/Roles'), TRAJECTORY);
+        const picked = SelectCheckpointFrame(urlCheckpoint('Roles grid', '/app/admin/Roles'), TRAJECTORY);
         expect(picked?.stepNumber).toBe(4);
     });
 
@@ -58,16 +58,16 @@ describe('selectCheckpointFrame', () => {
         const cp = new RunCheckpoint();
         cp.Name = 'chart rendered';
         cp.VisualCriteria = ['the chart has bars'];
-        expect(selectCheckpointFrame(cp, TRAJECTORY)).toBeUndefined();
+        expect(SelectCheckpointFrame(cp, TRAJECTORY)).toBeUndefined();
     });
 
     it('returns undefined when the trajectory never reached the checkpoint', () => {
-        expect(selectCheckpointFrame(urlCheckpoint('GraphQL Console', '/app/dev/GraphQL'), TRAJECTORY)).toBeUndefined();
+        expect(SelectCheckpointFrame(urlCheckpoint('GraphQL Console', '/app/dev/GraphQL'), TRAJECTORY)).toBeUndefined();
     });
 
     it('applies volatile-param normalization when matching', () => {
         const frames = [frame(1, 'http://localhost:4200/app/admin/Users?nonce=abc123')];
-        const picked = selectCheckpointFrame(urlCheckpoint('Users grid', '/app/admin/Users'), frames, ['nonce']);
+        const picked = SelectCheckpointFrame(urlCheckpoint('Users grid', '/app/admin/Users'), frames, ['nonce']);
         expect(picked?.stepNumber).toBe(1);
     });
 });
@@ -94,18 +94,18 @@ describe('latchVisualFromVerdict — scoped to the section that was actually jud
         const checkpoints = [pendingVisual('home'), pendingVisual('data')];
         const latches = new Map<string, CheckpointLatch>();
 
-        latchVisualFromVerdict(checkpoints, latches, doneVerdict(), 1, 'home');
+        LatchVisualFromVerdict(checkpoints, latches, doneVerdict(), 1, 'home');
 
         expect(latches.get('home')?.visualMet).toBe(true);
-        expect(countMetCheckpoints(checkpoints, latches)).toBe(1);   // 'data' was never shown to the judge
+        expect(CountMetCheckpoints(checkpoints, latches)).toBe(1);   // 'data' was never shown to the judge
     });
 
     it('still latches every pending checkpoint when the call was not scoped', () => {
         const checkpoints = [pendingVisual('home'), pendingVisual('data')];
         const latches = new Map<string, CheckpointLatch>();
 
-        latchVisualFromVerdict(checkpoints, latches, doneVerdict(), 1);
+        LatchVisualFromVerdict(checkpoints, latches, doneVerdict(), 1);
 
-        expect(countMetCheckpoints(checkpoints, latches)).toBe(2);
+        expect(CountMetCheckpoints(checkpoints, latches)).toBe(2);
     });
 });

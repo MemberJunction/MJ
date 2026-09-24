@@ -38,10 +38,14 @@ vi.mock('@pinecone-database/pinecone', () => {
 });
 
 vi.mock('../config', () => ({
-  pineconeDefaultIndex: 'test-default-index',
-  openAIAPIKey: 'fake-openai-key',
-  pineconeHost: 'fake-host',
-  pineconeAPIKey: 'fake-pinecone-key',
+  PineconeDefaultIndex: 'test-default-index',
+    get pineconeDefaultIndex() { return this.PineconeDefaultIndex; },
+  OpenAIAPIKey: 'fake-openai-key',
+    get openAIAPIKey() { return this.OpenAIAPIKey; },
+  PineconeHost: 'fake-host',
+    get pineconeHost() { return this.PineconeHost; },
+  PineconeAPIKey: 'fake-pinecone-key',
+    get pineconeAPIKey() { return this.PineconeAPIKey; },
 }));
 
 vi.mock('dotenv', () => ({

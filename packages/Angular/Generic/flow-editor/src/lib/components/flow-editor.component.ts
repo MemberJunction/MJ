@@ -794,8 +794,13 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     }
   }
 
-  get selectedCount(): number {
+  get SelectedCount(): number {
     return this.selectedNodeIDs.length + this.selectedConnectionIDs.length;
+  }
+
+  /** @deprecated Use {@link SelectedCount}. */
+  get selectedCount(): number {
+    return this.SelectedCount;
   }
 
   private pushUndoState(): void {

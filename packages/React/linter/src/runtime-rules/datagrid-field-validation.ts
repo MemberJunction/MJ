@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -217,7 +217,7 @@ export class DatagridFieldValidationRule extends BaseLintRule {
       return violations;
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       JSXOpeningElement(path: NodePath<t.JSXOpeningElement>) {
         const nameNode = path.node.name;
         if (!t.isJSXIdentifier(nameNode)) return;

@@ -28,8 +28,26 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
 
   @Output() PermissionChanged = new EventEmitter<EntityPermissionChangedEvent>();
 
-  public permissions: MJEntityPermissionEntity[] = [];
-  public gridHeight: number = 750;
+  public Permissions: MJEntityPermissionEntity[] = [];
+
+  /** @deprecated Use {@link Permissions}. */
+  public get permissions(): MJEntityPermissionEntity[] {
+    return this.Permissions;
+  }
+  /** @deprecated Use {@link Permissions}. */
+  public set permissions(value: MJEntityPermissionEntity[]) {
+    this.Permissions = value;
+  }
+  public GridHeight: number = 750;
+
+  /** @deprecated Use {@link GridHeight}. */
+  public get gridHeight(): number {
+    return this.GridHeight;
+  }
+  /** @deprecated Use {@link GridHeight}. */
+  public set gridHeight(value: number) {
+    this.GridHeight = value;
+  }
   public isLoading: boolean = false;
 
   /**
@@ -110,7 +128,7 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
           });
           existingPermissions.push(p);
         }
-        this.permissions = existingPermissions;
+        this.Permissions = existingPermissions;
       }
       else if (this.Mode === 'Role') {
         // for the mode of Role, that means we want to show all entities and their permissions for the given role
@@ -132,7 +150,7 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
           });
           existingPermissions.push(p);
         }
-        this.permissions = existingPermissions.sort((a, b) => a.Entity!.localeCompare(b.Entity!));  
+        this.Permissions = existingPermissions.sort((a, b) => a.Entity!.localeCompare(b.Entity!));  
       }
     }
     else {
@@ -155,18 +173,23 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
     }
   }
 
-  public getRoleName(roleID: string): string {
+  public GetRoleName(roleID: string): string {
     if (!roleID) return '';
     return this.roleNameMap.get(NormalizeUUID(roleID)) ?? '';
   }
+
+  /** @deprecated Use {@link GetRoleName}. */
+  public getRoleName(roleID: string): string {
+    return this.GetRoleName(roleID);
+  }
   
-  public async savePermissions() {
+  public async SavePermissions() {
     if (this.NumDirtyPermissions > 0) {
       // iterate through each permisison and for the ones that are dirty, add to transaction group then commit at once
       const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
       let itemCount: number = 0;
-      for (const p of this.permissions) {
+      for (const p of this.Permissions) {
         if (this.IsPermissionReallyDirty(p)) {
           p.TransactionGroup = tg;
           itemCount++;
@@ -178,10 +201,15 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
     }
   }
 
-  public async cancelEdit() {
+  /** @deprecated Use {@link SavePermissions}. */
+  public async savePermissions() {
+    return this.SavePermissions();
+  }
+
+  public async CancelEdit() {
     if (this.NumDirtyPermissions > 0) {
       // go through and revert each permission that is REALLY dirty
-      this.permissions.forEach(p => {
+      this.Permissions.forEach(p => {
         if (this.IsPermissionReallyDirty(p)) {
           p.Revert();
         }
@@ -189,8 +217,13 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
     }
   }
 
+  /** @deprecated Use {@link CancelEdit}. */
+  public async cancelEdit() {
+    return this.CancelEdit();
+  }
+
   public get NumDirtyPermissions(): number {
-    return this.permissions.filter(p => this.IsPermissionReallyDirty(p)).length;
+    return this.Permissions.filter(p => this.IsPermissionReallyDirty(p)).length;
   }
 
   protected IsPermissionReallyDirty(p: MJEntityPermissionEntity): boolean {
@@ -202,11 +235,11 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
       return p.CanRead || p.CanCreate || p.CanUpdate || p.CanDelete; // if we have a new record, only consider it dirty if at least one permission is true
   }
 
-  public flipAllPermissions(type: 'Read' | 'Create' | 'Update' | 'Delete') {
+  public FlipAllPermissions(type: 'Read' | 'Create' | 'Update' | 'Delete') {
     // first, figure out what we have the majority of, if we have more ON, then we will flip to OFF, otherwise we will flip to ON
     let onCount = 0;
     let offCount = 0;
-    this.permissions.forEach(p => {
+    this.Permissions.forEach(p => {
       if (type === 'Read') {
         if (p.CanRead)
           onCount++;
@@ -235,7 +268,7 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
     const value = offCount > onCount;
 
     // now set the permission for each permission record
-    for (const p of this.permissions) {
+    for (const p of this.Permissions) {
       switch (type) {
         case 'Read':
           p.CanRead = value;
@@ -250,44 +283,59 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
           p.CanDelete = value;
           break;
       }
-      this.flipPermission(undefined, p, type, false); // call this function but tell it to NOT actually flip the permission, just to fire the event
+      this.FlipPermission(undefined, p, type, false); // call this function but tell it to NOT actually flip the permission, just to fire the event
     }
   }
 
-  public revertRow(event: MouseEvent, permission: MJEntityPermissionEntity) {
+  /** @deprecated Use {@link FlipAllPermissions}. */
+  public flipAllPermissions(type: 'Read' | 'Create' | 'Update' | 'Delete') {
+    return this.FlipAllPermissions(type);
+  }
+
+  public RevertRow(event: MouseEvent, permission: MJEntityPermissionEntity) {
     if (this.IsPermissionReallyDirty(permission)) {
       permission.Revert();
       event.stopPropagation(); // don't bubble up to the parent row because that will do something else...
     }
   }
 
-  public flipRow(permission: MJEntityPermissionEntity) {
+  /** @deprecated Use {@link RevertRow}. */
+  public revertRow(event: MouseEvent, permission: MJEntityPermissionEntity) {
+    return this.RevertRow(event, permission);
+  }
+
+  public FlipRow(permission: MJEntityPermissionEntity) {
     // if 2 or more are on, flip all to off, otherwise flip all to on
     const onCount = (permission.CanRead ? 1 : 0) + (permission.CanCreate ? 1 : 0) + (permission.CanUpdate ? 1 : 0) + (permission.CanDelete ? 1 : 0);
     const newValue = onCount < 2;
 
     if (permission.CanRead !== newValue) {
       permission.CanRead = newValue;
-      this.flipPermission(undefined, permission, 'Read', false); // fire the event but don't actually flip the permission
+      this.FlipPermission(undefined, permission, 'Read', false); // fire the event but don't actually flip the permission
     }
 
     if (permission.CanCreate !== newValue) {
       permission.CanCreate = newValue;
-      this.flipPermission(undefined, permission, 'Create', false); // fire the event but don't actually flip the permission
+      this.FlipPermission(undefined, permission, 'Create', false); // fire the event but don't actually flip the permission
     }
 
     if (permission.CanUpdate !== newValue) {
       permission.CanUpdate = newValue;
-      this.flipPermission(undefined, permission, 'Update', false); // fire the event but don't actually flip the permission
+      this.FlipPermission(undefined, permission, 'Update', false); // fire the event but don't actually flip the permission
     }
 
     if (permission.CanDelete !== newValue) {
       permission.CanDelete = newValue;
-      this.flipPermission(undefined, permission, 'Delete', false); // fire the event but don't actually flip the permission
+      this.FlipPermission(undefined, permission, 'Delete', false); // fire the event but don't actually flip the permission
     }
   }
 
-  public flipPermission(event: MouseEvent | undefined, permission: MJEntityPermissionEntity, type: 'Read' | 'Create' | 'Update' | 'Delete', flipPermission: boolean) {
+  /** @deprecated Use {@link FlipRow}. */
+  public flipRow(permission: MJEntityPermissionEntity) {
+    return this.FlipRow(permission);
+  }
+
+  public FlipPermission(event: MouseEvent | undefined, permission: MJEntityPermissionEntity, type: 'Read' | 'Create' | 'Update' | 'Delete', flipPermission: boolean) {
     if (flipPermission) {
       switch (type) {
         case 'Read':
@@ -316,5 +364,10 @@ export class EntityPermissionsGridComponent extends BaseAngularComponent impleme
 
     if (!flipPermission && event)
       event.stopPropagation();
+  }
+
+  /** @deprecated Use {@link FlipPermission}. */
+  public flipPermission(event: MouseEvent | undefined, permission: MJEntityPermissionEntity, type: 'Read' | 'Create' | 'Update' | 'Delete', flipPermission: boolean) {
+    return this.FlipPermission(event, permission, type, flipPermission);
   }
 }

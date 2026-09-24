@@ -11,7 +11,7 @@ export function Public(): PropertyDecorator | MethodDecorator | ClassDecorator {
     Directive(`@${DIRECTIVE_NAME}`)(targetOrPrototype, propertyKey, descriptor);
 }
 
-export const publicDirective: DirectiveBuilder = {
+export const PublicDirective: DirectiveBuilder = {
   typeDefs: `directive @${DIRECTIVE_NAME} on FIELD_DEFINITION`,
   transformer: (schema) => {
     const fieldMapper: FieldMapper = (fieldConfig) => {
@@ -40,3 +40,6 @@ export const publicDirective: DirectiveBuilder = {
     return mapSchema(schema, { [MapperKind.OBJECT_FIELD]: fieldMapper });
   },
 };
+
+/** @deprecated Use {@link PublicDirective}. */
+export const publicDirective = PublicDirective;

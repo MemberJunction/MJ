@@ -10,14 +10,14 @@ import {
     GraphCalendarEvent,
     GoogleCalendarEvent,
     GoogleListEventsArgs,
-    normalizeGraphEvent,
-    parseGraphDateTime,
-    extractGraphJoinUrl,
-    mapGraphResponseStatus,
-    normalizeGoogleEvent,
-    parseGoogleDateTime,
-    extractGoogleJoinUrl,
-    mapGoogleResponseStatus,
+    NormalizeGraphEvent,
+    ParseGraphDateTime,
+    ExtractGraphJoinUrl,
+    MapGraphResponseStatus,
+    NormalizeGoogleEvent,
+    ParseGoogleDateTime,
+    ExtractGoogleJoinUrl,
+    MapGoogleResponseStatus,
 } from '../calendar-source';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -183,31 +183,31 @@ describe('GraphCalendarSource', () => {
 describe('Graph pure helpers', () => {
     describe('parseGraphDateTime', () => {
         it('treats UTC and missing zone as UTC', () => {
-            expect(parseGraphDateTime({ dateTime: '2026-06-25T15:00:00', timeZone: 'UTC' })?.toISOString()).toBe(
+            expect(ParseGraphDateTime({ dateTime: '2026-06-25T15:00:00', timeZone: 'UTC' })?.toISOString()).toBe(
                 '2026-06-25T15:00:00.000Z',
             );
-            expect(parseGraphDateTime({ dateTime: '2026-06-25T15:00:00' })?.toISOString()).toBe(
+            expect(ParseGraphDateTime({ dateTime: '2026-06-25T15:00:00' })?.toISOString()).toBe(
                 '2026-06-25T15:00:00.000Z',
             );
         });
         it('honors an explicit offset/Z suffix on the string', () => {
-            expect(parseGraphDateTime({ dateTime: '2026-06-25T15:00:00Z' })?.toISOString()).toBe(
+            expect(ParseGraphDateTime({ dateTime: '2026-06-25T15:00:00Z' })?.toISOString()).toBe(
                 '2026-06-25T15:00:00.000Z',
             );
         });
         it('returns null on absent/invalid', () => {
-            expect(parseGraphDateTime(undefined)).toBeNull();
-            expect(parseGraphDateTime({ dateTime: 'nope' })).toBeNull();
+            expect(ParseGraphDateTime(undefined)).toBeNull();
+            expect(ParseGraphDateTime({ dateTime: 'nope' })).toBeNull();
         });
     });
 
     describe('extractGraphJoinUrl', () => {
         it('prefers structured onlineMeeting.joinUrl', () => {
-            expect(extractGraphJoinUrl(graphEvent())).toBe(TEAMS_JOIN_URL);
+            expect(ExtractGraphJoinUrl(graphEvent())).toBe(TEAMS_JOIN_URL);
         });
         it('falls back to the legacy flat onlineMeetingUrl', () => {
             expect(
-                extractGraphJoinUrl(graphEvent({ onlineMeeting: undefined, onlineMeetingUrl: TEAMS_JOIN_URL })),
+                ExtractGraphJoinUrl(graphEvent({ onlineMeeting: undefined, onlineMeetingUrl: TEAMS_JOIN_URL })),
             ).toBe(TEAMS_JOIN_URL);
         });
         it('extracts a meetup-join URL from the event body when no structured field exists', () => {
@@ -216,26 +216,26 @@ describe('Graph pure helpers', () => {
                 onlineMeetingUrl: undefined,
                 body: { contentType: 'html', content: `<a href="${TEAMS_JOIN_URL}">Join</a>` },
             });
-            expect(extractGraphJoinUrl(event)).toBe(TEAMS_JOIN_URL);
+            expect(ExtractGraphJoinUrl(event)).toBe(TEAMS_JOIN_URL);
         });
         it('returns undefined for a non-online event', () => {
             expect(
-                extractGraphJoinUrl(graphEvent({ onlineMeeting: undefined, onlineMeetingUrl: undefined, body: undefined })),
+                ExtractGraphJoinUrl(graphEvent({ onlineMeeting: undefined, onlineMeetingUrl: undefined, body: undefined })),
             ).toBeUndefined();
         });
     });
 
     it('mapGraphResponseStatus maps known + unknown responses', () => {
-        expect(mapGraphResponseStatus('accepted')).toBe('Accepted');
-        expect(mapGraphResponseStatus('organizer')).toBe('Accepted');
-        expect(mapGraphResponseStatus('declined')).toBe('Declined');
-        expect(mapGraphResponseStatus('tentativelyAccepted')).toBe('Tentative');
-        expect(mapGraphResponseStatus('notResponded')).toBe('NeedsAction');
-        expect(mapGraphResponseStatus('weird')).toBeUndefined();
+        expect(MapGraphResponseStatus('accepted')).toBe('Accepted');
+        expect(MapGraphResponseStatus('organizer')).toBe('Accepted');
+        expect(MapGraphResponseStatus('declined')).toBe('Declined');
+        expect(MapGraphResponseStatus('tentativelyAccepted')).toBe('Tentative');
+        expect(MapGraphResponseStatus('notResponded')).toBe('NeedsAction');
+        expect(MapGraphResponseStatus('weird')).toBeUndefined();
     });
 
     it('normalizeGraphEvent omits join URL and end when absent', () => {
-        const invite = normalizeGraphEvent(
+        const invite = NormalizeGraphEvent(
             graphEvent({ onlineMeeting: undefined, onlineMeetingUrl: undefined, body: undefined, end: undefined }),
         );
         expect(invite?.JoinUrl).toBeUndefined();
@@ -327,44 +327,44 @@ describe('GoogleCalendarSource', () => {
 describe('Google pure helpers', () => {
     describe('parseGoogleDateTime', () => {
         it('parses RFC3339 with offset', () => {
-            expect(parseGoogleDateTime({ dateTime: '2026-06-25T15:00:00-07:00' })?.toISOString()).toBe(
+            expect(ParseGoogleDateTime({ dateTime: '2026-06-25T15:00:00-07:00' })?.toISOString()).toBe(
                 '2026-06-25T22:00:00.000Z',
             );
         });
         it('parses an all-day date as UTC midnight', () => {
-            expect(parseGoogleDateTime({ date: '2026-06-25' })?.toISOString()).toBe('2026-06-25T00:00:00.000Z');
+            expect(ParseGoogleDateTime({ date: '2026-06-25' })?.toISOString()).toBe('2026-06-25T00:00:00.000Z');
         });
         it('returns null on absent/invalid', () => {
-            expect(parseGoogleDateTime(undefined)).toBeNull();
-            expect(parseGoogleDateTime({ dateTime: 'nope' })).toBeNull();
+            expect(ParseGoogleDateTime(undefined)).toBeNull();
+            expect(ParseGoogleDateTime({ dateTime: 'nope' })).toBeNull();
         });
     });
 
     describe('extractGoogleJoinUrl', () => {
         it('prefers a video conferenceData entry point', () => {
-            expect(extractGoogleJoinUrl(googleEvent())).toBe(MEET_JOIN_URL);
+            expect(ExtractGoogleJoinUrl(googleEvent())).toBe(MEET_JOIN_URL);
         });
         it('falls back to hangoutLink', () => {
-            expect(extractGoogleJoinUrl(googleEvent({ conferenceData: undefined, hangoutLink: MEET_JOIN_URL }))).toBe(
+            expect(ExtractGoogleJoinUrl(googleEvent({ conferenceData: undefined, hangoutLink: MEET_JOIN_URL }))).toBe(
                 MEET_JOIN_URL,
             );
         });
         it('returns undefined when no conferencing is attached', () => {
             expect(
-                extractGoogleJoinUrl(googleEvent({ conferenceData: undefined, hangoutLink: undefined })),
+                ExtractGoogleJoinUrl(googleEvent({ conferenceData: undefined, hangoutLink: undefined })),
             ).toBeUndefined();
         });
     });
 
     it('mapGoogleResponseStatus maps known + unknown responses', () => {
-        expect(mapGoogleResponseStatus('accepted')).toBe('Accepted');
-        expect(mapGoogleResponseStatus('declined')).toBe('Declined');
-        expect(mapGoogleResponseStatus('tentative')).toBe('Tentative');
-        expect(mapGoogleResponseStatus('needsAction')).toBe('NeedsAction');
-        expect(mapGoogleResponseStatus('mystery')).toBeUndefined();
+        expect(MapGoogleResponseStatus('accepted')).toBe('Accepted');
+        expect(MapGoogleResponseStatus('declined')).toBe('Declined');
+        expect(MapGoogleResponseStatus('tentative')).toBe('Tentative');
+        expect(MapGoogleResponseStatus('needsAction')).toBe('NeedsAction');
+        expect(MapGoogleResponseStatus('mystery')).toBeUndefined();
     });
 
     it('normalizeGoogleEvent returns null for a cancelled event', () => {
-        expect(normalizeGoogleEvent(googleEvent({ status: 'cancelled' }))).toBeNull();
+        expect(NormalizeGoogleEvent(googleEvent({ status: 'cancelled' }))).toBeNull();
     });
 });

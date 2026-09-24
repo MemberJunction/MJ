@@ -119,7 +119,7 @@ export interface CacheInvalidationFilterContext {
  * roles, so this stays cheap enough to run per subscriber per event. It is not free: it runs for
  * every connected socket on every save, so keep it free of I/O.
  */
-export function cacheInvalidationFilter(data: {
+export function CacheInvalidationFilter(data: {
     payload: CacheInvalidationPayload;
     context: CacheInvalidationFilterContext | undefined;
 }): boolean {
@@ -149,6 +149,14 @@ export function cacheInvalidationFilter(data: {
     }
 
     return entity.GetUserPermisions(user).CanRead;
+}
+
+/** @deprecated Use {@link CacheInvalidationFilter}. */
+export function cacheInvalidationFilter(data: {
+    payload: CacheInvalidationPayload;
+    context: CacheInvalidationFilterContext | undefined;
+}): boolean {
+  return CacheInvalidationFilter(data);
 }
 
 @Resolver()
@@ -184,9 +192,9 @@ export class CacheInvalidationResolver {
     @Subscription(() => CacheInvalidationNotification, {
         topics: CACHE_INVALIDATION_TOPIC,
         filter: (data: { payload: CacheInvalidationPayload; context: CacheInvalidationFilterContext | undefined }) =>
-            cacheInvalidationFilter(data),
+            CacheInvalidationFilter(data),
     })
-    cacheInvalidation(
+    cacheInvalidation(  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
         @Root() payload: CacheInvalidationPayload
     ): CacheInvalidationNotification {
         return {

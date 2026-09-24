@@ -177,7 +177,7 @@ export class MeetingControlsState {
      * @returns `true` when the queue changed (a new raise landed), `false` otherwise.
      */
     public RaiseHand(participantId: string): boolean {
-        if (!this.roster.has(participantId) || this.isQueued(participantId)) {
+        if (!this.roster.has(participantId) || this.IsQueued(participantId)) {
             return false;
         }
         const participant = this.roster.get(participantId);
@@ -203,8 +203,13 @@ export class MeetingControlsState {
     }
 
     /** Whether a participant is currently in the hand-raise queue. */
-    public isQueued(participantId: string): boolean {
+    public IsQueued(participantId: string): boolean {
         return this.handQueue.some((e) => e.ParticipantId === participantId);
+    }
+
+    /** @deprecated Use {@link IsQueued}. */
+    public isQueued(participantId: string): boolean {
+        return this.IsQueued(participantId);
     }
 
     /** The next participant in the queue (front of the line), or `undefined` when the queue is empty. */

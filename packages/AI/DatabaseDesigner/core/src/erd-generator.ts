@@ -24,7 +24,7 @@ import type { TableDefinition, ColumnDefinition } from '@memberjunction/schema-e
  * Returns `null` for a single table with no FK relationships — a lone box with
  * no connections adds no visual value over the prototype column table.
  */
-export function generateERDMermaid(tables: TableDefinition[]): string | null {
+export function GenerateERDMermaid(tables: TableDefinition[]): string | null {
     if (!tables.length) return null;
 
     const hasAnyFKs = tables.some(t => (t.ForeignKeys?.length ?? 0) > 0);
@@ -44,6 +44,11 @@ export function generateERDMermaid(tables: TableDefinition[]): string | null {
     }
 
     return lines.join('\n');
+}
+
+/** @deprecated Use {@link GenerateERDMermaid}. */
+export function generateERDMermaid(tables: TableDefinition[]): string | null {
+    return GenerateERDMermaid(tables);
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────

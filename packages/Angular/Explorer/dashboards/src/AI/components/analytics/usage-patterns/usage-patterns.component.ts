@@ -548,18 +548,33 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
 
     // ── Heatmap helpers (called from template) ──
 
-    getCellBackground(day: number, hour: number): string {
+    GetCellBackground(day: number, hour: number): string {
         const intensity = this.HeatmapCells[day]?.[hour]?.Intensity ?? 0;
         return `color-mix(in srgb, var(--mj-brand-primary) ${intensity}%, var(--mj-bg-surface))`;
     }
 
-    getCellTooltip(day: number, hour: number): string {
+    /** @deprecated Use {@link GetCellBackground}. */
+    getCellBackground(day: number, hour: number): string {
+        return this.GetCellBackground(day, hour);
+    }
+
+    GetCellTooltip(day: number, hour: number): string {
         const count = this.HeatmapCells[day]?.[hour]?.Count ?? 0;
         return `${DAY_NAMES[day]} ${this.formatHourLabel(hour)}: ${count} runs`;
     }
 
-    getCellCount(day: number, hour: number): number {
+    /** @deprecated Use {@link GetCellTooltip}. */
+    getCellTooltip(day: number, hour: number): string {
+        return this.GetCellTooltip(day, hour);
+    }
+
+    GetCellCount(day: number, hour: number): number {
         return this.HeatmapCells[day]?.[hour]?.Count ?? 0;
+    }
+
+    /** @deprecated Use {@link GetCellCount}. */
+    getCellCount(day: number, hour: number): number {
+        return this.GetCellCount(day, hour);
     }
 
     // ── Data Loading ──

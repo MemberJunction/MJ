@@ -1,5 +1,5 @@
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers } from './ExpressionHelpers.js';
+import { ConvertIdentifiers } from './ExpressionHelpers.js';
 
 export class CreateIndexRule implements IConversionRule {
   Name = 'CreateIndexRule';
@@ -11,7 +11,7 @@ export class CreateIndexRule implements IConversionRule {
   BypassJustification = 'Custom output adds CREATE INDEX IF NOT EXISTS for idempotency, strips T-SQL filegroup syntax (ON [PRIMARY]), removes WITH NOCHECK, truncates index names to PG\'s 63-char limit (with hash suffix), and quotes column names with PascalCase. sqlglot does not apply MJ\'s naming conventions or idempotency wrappers.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
-    let result = convertIdentifiers(sql);
+    let result = ConvertIdentifiers(sql);
 
     // Remove CLUSTERED/NONCLUSTERED
     result = result.replace(/\bCLUSTERED\b/gi, '');

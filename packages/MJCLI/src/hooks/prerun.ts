@@ -143,8 +143,8 @@ async function maybeLoadBootstrap(options: { Command: { id?: string } }, verbose
     // Both modules are dynamic-imported so light commands keep their instant startup (the
     // config module's cosmiconfig search runs at import time).
     await import('@memberjunction/server-bootstrap-lite/mj-class-registrations');
-    const { loadDynamicPackagesForCommand } = await import('../lib/dynamic-packages.js');
-    await loadDynamicPackagesForCommand(commandId, { verbose });
+    const { LoadDynamicPackagesForCommand } = await import('../lib/dynamic-packages.js');
+    await LoadDynamicPackagesForCommand(commandId, { Verbose: verbose });
   }
 }
 
