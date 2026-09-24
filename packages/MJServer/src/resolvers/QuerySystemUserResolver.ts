@@ -347,7 +347,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 }
 
                 // Genuine failure - couldn't find an existing query with the same name
-                const errorMessage = record.LatestResult?.Message || '';
+                const errorMessage = record.LatestResult?.CompleteMessage || '';
                 return {
                     Success: false,
                     ErrorMessage: `Failed to create query: ${errorMessage || 'Unknown error'}`
@@ -536,7 +536,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             if (!saveResult) {
                 return {
                     Success: false,
-                    ErrorMessage: `Failed to update query: ${queryEntity.LatestResult?.Message || 'Unknown error'}`
+                    ErrorMessage: `Failed to update query: ${queryEntity.LatestResult?.CompleteMessage || 'Unknown error'}`
                 };
             }
 
@@ -685,7 +685,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                             currentParentID = recheckExisting.ID;
                         } else {
                             // Genuine failure (not a duplicate)
-                            const errorMessage = newCategory.LatestResult?.Message || '';
+                            const errorMessage = newCategory.LatestResult?.CompleteMessage || '';
                             throw new Error(`Failed to create category '${categoryName}': ${errorMessage || 'Unknown error'}`);
                         }
                     } else {

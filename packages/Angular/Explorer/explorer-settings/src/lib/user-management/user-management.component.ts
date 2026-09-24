@@ -728,7 +728,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
           this.SelectedUser = null;
           await this.LoadInitialData();
         } else {
-          throw new Error(user.LatestResult?.Message || 'Failed to delete user');
+          throw new Error(user.LatestResult?.CompleteMessage || 'Failed to delete user');
         }
       } else {
         throw new Error('User not found or permission denied');
@@ -757,7 +757,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       // guard on MJ: Users, because deactivating a user is a write to another user's row.
       // Mirrors deleteUser() above, which already checks its result this way.
       if (!(await user.Save())) {
-        throw new Error(user.LatestResult?.Message || 'Failed to update user status');
+        throw new Error(user.LatestResult?.CompleteMessage || 'Failed to update user status');
       }
       this.ngZone.run(() => {
         // Clear any banner left by a PREVIOUS refused toggle. Without this a non-Owner who is

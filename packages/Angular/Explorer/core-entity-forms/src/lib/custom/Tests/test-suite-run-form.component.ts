@@ -775,7 +775,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
         SharedService.Instance.CreateSimpleNotification('Tags saved successfully', 'success', 2000);
       } else {
         SharedService.Instance.CreateSimpleNotification(
-          this.record.LatestResult?.Message || 'Failed to save tags',
+          this.record.LatestResult?.CompleteMessage || 'Failed to save tags',
           'error',
           3000
         );
@@ -998,7 +998,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
         this.ExpandedRunId = null;
       } else {
         SharedService.Instance.CreateSimpleNotification(
-          feedback.LatestResult?.Message || 'Failed to save feedback',
+          feedback.LatestResult?.CompleteMessage || 'Failed to save feedback',
           'error',
           3000
         );

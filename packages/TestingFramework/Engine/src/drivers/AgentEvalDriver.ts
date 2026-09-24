@@ -696,7 +696,7 @@ export class AgentEvalDriver extends BaseTestDriver {
                     if (saved) {
                         this.log(`✓ Linked TestRun ${params.testRun.ID} -> AgentRun ${agentRunId}`, true);
                     } else {
-                        this.logError(`Failed to link TestRun to AgentRun: ${params.testRun.LatestResult?.Message}`);
+                        this.logError(`Failed to link TestRun to AgentRun: ${params.testRun.LatestResult?.CompleteMessage}`);
                     }
                 }
                 // Note: AgentRun.TestRunID is set by BaseAgent via the testRunId param passed to RunAgentInConversation

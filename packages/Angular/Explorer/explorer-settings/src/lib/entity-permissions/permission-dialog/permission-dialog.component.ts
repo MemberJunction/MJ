@@ -299,7 +299,7 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
     // Save the entity directly - it already has all the values bound
     const saveResult = await rolePermission.entityPermission.Save();
     if (!saveResult) {
-      throw new Error(rolePermission.entityPermission.LatestResult?.Message || `Failed to save permissions for role ${rolePermission.roleName}`);
+      throw new Error(rolePermission.entityPermission.LatestResult?.CompleteMessage || `Failed to save permissions for role ${rolePermission.roleName}`);
     }
   }
 

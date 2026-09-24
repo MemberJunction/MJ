@@ -616,7 +616,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                     );
                 } else {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `Failed to create new category. ${newCategory.LatestResult?.Message || ''}`, 
+                        `Failed to create new category. ${newCategory.LatestResult?.CompleteMessage || ''}`, 
                         'error',
                         3000
                     );
@@ -959,7 +959,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                     } else {
                         console.error('Failed to create new category');
                         MJNotificationService.Instance.CreateSimpleNotification(
-                            `Failed to create new category. ${newCategory.LatestResult?.Message || ''}`, 
+                            `Failed to create new category. ${newCategory.LatestResult?.CompleteMessage || ''}`, 
                             'error'
                         );
                         return false;

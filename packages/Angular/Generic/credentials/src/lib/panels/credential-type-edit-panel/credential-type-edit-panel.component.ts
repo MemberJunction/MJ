@@ -356,7 +356,7 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
                 this.Saved.emit(entity);
                 this.ClosePanel();
             } else {
-                const errorMessage = entity.LatestResult?.Message || 'Unknown error';
+                const errorMessage = entity.LatestResult?.CompleteMessage || 'Unknown error';
                 console.error('Save failed:', errorMessage);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to save credential type: ${errorMessage}`,
@@ -397,7 +397,7 @@ export class CredentialTypeEditPanelComponent extends BaseAngularComponent imple
                 this.Deleted.emit(this.CredentialType.ID);
                 this.ClosePanel();
             } else {
-                const errorMessage = this.CredentialType.LatestResult?.Message || 'Unknown error';
+                const errorMessage = this.CredentialType.LatestResult?.CompleteMessage || 'Unknown error';
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to delete credential type: ${errorMessage}`,
                     'error',

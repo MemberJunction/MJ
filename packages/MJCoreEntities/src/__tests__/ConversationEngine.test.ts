@@ -1,4 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { BaseEntityResult as BaseEntityResultType } from '@memberjunction/core';
+
+// The engine reports a refusal through LatestResult.CompleteMessage, so a failed Save/Delete needs a
+// REAL BaseEntityResult (the module mock below replaces @memberjunction/core wholesale).
+const { BaseEntityResult } = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+function refusal(message: string): BaseEntityResultType {
+    const result = new BaseEntityResult();
+    result.Success = false;
+    result.Message = message;
+    return result;
+}
 
 // ---------------------------------------------------------------------------
 // Mock dependencies before importing the module under test
@@ -79,7 +90,7 @@ const mockConversationEntity = {
     ProjectID: '',
     IsArchived: false,
     IsPinned: false,
-    LatestResult: null as { Message: string } | null,
+    LatestResult: null as BaseEntityResultType | null,
     Save: vi.fn().mockResolvedValue(true),
     Delete: vi.fn().mockResolvedValue(true),
     Load: vi.fn().mockResolvedValue(true),
@@ -531,7 +542,7 @@ describe('ConversationEngine', () => {
 
         it('should throw when save fails', async () => {
             mockConversationEntity.Save.mockResolvedValue(false);
-            mockConversationEntity.LatestResult = { Message: 'Save failed' };
+            mockConversationEntity.LatestResult = refusal('Save failed');
 
             await expect(
                 engine.CreateConversation('Bad Chat', 'env-1', contextUser)
@@ -626,7 +637,7 @@ describe('ConversationEngine', () => {
         it('should throw when delete fails', async () => {
             mockConversationEntity.Load.mockResolvedValue(true);
             mockConversationEntity.Delete.mockResolvedValue(false);
-            mockConversationEntity.LatestResult = { Message: 'Delete failed' };
+            mockConversationEntity.LatestResult = refusal('Delete failed');
 
             await expect(
                 engine.DeleteConversation('c1', contextUser)

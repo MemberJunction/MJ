@@ -590,7 +590,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
         await this.LoadData();
       } else {
         console.error('[IntegrationConnections] Save failed:',
-          this.EditEntity.LatestResult?.CompleteMessage ?? this.EditEntity.LatestResult?.Message);
+          this.EditEntity.LatestResult?.CompleteMessage);
       }
     } catch (err) {
       console.error('[IntegrationConnections] Save error:', err);
@@ -653,7 +653,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
         await this.LoadData();
       } else {
         console.error('[IntegrationConnections] Delete failed:',
-          ci.LatestResult?.CompleteMessage ?? ci.LatestResult?.Message);
+          ci.LatestResult?.CompleteMessage);
       }
     } catch (err) {
       console.error('[IntegrationConnections] Delete error:', err);
@@ -1722,7 +1722,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       return ci.ID;
     }
     console.error('[IntegrationConnections] Failed to save company integration:',
-      ci.LatestResult?.CompleteMessage ?? ci.LatestResult?.Message);
+      ci.LatestResult?.CompleteMessage);
     return null;
   }
 

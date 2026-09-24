@@ -256,7 +256,7 @@ export class ArtifactPermissionService {
 
         const saved = await permission.Save();
         if (!saved) {
-            throw new Error(permission.LatestResult?.Message || 'Failed to grant permission');
+            throw new Error(permission.LatestResult?.CompleteMessage || 'Failed to grant permission');
         }
 
         return permission;

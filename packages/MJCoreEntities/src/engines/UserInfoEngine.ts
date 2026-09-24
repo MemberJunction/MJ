@@ -426,7 +426,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
         }
         return true;
       } else {
-        console.error('UserInfoEngine.DeleteSetting: Failed to delete:', setting.LatestResult?.Message);
+        console.error('UserInfoEngine.DeleteSetting: Failed to delete:', setting.LatestResult?.CompleteMessage);
         return false;
       }
     } catch (error) {

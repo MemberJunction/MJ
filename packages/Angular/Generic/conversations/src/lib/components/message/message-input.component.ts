@@ -2234,7 +2234,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Handles message send failure
    */
   private handleSendFailure(messageDetail: MJConversationDetailEntity): void {
-    console.error('Failed to send message:', messageDetail.LatestResult?.Message);
+    console.error('Failed to send message:', messageDetail.LatestResult?.CompleteMessage);
     this.toastService.error('Failed to send message. Please try again.');
   }
 

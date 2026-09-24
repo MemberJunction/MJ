@@ -1074,7 +1074,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
 
         const saved = await category.Save();
         if (!saved) {
-            LogError(`Failed to create category '${name}': ${category.LatestResult?.Message}`);
+            LogError(`Failed to create category '${name}': ${category.LatestResult?.CompleteMessage}`);
             return null;
         }
 

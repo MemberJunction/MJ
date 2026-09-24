@@ -400,8 +400,8 @@ export class ListManagementService {
         listDetail.TransactionGroup = tg;
         const saveResult = await listDetail.Save();
         if (!saveResult) {
-          console.error(`[ListManagementService] Failed to queue record ${recordId} for list ${listId}:`, listDetail.LatestResult?.Message);
-          result.errors.push(`Failed to add record ${recordId} to list ${listId}: ${listDetail.LatestResult?.Message || 'Unknown error'}`);
+          console.error(`[ListManagementService] Failed to queue record ${recordId} for list ${listId}:`, listDetail.LatestResult?.CompleteMessage);
+          result.errors.push(`Failed to add record ${recordId} to list ${listId}: ${listDetail.LatestResult?.CompleteMessage || 'Unknown error'}`);
         }
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);

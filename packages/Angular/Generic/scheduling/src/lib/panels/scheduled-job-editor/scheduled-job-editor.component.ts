@@ -141,7 +141,7 @@ export class ScheduledJobEditorComponent extends BaseAngularComponent implements
                 this.Saved.emit(job);
             } else {
                 MJNotificationService.Instance.CreateSimpleNotification(
-                    `Failed to save: ${job.LatestResult?.Message ?? 'Unknown error'}`,
+                    `Failed to save: ${job.LatestResult?.CompleteMessage ?? 'Unknown error'}`,
                     'error', 5000
                 );
             }

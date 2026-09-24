@@ -316,7 +316,7 @@ export class CollectionFormModalComponent extends BaseAngularComponent implement
         this.Saved.emit(collection);
         this.resetForm();
       } else {
-        this.errorMessage = collection.LatestResult?.Message || 'Failed to save collection';
+        this.errorMessage = collection.LatestResult?.CompleteMessage || 'Failed to save collection';
         this.toastService.error(this.errorMessage);
       }
     } catch (error) {

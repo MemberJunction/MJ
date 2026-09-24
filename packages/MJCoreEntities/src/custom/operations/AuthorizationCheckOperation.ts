@@ -87,7 +87,7 @@ export class AuthorizationCheckServerOperation extends AuthorizationCheckOperati
                 }
                 if (!(await log.Save())) {
                     LogError(
-                        `Authorization.Check: failed to save audit log for "${row.Name}": ${log.LatestResult?.Message ?? 'unknown error'}`,
+                        `Authorization.Check: failed to save audit log for "${row.Name}": ${log.LatestResult?.CompleteMessage ?? 'unknown error'}`,
                     );
                 }
             } catch (e) {

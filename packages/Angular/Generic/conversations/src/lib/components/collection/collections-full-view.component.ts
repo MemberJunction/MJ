@@ -2805,7 +2805,7 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
     const deleted = await collection.Delete();
 
     if (!deleted) {
-      throw new Error(`Failed to delete collection: ${collection.LatestResult?.Message || 'Unknown error'}`);
+      throw new Error(`Failed to delete collection: ${collection.LatestResult?.CompleteMessage || 'Unknown error'}`);
     }
   }
 

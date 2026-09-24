@@ -3742,7 +3742,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
             const saved = await duplicate.Save();
             if (!saved) {
-                LogError(`[Dedup] Failed to save resolution for duplicate ${duplicateID}: ${duplicate.LatestResult?.Message ?? 'Unknown error'}`);
+                LogError(`[Dedup] Failed to save resolution for duplicate ${duplicateID}: ${duplicate.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
                 return false;
             }
 

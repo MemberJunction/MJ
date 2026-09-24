@@ -177,7 +177,7 @@ export class QueryDatabaseWriter {
 
     const saved = await category.Save();
     if (!saved) {
-      throw new Error(`Failed to create category: ${category.LatestResult?.Message}`);
+      throw new Error(`Failed to create category: ${category.LatestResult?.CompleteMessage}`);
     }
 
     return category.ID;

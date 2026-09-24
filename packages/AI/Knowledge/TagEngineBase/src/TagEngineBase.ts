@@ -302,7 +302,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
 
         const saved = await tag.Save();
         if (!saved) {
-            throw new Error(`Failed to save new tag "${name}": ${tag.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`Failed to save new tag "${name}": ${tag.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
 
         this._tags.push(tag);
@@ -373,7 +373,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
         item.Weight = weight;
         const saved = await item.Save();
         if (!saved) {
-            throw new Error(`Failed to update tagged item weight: ${item.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`Failed to update tagged item weight: ${item.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
         return item;
     }
@@ -398,7 +398,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
 
         const saved = await item.Save();
         if (!saved) {
-            throw new Error(`Failed to save new tagged item: ${item.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`Failed to save new tagged item: ${item.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
 
         return item;

@@ -1048,7 +1048,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             const saved = await conversation.Save();
             if (!saved) {
-                throw new Error(conversation.LatestResult?.Message || 'Failed to create conversation');
+                throw new Error(conversation.LatestResult?.CompleteMessage || 'Failed to create conversation');
             }
         } finally {
             this._selfMutating = false;
@@ -1154,7 +1154,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 // Delete failed — restore to list
                 const current = this._conversations$.value;
                 this._conversations$.next([conversation, ...current]);
-                throw new Error(conversation.LatestResult?.Message || 'Failed to delete conversation');
+                throw new Error(conversation.LatestResult?.CompleteMessage || 'Failed to delete conversation');
             }
         } finally {
             this._selfMutating = false;
@@ -1246,7 +1246,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             const saved = await conversation.Save();
             if (!saved) {
-                throw new Error(conversation.LatestResult?.Message || 'Failed to update conversation');
+                throw new Error(conversation.LatestResult?.CompleteMessage || 'Failed to update conversation');
             }
         } finally {
             this._selfMutating = false;
@@ -2305,7 +2305,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             const saved = await detail.Save();
             if (!saved) {
-                throw new Error(detail.LatestResult?.Message || 'Failed to create conversation detail');
+                throw new Error(detail.LatestResult?.CompleteMessage || 'Failed to create conversation detail');
             }
         } finally {
             this._selfMutating = false;
@@ -2328,7 +2328,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             const saved = await detail.Save();
             if (!saved) {
-                throw new Error(detail.LatestResult?.Message || 'Failed to save conversation detail');
+                throw new Error(detail.LatestResult?.CompleteMessage || 'Failed to save conversation detail');
             }
         } finally {
             this._selfMutating = false;
@@ -2371,7 +2371,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         try {
             const deleted = await detail.Delete();
             if (!deleted) {
-                throw new Error(detail.LatestResult?.Message || 'Failed to delete conversation detail');
+                throw new Error(detail.LatestResult?.CompleteMessage || 'Failed to delete conversation detail');
             }
         } finally {
             this._selfMutating = false;
@@ -2808,7 +2808,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         const saved = await conversation.Save();
         if (!saved) {
-            throw new Error(conversation.LatestResult?.Message || 'Failed to update conversation');
+            throw new Error(conversation.LatestResult?.CompleteMessage || 'Failed to update conversation');
         }
         return true;
     }

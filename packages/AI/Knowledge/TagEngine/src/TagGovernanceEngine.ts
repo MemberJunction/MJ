@@ -184,7 +184,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
             if (saved) {
                 moved++;
             } else {
-                LogError(`TagGovernanceEngine: Failed to re-point content item tag ${item.ID}: ${item.LatestResult?.Message ?? 'Unknown error'}`);
+                LogError(`TagGovernanceEngine: Failed to re-point content item tag ${item.ID}: ${item.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
             }
         }
         return moved;
@@ -213,7 +213,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
             if (saved) {
                 moved++;
             } else {
-                LogError(`TagGovernanceEngine: Failed to re-point tagged item ${item.ID}: ${item.LatestResult?.Message ?? 'Unknown error'}`);
+                LogError(`TagGovernanceEngine: Failed to re-point tagged item ${item.ID}: ${item.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
             }
         }
         return moved;
@@ -228,7 +228,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
         tag.MergedIntoTagID = survivingTagID;
         const saved = await tag.Save();
         if (!saved) {
-            throw new Error(`TagGovernanceEngine: Failed to mark tag ${sourceTagID} as merged: ${tag.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`TagGovernanceEngine: Failed to mark tag ${sourceTagID} as merged: ${tag.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
     }
 
@@ -291,7 +291,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
         tag.ParentID = newParentID;
         const saved = await tag.Save();
         if (!saved) {
-            throw new Error(`TagGovernanceEngine: Failed to move tag ${tagID}: ${tag.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`TagGovernanceEngine: Failed to move tag ${tagID}: ${tag.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
 
         await this.createAuditEntry(
@@ -324,7 +324,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
         tag.DisplayName = newName;
         const saved = await tag.Save();
         if (!saved) {
-            throw new Error(`TagGovernanceEngine: Failed to rename tag ${tagID}: ${tag.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`TagGovernanceEngine: Failed to rename tag ${tagID}: ${tag.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
 
         await this.createAuditEntry(
@@ -406,7 +406,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
         tag.Status = newStatus;
         const saved = await tag.Save();
         if (!saved) {
-            throw new Error(`TagGovernanceEngine: Failed to change status of tag ${tagID} to ${newStatus}: ${tag.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`TagGovernanceEngine: Failed to change status of tag ${tagID} to ${newStatus}: ${tag.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
 
         await this.createAuditEntry(
@@ -451,7 +451,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
 
         const saved = await tag.Save();
         if (!saved) {
-            throw new Error(`TagGovernanceEngine: Failed to create new tag "${name}": ${tag.LatestResult?.Message ?? 'Unknown error'}`);
+            throw new Error(`TagGovernanceEngine: Failed to create new tag "${name}": ${tag.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
         return tag;
     }
@@ -777,7 +777,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
 
         const saved = await auditLog.Save();
         if (!saved) {
-            LogError(`TagGovernanceEngine: Failed to create audit log entry for tag ${tagID}, action ${action}: ${auditLog.LatestResult?.Message ?? 'Unknown error'}`);
+            LogError(`TagGovernanceEngine: Failed to create audit log entry for tag ${tagID}, action ${action}: ${auditLog.LatestResult?.CompleteMessage ?? 'Unknown error'}`);
         }
     }
 }

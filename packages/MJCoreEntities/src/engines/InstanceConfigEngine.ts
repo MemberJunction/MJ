@@ -177,7 +177,7 @@ export class InstanceConfigEngine extends BaseEngine<InstanceConfigEngine> {
             if (saved) {
                 return true;
             } else {
-                console.error('InstanceConfigEngine.Set: Failed to save:', config.LatestResult?.Message);
+                console.error('InstanceConfigEngine.Set: Failed to save:', config.LatestResult?.CompleteMessage);
                 return false;
             }
         } catch (error) {

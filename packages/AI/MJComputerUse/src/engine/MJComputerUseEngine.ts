@@ -1118,7 +1118,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
 
         const saved = await mediaEntity.Save();
         if (!saved) {
-            LogError(`Failed to save screenshot media for step ${step.StepNumber}: ${mediaEntity.LatestResult?.Message}`);
+            LogError(`Failed to save screenshot media for step ${step.StepNumber}: ${mediaEntity.LatestResult?.CompleteMessage}`);
         }
     }
 

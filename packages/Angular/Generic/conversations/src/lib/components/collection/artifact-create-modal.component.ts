@@ -356,7 +356,7 @@ export class ArtifactCreateModalComponent extends BaseAngularComponent implement
 
       const artifactSaved = await artifact.Save();
       if (!artifactSaved) {
-        this.errorMessage = artifact.LatestResult?.Message || 'Failed to create artifact';
+        this.errorMessage = artifact.LatestResult?.CompleteMessage || 'Failed to create artifact';
         this.toastService.error(this.errorMessage);
         return;
       }
@@ -374,7 +374,7 @@ export class ArtifactCreateModalComponent extends BaseAngularComponent implement
       if (!versionSaved) {
         // Rollback: delete the artifact if version creation fails
         await artifact.Delete();
-        this.errorMessage = version.LatestResult?.Message || 'Failed to create artifact version';
+        this.errorMessage = version.LatestResult?.CompleteMessage || 'Failed to create artifact version';
         this.toastService.error(this.errorMessage);
         return;
       }

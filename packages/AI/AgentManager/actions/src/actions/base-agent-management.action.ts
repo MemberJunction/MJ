@@ -336,7 +336,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             if (!promptSaved) {
                 return { 
                     success: false, 
-                    error: prompt.LatestResult?.Message || 'Failed to save prompt' 
+                    error: prompt.LatestResult?.CompleteMessage || 'Failed to save prompt' 
                 };
             }
             
@@ -358,7 +358,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
                 await prompt.Delete();
                 return { 
                     success: false, 
-                    error: agentPrompt.LatestResult?.Message || 'Failed to associate prompt with agent' 
+                    error: agentPrompt.LatestResult?.CompleteMessage || 'Failed to associate prompt with agent' 
                 };
             }
             

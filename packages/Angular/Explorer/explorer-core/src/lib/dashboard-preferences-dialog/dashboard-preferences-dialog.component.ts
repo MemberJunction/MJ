@@ -429,7 +429,7 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
       for (const pref of prefsToDelete) {
         console.log('Deleting preference for dashboard:', pref.DashboardID);
         if (!await pref.Delete()) {
-          const errorMsg = pref.LatestResult?.Error || pref.LatestResult?.Message || 'Unknown error';
+          const errorMsg = pref.LatestResult?.CompleteMessage || 'Unknown error';
           throw new Error(`Failed to delete preference: ${errorMsg}`);
         }
       }
@@ -449,7 +449,7 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
           prefEntity.DisplayOrder = newDisplayOrder;
           
           if (!await prefEntity.Save()) {
-            const errorMsg = prefEntity.LatestResult?.Error || prefEntity.LatestResult?.Message || 'Unknown error';
+            const errorMsg = prefEntity.LatestResult?.CompleteMessage || 'Unknown error';
             throw new Error(`Failed to update preference for dashboard ${dashboard.Name}: ${errorMsg}`);
           }
         } else {
@@ -478,7 +478,7 @@ export class DashboardPreferencesDialogComponent extends BaseAngularComponent im
           });
 
           if (!await prefEntity.Save()) {
-            const errorMsg = prefEntity.LatestResult?.Error || prefEntity.LatestResult?.Message || 'Unknown error';
+            const errorMsg = prefEntity.LatestResult?.CompleteMessage || 'Unknown error';
             throw new Error(`Failed to create preference for dashboard ${dashboard.Name}: ${errorMsg}`);
           }
         }

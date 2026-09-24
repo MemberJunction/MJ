@@ -211,7 +211,7 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
                 if (!deleted) {
                     throw new Error(
                         `Failed to remove share for ${share.User.Name}: ${
-                            share.PermissionEntity.LatestResult?.Message ?? 'unknown error'
+                            share.PermissionEntity.LatestResult?.CompleteMessage ?? 'unknown error'
                         }`
                     );
                 }
@@ -226,7 +226,7 @@ export class GenericShareDialogComponent extends BaseAngularComponent implements
                 if (!saved) {
                     throw new Error(
                         `Failed to save share for ${share.User.Name}: ${
-                            share.PermissionEntity.LatestResult?.Message ?? 'unknown error'
+                            share.PermissionEntity.LatestResult?.CompleteMessage ?? 'unknown error'
                         }`
                     );
                 }

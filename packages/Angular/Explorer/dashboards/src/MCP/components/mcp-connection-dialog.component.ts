@@ -337,7 +337,7 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
             const saved = await entity.Save();
             if (!saved) {
                 // Use CompleteMessage for full error details, fall back to Message
-                const errorMessage = entity.LatestResult?.CompleteMessage || entity.LatestResult?.Message || 'Unknown error';
+                const errorMessage = entity.LatestResult?.CompleteMessage || 'Unknown error';
                 console.error('MCP Connection save failed:', errorMessage, entity.LatestResult);
                 throw new Error(errorMessage);
             }

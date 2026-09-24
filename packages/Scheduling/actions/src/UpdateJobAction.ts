@@ -125,7 +125,7 @@ export class UpdateScheduledJobAction extends BaseJobAction {
                 return {
                     Success: false,
                     ResultCode: 'FAILED',
-                    Message: `Failed to update scheduled job: ${job.LatestResult?.Message || 'Unknown error'}`
+                    Message: `Failed to update scheduled job: ${job.LatestResult?.CompleteMessage || 'Unknown error'}`
                 };
             }
 

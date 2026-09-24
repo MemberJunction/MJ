@@ -2781,7 +2781,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const credSaved = await credential.Save();
             if (!credSaved) {
-                const err = credential.LatestResult?.Message || 'Unknown error';
+                const err = credential.LatestResult?.CompleteMessage || 'Unknown error';
                 return { Success: false, Message: `Failed to create Credential: ${err}` };
             }
             const credentialID = credential.ID;
@@ -2808,7 +2808,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const saved = await ci.Save();
             if (!saved) {
-                const validationErrors = ci.LatestResult?.Message || 'Unknown validation error';
+                const validationErrors = ci.LatestResult?.CompleteMessage || 'Unknown validation error';
                 return { Success: false, Message: `Failed to save CompanyIntegration: ${validationErrors}` };
             }
 
@@ -2839,7 +2839,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 await this.rollbackCreatedConnection(ci, credential);
                 return {
                     Success: false,
-                    Message: `Failed to activate CompanyIntegration: ${ci.LatestResult?.Message || 'Unknown error'}`,
+                    Message: `Failed to activate CompanyIntegration: ${ci.LatestResult?.CompleteMessage || 'Unknown error'}`,
                 };
             }
 
@@ -3216,7 +3216,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
             ci.IsActive = true;
-            if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.Message ?? 'Unknown error'}` };
+            if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.CompleteMessage ?? 'Unknown error'}` };
 
             if (runSchemaRefresh && !awaitSchemaRefresh) {
                 const detached = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md);
@@ -4699,7 +4699,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
             job.Status = enabled ? 'Active' : 'Paused';
             if (!await job.Save()) {
-                const err = job.LatestResult?.Message || 'Unknown error';
+                const err = job.LatestResult?.CompleteMessage || 'Unknown error';
                 return { Success: false, Message: `Failed to toggle: ${err}` };
             }
             return { Success: true, Message: enabled ? 'Activated' : 'Paused' };
@@ -4787,7 +4787,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             await job.Delete();
             const deleted = await tg.Submit();
             if (!deleted) {
-                const err = job.LatestResult?.Message || 'Unknown error';
+                const err = job.LatestResult?.CompleteMessage || 'Unknown error';
                 return { Success: false, Message: `Failed to delete: ${err}` };
             }
             return { Success: true, Message: `Deleted (${jobRunsResult.Results?.length ?? 0} runs removed)` };

@@ -1279,7 +1279,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             console.debug('[DashboardBrowserResource] Save result:', {
                 success: saved,
                 latestResult: category.LatestResult,
-                message: category.LatestResult?.Message,
+                message: category.LatestResult?.CompleteMessage,
                 success2: category.LatestResult?.Success,
                 id: category.ID
             });
@@ -1290,7 +1290,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 this.Categories.push(category);
                 this.Categories = [...this.Categories].sort((a, b) => a.Name.localeCompare(b.Name));
             } else {
-                const errorMessage = category.LatestResult?.Message || 'Unknown error saving category';
+                const errorMessage = category.LatestResult?.CompleteMessage || 'Unknown error saving category';
                 console.error('[DashboardBrowserResource] Failed to save category:', errorMessage);
                 console.error('[DashboardBrowserResource] Full LatestResult:', JSON.stringify(category.LatestResult, null, 2));
 

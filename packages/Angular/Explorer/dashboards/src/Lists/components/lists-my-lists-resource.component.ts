@@ -2012,7 +2012,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         this.notificationService.CreateSimpleNotification(`"${listName}" deleted`, 'success', 3000);
       } else {
         // Get the detailed error message from LatestResult
-        const errorMessage = listToDelete.LatestResult?.Message || 'Unknown error occurred';
+        const errorMessage = listToDelete.LatestResult?.CompleteMessage || 'Unknown error occurred';
         console.error('Failed to delete list:', listToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
@@ -2078,7 +2078,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
         await this.loadData();
       } else {
         // Get the detailed error message from LatestResult
-        const errorMessage = list.LatestResult?.Message || 'Unknown error occurred';
+        const errorMessage = list.LatestResult?.CompleteMessage || 'Unknown error occurred';
         const action = isEditing ? 'update' : 'create';
         console.error(`Failed to ${action} list:`, list.LatestResult);
         this.notificationService.CreateSimpleNotification(

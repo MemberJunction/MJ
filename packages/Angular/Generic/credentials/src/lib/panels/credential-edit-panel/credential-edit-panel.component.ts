@@ -545,7 +545,7 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
                 this.ClosePanel();
             } else {
                 // Use CompleteMessage for full error details, fall back to Message
-                const rawError = entity.LatestResult?.CompleteMessage || entity.LatestResult?.Message || 'Unknown error';
+                const rawError = entity.LatestResult?.CompleteMessage || 'Unknown error';
                 console.error('Credential save failed:', rawError, entity.LatestResult);
 
                 // Defense-in-depth: a concurrent save can still trip the DB UNIQUE (CredentialTypeID, Name)
@@ -596,7 +596,7 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
                 this.ClosePanel();
             } else {
                 // Use CompleteMessage for full error details, fall back to Message
-                const errorMessage = this.Credential.LatestResult?.CompleteMessage || this.Credential.LatestResult?.Message || 'Unknown error';
+                const errorMessage = this.Credential.LatestResult?.CompleteMessage || 'Unknown error';
                 console.error('Credential delete failed:', errorMessage, this.Credential.LatestResult);
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Failed to delete credential: ${errorMessage}`,

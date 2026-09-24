@@ -56,7 +56,7 @@ export class DeleteScheduledJobAction extends BaseJobAction {
             const deleteResult = await job.Delete();
 
             if (!deleteResult) {
-                const errorMsg = job.LatestResult?.Message || 'Unknown error';
+                const errorMsg = job.LatestResult?.CompleteMessage || 'Unknown error';
 
                 // Check for cascade/reference errors
                 if (errorMsg.toLowerCase().includes('reference') ||

@@ -188,7 +188,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';
                     log.ErrorMessage = sendResult.Error;
                     if (!await log.Save()){
-                        throw new Error(`Failed to complete log for message: ${log.LatestResult?.Message}`);
+                        throw new Error(`Failed to complete log for message: ${log.LatestResult?.CompleteMessage}`);
                     }
                     else{
                         return sendResult;

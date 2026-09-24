@@ -687,7 +687,7 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
         // Navigate to the newly created agent record
         this.navigationService.OpenEntityRecord('MJ: AI Agents', agent.PrimaryKey);
       } else {
-        const errorMessage = agent.LatestResult?.Message || 'Unknown error occurred while creating sub-agent';
+        const errorMessage = agent.LatestResult?.CompleteMessage || 'Unknown error occurred while creating sub-agent';
         this.error = `Failed to create sub-agent: ${errorMessage}`;
         LogError('Sub-agent creation failed', undefined, errorMessage);
       }

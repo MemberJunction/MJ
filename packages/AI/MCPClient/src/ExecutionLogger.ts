@@ -90,7 +90,7 @@ export class ExecutionLogger {
 
             const saved = await logEntity.Save();
             if (!saved) {
-                console.error('[MCPClient] Failed to create execution log entry:', logEntity.LatestResult?.Message);
+                console.error('[MCPClient] Failed to create execution log entry:', logEntity.LatestResult?.CompleteMessage);
                 return null;
             }
 
@@ -190,7 +190,7 @@ export class ExecutionLogger {
 
             const saved = await logEntity.Save();
             if (!saved) {
-                console.error('[MCPClient] Failed to complete execution log:', logEntity.LatestResult?.Message);
+                console.error('[MCPClient] Failed to complete execution log:', logEntity.LatestResult?.CompleteMessage);
             }
 
             // Remove from pending
