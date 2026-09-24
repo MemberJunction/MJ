@@ -83,7 +83,7 @@ export interface NccoEndpoint {
  * @param headers Optional metadata headers Vonage forwards on the websocket handshake.
  * @returns The NCCO document (a JSON array of actions) to return to Vonage.
  */
-export function buildConnectNcco(
+export function BuildConnectNcco(
     mediaWssUrl: string,
     contentType = 'audio/l16;rate=8000',
     headers?: Record<string, unknown>,
@@ -95,6 +95,15 @@ export function buildConnectNcco(
     return [{ action: 'connect', endpoint: [endpoint] }];
 }
 
+/** @deprecated Use {@link BuildConnectNcco}. */
+export function buildConnectNcco(
+    mediaWssUrl: string,
+    contentType = 'audio/l16;rate=8000',
+    headers?: Record<string, unknown>,
+): NccoAction[] {
+    return BuildConnectNcco(mediaWssUrl, contentType, headers);
+}
+
 /**
  * Builds the NCCO `connect` action used to **transfer** a live call to another number — the document
  * supplied to the Voice API `PUT /v1/calls/:uuid` transfer (`{ action: 'transfer', destination: { type:
@@ -103,8 +112,13 @@ export function buildConnectNcco(
  * @param toNumber The transfer destination (E.164).
  * @returns A one-action NCCO connecting the call to a `phone` endpoint.
  */
-export function buildTransferNccoAction(toNumber: string): NccoAction[] {
+export function BuildTransferNccoAction(toNumber: string): NccoAction[] {
     return [{ action: 'connect', endpoint: [{ type: 'phone', number: toNumber } as unknown as NccoEndpoint] }];
+}
+
+/** @deprecated Use {@link BuildTransferNccoAction}. */
+export function buildTransferNccoAction(toNumber: string): NccoAction[] {
+    return BuildTransferNccoAction(toNumber);
 }
 
 /**
@@ -132,7 +146,7 @@ export interface VonageControlEvent {
  * @param text The UTF-8 text-frame payload Vonage sent.
  * @returns The parsed control event, or `null` when the frame is not a recognizable JSON event.
  */
-export function parseVonageControlEvent(text: string): VonageControlEvent | null {
+export function ParseVonageControlEvent(text: string): VonageControlEvent | null {
     try {
         const parsed: unknown = JSON.parse(text);
         if (parsed && typeof parsed === 'object' && typeof (parsed as { event?: unknown }).event === 'string') {
@@ -142,6 +156,11 @@ export function parseVonageControlEvent(text: string): VonageControlEvent | null
     } catch {
         return null;
     }
+}
+
+/** @deprecated Use {@link ParseVonageControlEvent}. */
+export function parseVonageControlEvent(text: string): VonageControlEvent | null {
+    return ParseVonageControlEvent(text);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -248,7 +267,7 @@ export class RealVonageBindings implements IVonageClientBindings {
         return this.voice.CreateCall({
             To: toNumber,
             From: fromNumber,
-            Ncco: buildConnectNcco(this.mediaWssUrl, this.contentType),
+            Ncco: BuildConnectNcco(this.mediaWssUrl, this.contentType),
             ...(eventUrl ? { EventUrl: eventUrl } : {}),
         });
     }
@@ -293,7 +312,7 @@ export class RealVonageBindings implements IVonageClientBindings {
 
     /** @inheritdoc */
     public async transferCall(callUuid: string, toNumber: string): Promise<void> {
-        await this.voice.TransferCall(callUuid, { Ncco: buildTransferNccoAction(toNumber) });
+        await this.voice.TransferCall(callUuid, { Ncco: BuildTransferNccoAction(toNumber) });
     }
 
     /** @inheritdoc */

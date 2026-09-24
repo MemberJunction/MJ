@@ -39,7 +39,7 @@ import {
 import { MJEntityEntity, MJEntityFieldPermissionEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { ordinalCompare } from '@memberjunction/global';
 import {
-    q, schemaOf, flsEntity, fieldOf, restrictableFields, rolesWithRead, skipIfUnusable, loadEfpRow
+    Q, SchemaOf, FlsEntity, FieldOf, RestrictableFields, RolesWithRead, SkipIfUnusable, LoadEfpRow
 } from './fls-enforcement.checks';
 
 // Captured in Setup so Teardown can restore role membership even after a mid-check failure.
@@ -60,18 +60,18 @@ let captured: CapturedRoles | null = null;
 
 /** Direct-SQL reset: no permission rows, flag off, metadata refreshed. The known-clean baseline. */
 async function resetFls(ctx: IntegrationCheckContext): Promise<void> {
-    const schema = schemaOf(ctx);
-    const entity = flsEntity(ctx);
-    await q(ctx,
+    const schema = SchemaOf(ctx);
+    const entity = FlsEntity(ctx);
+    await Q(ctx,
         `DELETE p FROM [${schema}].EntityFieldPermission p ` +
         `JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
-    await q(ctx, `UPDATE [${schema}].Entity SET EnableFieldLevelSecurity = 0 WHERE ID = '${entity.ID}'`);
+    await Q(ctx, `UPDATE [${schema}].Entity SET EnableFieldLevelSecurity = 0 WHERE ID = '${entity.ID}'`);
     await ctx.Provider.Refresh();
 }
 
 /** Flip the flag through the real server entity path. Returns [ok, message]. */
 async function setFlag(ctx: IntegrationCheckContext, on: boolean): Promise<[boolean, string]> {
-    const entity = flsEntity(ctx);
+    const entity = FlsEntity(ctx);
     const ent = await ctx.Provider.GetEntityObject<MJEntityEntity>('MJ: Entities', ctx.User);
     Assert(await ent.Load(entity.ID), `failed to load '${SEEDED_FLS_ENTITY}' entity record`);
     ent.EnableFieldLevelSecurity = on;
@@ -102,10 +102,10 @@ function systemUser(): UserInfo {
 async function efpRowsForRoles(
     ctx: IntegrationCheckContext, fieldName: string, roleIds: string[]
 ): Promise<Array<{ ID: string; RoleID: string }>> {
-    const fieldId = fieldOf(flsEntity(ctx), fieldName).ID;
+    const fieldId = FieldOf(FlsEntity(ctx), fieldName).ID;
     const list = roleIds.map(r => `'${r.toLowerCase()}'`).join(',');
-    return q<{ ID: string; RoleID: string }>(ctx,
-        `SELECT ID, RoleID FROM [${schemaOf(ctx)}].EntityFieldPermission ` +
+    return Q<{ ID: string; RoleID: string }>(ctx,
+        `SELECT ID, RoleID FROM [${SchemaOf(ctx)}].EntityFieldPermission ` +
         `WHERE EntityFieldID = '${fieldId}' AND LOWER(CONVERT(NVARCHAR(36), RoleID)) IN (${list}) ORDER BY RoleID`);
 }
 
@@ -119,8 +119,8 @@ async function refreshUsers(ctx: IntegrationCheckContext): Promise<void> {
 
 /** Load the UserRole row joining (user, role) through the entity path. */
 async function loadUserRole(ctx: IntegrationCheckContext, userId: string, roleId: string): Promise<MJUserRoleEntity> {
-    const rows = await q<{ ID: string }>(ctx,
-        `SELECT ID FROM [${schemaOf(ctx)}].UserRole ` +
+    const rows = await Q<{ ID: string }>(ctx,
+        `SELECT ID FROM [${SchemaOf(ctx)}].UserRole ` +
         `WHERE UserID = '${userId}' AND LOWER(CONVERT(NVARCHAR(36), RoleID)) = '${roleId.toLowerCase()}'`);
     Assert(rows.length === 1, `expected one UserRole row for user ${userId} / role ${roleId}, got ${rows.length}`);
     const ur = await ctx.Provider.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', ctx.User);
@@ -143,9 +143,9 @@ async function loadUserRole(ctx: IntegrationCheckContext, userId: string, roleId
 async function restoreUserRole(
     ctx: IntegrationCheckContext, userId: string, roleId: string, userRoleId: string
 ): Promise<void> {
-    await q(ctx,
-        `IF NOT EXISTS (SELECT 1 FROM [${schemaOf(ctx)}].UserRole WHERE UserID='${userId}' AND RoleID='${roleId}') ` +
-        `INSERT INTO [${schemaOf(ctx)}].UserRole (ID, UserID, RoleID) VALUES ('${userRoleId}', '${userId}', '${roleId}')`);
+    await Q(ctx,
+        `IF NOT EXISTS (SELECT 1 FROM [${SchemaOf(ctx)}].UserRole WHERE UserID='${userId}' AND RoleID='${roleId}') ` +
+        `INSERT INTO [${SchemaOf(ctx)}].UserRole (ID, UserID, RoleID) VALUES ('${userRoleId}', '${userId}', '${roleId}')`);
     await refreshUsers(ctx);
     await ctx.Provider.Refresh();
 }
@@ -218,41 +218,46 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-lifecycle', {
  * UQ_EntityFieldPermission_Field_Role midway. The save must report failure, the flag must
  * roll back to 0, and no snapshot rows may survive — only the planted poison row.
  */
-export async function CheckLc1_FlagFlipIsAtomic(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC1')) return;
+export async function CheckLc1FlagFlipIsAtomic(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC1')) return;
     const fx = ctx.FlsFixture!;
     await resetFls(ctx);
-    const entity = flsEntity(ctx);
-    const fields = restrictableFields(entity);
+    const entity = FlsEntity(ctx);
+    const fields = RestrictableFields(entity);
     const midField = fields[Math.floor(fields.length / 2)];
-    await q(ctx,
-        `INSERT INTO [${schemaOf(ctx)}].EntityFieldPermission (EntityFieldID, RoleID, ReadAccess, UpdateAccess, CreateAccess) ` +
+    await Q(ctx,
+        `INSERT INTO [${SchemaOf(ctx)}].EntityFieldPermission (EntityFieldID, RoleID, ReadAccess, UpdateAccess, CreateAccess) ` +
         `VALUES ('${midField.ID}', '${fx.RoleIDs!.Reader}', 'Allow', 'No Access', 'No Access')`);
 
     const [ok, msg] = await setFlag(ctx, true);
     Assert(!ok, `the enable must FAIL on the planted unique-key collision (got success; poison on ${midField.Name})`);
     Assert(msg.length > 0, 'the failed save must carry an error message');
 
-    const flag = await q<{ f: boolean }>(ctx,
-        `SELECT EnableFieldLevelSecurity AS f FROM [${schemaOf(ctx)}].Entity WHERE ID = '${entity.ID}'`);
+    const flag = await Q<{ f: boolean }>(ctx,
+        `SELECT EnableFieldLevelSecurity AS f FROM [${SchemaOf(ctx)}].Entity WHERE ID = '${entity.ID}'`);
     AssertEqual(flag[0].f, false, 'the flag must roll back to 0 with the snapshot');
-    const rows = await q<{ n: number }>(ctx,
-        `SELECT COUNT(*) AS n FROM [${schemaOf(ctx)}].EntityFieldPermission p ` +
-        `JOIN [${schemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
+    const rows = await Q<{ n: number }>(ctx,
+        `SELECT COUNT(*) AS n FROM [${SchemaOf(ctx)}].EntityFieldPermission p ` +
+        `JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
     AssertEqual(rows[0].n, 1, 'only the planted poison row may remain — a partial snapshot means the transaction tore');
 
     await resetFls(ctx); // remove the poison
 }
 
+/** @deprecated Use {@link CheckLc1FlagFlipIsAtomic}. */
+export async function CheckLc1_FlagFlipIsAtomic(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc1FlagFlipIsAtomic(ctx);
+}
+
 /** LC2 — reconciliation is idempotent (2.10): a re-save with the flag already on (not dirty) writes nothing. */
-export async function CheckLc2_ReconciliationIdempotent(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC2')) return;
+export async function CheckLc2ReconciliationIdempotent(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC2')) return;
     await enableFresh(ctx);
-    const entity = flsEntity(ctx);
-    const expected = restrictableFields(entity).length * rolesWithRead(entity).length;
-    const count = async () => (await q<{ n: number }>(ctx,
-        `SELECT COUNT(*) AS n FROM [${schemaOf(ctx)}].EntityFieldPermission p ` +
-        `JOIN [${schemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`))[0].n;
+    const entity = FlsEntity(ctx);
+    const expected = RestrictableFields(entity).length * RolesWithRead(entity).length;
+    const count = async () => (await Q<{ n: number }>(ctx,
+        `SELECT COUNT(*) AS n FROM [${SchemaOf(ctx)}].EntityFieldPermission p ` +
+        `JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`))[0].n;
     AssertEqual(await count(), expected, 'the fresh snapshot must cover (restrictable fields × read-holding roles)');
 
     const [okAgain, msgAgain] = await setFlag(ctx, true); // not dirty → no reconcile
@@ -260,44 +265,54 @@ export async function CheckLc2_ReconciliationIdempotent(ctx: IntegrationCheckCon
     AssertEqual(await count(), expected, 'a non-dirty re-save must write NOTHING (idempotency)');
 }
 
+/** @deprecated Use {@link CheckLc2ReconciliationIdempotent}. */
+export async function CheckLc2_ReconciliationIdempotent(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc2ReconciliationIdempotent(ctx);
+}
+
 /**
  * LC3 — disable keeps rows and stops enforcement; re-enable does not clobber (2.5/2.6).
  * Tighten one rule, disable (rows survive, the Deny stops binding), re-enable (no rows added,
  * the Deny survived and binds again).
  */
-export async function CheckLc3_DisableKeepsRowsReEnableKeepsTightening(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC3')) return;
+export async function CheckLc3DisableKeepsRowsReEnableKeepsTightening(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC3')) return;
     const fx = ctx.FlsFixture!;
     await enableFresh(ctx);
-    const entity = flsEntity(ctx);
-    const expected = restrictableFields(entity).length * rolesWithRead(entity).length;
-    const emailField = fieldOf(entity, 'Email');
+    const entity = FlsEntity(ctx);
+    const expected = RestrictableFields(entity).length * RolesWithRead(entity).length;
+    const emailField = FieldOf(entity, 'Email');
 
-    const tighten = await loadEfpRow(ctx, emailField.ID, fx.RoleIDs!.Reader);
+    const tighten = await LoadEfpRow(ctx, emailField.ID, fx.RoleIDs!.Reader);
     tighten.ReadAccess = 'Deny';
     tighten.UpdateAccess = 'No Access';
     tighten.CreateAccess = 'No Access';
     Assert(await tighten.Save(), `tightening Email/Reader must save: ${tighten.LatestResult?.CompleteMessage ?? ''}`);
     await ctx.Provider.Refresh();
-    Assert(flsEntity(ctx).GetDeniedReadFields(fx.Reader!).has('email'), 'the tightening must bind while enabled');
+    Assert(FlsEntity(ctx).GetDeniedReadFields(fx.Reader!).has('email'), 'the tightening must bind while enabled');
 
     const [okOff, msgOff] = await setFlag(ctx, false);
     Assert(okOff, `disable must save: ${msgOff}`);
     await ctx.Provider.Refresh();
-    const rowsOff = await q<{ n: number }>(ctx,
-        `SELECT COUNT(*) AS n FROM [${schemaOf(ctx)}].EntityFieldPermission p ` +
-        `JOIN [${schemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
+    const rowsOff = await Q<{ n: number }>(ctx,
+        `SELECT COUNT(*) AS n FROM [${SchemaOf(ctx)}].EntityFieldPermission p ` +
+        `JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
     AssertEqual(rowsOff[0].n, expected, 'disable must KEEP every row (2.5)');
-    AssertEqual(flsEntity(ctx).GetDeniedReadFields(fx.Reader!).size, 0, 'with the flag off, enforcement must stop');
+    AssertEqual(FlsEntity(ctx).GetDeniedReadFields(fx.Reader!).size, 0, 'with the flag off, enforcement must stop');
 
     const [okOn, msgOn] = await setFlag(ctx, true);
     Assert(okOn, `re-enable must save: ${msgOn}`);
     await ctx.Provider.Refresh();
-    const rowsOn = await q<{ n: number }>(ctx,
-        `SELECT COUNT(*) AS n FROM [${schemaOf(ctx)}].EntityFieldPermission p ` +
-        `JOIN [${schemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
+    const rowsOn = await Q<{ n: number }>(ctx,
+        `SELECT COUNT(*) AS n FROM [${SchemaOf(ctx)}].EntityFieldPermission p ` +
+        `JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID WHERE f.EntityID = '${entity.ID}'`);
     AssertEqual(rowsOn[0].n, expected, 're-enable must add NOTHING (2.6 — no clobber)');
-    Assert(flsEntity(ctx).GetDeniedReadFields(fx.Reader!).has('email'), 'the tightening must SURVIVE the disable/re-enable cycle');
+    Assert(FlsEntity(ctx).GetDeniedReadFields(fx.Reader!).has('email'), 'the tightening must SURVIVE the disable/re-enable cycle');
+}
+
+/** @deprecated Use {@link CheckLc3DisableKeepsRowsReEnableKeepsTightening}. */
+export async function CheckLc3_DisableKeepsRowsReEnableKeepsTightening(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc3DisableKeepsRowsReEnableKeepsTightening(ctx);
 }
 
 /**
@@ -306,8 +321,8 @@ export async function CheckLc3_DisableKeepsRowsReEnableKeepsTightening(ctx: Inte
  * must refuse at least the LAST edit (judged by the projected aggregate, from the DATABASE,
  * because metadata lags the writes), and the system user must still read the field.
  */
-export async function CheckLc4_NoAccessLockoutRefused(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC4')) return;
+export async function CheckLc4NoAccessLockoutRefused(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC4')) return;
     await enableFresh(ctx);
     const sysUser = systemUser();
     const rows = await efpRowsForRoles(ctx, 'Email', sysUser.UserRoles.map(r => r.RoleID));
@@ -326,12 +341,17 @@ export async function CheckLc4_NoAccessLockoutRefused(ctx: IntegrationCheckConte
         `at least one No-Access edit must be refused (${outcomes.filter(ok => !ok).length} of ${outcomes.length} were) — ` +
         `all permitted means the lockout hole is back`);
     await ctx.Provider.Refresh();
-    Assert(!flsEntity(ctx).GetDeniedReadFields(sysUser).has('email'), 'the system user must still read Email');
+    Assert(!FlsEntity(ctx).GetDeniedReadFields(sysUser).has('email'), 'the system user must still read Email');
+}
+
+/** @deprecated Use {@link CheckLc4NoAccessLockoutRefused}. */
+export async function CheckLc4_NoAccessLockoutRefused(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc4NoAccessLockoutRefused(ctx);
 }
 
 /** LC5 — the delete lockout vector (4.7b): deleting the system user's Allow rows one at a time, the LAST is refused. */
-export async function CheckLc5_DeleteLockoutRefused(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC5')) return;
+export async function CheckLc5DeleteLockoutRefused(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC5')) return;
     await enableFresh(ctx);
     const sysUser = systemUser();
     const rows = await efpRowsForRoles(ctx, 'Phone', sysUser.UserRoles.map(r => r.RoleID));
@@ -346,12 +366,17 @@ export async function CheckLc5_DeleteLockoutRefused(ctx: IntegrationCheckContext
     Assert(outcomes.some(ok => !ok),
         `at least one delete must be refused (${outcomes.filter(ok => !ok).length} of ${outcomes.length} were)`);
     await ctx.Provider.Refresh();
-    Assert(!flsEntity(ctx).GetDeniedReadFields(sysUser).has('phone'), 'the system user must still read Phone');
+    Assert(!FlsEntity(ctx).GetDeniedReadFields(sysUser).has('phone'), 'the system user must still read Phone');
+}
+
+/** @deprecated Use {@link CheckLc5DeleteLockoutRefused}. */
+export async function CheckLc5_DeleteLockoutRefused(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc5DeleteLockoutRefused(ctx);
 }
 
 /** LC6 — a Deny aimed at a system-user role is refused outright (4.7c). */
-export async function CheckLc6_DenyOnSystemRoleRefused(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC6')) return;
+export async function CheckLc6DenyOnSystemRoleRefused(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC6')) return;
     await enableFresh(ctx);
     const sysUser = systemUser();
     const rows = await efpRowsForRoles(ctx, 'Title', sysUser.UserRoles.map(r => r.RoleID));
@@ -367,13 +392,18 @@ export async function CheckLc6_DenyOnSystemRoleRefused(ctx: IntegrationCheckCont
         `(${efp.LatestResult?.CompleteMessage?.slice(0, 100) ?? 'SAVED — the guard did not fire'})`);
 }
 
+/** @deprecated Use {@link CheckLc6DenyOnSystemRoleRefused}. */
+export async function CheckLc6_DenyOnSystemRoleRefused(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc6DenyOnSystemRoleRefused(ctx);
+}
+
 /**
  * LC7 — the role-REMOVAL half of the guard. Removing a system-user role is permitted while
  * the other roles still duplicate its Allows; refused when it carries the LAST Allow; and a
  * role contributing no Allow can still be removed.
  */
-export async function CheckLc7_SystemRoleRemovalGuard(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC7')) return;
+export async function CheckLc7SystemRoleRemovalGuard(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC7')) return;
     await enableFresh(ctx);
     const sysUser = systemUser();
     // Sort before choosing the pair. `UserRoles` arrives in row order, and steps 1 and 3 below
@@ -392,11 +422,11 @@ export async function CheckLc7_SystemRoleRemovalGuard(ctx: IntegrationCheckConte
     await restoreUserRole(ctx, sysUser.ID, keeper, first.ID);
 
     // 2) narrow every OTHER role to No Access by direct SQL, so `keeper` carries the only Allows.
-    const entity = flsEntity(ctx);
+    const entity = FlsEntity(ctx);
     const others = roles.filter(r => r !== keeper).map(r => `'${r.toLowerCase()}'`).join(',');
-    await q(ctx,
+    await Q(ctx,
         `UPDATE p SET p.ReadAccess='No Access', p.UpdateAccess='No Access', p.CreateAccess='No Access' ` +
-        `FROM [${schemaOf(ctx)}].EntityFieldPermission p JOIN [${schemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID ` +
+        `FROM [${SchemaOf(ctx)}].EntityFieldPermission p JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID ` +
         `WHERE f.EntityID = '${entity.ID}' AND LOWER(CONVERT(NVARCHAR(36), p.RoleID)) IN (${others})`);
     await ctx.Provider.Refresh();
     const lastCarrier = await loadUserRole(ctx, sysUser.ID, keeper);
@@ -410,9 +440,14 @@ export async function CheckLc7_SystemRoleRemovalGuard(ctx: IntegrationCheckConte
     await restoreUserRole(ctx, sysUser.ID, spare, redundant.ID);
 }
 
+/** @deprecated Use {@link CheckLc7SystemRoleRemovalGuard}. */
+export async function CheckLc7_SystemRoleRemovalGuard(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc7SystemRoleRemovalGuard(ctx);
+}
+
 /** LC8 — ordinary users are untouched by the role-removal guard. */
-export async function CheckLc8_OrdinaryUserRoleRemovalUnaffected(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC8')) return;
+export async function CheckLc8OrdinaryUserRoleRemovalUnaffected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC8')) return;
     const fx = ctx.FlsFixture!;
     await enableFresh(ctx);
     const roleId = fx.RoleIDs!.Neutral; // one of multi's three roles
@@ -421,24 +456,29 @@ export async function CheckLc8_OrdinaryUserRoleRemovalUnaffected(ctx: Integratio
     await restoreUserRole(ctx, fx.Multi!.ID, roleId, ur.ID);
 }
 
+/** @deprecated Use {@link CheckLc8OrdinaryUserRoleRemovalUnaffected}. */
+export async function CheckLc8_OrdinaryUserRoleRemovalUnaffected(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc8OrdinaryUserRoleRemovalUnaffected(ctx);
+}
+
 /**
  * LC9 — the startup sweep (4.8): zero violations on a clean database; a lockout written by
  * DIRECT SQL — which no entity-layer guard ever saw — is detected; and the check singleton
  * reports the same count.
  */
-export async function CheckLc9_StartupSweepCatchesDirectSql(ctx: IntegrationCheckContext): Promise<void> {
-    if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC9')) return;
+export async function CheckLc9StartupSweepCatchesDirectSql(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC9')) return;
     await enableFresh(ctx);
     const provider: IMetadataProvider = ctx.Provider;
     const clean = FindSystemUserFieldAccessViolations(provider);
     AssertEqual(clean.length, 0, `a clean database must report zero violations (got ${clean.map(v => `${v.FieldName}/${v.Verb}`).join(', ')})`);
 
     const sysUser = systemUser();
-    const entity = flsEntity(ctx);
+    const entity = FlsEntity(ctx);
     const sysList = sysUser.UserRoles.map(r => `'${r.RoleID.toLowerCase()}'`).join(',');
-    await q(ctx,
+    await Q(ctx,
         `UPDATE p SET p.ReadAccess='No Access', p.UpdateAccess='No Access', p.CreateAccess='No Access' ` +
-        `FROM [${schemaOf(ctx)}].EntityFieldPermission p JOIN [${schemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID ` +
+        `FROM [${SchemaOf(ctx)}].EntityFieldPermission p JOIN [${SchemaOf(ctx)}].EntityField f ON f.ID = p.EntityFieldID ` +
         `WHERE f.EntityID = '${entity.ID}' AND f.Name = 'LastName' AND LOWER(CONVERT(NVARCHAR(36), p.RoleID)) IN (${sysList})`);
     await ctx.Provider.Refresh();
 
@@ -450,17 +490,22 @@ export async function CheckLc9_StartupSweepCatchesDirectSql(ctx: IntegrationChec
     await resetFls(ctx); // leave the entity clean for teardown symmetry
 }
 
+/** @deprecated Use {@link CheckLc9StartupSweepCatchesDirectSql}. */
+export async function CheckLc9_StartupSweepCatchesDirectSql(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckLc9StartupSweepCatchesDirectSql(ctx);
+}
+
 /** The 'fls-lifecycle' bundle (server transport, mutation tier). Order is load-bearing. */
 export const FlsLifecycleChecks: NamedCheck[] = [
-    { Id: 'fls-lifecycle.LC1', Name: 'LC1: the flag flip is atomic — a forced mid-snapshot failure leaves flag 0 and no snapshot rows', Fn: CheckLc1_FlagFlipIsAtomic, RequiresMutation: true },
-    { Id: 'fls-lifecycle.LC2', Name: 'LC2: reconciliation is idempotent — a non-dirty re-save writes nothing', Fn: CheckLc2_ReconciliationIdempotent, RequiresMutation: true },
-    { Id: 'fls-lifecycle.LC3', Name: 'LC3: disable keeps rows and stops enforcement; re-enable adds nothing and the tightening survives', Fn: CheckLc3_DisableKeepsRowsReEnableKeepsTightening, RequiresMutation: true },
-    { Id: 'fls-lifecycle.LC4', Name: 'LC4: turning every system-user role to No Access — the last edit is refused (the lockout hole stays closed)', Fn: CheckLc4_NoAccessLockoutRefused, RequiresMutation: true },
-    { Id: 'fls-lifecycle.LC5', Name: 'LC5: deleting every system-user Allow row — the last delete is refused', Fn: CheckLc5_DeleteLockoutRefused, RequiresMutation: true },
-    { Id: 'fls-lifecycle.LC6', Name: 'LC6: a Deny aimed at a system-user role is refused outright', Fn: CheckLc6_DenyOnSystemRoleRefused, RequiresMutation: true },
-    { Id: 'fls-lifecycle.LC7', Name: 'LC7: removing a system-user role — permitted while redundant, refused when it carries the last Allow', Fn: CheckLc7_SystemRoleRemovalGuard, RequiresMutation: true },
-    { Id: 'fls-lifecycle.LC8', Name: 'LC8: ordinary users\' role removal is untouched by the system-user guard', Fn: CheckLc8_OrdinaryUserRoleRemovalUnaffected, RequiresMutation: true },
-    { Id: 'fls-lifecycle.LC9', Name: 'LC9: the startup sweep reports zero on clean state and catches a direct-SQL lockout', Fn: CheckLc9_StartupSweepCatchesDirectSql, RequiresMutation: true }
+    { Id: 'fls-lifecycle.LC1', Name: 'LC1: the flag flip is atomic — a forced mid-snapshot failure leaves flag 0 and no snapshot rows', Fn: CheckLc1FlagFlipIsAtomic, RequiresMutation: true },
+    { Id: 'fls-lifecycle.LC2', Name: 'LC2: reconciliation is idempotent — a non-dirty re-save writes nothing', Fn: CheckLc2ReconciliationIdempotent, RequiresMutation: true },
+    { Id: 'fls-lifecycle.LC3', Name: 'LC3: disable keeps rows and stops enforcement; re-enable adds nothing and the tightening survives', Fn: CheckLc3DisableKeepsRowsReEnableKeepsTightening, RequiresMutation: true },
+    { Id: 'fls-lifecycle.LC4', Name: 'LC4: turning every system-user role to No Access — the last edit is refused (the lockout hole stays closed)', Fn: CheckLc4NoAccessLockoutRefused, RequiresMutation: true },
+    { Id: 'fls-lifecycle.LC5', Name: 'LC5: deleting every system-user Allow row — the last delete is refused', Fn: CheckLc5DeleteLockoutRefused, RequiresMutation: true },
+    { Id: 'fls-lifecycle.LC6', Name: 'LC6: a Deny aimed at a system-user role is refused outright', Fn: CheckLc6DenyOnSystemRoleRefused, RequiresMutation: true },
+    { Id: 'fls-lifecycle.LC7', Name: 'LC7: removing a system-user role — permitted while redundant, refused when it carries the last Allow', Fn: CheckLc7SystemRoleRemovalGuard, RequiresMutation: true },
+    { Id: 'fls-lifecycle.LC8', Name: 'LC8: ordinary users\' role removal is untouched by the system-user guard', Fn: CheckLc8OrdinaryUserRoleRemovalUnaffected, RequiresMutation: true },
+    { Id: 'fls-lifecycle.LC9', Name: 'LC9: the startup sweep reports zero on clean state and catches a direct-SQL lockout', Fn: CheckLc9StartupSweepCatchesDirectSql, RequiresMutation: true }
 ];
 
 for (const check of FlsLifecycleChecks) {

@@ -33,6 +33,11 @@ export async function IsBiometricAvailable(): Promise<boolean> {
     }
 }
 
+/** @deprecated Use {@link IsBiometricAvailable}. */
+export async function isBiometricAvailable(): Promise<boolean> {
+    return IsBiometricAvailable();
+}
+
 /**
  * Resolve a friendly label for the strongest biometric modality the device
  * supports (Face ID > Touch ID > generic). Used for UI copy on the lock screen
@@ -52,6 +57,11 @@ export async function GetBiometricLabel(): Promise<BiometricLabel> {
     }
 }
 
+/** @deprecated Use {@link GetBiometricLabel}. */
+export async function getBiometricLabel(): Promise<BiometricLabel> {
+    return GetBiometricLabel();
+}
+
 /**
  * Prompt the user to authenticate with their biometric (falling back to the
  * device passcode, which is acceptable for an app lock). Guards for
@@ -62,7 +72,7 @@ export async function GetBiometricLabel(): Promise<BiometricLabel> {
  * @returns `true` if the user successfully authenticated; `false` on cancel,
  *   failure, unavailability, or any native error.
  */
-export async function authenticate(reason: string): Promise<boolean> {
+export async function Authenticate(reason: string): Promise<boolean> {
     try {
         if (!(await IsBiometricAvailable())) return false;
         const result = await LocalAuthentication.authenticateAsync({
@@ -74,4 +84,9 @@ export async function authenticate(reason: string): Promise<boolean> {
     } catch {
         return false;
     }
+}
+
+/** @deprecated Use {@link Authenticate}. */
+export async function authenticate(reason: string): Promise<boolean> {
+    return Authenticate(reason);
 }

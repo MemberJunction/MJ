@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IRemoteBrowserProviderFeatures, IRemoteBrowserSession } from '@memberjunction/remote-browser-base';
-import { dispatchRemoteBrowserGoal } from '../remote-browser-engine';
+import { DispatchRemoteBrowserGoal } from '../remote-browser-engine';
 
 /** A fake session exposing only the two methods the dispatcher calls. */
 function makeSession() {
@@ -24,7 +24,7 @@ describe('dispatchRemoteBrowserGoal', () => {
   it('uses the ComputerUse strategy by default (no native capability) and passes options through', async () => {
     const session = makeSession();
     const features: IRemoteBrowserProviderFeatures = {};
-    const result = await dispatchRemoteBrowserGoal(session, features, 'log in', { MaxSteps: 9, StartUrl: 'https://start.test/' });
+    const result = await DispatchRemoteBrowserGoal(session, features, 'log in', { MaxSteps: 9, StartUrl: 'https://start.test/' });
 
     expect(session.RunComputerUseGoal).toHaveBeenCalledOnce();
     expect(session.RunComputerUseGoal.mock.calls[0][0]).toBe('log in');
@@ -37,7 +37,7 @@ describe('dispatchRemoteBrowserGoal', () => {
   it('uses NativeAI when the backend advertises it and the caller did not pin ComputerUse', async () => {
     const session = makeSession();
     const features: IRemoteBrowserProviderFeatures = { NativeAIControl: true };
-    const result = await dispatchRemoteBrowserGoal(session, features, 'log in', {});
+    const result = await DispatchRemoteBrowserGoal(session, features, 'log in', {});
 
     expect(session.InvokeNativeAIControl).toHaveBeenCalledWith('log in');
     expect(session.RunComputerUseGoal).not.toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe('dispatchRemoteBrowserGoal', () => {
   it('honors an explicit ComputerUse preference even when NativeAI is available', async () => {
     const session = makeSession();
     const features: IRemoteBrowserProviderFeatures = { NativeAIControl: true };
-    const result = await dispatchRemoteBrowserGoal(session, features, 'log in', { PreferredStrategy: 'ComputerUse' });
+    const result = await DispatchRemoteBrowserGoal(session, features, 'log in', { PreferredStrategy: 'ComputerUse' });
 
     expect(session.RunComputerUseGoal).toHaveBeenCalledOnce();
     expect(session.InvokeNativeAIControl).not.toHaveBeenCalled();
@@ -59,7 +59,7 @@ describe('dispatchRemoteBrowserGoal', () => {
   it('maps a failed native control result to a failed goal result', async () => {
     const session = makeSession();
     session.InvokeNativeAIControl.mockResolvedValueOnce({ Success: false, Detail: 'stagehand error' });
-    const result = await dispatchRemoteBrowserGoal(session, { NativeAIControl: true }, 'x', {});
+    const result = await DispatchRemoteBrowserGoal(session, { NativeAIControl: true }, 'x', {});
     expect(result.Success).toBe(false);
     expect(result.Strategy).toBe('NativeAI');
     expect(result.Status).toBe('Error');

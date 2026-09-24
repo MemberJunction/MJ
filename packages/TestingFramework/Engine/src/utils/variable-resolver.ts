@@ -21,8 +21,8 @@ import {
 export class VariableResolutionError extends Error {
   constructor(
     message: string,
-    public readonly variableName?: string,
-    public readonly reason?: 'missing_required' | 'invalid_type' | 'invalid_value' | 'parse_error'
+    public readonly variableName?: string,  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    public readonly reason?: 'missing_required' | 'invalid_type' | 'invalid_value' | 'parse_error'  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   ) {
     super(message);
     this.name = 'VariableResolutionError';
@@ -57,16 +57,16 @@ export class VariableResolver {
    * @returns Resolved variables with values and sources
    * @throws VariableResolutionError if required variables are missing or values are invalid
    */
-  resolveVariables(
+  ResolveVariables(
     typeVariablesSchemaJson: string | null,
     testVariablesJson: string | null,
     suiteVariablesJson: string | null,
     runOptions: TestRunOptions
   ): ResolvedTestVariables {
     // Parse schemas
-    const typeSchema = this.parseTypeSchema(typeVariablesSchemaJson);
-    const testConfig = this.parseTestConfig(testVariablesJson);
-    const suiteConfig = this.parseSuiteConfig(suiteVariablesJson);
+    const typeSchema = this.ParseTypeSchema(typeVariablesSchemaJson);
+    const testConfig = this.ParseTestConfig(testVariablesJson);
+    const suiteConfig = this.ParseSuiteConfig(suiteVariablesJson);
 
     // If no type schema, return empty resolved variables
     if (!typeSchema || typeSchema.variables.length === 0) {
@@ -104,10 +104,20 @@ export class VariableResolver {
     return { values, sources };
   }
 
+  /** @deprecated Use {@link ResolveVariables}. */
+  resolveVariables(
+    typeVariablesSchemaJson: string | null,
+    testVariablesJson: string | null,
+    suiteVariablesJson: string | null,
+    runOptions: TestRunOptions
+  ): ResolvedTestVariables {
+    return this.ResolveVariables(typeVariablesSchemaJson, testVariablesJson, suiteVariablesJson, runOptions);
+  }
+
   /**
    * Parse the TestType.VariablesSchema JSON
    */
-  parseTypeSchema(json: string | null): TestTypeVariablesSchema | null {
+  ParseTypeSchema(json: string | null): TestTypeVariablesSchema | null {
     if (!json) {
       return null;
     }
@@ -129,10 +139,15 @@ export class VariableResolver {
     return parsed;
   }
 
+  /** @deprecated Use {@link ParseTypeSchema}. */
+  parseTypeSchema(json: string | null): TestTypeVariablesSchema | null {
+    return this.ParseTypeSchema(json);
+  }
+
   /**
    * Parse the Test.Variables JSON
    */
-  parseTestConfig(json: string | null): TestVariablesConfig | null {
+  ParseTestConfig(json: string | null): TestVariablesConfig | null {
     if (!json) {
       return null;
     }
@@ -145,10 +160,15 @@ export class VariableResolver {
     return parsed as TestVariablesConfig;
   }
 
+  /** @deprecated Use {@link ParseTestConfig}. */
+  parseTestConfig(json: string | null): TestVariablesConfig | null {
+    return this.ParseTestConfig(json);
+  }
+
   /**
    * Parse the TestSuite.Variables JSON
    */
-  parseSuiteConfig(json: string | null): TestSuiteVariablesConfig | null {
+  ParseSuiteConfig(json: string | null): TestSuiteVariablesConfig | null {
     if (!json) {
       return null;
     }
@@ -159,6 +179,11 @@ export class VariableResolver {
     }
 
     return parsed as TestSuiteVariablesConfig;
+  }
+
+  /** @deprecated Use {@link ParseSuiteConfig}. */
+  parseSuiteConfig(json: string | null): TestSuiteVariablesConfig | null {
+    return this.ParseSuiteConfig(json);
   }
 
   /**
@@ -189,14 +214,14 @@ export class VariableResolver {
     // Priority 1: Run-level value
     if (runOptions.variables?.[varDef.name] !== undefined) {
       const value = runOptions.variables[varDef.name];
-      this.validateValue(varDef, testOverride, value, 'run');
+      this.ValidateValue(varDef, testOverride, value, 'run');
       return { value: value as TestVariableValue, source: 'run' };
     }
 
     // Priority 2: Suite-level value
     if (suiteConfig?.variables?.[varDef.name] !== undefined) {
       const value = suiteConfig.variables[varDef.name];
-      this.validateValue(varDef, testOverride, value, 'suite');
+      this.ValidateValue(varDef, testOverride, value, 'suite');
       return { value: value as TestVariableValue, source: 'suite' };
     }
 
@@ -216,14 +241,14 @@ export class VariableResolver {
   /**
    * Validate a variable value against its definition.
    */
-  validateValue(
+  ValidateValue(
     varDef: TestVariableDefinition,
     testOverride: TestVariableOverride | undefined,
     value: unknown,
     source: string
   ): void {
     // Type validation
-    this.validateDataType(varDef, value);
+    this.ValidateDataType(varDef, value);
 
     // Check against possible values (static source)
     if (varDef.valueSource === 'static' && varDef.possibleValues && varDef.possibleValues.length > 0) {
@@ -241,10 +266,20 @@ export class VariableResolver {
     }
   }
 
+  /** @deprecated Use {@link ValidateValue}. */
+  validateValue(
+    varDef: TestVariableDefinition,
+    testOverride: TestVariableOverride | undefined,
+    value: unknown,
+    source: string
+  ): void {
+    return this.ValidateValue(varDef, testOverride, value, source);
+  }
+
   /**
    * Validate value matches the expected data type.
    */
-  validateDataType(varDef: TestVariableDefinition, value: unknown): void {
+  ValidateDataType(varDef: TestVariableDefinition, value: unknown): void {
     const actualType = typeof value;
 
     switch (varDef.dataType) {
@@ -291,16 +326,21 @@ export class VariableResolver {
     }
   }
 
+  /** @deprecated Use {@link ValidateDataType}. */
+  validateDataType(varDef: TestVariableDefinition, value: unknown): void {
+    return this.ValidateDataType(varDef, value);
+  }
+
   /**
    * Get available variables for a test (combines type and test configuration).
    * Useful for CLI help and variable listing.
    */
-  getAvailableVariables(
+  GetAvailableVariables(
     typeVariablesSchemaJson: string | null,
     testVariablesJson: string | null
   ): TestVariableDefinition[] {
-    const typeSchema = this.parseTypeSchema(typeVariablesSchemaJson);
-    const testConfig = this.parseTestConfig(testVariablesJson);
+    const typeSchema = this.ParseTypeSchema(typeVariablesSchemaJson);
+    const testConfig = this.ParseTestConfig(testVariablesJson);
 
     if (!typeSchema) {
       return [];
@@ -332,11 +372,19 @@ export class VariableResolver {
       });
   }
 
+  /** @deprecated Use {@link GetAvailableVariables}. */
+  getAvailableVariables(
+    typeVariablesSchemaJson: string | null,
+    testVariablesJson: string | null
+  ): TestVariableDefinition[] {
+    return this.GetAvailableVariables(typeVariablesSchemaJson, testVariablesJson);
+  }
+
   /**
    * Parse a variable value from a CLI string.
    * Converts string input to appropriate type based on variable definition.
    */
-  parseCliValue(
+  ParseCliValue(
     varDef: TestVariableDefinition,
     cliValue: string
   ): TestVariableValue {
@@ -388,15 +436,23 @@ export class VariableResolver {
     }
   }
 
+  /** @deprecated Use {@link ParseCliValue}. */
+  parseCliValue(
+    varDef: TestVariableDefinition,
+    cliValue: string
+  ): TestVariableValue {
+    return this.ParseCliValue(varDef, cliValue);
+  }
+
   /**
    * Parse CLI variable arguments (name=value format) into a variables object.
    * If type schema is provided, values are converted to appropriate types.
    */
-  parseCliVariables(
+  ParseCliVariables(
     cliArgs: string[],
     typeVariablesSchemaJson?: string | null
   ): Record<string, TestVariableValue> {
-    const typeSchema = typeVariablesSchemaJson ? this.parseTypeSchema(typeVariablesSchemaJson) : null;
+    const typeSchema = typeVariablesSchemaJson ? this.ParseTypeSchema(typeVariablesSchemaJson) : null;
     const result: Record<string, TestVariableValue> = {};
 
     for (const arg of cliArgs) {
@@ -416,7 +472,7 @@ export class VariableResolver {
       const varDef = typeSchema?.variables.find(v => v.name === name);
 
       if (varDef) {
-        result[name] = this.parseCliValue(varDef, valueStr);
+        result[name] = this.ParseCliValue(varDef, valueStr);
       } else {
         // No type info, keep as string
         result[name] = valueStr;
@@ -424,5 +480,13 @@ export class VariableResolver {
     }
 
     return result;
+  }
+
+  /** @deprecated Use {@link ParseCliVariables}. */
+  parseCliVariables(
+    cliArgs: string[],
+    typeVariablesSchemaJson?: string | null
+  ): Record<string, TestVariableValue> {
+    return this.ParseCliVariables(cliArgs, typeVariablesSchemaJson);
   }
 }

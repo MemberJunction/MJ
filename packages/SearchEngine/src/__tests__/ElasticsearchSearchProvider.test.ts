@@ -23,7 +23,7 @@ vi.mock('@elastic/elasticsearch', () => ({
 
 import {
     ElasticsearchSearchProvider,
-    __resetElasticsearchClientLoaderForTests,
+    ResetElasticsearchClientLoaderForTests,
 } from '../providers/ElasticsearchSearchProvider';
 import type { UserInfo } from '@memberjunction/core';
 import type { ScopeConstraints } from '../generic/search.types';
@@ -49,7 +49,7 @@ function basicConfig() {
 describe('ElasticsearchSearchProvider', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        __resetElasticsearchClientLoaderForTests();
+        ResetElasticsearchClientLoaderForTests();
         mockPing.mockResolvedValue({});
     });
 

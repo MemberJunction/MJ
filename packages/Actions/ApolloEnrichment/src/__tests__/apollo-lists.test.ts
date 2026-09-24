@@ -73,13 +73,13 @@ vi.mock('@memberjunction/core', () => ({
 process.env.APOLLO_API_KEY = 'env-key';
 
 const { ApolloRESTClient } = await import('../lists/ApolloRESTClient.js');
-const { extractApolloKey } = await import('../lists/credentials.js');
+const { ExtractApolloKey } = await import('../lists/credentials.js');
 const {
-    getParam,
-    getParamRaw,
-    parseOptionalBooleanParam,
-    parseOptionalIntegerParam,
-    parseStringArrayParam,
+    GetParam,
+    GetParamRaw,
+    ParseOptionalBooleanParam,
+    ParseOptionalIntegerParam,
+    ParseStringArrayParam,
 } = await import('../lists/params.js');
 const { ApolloGetListsAction, ApolloCreateListAction } = await import('../lists/ApolloListActions.js');
 const { ApolloGetListAccountsAction, ApolloGetListContactsAction, ApolloSearchPeopleAction } = await import(
@@ -642,55 +642,55 @@ describe('ApolloRESTClient moves', () => {
 
 describe('param parsing', () => {
     const withParams = (list: Array<{ Name: string; Value: unknown }>) =>
-        ({ Params: list } as unknown as Parameters<typeof getParam>[0]);
+        ({ Params: list } as unknown as Parameters<typeof GetParam>[0]);
 
     it('finds a param case-insensitively and trims it', () => {
-        expect(getParam(withParams([{ Name: 'listname', Value: '  Cold  ' }]), 'ListName')).toBe('Cold');
+        expect(GetParam(withParams([{ Name: 'listname', Value: '  Cold  ' }]), 'ListName')).toBe('Cold');
     });
 
     it('treats whitespace as absent, so a required check catches a blank list name', () => {
-        expect(getParam(withParams([{ Name: 'ListName', Value: '   ' }]), 'ListName')).toBeNull();
-        expect(getParam(withParams([]), 'ListName')).toBeNull();
+        expect(GetParam(withParams([{ Name: 'ListName', Value: '   ' }]), 'ListName')).toBeNull();
+        expect(GetParam(withParams([]), 'ListName')).toBeNull();
     });
 
     it('returns a raw value untouched, for the array/JSON/CSV parsers', () => {
-        expect(getParamRaw(withParams([{ Name: 'Titles', Value: ['CEO'] }]), 'Titles')).toEqual(['CEO']);
+        expect(GetParamRaw(withParams([{ Name: 'Titles', Value: ['CEO'] }]), 'Titles')).toEqual(['CEO']);
     });
 
     it('accepts a list as an array, a JSON string, or a comma-separated string', () => {
-        expect(parseStringArrayParam(['CEO', 'CTO'], 'Titles').value).toEqual(['CEO', 'CTO']);
-        expect(parseStringArrayParam('["CEO","CTO"]', 'Titles').value).toEqual(['CEO', 'CTO']);
-        expect(parseStringArrayParam(' owner , founder ', 'Seniorities').value).toEqual(['owner', 'founder']);
+        expect(ParseStringArrayParam(['CEO', 'CTO'], 'Titles').value).toEqual(['CEO', 'CTO']);
+        expect(ParseStringArrayParam('["CEO","CTO"]', 'Titles').value).toEqual(['CEO', 'CTO']);
+        expect(ParseStringArrayParam(' owner , founder ', 'Seniorities').value).toEqual(['owner', 'founder']);
     });
 
     it('treats an absent or empty list as unsupplied rather than as an empty filter', () => {
         for (const raw of [null, undefined, '', '  ,  ', []]) {
-            expect(parseStringArrayParam(raw, 'Titles')).toEqual({ value: undefined, error: null });
+            expect(ParseStringArrayParam(raw, 'Titles')).toEqual({ value: undefined, error: null });
         }
     });
 
     it('reports a malformed JSON array instead of silently dropping the filter', () => {
-        expect(parseStringArrayParam('["CEO"', 'Titles').error).toMatch(/unparseable/);
-        expect(parseStringArrayParam([1, 2], 'Titles').error).toMatch(/JSON array of strings/);
+        expect(ParseStringArrayParam('["CEO"', 'Titles').error).toMatch(/unparseable/);
+        expect(ParseStringArrayParam([1, 2], 'Titles').error).toMatch(/JSON array of strings/);
     });
 
     it('parses an integer from a number or a numeric string, and enforces the range', () => {
-        expect(parseOptionalIntegerParam(5, 'Page', { min: 1, max: 500 }).value).toBe(5);
-        expect(parseOptionalIntegerParam(' 5 ', 'Page').value).toBe(5);
-        expect(parseOptionalIntegerParam(0, 'Page', { min: 1 }).error).toMatch(/>= 1/);
-        expect(parseOptionalIntegerParam(501, 'Page', { max: 500 }).error).toMatch(/<= 500/);
+        expect(ParseOptionalIntegerParam(5, 'Page', { min: 1, max: 500 }).value).toBe(5);
+        expect(ParseOptionalIntegerParam(' 5 ', 'Page').value).toBe(5);
+        expect(ParseOptionalIntegerParam(0, 'Page', { min: 1 }).error).toMatch(/>= 1/);
+        expect(ParseOptionalIntegerParam(501, 'Page', { max: 500 }).error).toMatch(/<= 500/);
     });
 
     it('rejects a fractional page rather than rounding it into a plausible wrong answer', () => {
-        expect(parseOptionalIntegerParam(1.5, 'Page').error).toMatch(/must be an integer/);
-        expect(parseOptionalIntegerParam('abc', 'Page').error).toMatch(/must be an integer/);
+        expect(ParseOptionalIntegerParam(1.5, 'Page').error).toMatch(/must be an integer/);
+        expect(ParseOptionalIntegerParam('abc', 'Page').error).toMatch(/must be an integer/);
     });
 
     it("does not treat the string 'false' as true", () => {
-        expect(parseOptionalBooleanParam('false', 'Verify').value).toBe(false);
-        expect(parseOptionalBooleanParam('TRUE', 'Verify').value).toBe(true);
-        expect(parseOptionalBooleanParam(false, 'Verify').value).toBe(false);
-        expect(parseOptionalBooleanParam('yes', 'Verify').error).toMatch(/must be a boolean/);
+        expect(ParseOptionalBooleanParam('false', 'Verify').value).toBe(false);
+        expect(ParseOptionalBooleanParam('TRUE', 'Verify').value).toBe(true);
+        expect(ParseOptionalBooleanParam(false, 'Verify').value).toBe(false);
+        expect(ParseOptionalBooleanParam('yes', 'Verify').error).toMatch(/must be a boolean/);
     });
 });
 
@@ -699,24 +699,24 @@ describe('param parsing', () => {
 describe('credential parsing', () => {
     it('accepts the key under any of the casings a hand-authored credential uses', () => {
         for (const key of ['apiKey', 'APIKey', 'api_key', 'ApiKey', 'masterApiKey']) {
-            expect(extractApolloKey(JSON.stringify({ [key]: 'k-1' }), 'Apollo')).toBe('k-1');
+            expect(ExtractApolloKey(JSON.stringify({ [key]: 'k-1' }), 'Apollo')).toBe('k-1');
         }
     });
 
     it('trims the key and treats a blank one as absent', () => {
-        expect(extractApolloKey(JSON.stringify({ apiKey: '  k-1 ' }), 'Apollo')).toBe('k-1');
-        expect(extractApolloKey(JSON.stringify({ apiKey: '   ' }), 'Apollo')).toBeNull();
-        expect(extractApolloKey('', 'Apollo')).toBeNull();
-        expect(extractApolloKey(null, 'Apollo')).toBeNull();
+        expect(ExtractApolloKey(JSON.stringify({ apiKey: '  k-1 ' }), 'Apollo')).toBe('k-1');
+        expect(ExtractApolloKey(JSON.stringify({ apiKey: '   ' }), 'Apollo')).toBeNull();
+        expect(ExtractApolloKey('', 'Apollo')).toBeNull();
+        expect(ExtractApolloKey(null, 'Apollo')).toBeNull();
     });
 
     it('throws on a broken Values payload rather than falling through to another workspace key', () => {
-        expect(() => extractApolloKey('{not json', 'Apollo')).toThrow(/not valid JSON/);
-        expect(() => extractApolloKey('"a string"', 'Apollo')).toThrow(/must be a JSON object/);
+        expect(() => ExtractApolloKey('{not json', 'Apollo')).toThrow(/not valid JSON/);
+        expect(() => ExtractApolloKey('"a string"', 'Apollo')).toThrow(/must be a JSON object/);
     });
 
     it('reports no key when the payload holds something unrelated', () => {
-        expect(extractApolloKey(JSON.stringify({ token: 'k-1' }), 'Apollo')).toBeNull();
+        expect(ExtractApolloKey(JSON.stringify({ token: 'k-1' }), 'Apollo')).toBeNull();
     });
 });
 

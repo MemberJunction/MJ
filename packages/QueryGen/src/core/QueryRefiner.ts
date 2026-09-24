@@ -8,7 +8,7 @@
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserInfo, LogStatus } from '@memberjunction/core';
-import { extractErrorMessage } from '../utils/error-handlers';
+import { ExtractErrorMessage } from '../utils/error-handlers';
 import {
   GeneratedQuery,
   BusinessQuestion,
@@ -20,7 +20,7 @@ import {
 import { QueryTester } from './QueryTester';
 import { PROMPT_QUERY_EVALUATOR, PROMPT_QUERY_REFINER } from '../prompts/PromptNames';
 import { QueryGenConfig } from '../cli/config';
-import { executePromptWithOverrides } from '../utils/prompt-helpers';
+import { ExecutePromptWithOverrides } from '../utils/prompt-helpers';
 
 /**
  * QueryRefiner class
@@ -47,7 +47,7 @@ export class QueryRefiner {
    * @param maxRefinements - Maximum refinement iterations (default: 3)
    * @returns Refined query with test results and evaluation
    */
-  async refineQuery(
+  async RefineQuery(
     query: GeneratedQuery,
     businessQuestion: BusinessQuestion,
     entityMetadata: EntityMetadataForPrompt[],
@@ -78,7 +78,7 @@ export class QueryRefiner {
       } catch (error: unknown) {
         // Query broke during refinement - revert to last working version
         if (this.config.verbose) {
-          LogStatus(`Refinement produced broken query: ${extractErrorMessage(error, 'Refinement Test')}. Reverting to last working version.`);
+          LogStatus(`Refinement produced broken query: ${ExtractErrorMessage(error, 'Refinement Test')}. Reverting to last working version.`);
         }
 
         // If we have a previous working version, use that
@@ -147,6 +147,16 @@ export class QueryRefiner {
     );
   }
 
+  /** @deprecated Use {@link RefineQuery}. */
+  async refineQuery(
+    query: GeneratedQuery,
+    businessQuestion: BusinessQuestion,
+    entityMetadata: EntityMetadataForPrompt[],
+    maxRefinements: number = 3
+  ): Promise<RefinedQuery> {
+    return this.RefineQuery(query, businessQuestion, entityMetadata, maxRefinements);
+  }
+
   /**
    * Configure AIEngine for prompt execution
    * Ensures engine is ready before running prompts
@@ -156,7 +166,7 @@ export class QueryRefiner {
       const aiEngine = AIEngine.Instance;
       await aiEngine.Config(false, this.contextUser);
     } catch (error: unknown) {
-      throw new Error(extractErrorMessage(error, 'AIEngine Configuration'));
+      throw new Error(ExtractErrorMessage(error, 'AIEngine Configuration'));
     }
   }
 
@@ -265,7 +275,7 @@ export class QueryRefiner {
       this.logEvaluation(evaluation);
       return evaluation;
     } catch (error: unknown) {
-      throw new Error(extractErrorMessage(error, 'QueryRefiner.evaluateQuery'));
+      throw new Error(ExtractErrorMessage(error, 'QueryRefiner.evaluateQuery'));
     }
   }
 
@@ -312,7 +322,7 @@ export class QueryRefiner {
       };
     } catch (error: unknown) {
       throw new Error(
-        extractErrorMessage(error, 'QueryRefiner.performRefinement')
+        ExtractErrorMessage(error, 'QueryRefiner.performRefinement')
       );
     }
   }
@@ -340,7 +350,7 @@ export class QueryRefiner {
     prompt: MJAIPromptEntityExtended,
     promptData: Record<string, unknown>
   ): Promise<T> {
-    const result = await executePromptWithOverrides<T>(
+    const result = await ExecutePromptWithOverrides<T>(
       prompt,
       promptData,
       this.contextUser,

@@ -16,7 +16,7 @@ import {
     Branding,
 } from './shared/svg-types';
 import { SVGUtils } from './shared/svg-utils';
-import { getPalette, generateCSS, getFontSpec, getColorForIndex } from './shared/svg-theming';
+import { GetPalette, GenerateCSS, GetFontSpec, GetColorForIndex } from './shared/svg-theming';
 
 /**
  * Action that generates SVG network graphs including force-directed layouts, decision trees, and radial networks.
@@ -269,16 +269,16 @@ export class CreateSVGNetworkAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
         const ns = svg.namespaceURI!;
 
         // Build group-to-color mapping
         const groups = [...new Set(nodes.map((n) => n.group).filter((g): g is string => g != null))];
-        const groupColorMap = new Map(groups.map((g, i) => [g, getColorForIndex(i, branding.palette)]));
+        const groupColorMap = new Map(groups.map((g, i) => [g, GetColorForIndex(i, branding.palette)]));
 
         // Wrap content in pan/zoom container if needed
         const contentContainer = doc.createElementNS(ns, 'g');
@@ -355,12 +355,12 @@ export class CreateSVGNetworkAction extends BaseAction {
 
         // Add legend if requested
         if (showLegend && groups.length > 0) {
-            this.addLegend(doc, svg, groups, groupColorMap, vb, getFontSpec(branding.font));
+            this.addLegend(doc, svg, groups, groupColorMap, vb, GetFontSpec(branding.font));
         }
 
         // Add title if present
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Add interactivity features
@@ -426,11 +426,11 @@ export class CreateSVGNetworkAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
         const ns = svg.namespaceURI!;
 
         // Create container group with offset for padding
@@ -527,7 +527,7 @@ export class CreateSVGNetworkAction extends BaseAction {
 
         // Add title if present
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Sanitize and return
@@ -626,11 +626,11 @@ export class CreateSVGNetworkAction extends BaseAction {
         }
 
         // Add styles
-        const css = generateCSS(branding);
+        const css = GenerateCSS(branding);
         SVGUtils.addStyles(svg, css);
 
         // Get palette
-        const palette = getPalette(branding.palette);
+        const palette = GetPalette(branding.palette);
         const ns = svg.namespaceURI!;
 
         // Render edges
@@ -691,7 +691,7 @@ export class CreateSVGNetworkAction extends BaseAction {
 
         // Add title if present
         if (title) {
-            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+            this.addTitle(doc, svg, title, vb.width, GetFontSpec(branding.font));
         }
 
         // Sanitize and return

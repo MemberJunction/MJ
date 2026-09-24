@@ -42,13 +42,13 @@ export type RenderMode =
 /** Verdict from {@link AssessSpec}. */
 export interface SpecAssessment {
     /** True when some renderer can show this. */
-    renderable: boolean;
+    Renderable: boolean;
     /** Which renderer to use. */
-    mode: RenderMode;
+    Mode: RenderMode;
     /** Human-readable reason, when nothing can render it. */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
     /** The libraries that forced the DOM host, for diagnostics. */
-    domLibraries?: string[];
+    DomLibraries?: string[];
 }
 
 /** True when the spec has a non-empty name and a real code body. */
@@ -111,14 +111,14 @@ function domHostLibraries(spec: ComponentSpec): string[] {
  */
 export function AssessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
     if (!spec || !hasRenderableCode(spec)) {
-        return { renderable: false, mode: 'none', reason: 'This artifact does not contain a renderable component.' };
+        return { Renderable: false, Mode: 'none', reason: 'This artifact does not contain a renderable component.' };
     }
 
     const domOnly = domHostLibraries(spec);
     if (domOnly.length > 0) {
         // Not a refusal any more. A library that needs a canvas gets one — see `dom-host/`.
-        return { renderable: true, mode: 'dom', domLibraries: domOnly };
+        return { Renderable: true, Mode: 'dom', DomLibraries: domOnly };
     }
 
-    return { renderable: true, mode: 'native' };
+    return { Renderable: true, Mode: 'native' };
 }

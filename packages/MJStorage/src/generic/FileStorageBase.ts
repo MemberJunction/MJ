@@ -994,7 +994,7 @@ export abstract class FileStorageBase {
    *                 - Provide for multi-tenant (overrides with database credentials)
    * @returns A Promise that resolves when initialization is complete
    */
-  public async initialize(config?: StorageProviderConfig): Promise<void> {
+  public async initialize(config?: StorageProviderConfig): Promise<void> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     // Extract and store account information from the config if provided
     if (config) {
       this._accountId = config.accountId;

@@ -14,7 +14,7 @@ import {
     IntegrationEngine,
     ConnectorFactory,
 } from '@memberjunction/integration-engine';
-import { buildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
+import { BuildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
 
 /**
  * Server-side extension of MJCompanyIntegrationEntity that exposes
@@ -169,7 +169,7 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
         // falls through to the synthetic-PK fallback (see StagePKClassify in
         // IntegrationConnectorCreationPipeline.ts); wiring it gives such tables
         // a chance at a more meaningful AI-proposed key first.
-        const llmInference = await buildIntegrationLLMPKCallback(user);
+        const llmInference = await BuildIntegrationLLMPKCallback(user);
 
         // The pipeline takes a fully-typed CompanyIntegration; this class extends
         // MJCompanyIntegrationEntity, so `this` satisfies the contract directly.

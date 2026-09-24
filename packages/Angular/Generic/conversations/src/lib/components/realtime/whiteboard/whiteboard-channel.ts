@@ -33,7 +33,7 @@ function toolSucceeded(result: string): boolean {
  * Asynchronously rasterizes an SVG string to a JPEG base64 string (without the `data:image/jpeg;base64,` prefix)
  * using an offscreen canvas. Returns null in non-DOM environments or when rendering fails.
  */
-export async function rasterizeSvgToJpegBase64(svg: string, width = 1280, height = 720): Promise<string | null> {
+export async function RasterizeSvgToJpegBase64(svg: string, width = 1280, height = 720): Promise<string | null> {
   if (typeof document === 'undefined' || typeof Image === 'undefined') {
     return null;
   }
@@ -188,7 +188,7 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
     }
     try {
       const svg = BuildWhiteboardExportSvg(this.State);
-      return await rasterizeSvgToJpegBase64(svg);
+      return await RasterizeSvgToJpegBase64(svg);
     } catch (err) {
       console.error('[RealtimeWhiteboardChannel] Failed to export whiteboard frame:', err);
       return null;
@@ -603,4 +603,9 @@ export class RealtimeWhiteboardChannel extends BaseRealtimeChannelClient<Realtim
  */
 export function LoadRealtimeWhiteboardChannel(): void {
   // intentional no-op — the import side effect performs the registration
+}
+
+/** @deprecated Use {@link RasterizeSvgToJpegBase64}. */
+export async function rasterizeSvgToJpegBase64(svg: string, width = 1280, height = 720): Promise<string | null> {
+  return RasterizeSvgToJpegBase64(svg, width, height);
 }

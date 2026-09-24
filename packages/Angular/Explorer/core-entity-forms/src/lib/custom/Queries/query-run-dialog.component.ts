@@ -37,22 +37,157 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
 
     @Input() query: MJQueryEntity | null = null;
     @Input() parameters: MJQueryParameterEntity[] = [];
-    @Input() isVisible = false;
-    @Output() isVisibleChange = new EventEmitter<boolean>();
-    @Output() onClose = new EventEmitter<void>();
+    @Input() IsVisible = false;
 
-    public isRunning = false;
-    public isLoadingParams = false;
-    public parameterPairs: ParameterPair[] = [];
-    public parametersExpanded = true;
-    public resultsExpanded = true;
-    public paginationExpanded = false;
-    public runResult: QueryRunResult | null = null;
-    public resultColumns: any[] = [];
-    public resultRows: any[] = [];
-    public selectedRows: any[] = [];
-    public maxRows: number | null = null;
-    public startRow: number = 0;
+    /** @deprecated Use {@link IsVisible}. */
+    @Input() set isVisible(value: QueryRunDialogComponent['IsVisible']) {
+      this.IsVisible = value;
+    }
+    /** @deprecated Use {@link IsVisible}. */
+    get isVisible(): QueryRunDialogComponent['IsVisible'] {
+      return this.IsVisible;
+    }
+    @Output() IsVisibleChange = new EventEmitter<boolean>();
+
+    /**
+     * @deprecated Use {@link IsVisibleChange}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (isVisibleChange) keeps working. Must stay AFTER IsVisibleChange: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() isVisibleChange = this.IsVisibleChange;
+    @Output() OnClose = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link OnClose}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (onClose) keeps working. Must stay AFTER OnClose: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() onClose = this.OnClose;
+
+    public IsRunning = false;
+
+    /** @deprecated Use {@link IsRunning}. */
+    public get isRunning() {
+      return this.IsRunning;
+    }
+    /** @deprecated Use {@link IsRunning}. */
+    public set isRunning(value) {
+      this.IsRunning = value;
+    }
+    public IsLoadingParams = false;
+
+    /** @deprecated Use {@link IsLoadingParams}. */
+    public get isLoadingParams() {
+      return this.IsLoadingParams;
+    }
+    /** @deprecated Use {@link IsLoadingParams}. */
+    public set isLoadingParams(value) {
+      this.IsLoadingParams = value;
+    }
+    public ParameterPairs: ParameterPair[] = [];
+
+    /** @deprecated Use {@link ParameterPairs}. */
+    public get parameterPairs(): ParameterPair[] {
+      return this.ParameterPairs;
+    }
+    /** @deprecated Use {@link ParameterPairs}. */
+    public set parameterPairs(value: ParameterPair[]) {
+      this.ParameterPairs = value;
+    }
+    public ParametersExpanded = true;
+
+    /** @deprecated Use {@link ParametersExpanded}. */
+    public get parametersExpanded() {
+      return this.ParametersExpanded;
+    }
+    /** @deprecated Use {@link ParametersExpanded}. */
+    public set parametersExpanded(value) {
+      this.ParametersExpanded = value;
+    }
+    public ResultsExpanded = true;
+
+    /** @deprecated Use {@link ResultsExpanded}. */
+    public get resultsExpanded() {
+      return this.ResultsExpanded;
+    }
+    /** @deprecated Use {@link ResultsExpanded}. */
+    public set resultsExpanded(value) {
+      this.ResultsExpanded = value;
+    }
+    public PaginationExpanded = false;
+
+    /** @deprecated Use {@link PaginationExpanded}. */
+    public get paginationExpanded() {
+      return this.PaginationExpanded;
+    }
+    /** @deprecated Use {@link PaginationExpanded}. */
+    public set paginationExpanded(value) {
+      this.PaginationExpanded = value;
+    }
+    public RunResult: QueryRunResult | null = null;
+
+    /** @deprecated Use {@link RunResult}. */
+    public get runResult(): QueryRunResult | null {
+      return this.RunResult;
+    }
+    /** @deprecated Use {@link RunResult}. */
+    public set runResult(value: QueryRunResult | null) {
+      this.RunResult = value;
+    }
+    public ResultColumns: any[] = [];
+
+    /** @deprecated Use {@link ResultColumns}. */
+    public get resultColumns(): any[] {
+      return this.ResultColumns;
+    }
+    /** @deprecated Use {@link ResultColumns}. */
+    public set resultColumns(value: any[]) {
+      this.ResultColumns = value;
+    }
+    public ResultRows: any[] = [];
+
+    /** @deprecated Use {@link ResultRows}. */
+    public get resultRows(): any[] {
+      return this.ResultRows;
+    }
+    /** @deprecated Use {@link ResultRows}. */
+    public set resultRows(value: any[]) {
+      this.ResultRows = value;
+    }
+    public SelectedRows: any[] = [];
+
+    /** @deprecated Use {@link SelectedRows}. */
+    public get selectedRows(): any[] {
+      return this.SelectedRows;
+    }
+    /** @deprecated Use {@link SelectedRows}. */
+    public set selectedRows(value: any[]) {
+      this.SelectedRows = value;
+    }
+    public MaxRows: number | null = null;
+
+    /** @deprecated Use {@link MaxRows}. */
+    public get maxRows(): number | null {
+      return this.MaxRows;
+    }
+    /** @deprecated Use {@link MaxRows}. */
+    public set maxRows(value: number | null) {
+      this.MaxRows = value;
+    }
+    public StartRow: number = 0;
+
+    /** @deprecated Use {@link StartRow}. */
+    public get startRow(): number {
+      return this.StartRow;
+    }
+    /** @deprecated Use {@link StartRow}. */
+    public set startRow(value: number) {
+      this.StartRow = value;
+    }
 
     ngOnInit() {
         this.initializeParameters();
@@ -71,7 +206,7 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
         if (!this.query || !this.parameters) return;
 
         // Create parameter pairs from defined query parameters only
-        this.parameterPairs = this.parameters.map(param => ({
+        this.ParameterPairs = this.parameters.map(param => ({
             name: param.Name,
             value: param.DefaultValue || '',
             type: param.Type || 'string',
@@ -81,7 +216,7 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
         }));
     }
 
-    getValueListOptions(valueList: string): Array<{text: string, value: string}> {
+    GetValueListOptions(valueList: string): Array<{text: string, value: string}> {
         if (!valueList) return [];
         
         try {
@@ -92,7 +227,12 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
         }
     }
 
-    isParameterValid(param: ParameterPair): boolean {
+    /** @deprecated Use {@link GetValueListOptions}. */
+    getValueListOptions(valueList: string): Array<{text: string, value: string}> {
+      return this.GetValueListOptions(valueList);
+    }
+
+    IsParameterValid(param: ParameterPair): boolean {
         if (param.isRequired && !param.value) {
             return false;
         }
@@ -105,11 +245,16 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
         return true;
     }
 
-    async runQuery(isPaginationRequest: boolean = false) {
+    /** @deprecated Use {@link IsParameterValid}. */
+    isParameterValid(param: ParameterPair): boolean {
+      return this.IsParameterValid(param);
+    }
+
+    async RunQuery(isPaginationRequest: boolean = false) {
         if (!this.query?.ID) return;
 
         // Validate required parameters
-        const invalidParams = this.parameterPairs.filter(p => p.isRequired && !p.value);
+        const invalidParams = this.ParameterPairs.filter(p => p.isRequired && !p.value);
         if (invalidParams.length > 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Required parameters missing: ${invalidParams.map(p => p.name).join(', ')}`,
@@ -119,13 +264,13 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
             return;
         }
 
-        this.isRunning = true;
-        this.runResult = null;
+        this.IsRunning = true;
+        this.RunResult = null;
 
         try {
             // Build parameters object
             const queryParameters: Record<string, any> = {};
-            this.parameterPairs.forEach(param => {
+            this.ParameterPairs.forEach(param => {
                 if (param.value) {
                     try {
                         // Try to parse as JSON first, fallback to string
@@ -167,13 +312,13 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
             };
             
             // Only include MaxRows if it's set
-            if (this.maxRows && this.maxRows > 0) {
-                variables.MaxRows = this.maxRows;
+            if (this.MaxRows && this.MaxRows > 0) {
+                variables.MaxRows = this.MaxRows;
             }
             
             // Only include StartRow if it's set and greater than 0
-            if (this.startRow && this.startRow > 0) {
-                variables.StartRow = this.startRow;
+            if (this.StartRow && this.StartRow > 0) {
+                variables.StartRow = this.StartRow;
             }
 
             console.log('Executing query with variables:', variables);
@@ -184,18 +329,18 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
             ) as {GetQueryData: QueryRunResult};
 
             if (response?.GetQueryData) {
-                this.runResult = response.GetQueryData;
+                this.RunResult = response.GetQueryData;
                 
-                if (this.runResult.Success && this.runResult.Results) {
+                if (this.RunResult.Success && this.RunResult.Results) {
                     // Parse the JSON string results
                     try {
-                        const parsedResults = JSON.parse(this.runResult.Results);
+                        const parsedResults = JSON.parse(this.RunResult.Results);
                         this.processResults(parsedResults);
                         // Only show notification on first run (not pagination)
                         if (!isPaginationRequest) {
-                            const rowCountMsg = this.runResult.TotalRowCount > this.runResult.RowCount
-                                ? `Query executed successfully. Showing ${this.runResult.RowCount} of ${this.runResult.TotalRowCount} total rows.`
-                                : `Query executed successfully. ${this.runResult.RowCount} rows returned.`;
+                            const rowCountMsg = this.RunResult.TotalRowCount > this.RunResult.RowCount
+                                ? `Query executed successfully. Showing ${this.RunResult.RowCount} of ${this.RunResult.TotalRowCount} total rows.`
+                                : `Query executed successfully. ${this.RunResult.RowCount} rows returned.`;
                             MJNotificationService.Instance.CreateSimpleNotification(
                                 rowCountMsg,
                                 'success',
@@ -204,9 +349,9 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
                         }
                         
                         // Automatically expand results and collapse other sections
-                        this.parametersExpanded = false;
-                        this.paginationExpanded = false;
-                        this.resultsExpanded = true;
+                        this.ParametersExpanded = false;
+                        this.PaginationExpanded = false;
+                        this.ResultsExpanded = true;
                     } catch (error) {
                         console.error('Error parsing results:', error);
                         MJNotificationService.Instance.CreateSimpleNotification(
@@ -216,24 +361,24 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
                         );
                     }
                 } else {
-                    console.error('Query execution failed:', this.runResult);
+                    console.error('Query execution failed:', this.RunResult);
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        this.runResult?.ErrorMessage || 'Query execution failed',
+                        this.RunResult?.ErrorMessage || 'Query execution failed',
                         'error',
                         3000
                     );
                     
                     // Expand results section to show error
-                    this.parametersExpanded = false;
-                    this.paginationExpanded = false;
-                    this.resultsExpanded = true;
+                    this.ParametersExpanded = false;
+                    this.PaginationExpanded = false;
+                    this.ResultsExpanded = true;
                 }
             } else {
                 throw new Error('No response from server');
             }
         } catch (error) {
             console.error('Error running query:', error);
-            this.runResult = {
+            this.RunResult = {
                 QueryID: this.query.ID,
                 QueryName: this.query.Name,
                 Success: false,
@@ -249,28 +394,33 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
                 3000
             );
         } finally {
-            this.isRunning = false;
+            this.IsRunning = false;
             this.cdr.detectChanges();
         }
     }
 
+    /** @deprecated Use {@link RunQuery}. */
+    async runQuery(isPaginationRequest: boolean = false) {
+      return this.RunQuery(isPaginationRequest);
+    }
+
     private processResults(results: any[]) {
         if (!results || results.length === 0) {
-            this.resultColumns = [];
-            this.resultRows = [];
+            this.ResultColumns = [];
+            this.ResultRows = [];
             return;
         }
 
         // Extract columns from first row
         const firstRow = results[0];
-        this.resultColumns = Object.keys(firstRow).map(key => ({
+        this.ResultColumns = Object.keys(firstRow).map(key => ({
             field: key,
             title: this.formatColumnTitle(key),
             width: this.calculateColumnWidth(key, results)
         }));
 
         // Set rows
-        this.resultRows = results;
+        this.ResultRows = results;
     }
 
     private formatColumnTitle(field: string): string {
@@ -293,8 +443,8 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
         return Math.min(Math.max(maxLength * 10, 100), 300);
     }
 
-    exportToCSV() {
-        if (!this.resultRows || this.resultRows.length === 0) {
+    ExportToCSV() {
+        if (!this.ResultRows || this.ResultRows.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'No data to export',
                 'warning',
@@ -304,9 +454,9 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
         }
 
         // Create CSV content
-        const headers = this.resultColumns.map(col => col.title).join(',');
-        const rows = this.resultRows.map(row =>
-            this.resultColumns.map(col => {
+        const headers = this.ResultColumns.map(col => col.title).join(',');
+        const rows = this.ResultRows.map(row =>
+            this.ResultColumns.map(col => {
                 const value = row[col.field];
                 // Escape values containing commas or quotes
                 if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
@@ -336,8 +486,13 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
         );
     }
 
-    async copyToClipboard() {
-        if (!this.resultRows || this.resultRows.length === 0) {
+    /** @deprecated Use {@link ExportToCSV}. */
+    exportToCSV() {
+      return this.ExportToCSV();
+    }
+
+    async CopyToClipboard() {
+        if (!this.ResultRows || this.ResultRows.length === 0) {
             MJNotificationService.Instance.CreateSimpleNotification(
                 'No data to copy',
                 'warning',
@@ -348,9 +503,9 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
 
         try {
             // Create tab-delimited content for pasting into Excel
-            const headers = this.resultColumns.map(col => col.title).join('\t');
-            const rows = this.resultRows.map(row =>
-                this.resultColumns.map(col => row[col.field] || '').join('\t')
+            const headers = this.ResultColumns.map(col => col.title).join('\t');
+            const rows = this.ResultRows.map(row =>
+                this.ResultColumns.map(col => row[col.field] || '').join('\t')
             );
 
             const content = [headers, ...rows].join('\n');
@@ -371,52 +526,87 @@ export class QueryRunDialogComponent extends BaseAngularComponent implements OnI
         }
     }
 
-    close() {
-        this.isVisible = false;
-        this.isVisibleChange.emit(false);
-        this.onClose.emit();
-        
-        // Reset state
-        this.runResult = null;
-        this.resultColumns = [];
-        this.resultRows = [];
-        this.selectedRows = [];
-        this.startRow = 0;
+    /** @deprecated Use {@link CopyToClipboard}. */
+    async copyToClipboard() {
+      return this.CopyToClipboard();
     }
 
+    close() {
+        this.IsVisible = false;
+        this.IsVisibleChange.emit(false);
+        this.OnClose.emit();
+        
+        // Reset state
+        this.RunResult = null;
+        this.ResultColumns = [];
+        this.ResultRows = [];
+        this.SelectedRows = [];
+        this.StartRow = 0;
+    }
+
+    GetAppliedParametersCount(): number {
+        return this.ParameterPairs.filter(p => p.value).length;
+    }
+
+    /** @deprecated Use {@link GetAppliedParametersCount}. */
     getAppliedParametersCount(): number {
-        return this.parameterPairs.filter(p => p.value).length;
+      return this.GetAppliedParametersCount();
     }
     
+    HasInvalidParameters(): boolean {
+        return this.ParameterPairs.some(p => !this.IsParameterValid(p));
+    }
+
+    /** @deprecated Use {@link HasInvalidParameters}. */
     hasInvalidParameters(): boolean {
-        return this.parameterPairs.some(p => !this.isParameterValid(p));
+      return this.HasInvalidParameters();
     }
     
     // Pagination methods
+    GoToFirstPage() {
+        this.StartRow = 0;
+        this.RunQuery(true);
+    }
+
+    /** @deprecated Use {@link GoToFirstPage}. */
     goToFirstPage() {
-        this.startRow = 0;
-        this.runQuery(true);
+      return this.GoToFirstPage();
     }
     
+    GoToPreviousPage() {
+        if (this.StartRow > 0 && this.MaxRows) {
+            this.StartRow = Math.max(0, this.StartRow - this.MaxRows);
+            this.RunQuery(true);
+        }
+    }
+
+    /** @deprecated Use {@link GoToPreviousPage}. */
     goToPreviousPage() {
-        if (this.startRow > 0 && this.maxRows) {
-            this.startRow = Math.max(0, this.startRow - this.maxRows);
-            this.runQuery(true);
-        }
+      return this.GoToPreviousPage();
     }
     
+    GoToNextPage() {
+        if (this.MaxRows && this.RunResult && this.StartRow + this.RunResult.RowCount < this.RunResult.TotalRowCount) {
+            this.StartRow += this.MaxRows;
+            this.RunQuery(true);
+        }
+    }
+
+    /** @deprecated Use {@link GoToNextPage}. */
     goToNextPage() {
-        if (this.maxRows && this.runResult && this.startRow + this.runResult.RowCount < this.runResult.TotalRowCount) {
-            this.startRow += this.maxRows;
-            this.runQuery(true);
-        }
+      return this.GoToNextPage();
     }
     
-    goToLastPage() {
-        if (this.maxRows && this.runResult) {
-            const totalPages = Math.ceil(this.runResult.TotalRowCount / this.maxRows);
-            this.startRow = (totalPages - 1) * this.maxRows;
-            this.runQuery(true);
+    GoToLastPage() {
+        if (this.MaxRows && this.RunResult) {
+            const totalPages = Math.ceil(this.RunResult.TotalRowCount / this.MaxRows);
+            this.StartRow = (totalPages - 1) * this.MaxRows;
+            this.RunQuery(true);
         }
+    }
+
+    /** @deprecated Use {@link GoToLastPage}. */
+    goToLastPage() {
+      return this.GoToLastPage();
     }
 }

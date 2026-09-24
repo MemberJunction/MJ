@@ -126,12 +126,17 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
     private readonly _schemaCache = new Map<string, SchemaCacheEntry>();
 
     /** Invalidate all per-user caches for the current user (call after create/modify). */
-    public invalidateCache(): void {
+    public InvalidateCache(): void {
         const userId = new Metadata().CurrentUser?.ID; // global-provider-ok: client-side Angular engine, single provider
         if (userId) {
             this._cache.delete(userId);
             this._schemaCache.delete(userId);
         }
+    }
+
+    /** @deprecated Use {@link InvalidateCache}. */
+    public invalidateCache(): void {
+        return this.InvalidateCache();
     }
 
     // ─── Entity list ──────────────────────────────────────────────────────
@@ -145,7 +150,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
      *
      * Results are cached per-user with a 5-minute TTL.
      */
-    public async loadAccessibleEntities(): Promise<AccessibleEntity[]> {
+    public async LoadAccessibleEntities(): Promise<AccessibleEntity[]> {
         const md = new Metadata(); // global-provider-ok: client-side Angular engine, single provider
         const userId = md.CurrentUser?.ID;
         if (!userId) return [];
@@ -164,11 +169,16 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
         return entities;
     }
 
+    /** @deprecated Use {@link LoadAccessibleEntities}. */
+    public async loadAccessibleEntities(): Promise<AccessibleEntity[]> {
+        return this.LoadAccessibleEntities();
+    }
+
     /**
      * Load full entity detail (columns, foreign keys, description) for the modify wizard.
      * Not cached — always fetches fresh data so the wizard reflects current DB state.
      */
-    public async loadEntityDetail(entityId: string): Promise<AccessibleEntityDetail | null> {
+    public async LoadEntityDetail(entityId: string): Promise<AccessibleEntityDetail | null> {
         const rv = new RunView();
         // BypassCache: true on both queries because CodeGen writes Entity Fields via direct
         // SQL (outside BaseEntity.Save()), so the server-side RunView cache never receives
@@ -214,9 +224,14 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
             fieldCount: editableFields.length,
             createdAt: new Date(entity.__mj_CreatedAt),
             isOwner,
-            columns: editableFields.map(f => this.mapFieldToColumnSpec(f)),
-            foreignKeys: [],  // FK detail loaded on demand — Phase 5e
+            Columns: editableFields.map(f => this.mapFieldToColumnSpec(f)),
+            ForeignKeys: [],  // FK detail loaded on demand — Phase 5e
         };
+    }
+
+    /** @deprecated Use {@link LoadEntityDetail}. */
+    public async loadEntityDetail(entityId: string): Promise<AccessibleEntityDetail | null> {
+        return this.LoadEntityDetail(entityId);
     }
 
     // ─── Schema options ───────────────────────────────────────────────────
@@ -236,7 +251,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
      *
      * All items beyond #1 require `Create in Custom Schema` authorization.
      */
-    public async loadAvailableSchemas(): Promise<SchemaOption[]> {
+    public async LoadAvailableSchemas(): Promise<SchemaOption[]> {
         const userId = new Metadata().CurrentUser?.ID; // global-provider-ok: client-side Angular engine, single provider
         if (!userId) return [];
 
@@ -248,6 +263,11 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
         const schemas = await this.fetchAvailableSchemas();
         this._schemaCache.set(userId, { schemas, timestamp: Date.now() });
         return schemas;
+    }
+
+    /** @deprecated Use {@link LoadAvailableSchemas}. */
+    public async loadAvailableSchemas(): Promise<SchemaOption[]> {
+        return this.LoadAvailableSchemas();
     }
 
     /** Build the schema option list: UDT first, then real DB schemas, then Other. */
@@ -265,10 +285,10 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
 
         if (canUseUdt) {
             schemas.push({
-                value: UDT_SCHEMA_NAME,
-                label: `${UDT_SCHEMA_NAME} — User-Defined Tables (default)`,
-                isDefault: true,
-                requiresElevatedAuth: false,
+                Value: UDT_SCHEMA_NAME,
+                Label: `${UDT_SCHEMA_NAME} — User-Defined Tables (default)`,
+                IsDefault: true,
+                RequiresElevatedAuth: false,
             });
         }
 
@@ -279,19 +299,19 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
                 if (schemaName === UDT_SCHEMA_NAME) continue;
                 if (FRONTEND_BLOCKED_SCHEMAS.has(schemaName)) continue;
                 schemas.push({
-                    value: schemaName,
-                    label: schemaName,
-                    isDefault: false,
-                    requiresElevatedAuth: true,
+                    Value: schemaName,
+                    Label: schemaName,
+                    IsDefault: false,
+                    RequiresElevatedAuth: true,
                 });
             }
 
             // Free-text escape hatch for schemas not yet registered with MJ
             schemas.push({
-                value: '',
-                label: 'Other (enter schema name)',
-                isDefault: false,
-                requiresElevatedAuth: true,
+                Value: '',
+                Label: 'Other (enter schema name)',
+                IsDefault: false,
+                RequiresElevatedAuth: true,
             });
         }
 
@@ -320,7 +340,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
      *
      * Returns true when the proposed names are safe to use.
      */
-    public async isNameAvailable(entityName: string, tableName: string, schemaName: string): Promise<boolean> {
+    public async IsNameAvailable(entityName: string, tableName: string, schemaName: string): Promise<boolean> {
         const rv = new RunView();
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Entities',
@@ -332,6 +352,11 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
         });
 
         return result.Success && result.Results.length === 0;
+    }
+
+    /** @deprecated Use {@link IsNameAvailable}. */
+    public async isNameAvailable(entityName: string, tableName: string, schemaName: string): Promise<boolean> {
+        return this.IsNameAvailable(entityName, tableName, schemaName);
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────

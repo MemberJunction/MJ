@@ -363,30 +363,90 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
   `]
 })
 export class LiveExecutionWidgetComponent implements OnInit, OnDestroy {
-  @Input() executions: LiveExecution[] = [];
-  @Input() maxVisible = 8;
-  @Output() executionClick = new EventEmitter<LiveExecution>();
+  @Input() Executions: LiveExecution[] = [];
 
-  showAll = false;
-  circumference = 2 * Math.PI * 10; // r=10
+  /** @deprecated Use {@link Executions}. */
+  @Input() set executions(value: LiveExecution[]) {
+    this.Executions = value;
+  }
+  /** @deprecated Use {@link Executions}. */
+  get executions(): LiveExecution[] {
+    return this.Executions;
+  }
+  @Input() MaxVisible = 8;
+
+  /** @deprecated Use {@link MaxVisible}. */
+  @Input() set maxVisible(value: LiveExecutionWidgetComponent['MaxVisible']) {
+    this.MaxVisible = value;
+  }
+  /** @deprecated Use {@link MaxVisible}. */
+  get maxVisible(): LiveExecutionWidgetComponent['MaxVisible'] {
+    return this.MaxVisible;
+  }
+  @Output() ExecutionClick = new EventEmitter<LiveExecution>();
+
+  /**
+   * @deprecated Use {@link ExecutionClick}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (executionClick) keeps working. Must stay AFTER ExecutionClick: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() executionClick = this.ExecutionClick;
+
+  ShowAll = false;
+
+  /** @deprecated Use {@link ShowAll}. */
+  get showAll() {
+    return this.ShowAll;
+  }
+  /** @deprecated Use {@link ShowAll}. */
+  set showAll(value) {
+    this.ShowAll = value;
+  }
+  Circumference = 2 * Math.PI * 10;
+
+  /** @deprecated Use {@link Circumference}. */
+  get circumference() {
+    return this.Circumference;
+  }
+  /** @deprecated Use {@link Circumference}. */
+  set circumference(value) {
+    this.Circumference = value;
+  } // r=10
 
   ngOnInit() {}
 
   ngOnDestroy() {}
 
-  trackByExecutionId(index: number, execution: LiveExecution): string {
+  TrackByExecutionId(index: number, execution: LiveExecution): string {
     return execution.id;
   }
 
+  /** @deprecated Use {@link TrackByExecutionId}. */
+  trackByExecutionId(index: number, execution: LiveExecution): string {
+    return this.TrackByExecutionId(index, execution);
+  }
+
+  HasActiveExecutions(): boolean {
+    return this.Executions.some(e => e.status === 'running');
+  }
+
+  /** @deprecated Use {@link HasActiveExecutions}. */
   hasActiveExecutions(): boolean {
-    return this.executions.some(e => e.status === 'running');
+    return this.HasActiveExecutions();
   }
 
+  GetActiveCount(): number {
+    return this.Executions.filter(e => e.status === 'running').length;
+  }
+
+  /** @deprecated Use {@link GetActiveCount}. */
   getActiveCount(): number {
-    return this.executions.filter(e => e.status === 'running').length;
+    return this.GetActiveCount();
   }
 
-  getExecutionIcon(execution: LiveExecution): string {
+  GetExecutionIcon(execution: LiveExecution): string {
     if (execution.type === 'agent') {
       return 'fa-solid fa-robot';
     } else {
@@ -394,7 +454,12 @@ export class LiveExecutionWidgetComponent implements OnInit, OnDestroy {
     }
   }
 
-  getStatusIcon(status: string): string {
+  /** @deprecated Use {@link GetExecutionIcon}. */
+  getExecutionIcon(execution: LiveExecution): string {
+    return this.GetExecutionIcon(execution);
+  }
+
+  GetStatusIcon(status: string): string {
     switch (status) {
       case 'running':
         return 'fa-solid fa-play';
@@ -405,6 +470,11 @@ export class LiveExecutionWidgetComponent implements OnInit, OnDestroy {
       default:
         return 'fa-solid fa-question';
     }
+  }
+
+  /** @deprecated Use {@link GetStatusIcon}. */
+  getStatusIcon(status: string): string {
+    return this.GetStatusIcon(status);
   }
 
   formatDuration(duration?: number): string {
@@ -423,17 +493,32 @@ export class LiveExecutionWidgetComponent implements OnInit, OnDestroy {
     }
   }
 
+  GetProgressOffset(progress: number): number {
+    return this.Circumference - (progress / 100) * this.Circumference;
+  }
+
+  /** @deprecated Use {@link GetProgressOffset}. */
   getProgressOffset(progress: number): number {
-    return this.circumference - (progress / 100) * this.circumference;
+    return this.GetProgressOffset(progress);
   }
 
+  ToggleShowAll(): void {
+    this.ShowAll = !this.ShowAll;
+    this.MaxVisible = this.ShowAll ? this.Executions.length : 8;
+  }
+
+  /** @deprecated Use {@link ToggleShowAll}. */
   toggleShowAll(): void {
-    this.showAll = !this.showAll;
-    this.maxVisible = this.showAll ? this.executions.length : 8;
+    return this.ToggleShowAll();
   }
 
+  OnExecutionClick(execution: LiveExecution): void {
+    this.ExecutionClick.emit(execution);
+  }
+
+  /** @deprecated Use {@link OnExecutionClick}. */
   onExecutionClick(execution: LiveExecution): void {
-    this.executionClick.emit(execution);
+    return this.OnExecutionClick(execution);
   }
 
   formatCurrency(amount: number): string {

@@ -124,7 +124,16 @@ export class MJPageSearchComponent extends MJNamedControlBase implements AfterVi
 
   @ViewChild('searchInput') private searchInputEl: ElementRef<HTMLInputElement> | undefined;
 
-  public focused: boolean = false;
+  public Focused: boolean = false;
+
+  /** @deprecated Use {@link Focused}. */
+  public get focused(): boolean {
+    return this.Focused;
+  }
+  /** @deprecated Use {@link Focused}. */
+  public set focused(value: boolean) {
+    this.Focused = value;
+  }
 
   /**
    * `placeholderIsName` is passed here and nowhere else: this is a toolbar widget whose placeholder
@@ -143,9 +152,14 @@ export class MJPageSearchComponent extends MJNamedControlBase implements AfterVi
     });
   }
 
-  public onInput(event: Event): void {
+  public OnInput(event: Event): void {
     const v = (event.target as HTMLInputElement).value;
     this.Value = v;
     this.ValueChange.emit(v);
+  }
+
+  /** @deprecated Use {@link OnInput}. */
+  public onInput(event: Event): void {
+    return this.OnInput(event);
   }
 }

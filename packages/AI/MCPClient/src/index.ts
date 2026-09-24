@@ -53,7 +53,7 @@ export {
 // Agent integration
 export {
     AgentToolAdapter,
-    createAgentToolAdapter,
+    CreateAgentToolAdapter, createAgentToolAdapter,
     type OpenAIFunctionDefinition,
     type AnthropicToolDefinition,
     type AgentToolDefinition,

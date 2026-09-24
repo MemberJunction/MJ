@@ -42,11 +42,11 @@ function isOracleClass(value: unknown): value is new () => IOracle {
 
 export interface LoadedOracleSummary {
     /** Module path that was loaded. */
-    modulePath: string;
+    ModulePath: string;
     /** Names of oracles that were successfully registered. */
-    registered: string[];
+    Registered: string[];
     /** Export keys we walked past because they didn't look like oracles. */
-    skipped: string[];
+    Skipped: string[];
 }
 
 /**
@@ -63,7 +63,7 @@ export interface LoadedOracleSummary {
  *
  * @throws if the module file doesn't exist or the import itself fails.
  */
-export async function loadOraclesModule(
+export async function LoadOraclesModule(
     modulePath: string,
     engine: TestEngine,
 ): Promise<LoadedOracleSummary> {
@@ -151,5 +151,13 @@ export async function loadOraclesModule(
         registered.push(oracle.type);
     }
 
-    return { modulePath: absPath, registered, skipped };
+    return { ModulePath: absPath, Registered: registered, Skipped: skipped };
+}
+
+/** @deprecated Use {@link LoadOraclesModule}. */
+export async function loadOraclesModule(
+    modulePath: string,
+    engine: TestEngine,
+): Promise<LoadedOracleSummary> {
+    return LoadOraclesModule(modulePath, engine);
 }

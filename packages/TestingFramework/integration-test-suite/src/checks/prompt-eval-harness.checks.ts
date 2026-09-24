@@ -47,7 +47,7 @@ import { PromptEvalDriver, AgentDecisionOracle, ResponseWellFormedOracle } from 
 import type { IOracle } from '@memberjunction/testing-engine';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { TestLLM, registerTestLLM } from '@memberjunction/unit-testing';
+import { TestLLM, RegisterTestLLM } from '@memberjunction/unit-testing';
 import { parseCorpusCase, normalizeDecision, evaluateCorpusExpectation, evaluateWellFormed, type CorpusCase } from '@memberjunction/testing-engine';
 import { Assert, AssertEqual, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
 
@@ -345,7 +345,7 @@ const checks: NamedCheck[] = [
             }) });
             // The ClassFactory registration is process-wide and this suite runs every bundle in one
             // process: without the restore, later bundles' real prompt calls get this scripted reply.
-            const restoreDrivers = registerTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
+            const restoreDrivers = RegisterTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
             try {
 
                 const runner = new AIPromptRunner();
@@ -447,7 +447,7 @@ const checks: NamedCheck[] = [
             llm.Script({ kind: 'succeed', content: JSON.stringify(synthesizeEnvelope(branch!)) });
             // The ClassFactory registration is process-wide and this suite runs every bundle in one
             // process: without the restore, later bundles' real prompt calls get this scripted reply.
-            const restoreDrivers = registerTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
+            const restoreDrivers = RegisterTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
             try {
 
                 await AIEngine.Instance.Config(false, ctx.User);

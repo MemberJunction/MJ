@@ -2,32 +2,32 @@ import { describe, it, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
 import { createPublicKey } from 'node:crypto';
 import {
-  parseAllowedOrigins,
-  isOriginAllowed,
-  isModalityEnabled,
-  evaluateWidgetMint,
-  buildWidgetGuestClaims,
-  looksLikeBot,
+  ParseAllowedOrigins,
+  IsOriginAllowed,
+  IsModalityEnabled,
+  EvaluateWidgetMint,
+  BuildWidgetGuestClaims,
+  LooksLikeBot,
 } from '../realtimeWidget/widgetCore.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 
 describe('widget core — parseAllowedOrigins', () => {
   it('parses a JSON array of origins', () => {
-    expect(parseAllowedOrigins('["https://a.com","https://b.com"]')).toEqual(['https://a.com', 'https://b.com']);
+    expect(ParseAllowedOrigins('["https://a.com","https://b.com"]')).toEqual(['https://a.com', 'https://b.com']);
   });
 
   it('tolerates a comma-separated string', () => {
-    expect(parseAllowedOrigins('https://a.com, https://b.com')).toEqual(['https://a.com', 'https://b.com']);
+    expect(ParseAllowedOrigins('https://a.com, https://b.com')).toEqual(['https://a.com', 'https://b.com']);
   });
 
   it('normalizes case and strips trailing slashes', () => {
-    expect(parseAllowedOrigins('["HTTPS://Acme.COM/"]')).toEqual(['https://acme.com']);
+    expect(ParseAllowedOrigins('["HTTPS://Acme.COM/"]')).toEqual(['https://acme.com']);
   });
 
   it('returns empty (fail-closed) for null / blank / non-array JSON', () => {
-    expect(parseAllowedOrigins(null)).toEqual([]);
-    expect(parseAllowedOrigins('   ')).toEqual([]);
-    expect(parseAllowedOrigins('{"not":"an-array"}')).toEqual([]);
+    expect(ParseAllowedOrigins(null)).toEqual([]);
+    expect(ParseAllowedOrigins('   ')).toEqual([]);
+    expect(ParseAllowedOrigins('{"not":"an-array"}')).toEqual([]);
   });
 });
 
@@ -35,37 +35,37 @@ describe('widget core — isOriginAllowed (fail-closed)', () => {
   const allowed = ['https://acme.com', 'https://www.acme.com'];
 
   it('accepts an exact (normalized) match', () => {
-    expect(isOriginAllowed('https://acme.com', allowed)).toBe(true);
-    expect(isOriginAllowed('HTTPS://ACME.COM/', allowed)).toBe(true);
+    expect(IsOriginAllowed('https://acme.com', allowed)).toBe(true);
+    expect(IsOriginAllowed('HTTPS://ACME.COM/', allowed)).toBe(true);
   });
 
   it('rejects a non-listed origin', () => {
-    expect(isOriginAllowed('https://evil.com', allowed)).toBe(false);
-    expect(isOriginAllowed('https://sub.acme.com', allowed)).toBe(false);
+    expect(IsOriginAllowed('https://evil.com', allowed)).toBe(false);
+    expect(IsOriginAllowed('https://sub.acme.com', allowed)).toBe(false);
   });
 
   it('rejects a missing request origin', () => {
-    expect(isOriginAllowed(undefined, allowed)).toBe(false);
-    expect(isOriginAllowed('', allowed)).toBe(false);
+    expect(IsOriginAllowed(undefined, allowed)).toBe(false);
+    expect(IsOriginAllowed('', allowed)).toBe(false);
   });
 
   it('rejects everything when the allowlist is empty (never "*")', () => {
-    expect(isOriginAllowed('https://acme.com', [])).toBe(false);
+    expect(IsOriginAllowed('https://acme.com', [])).toBe(false);
   });
 });
 
 describe('widget core — isModalityEnabled', () => {
   it('Both enables text and voice', () => {
-    expect(isModalityEnabled('Both', 'Text')).toBe(true);
-    expect(isModalityEnabled('Both', 'Voice')).toBe(true);
+    expect(IsModalityEnabled('Both', 'Text')).toBe(true);
+    expect(IsModalityEnabled('Both', 'Voice')).toBe(true);
   });
   it('Text enables only text', () => {
-    expect(isModalityEnabled('Text', 'Text')).toBe(true);
-    expect(isModalityEnabled('Text', 'Voice')).toBe(false);
+    expect(IsModalityEnabled('Text', 'Text')).toBe(true);
+    expect(IsModalityEnabled('Text', 'Voice')).toBe(false);
   });
   it('Voice enables only voice', () => {
-    expect(isModalityEnabled('Voice', 'Voice')).toBe(true);
-    expect(isModalityEnabled('Voice', 'Text')).toBe(false);
+    expect(IsModalityEnabled('Voice', 'Voice')).toBe(true);
+    expect(IsModalityEnabled('Voice', 'Text')).toBe(false);
   });
 });
 
@@ -73,22 +73,22 @@ describe('widget core — evaluateWidgetMint', () => {
   const base = { Status: 'Active', AllowedOrigins: '["https://acme.com"]', Modality: 'Both' };
 
   it('passes for an active widget from an allowed origin', () => {
-    expect(evaluateWidgetMint(base, 'https://acme.com')).toEqual({ ok: true });
+    expect(EvaluateWidgetMint(base, 'https://acme.com')).toEqual({ ok: true });
   });
 
   it('rejects a disabled widget', () => {
-    expect(evaluateWidgetMint({ ...base, Status: 'Disabled' }, 'https://acme.com')).toEqual({
+    expect(EvaluateWidgetMint({ ...base, Status: 'Disabled' }, 'https://acme.com')).toEqual({
       ok: false,
       errorCode: 'disabled',
     });
   });
 
   it('rejects a disallowed origin', () => {
-    expect(evaluateWidgetMint(base, 'https://evil.com')).toEqual({ ok: false, errorCode: 'origin_not_allowed' });
+    expect(EvaluateWidgetMint(base, 'https://evil.com')).toEqual({ ok: false, errorCode: 'origin_not_allowed' });
   });
 
   it('rejects a missing origin (fail-closed)', () => {
-    expect(evaluateWidgetMint(base, undefined)).toEqual({ ok: false, errorCode: 'origin_not_allowed' });
+    expect(EvaluateWidgetMint(base, undefined)).toEqual({ ok: false, errorCode: 'origin_not_allowed' });
   });
 });
 
@@ -106,14 +106,14 @@ describe('widget core — buildWidgetGuestClaims', () => {
   };
 
   it('marks the session anonymous + magic-link and binds the widget id', () => {
-    const claims = buildWidgetGuestClaims(args);
+    const claims = BuildWidgetGuestClaims(args);
     expect(claims.mj_anon).toBe(true);
     expect(claims.mj_magic_link).toBe(true);
     expect(claims.mj_widget_id).toBe('WIDGET-123');
   });
 
   it('scopes to the application + guest role and the configured anon email', () => {
-    const claims = buildWidgetGuestClaims(args);
+    const claims = BuildWidgetGuestClaims(args);
     expect(claims.mj_app_id).toBe('APP-1');
     expect(claims.mj_role).toBe('Widget Guest');
     expect(claims.email).toBe('anonymous@magic-link.local');
@@ -122,13 +122,13 @@ describe('widget core — buildWidgetGuestClaims', () => {
   });
 
   it('carries a single scope entry for the guest grant', () => {
-    const claims = buildWidgetGuestClaims(args);
+    const claims = BuildWidgetGuestClaims(args);
     expect(claims.mj_scopes).toHaveLength(1);
     expect(claims.mj_scopes?.[0]).toMatchObject({ appId: 'APP-1', role: 'Widget Guest' });
   });
 
   it('sets exp = iat + ttl', () => {
-    const claims = buildWidgetGuestClaims(args);
+    const claims = BuildWidgetGuestClaims(args);
     expect(claims.iat).toBe(1_000_000);
     expect(claims.exp).toBe(1_000_900);
   });
@@ -139,7 +139,7 @@ describe('widget core — RS256 sign + verify roundtrip (reuses MagicLinkKeyMana
     const km = MagicLinkKeyManager.Instance;
     km.Initialize(); // ephemeral keypair (idempotent if already initialized in-process)
 
-    const claims = buildWidgetGuestClaims({
+    const claims = BuildWidgetGuestClaims({
       issuer: 'https://mj.example.com',
       audience: 'mj-magic-link',
       widgetId: 'WIDGET-XYZ',
@@ -164,7 +164,7 @@ describe('widget core — RS256 sign + verify roundtrip (reuses MagicLinkKeyMana
   it('rejects a tampered widget token', () => {
     const km = MagicLinkKeyManager.Instance;
     km.Initialize();
-    const claims = buildWidgetGuestClaims({
+    const claims = BuildWidgetGuestClaims({
       issuer: 'https://mj.example.com',
       audience: 'mj-magic-link',
       widgetId: 'W',
@@ -184,21 +184,21 @@ describe('widget core — RS256 sign + verify roundtrip (reuses MagicLinkKeyMana
 
 describe('widget core — looksLikeBot (W6 mint heuristic)', () => {
   it('flags a missing / blank user-agent as a bot', () => {
-    expect(looksLikeBot(undefined)).toBe(true);
-    expect(looksLikeBot(null)).toBe(true);
-    expect(looksLikeBot('   ')).toBe(true);
+    expect(LooksLikeBot(undefined)).toBe(true);
+    expect(LooksLikeBot(null)).toBe(true);
+    expect(LooksLikeBot('   ')).toBe(true);
   });
 
   it('flags known automation user-agents', () => {
-    expect(looksLikeBot('curl/8.4.0')).toBe(true);
-    expect(looksLikeBot('python-requests/2.31')).toBe(true);
-    expect(looksLikeBot('Googlebot/2.1 (+http://www.google.com/bot.html)')).toBe(true);
-    expect(looksLikeBot('Mozilla/5.0 (compatible; bingbot/2.0)')).toBe(true);
-    expect(looksLikeBot('HeadlessChrome/120.0.0.0')).toBe(true);
+    expect(LooksLikeBot('curl/8.4.0')).toBe(true);
+    expect(LooksLikeBot('python-requests/2.31')).toBe(true);
+    expect(LooksLikeBot('Googlebot/2.1 (+http://www.google.com/bot.html)')).toBe(true);
+    expect(LooksLikeBot('Mozilla/5.0 (compatible; bingbot/2.0)')).toBe(true);
+    expect(LooksLikeBot('HeadlessChrome/120.0.0.0')).toBe(true);
   });
 
   it('allows real browser user-agents', () => {
-    expect(looksLikeBot('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')).toBe(false);
-    expect(looksLikeBot('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1')).toBe(false);
+    expect(LooksLikeBot('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36')).toBe(false);
+    expect(LooksLikeBot('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1')).toBe(false);
   });
 });

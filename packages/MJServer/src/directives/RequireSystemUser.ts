@@ -9,7 +9,7 @@ export function RequireSystemUser(): PropertyDecorator | MethodDecorator | Class
   return (targetOrPrototype, propertyKey, descriptor) => Directive(`@${DIRECTIVE_NAME}`)(targetOrPrototype, propertyKey, descriptor);
 }
 
-export const requireSystemUserDirective: DirectiveBuilder = {
+export const RequireSystemUserDirective: DirectiveBuilder = {
   typeDefs: `directive @${DIRECTIVE_NAME} on FIELD_DEFINITION`,
   transformer: (schema) => {
     const fieldMapper: FieldMapper = (fieldConfig) => {
@@ -29,3 +29,6 @@ export const requireSystemUserDirective: DirectiveBuilder = {
     return mapSchema(schema, { [MapperKind.OBJECT_FIELD]: fieldMapper });
   },
 };
+
+/** @deprecated Use {@link RequireSystemUserDirective}. */
+export const requireSystemUserDirective = RequireSystemUserDirective;

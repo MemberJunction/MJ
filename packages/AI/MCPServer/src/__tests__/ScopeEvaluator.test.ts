@@ -5,10 +5,10 @@
 import { describe, it, expect } from 'vitest';
 import {
     ScopeEvaluator,
-    createScopeEvaluator,
-    checkScope,
-    checkAnyScope,
-    checkAllScopes,
+    CreateScopeEvaluator,
+    CheckScope,
+    CheckAnyScope,
+    CheckAllScopes,
 } from '../auth/ScopeEvaluator';
 
 describe('ScopeEvaluator', () => {
@@ -190,72 +190,72 @@ describe('ScopeEvaluator', () => {
 
 describe('createScopeEvaluator()', () => {
     it('should create evaluator from claims with scopes', () => {
-        const evaluator = createScopeEvaluator({ scopes: ['entity:read'] });
+        const evaluator = CreateScopeEvaluator({ scopes: ['entity:read'] });
         expect(evaluator.hasScope('entity:read')).toBe(true);
     });
 
     it('should create empty evaluator from claims without scopes', () => {
-        const evaluator = createScopeEvaluator({});
+        const evaluator = CreateScopeEvaluator({});
         expect(evaluator.isEmpty()).toBe(true);
     });
 
     it('should create empty evaluator from claims with undefined scopes', () => {
-        const evaluator = createScopeEvaluator({ scopes: undefined });
+        const evaluator = CreateScopeEvaluator({ scopes: undefined });
         expect(evaluator.isEmpty()).toBe(true);
     });
 });
 
 describe('checkScope()', () => {
     it('should return true when scope is present', () => {
-        expect(checkScope({ scopes: ['entity:read'] }, 'entity:read')).toBe(true);
+        expect(CheckScope({ scopes: ['entity:read'] }, 'entity:read')).toBe(true);
     });
 
     it('should return false when scope is missing', () => {
-        expect(checkScope({ scopes: ['entity:read'] }, 'entity:write')).toBe(false);
+        expect(CheckScope({ scopes: ['entity:read'] }, 'entity:write')).toBe(false);
     });
 
     it('should return false when scopes is undefined', () => {
-        expect(checkScope({}, 'entity:read')).toBe(false);
+        expect(CheckScope({}, 'entity:read')).toBe(false);
     });
 
     it('should return true for any scope when full_access is present', () => {
-        expect(checkScope({ scopes: ['full_access'] }, 'entity:read')).toBe(true);
-        expect(checkScope({ scopes: ['full_access'] }, 'action:execute')).toBe(true);
+        expect(CheckScope({ scopes: ['full_access'] }, 'entity:read')).toBe(true);
+        expect(CheckScope({ scopes: ['full_access'] }, 'action:execute')).toBe(true);
     });
 });
 
 describe('checkAnyScope()', () => {
     it('should return true when any scope matches', () => {
-        expect(checkAnyScope({ scopes: ['entity:read'] }, ['entity:read', 'entity:write'])).toBe(true);
+        expect(CheckAnyScope({ scopes: ['entity:read'] }, ['entity:read', 'entity:write'])).toBe(true);
     });
 
     it('should return false when no scope matches', () => {
-        expect(checkAnyScope({ scopes: ['entity:read'] }, ['action:execute'])).toBe(false);
+        expect(CheckAnyScope({ scopes: ['entity:read'] }, ['action:execute'])).toBe(false);
     });
 
     it('should return false when scopes is undefined', () => {
-        expect(checkAnyScope({}, ['entity:read'])).toBe(false);
+        expect(CheckAnyScope({}, ['entity:read'])).toBe(false);
     });
 
     it('should return true for any check when full_access is present', () => {
-        expect(checkAnyScope({ scopes: ['full_access'] }, ['action:execute', 'agent:run'])).toBe(true);
+        expect(CheckAnyScope({ scopes: ['full_access'] }, ['action:execute', 'agent:run'])).toBe(true);
     });
 });
 
 describe('checkAllScopes()', () => {
     it('should return true when all scopes present', () => {
-        expect(checkAllScopes({ scopes: ['a', 'b'] }, ['a', 'b'])).toBe(true);
+        expect(CheckAllScopes({ scopes: ['a', 'b'] }, ['a', 'b'])).toBe(true);
     });
 
     it('should return false when not all present', () => {
-        expect(checkAllScopes({ scopes: ['a'] }, ['a', 'b'])).toBe(false);
+        expect(CheckAllScopes({ scopes: ['a'] }, ['a', 'b'])).toBe(false);
     });
 
     it('should return false when scopes is undefined', () => {
-        expect(checkAllScopes({}, ['a'])).toBe(false);
+        expect(CheckAllScopes({}, ['a'])).toBe(false);
     });
 
     it('should return true for any check when full_access is present', () => {
-        expect(checkAllScopes({ scopes: ['full_access'] }, ['a', 'b', 'c'])).toBe(true);
+        expect(CheckAllScopes({ scopes: ['full_access'] }, ['a', 'b', 'c'])).toBe(true);
     });
 });

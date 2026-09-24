@@ -222,7 +222,7 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
     }
 
     /** Generic setter for the simple string/enum fields, driven by the template inputs. */
-    set(field: 'Name' | 'Description' | 'Status' | 'ScopeType' | 'ScopeFilter' | 'WorkType', event: Event): void {
+    Set(field: 'Name' | 'Description' | 'Status' | 'ScopeType' | 'ScopeFilter' | 'WorkType', event: Event): void {
         if (!this.Record) return;
         const value = (event.target as HTMLInputElement | HTMLSelectElement).value;
         // Strongly-typed assignment per field (no dynamic Set()).
@@ -237,25 +237,45 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
     }
 
-    onEntityChange(event: Event): void {
+    /** @deprecated Use {@link Set}. */
+    set(field: 'Name' | 'Description' | 'Status' | 'ScopeType' | 'ScopeFilter' | 'WorkType', event: Event): void {
+        return this.Set(field, event);
+    }
+
+    OnEntityChange(event: Event): void {
         if (!this.Record) return;
         this.Record.EntityID = (event.target as HTMLSelectElement).value;
         this.resolveEntityName();
         this.cdr.detectChanges();
     }
 
-    onRulesChange(ruleSet: FieldRuleSet): void {
+    /** @deprecated Use {@link OnEntityChange}. */
+    onEntityChange(event: Event): void {
+        return this.OnEntityChange(event);
+    }
+
+    OnRulesChange(ruleSet: FieldRuleSet): void {
         this.RuleSet = ruleSet;
         if (this.Record) this.Record.Configuration = JSON.stringify(ruleSet);
         this.cdr.detectChanges();
     }
 
-    onFeaturePipelineSpecChange(spec: DataFeatureSpec): void {
+    /** @deprecated Use {@link OnRulesChange}. */
+    onRulesChange(ruleSet: FieldRuleSet): void {
+        return this.OnRulesChange(ruleSet);
+    }
+
+    OnFeaturePipelineSpecChange(spec: DataFeatureSpec): void {
         this.FeaturePipelineSpec = spec;
         if (this.Record) {
             this.Record.Configuration = JSON.stringify(spec);
         }
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnFeaturePipelineSpecChange}. */
+    onFeaturePipelineSpecChange(spec: DataFeatureSpec): void {
+        return this.OnFeaturePipelineSpecChange(spec);
     }
 
     /** Saves the record (and emits). Returns success. */
@@ -303,9 +323,14 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
     }
 
-    onPreviewDone(_result: EntityActionUXResult): void {
+    OnPreviewDone(_result: EntityActionUXResult): void {
         this.PreviewDriver = null;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnPreviewDone}. */
+    onPreviewDone(_result: EntityActionUXResult): void {
+        return this.OnPreviewDone(_result);
     }
 
     Cancel(): void { this.Cancelled.emit(); }
