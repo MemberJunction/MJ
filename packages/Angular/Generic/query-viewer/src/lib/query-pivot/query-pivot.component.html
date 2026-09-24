@@ -1,8 +1,7 @@
 <div class="mj-query-pivot-container" [style.height]="Height">
     @if (Loading && PivotedData.length === 0) {
         <div class="mj-query-pivot-loading" role="status" aria-live="polite">
-            <div class="mj-query-pivot-spinner"></div>
-            <span class="mj-query-pivot-loading-text">Loading pivot data...</span>
+            <mj-loading text="Loading pivot data..."></mj-loading>
         </div>
     }
 

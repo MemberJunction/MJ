@@ -10,7 +10,7 @@ import {
   TrendData,
   ChartData
 } from '../../../services/ai-instrumentation.service';
-import { computeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
+import { ComputeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 import { TimeSeriesConfig } from '../../charts/time-series-chart.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -21,7 +21,8 @@ interface KpiDisplayCard {
   Label: string;
   Value: string;
   Subtitle?: string;
-  SparklineData: number[];
+  /** Bar heights (0–100). A null point is an unknown value (e.g. an unpriced bucket), drawn distinctly. */
+  SparklineData: (number | null)[];
   DeltaPercent: number;
   DeltaDirection: 'up' | 'down' | 'stable';
   IsImprovement: boolean;
@@ -66,11 +67,15 @@ interface ErrorHotspot {
           }
           <div class="kpi-sparkline">
             @for (bar of card.SparklineData; track $index) {
-              <div
-                class="spark-bar"
-                [style.height.%]="bar"
-                [style.background]="card.BorderColor"
-              ></div>
+              @if (bar === null) {
+                <div class="spark-bar spark-bar--unknown" title="unpriced — cost unknown"></div>
+              } @else {
+                <div
+                  class="spark-bar"
+                  [style.height.%]="bar"
+                  [style.background]="card.BorderColor"
+                ></div>
+              }
             }
           </div>
           @if (ComparisonEnabled && card.DeltaDirection !== 'stable') {
@@ -126,7 +131,7 @@ interface ErrorHotspot {
                 [class.consumer-type-pill--agent]="item.Type === 'agent'"
               >{{ item.Type }}</div>
               <div class="consumer-name" [title]="item.Name">{{ item.Name }}</div>
-              <div class="consumer-cost">{{ item.Cost !== null ? '$' + FormatCost(item.Cost) : '\u2014' }}</div>
+              <div class="consumer-cost">{{ item.Cost !== null ? CostPrefix + FormatCost(item.Cost) : '\u2014' }}</div>
               <div class="consumer-bar-container">
                 <div
                   class="consumer-bar"
@@ -246,6 +251,12 @@ interface ErrorHotspot {
     }
     .kpi-card:hover .spark-bar {
       opacity: 0.55;
+    }
+    /* An unknown point (an unpriced bucket) — outlined full height, never a zero-height bar. */
+    .spark-bar--unknown {
+      height: 100%;
+      background: transparent;
+      border: 1px dashed var(--mj-status-warning);
     }
 
     /* ─── Delta Badge ─────────────────────────────────────────── */
@@ -553,7 +564,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   }
 
   OnRefresh(): void {
-    this.instrumentationService.refresh();
+    this.instrumentationService.Refresh();
     if (this.ComparisonEnabled) {
       this.loadComparisonData();
     }
@@ -564,6 +575,9 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   }
 
   // ─── Formatting Helpers ──────────────────────────────────────────
+
+  /** Prefix for every amount on this view: '$' for USD, else the ISO code — all figures share one currency. */
+  public CostPrefix = '$';
 
   FormatCost(cost: number | null): string {
     if (cost === null || cost === undefined) {
@@ -583,14 +597,14 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   private latestKpis: DashboardKPIs | null = null;
 
   private subscribeToStreams(): void {
-    this.instrumentationService.isLoading$
+    this.instrumentationService.IsLoading$
       .pipe(takeUntil(this.destroy$))
       .subscribe(loading => {
         this.IsLoading = loading;
         this.cdr.markForCheck();
       });
 
-    this.instrumentationService.kpis$
+    this.instrumentationService.Kpis$
       .pipe(takeUntil(this.destroy$))
       .subscribe(kpis => {
         this.latestKpis = kpis;
@@ -598,14 +612,14 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
         this.cdr.markForCheck();
       });
 
-    this.instrumentationService.trends$
+    this.instrumentationService.Trends$
       .pipe(takeUntil(this.destroy$))
       .subscribe(trends => {
         this.TrendsData = trends;
         this.cdr.markForCheck();
       });
 
-    this.instrumentationService.chartData$
+    this.instrumentationService.ChartData$
       .pipe(takeUntil(this.destroy$))
       .subscribe(chartData => {
         this.TopConsumers = this.buildTopConsumers(chartData);
@@ -619,9 +633,9 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   private applyDateRange(): void {
     const { start, end } = this.computeDateRange(this.TimeRange);
     this.PeriodLabel = this.getPeriodLabel(this.TimeRange);
-    this.instrumentationService.setDateRange(start, end);
+    this.instrumentationService.SetDateRange(start, end);
     // Explicitly refresh to ensure data loads on first visit
-    this.instrumentationService.refresh();
+    this.instrumentationService.Refresh();
   }
 
   private computeDateRange(range: string): { start: Date; end: Date } {
@@ -671,10 +685,10 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     // Temporarily set date range to previous period, capture KPIs, then restore
     const previousService = new AIInstrumentationService();
     previousService.Provider = this.ProviderToUse;
-    previousService.setDateRange(prevStart, prevEnd);
+    previousService.SetDateRange(prevStart, prevEnd);
 
     // We subscribe to the previousService's kpis$ once
-    const sub: Subscription = previousService.kpis$
+    const sub: Subscription = previousService.Kpis$
       .pipe(takeUntil(this.destroy$))
       .subscribe(kpis => {
         this.previousKpis = kpis;
@@ -692,8 +706,14 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
       return;
     }
 
-    const coveragePct = computeCoveragePercent(kpis.Coverage);
-    const prevCoveragePct = this.previousKpis?.Coverage ? computeCoveragePercent(this.previousKpis.Coverage) : null;
+    const coveragePct = ComputeCoveragePercent(kpis.Coverage);
+    const prevCoveragePct = this.previousKpis?.Coverage ? ComputeCoveragePercent(this.previousKpis.Coverage) : null;
+    const currency = kpis.costCurrency ? kpis.costCurrency : 'USD';
+    this.CostPrefix = currency === 'USD' ? '$' : currency + ' ';
+    // Mixed currencies: the figures are in one of them and the rest are left out — say which.
+    const costSubtitle = `covers ${Math.round(coveragePct)}% of runs` + (kpis.IsMixedCurrency ? ` \u00b7 ${currency} only` : '');
+    // A period comparison across different currencies would compare unlike units.
+    const prevTotalCost = this.previousKpis && this.previousKpis.costCurrency === kpis.costCurrency ? this.previousKpis.totalCost : null;
 
     const trends = this.TrendsData;
     this.KpiCards = [
@@ -704,11 +724,11 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
         'up-is-neutral', 'var(--mj-brand-primary)'
       ),
       this.buildKpiCard(
-        'Total Cost', kpis.totalCost !== null ? '$' + this.FormatCost(kpis.totalCost) : '\u2014',
+        'Total Cost', kpis.totalCost !== null ? this.CostPrefix + this.FormatCost(kpis.totalCost) : '\u2014',
         this.extractSparkline(trends, 'cost'),
-        kpis.totalCost, this.previousKpis?.totalCost ?? null,
+        kpis.totalCost, prevTotalCost,
         'down-is-good', 'var(--mj-status-warning)',
-        `covers ${Math.round(coveragePct)}% of runs`
+        costSubtitle
       ),
       this.buildKpiCard(
         'Coverage', coveragePct.toFixed(1) + '%',
@@ -752,7 +772,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   private buildKpiCard(
     label: string,
     value: string,
-    sparkline: number[],
+    sparkline: (number | null)[],
     current: number | null,
     previous: number | null,
     goodDirection: 'up-is-good' | 'down-is-good' | 'up-is-neutral',
@@ -797,22 +817,23 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
 
   // ─── Private: Sparkline ──────────────────────────────────────────
 
-  private extractSparkline(trends: TrendData[], metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): number[] {
+  private extractSparkline(trends: TrendData[], metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): (number | null)[] {
     if (!trends || trends.length === 0) {
       return [20, 40, 30, 60, 50, 70, 45]; // placeholder
     }
 
-    // Sample up to 7 evenly-spaced points
+    // Sample up to 7 evenly-spaced points. A null value (an unpriced cost bucket) stays null — drawn
+    // as an unknown point, not as a zero bar that reads as "nothing was spent".
     const step = Math.max(1, Math.floor(trends.length / 7));
-    const sampled: number[] = [];
+    const sampled: (number | null)[] = [];
     for (let i = 0; i < trends.length && sampled.length < 7; i += step) {
-      const val = this.getMetricFromTrend(trends[i], metric);
-      sampled.push(val !== null ? val : 0);
+      sampled.push(this.getMetricFromTrend(trends[i], metric));
     }
 
-    // Normalize to 0-100 percentage
-    const maxVal = Math.max(...sampled, 1);
-    return sampled.map(v => Math.max(5, (v / maxVal) * 100));
+    // Normalize the known points to 0-100 percentage
+    const known = sampled.filter((v): v is number => v !== null);
+    const maxVal = Math.max(...known, 1);
+    return sampled.map(v => (v === null ? null : Math.max(5, (v / maxVal) * 100)));
   }
 
   private getMetricFromTrend(trend: TrendData, metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): number | null {

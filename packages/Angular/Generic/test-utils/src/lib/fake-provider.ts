@@ -14,7 +14,7 @@ export interface FakeProviderOptions<T = unknown> {
   /**
    * Rows any `RunQuery` / `RunQueries` call returns — a fixed array or a function of the params.
    */
-  runQueryResults?: unknown[] | ((params: RunQueryParams) => unknown[]);
+  RunQueryResults?: unknown[] | ((params: RunQueryParams) => unknown[]);
   /** The provider's `CurrentUser`. Merged over a stub default. */
   currentUser?: Partial<UserInfo>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /**
@@ -57,7 +57,7 @@ export function CreateFakeProvider<T = unknown>(options: FakeProviderOptions<T> 
   const toResult = (rows: T[]): RunViewResult => ({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length }) as RunViewResult;
 
   const queryRowsFor = (params: RunQueryParams): unknown[] =>
-    typeof options.runQueryResults === 'function' ? options.runQueryResults(params) : (options.runQueryResults ?? []);
+    typeof options.RunQueryResults === 'function' ? options.RunQueryResults(params) : (options.RunQueryResults ?? []);
 
   const toQueryResult = (rows: unknown[]): RunQueryResult =>
     ({ Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTimeMS: 1 } as unknown as RunQueryResult);

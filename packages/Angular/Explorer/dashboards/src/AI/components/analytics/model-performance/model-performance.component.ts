@@ -84,7 +84,7 @@ const FIELDS = [
                         <i class="fa-solid fa-trophy panel-header__icon"></i>
                         Model Performance Leaderboard
                     </div>
-                    <span class="panel-header__subtitle">sampled from {{ allRuns.length | number }} recent runs</span>
+                    <span class="panel-header__subtitle">sampled from {{ AllRuns.length | number }} recent runs</span>
                 </div>
                 <div class="table-wrapper">
                     <table class="leaderboard-table">
@@ -390,8 +390,6 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
     public Rows: ModelLeaderboardRow[] = [];
 
     public AllRuns: PromptRunRecord[] = [];
-    public get allRuns(): PromptRunRecord[] { return this.AllRuns; }
-    public set allRuns(v: PromptRunRecord[]) { this.AllRuns = v; }
 
     async ngOnInit(): Promise<void> {
         // AIEngineBase is deferred at startup — make sure it's loaded before
@@ -438,7 +436,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
                 ResultType: 'simple'
             });
 
-            this.allRuns = (result?.Results ?? []) as PromptRunRecord[];
+            this.AllRuns = (result?.Results ?? []) as PromptRunRecord[];
             this.buildRows();
         } catch (e) {
             console.error('Model Performance load error:', e);
@@ -452,7 +450,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
 
     private buildRows(): void {
         // Filter by vendor if needed
-        let runs = this.allRuns;
+        let runs = this.AllRuns;
         if (this.SelectedVendor) {
             runs = runs.filter(r => r.VendorID === this.SelectedVendor);
         }

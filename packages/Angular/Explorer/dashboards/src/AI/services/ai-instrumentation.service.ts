@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, from, combineLatest } from 'rxjs';
-import { switchMap, shareReplay, tap, map } from 'rxjs/operators';
-import { RunView, RunQuery, IMetadataProvider, IRunQueryProvider } from '@memberjunction/core';
+import { BehaviorSubject, from, combineLatest, of } from 'rxjs';
+import { switchMap, shareReplay, tap, map, catchError } from 'rxjs/operators';
+import { RunView, RunQuery, IMetadataProvider, IRunQueryProvider, RunViewResult } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
 import { CacheRate } from './cache-metrics';
@@ -10,30 +10,48 @@ import {
   DashboardKPIs,
   TrendData,
   LiveExecution,
+  LiveExecutionStatus,
   CostInputRow,
-  computeTotalCost,
-  computeKPIs,
-  computeTrends,
-  computeLiveExecutions,
-  computeCostByModel,
-  computePerformanceMatrix,
-  computeTokenEfficiency,
-  countActiveExecutions
+  ComputeTotalCost,
+  ComputeKPIs,
+  ComputeTrends,
+  ComputeLiveExecutions,
+  ComputeCostByModel,
+  ComputePerformanceMatrix,
+  ComputeTokenEfficiency,
+  CountActiveExecutions,
+  ResolveCostCurrency
 } from './ai-usage-analytics.compute';
 
 export {
   DashboardKPIs,
   TrendData,
   LiveExecution,
+  LiveExecutionStatus,
   AIUsageCoverage,
   AIUsageHourlyRow,
   AIUsageDailyRow,
   AIUsageByModelRow,
   AIAgentRunSubtreeCost,
   CostInputRow,
-  computeTotalCost,
+  ComputeTotalCost,
   CacheRate
 };
+
+/**
+ * True when a metadata provider can also run saved queries. At runtime MJ's providers (ProviderBase
+ * subclasses) implement both interfaces, but IMetadataProvider does not extend IRunQueryProvider, so
+ * this is checked rather than asserted — a provider that cannot run queries fails loudly here
+ * instead of at the first RunQuery call.
+ */
+function IsRunQueryProvider(provider: IMetadataProvider): provider is IMetadataProvider & IRunQueryProvider {
+  return 'RunQuery' in provider && typeof provider.RunQuery === 'function'
+    && 'RunQueries' in provider && typeof provider.RunQueries === 'function';
+}
+
+/** How deep an execution drill-down follows child runs, and how many it will load in total. */
+const EXECUTION_DETAIL_MAX_DEPTH = 4;
+const EXECUTION_DETAIL_MAX_NODES = 200;
 
 /**
  * Lightweight record types for live run monitoring and execution drill-down.
@@ -144,7 +162,11 @@ export class AIInstrumentationService {
   }
 
   public get RunQueryToUse(): IRunQueryProvider {
-    return <IRunQueryProvider><any>this.ProviderToUse;
+    const provider = this.ProviderToUse;
+    if (IsRunQueryProvider(provider)) {
+      return provider;
+    }
+    throw new Error('AIInstrumentationService: the configured MetadataProvider cannot run queries');
   }
 
   private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
@@ -168,10 +190,20 @@ export class AIInstrumentationService {
   /**
    * Single data load: fetches aggregated hourly facts via RunQuery and
    * live runs via bounded RunViews once per refresh or date-range change.
+   *
+   * A failed load is contained INSIDE the switchMap. Left to reach shareReplay, one rejected load
+   * (a transient network blip, a RunQuery 500) terminates the shared subject for the life of this
+   * root-provided service: every derived stream replays the error, Refresh() and SetDateRange()
+   * push into a combineLatest nobody is subscribed to any more, and IsLoading$ sticks at true.
    */
   private readonly rawData$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
-    switchMap(() => from(this.loadAllData())),
+    switchMap(([, range]) => from(this.loadAllData()).pipe(
+      catchError((error: unknown) => {
+        console.error('AI analytics: dashboard data failed to load; showing an empty period until the next refresh.', error);
+        return of(this.emptyRawData(range.start, range.end));
+      })
+    )),
     tap(() => this._isLoading$.next(false)),
     shareReplay(1)
   );
@@ -179,8 +211,8 @@ export class AIInstrumentationService {
   // Derived streams — pure in-memory transforms via ai-usage-analytics.compute.ts
   readonly Kpis$ = this.rawData$.pipe(
     map(data => {
-      const activeExecutions = countActiveExecutions(data.livePromptRuns, data.liveAgentRuns);
-      return computeKPIs(data.hourlyRows, activeExecutions, data.modelNames, data.agentNames);
+      const activeExecutions = CountActiveExecutions(data.livePromptRuns, data.liveAgentRuns);
+      return ComputeKPIs(data.hourlyRows, activeExecutions, data.modelNames, data.agentNames);
     }),
     shareReplay(1)
   );
@@ -191,7 +223,7 @@ export class AIInstrumentationService {
   }
 
   readonly Trends$ = this.rawData$.pipe(
-    map(data => computeTrends(data.hourlyRows, data.start, data.end)),
+    map(data => ComputeTrends(data.hourlyRows, data.start, data.end, ResolveCostCurrency(data.hourlyRows).Currency)),
     shareReplay(1)
   );
 
@@ -201,7 +233,7 @@ export class AIInstrumentationService {
   }
 
   readonly LiveExecutions$ = this.rawData$.pipe(
-    map(data => computeLiveExecutions(data.livePromptRuns, data.liveAgentRuns)),
+    map(data => ComputeLiveExecutions(data.livePromptRuns, data.liveAgentRuns)),
     shareReplay(1)
   );
 
@@ -211,12 +243,16 @@ export class AIInstrumentationService {
   }
 
   readonly ChartData$ = combineLatest([this.rawData$, this.Trends$]).pipe(
-    map(([data, executionTrends]) => ({
-      executionTrends,
-      costByModel: computeCostByModel(data.hourlyRows, data.modelNames),
-      performanceMatrix: computePerformanceMatrix(data.hourlyRows, data.modelNames, data.agentNames),
-      tokenEfficiency: computeTokenEfficiency(data.hourlyRows, data.modelNames)
-    })),
+    map(([data, executionTrends]) => {
+      // One currency for every cost on the page — the same one the KPIs report in.
+      const currency = ResolveCostCurrency(data.hourlyRows).Currency;
+      return {
+        executionTrends,
+        costByModel: ComputeCostByModel(data.hourlyRows, data.modelNames, currency),
+        performanceMatrix: ComputePerformanceMatrix(data.hourlyRows, data.modelNames, data.agentNames),
+        tokenEfficiency: ComputeTokenEfficiency(data.hourlyRows, data.modelNames, currency)
+      };
+    }),
     shareReplay(1)
   );
 
@@ -245,7 +281,7 @@ export class AIInstrumentationService {
 
   /**
    * Single batch query that loads all data needed by every dashboard widget.
-   * AIUsageHourly runs through RunQuery (Materialized).
+   * AIUsageHourly runs through RunQuery.
    * Live runs and dimension names are loaded with explicit MaxRows bounds.
    */
   private async loadAllData(): Promise<DashboardRawData> {
@@ -263,8 +299,7 @@ export class AIInstrumentationService {
         Parameters: {
           start: start.toISOString(),
           end: end.toISOString()
-        },
-        DataSource: 'Materialized'
+        }
       }),
       rv.RunViews<PromptRunRecord | AgentRunRecord | { ID: string; Name: string }>([
         {
@@ -298,33 +333,26 @@ export class AIInstrumentationService {
       ])
     ]);
 
-    const hourlyRows = (queryResult && queryResult.Success && Array.isArray(queryResult.Results)
-      ? queryResult.Results
-      : []) as AIUsageHourlyRow[];
+    if (!queryResult.Success) {
+      // A failed aggregate read is not an empty period. Say so rather than let every KPI read zero.
+      console.error(`AI analytics: AIUsageHourly failed to load; usage figures will be empty. ${queryResult.ErrorMessage}`);
+    }
+    const hourlyRows = (queryResult.Success && Array.isArray(queryResult.Results) ? queryResult.Results : []) as AIUsageHourlyRow[];
 
-    const livePromptRuns = (rvResults && rvResults[0] && Array.isArray(rvResults[0].Results)
-      ? rvResults[0].Results
-      : []) as PromptRunRecord[];
-
-    const liveAgentRuns = (rvResults && rvResults[1] && Array.isArray(rvResults[1].Results)
-      ? rvResults[1].Results
-      : []) as AgentRunRecord[];
+    const livePromptRuns = this.resultRows<PromptRunRecord>(rvResults[0], 'live prompt runs');
+    const liveAgentRuns = this.resultRows<AgentRunRecord>(rvResults[1], 'live agent runs');
 
     const modelNames = new Map<string, string>();
-    if (rvResults && rvResults[2] && Array.isArray(rvResults[2].Results)) {
-      for (const m of rvResults[2].Results as { ID: string; Name: string }[]) {
-        if (m && m.ID && m.Name) {
-          modelNames.set(m.ID, m.Name);
-        }
+    for (const m of this.resultRows<{ ID: string; Name: string }>(rvResults[2], 'model names')) {
+      if (m && m.ID && m.Name) {
+        modelNames.set(m.ID, m.Name);
       }
     }
 
     const agentNames = new Map<string, string>();
-    if (rvResults && rvResults[3] && Array.isArray(rvResults[3].Results)) {
-      for (const a of rvResults[3].Results as { ID: string; Name: string }[]) {
-        if (a && a.ID && a.Name) {
-          agentNames.set(a.ID, a.Name);
-        }
+    for (const a of this.resultRows<{ ID: string; Name: string }>(rvResults[3], 'agent names')) {
+      if (a && a.ID && a.Name) {
+        agentNames.set(a.ID, a.Name);
       }
     }
 
@@ -339,14 +367,45 @@ export class AIInstrumentationService {
     };
   }
 
+  /** The payload a failed load degrades to: an empty period over the requested range. */
+  private emptyRawData(start: Date, end: Date): DashboardRawData {
+    return {
+      hourlyRows: [],
+      livePromptRuns: [],
+      liveAgentRuns: [],
+      modelNames: new Map<string, string>(),
+      agentNames: new Map<string, string>(),
+      start,
+      end
+    };
+  }
+
+  /**
+   * The rows of a RunView result, logging when the view FAILED. A failed view and an empty one both
+   * yield no rows, but only the empty one means "nothing there" — without the log, a failure reads
+   * as a confident zero on whatever figure the rows feed.
+   */
+  private resultRows<T>(result: RunViewResult<unknown> | undefined, what: string): T[] {
+    if (!result) {
+      console.error(`AI analytics: no result returned for ${what}`);
+      return [];
+    }
+    if (!result.Success) {
+      console.error(`AI analytics: ${what} failed to load. ${result.ErrorMessage}`);
+      return [];
+    }
+    return (Array.isArray(result.Results) ? result.Results : []) as T[];
+  }
+
   // ─── Execution Details (on-demand, not part of initial load) ──────
 
   async GetExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
     try {
+      const budget = { visited: new Set<string>(), remaining: EXECUTION_DETAIL_MAX_NODES };
       if (type === 'prompt') {
-        return await this.getPromptExecutionDetails(executionId);
+        return await this.getPromptExecutionDetails(executionId, 0, budget);
       } else {
-        return await this.getAgentExecutionDetails(executionId);
+        return await this.getAgentExecutionDetails(executionId, 0, budget);
       }
     } catch (error) {
       console.error('Error loading execution details:', error);
@@ -359,8 +418,28 @@ export class AIInstrumentationService {
     return this.GetExecutionDetails(executionId, type);
   }
 
-  private async getPromptExecutionDetails(promptRunId: string): Promise<ExecutionDetails> {
+  /**
+   * Claims a node for the drill-down: false when it was already visited (a ParentID cycle) or the
+   * total node budget is spent. Bounded because each node costs a RunViews round trip and children
+   * fan out — an uncapped 3-level tree of 20 children each is thousands of requests from one click.
+   */
+  private claimDetailNode(id: string, budget: { visited: Set<string>; remaining: number }): boolean {
+    const key = NormalizeUUID(id);
+    if (budget.visited.has(key) || budget.remaining <= 0) {
+      return false;
+    }
+    budget.visited.add(key);
+    budget.remaining--;
+    return true;
+  }
+
+  private async getPromptExecutionDetails(
+    promptRunId: string,
+    depth: number,
+    budget: { visited: Set<string>; remaining: number }
+  ): Promise<ExecutionDetails> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const loadChildren = depth < EXECUTION_DETAIL_MAX_DEPTH;
     const [result, childrenResult] = await rv.RunViews<PromptRunRecord>([
       {
         EntityName: 'MJ: AI Prompt Runs',
@@ -369,21 +448,23 @@ export class AIInstrumentationService {
         ResultType: 'simple',
         MaxRows: 1
       },
-      {
+      ...(loadChildren ? [{
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ParentID = '${promptRunId}'`,
         Fields: PROMPT_RUN_FIELDS,
-        ResultType: 'simple',
+        ResultType: 'simple' as const,
         MaxRows: 100
-      }
+      }] : [])
     ]);
 
-    const run = result && result.Results && result.Results.length > 0 ? result.Results[0] : null;
+    const run = this.resultRows<PromptRunRecord>(result, 'prompt run detail')[0];
     if (!run) throw new Error('Prompt run not found');
 
-    const childrenList = childrenResult && Array.isArray(childrenResult.Results) ? childrenResult.Results : [];
+    const childrenList = loadChildren ? this.resultRows<PromptRunRecord>(childrenResult, 'prompt run children') : [];
     const children = await Promise.all(
-      childrenList.map(child => this.getPromptExecutionDetails(child.ID))
+      childrenList
+        .filter(child => this.claimDetailNode(child.ID, budget))
+        .map(child => this.getPromptExecutionDetails(child.ID, depth + 1, budget))
     );
 
     const costVal = run.Cost !== null && run.Cost !== undefined ? run.Cost : null;
@@ -409,8 +490,13 @@ export class AIInstrumentationService {
     };
   }
 
-  private async getAgentExecutionDetails(agentRunId: string): Promise<ExecutionDetails> {
+  private async getAgentExecutionDetails(
+    agentRunId: string,
+    depth: number,
+    budget: { visited: Set<string>; remaining: number }
+  ): Promise<ExecutionDetails> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const loadChildren = depth < EXECUTION_DETAIL_MAX_DEPTH;
     const [result, childrenResult] = await rv.RunViews<AgentRunRecord>([
       {
         EntityName: 'MJ: AI Agent Runs',
@@ -419,21 +505,23 @@ export class AIInstrumentationService {
         ResultType: 'simple',
         MaxRows: 1
       },
-      {
+      ...(loadChildren ? [{
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ParentRunID = '${agentRunId}'`,
         Fields: AGENT_RUN_FIELDS,
-        ResultType: 'simple',
+        ResultType: 'simple' as const,
         MaxRows: 100
-      }
+      }] : [])
     ]);
 
-    const run = result && result.Results && result.Results.length > 0 ? result.Results[0] : null;
+    const run = this.resultRows<AgentRunRecord>(result, 'agent run detail')[0];
     if (!run) throw new Error('Agent run not found');
 
-    const childrenList = childrenResult && Array.isArray(childrenResult.Results) ? childrenResult.Results : [];
+    const childrenList = loadChildren ? this.resultRows<AgentRunRecord>(childrenResult, 'agent run children') : [];
     const children = await Promise.all(
-      childrenList.map(child => this.getAgentExecutionDetails(child.ID))
+      childrenList
+        .filter(child => this.claimDetailNode(child.ID, budget))
+        .map(child => this.getAgentExecutionDetails(child.ID, depth + 1, budget))
     );
 
     const costVal = run.TotalCost !== null && run.TotalCost !== undefined ? run.TotalCost : null;
@@ -459,60 +547,51 @@ export class AIInstrumentationService {
   }
 
   /**
-   * Fetch hourly aggregate usage for a date range via stored query AIUsageHourly (Materialized).
+   * Runs one of the AI usage aggregate queries, logging a failure rather than letting it read as an
+   * empty (zero-usage) period.
    */
-  async getUsageHourly(start: Date, end: Date): Promise<AIUsageHourlyRow[]> {
+  private async runUsageQuery<T>(queryName: string, start: Date, end: Date): Promise<T[]> {
     const rq = new RunQuery(this.RunQueryToUse);
     const res = await rq.RunQuery({
-      QueryName: 'AIUsageHourly',
+      QueryName: queryName,
       CategoryPath: '/MJ/AI/',
       Parameters: {
         start: start.toISOString(),
         end: end.toISOString()
-      },
-      DataSource: 'Materialized'
+      }
     });
-    return (res && res.Success && Array.isArray(res.Results) ? res.Results : []) as AIUsageHourlyRow[];
+    if (!res.Success) {
+      console.error(`AI analytics: ${queryName} failed to load. ${res.ErrorMessage}`);
+      return [];
+    }
+    return (Array.isArray(res.Results) ? res.Results : []) as T[];
   }
 
   /**
-   * Fetch daily aggregate usage for a date range via stored query AIUsageDaily (Materialized).
+   * Fetch hourly aggregate usage for a date range via stored query AIUsageHourly.
    */
-  async getUsageDaily(start: Date, end: Date): Promise<AIUsageDailyRow[]> {
-    const rq = new RunQuery(this.RunQueryToUse);
-    const res = await rq.RunQuery({
-      QueryName: 'AIUsageDaily',
-      CategoryPath: '/MJ/AI/',
-      Parameters: {
-        start: start.toISOString(),
-        end: end.toISOString()
-      },
-      DataSource: 'Materialized'
-    });
-    return (res && res.Success && Array.isArray(res.Results) ? res.Results : []) as AIUsageDailyRow[];
+  async GetUsageHourly(start: Date, end: Date): Promise<AIUsageHourlyRow[]> {
+    return this.runUsageQuery<AIUsageHourlyRow>('AIUsageHourly', start, end);
   }
 
   /**
-   * Fetch model-level aggregate usage for a date range via stored query AIUsageByModel (Materialized).
+   * Fetch daily aggregate usage for a date range via stored query AIUsageDaily.
    */
-  async getUsageByModel(start: Date, end: Date): Promise<AIUsageByModelRow[]> {
-    const rq = new RunQuery(this.RunQueryToUse);
-    const res = await rq.RunQuery({
-      QueryName: 'AIUsageByModel',
-      CategoryPath: '/MJ/AI/',
-      Parameters: {
-        start: start.toISOString(),
-        end: end.toISOString()
-      },
-      DataSource: 'Materialized'
-    });
-    return (res && res.Success && Array.isArray(res.Results) ? res.Results : []) as AIUsageByModelRow[];
+  async GetUsageDaily(start: Date, end: Date): Promise<AIUsageDailyRow[]> {
+    return this.runUsageQuery<AIUsageDailyRow>('AIUsageDaily', start, end);
+  }
+
+  /**
+   * Fetch model-level aggregate usage for a date range via stored query AIUsageByModel.
+   */
+  async GetUsageByModel(start: Date, end: Date): Promise<AIUsageByModelRow[]> {
+    return this.runUsageQuery<AIUsageByModelRow>('AIUsageByModel', start, end);
   }
 
   /**
    * Calculate recursive subtree cost and token metrics for an agent run via CalculateRunCost.
    */
-  async calculateAgentRunCost(agentRunId: string): Promise<AIAgentRunSubtreeCost | null> {
+  async CalculateAgentRunCost(agentRunId: string): Promise<AIAgentRunSubtreeCost | null> {
     const rq = new RunQuery(this.RunQueryToUse);
     const res = await rq.RunQuery({
       QueryName: 'CalculateRunCost',
@@ -522,7 +601,11 @@ export class AIInstrumentationService {
         AgentRunID: agentRunId
       }
     });
-    if (res && res.Success && Array.isArray(res.Results) && res.Results.length > 0) {
+    if (!res.Success) {
+      console.error(`AI analytics: CalculateRunCost failed for agent run ${agentRunId}. ${res.ErrorMessage}`);
+      return null;
+    }
+    if (Array.isArray(res.Results) && res.Results.length > 0) {
       const raw = res.Results[0] as AIAgentRunSubtreeCost;
       const cost = raw.TotalCost !== null && raw.TotalCost !== undefined ? Number(raw.TotalCost) : null;
       const toFiniteNum = (v: unknown): number => {
@@ -544,7 +627,7 @@ export class AIInstrumentationService {
   /**
    * Fetch model and vendor lookups for mapping IDs to display names.
    */
-  async getModelAndVendorLookups(): Promise<{
+  async GetModelAndVendorLookups(): Promise<{
     models: Map<string, string>;
     modelVendors: Map<string, string>;
     vendors: Map<string, string>;
@@ -576,28 +659,22 @@ export class AIInstrumentationService {
     const vendors = new Map<string, string>();
     const agents = new Map<string, string>();
 
-    if (modelsRes && modelsRes.Success && Array.isArray(modelsRes.Results)) {
-      for (const m of modelsRes.Results as Array<{ ID: string; Name: string; VendorID?: string | null }>) {
-        if (m.ID) {
-          models.set(m.ID.toLowerCase(), m.Name);
-          if (m.VendorID) {
-            modelVendors.set(m.ID.toLowerCase(), m.VendorID);
-          }
+    for (const m of this.resultRows<{ ID: string; Name: string; VendorID?: string | null }>(modelsRes, 'model names')) {
+      if (m.ID) {
+        models.set(m.ID.toLowerCase(), m.Name);
+        if (m.VendorID) {
+          modelVendors.set(m.ID.toLowerCase(), m.VendorID);
         }
       }
     }
-    if (vendorsRes && vendorsRes.Success && Array.isArray(vendorsRes.Results)) {
-      for (const v of vendorsRes.Results as Array<{ ID: string; Name: string }>) {
-        if (v.ID) {
-          vendors.set(v.ID.toLowerCase(), v.Name);
-        }
+    for (const v of this.resultRows<{ ID: string; Name: string }>(vendorsRes, 'vendor names')) {
+      if (v.ID) {
+        vendors.set(v.ID.toLowerCase(), v.Name);
       }
     }
-    if (agentsRes && agentsRes.Success && Array.isArray(agentsRes.Results)) {
-      for (const a of agentsRes.Results as Array<{ ID: string; Name: string }>) {
-        if (a.ID) {
-          agents.set(a.ID.toLowerCase(), a.Name);
-        }
+    for (const a of this.resultRows<{ ID: string; Name: string }>(agentsRes, 'agent names')) {
+      if (a.ID) {
+        agents.set(a.ID.toLowerCase(), a.Name);
       }
     }
     return { models, modelVendors, vendors, agents };
@@ -606,7 +683,7 @@ export class AIInstrumentationService {
   /**
    * Fetch active realtime model pricing rates and compute currency-per-token divisors.
    */
-  async getCacheRates(): Promise<Map<string, CacheRate>> {
+  async GetCacheRates(): Promise<Map<string, CacheRate>> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const [rateResult, unitTypeResult] = await rv.RunViews([
       {
@@ -622,12 +699,21 @@ export class AIInstrumentationService {
       }
     ]);
 
+    // A failed unit-type view is NOT the same as "these rows are unpriceable". Without the driver
+    // classes every rate row falls into the `continue` below, and cache savings render as a
+    // confident 0 instead of an error — the figure most likely to be believed. Say so rather than
+    // let the empty map speak for it.
+    if (unitTypeResult && !unitTypeResult.Success) {
+      console.error('AI analytics: price unit types failed to load; cache-savings figures will read 0. ' +
+        unitTypeResult.ErrorMessage);
+    }
+
     const cacheRates = new Map<string, CacheRate>();
-    const unitTypes = (unitTypeResult && Array.isArray(unitTypeResult.Results) ? unitTypeResult.Results : []) as Array<{ ID: string; DriverClass: string | null }>;
+    const unitTypes = this.resultRows<{ ID: string; DriverClass: string | null }>(unitTypeResult, 'price unit types');
     const driverClassByUnitType = new Map<string, string>(
       unitTypes.filter(u => u.DriverClass).map(u => [NormalizeUUID(u.ID), u.DriverClass!])
     );
-    const rows = (rateResult && Array.isArray(rateResult.Results) ? rateResult.Results : []) as Array<{
+    const rows = this.resultRows<{
       ModelID: string | null;
       VendorID: string | null;
       InputPricePerUnit: number | null;
@@ -635,7 +721,7 @@ export class AIInstrumentationService {
       CacheReadPricePerUnit: number | null;
       CacheWritePricePerUnit: number | null;
       UnitTypeID: string | null;
-    }>;
+    }>(rateResult, 'model cost rates');
 
     for (const row of rows) {
       const unitTypeId = row.UnitTypeID !== null && row.UnitTypeID !== undefined ? row.UnitTypeID : '';
@@ -658,5 +744,3 @@ export class AIInstrumentationService {
     return cacheRates;
   }
 }
-
-

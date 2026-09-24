@@ -20,13 +20,20 @@ export type PivotTimeGrain = 'hour' | 'day';
  */
 export interface PivotMeasureColumn {
     /** The field name/key from the raw query dataset */
-    key: string;
+    Key: string;
     /** The column header label to display */
-    label: string;
+    Label: string;
     /** Format style for rendering the aggregated value */
-    format: PivotMeasureFormat;
+    Format: PivotMeasureFormat;
     /** Aggregation function to apply (defaults to 'sum') */
-    aggregation?: PivotAggregationType;
+    Aggregation?: PivotAggregationType;
+    /**
+     * For a `'currency'` measure: the row column holding each amount's ISO 4217 currency code.
+     * The pivot also groups by this column, so amounts in different currencies are never summed
+     * into one figure, and each group is formatted in its own currency. Omit for single-currency
+     * data, which is then formatted as USD.
+     */
+    CurrencyColumn?: string;
 }
 
 /**
@@ -34,20 +41,20 @@ export interface PivotMeasureColumn {
  */
 export interface QueryPivotConfig {
     /** Columns to group rows by */
-    dimensionColumns: string[];
+    DimensionColumns: string[];
     /** Measures to aggregate per group */
-    measureColumns: PivotMeasureColumn[];
+    MeasureColumns: PivotMeasureColumn[];
     /** Optional date/time column to bucket */
-    timeColumn?: string | null;
+    TimeColumn?: string | null;
     /** Time grain for the timeColumn (e.g., 'hour' or 'day') */
-    grain?: PivotTimeGrain | null;
+    Grain?: PivotTimeGrain | null;
     /** Whether to calculate comparison window deltas */
-    comparisonWindow?: boolean;
+    ComparisonWindow?: boolean;
     /**
      * Optional column name indicating whether a row belongs to the current or comparison period.
-     * When not supplied but comparisonWindow is true, rows are split across available time intervals.
+     * When not supplied but ComparisonWindow is true, rows are split across available time intervals.
      */
-    comparisonPeriodColumn?: string | null;
+    ComparisonPeriodColumn?: string | null;
 }
 
 /**
@@ -55,11 +62,11 @@ export interface QueryPivotConfig {
  */
 export interface PivotResult {
     /** The aggregated rows ready for tabular grid display */
-    rows: Record<string, unknown>[];
+    Rows: Record<string, unknown>[];
     /** Column definitions configured with appropriate alignment and headers */
-    columnConfigs: QueryGridColumnConfig[];
+    ColumnConfigs: QueryGridColumnConfig[];
     /** Total number of raw input rows processed */
-    totalInputRows: number;
+    TotalInputRows: number;
     /** Total number of grouped output rows generated */
-    groupedRowCount: number;
+    GroupedRowCount: number;
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { RunViewParams } from '@memberjunction/core';
+import { RunQueryParams, RunViewParams } from '@memberjunction/core';
 import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsAgentRunsComponent } from './agent-run-analysis.component';
@@ -8,8 +8,9 @@ import { AnalyticsAgentRunsComponent } from './agent-run-analysis.component';
 /**
  * DOM coverage for <app-analytics-agent-runs> — the agent-run analysis view: a six-tile stats bar,
  * a cost-attribution panel (empty-state-gated), and a sortable "Recent Agent Runs" table. It loads
- * `MJ: AI Agent Runs` + `MJ: AI Prompt Runs` via `RunViews` through `this.ProviderToUse`; a
- * `createFakeProvider` returns rows keyed by `EntityName`. Empty data → the two empty states; agent
+ * `MJ: AI Agent Runs` via `RunView` and per-agent usage from the AIUsageDaily aggregate via `RunQuery`
+ * (never raw prompt runs, which carry no agent-run key); a `createFakeProvider` returns rows keyed by
+ * `EntityName` / `QueryName`. Empty data → the two empty states; agent
  * rows → attribution rows + a recent-runs table. Clicking a sortable header calls `OnSort`, which
  * toggles `SortDir` and re-renders (the caret icon flips). `mj-loading` / `mj-empty-state` stubbed.
  */
@@ -25,15 +26,25 @@ const AGENT_RUNS: AgentRunFixture[] = [
   { ID: 'a1', Agent: 'Sales Agent', AgentID: 'ag1', Status: 'Completed', Success: true, StartedAt: '2026-01-05T09:00:00Z', CompletedAt: '2026-01-05T09:00:30Z', TotalCost: 0.05, TotalPromptIterations: 2 },
   { ID: 'a2', Agent: 'Support Agent', AgentID: 'ag2', Status: 'Failed', Success: false, StartedAt: '2026-01-05T10:00:00Z', CompletedAt: '2026-01-05T10:00:20Z', TotalCost: 0.02, TotalPromptIterations: 1 },
 ];
-const PROMPT_RUNS = [{ ID: 'p1', AgentRunID: 'a1', Cost: 0.01, TokensUsed: 500, RunAt: '2026-01-05T09:00:10Z' }];
+const LOOKUPS: Record<string, unknown[]> = {
+  'MJ: AI Agents': [{ ID: 'ag1', Name: 'Sales Agent' }, { ID: 'ag2', Name: 'Support Agent' }],
+  'MJ: AI Vendors': [{ ID: 'v1', Name: 'OpenAI' }],
+};
+const USAGE_ROWS = [
+  { DayBucket: '2026-01-05', AgentID: 'ag1', VendorID: 'v1', CostCurrency: 'USD', Runs: 2, PricedRuns: 2, UnpricedRuns: 0, OwnCost: 0.01 },
+];
 
 const rowsByEntity = (p: RunViewParams): unknown[] =>
-  p.EntityName === 'MJ: AI Agent Runs' ? AGENT_RUNS : p.EntityName === 'MJ: AI Prompt Runs' ? PROMPT_RUNS : [];
+  p.EntityName === 'MJ: AI Agent Runs' ? AGENT_RUNS : (LOOKUPS[p.EntityName ?? ''] ?? []);
+const usageByQuery = (p: RunQueryParams): unknown[] => (p.QueryName === 'AIUsageDaily' ? USAGE_ROWS : []);
 
-async function render(rowsFn: (p: RunViewParams) => unknown[]): Promise<ComponentFixture<AnalyticsAgentRunsComponent>> {
+async function render(
+  rowsFn: (p: RunViewParams) => unknown[],
+  queryFn: (p: RunQueryParams) => unknown[] = () => []
+): Promise<ComponentFixture<AnalyticsAgentRunsComponent>> {
   TestBed.configureTestingModule({ declarations: [AnalyticsAgentRunsComponent], imports: [StubLoadingComponent, StubEmptyStateComponent] });
   const fixture = TestBed.createComponent(AnalyticsAgentRunsComponent);
-  fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: rowsFn }));
+  fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: rowsFn, RunQueryResults: queryFn }));
   fixture.detectChanges(false);
   await new Promise((r) => setTimeout(r, 0));
   fixture.componentRef.changeDetectorRef.markForCheck();
@@ -74,11 +85,20 @@ describe('AnalyticsAgentRunsComponent (DOM)', () => {
     expect(fixture.componentInstance.Stats.SuccessRate).toBeCloseTo(50);
   });
 
-  it('renders the cost-attribution rows + legend when there is agent cost', async () => {
+  it('renders the cost-attribution rows + legend from the usage aggregate', async () => {
     installProvider({ runViewResults: [] });
-    const fixture = await render(rowsByEntity);
-    expect(queryAll(fixture, '.attribution-row').length).toBeGreaterThan(0);
-    expect(query(fixture, '.legend-row')).not.toBeNull();
+    const fixture = await render(rowsByEntity, usageByQuery);
+    expect(queryAll(fixture, '.attribution-row').length).toBe(1);
+    expect(query(fixture, '.attribution-name')?.textContent?.trim()).toBe('Sales Agent');
+    expect(query(fixture, '.legend-row')?.textContent).toContain('OpenAI');
+    expect(fixture.componentInstance.Stats.PromptRuns).toBe(2);
+  });
+
+  it('shows the run\'s own prompt-iteration count in the recent-runs table', async () => {
+    installProvider({ runViewResults: [] });
+    const fixture = await render(rowsByEntity, usageByQuery);
+    const counts = fixture.componentInstance.RecentRuns.map(r => [r.ID, r.StepCount]);
+    expect(counts).toEqual(expect.arrayContaining([['a1', 2], ['a2', 1]]));
   });
 
   it('toggles sort direction when a sorted header is clicked again', async () => {

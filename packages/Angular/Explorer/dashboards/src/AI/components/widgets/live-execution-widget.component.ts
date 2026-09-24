@@ -183,6 +183,14 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       background: color-mix(in srgb, var(--mj-status-error) 2%, var(--mj-bg-surface));
     }
 
+    .execution-item--paused {
+      border-left-color: var(--mj-status-warning);
+    }
+
+    .execution-item--cancelled {
+      border-left-color: var(--mj-border-strong);
+    }
+
     .execution-icon {
       width: 32px;
       height: 32px;
@@ -207,6 +215,16 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     .execution-item--failed .execution-icon {
       background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
       color: var(--mj-status-error);
+    }
+
+    .execution-item--paused .execution-icon {
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
+    }
+
+    .execution-item--cancelled .execution-icon {
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-muted);
     }
 
     .execution-info {
@@ -300,6 +318,16 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
 
     .status-indicator--failed {
       background: var(--mj-status-error);
+      color: var(--mj-text-inverse);
+    }
+
+    .status-indicator--paused {
+      background: var(--mj-status-warning);
+      color: var(--mj-text-inverse);
+    }
+
+    .status-indicator--cancelled {
+      background: var(--mj-text-muted);
       color: var(--mj-text-inverse);
     }
 
@@ -463,10 +491,14 @@ export class LiveExecutionWidgetComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'running':
         return 'fa-solid fa-play';
+      case 'paused':
+        return 'fa-solid fa-pause';
       case 'completed':
         return 'fa-solid fa-check';
       case 'failed':
         return 'fa-solid fa-times';
+      case 'cancelled':
+        return 'fa-solid fa-ban';
       default:
         return 'fa-solid fa-question';
     }

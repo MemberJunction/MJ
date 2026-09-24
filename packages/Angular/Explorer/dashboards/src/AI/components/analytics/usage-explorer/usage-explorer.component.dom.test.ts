@@ -5,7 +5,9 @@ import { CommonModule } from '@angular/common';
 import { Subject, of } from 'rxjs';
 import { CompositeKey } from '@memberjunction/core';
 import { NavigationService } from '@memberjunction/ng-shared';
-import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
+import { By } from '@angular/platform-browser';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { QueryViewerModule, QueryPivotComponent, PivotResult } from '@memberjunction/ng-query-viewer';
 import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 import { UsageExplorerComponent } from './usage-explorer.component';
 import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
@@ -22,6 +24,7 @@ const FIXTURE_DAILY_ROWS: Partial<AIUsageDailyRow>[] = [
         PrimaryScopeEntityID: 'scope-1',
         ConfigurationID: 'config-1',
         SourceKind: 'agent_chat',
+        CostCurrency: 'USD',
         Runs: 10,
         SucceededRuns: 9,
         FailedRuns: 1,
@@ -46,6 +49,7 @@ const FIXTURE_DAILY_ROWS: Partial<AIUsageDailyRow>[] = [
         PrimaryScopeEntityID: 'scope-2',
         ConfigurationID: 'config-2',
         SourceKind: 'workflow_step',
+        CostCurrency: null,
         Runs: 5,
         SucceededRuns: 5,
         FailedRuns: 0,
@@ -72,8 +76,9 @@ describe('UsageExplorerComponent (DOM)', () => {
     };
 
     let mockInstrumentation: {
-        getUsageHourly: ReturnType<typeof vi.fn>;
-        getUsageDaily: ReturnType<typeof vi.fn>;
+        Provider: unknown;
+        GetUsageHourly: ReturnType<typeof vi.fn>;
+        GetUsageDaily: ReturnType<typeof vi.fn>;
     };
 
     beforeEach(() => {
@@ -86,8 +91,9 @@ describe('UsageExplorerComponent (DOM)', () => {
         };
 
         mockInstrumentation = {
-            getUsageHourly: vi.fn().mockResolvedValue([]),
-            getUsageDaily: vi.fn().mockResolvedValue(FIXTURE_DAILY_ROWS)
+            Provider: null,
+            GetUsageHourly: vi.fn().mockResolvedValue([]),
+            GetUsageDaily: vi.fn().mockResolvedValue(FIXTURE_DAILY_ROWS)
         };
     });
 
@@ -102,6 +108,8 @@ describe('UsageExplorerComponent (DOM)', () => {
                 MJDropdownComponent
             ],
             providers: [
+                // The real query-data-grid animates its empty state, which the load-from-service cases reach.
+                provideNoopAnimations(),
                 { provide: NavigationService, useValue: mockNavService },
                 { provide: AIInstrumentationService, useValue: mockInstrumentation }
             ]
@@ -173,10 +181,12 @@ describe('UsageExplorerComponent (DOM)', () => {
         );
 
         component.OnRowActivated({ UserID: 'user-999' });
+        // The registered entity name — 'Users' does not exist in metadata and fails to open.
         expect(mockNavService.OpenEntityRecord).toHaveBeenCalledWith(
-            'Users',
+            'MJ: Users',
             expect.any(Object)
         );
+        expect(mockNavService.OpenEntityRecord).not.toHaveBeenCalledWith('Users', expect.anything());
 
         component.OnRowActivated({ ConfigurationID: 'config-111' });
         expect(mockNavService.OpenEntityRecord).toHaveBeenCalledWith(
@@ -191,19 +201,19 @@ describe('UsageExplorerComponent (DOM)', () => {
 
         expect(component.SelectedMeasure).toBe('cost');
         expect(component.MeasureColumns).toEqual([
-            { key: 'OwnCost', label: 'Cost', format: 'currency', aggregation: 'sum' }
+            { Key: 'OwnCost', Label: 'Cost', Format: 'currency', Aggregation: 'sum', CurrencyColumn: 'CostCurrency' }
         ]);
 
         component.OnMeasureChange('tokens');
         expect(component.MeasureColumns).toEqual([
-            { key: 'TokensPrompt', label: 'Prompt Tokens', format: 'number', aggregation: 'sum' },
-            { key: 'TokensCompletion', label: 'Completion Tokens', format: 'number', aggregation: 'sum' }
+            { Key: 'TokensPrompt', Label: 'Prompt Tokens', Format: 'number', Aggregation: 'sum' },
+            { Key: 'TokensCompletion', Label: 'Completion Tokens', Format: 'number', Aggregation: 'sum' }
         ]);
 
         component.OnMeasureChange('p95_latency');
         expect(component.MeasureColumns).toEqual([
-            { key: 'LatencyP95', label: 'Avg P95 Latency', format: 'duration', aggregation: 'avg' },
-            { key: 'LatencyP50', label: 'Avg P50 Latency', format: 'duration', aggregation: 'avg' }
+            { Key: 'LatencyP95', Label: 'Avg P95 Latency', Format: 'duration', Aggregation: 'avg' },
+            { Key: 'LatencyP50', Label: 'Avg P50 Latency', Format: 'duration', Aggregation: 'avg' }
         ]);
 
         component.OnGroupByChange('ModelID');
@@ -215,5 +225,64 @@ describe('UsageExplorerComponent (DOM)', () => {
         component.OnGrainChange('hour');
         expect(component.SelectedGrain).toBe('hour');
         expect(component.TimeColumn).toBe('HourBucket');
+    });
+
+    it('hands the pivot stable config arrays, so change detection alone never re-pivots', async () => {
+        const fixture = await createComponent(FIXTURE_DAILY_ROWS as Record<string, unknown>[]);
+        const component = fixture.componentInstance;
+        const pivot = fixture.debugElement.query(By.directive(QueryPivotComponent)).componentInstance as QueryPivotComponent;
+        const pivots: PivotResult[] = [];
+        pivot.PivotComplete.subscribe(r => pivots.push(r));
+
+        const measures = component.MeasureColumns;
+        const dims = component.DimensionColumns;
+        for (let i = 0; i < 3; i++) {
+            fixture.componentRef.changeDetectorRef.markForCheck();
+            fixture.detectChanges();
+        }
+        expect(component.MeasureColumns).toBe(measures);
+        expect(component.DimensionColumns).toBe(dims);
+        expect(pivots.length).toBe(0);
+
+        // A real selection change swaps the array and re-pivots exactly once.
+        component.OnMeasureChange('tokens');
+        fixture.detectChanges();
+        expect(component.MeasureColumns).not.toBe(measures);
+        expect(pivots.length).toBe(1);
+    });
+
+    it('drops rows lacking a filtered dimension instead of letting them through every filter', async () => {
+        const rows: Partial<AIUsageDailyRow>[] = [
+            { ...FIXTURE_DAILY_ROWS[0], ModelID: 'MODEL-GPT4' },
+            { ...FIXTURE_DAILY_ROWS[0], AgentID: 'agent-level-only', ModelID: null, OwnCost: 9 }
+        ];
+        mockInstrumentation.GetUsageDaily.mockResolvedValue(rows);
+        const fixture = await createComponent();
+        fixture.componentRef.setInput('Filters', { Models: ['model-gpt4'], Agents: [], Prompts: [], Statuses: [] });
+        await fixture.whenStable();
+        await new Promise(r => setTimeout(r, 0));
+        const kept = fixture.componentInstance.PivotRows;
+        expect(kept.length).toBe(1);
+        expect(kept[0]['ModelID']).toBe('MODEL-GPT4'); // UUID match is case-insensitive
+    });
+
+    it('shows an all-unpriced group as an em dash even though the query reports OwnCost 0', async () => {
+        const unpricedZero: Partial<AIUsageDailyRow>[] = [
+            { ...FIXTURE_DAILY_ROWS[1], OwnCost: 0, PricedRuns: 0, UnpricedRuns: 5 }
+        ];
+        mockInstrumentation.GetUsageDaily.mockResolvedValue(unpricedZero);
+        const fixture = await createComponent();
+        await new Promise(r => setTimeout(r, 0));
+        expect(fixture.componentInstance.PivotRows[0]['OwnCost']).toBeNull();
+    });
+
+    it('logs a failed load instead of silently showing an empty period', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        mockInstrumentation.GetUsageDaily.mockRejectedValue(new Error('query 500'));
+        const fixture = await createComponent();
+        await new Promise(r => setTimeout(r, 0));
+        expect(fixture.componentInstance.PivotRows).toEqual([]);
+        expect(error).toHaveBeenCalledWith('AI Usage Explorer: usage data failed to load', expect.any(Error));
+        error.mockRestore();
     });
 });

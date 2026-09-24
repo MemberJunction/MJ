@@ -9,7 +9,7 @@ import {
   ChartData,
   ExecutionDetails
 } from '../services/ai-instrumentation.service';
-import { computeCoveragePercent } from '../services/ai-usage-analytics.compute';
+import { ComputeCoveragePercent } from '../services/ai-usage-analytics.compute';
 import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
@@ -2055,7 +2055,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     const covPriced = kpis.Coverage?.PricedRuns ?? 0;
     const covUnpriced = kpis.Coverage?.UnpricedRuns ?? 0;
     const covTotal = covPriced + covUnpriced;
-    const coveragePct = Math.round(computeCoveragePercent(kpis.Coverage));
+    const coveragePct = Math.round(ComputeCoveragePercent(kpis.Coverage));
 
     return [
       {
@@ -2067,10 +2067,13 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       },
       {
         title: 'Total Cost',
-        value: kpis.totalCost !== null ? `$${kpis.totalCost.toFixed(4)}` : '\u2014',
+        value: kpis.totalCost !== null
+          ? `${kpis.costCurrency === 'USD' ? '$' : kpis.costCurrency + ' '}${kpis.totalCost.toFixed(4)}`
+          : '\u2014',
         icon: 'fa-dollar-sign',
         color: 'warning',
-        subtitle: `covers ${coveragePct}% of runs`
+        // Mixed currencies: the total is in one of them; the others are left out rather than added at 1:1.
+        subtitle: `covers ${coveragePct}% of runs` + (kpis.IsMixedCurrency ? ` \u00b7 ${kpis.costCurrency} only` : '')
       },
       {
         title: 'Coverage',

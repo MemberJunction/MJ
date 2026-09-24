@@ -1,122 +1,122 @@
 import { describe, it, expect } from 'vitest';
 import {
-    aggregateValues,
-    bucketTimestamp,
-    computeDeltaPercent,
-    computePivot,
-    formatDelta,
-    formatDuration,
-    formatMeasureValue
+    AggregateValues,
+    BucketTimestamp,
+    ComputeDeltaPercent,
+    ComputePivot,
+    FormatDelta,
+    FormatDuration,
+    FormatMeasureValue
 } from './query-pivot.compute';
 import { QueryPivotConfig } from './query-pivot.types';
 
 describe('query-pivot.compute', () => {
-    describe('formatMeasureValue', () => {
+    describe('FormatMeasureValue', () => {
         it('renders null, undefined, or NaN as an em dash', () => {
-            expect(formatMeasureValue(null, 'currency')).toBe('—');
-            expect(formatMeasureValue(undefined, 'number')).toBe('—');
-            expect(formatMeasureValue(NaN, 'percent')).toBe('—');
+            expect(FormatMeasureValue(null, 'currency')).toBe('—');
+            expect(FormatMeasureValue(undefined, 'number')).toBe('—');
+            expect(FormatMeasureValue(NaN, 'percent')).toBe('—');
         });
 
         it('formats currency with dollar sign, comma separators, and 2 decimals', () => {
-            expect(formatMeasureValue(1234.56, 'currency')).toBe('$1,234.56');
-            expect(formatMeasureValue(0, 'currency')).toBe('$0.00');
-            expect(formatMeasureValue(10, 'currency')).toBe('$10.00');
+            expect(FormatMeasureValue(1234.56, 'currency')).toBe('$1,234.56');
+            expect(FormatMeasureValue(0, 'currency')).toBe('$0.00');
+            expect(FormatMeasureValue(10, 'currency')).toBe('$10.00');
         });
 
         it('formats numbers with commas and appropriate decimal places', () => {
-            expect(formatMeasureValue(1000, 'number')).toBe('1,000');
-            expect(formatMeasureValue(1234.567, 'number')).toBe('1,234.57');
+            expect(FormatMeasureValue(1000, 'number')).toBe('1,000');
+            expect(FormatMeasureValue(1234.567, 'number')).toBe('1,234.57');
         });
 
         it('formats percentage with 1 decimal and % sign', () => {
-            expect(formatMeasureValue(12.34, 'percent')).toBe('12.3%');
-            expect(formatMeasureValue(0, 'percent')).toBe('0.0%');
+            expect(FormatMeasureValue(12.34, 'percent')).toBe('12.3%');
+            expect(FormatMeasureValue(0, 'percent')).toBe('0.0%');
         });
 
         it('formats duration into ms, s, and m s units', () => {
-            expect(formatDuration(450)).toBe('450ms');
-            expect(formatDuration(2500)).toBe('2.50s');
-            expect(formatDuration(125000)).toBe('2m 5s');
+            expect(FormatDuration(450)).toBe('450ms');
+            expect(FormatDuration(2500)).toBe('2.50s');
+            expect(FormatDuration(125000)).toBe('2m 5s');
         });
     });
 
-    describe('formatDelta', () => {
+    describe('FormatDelta', () => {
         it('formats positive delta with + prefix and % sign', () => {
-            expect(formatDelta(15.23)).toBe('+15.2%');
+            expect(FormatDelta(15.23)).toBe('+15.2%');
         });
 
         it('formats negative delta with - sign', () => {
-            expect(formatDelta(-8.46)).toBe('-8.5%');
+            expect(FormatDelta(-8.46)).toBe('-8.5%');
         });
 
         it('returns em dash for null or undefined delta', () => {
-            expect(formatDelta(null)).toBe('—');
-            expect(formatDelta(undefined)).toBe('—');
+            expect(FormatDelta(null)).toBe('—');
+            expect(FormatDelta(undefined)).toBe('—');
         });
     });
 
-    describe('bucketTimestamp', () => {
+    describe('BucketTimestamp', () => {
         const ts = '2026-09-15T14:35:22.000Z';
 
         it('buckets into hour grain (YYYY-MM-DD HH:00)', () => {
-            expect(bucketTimestamp(ts, 'hour')).toBe('2026-09-15 14:00');
+            expect(BucketTimestamp(ts, 'hour')).toBe('2026-09-15 14:00');
         });
 
         it('buckets into day grain (YYYY-MM-DD)', () => {
-            expect(bucketTimestamp(ts, 'day')).toBe('2026-09-15');
+            expect(BucketTimestamp(ts, 'day')).toBe('2026-09-15');
         });
 
         it('returns em dash for null or empty dates', () => {
-            expect(bucketTimestamp(null, 'hour')).toBe('—');
-            expect(bucketTimestamp('', 'day')).toBe('—');
+            expect(BucketTimestamp(null, 'hour')).toBe('—');
+            expect(BucketTimestamp('', 'day')).toBe('—');
         });
     });
 
-    describe('aggregateValues', () => {
+    describe('AggregateValues', () => {
         const nums = [10, 20, 30];
 
         it('computes sum', () => {
-            expect(aggregateValues(nums, 'sum')).toBe(60);
+            expect(AggregateValues(nums, 'sum')).toBe(60);
         });
 
         it('computes average', () => {
-            expect(aggregateValues(nums, 'avg')).toBe(20);
+            expect(AggregateValues(nums, 'avg')).toBe(20);
         });
 
         it('computes min and max', () => {
-            expect(aggregateValues(nums, 'min')).toBe(10);
-            expect(aggregateValues(nums, 'max')).toBe(30);
+            expect(AggregateValues(nums, 'min')).toBe(10);
+            expect(AggregateValues(nums, 'max')).toBe(30);
         });
 
         it('computes count of non-null items', () => {
-            expect(aggregateValues([10, null, 20, undefined, 30], 'count')).toBe(3);
+            expect(AggregateValues([10, null, 20, undefined, 30], 'count')).toBe(3);
         });
 
         it('returns null if all values are null or undefined', () => {
-            expect(aggregateValues([null, undefined, null], 'sum')).toBeNull();
+            expect(AggregateValues([null, undefined, null], 'sum')).toBeNull();
         });
 
         it('ignores null and undefined when aggregating valid numbers', () => {
-            expect(aggregateValues([10, null, 20, undefined], 'sum')).toBe(30);
-            expect(aggregateValues([10, null, 20, undefined], 'avg')).toBe(15);
+            expect(AggregateValues([10, null, 20, undefined], 'sum')).toBe(30);
+            expect(AggregateValues([10, null, 20, undefined], 'avg')).toBe(15);
         });
     });
 
-    describe('computeDeltaPercent', () => {
+    describe('ComputeDeltaPercent', () => {
         it('computes percentage delta correctly', () => {
-            expect(computeDeltaPercent(150, 100)).toBe(50);
-            expect(computeDeltaPercent(75, 100)).toBe(-25);
+            expect(ComputeDeltaPercent(150, 100)).toBe(50);
+            expect(ComputeDeltaPercent(75, 100)).toBe(-25);
         });
 
         it('returns null if previous is zero or either value is null', () => {
-            expect(computeDeltaPercent(100, 0)).toBeNull();
-            expect(computeDeltaPercent(null, 100)).toBeNull();
-            expect(computeDeltaPercent(100, null)).toBeNull();
+            expect(ComputeDeltaPercent(100, 0)).toBeNull();
+            expect(ComputeDeltaPercent(null, 100)).toBeNull();
+            expect(ComputeDeltaPercent(100, null)).toBeNull();
         });
     });
 
-    describe('computePivot', () => {
+    describe('ComputePivot', () => {
         const twelveRowFixture = [
             { Agent: 'SupportBot', Model: 'gpt-4o', Cost: 10.0, Tokens: 1000, Timestamp: '2026-09-15T00:00:00Z' },
             { Agent: 'SupportBot', Model: 'gpt-4o', Cost: 15.0, Tokens: 1500, Timestamp: '2026-09-15T01:00:00Z' },
@@ -134,44 +134,44 @@ describe('query-pivot.compute', () => {
 
         it('groups 12-row fixture into expected agent dimension totals', () => {
             const config: QueryPivotConfig = {
-                dimensionColumns: ['Agent'],
-                measureColumns: [
-                    { key: 'Cost', label: 'Total Cost', format: 'currency', aggregation: 'sum' },
-                    { key: 'Tokens', label: 'Total Tokens', format: 'number', aggregation: 'sum' }
+                DimensionColumns: ['Agent'],
+                MeasureColumns: [
+                    { Key: 'Cost', Label: 'Total Cost', Format: 'currency', Aggregation: 'sum' },
+                    { Key: 'Tokens', Label: 'Total Tokens', Format: 'number', Aggregation: 'sum' }
                 ]
             };
 
-            const result = computePivot(twelveRowFixture, config);
+            const result = ComputePivot(twelveRowFixture, config);
 
-            expect(result.totalInputRows).toBe(12);
-            expect(result.groupedRowCount).toBe(3);
+            expect(result.TotalInputRows).toBe(12);
+            expect(result.GroupedRowCount).toBe(3);
 
-            const supportRow = result.rows.find(r => r['Agent'] === 'SupportBot')!;
+            const supportRow = result.Rows.find(r => r['Agent'] === 'SupportBot')!;
             expect(supportRow).toBeDefined();
             expect(supportRow['Cost']).toBe('$35.00');
             expect(supportRow['Cost_raw']).toBe(35.0);
             expect(supportRow['Tokens']).toBe('3,500');
             expect(supportRow['Tokens_raw']).toBe(3500);
 
-            const salesRow = result.rows.find(r => r['Agent'] === 'SalesBot')!;
+            const salesRow = result.Rows.find(r => r['Agent'] === 'SalesBot')!;
             expect(salesRow['Cost']).toBe('$65.00');
             expect(salesRow['Tokens']).toBe('6,500');
 
-            const triageRow = result.rows.find(r => r['Agent'] === 'TriageBot')!;
+            const triageRow = result.Rows.find(r => r['Agent'] === 'TriageBot')!;
             expect(triageRow['Cost']).toBe('$5.00');
             expect(triageRow['Tokens']).toBe('1,200');
         });
 
         it('renders null measure as em dash when all grouped rows have null', () => {
             const config: QueryPivotConfig = {
-                dimensionColumns: ['Agent', 'Model'],
-                measureColumns: [
-                    { key: 'Cost', label: 'Cost', format: 'currency', aggregation: 'sum' }
+                DimensionColumns: ['Agent', 'Model'],
+                MeasureColumns: [
+                    { Key: 'Cost', Label: 'Cost', Format: 'currency', Aggregation: 'sum' }
                 ]
             };
 
-            const result = computePivot(twelveRowFixture, config);
-            const unpricedRow = result.rows.find(r => r['Agent'] === 'TriageBot' && r['Model'] === 'custom-internal')!;
+            const result = ComputePivot(twelveRowFixture, config);
+            const unpricedRow = result.Rows.find(r => r['Agent'] === 'TriageBot' && r['Model'] === 'custom-internal')!;
 
             expect(unpricedRow).toBeDefined();
             expect(unpricedRow['Cost']).toBe('—');
@@ -188,42 +188,60 @@ describe('query-pivot.compute', () => {
             ];
 
             const config: QueryPivotConfig = {
-                dimensionColumns: ['Agent'],
-                measureColumns: [
-                    { key: 'Cost', label: 'Cost', format: 'currency', aggregation: 'sum' }
+                DimensionColumns: ['Agent'],
+                MeasureColumns: [
+                    { Key: 'Cost', Label: 'Cost', Format: 'currency', Aggregation: 'sum' }
                 ],
-                comparisonWindow: true,
-                comparisonPeriodColumn: 'Period'
+                ComparisonWindow: true,
+                ComparisonPeriodColumn: 'Period'
             };
 
-            const result = computePivot(comparisonFixture, config);
+            const result = ComputePivot(comparisonFixture, config);
 
-            const supportRow = result.rows.find(r => r['Agent'] === 'SupportBot')!;
+            const supportRow = result.Rows.find(r => r['Agent'] === 'SupportBot')!;
             expect(supportRow['Cost']).toBe('$120.00');
             expect(supportRow['Cost_prev']).toBe('$100.00');
             expect(supportRow['Cost_delta']).toBe('+20.0%');
             expect(supportRow['Cost_delta_percent']).toBe(20);
 
-            const salesRow = result.rows.find(r => r['Agent'] === 'SalesBot')!;
+            const salesRow = result.Rows.find(r => r['Agent'] === 'SalesBot')!;
             expect(salesRow['Cost']).toBe('$80.00');
             expect(salesRow['Cost_prev']).toBe('$100.00');
             expect(salesRow['Cost_delta']).toBe('-20.0%');
 
-            const newBotRow = result.rows.find(r => r['Agent'] === 'NewBot')!;
+            const newBotRow = result.Rows.find(r => r['Agent'] === 'NewBot')!;
             expect(newBotRow['Cost']).toBe('$50.00');
             expect(newBotRow['Cost_prev']).toBe('—');
             expect(newBotRow['Cost_delta']).toBe('—');
         });
 
         it('returns empty result for empty input rows', () => {
-            const result = computePivot([], {
-                dimensionColumns: ['Agent'],
-                measureColumns: [{ key: 'Cost', label: 'Cost', format: 'currency' }]
+            const result = ComputePivot([], {
+                DimensionColumns: ['Agent'],
+                MeasureColumns: [{ Key: 'Cost', Label: 'Cost', Format: 'currency' }]
             });
 
-            expect(result.rows).toEqual([]);
-            expect(result.groupedRowCount).toBe(0);
-            expect(result.columnConfigs.length).toBe(2);
+            expect(result.Rows).toEqual([]);
+            expect(result.GroupedRowCount).toBe(0);
+            expect(result.ColumnConfigs.length).toBe(2);
+        });
+
+        it('never sums a currency measure across currencies when CurrencyColumn is set', () => {
+            const rows = [
+                { Agent: 'SupportBot', Cost: 10, CostCurrency: 'USD' },
+                { Agent: 'SupportBot', Cost: 5, CostCurrency: 'USD' },
+                { Agent: 'SupportBot', Cost: 7, CostCurrency: 'EUR' }
+            ];
+            const result = ComputePivot(rows, {
+                DimensionColumns: ['Agent'],
+                MeasureColumns: [{ Key: 'Cost', Label: 'Cost', Format: 'currency', CurrencyColumn: 'CostCurrency' }]
+            });
+
+            expect(result.Rows.length).toBe(2);
+            expect(result.Rows.find(r => r['CostCurrency'] === 'USD')!['Cost']).toBe('$15.00');
+            expect(result.Rows.find(r => r['CostCurrency'] === 'EUR')!['Cost']).toBe('€7.00');
+            // The currency is shown as its own column, so the split is visible rather than implied.
+            expect(result.ColumnConfigs.map(c => c.field)).toEqual(['Agent', 'CostCurrency', 'Cost']);
         });
     });
 });

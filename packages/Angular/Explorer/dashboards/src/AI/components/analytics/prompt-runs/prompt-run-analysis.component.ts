@@ -224,7 +224,7 @@ const PAGE_SIZE = 25;
             <div class="table-panel">
                 <div class="table-header">
                     <h3 class="table-title">Run Details</h3>
-                    <span class="table-count">showing latest {{ FilteredRuns.length | number }} of {{ allRuns.length | number }} runs</span>
+                    <span class="table-count">showing latest {{ FilteredRuns.length | number }} of {{ AllRuns.length | number }} runs</span>
                 </div>
                 <div class="table-scroll">
                     <table class="runs-table">
@@ -811,7 +811,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     public SortDirection: SortDirection = 'desc';
     public CurrentPage = 1;
 
-    public allRuns: PromptRunRecord[] = [];
+    public AllRuns: PromptRunRecord[] = [];
 
     readonly ChartMetricOptions: { key: ChartMetric; label: string }[] = [
         { key: 'volume', label: 'By Volume' },
@@ -845,7 +845,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     // ── Computed Properties ──
 
     get FilteredRuns(): PromptRunRecord[] {
-        return this.applyFilters(this.allRuns);
+        return this.applyFilters(this.AllRuns);
     }
 
     get Stats(): PromptRunStats {
@@ -1011,12 +1011,12 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
             });
 
             if (result.Success) {
-                this.allRuns = result.Results;
+                this.AllRuns = result.Results;
             } else {
-                this.allRuns = [];
+                this.AllRuns = [];
             }
         } catch {
-            this.allRuns = [];
+            this.AllRuns = [];
         }
 
         this.resetPagination();

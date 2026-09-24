@@ -12,19 +12,14 @@ import {
  * Formats a numeric measure value according to the specified format style.
  * Null and undefined values always render as an em dash ('—').
  */
-export function formatMeasureValue(value: number | null | undefined, format: PivotMeasureFormat): string {
+export function FormatMeasureValue(value: number | null | undefined, format: PivotMeasureFormat, currencyCode: string = 'USD'): string {
     if (value === null || value === undefined || isNaN(value)) {
         return '—';
     }
 
     switch (format) {
         case 'currency':
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(value);
+            return formatCurrencyAmount(value, currencyCode);
 
         case 'number':
             return value.toLocaleString('en-US', {
@@ -39,7 +34,7 @@ export function formatMeasureValue(value: number | null | undefined, format: Piv
             })}%`;
 
         case 'duration':
-            return formatDuration(value);
+            return FormatDuration(value);
 
         default:
             return String(value);
@@ -47,9 +42,26 @@ export function formatMeasureValue(value: number | null | undefined, format: Piv
 }
 
 /**
+ * Formats an amount in the given ISO 4217 currency. A code Intl does not recognise is shown beside
+ * the number rather than silently re-labelled as dollars.
+ */
+function formatCurrencyAmount(value: number, currencyCode: string): string {
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currencyCode,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(value);
+    } catch {
+        return `${value.toFixed(2)} ${currencyCode}`;
+    }
+}
+
+/**
  * Formats a duration in milliseconds into a concise readable unit (ms, s, m s).
  */
-export function formatDuration(ms: number): string {
+export function FormatDuration(ms: number): string {
     if (ms < 1000) {
         return `${Math.round(ms)}ms`;
     }
@@ -64,7 +76,7 @@ export function formatDuration(ms: number): string {
 /**
  * Formats a comparison delta percentage with sign prefix and em dash fallback.
  */
-export function formatDelta(deltaPercent: number | null | undefined): string {
+export function FormatDelta(deltaPercent: number | null | undefined): string {
     if (deltaPercent === null || deltaPercent === undefined || isNaN(deltaPercent)) {
         return '—';
     }
@@ -75,7 +87,7 @@ export function formatDelta(deltaPercent: number | null | undefined): string {
 /**
  * Buckets a date/time value into the given time grain (hour or day).
  */
-export function bucketTimestamp(value: unknown, grain: PivotTimeGrain): string {
+export function BucketTimestamp(value: unknown, grain: PivotTimeGrain): string {
     if (value === null || value === undefined || value === '') {
         return '—';
     }
@@ -104,7 +116,7 @@ export function bucketTimestamp(value: unknown, grain: PivotTimeGrain): string {
  * NOTE: For 'count' aggregation, this returns the count of non-null values
  * for the measure column in this group (matching SQL COUNT(column) semantics).
  */
-export function aggregateValues(
+export function AggregateValues(
     values: (number | null | undefined)[],
     aggregation: PivotAggregationType = 'sum'
 ): number | null {
@@ -137,7 +149,7 @@ export function aggregateValues(
 /**
  * Computes percentage delta between current and previous values.
  */
-export function computeDeltaPercent(current: number | null, previous: number | null): number | null {
+export function ComputeDeltaPercent(current: number | null, previous: number | null): number | null {
     if (current === null || previous === null || previous === 0) {
         return null;
     }
@@ -189,7 +201,7 @@ function extractGroupKey(
     }
 
     if (timeColumn && grain) {
-        const bucketed = bucketTimestamp(row[timeColumn], grain);
+        const bucketed = BucketTimestamp(row[timeColumn], grain);
         dimensionValues[timeColumn] = bucketed;
         keyParts.push(`${timeColumn}:${bucketed}`);
     }
@@ -198,6 +210,20 @@ function extractGroupKey(
         groupKey: keyParts.join('|'),
         dimensionValues
     };
+}
+
+/**
+ * The columns rows are grouped by: the configured dimensions plus any measure's CurrencyColumn, so a
+ * currency measure is never aggregated across currencies.
+ */
+function effectiveDimensions(config: QueryPivotConfig): string[] {
+    const dims = [...config.DimensionColumns];
+    for (const measure of config.MeasureColumns) {
+        if (measure.Format === 'currency' && measure.CurrencyColumn && !dims.includes(measure.CurrencyColumn)) {
+            dims.push(measure.CurrencyColumn);
+        }
+    }
+    return dims;
 }
 
 /**
@@ -233,9 +259,9 @@ function groupRows(
     for (const row of rows) {
         const { groupKey, dimensionValues } = extractGroupKey(
             row,
-            config.dimensionColumns,
-            config.timeColumn,
-            config.grain
+            effectiveDimensions(config),
+            config.TimeColumn,
+            config.Grain
         );
 
         let group = groups.get(groupKey);
@@ -244,7 +270,7 @@ function groupRows(
             groups.set(groupKey, group);
         }
 
-        if (config.comparisonWindow && isRowInPreviousPeriod(row, config.comparisonPeriodColumn)) {
+        if (config.ComparisonWindow && isRowInPreviousPeriod(row, config.ComparisonPeriodColumn)) {
             group.prevRows.push(row);
         } else {
             group.currentRows.push(row);
@@ -254,34 +280,44 @@ function groupRows(
     return groups;
 }
 
+/** The currency a group's amounts are in: its CurrencyColumn value, or USD when none is configured. */
+function currencyForGroup(dimensionValues: Record<string, unknown>, measure: PivotMeasureColumn): string {
+    if (!measure.CurrencyColumn) {
+        return 'USD';
+    }
+    const code = dimensionValues[measure.CurrencyColumn];
+    return typeof code === 'string' && code.length === 3 ? code.toUpperCase() : 'USD';
+}
+
 /**
  * Computes measures for a single group with comparison window support.
  */
 function computeGroupMeasures(
-    group: { currentRows: Record<string, unknown>[]; prevRows: Record<string, unknown>[] },
+    group: { dimensionValues: Record<string, unknown>; currentRows: Record<string, unknown>[]; prevRows: Record<string, unknown>[] },
     measureCols: PivotMeasureColumn[],
     comparisonWindow: boolean
 ): Record<string, unknown> {
     const result: Record<string, unknown> = {};
 
     for (const measure of measureCols) {
-        const currentVals = group.currentRows.map(r => r[measure.key] as number | null | undefined);
-        const currentAgg = aggregateValues(currentVals, measure.aggregation);
+        const currency = currencyForGroup(group.dimensionValues, measure);
+        const currentVals = group.currentRows.map(r => r[measure.Key] as number | null | undefined);
+        const currentAgg = AggregateValues(currentVals, measure.Aggregation);
 
-        result[measure.key] = formatMeasureValue(currentAgg, measure.format);
-        result[`${measure.key}_raw`] = currentAgg;
+        result[measure.Key] = FormatMeasureValue(currentAgg, measure.Format, currency);
+        result[`${measure.Key}_raw`] = currentAgg;
 
         if (comparisonWindow) {
-            const prevVals = group.prevRows.map(r => r[measure.key] as number | null | undefined);
-            const prevAgg = aggregateValues(prevVals, measure.aggregation);
-            const deltaPercent = computeDeltaPercent(currentAgg, prevAgg);
+            const prevVals = group.prevRows.map(r => r[measure.Key] as number | null | undefined);
+            const prevAgg = AggregateValues(prevVals, measure.Aggregation);
+            const deltaPercent = ComputeDeltaPercent(currentAgg, prevAgg);
             const diff = currentAgg !== null && prevAgg !== null ? currentAgg - prevAgg : null;
 
-            result[`${measure.key}_prev`] = formatMeasureValue(prevAgg, measure.format);
-            result[`${measure.key}_prev_raw`] = prevAgg;
-            result[`${measure.key}_delta`] = formatDelta(deltaPercent);
-            result[`${measure.key}_delta_raw`] = diff;
-            result[`${measure.key}_delta_percent`] = deltaPercent;
+            result[`${measure.Key}_prev`] = FormatMeasureValue(prevAgg, measure.Format, currency);
+            result[`${measure.Key}_prev_raw`] = prevAgg;
+            result[`${measure.Key}_delta`] = FormatDelta(deltaPercent);
+            result[`${measure.Key}_delta_raw`] = diff;
+            result[`${measure.Key}_delta_percent`] = deltaPercent;
         }
     }
 
@@ -297,22 +333,22 @@ function buildGridColumns(
     const columns: QueryGridColumnConfig[] = [];
     let order = 0;
 
-    for (const dim of config.dimensionColumns) {
+    for (const dim of effectiveDimensions(config)) {
         columns.push(createGridColumn(dim, dim, order++, 'left', 'nvarchar'));
     }
 
-    if (config.timeColumn && config.grain) {
-        const timeHeader = config.grain === 'hour' ? `${config.timeColumn} (Hour)` : `${config.timeColumn} (Day)`;
-        columns.push(createGridColumn(config.timeColumn, timeHeader, order++, 'left', 'nvarchar'));
+    if (config.TimeColumn && config.Grain) {
+        const timeHeader = config.Grain === 'hour' ? `${config.TimeColumn} (Hour)` : `${config.TimeColumn} (Day)`;
+        columns.push(createGridColumn(config.TimeColumn, timeHeader, order++, 'left', 'nvarchar'));
     }
 
-    for (const measure of config.measureColumns) {
-        const baseType = measure.format === 'currency' ? 'money' : (measure.format === 'number' ? 'decimal' : 'nvarchar');
-        columns.push(createGridColumn(measure.key, measure.label, order++, 'right', baseType));
+    for (const measure of config.MeasureColumns) {
+        const baseType = measure.Format === 'currency' ? 'money' : (measure.Format === 'number' ? 'decimal' : 'nvarchar');
+        columns.push(createGridColumn(measure.Key, measure.Label, order++, 'right', baseType));
 
-        if (config.comparisonWindow) {
-            columns.push(createGridColumn(`${measure.key}_prev`, `${measure.label} (Prev)`, order++, 'right', baseType));
-            columns.push(createGridColumn(`${measure.key}_delta`, `${measure.label} Δ`, order++, 'right', 'nvarchar'));
+        if (config.ComparisonWindow) {
+            columns.push(createGridColumn(`${measure.Key}_prev`, `${measure.Label} (Prev)`, order++, 'right', baseType));
+            columns.push(createGridColumn(`${measure.Key}_delta`, `${measure.Label} Δ`, order++, 'right', 'nvarchar'));
         }
     }
 
@@ -323,16 +359,16 @@ function buildGridColumns(
  * Pure pivot function: aggregates query rows by dimensions, applies measure aggregations,
  * computes comparison deltas, formats null values as em dashes ('—'), and builds grid column defs.
  */
-export function computePivot(
+export function ComputePivot(
     rows: Record<string, unknown>[],
     config: QueryPivotConfig
 ): PivotResult {
     if (!rows || rows.length === 0) {
         return {
-            rows: [],
-            columnConfigs: buildGridColumns(config),
-            totalInputRows: 0,
-            groupedRowCount: 0
+            Rows: [],
+            ColumnConfigs: buildGridColumns(config),
+            TotalInputRows: 0,
+            GroupedRowCount: 0
         };
     }
 
@@ -340,7 +376,7 @@ export function computePivot(
     const outputRows: Record<string, unknown>[] = [];
 
     for (const group of groups.values()) {
-        const measureValues = computeGroupMeasures(group, config.measureColumns, !!config.comparisonWindow);
+        const measureValues = computeGroupMeasures(group, config.MeasureColumns, !!config.ComparisonWindow);
         outputRows.push({
             ...group.dimensionValues,
             ...measureValues
@@ -348,9 +384,9 @@ export function computePivot(
     }
 
     return {
-        rows: outputRows,
-        columnConfigs: buildGridColumns(config),
-        totalInputRows: rows.length,
-        groupedRowCount: outputRows.length
+        Rows: outputRows,
+        ColumnConfigs: buildGridColumns(config),
+        TotalInputRows: rows.length,
+        GroupedRowCount: outputRows.length
     };
 }

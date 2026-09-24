@@ -82,7 +82,17 @@ class GridStub {
     @Output() RefreshRequest = new EventEmitter<void>();
 }
 
-const CHILDREN = [GridStub];
+/** Stub for the shared <mj-loading> indicator the pivot renders while loading. */
+@Component({
+    standalone: true,
+    selector: 'mj-loading',
+    template: '<span class="stub-loading">{{ text }}</span>'
+})
+class LoadingStub {
+    @Input() text = '';
+}
+
+const CHILDREN = [GridStub, LoadingStub];
 
 const TWELVE_ROW_FIXTURE: Record<string, unknown>[] = [
     { Agent: 'SupportBot', Model: 'gpt-4o', Cost: 10.0, Tokens: 1000, Timestamp: '2026-09-15T00:00:00Z' },
@@ -141,8 +151,8 @@ describe('QueryPivotComponent (DOM)', () => {
             data: TWELVE_ROW_FIXTURE,
             dimensionColumns: ['Agent'],
             measureColumns: [
-                { key: 'Cost', label: 'Total Cost', format: 'currency', aggregation: 'sum' },
-                { key: 'Tokens', label: 'Total Tokens', format: 'number', aggregation: 'sum' }
+                { Key: 'Cost', Label: 'Total Cost', Format: 'currency', Aggregation: 'sum' },
+                { Key: 'Tokens', Label: 'Total Tokens', Format: 'number', Aggregation: 'sum' }
             ]
         });
 
@@ -170,7 +180,7 @@ describe('QueryPivotComponent (DOM)', () => {
             data: TWELVE_ROW_FIXTURE,
             dimensionColumns: ['Agent', 'Model'],
             measureColumns: [
-                { key: 'Cost', label: 'Cost', format: 'currency', aggregation: 'sum' }
+                { Key: 'Cost', Label: 'Cost', Format: 'currency', Aggregation: 'sum' }
             ]
         });
 
@@ -197,7 +207,7 @@ describe('QueryPivotComponent (DOM)', () => {
             data: comparisonData,
             dimensionColumns: ['Agent'],
             measureColumns: [
-                { key: 'Cost', label: 'Cost', format: 'currency', aggregation: 'sum' }
+                { Key: 'Cost', Label: 'Cost', Format: 'currency', Aggregation: 'sum' }
             ],
             comparisonWindow: true,
             comparisonPeriodColumn: 'Period'
@@ -223,11 +233,27 @@ describe('QueryPivotComponent (DOM)', () => {
         expect(newBotRow['Cost_delta']).toBe('—');
     });
 
+    it('re-pivots only when a config input actually changes, not on every rebinding', () => {
+        const measures: PivotMeasureColumn[] = [{ Key: 'Cost', Label: 'Cost', Format: 'currency', Aggregation: 'sum' }];
+        const fixture = render({ data: TWELVE_ROW_FIXTURE, dimensionColumns: ['Agent'], measureColumns: measures });
+        const pivots = capture(fixture.componentInstance.PivotComplete);
+
+        // Rebinding the identical array (what a memoized host does on every change-detection pass) is a no-op.
+        fixture.componentInstance.MeasureColumns = measures;
+        fixture.componentInstance.DimensionColumns = fixture.componentInstance.DimensionColumns;
+        expect(pivots.length).toBe(0);
+
+        // A real change re-pivots the rows already held, without a query round trip.
+        fixture.componentInstance.DimensionColumns = ['Model'];
+        expect(pivots.length).toBe(1);
+        expect(fixture.componentInstance.PivotedData.length).toBe(4);
+    });
+
     it('emits rowActivated event when a row is clicked or double-clicked', () => {
         const fixture = render({
             data: TWELVE_ROW_FIXTURE,
             dimensionColumns: ['Agent'],
-            measureColumns: [{ key: 'Cost', label: 'Cost', format: 'currency' }]
+            measureColumns: [{ Key: 'Cost', Label: 'Cost', Format: 'currency' }]
         });
 
         const activatedRows = capture(fixture.componentInstance.RowActivated);
@@ -253,7 +279,7 @@ describe('QueryPivotComponent (DOM)', () => {
             queryName: 'AIUsageHourly',
             provider: fakeProvider,
             dimensionColumns: ['Agent'],
-            measureColumns: [{ key: 'Cost', label: 'Total Cost', format: 'currency' }]
+            measureColumns: [{ Key: 'Cost', Label: 'Total Cost', Format: 'currency' }]
         });
 
         await fixture.componentInstance.Run();
@@ -270,7 +296,7 @@ describe('QueryPivotComponent (DOM)', () => {
             queryName: 'AIUsageHourly',
             provider: fakeProvider,
             dimensionColumns: ['Agent'],
-            measureColumns: [{ key: 'Cost', label: 'Cost', format: 'currency' }]
+            measureColumns: [{ Key: 'Cost', Label: 'Cost', Format: 'currency' }]
         });
 
         await fixture.componentInstance.Run();
@@ -287,6 +313,10 @@ describe('QueryPivotComponent (DOM)', () => {
         });
 
         expect(query(fixture, '.mj-query-pivot-loading')).not.toBeNull();
-        expect(text(fixture, '.mj-query-pivot-loading-text')).toBe('Loading pivot data...');
+        // The standard MJ indicator, not a hand-rolled spinner (packages/Angular/CLAUDE.md).
+        const loading = fixture.debugElement.query(By.directive(LoadingStub))?.componentInstance as LoadingStub | undefined;
+        expect(loading).toBeDefined();
+        expect(loading!.text).toBe('Loading pivot data...');
+        expect(query(fixture, '.mj-query-pivot-spinner')).toBeNull();
     });
 });

@@ -422,11 +422,7 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
 
     private failedRuns: FailedRunRecord[] = [];
     public TotalRunCount = 0;
-    public get totalRunCount(): number { return this.TotalRunCount; }
-    public set totalRunCount(v: number) { this.TotalRunCount = v; }
     public TotalErrorCount = 0;
-    public get totalErrorCount(): number { return this.TotalErrorCount; }
-    public set totalErrorCount(v: number) { this.TotalErrorCount = v; }
 
     ngOnInit(): void {
         this.initialized = true;
@@ -493,8 +489,8 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
             ]);
 
             this.failedRuns = (errorResult?.Results ?? []) as FailedRunRecord[];
-            this.totalErrorCount = errorResult?.TotalRowCount ?? this.failedRuns.length;
-            this.totalRunCount = totalResult?.TotalRowCount ?? totalResult?.RowCount ?? (totalResult?.Results?.length ?? 0);
+            this.TotalErrorCount = errorResult?.TotalRowCount ?? this.failedRuns.length;
+            this.TotalRunCount = totalResult?.TotalRowCount ?? totalResult?.RowCount ?? (totalResult?.Results?.length ?? 0);
 
             this.computeSummary();
             this.buildErrorGroups();
@@ -509,8 +505,8 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     // ── Computations ──
 
     private computeSummary(): void {
-        const errorCount = this.totalErrorCount;
-        const errorRate = this.totalRunCount > 0 ? (errorCount / this.totalRunCount) * 100 : 0;
+        const errorCount = this.TotalErrorCount;
+        const errorRate = this.TotalRunCount > 0 ? (errorCount / this.TotalRunCount) * 100 : 0;
 
         // Find most common error by grouping error messages
         const messageCounts = new Map<string, number>();

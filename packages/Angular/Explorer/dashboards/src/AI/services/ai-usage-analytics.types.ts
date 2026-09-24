@@ -7,6 +7,10 @@
  *
  * Doctrine rules:
  * - Cost fields are always `number | null`, never `number`.
+ * - Every row carrying a cost carries its `CostCurrency`: the queries group by it, so one logical
+ *   group can arrive as several rows, one per currency. Never sum `OwnCost` across currencies.
+ * - `Runs` counts model calls: parallel parents are excluded (they are tallied in `ParallelParents`
+ *   where a query reports them).
  * - Stored queries by name/ID only, never raw SQL.
  */
 
@@ -32,6 +36,8 @@ export interface AIUsageHourlyRow {
   PrimaryScopeRecordID: string | null;
   ConfigurationID: string | null;
   SourceKind: string;
+  /** ISO 4217 currency of OwnCost (a GROUP BY dimension). Null when the group carries no priced runs. */
+  CostCurrency: string | null;
   Runs: number;
   SucceededRuns: number;
   FailedRuns: number;
@@ -65,6 +71,8 @@ export interface AIUsageDailyRow {
   PrimaryScopeRecordID: string | null;
   ConfigurationID: string | null;
   SourceKind: string;
+  /** ISO 4217 currency of OwnCost (a GROUP BY dimension). Null when the group carries no priced runs. */
+  CostCurrency: string | null;
   Runs: number;
   SucceededRuns: number;
   FailedRuns: number;
@@ -89,7 +97,11 @@ export interface AIUsageDailyRow {
 export interface AIUsageByModelRow {
   VendorID: string | null;
   ModelID: string | null;
+  /** ISO 4217 currency of OwnCost (a GROUP BY dimension). */
+  CostCurrency: string | null;
   Runs: number;
+  PricedRuns: number;
+  UnpricedRuns: number;
   OwnCost: number | null;
   TokensPrompt: number;
   TokensCompletion: number;
@@ -104,7 +116,11 @@ export interface AIUsageByModelRow {
  */
 export interface AIUsageByUserRow {
   UserID: string | null;
+  /** ISO 4217 currency of OwnCost (a GROUP BY dimension). */
+  CostCurrency: string | null;
   Runs: number;
+  PricedRuns: number;
+  UnpricedRuns: number;
   OwnCost: number | null;
   TokensPrompt: number;
   TokensCompletion: number;
@@ -118,6 +134,8 @@ export interface AIUsageByUserRow {
 export interface AIUsageByScopeRow {
   PrimaryScopeEntityID: string | null;
   PrimaryScopeRecordID: string | null;
+  /** ISO 4217 currency of OwnCost (a GROUP BY dimension). */
+  CostCurrency: string | null;
   Runs: number;
   SucceededRuns: number;
   FailedRuns: number;
@@ -142,6 +160,8 @@ export interface AIUsageByScopeRow {
 export interface AIUsageCacheEfficiencyRow {
   ModelID: string | null;
   PromptID: string | null;
+  /** ISO 4217 currency of EstimatedSavings. */
+  CostCurrency: string | null;
   TokensCacheRead: number;
   TokensPrompt: number;
   CacheReadShare: number | null;

@@ -4,11 +4,9 @@ import {
     Component,
     EventEmitter,
     Input,
-    OnChanges,
     OnDestroy,
     OnInit,
-    Output,
-    SimpleChanges
+    Output
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunQuery, RunQueryParams, RunQueryResult } from '@memberjunction/core';
@@ -19,7 +17,7 @@ import {
     QueryGridVisualConfig,
     QueryRowClickEvent
 } from '../query-data-grid/models/query-grid-types';
-import { computePivot } from './query-pivot.compute';
+import { ComputePivot } from './query-pivot.compute';
 import {
     PivotMeasureColumn,
     PivotResult,
@@ -37,7 +35,7 @@ import {
  * <mj-query-pivot
  *   [QueryName]="'AIUsageHourly'"
  *   [DimensionColumns]="['Agent']"
- *   [MeasureColumns]="[{ key: 'TotalCost', label: 'Cost', format: 'currency' }]"
+ *   [MeasureColumns]="[{ Key: 'TotalCost', Label: 'Cost', Format: 'currency' }]"
  *   (rowActivated)="onRowSelected($event)">
  * </mj-query-pivot>
  * ```
@@ -49,25 +47,57 @@ import {
     styleUrls: ['./query-pivot.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class QueryPivotComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
+export class QueryPivotComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+    // Inputs are setters rather than an ngOnChanges switch (packages/Angular/CLAUDE.md). Each setter
+    // reacts only when its own value actually changes, so a host that rebinds an equal value — or an
+    // unrelated change-detection pass — never triggers a re-query or a full re-pivot.
+
     // ========================================
     // Inputs: Query Identification & Params
     // ========================================
 
+    private _queryName: string | null = null;
     /** Name of the saved Query to execute */
-    @Input() QueryName: string | null = null;
+    @Input()
+    set QueryName(value: string | null) {
+        if (value === this._queryName) return;
+        this._queryName = value;
+        this.onQueryIdentityChanged();
+    }
+    get QueryName(): string | null { return this._queryName; }
 
     /** Category path of the saved Query */
     @Input() CategoryPath: string | null = null;
 
+    private _queryID: string | null = null;
     /** ID of the saved Query (alternative to QueryName) */
-    @Input() QueryID: string | null = null;
+    @Input()
+    set QueryID(value: string | null) {
+        if (value === this._queryID) return;
+        this._queryID = value;
+        this.onQueryIdentityChanged();
+    }
+    get QueryID(): string | null { return this._queryID; }
 
+    private _queryParams: RunQueryParams | null = null;
     /** Full RunQueryParams object passed by host */
-    @Input() QueryParams: RunQueryParams | null = null;
+    @Input()
+    set QueryParams(value: RunQueryParams | null) {
+        if (value === this._queryParams) return;
+        this._queryParams = value;
+        this.onQueryIdentityChanged();
+    }
+    get QueryParams(): RunQueryParams | null { return this._queryParams; }
 
+    private _parameters: Record<string, unknown> | null = null;
     /** Parameter values to supply to the query */
-    @Input() Parameters: Record<string, unknown> | null = null;
+    @Input()
+    set Parameters(value: Record<string, unknown> | null) {
+        if (value === this._parameters) return;
+        this._parameters = value;
+        this.onQueryIdentityChanged();
+    }
+    get Parameters(): Record<string, unknown> | null { return this._parameters; }
 
     /** Data source to query from: 'Materialized' (default) or 'Live' */
     @Input() DataSource: 'Materialized' | 'Live' = 'Materialized';
@@ -79,30 +109,81 @@ export class QueryPivotComponent extends BaseAngularComponent implements OnInit,
     // Inputs: Pivot Configuration
     // ========================================
 
+    private _dimensionColumns: string[] = [];
     /** Array of column names to group by */
-    @Input() DimensionColumns: string[] = [];
+    @Input()
+    set DimensionColumns(value: string[]) {
+        if (value === this._dimensionColumns) return;
+        this._dimensionColumns = value ?? [];
+        this.onPivotConfigChanged();
+    }
+    get DimensionColumns(): string[] { return this._dimensionColumns; }
 
+    private _measureColumns: PivotMeasureColumn[] = [];
     /** Array of measure specifications to aggregate */
-    @Input() MeasureColumns: PivotMeasureColumn[] = [];
+    @Input()
+    set MeasureColumns(value: PivotMeasureColumn[]) {
+        if (value === this._measureColumns) return;
+        this._measureColumns = value ?? [];
+        this.onPivotConfigChanged();
+    }
+    get MeasureColumns(): PivotMeasureColumn[] { return this._measureColumns; }
 
+    private _timeColumn: string | null = null;
     /** Optional date/time column for time bucketing */
-    @Input() TimeColumn: string | null = null;
+    @Input()
+    set TimeColumn(value: string | null) {
+        if (value === this._timeColumn) return;
+        this._timeColumn = value;
+        this.onPivotConfigChanged();
+    }
+    get TimeColumn(): string | null { return this._timeColumn; }
 
+    private _grain: PivotTimeGrain | null = null;
     /** Grain for time bucketing: 'hour' | 'day' */
-    @Input() Grain: PivotTimeGrain | null = null;
+    @Input()
+    set Grain(value: PivotTimeGrain | null) {
+        if (value === this._grain) return;
+        this._grain = value;
+        this.onPivotConfigChanged();
+    }
+    get Grain(): PivotTimeGrain | null { return this._grain; }
 
+    private _comparisonWindow = false;
     /** Whether to compute comparison window metrics and deltas */
-    @Input() ComparisonWindow: boolean = false;
+    @Input()
+    set ComparisonWindow(value: boolean) {
+        if (value === this._comparisonWindow) return;
+        this._comparisonWindow = value;
+        this.onPivotConfigChanged();
+    }
+    get ComparisonWindow(): boolean { return this._comparisonWindow; }
 
+    private _comparisonPeriodColumn: string | null = null;
     /** Optional column identifying comparison/previous period rows */
-    @Input() ComparisonPeriodColumn: string | null = null;
+    @Input()
+    set ComparisonPeriodColumn(value: string | null) {
+        if (value === this._comparisonPeriodColumn) return;
+        this._comparisonPeriodColumn = value;
+        this.onPivotConfigChanged();
+    }
+    get ComparisonPeriodColumn(): string | null { return this._comparisonPeriodColumn; }
 
     // ========================================
     // Inputs: Data & Display Overrides
     // ========================================
 
+    private _data: Record<string, unknown>[] | null = null;
     /** Optional raw data input (bypasses remote query execution if supplied) */
-    @Input() Data: Record<string, unknown>[] | null = null;
+    @Input()
+    set Data(value: Record<string, unknown>[] | null) {
+        if (value === this._data) return;
+        this._data = value;
+        if (this.initialized && value) {
+            this.ApplyPivot(value);
+        }
+    }
+    get Data(): Record<string, unknown>[] | null { return this._data; }
 
     /** External loading state override */
     @Input() IsLoading: boolean = false;
@@ -154,6 +235,8 @@ export class QueryPivotComponent extends BaseAngularComponent implements OnInit,
     public GroupedRowCount: number = 0;
 
     private internalIsLoading: boolean = false;
+    private initialized = false;
+    private runScheduled = false;
     private destroy$ = new Subject<void>();
 
     constructor(private cdr: ChangeDetectorRef) {
@@ -165,6 +248,7 @@ export class QueryPivotComponent extends BaseAngularComponent implements OnInit,
     }
 
     ngOnInit(): void {
+        this.initialized = true;
         if (this.Data && this.Data.length > 0) {
             this.ApplyPivot(this.Data);
         } else if (this.AutoRun && (this.QueryName || this.QueryID || this.QueryParams)) {
@@ -172,34 +256,31 @@ export class QueryPivotComponent extends BaseAngularComponent implements OnInit,
         }
     }
 
-    ngOnChanges(changes: SimpleChanges): void {
-        if (changes['Data'] && !changes['Data'].firstChange) {
-            if (this.Data) {
-                this.ApplyPivot(this.Data);
-            }
-        } else if (
-            (changes['QueryName'] || changes['QueryID'] || changes['QueryParams'] || changes['Parameters']) &&
-            !changes['QueryName']?.firstChange &&
-            this.AutoRun
-        ) {
-            void this.Run();
-        } else if (
-            (changes['DimensionColumns'] ||
-                changes['MeasureColumns'] ||
-                changes['TimeColumn'] ||
-                changes['Grain'] ||
-                changes['ComparisonWindow'] ||
-                changes['ComparisonPeriodColumn']) &&
-            !changes['DimensionColumns']?.firstChange &&
-            this.RawData.length > 0
-        ) {
-            this.ApplyPivot(this.RawData);
-        }
-    }
-
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
+    }
+
+    /**
+     * A change to what the query is re-runs it; initial values are handled once by ngOnInit. Coalesced
+     * to one run per turn, because a host commonly rebinds QueryName and Parameters in the same pass.
+     */
+    private onQueryIdentityChanged(): void {
+        if (!this.initialized || !this.AutoRun || this.runScheduled) {
+            return;
+        }
+        this.runScheduled = true;
+        queueMicrotask(() => {
+            this.runScheduled = false;
+            void this.Run();
+        });
+    }
+
+    /** A change to how rows are pivoted re-pivots the rows already held; no query round trip. */
+    private onPivotConfigChanged(): void {
+        if (this.initialized && this.RawData.length > 0) {
+            this.ApplyPivot(this.RawData);
+        }
     }
 
     // ========================================
@@ -266,19 +347,19 @@ export class QueryPivotComponent extends BaseAngularComponent implements OnInit,
     public ApplyPivot(rows: Record<string, unknown>[]): void {
         this.RawData = rows;
         const config: QueryPivotConfig = {
-            dimensionColumns: this.DimensionColumns || [],
-            measureColumns: this.MeasureColumns || [],
-            timeColumn: this.TimeColumn,
-            grain: this.Grain,
-            comparisonWindow: this.ComparisonWindow,
-            comparisonPeriodColumn: this.ComparisonPeriodColumn
+            DimensionColumns: this.DimensionColumns || [],
+            MeasureColumns: this.MeasureColumns || [],
+            TimeColumn: this.TimeColumn,
+            Grain: this.Grain,
+            ComparisonWindow: this.ComparisonWindow,
+            ComparisonPeriodColumn: this.ComparisonPeriodColumn
         };
 
-        const pivotResult = computePivot(rows, config);
-        this.PivotedData = pivotResult.rows;
-        this.ColumnConfigs = pivotResult.columnConfigs;
-        this.TotalInputRows = pivotResult.totalInputRows;
-        this.GroupedRowCount = pivotResult.groupedRowCount;
+        const pivotResult = ComputePivot(rows, config);
+        this.PivotedData = pivotResult.Rows;
+        this.ColumnConfigs = pivotResult.ColumnConfigs;
+        this.TotalInputRows = pivotResult.TotalInputRows;
+        this.GroupedRowCount = pivotResult.GroupedRowCount;
         this.PivotComplete.emit(pivotResult);
         this.cdr.markForCheck();
     }
