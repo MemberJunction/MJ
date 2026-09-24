@@ -48,7 +48,8 @@ import { HttpError as FakeHttpError } from '@memberjunction/network-utils';
 const apiKey = { value: 'tvly-test-key' as string | undefined };
 
 vi.mock('../config', () => ({
-    getApiIntegrationsConfig: () => ({ tavilyApiKey: apiKey.value }),
+    GetApiIntegrationsConfig: () => ({ tavilyApiKey: apiKey.value }),
+    get getApiIntegrationsConfig() { return this.GetApiIntegrationsConfig; },
 }));
 
 import { TavilySearchAction } from '../custom/web/tavily-search.action';

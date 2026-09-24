@@ -37,8 +37,13 @@ export class CerebrasLLM extends BaseLLM {
     /**
      * Read only getter method to get the Cerebras client instance
      */
-    public get client(): Cerebras {
+    public get Client(): Cerebras {
         return this.CerebrasClient;
+    }
+
+    /** @deprecated Use {@link Client}. */
+    public get client(): Cerebras {
+        return this.Client;
     }
     
     /**
@@ -330,7 +335,7 @@ export class CerebrasLLM extends BaseLLM {
          */
         let chatResponse: ChatCompletion.ChatCompletionResponse;
         try {
-            chatResponse = (await this.client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken })) as ChatCompletion.ChatCompletionResponse;
+            chatResponse = (await this.Client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken })) as ChatCompletion.ChatCompletionResponse;
         } catch (error) {
             if (this.isCancellation(error, params.cancellationToken)) {
                 return this.buildCancelledResult(startTime);
@@ -447,7 +452,7 @@ export class CerebrasLLM extends BaseLLM {
 
         // Forward the cancellation token so an abort closes the streaming socket, and wrap the stream
         // so the abort is reported as a cancellation rather than a truncated success.
-        const stream = await this.client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken });
+        const stream = await this.Client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken });
         return this.iterateWithCancellation(stream as AsyncIterable<ChatCompletion>, params.cancellationToken);
     }
 

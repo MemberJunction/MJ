@@ -13,8 +13,13 @@ import ora from 'ora-classic';
 let _spinnerStream: NodeJS.WriteStream = process.stdout;
 
 /** Redirect the CodeGen spinner to {@link stream} (e.g. stderr in JSON mode). */
-export function setCodeGenSpinnerStream(stream: NodeJS.WriteStream): void {
+export function SetCodeGenSpinnerStream(stream: NodeJS.WriteStream): void {
    _spinnerStream = stream;
+}
+
+/** @deprecated Use {@link SetCodeGenSpinnerStream}. */
+export function setCodeGenSpinnerStream(stream: NodeJS.WriteStream): void {
+   return SetCodeGenSpinnerStream(stream);
 }
 
 /**
@@ -81,7 +86,7 @@ export class LoggerBase {
    /**
     * Start a spinner with a message (non-verbose mode only)
     */
-   public startSpinner(message: string): void {
+   public StartSpinner(message: string): void {
       if (!this.isVerbose) {
          this.ensureSpinner();
          if (this._spinner) {
@@ -93,15 +98,20 @@ export class LoggerBase {
             console.log(`🔄 ${message}`);
          }
       } else {
-         this.logStatus(message, SeverityType.Info);
+         this.LogStatus(message, SeverityType.Info);
       }
+   }
+
+   /** @deprecated Use {@link StartSpinner}. */
+   public startSpinner(message: string): void {
+      return this.StartSpinner(message);
    }
 
    /**
     * Update spinner text (non-verbose mode only). Resets the live elapsed timer so
     * the displayed duration tracks the new sub-step rather than the prior one.
     */
-   public updateSpinner(message: string): void {
+   public UpdateSpinner(message: string): void {
       if (!this.isVerbose) {
          this.ensureSpinner();
          if (this._spinner) {
@@ -113,14 +123,19 @@ export class LoggerBase {
             console.log(`🔄 ${message}`);
          }
       } else {
-         this.logStatus(message, SeverityType.Info);
+         this.LogStatus(message, SeverityType.Info);
       }
+   }
+
+   /** @deprecated Use {@link UpdateSpinner}. */
+   public updateSpinner(message: string): void {
+      return this.UpdateSpinner(message);
    }
 
    /**
     * Stop spinner with success message
     */
-   public succeedSpinner(message?: string): void {
+   public SucceedSpinner(message?: string): void {
       this.stopTick();
       if (!this.isVerbose) {
          this.ensureSpinner();
@@ -131,14 +146,19 @@ export class LoggerBase {
             console.log(`✅ ${message}`);
          }
       } else if (message) {
-         this.logStatus(`✓ ${message}`, SeverityType.Info);
+         this.LogStatus(`✓ ${message}`, SeverityType.Info);
       }
+   }
+
+   /** @deprecated Use {@link SucceedSpinner}. */
+   public succeedSpinner(message?: string): void {
+      return this.SucceedSpinner(message);
    }
 
    /**
     * Stop spinner with failure message
     */
-   public failSpinner(message?: string): void {
+   public FailSpinner(message?: string): void {
       this.stopTick();
       if (!this.isVerbose) {
          this.ensureSpinner();
@@ -149,14 +169,19 @@ export class LoggerBase {
             console.log(`❌ ${message}`);
          }
       } else if (message) {
-         this.logError(`✗ ${message}`, SeverityType.Critical);
+         this.LogError(`✗ ${message}`, SeverityType.Critical);
       }
+   }
+
+   /** @deprecated Use {@link FailSpinner}. */
+   public failSpinner(message?: string): void {
+      return this.FailSpinner(message);
    }
 
    /**
     * Stop spinner with warning message
     */
-   public warnSpinner(message?: string): void {
+   public WarnSpinner(message?: string): void {
       this.stopTick();
       if (!this.isVerbose) {
          this.ensureSpinner();
@@ -167,14 +192,19 @@ export class LoggerBase {
             console.log(`⚠️ ${message}`);
          }
       } else if (message) {
-         this.logError(`⚠ ${message}`, SeverityType.Warning);
+         this.LogError(`⚠ ${message}`, SeverityType.Warning);
       }
+   }
+
+   /** @deprecated Use {@link WarnSpinner}. */
+   public warnSpinner(message?: string): void {
+      return this.WarnSpinner(message);
    }
 
    /**
     * Stop spinner without status
     */
-   public stopSpinner(): void {
+   public StopSpinner(): void {
       this.stopTick();
       if (!this.isVerbose) {
          this.ensureSpinner();
@@ -184,16 +214,26 @@ export class LoggerBase {
       }
    }
 
+   /** @deprecated Use {@link StopSpinner}. */
+   public stopSpinner(): void {
+      return this.StopSpinner();
+   }
+
    /**
     * Logs an error message to the console and to the log file if configured
     * @param message
     * @param args
     */
-   public logError(message: string, severity: SeverityType, ...args: any[]) {
+   public LogError(message: string, severity: SeverityType, ...args: any[]) {
       const consoleMessage: string = FormatConsoleMessage(message, severity);
       const fileMessage: string = FormatFileMessage(message, severity);
       this.logToConsole(consoleMessage, true, ...args);
       this.logToFile(fileMessage, true, ...args);
+   }
+
+   /** @deprecated Use {@link LogError}. */
+   public logError(message: string, severity: SeverityType, ...args: any[]) {
+      return this.LogError(message, severity, ...args);
    }
 
    /**
@@ -201,11 +241,16 @@ export class LoggerBase {
     * @param message
     * @param args
     */
-   public logStatus(message: string, severity: SeverityType, ...args: any[]) {
+   public LogStatus(message: string, severity: SeverityType, ...args: any[]) {
       const consoleMessage: string = FormatConsoleMessage(message, severity);
       const fileMessage: string = FormatFileMessage(message, severity);
       this.logToConsole(consoleMessage, false, ...args);
       this.logToFile(fileMessage, false, ...args);
+   }
+
+   /** @deprecated Use {@link LogStatus}. */
+   public logStatus(message: string, severity: SeverityType, ...args: any[]) {
+      return this.LogStatus(message, severity, ...args);
    }
 
    /**
@@ -215,11 +260,16 @@ export class LoggerBase {
     * @param isError Whether to treat this message as an error
     * @param args Any additional arguments to log
     */
-   public logMessage(message: string, severity: SeverityType, isError: boolean, ...args: any[]) {
+   public LogMessage(message: string, severity: SeverityType, isError: boolean, ...args: any[]) {
       const consoleMessage: string = FormatConsoleMessage(message, severity);
       const fileMessage: string = FormatFileMessage(message, severity);
       this.logToConsole(consoleMessage, isError, ...args);
       this.logToFile(fileMessage, isError, ...args);
+   }
+
+   /** @deprecated Use {@link LogMessage}. */
+   public logMessage(message: string, severity: SeverityType, isError: boolean, ...args: any[]) {
+      return this.LogMessage(message, severity, isError, ...args);
    }
 
    protected logToConsole(message: string, isError: boolean, ...args: any[]) {
@@ -257,49 +307,89 @@ const _logger: LoggerBase = MJGlobal.Instance.ClassFactory.CreateInstance<Logger
 /**
  * Wrapper for the LoggerBase.logError method
  */
-export function logError(message: string, ...args: any[]) {
+export function logError(message: string, ...args: any[]) {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
    return _logger.logError(message, SeverityType.Critical, ...args);
 }
 
-export function logWarning(message: string, ...args: any[]) {
+export function LogWarning(message: string, ...args: any[]) {
    return _logger.logError(message, SeverityType.Warning, ...args);
+}
+
+/** @deprecated Use {@link LogWarning}. */
+export function logWarning(message: string, ...args: any[]) {
+   return LogWarning(message, ...args);
 }
 
 /**
  * Wrapper for the LoggerBase.logStatus method
  */
-export function logStatus(message: string, ...args: any[]) {
+export function logStatus(message: string, ...args: any[]) {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
    return _logger.logStatus(message, SeverityType.Info, ...args);
 }
 
 /**
  * Wrapper for the LoggerBase.logMessage method
  */
-export function logMessage(message: string, severity: SeverityType, isError = false, ...args: any[]): void {
+export function LogMessage(message: string, severity: SeverityType, isError = false, ...args: any[]): void {
    return _logger.logMessage(message, severity, isError, ...args);
 }
 
+/** @deprecated Use {@link LogMessage}. */
+export function logMessage(message: string, severity: SeverityType, isError = false, ...args: any[]): void {
+   return LogMessage(message, severity, isError, ...args);
+}
+
 // Spinner management functions
-export function startSpinner(message: string): void {
+export function StartSpinner(message: string): void {
    return _logger.startSpinner(message);
 }
 
-export function updateSpinner(message: string): void {
+/** @deprecated Use {@link StartSpinner}. */
+export function startSpinner(message: string): void {
+   return StartSpinner(message);
+}
+
+export function UpdateSpinner(message: string): void {
    return _logger.updateSpinner(message);
 }
 
-export function succeedSpinner(message?: string): void {
+/** @deprecated Use {@link UpdateSpinner}. */
+export function updateSpinner(message: string): void {
+   return UpdateSpinner(message);
+}
+
+export function SucceedSpinner(message?: string): void {
    return _logger.succeedSpinner(message);
 }
 
-export function failSpinner(message?: string): void {
+/** @deprecated Use {@link SucceedSpinner}. */
+export function succeedSpinner(message?: string): void {
+   return SucceedSpinner(message);
+}
+
+export function FailSpinner(message?: string): void {
    return _logger.failSpinner(message);
 }
 
-export function warnSpinner(message?: string): void {
+/** @deprecated Use {@link FailSpinner}. */
+export function failSpinner(message?: string): void {
+   return FailSpinner(message);
+}
+
+export function WarnSpinner(message?: string): void {
    return _logger.warnSpinner(message);
 }
 
-export function stopSpinner(): void {
+/** @deprecated Use {@link WarnSpinner}. */
+export function warnSpinner(message?: string): void {
+   return WarnSpinner(message);
+}
+
+export function StopSpinner(): void {
    return _logger.stopSpinner();
+}
+
+/** @deprecated Use {@link StopSpinner}. */
+export function stopSpinner(): void {
+   return StopSpinner();
 }

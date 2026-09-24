@@ -7,7 +7,7 @@ import { JournalEntryLine } from './types';
  * debit/credit, non-negative amounts. Throws with the historical QBO messages
  * so existing callers keep ResultCode ERROR for structural problems.
  */
-export function parseAndValidateJournalEntryLines(linesParam: unknown): JournalEntryLine[] {
+export function ParseAndValidateJournalEntryLines(linesParam: unknown): JournalEntryLine[] {
     if (!linesParam) {
         throw new Error('Lines parameter is required');
     }
@@ -59,7 +59,12 @@ export function parseAndValidateJournalEntryLines(linesParam: unknown): JournalE
     return lines;
 }
 
-export function journalEntryBalanceError(params: ActionParam[]): ActionResultSimple {
+/** @deprecated Use {@link ParseAndValidateJournalEntryLines}. */
+export function parseAndValidateJournalEntryLines(linesParam: unknown): JournalEntryLine[] {
+    return ParseAndValidateJournalEntryLines(linesParam);
+}
+
+export function JournalEntryBalanceError(params: ActionParam[]): ActionResultSimple {
     return {
         Success: false,
         ResultCode: 'VALIDATION_ERROR',
@@ -68,6 +73,16 @@ export function journalEntryBalanceError(params: ActionParam[]): ActionResultSim
     };
 }
 
-export function totalDebits(lines: JournalEntryLine[]): number {
+/** @deprecated Use {@link JournalEntryBalanceError}. */
+export function journalEntryBalanceError(params: ActionParam[]): ActionResultSimple {
+    return JournalEntryBalanceError(params);
+}
+
+export function TotalDebits(lines: JournalEntryLine[]): number {
     return lines.reduce((sum, line) => sum + (line.debit || 0), 0);
+}
+
+/** @deprecated Use {@link TotalDebits}. */
+export function totalDebits(lines: JournalEntryLine[]): number {
+    return TotalDebits(lines);
 }

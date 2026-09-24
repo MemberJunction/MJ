@@ -45,7 +45,7 @@ vi.mock('../graphQLDataProvider', () => {
   };
 });
 
-import { setupGraphQLClient } from '../config';
+import { SetupGraphQLClient } from '../config';
 import { GraphQLProviderConfigData } from '../graphQLDataProvider';
 import { SetProvider, StartupManager } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
@@ -63,7 +63,7 @@ describe('setupGraphQLClient', () => {
       async () => 'token',
     );
 
-    const result = await setupGraphQLClient(config);
+    const result = await SetupGraphQLClient(config);
     expect(result).toBeDefined();
   });
 
@@ -75,7 +75,7 @@ describe('setupGraphQLClient', () => {
       async () => 'token',
     );
 
-    await setupGraphQLClient(config);
+    await SetupGraphQLClient(config);
     expect(SetProvider).toHaveBeenCalled();
   });
 
@@ -87,7 +87,7 @@ describe('setupGraphQLClient', () => {
       async () => 'token',
     );
 
-    await setupGraphQLClient(config);
+    await SetupGraphQLClient(config);
     expect(StartupManager.Instance.Startup).toHaveBeenCalled();
   });
 
@@ -99,7 +99,7 @@ describe('setupGraphQLClient', () => {
       async () => 'token',
     );
 
-    await setupGraphQLClient(config);
+    await SetupGraphQLClient(config);
     expect(MJGlobal.Instance.RaiseEvent).toHaveBeenCalled();
   });
 });

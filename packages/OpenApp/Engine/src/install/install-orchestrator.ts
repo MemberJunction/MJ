@@ -18,8 +18,8 @@ import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-
 import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CreateAppSchema, DropAppSchema, SchemaExists, ValidateSchemaName, MJ_APP_SCHEMA_PREFIX, type SchemaNameValidation } from './schema-manager.js';
-import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.js';
-import { extractApplicationIds } from './migration-application-ids.js';
+import { RunFkGraphTeardown, BuildRootDoomedPredicate } from './entity-teardown.js';
+import { ExtractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
@@ -2355,7 +2355,7 @@ export async function RemoveAppEntityMetadata(
       // QueueDeleteEntitiesByFilter list + per-entity Delete + SchemaInfo delete.
       const dbProvider = options!.DatabaseProvider!;
       const mjSchema = options?.MJCoreSchema ?? '__mj';
-      const rootPredicate = buildRootDoomedPredicate(dbProvider.Dialect, schemaName);
+      const rootPredicate = BuildRootDoomedPredicate(dbProvider.Dialect, schemaName);
       await RunFkGraphTeardown(dbProvider, mjSchema, rootPredicate, callbacks);
     } else {
       // LEGACY FALLBACK (no DatabaseProvider passed): entity-layer path — all deletes queued into
@@ -2460,7 +2460,7 @@ async function ExtractDeclaredApplicationIds(
     if (!download.Success) {
       return [];
     }
-    return await extractApplicationIds(tempDir);
+    return await ExtractApplicationIds(tempDir);
   } catch {
     return [];
   } finally {

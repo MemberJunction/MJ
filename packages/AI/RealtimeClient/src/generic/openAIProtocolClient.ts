@@ -1,9 +1,9 @@
 import { ClientRealtimeSessionConfig, JSONObject, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { BaseRealtimeClient, RealtimeClientState } from './baseRealtimeClient';
-import { base64ToArrayBuffer } from '../audio/pcmUtils';
+import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
+import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
 
 // ── OpenAI-protocol SERVER event interfaces (discriminated union by `type`) ────
 // The one shared model of the OpenAI Realtime client-facing frame set, consumed by every
@@ -1031,7 +1031,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
 
     /** @inheritdoc — enqueues one base64 PCM16 chunk into the local playout engine. */
     protected override handleAudioDeltaFrame(deltaBase64: string): void {
-        this.playback?.Enqueue(base64ToArrayBuffer(deltaBase64));
+        this.playback?.Enqueue(Base64ToArrayBuffer(deltaBase64));
     }
 
     /**
@@ -1137,7 +1137,7 @@ export abstract class OpenAIProtocolWebSocketRealtimeClient extends OpenAIProtoc
         sampleRate: number,
         onPcmChunk: (base64Pcm16: string) => void
     ): Promise<IPcmMicCapture> {
-        return createPcmMicCapture(micStream, sampleRate, onPcmChunk);
+        return CreatePcmMicCapture(micStream, sampleRate, onPcmChunk);
     }
 
     /** Creation seam for the playout engine. Production returns the shared {@link RealtimePcmPlayback}. */

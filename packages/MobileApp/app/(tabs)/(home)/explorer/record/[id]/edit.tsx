@@ -34,12 +34,12 @@ export default function RecordEditScreen() {
         const result = await save();
         if (result.success) {
             router.back();
-        } else if (result.error) {
-            setSaveError(result.error);
+        } else if (result.Error) {
+            setSaveError(result.Error);
         }
     };
 
-    const hasFields = !!load && load.descriptors.length > 0;
+    const hasFields = !!load && load.Descriptors.length > 0;
     const canSave = hasFields && canUpdate && !saving;
 
     return (
@@ -63,7 +63,7 @@ export default function RecordEditScreen() {
                     hasFields={hasFields}
                     canUpdate={canUpdate}
                     saveError={saveError}
-                    descriptors={load?.descriptors ?? []}
+                    descriptors={load?.Descriptors ?? []}
                     values={values}
                     errors={errors}
                     saving={saving}
@@ -94,11 +94,11 @@ type EditBodyProps = {
     hasFields: boolean;
     canUpdate: boolean;
     saveError: string | null;
-    descriptors: React.ComponentProps<typeof RecordForm>['descriptors'];
-    values: React.ComponentProps<typeof RecordForm>['values'];
-    errors: React.ComponentProps<typeof RecordForm>['errors'];
+    descriptors: React.ComponentProps<typeof RecordForm>['Descriptors'];
+    values: React.ComponentProps<typeof RecordForm>['Values'];
+    errors: React.ComponentProps<typeof RecordForm>['Errors'];
     saving: boolean;
-    onChange: React.ComponentProps<typeof RecordForm>['onChange'];
+    onChange: React.ComponentProps<typeof RecordForm>['OnChange'];
 };
 
 /** Renders the correct body state: loading, error, not-found, no-fields, or the form. */
@@ -131,11 +131,11 @@ function EditBody(props: EditBodyProps) {
                 </View>
             ) : null}
             <RecordForm
-                descriptors={props.descriptors}
-                values={props.values}
-                errors={props.errors}
-                onChange={props.onChange}
-                disabled={props.saving || !canUpdate}
+                Descriptors={props.descriptors}
+                Values={props.values}
+                Errors={props.errors}
+                OnChange={props.onChange}
+                Disabled={props.saving || !canUpdate}
             />
         </ScrollView>
     );

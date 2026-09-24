@@ -36,7 +36,7 @@ export const DEFAULT_WAVEFORM_BARS = 160;
  * @param aggregation per-bucket reducer (default `'max-abs'`)
  * @returns a `barCount`-length array of normalized `0..1` peaks
  */
-export function downsamplePeaks(
+export function DownsamplePeaks(
   samples: Float32Array | number[] | null | undefined,
   barCount: number = DEFAULT_WAVEFORM_BARS,
   aggregation: WaveformAggregation = 'max-abs',
@@ -48,7 +48,16 @@ export function downsamplePeaks(
   }
 
   const raw = aggregateBuckets(samples as Float32Array | number[], length, bars, aggregation);
-  return normalizePeaks(raw);
+  return NormalizePeaks(raw);
+}
+
+/** @deprecated Use {@link DownsamplePeaks}. */
+export function downsamplePeaks(
+  samples: Float32Array | number[] | null | undefined,
+  barCount: number = DEFAULT_WAVEFORM_BARS,
+  aggregation: WaveformAggregation = 'max-abs',
+): number[] {
+  return DownsamplePeaks(samples, barCount, aggregation);
 }
 
 /**
@@ -106,7 +115,7 @@ function reduceBucket(
  * Returns a copy. When the maximum is `0` (silence) or non-finite, returns the values
  * clamped to `[0, 1]` without scaling (so an all-zero input stays all-zero).
  */
-export function normalizePeaks(values: number[]): number[] {
+export function NormalizePeaks(values: number[]): number[] {
   let max = 0;
   for (const v of values) {
     const a = Math.abs(v);
@@ -115,13 +124,18 @@ export function normalizePeaks(values: number[]): number[] {
     }
   }
   if (max <= 0 || !isFinite(max)) {
-    return values.map((v) => clamp01(v));
+    return values.map((v) => Clamp01(v));
   }
-  return values.map((v) => clamp01(Math.abs(v) / max));
+  return values.map((v) => Clamp01(Math.abs(v) / max));
+}
+
+/** @deprecated Use {@link NormalizePeaks}. */
+export function normalizePeaks(values: number[]): number[] {
+  return NormalizePeaks(values);
 }
 
 /** Clamps a number to the `[0, 1]` range. */
-export function clamp01(v: number): number {
+export function Clamp01(v: number): number {
   if (!isFinite(v) || v < 0) {
     return 0;
   }
@@ -129,4 +143,9 @@ export function clamp01(v: number): number {
     return 1;
   }
   return v;
+}
+
+/** @deprecated Use {@link Clamp01}. */
+export function clamp01(v: number): number {
+  return Clamp01(v);
 }

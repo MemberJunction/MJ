@@ -63,8 +63,13 @@ function capNames(names: readonly string[]): string[] {
  * @param mode - candidate mode string (may be anything the agent passes)
  * @returns true when `mode` is one of cards | list
  */
-export function isValidBrowserViewMode(mode: unknown): mode is BrowserViewMode {
+export function IsValidBrowserViewMode(mode: unknown): mode is BrowserViewMode {
     return typeof mode === 'string' && (VALID_BROWSER_VIEW_MODES as readonly string[]).includes(mode);
+}
+
+/** @deprecated Use {@link IsValidBrowserViewMode}. */
+export function isValidBrowserViewMode(mode: unknown): mode is BrowserViewMode {
+    return IsValidBrowserViewMode(mode);
 }
 
 /**
@@ -146,7 +151,7 @@ export interface DashboardBrowserAgentContextInput {
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildDashboardBrowserAgentContext(
+export function BuildDashboardBrowserAgentContext(
     input: DashboardBrowserAgentContextInput,
 ): Record<string, unknown> {
     const hasSearch = input.SearchText.trim().length > 0;
@@ -191,4 +196,11 @@ export function buildDashboardBrowserAgentContext(
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildDashboardBrowserAgentContext}. */
+export function buildDashboardBrowserAgentContext(
+    input: DashboardBrowserAgentContextInput,
+): Record<string, unknown> {
+    return BuildDashboardBrowserAgentContext(input);
 }

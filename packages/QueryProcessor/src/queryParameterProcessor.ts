@@ -280,7 +280,7 @@ export class QueryParameterProcessor {
      * - SQL Server: converts to 1/0 (BIT fields)
      * - PostgreSQL: keeps as true/false (native boolean)
      */
-    public static validateParameters(
+    public static ValidateParameters(
         parameters: Record<string, unknown> | undefined,
         parameterDefinitions: MJQueryParameterEntity[],
         skipUnknownParameterCheck?: boolean
@@ -408,6 +408,15 @@ export class QueryParameterProcessor {
         };
     }
 
+    /** @deprecated Use {@link ValidateParameters}. */
+    public static validateParameters(
+        parameters: Record<string, unknown> | undefined,
+        parameterDefinitions: MJQueryParameterEntity[],
+        skipUnknownParameterCheck?: boolean
+    ): ParameterValidationResult {
+        return this.ValidateParameters(parameters, parameterDefinitions, skipUnknownParameterCheck);
+    }
+
     /**
      * Processes a query template with the provided parameters.
      * Accepts either a full `QueryInfo` (saved queries) or a minimal `QueryTemplateInput`
@@ -419,7 +428,7 @@ export class QueryParameterProcessor {
      *        own UsesTemplate is false. Used for transitive template resolution when a composed
      *        dependency uses templates but the outer query does not.
      */
-    public static processQueryTemplate(
+    public static ProcessQueryTemplate(
         query: QueryTemplateInput,
         parameters: Record<string, unknown> | undefined,
         sqlOverride?: string,
@@ -440,7 +449,7 @@ export class QueryParameterProcessor {
             // Validate parameters against known definitions.
             // When force-processing for transitive templates, the outer query may not define
             // all parameters used by dependencies, so we skip the "unknown parameter" check.
-            const validation = this.validateParameters(parameters, query.Parameters, forceTemplateProcessing);
+            const validation = this.ValidateParameters(parameters, query.Parameters, forceTemplateProcessing);
             if (!validation.success) {
                 return {
                     success: false,
@@ -491,5 +500,15 @@ export class QueryParameterProcessor {
                 appliedParameters: {}
             };
         }
+    }
+
+    /** @deprecated Use {@link ProcessQueryTemplate}. */
+    public static processQueryTemplate(
+        query: QueryTemplateInput,
+        parameters: Record<string, unknown> | undefined,
+        sqlOverride?: string,
+        forceTemplateProcessing?: boolean
+    ): QueryProcessingResult {
+        return this.ProcessQueryTemplate(query, parameters, sqlOverride, forceTemplateProcessing);
     }
 }

@@ -53,7 +53,7 @@ export class MJMagicLinkProvider extends MJAuthBase {
    * Falls back cleanly to the primary IdP when no token is present (e.g. after a
    * guest's session expires or logs out).
    */
-  static hasSessionToken(): boolean {
+  static HasSessionToken(): boolean {
     if (typeof window === 'undefined') {
       return false;
     }
@@ -67,6 +67,11 @@ export class MJMagicLinkProvider extends MJAuthBase {
     } catch {
       return false;
     }
+  }
+
+  /** @deprecated Use {@link HasSessionToken}. */
+  static hasSessionToken(): boolean {
+    return this.HasSessionToken();
   }
 
   async initialize(): Promise<void> {

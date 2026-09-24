@@ -50,13 +50,48 @@ export class EntityWizardStateService {
     private readonly _isValidating = new BehaviorSubject<boolean>(false);
     private readonly _isSubmitting = new BehaviorSubject<boolean>(false);
 
-    public readonly currentStep$: Observable<WizardStep>             = this._currentStep.asObservable();
-    public readonly tableDefinition$: Observable<Partial<EntityTableSpec>> = this._tableDefinition.asObservable();
-    public readonly stepErrors$: Observable<Record<string, string>>  = this._stepErrors.asObservable();
-    public readonly validationResult$: Observable<ClientValidationResult | null> = this._validationResult.asObservable();
-    public readonly pipelineResult$: Observable<EntityPipelineResult | null>  = this._pipelineResult.asObservable();
-    public readonly isValidating$: Observable<boolean>               = this._isValidating.asObservable();
-    public readonly isSubmitting$: Observable<boolean>               = this._isSubmitting.asObservable();
+    public readonly CurrentStep$: Observable<WizardStep>             = this._currentStep.asObservable();
+
+    /** @deprecated Use {@link CurrentStep$}. */
+    public get currentStep$(): Observable<WizardStep> {
+        return this.CurrentStep$;
+    }
+    public readonly TableDefinition$: Observable<Partial<EntityTableSpec>> = this._tableDefinition.asObservable();
+
+    /** @deprecated Use {@link TableDefinition$}. */
+    public get tableDefinition$(): Observable<Partial<EntityTableSpec>> {
+        return this.TableDefinition$;
+    }
+    public readonly StepErrors$: Observable<Record<string, string>>  = this._stepErrors.asObservable();
+
+    /** @deprecated Use {@link StepErrors$}. */
+    public get stepErrors$(): Observable<Record<string, string>> {
+        return this.StepErrors$;
+    }
+    public readonly ValidationResult$: Observable<ClientValidationResult | null> = this._validationResult.asObservable();
+
+    /** @deprecated Use {@link ValidationResult$}. */
+    public get validationResult$(): Observable<ClientValidationResult | null> {
+        return this.ValidationResult$;
+    }
+    public readonly PipelineResult$: Observable<EntityPipelineResult | null>  = this._pipelineResult.asObservable();
+
+    /** @deprecated Use {@link PipelineResult$}. */
+    public get pipelineResult$(): Observable<EntityPipelineResult | null> {
+        return this.PipelineResult$;
+    }
+    public readonly IsValidating$: Observable<boolean>               = this._isValidating.asObservable();
+
+    /** @deprecated Use {@link IsValidating$}. */
+    public get isValidating$(): Observable<boolean> {
+        return this.IsValidating$;
+    }
+    public readonly IsSubmitting$: Observable<boolean>               = this._isSubmitting.asObservable();
+
+    /** @deprecated Use {@link IsSubmitting$}. */
+    public get isSubmitting$(): Observable<boolean> {
+        return this.IsSubmitting$;
+    }
 
     // ─── Convenience snapshot getters ─────────────────────────────────────
 
@@ -98,10 +133,10 @@ export class EntityWizardStateService {
     public UpdateBasics(basics: BasicsStepValue): void {
         this._tableDefinition.next({
             ...this._tableDefinition.value,
-            EntityName: basics.entityName,
-            TableName:  basics.tableName,
-            SchemaName: basics.schemaName,
-            Description: basics.description || undefined,
+            EntityName: basics.EntityName,
+            TableName:  basics.TableName,
+            SchemaName: basics.SchemaName,
+            Description: basics.Description || undefined,
         });
     }
 
@@ -195,7 +230,7 @@ export class EntityWizardStateService {
             const result = modificationType === 'create'
                 ? await this.designerService.createEntity(td)
                 : await this.designerService.modifyEntity(td, {
-                    existingEntityId: existingEntityId ?? '',
+                    ExistingEntityId: existingEntityId ?? '',
                 });
             this._pipelineResult.next(result);
             return result;

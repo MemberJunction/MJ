@@ -220,7 +220,7 @@ export class DatabaseDesignerPipelineExecutor {
      * @param tables - Table definitions to sort. Not mutated.
      * @returns A new array with the same tables in dependency order.
      */
-    public static sortByFKDependency(tables: TableDefinition[]): TableDefinition[] {
+    public static SortByFKDependency(tables: TableDefinition[]): TableDefinition[] {
         if (tables.length <= 1) return [...tables];
 
         // Build an index from "schema.table" → original array index for fast lookup
@@ -275,6 +275,11 @@ export class DatabaseDesignerPipelineExecutor {
         }
 
         return sorted;
+    }
+
+    /** @deprecated Use {@link SortByFKDependency}. */
+    public static sortByFKDependency(tables: TableDefinition[]): TableDefinition[] {
+        return this.SortByFKDependency(tables);
     }
 
     /**

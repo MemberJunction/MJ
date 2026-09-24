@@ -17,11 +17,11 @@ export { PostgreSQLDialect } from './postgresqlDialect.js';
 export { GetDialect } from './dialectFactory.js';
 export { FindReferencedIdentifiers } from './identifierReferences.js';
 export {
-    restarLayeredOuterView,
-    buildCreateOrReplaceLayeredOuterViewSQL,
+    RestarLayeredOuterView, restarLayeredOuterView,
+    BuildCreateOrReplaceLayeredOuterViewSQL, buildCreateOrReplaceLayeredOuterViewSQL,
     LayeredOuterRestarError,
-    findTopLevelKeyword,
-    splitTopLevelCommaList,
+    FindTopLevelKeyword, findTopLevelKeyword,
+    SplitTopLevelCommaList, splitTopLevelCommaList,
 } from './postgresqlRestarLayeredOuter.js';
 export type { RestarLayeredOuterViewArgs } from './postgresqlRestarLayeredOuter.js';
 export {

@@ -35,11 +35,11 @@ describe.skip('integration (slow, opt-in): agent send', () => {
             text: '@sage say hello in one short sentence.',
         });
         expect(send.success).toBe(true);
-        expect(send.userMessageId).toBeTruthy();
-        expect(send.aiMessageId).toBeTruthy();
+        expect(send.UserMessageId).toBeTruthy();
+        expect(send.AiMessageId).toBeTruthy();
 
         // Poll the AI detail until it finalizes (Complete/Error) or we time out.
-        const aiId = send.aiMessageId!;
+        const aiId = send.AiMessageId!;
         const deadline = Date.now() + 90_000;
         let status: string | null = null;
         while (Date.now() < deadline) {

@@ -300,7 +300,7 @@ export class StorageAdminDialogComponent implements OnInit {
       }
 
       // Sync Role Permissions
-      await this.SyncAccountPermissions(accountEntity.ID, this.EditingAccountSelectedRoleIDs);
+      await this.syncAccountPermissions(accountEntity.ID, this.EditingAccountSelectedRoleIDs);
 
       // Force engine refresh
       await FileStorageEngineBase.Instance.Config(true);
@@ -320,7 +320,7 @@ export class StorageAdminDialogComponent implements OnInit {
     }
   }
 
-  private async SyncAccountPermissions(accountId: string, desiredRoleIds: string[]): Promise<void> {
+  private async syncAccountPermissions(accountId: string, desiredRoleIds: string[]): Promise<void> {
     const md = this.ProviderToUse;
     const user = md.CurrentUser;
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ManageMetadataBase } from '../Database/manage-metadata';
-import { evaluateMaterializationDrift } from '../Database/materializationDrift';
+import { EvaluateMaterializationDrift } from '../Database/materializationDrift';
 import type { EntityInfo, Metadata } from '@memberjunction/core';
 import type { CodeGenConnection, CodeGenQueryRow } from '../Database/codeGenDatabaseProvider';
 
@@ -83,14 +83,14 @@ describe('base-view drift — mint and drift must compare the same column set', 
         const facts = await mm.gather(entity({ external: true, fields: [{ Name: 'ID', IsVirtual: false }, { Name: 'Total', IsVirtual: false }, { Name: 'OwnerName', IsVirtual: true }] }));
 
         expect(facts.baseView?.currentEntityFields).toEqual(['ID', 'Total']); // virtual excluded — symmetric with the mint
-        expect(evaluateMaterializationDrift(facts)).toEqual({ drift: false });
+        expect(EvaluateMaterializationDrift(facts)).toEqual({ drift: false });
     });
 
     it('documents the OLD behavior: the unfiltered field list flags the virtual field as added, and holds forever', () => {
         // Not a test of current code — it pins WHY the fix matters, by running the evaluator on the fact
         // shape the pre-fix gatherer produced. DriftHold here is terminal: held rows are excluded from the
         // sweep, so this verdict could never be revisited.
-        const verdict = evaluateMaterializationDrift({
+        const verdict = EvaluateMaterializationDrift({
             sourceType: 'EntityBaseView',
             baseView: { sourceEntityExists: true, currentEntityFields: ['ID', 'Total', 'OwnerName'], materializedColumns: ['ID', 'Total'] },
         });
@@ -106,7 +106,7 @@ describe('base-view drift — mint and drift must compare the same column set', 
         const facts = await mm.gather(entity({ external: false, fields: [{ Name: 'ID', IsVirtual: false }, { Name: 'OwnerName', IsVirtual: true }] }));
 
         expect(facts.baseView?.currentEntityFields).toEqual(['ID', 'OwnerName']);
-        expect(evaluateMaterializationDrift(facts)).toEqual({ drift: false });
+        expect(EvaluateMaterializationDrift(facts)).toEqual({ drift: false });
     });
 
     it('STILL detects real drift: a new NON-virtual field on an external entity', async () => {
@@ -116,7 +116,7 @@ describe('base-view drift — mint and drift must compare the same column set', 
         mm.snapshotColumns = ['ID', 'Total'];
         const facts = await mm.gather(entity({ external: true, fields: [{ Name: 'ID', IsVirtual: false }, { Name: 'Total', IsVirtual: false }, { Name: 'Currency', IsVirtual: false }, { Name: 'OwnerName', IsVirtual: true }] }));
 
-        const verdict = evaluateMaterializationDrift(facts);
+        const verdict = EvaluateMaterializationDrift(facts);
         expect(verdict.drift).toBe(true);
         expect(verdict.reason).toMatch(/currency/i);
         expect(verdict.reason).not.toMatch(/ownername/i); // the virtual field is still not the reason
@@ -127,7 +127,7 @@ describe('base-view drift — mint and drift must compare the same column set', 
         mm.snapshotColumns = ['ID', 'Total', 'LegacyCode'];
         const facts = await mm.gather(entity({ external: true, fields: [{ Name: 'ID', IsVirtual: false }, { Name: 'Total', IsVirtual: false }] }));
 
-        const verdict = evaluateMaterializationDrift(facts);
+        const verdict = EvaluateMaterializationDrift(facts);
         expect(verdict.drift).toBe(true);
         expect(verdict.reason).toMatch(/legacycode/i);
     });
@@ -136,6 +136,6 @@ describe('base-view drift — mint and drift must compare the same column set', 
         const mm = new TestableDriftSymmetry();
         const facts = await mm.gather(undefined);
         expect(facts.baseView?.sourceEntityExists).toBe(false);
-        expect(evaluateMaterializationDrift(facts)).toEqual({ drift: true, reason: 'source entity no longer exists' });
+        expect(EvaluateMaterializationDrift(facts)).toEqual({ drift: true, reason: 'source entity no longer exists' });
     });
 });

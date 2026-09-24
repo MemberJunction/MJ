@@ -44,8 +44,8 @@ import type { CapturedAttachment } from './attachment-meta';
 
 /** Outcome of attaching a captured file to a message. */
 export type AttachResult =
-    | { ok: true; attachmentId: string; storedInline: true }
-    | { ok: false; reason: 'too-large' | 'invalid' | 'save-failed'; message: string };
+    | { ok: true; attachmentId: string; storedInline: true }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { ok: false; reason: 'too-large' | 'invalid' | 'save-failed'; message: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Byte length of a base64 payload, without allocating the decoded buffer. */
 export function Base64SizeBytes(base64: string): number {

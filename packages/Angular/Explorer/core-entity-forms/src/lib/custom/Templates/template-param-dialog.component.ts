@@ -6,19 +6,19 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface ParameterPair {
-    key: string;
-    value: string;
-    isFromTemplate: boolean;
-    description?: string;
-    isRequired?: boolean;
-    type?: string;
+    key: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    value: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    isFromTemplate: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    description?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    isRequired?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    type?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 export interface TemplateRunResult {
-    success: boolean;
-    output?: string;
-    error?: string;
-    executionTimeMs?: number;
+    Success: boolean;
+    Output?: string;
+    Error?: string;
+    ExecutionTimeMs?: number;
 }
 
 @Component({
@@ -28,16 +28,34 @@ export interface TemplateRunResult {
     styleUrls: ['./template-param-dialog.component.css']
 })
 export class TemplateParamDialogComponent extends BaseAngularComponent implements OnInit {
-    @Input() template: MJTemplateEntity | null = null;
-    
-    public _isVisible: boolean = false;
-    @Input() 
-    get isVisible(): boolean {
-        return this._isVisible;
+    @Input() Template: MJTemplateEntity | null = null;
+
+    /** @deprecated Use {@link Template}. */
+    @Input() set template(value: MJTemplateEntity | null) {
+      this.Template = value;
     }
-    set isVisible(value: boolean) {
-        const wasVisible = this._isVisible;
-        this._isVisible = value;
+    /** @deprecated Use {@link Template}. */
+    get template(): MJTemplateEntity | null {
+      return this.Template;
+    }
+    
+    public IsVisible: boolean = false;
+
+    /** @deprecated Use {@link IsVisible}. */
+    public get _isVisible(): boolean {
+      return this.IsVisible;
+    }
+    /** @deprecated Use {@link IsVisible}. */
+    public set _isVisible(value: boolean) {
+      this.IsVisible = value;
+    }
+    @Input() 
+    get isVisible(): boolean {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+        return this.IsVisible;
+    }
+    set isVisible(value: boolean) {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
+        const wasVisible = this.IsVisible;
+        this.IsVisible = value;
         
         // Reset dialog state when opening
         if (value && !wasVisible) {
@@ -45,35 +63,107 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
         }
     }
     
-    @Output() isVisibleChange = new EventEmitter<boolean>();
-    @Output() onClose = new EventEmitter<void>();
+    @Output() IsVisibleChange = new EventEmitter<boolean>();
+
+    /**
+     * @deprecated Use {@link IsVisibleChange}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (isVisibleChange) keeps working. Must stay AFTER IsVisibleChange: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() isVisibleChange = this.IsVisibleChange;
+    @Output() OnClose = new EventEmitter<void>();
+
+    /**
+     * @deprecated Use {@link OnClose}.
+     *
+     * The same emitter under the old binding name, so a template still binding
+     * (onClose) keeps working. Must stay AFTER OnClose: class fields
+     * initialise in order, and the other way round this captures undefined.
+     */
+    @Output() onClose = this.OnClose;
 
     public parameters: ParameterPair[] = [];
     public isLoading = false;
-    public isRunning = false;
-    public testResult: TemplateRunResult | null = null;
-    public hasUnsavedParameters = false;
-    public parametersExpanded = true;
-    public jsonPreviewExpanded = false;
-    public resultsExpanded = true;
+    public IsRunning = false;
+
+    /** @deprecated Use {@link IsRunning}. */
+    public get isRunning() {
+      return this.IsRunning;
+    }
+    /** @deprecated Use {@link IsRunning}. */
+    public set isRunning(value) {
+      this.IsRunning = value;
+    }
+    public TestResult: TemplateRunResult | null = null;
+
+    /** @deprecated Use {@link TestResult}. */
+    public get testResult(): TemplateRunResult | null {
+      return this.TestResult;
+    }
+    /** @deprecated Use {@link TestResult}. */
+    public set testResult(value: TemplateRunResult | null) {
+      this.TestResult = value;
+    }
+    public HasUnsavedParameters = false;
+
+    /** @deprecated Use {@link HasUnsavedParameters}. */
+    public get hasUnsavedParameters() {
+      return this.HasUnsavedParameters;
+    }
+    /** @deprecated Use {@link HasUnsavedParameters}. */
+    public set hasUnsavedParameters(value) {
+      this.HasUnsavedParameters = value;
+    }
+    public ParametersExpanded = true;
+
+    /** @deprecated Use {@link ParametersExpanded}. */
+    public get parametersExpanded() {
+      return this.ParametersExpanded;
+    }
+    /** @deprecated Use {@link ParametersExpanded}. */
+    public set parametersExpanded(value) {
+      this.ParametersExpanded = value;
+    }
+    public JsonPreviewExpanded = false;
+
+    /** @deprecated Use {@link JsonPreviewExpanded}. */
+    public get jsonPreviewExpanded() {
+      return this.JsonPreviewExpanded;
+    }
+    /** @deprecated Use {@link JsonPreviewExpanded}. */
+    public set jsonPreviewExpanded(value) {
+      this.JsonPreviewExpanded = value;
+    }
+    public ResultsExpanded = true;
+
+    /** @deprecated Use {@link ResultsExpanded}. */
+    public get resultsExpanded() {
+      return this.ResultsExpanded;
+    }
+    /** @deprecated Use {@link ResultsExpanded}. */
+    public set resultsExpanded(value) {
+      this.ResultsExpanded = value;
+    }
 
     private originalTemplateParams: MJTemplateParamEntity[] = [];
 
     ngOnInit() {
-        if (this.template) {
-            this.loadTemplateParams();
+        if (this.Template) {
+            this.LoadTemplateParams();
         }
     }
 
-    async loadTemplateParams() {
-        if (!this.template?.ID) return;
+    async LoadTemplateParams() {
+        if (!this.Template?.ID) return;
 
         this.isLoading = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunView<MJTemplateParamEntity>({
                 EntityName: 'MJ: Template Params',
-                ExtraFilter: `TemplateID='${this.template.ID}'`,
+                ExtraFilter: `TemplateID='${this.Template.ID}'`,
                 OrderBy: 'Name ASC' 
             });
 
@@ -91,7 +181,7 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
 
             // If no template params, add one empty pair to start
             if (this.parameters.length === 0) {
-                this.addParameter();
+                this.AddParameter();
             }
 
         } catch (error) {
@@ -105,7 +195,12 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
         }
     }
 
-    addParameter() {
+    /** @deprecated Use {@link LoadTemplateParams}. */
+    async loadTemplateParams() {
+      return this.LoadTemplateParams();
+    }
+
+    AddParameter() {
         this.parameters.push({
             key: '',
             value: '',
@@ -113,23 +208,38 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
         });
     }
 
-    removeParameter(index: number) {
+    /** @deprecated Use {@link AddParameter}. */
+    addParameter() {
+      return this.AddParameter();
+    }
+
+    RemoveParameter(index: number) {
         if (this.parameters.length > 1) {
             this.parameters.splice(index, 1);
         }
     }
 
-    onParameterChange() {
+    /** @deprecated Use {@link RemoveParameter}. */
+    removeParameter(index: number) {
+      return this.RemoveParameter(index);
+    }
+
+    OnParameterChange() {
         // Check if we have new parameters not in template
-        this.hasUnsavedParameters = this.parameters.some(param => 
+        this.HasUnsavedParameters = this.parameters.some(param => 
             param.key && 
             !param.isFromTemplate && 
             !this.originalTemplateParams.find(tp => tp.Name === param.key)
         );
     }
 
-    async runTemplate() {
-        if (!this.template?.ID) return;
+    /** @deprecated Use {@link OnParameterChange}. */
+    onParameterChange() {
+      return this.OnParameterChange();
+    }
+
+    async RunTemplate() {
+        if (!this.Template?.ID) return;
 
         // Validate parameter names - check for empty parameter names
         const emptyNameParams = this.parameters.filter(p => p.value && !p.key);
@@ -151,8 +261,8 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
             return;
         }
 
-        this.isRunning = true;
-        this.testResult = null;
+        this.IsRunning = true;
+        this.TestResult = null;
 
         try {
             // Build context data object from parameters
@@ -171,31 +281,31 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
             // Run the template via the Template.Run Remote Operation (provider-scoped; routes over the
             // generic ExecuteRemoteOperation transport — no bespoke GraphQL client).
             const opResult = await new TemplateRunOperation().Execute(
-                { templateID: this.template.ID, data: contextData },
+                { templateID: this.Template.ID, data: contextData },
                 { provider: this.ProviderToUse },
             );
 
             {
-                this.testResult = {
-                    success: opResult.Success,
-                    output: opResult.Output?.output,
-                    error: opResult.ErrorMessage,
-                    executionTimeMs: opResult.Output?.executionTimeMs,
+                this.TestResult = {
+                    Success: opResult.Success,
+                    Output: opResult.Output?.output,
+                    Error: opResult.ErrorMessage,
+                    ExecutionTimeMs: opResult.Output?.executionTimeMs,
                 };
 
                 // Collapse parameters and expand results after execution
-                this.parametersExpanded = false;
-                this.resultsExpanded = true;
+                this.ParametersExpanded = false;
+                this.ResultsExpanded = true;
                 
-                if (this.testResult?.success) {
+                if (this.TestResult?.Success) {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `Template executed successfully in ${this.testResult.executionTimeMs || 0}ms`,
+                        `Template executed successfully in ${this.TestResult.ExecutionTimeMs || 0}ms`,
                         'success',
                         4000
                     );
                 } else {
                     MJNotificationService.Instance.CreateSimpleNotification(
-                        `Template execution failed: ${this.testResult?.error || 'Unknown error'}`,
+                        `Template execution failed: ${this.TestResult?.Error || 'Unknown error'}`,
                         'error',
                         5000
                     );
@@ -204,27 +314,32 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
 
         } catch (error) {
             console.error('Template test error:', error);
-            this.testResult = {
-                success: false,
-                error: (error as Error).message || 'Unknown error occurred'
+            this.TestResult = {
+                Success: false,
+                Error: (error as Error).message || 'Unknown error occurred'
             };
             
             // Still collapse parameters and expand results on error
-            this.parametersExpanded = false;
-            this.resultsExpanded = true;
+            this.ParametersExpanded = false;
+            this.ResultsExpanded = true;
             
             MJNotificationService.Instance.CreateSimpleNotification(
-                `Template test failed: ${this.testResult?.error || 'Unknown error'}`,
+                `Template test failed: ${this.TestResult?.Error || 'Unknown error'}`,
                 'error',
                 5000
             );
         } finally {
-            this.isRunning = false;
+            this.IsRunning = false;
         }
     }
 
-    async updateTemplateParams() {
-        if (!this.template?.ID || !this.hasUnsavedParameters) return;
+    /** @deprecated Use {@link RunTemplate}. */
+    async runTemplate() {
+      return this.RunTemplate();
+    }
+
+    async UpdateTemplateParams() {
+        if (!this.Template?.ID || !this.HasUnsavedParameters) return;
 
         const newParams = this.parameters.filter(param => 
             param.key && 
@@ -239,7 +354,7 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
             
             for (const param of newParams) {
                 const templateParam = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params');
-                templateParam.TemplateID = this.template.ID;
+                templateParam.TemplateID = this.Template.ID;
                 templateParam.Name = param.key;
                 templateParam.Description = param.description || null;
                 templateParam.Type = 'Scalar'; // Default type
@@ -257,10 +372,10 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
                 'success'
             );
 
-            this.hasUnsavedParameters = false;
+            this.HasUnsavedParameters = false;
             
             // Reload template params to sync
-            await this.loadTemplateParams();
+            await this.LoadTemplateParams();
 
         } catch (error) {
             console.error('Error updating template params:', error);
@@ -271,36 +386,41 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
         }
     }
 
+    /** @deprecated Use {@link UpdateTemplateParams}. */
+    async updateTemplateParams() {
+      return this.UpdateTemplateParams();
+    }
+
     close() {
-        this._isVisible = false;
-        this.isVisibleChange.emit(false);
-        this.onClose.emit();
+        this.IsVisible = false;
+        this.IsVisibleChange.emit(false);
+        this.OnClose.emit();
     }
 
     private resetDialogState() {
         // Reset expansion states for a clean testing experience
-        this.parametersExpanded = true;     // Show params by default
-        this.jsonPreviewExpanded = false;   // Hide JSON (developer-focused)
-        this.resultsExpanded = true;        // Show results when they exist
+        this.ParametersExpanded = true;     // Show params by default
+        this.JsonPreviewExpanded = false;   // Hide JSON (developer-focused)
+        this.ResultsExpanded = true;        // Show results when they exist
         
         // Clear previous test results
-        this.testResult = null;
-        this.isRunning = false;
+        this.TestResult = null;
+        this.IsRunning = false;
         
         // Reset unsaved parameters flag
-        this.hasUnsavedParameters = false;
+        this.HasUnsavedParameters = false;
     }
 
-    saveResults() {
-        if (!this.testResult) return;
+    SaveResults() {
+        if (!this.TestResult) return;
 
-        const content = this.testResult.success 
-            ? this.testResult.output || 'No output'
-            : this.testResult.error || 'No error details';
+        const content = this.TestResult.Success 
+            ? this.TestResult.Output || 'No output'
+            : this.TestResult.Error || 'No error details';
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-        const templateName = this.template?.Name?.replace(/[^a-zA-Z0-9]/g, '_') || 'template';
-        const status = this.testResult.success ? 'success' : 'error';
+        const templateName = this.Template?.Name?.replace(/[^a-zA-Z0-9]/g, '_') || 'template';
+        const status = this.TestResult.Success ? 'success' : 'error';
         const filename = `${templateName}_${status}_${timestamp}.txt`;
 
         // Create blob and download
@@ -320,7 +440,12 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
         );
     }
 
-    get parametersAsJson(): string {
+    /** @deprecated Use {@link SaveResults}. */
+    saveResults() {
+      return this.SaveResults();
+    }
+
+    get ParametersAsJson(): string {
         const contextData: any = {};
         this.parameters.forEach(param => {
             if (param.key && param.value) {
@@ -332,5 +457,10 @@ export class TemplateParamDialogComponent extends BaseAngularComponent implement
             }
         });
         return JSON.stringify(contextData, null, 2);
+    }
+
+    /** @deprecated Use {@link ParametersAsJson}. */
+    get parametersAsJson(): string {
+      return this.ParametersAsJson;
     }
 }

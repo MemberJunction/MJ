@@ -32,23 +32,77 @@ interface RolePermissions {
   styleUrls: ['./permission-dialog.component.css']
 })
 export class PermissionDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges {
-  @Input() data: PermissionDialogData | null = null;
-  @Input() visible = false;
-  @Output() result = new EventEmitter<PermissionDialogResult>();
+  @Input() Data: PermissionDialogData | null = null;
+
+  /** @deprecated Use {@link Data}. */
+  @Input() set data(value: PermissionDialogData | null) {
+    this.Data = value;
+  }
+  /** @deprecated Use {@link Data}. */
+  get data(): PermissionDialogData | null {
+    return this.Data;
+  }
+  @Input() Visible = false;
+
+  /** @deprecated Use {@link Visible}. */
+  @Input() set visible(value: PermissionDialogComponent['Visible']) {
+    this.Visible = value;
+  }
+  /** @deprecated Use {@link Visible}. */
+  get visible(): PermissionDialogComponent['Visible'] {
+    return this.Visible;
+  }
+  @Output() Result = new EventEmitter<PermissionDialogResult>();
+
+  /**
+   * @deprecated Use {@link Result}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (result) keeps working. Must stay AFTER Result: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() result = this.Result;
 
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
   private get metadata() { return this.ProviderToUse; }
-  public permissionForm: FormGroup;
+  public PermissionForm: FormGroup;
+
+  /** @deprecated Use {@link PermissionForm}. */
+  public get permissionForm(): FormGroup {
+    return this.PermissionForm;
+  }
+  /** @deprecated Use {@link PermissionForm}. */
+  public set permissionForm(value: FormGroup) {
+    this.PermissionForm = value;
+  }
   public isLoading = false;
   public error: string | null = null;
-  public rolePermissions: RolePermissions[] = [];
-  public availableRoles: MJRoleEntity[] = [];
+  public RolePermissions: RolePermissions[] = [];
+
+  /** @deprecated Use {@link RolePermissions}. */
+  public get rolePermissions(): RolePermissions[] {
+    return this.RolePermissions;
+  }
+  /** @deprecated Use {@link RolePermissions}. */
+  public set rolePermissions(value: RolePermissions[]) {
+    this.RolePermissions = value;
+  }
+  public AvailableRoles: MJRoleEntity[] = [];
+
+  /** @deprecated Use {@link AvailableRoles}. */
+  public get availableRoles(): MJRoleEntity[] {
+    return this.AvailableRoles;
+  }
+  /** @deprecated Use {@link AvailableRoles}. */
+  public set availableRoles(value: MJRoleEntity[]) {
+    this.AvailableRoles = value;
+  }
 
   constructor() {
     super();
-    this.permissionForm = this.fb.group({});
+    this.PermissionForm = this.fb.group({});
   }
 
   ngOnInit(): void {
@@ -58,16 +112,16 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
   ngOnChanges(changes: SimpleChanges): void {
     console.log('Permission dialog ngOnChanges called:', changes);
     
-    if (changes['visible'] && this.visible) {
+    if (changes['visible'] && this.Visible) {
       this.resetDialog();
       // Load data when dialog becomes visible and we have data
-      if (this.data) {
+      if (this.Data) {
         console.log('Dialog became visible, loading permission data');
         this.loadPermissionData();
       }
     }
     
-    if (changes['data'] && this.data && this.visible) {
+    if (changes['data'] && this.Data && this.Visible) {
       console.log('Data changed while dialog is visible, reloading permission data');
       this.loadPermissionData();
     }
@@ -84,33 +138,43 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
 
   @HostListener('document:keydown.escape', ['$event'])
   onEscapeKey(event: Event): void {
-    if (this.visible) {
+    if (this.Visible) {
       this.onCancel();
     }
   }
 
-  public get hasChanges(): boolean {
-    return this.rolePermissions.some(rp => rp.isNew || rp.entityPermission.Dirty);
+  public get HasChanges(): boolean {
+    return this.RolePermissions.some(rp => rp.isNew || rp.entityPermission.Dirty);
   }
 
-  public hasEntityChanges(rolePermission: RolePermissions): boolean {
+  /** @deprecated Use {@link HasChanges}. */
+  public get hasChanges(): boolean {
+    return this.HasChanges;
+  }
+
+  public HasEntityChanges(rolePermission: RolePermissions): boolean {
     return rolePermission.isNew || rolePermission.entityPermission.Dirty;
   }
 
-  private loadPermissionData(): void {
-    if (!this.data) return;
+  /** @deprecated Use {@link HasEntityChanges}. */
+  public hasEntityChanges(rolePermission: RolePermissions): boolean {
+    return this.HasEntityChanges(rolePermission);
+  }
 
-    console.log('Loading permission data for entity:', this.data.entity.Name);
-    console.log('Existing permissions:', this.data.existingPermissions);
-    console.log('Available roles:', this.data.roles);
+  private loadPermissionData(): void {
+    if (!this.Data) return;
+
+    console.log('Loading permission data for entity:', this.Data.entity.Name);
+    console.log('Existing permissions:', this.Data.existingPermissions);
+    console.log('Available roles:', this.Data.roles);
 
     // Initialize role permissions from existing data
-    this.rolePermissions = [];
+    this.RolePermissions = [];
     const existingRoleIds = new Set<string>();
 
     // Process existing permissions
-    for (const permission of this.data.existingPermissions) {
-      const role = this.data.roles.find(r => UUIDsEqual(r.ID, permission.RoleID));
+    for (const permission of this.Data.existingPermissions) {
+      const role = this.Data.roles.find(r => UUIDsEqual(r.ID, permission.RoleID));
       if (role) {
         console.log(`Processing permission for role ${role.Name}:`, {
           canCreate: permission.CanCreate,
@@ -119,7 +183,7 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
           canDelete: permission.CanDelete
         });
         
-        this.rolePermissions.push({
+        this.RolePermissions.push({
           roleId: role.ID,
           roleName: role.Name || '',
           entityPermission: permission,
@@ -129,22 +193,22 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
       }
     }
 
-    console.log('Loaded role permissions:', this.rolePermissions);
+    console.log('Loaded role permissions:', this.RolePermissions);
 
     // Set available roles (those not already configured)
-    this.availableRoles = this.data.roles.filter(role => !existingRoleIds.has(role.ID));
+    this.AvailableRoles = this.Data.roles.filter(role => !existingRoleIds.has(role.ID));
     
-    console.log('Available roles for adding:', this.availableRoles.map(r => r.Name));
+    console.log('Available roles for adding:', this.AvailableRoles.map(r => r.Name));
     
     // Trigger change detection to update the UI
     this.cdr.detectChanges();
   }
 
-  public async addRolePermission(role: MJRoleEntity): Promise<void> {
+  public async AddRolePermission(role: MJRoleEntity): Promise<void> {
     // Create new EntityPermission entity
     const entityPermission = await this.metadata.GetEntityObject<MJEntityPermissionEntity>('MJ: Entity Permissions');
     entityPermission.NewRecord();
-    entityPermission.EntityID = this.data!.entity.ID;
+    entityPermission.EntityID = this.Data!.entity.ID;
     entityPermission.RoleID = role.ID;
     entityPermission.CanCreate = false;
     entityPermission.CanRead = true; // Default to read access
@@ -152,7 +216,7 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
     entityPermission.CanDelete = false;
 
     // Add new role permission
-    this.rolePermissions.push({
+    this.RolePermissions.push({
       roleId: role.ID,
       roleName: role.Name || '',
       entityPermission: entityPermission,
@@ -160,47 +224,57 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
     });
 
     // Remove from available roles
-    this.availableRoles = this.availableRoles.filter(r => !UUIDsEqual(r.ID, role.ID));
+    this.AvailableRoles = this.AvailableRoles.filter(r => !UUIDsEqual(r.ID, role.ID));
     this.cdr.detectChanges();
   }
 
-  public removeRolePermission(rolePermission: RolePermissions): void {
+  /** @deprecated Use {@link AddRolePermission}. */
+  public async addRolePermission(role: MJRoleEntity): Promise<void> {
+    return this.AddRolePermission(role);
+  }
+
+  public RemoveRolePermission(rolePermission: RolePermissions): void {
     // Add back to available roles if not new
     if (!rolePermission.isNew) {
-      const role = this.data?.roles.find(r => UUIDsEqual(r.ID, rolePermission.roleId));
+      const role = this.Data?.roles.find(r => UUIDsEqual(r.ID, rolePermission.roleId));
       if (role) {
-        this.availableRoles.push(role);
-        this.availableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+        this.AvailableRoles.push(role);
+        this.AvailableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
       }
     } else {
       // Add back to available roles
-      const role = this.data?.roles.find(r => UUIDsEqual(r.ID, rolePermission.roleId));
+      const role = this.Data?.roles.find(r => UUIDsEqual(r.ID, rolePermission.roleId));
       if (role) {
-        this.availableRoles.push(role);
-        this.availableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+        this.AvailableRoles.push(role);
+        this.AvailableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
       }
     }
 
     // Remove from role permissions
-    this.rolePermissions = this.rolePermissions.filter(rp => rp.roleId !== rolePermission.roleId);
+    this.RolePermissions = this.RolePermissions.filter(rp => rp.roleId !== rolePermission.roleId);
     this.cdr.detectChanges();
   }
 
-  public async onSubmit(): Promise<void> {
-    if (!this.data || !this.hasChanges) return;
+  /** @deprecated Use {@link RemoveRolePermission}. */
+  public removeRolePermission(rolePermission: RolePermissions): void {
+    return this.RemoveRolePermission(rolePermission);
+  }
+
+  public async OnSubmit(): Promise<void> {
+    if (!this.Data || !this.HasChanges) return;
 
     this.isLoading = true;
     this.error = null;
 
     try {
       // Process each role permission
-      for (const rolePermission of this.rolePermissions) {
+      for (const rolePermission of this.RolePermissions) {
         if (rolePermission.isNew || rolePermission.entityPermission.Dirty) {
           await this.saveRolePermission(rolePermission);
         }
       }
 
-      this.result.emit({ action: 'save', entity: this.data.entity });
+      this.Result.emit({ action: 'save', entity: this.Data.entity });
 
     } catch (error: unknown) {
       console.error('Error saving permissions:', error);
@@ -216,6 +290,11 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
     }
   }
 
+  /** @deprecated Use {@link OnSubmit}. */
+  public async onSubmit(): Promise<void> {
+    return this.OnSubmit();
+  }
+
   private async saveRolePermission(rolePermission: RolePermissions): Promise<void> {
     // Save the entity directly - it already has all the values bound
     const saveResult = await rolePermission.entityPermission.Save();
@@ -225,6 +304,6 @@ export class PermissionDialogComponent extends BaseAngularComponent implements O
   }
 
   public onCancel(): void {
-    this.result.emit({ action: 'cancel' });
+    this.Result.emit({ action: 'cancel' });
   }
 }

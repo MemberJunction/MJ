@@ -31,7 +31,7 @@ function datasetName(ctx: IntegrationCheckContext): string {
 }
 
 /** DS1: a cold fetch populates the dataset cache (false→true); a warm fetch serves the same dataset. */
-export async function CheckDs1_ColdThenWarm(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckDs1ColdThenWarm(ctx: IntegrationCheckContext): Promise<void> {
     const md = new Metadata(); // global-provider-ok: integration test owns its single-provider process (D1)
     const name = datasetName(ctx);
 
@@ -52,12 +52,22 @@ export async function CheckDs1_ColdThenWarm(ctx: IntegrationCheckContext): Promi
     AssertEqual(warm.Results.length, cold.Results.length, 'warm fetch must serve the same dataset as the cold fetch');
 }
 
+/** @deprecated Use {@link CheckDs1ColdThenWarm}. */
+export async function CheckDs1_ColdThenWarm(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckDs1ColdThenWarm(ctx);
+}
+
 /** DS2: the status APIs agree with the (now-warm) cache state. */
-export async function CheckDs2_StatusApis(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckDs2StatusApis(ctx: IntegrationCheckContext): Promise<void> {
     const md = new Metadata(); // global-provider-ok: dedicated single-provider process (D1)
     const name = datasetName(ctx);
     Assert(await md.IsDatasetCached(name), 'IsDatasetCached should be true after a warm fetch (DS1 ran first)');
     Assert(await md.IsDatasetCacheUpToDate(name), 'IsDatasetCacheUpToDate should be true immediately after caching');
+}
+
+/** @deprecated Use {@link CheckDs2StatusApis}. */
+export async function CheckDs2_StatusApis(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckDs2StatusApis(ctx);
 }
 
 /**
@@ -66,7 +76,7 @@ export async function CheckDs2_StatusApis(ctx: IntegrationCheckContext): Promise
  * IsDatasetCacheUpToDate false (a cleared dataset must never masquerade as up-to-date —
  * a stale "up to date" would suppress the refetch and serve nothing / stale data).
  */
-export async function CheckDs3_ClearMakesUncachedAndStale(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckDs3ClearMakesUncachedAndStale(ctx: IntegrationCheckContext): Promise<void> {
     const md = new Metadata(); // global-provider-ok: dedicated single-provider process (D1)
     const name = datasetName(ctx);
     // Be self-sufficient: ensure it is cached first (DS1 typically ran, but don't rely on it).
@@ -78,22 +88,27 @@ export async function CheckDs3_ClearMakesUncachedAndStale(ctx: IntegrationCheckC
     Assert(!(await md.IsDatasetCacheUpToDate(name)), 'a cleared (absent) dataset must report NOT up-to-date, never true');
 }
 
+/** @deprecated Use {@link CheckDs3ClearMakesUncachedAndStale}. */
+export async function CheckDs3_ClearMakesUncachedAndStale(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckDs3ClearMakesUncachedAndStale(ctx);
+}
+
 /** The ordered 'dataset-cache' bundle. DS1 warms the cache that DS2 then inspects; DS3 clears it. */
 export const DatasetCacheChecks: NamedCheck[] = [
     {
         Id: 'dataset-cache.DS1',
         Name: 'DS1: cold fetch populates the dataset cache (false→true); warm fetch serves the same dataset',
-        Fn: CheckDs1_ColdThenWarm
+        Fn: CheckDs1ColdThenWarm
     },
     {
         Id: 'dataset-cache.DS2',
         Name: 'DS2: IsDatasetCached / IsDatasetCacheUpToDate agree with the warm cache state',
-        Fn: CheckDs2_StatusApis
+        Fn: CheckDs2StatusApis
     },
     {
         Id: 'dataset-cache.DS3',
         Name: 'DS3: ClearDatasetCache flips both status APIs back to false (a cleared dataset is never up-to-date)',
-        Fn: CheckDs3_ClearMakesUncachedAndStale
+        Fn: CheckDs3ClearMakesUncachedAndStale
     }
 ];
 

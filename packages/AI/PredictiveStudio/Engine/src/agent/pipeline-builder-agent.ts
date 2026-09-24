@@ -78,7 +78,7 @@ export interface PredictiveStudioBuilderPayload extends ModelingPlanSpec {
 }
 
 /** Project the rich {@link BuildPredictionResult} into the compact, payload-safe outcome (pure → testable). */
-export function summarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
+export function SummarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
   return {
     success: result.success,
     pipelineId: result.pipelineId,
@@ -92,8 +92,13 @@ export function summarizeBuildResult(result: BuildPredictionResult): PredictiveS
   };
 }
 
+/** @deprecated Use {@link SummarizeBuildResult}. */
+export function summarizeBuildResult(result: BuildPredictionResult): PredictiveStudioBuildOutcome {
+  return SummarizeBuildResult(result);
+}
+
 /** A plain, user-facing sentence describing what the build did (for the agent's reasoning/message). */
-export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
+export function BuildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
   const warningText = o.warnings && o.warnings.length > 0
     ? ` Note: ${o.warnings.length} candidate feature(s) could not be mapped to pipeline steps (${o.warnings.map(w => `${w.FeatureName}: ${w.Reason}`).join('; ')}).`
     : '';
@@ -105,8 +110,13 @@ export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
   return `I built and trained the prediction, but I'm holding it back: ${heldMessage}${warningText}`;
 }
 
+/** @deprecated Use {@link BuildOutcomeMessage}. */
+export function buildOutcomeMessage(o: PredictiveStudioBuildOutcome): string {
+  return BuildOutcomeMessage(o);
+}
+
 /** Parse raw feature importance off the trained MLModel entity. */
-export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload[] {
+export function ParseFeatureImportance(raw: unknown): MLFeatureImportancePayload[] {
   if (!raw) return [];
   try {
     const val = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw;
@@ -132,8 +142,13 @@ export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload
   return [];
 }
 
+/** @deprecated Use {@link ParseFeatureImportance}. */
+export function parseFeatureImportance(raw: unknown): MLFeatureImportancePayload[] {
+  return ParseFeatureImportance(raw);
+}
+
 /** Generate a clean markdown results report for the ML Experiment Results artifact. */
-export function generateMarkdownReport(
+export function GenerateMarkdownReport(
   name: string,
   goal: string,
   targetVar: string,
@@ -177,6 +192,22 @@ ${topFeatures || '- Features analyzed from source entity.'}
 `;
 }
 
+/** @deprecated Use {@link GenerateMarkdownReport}. */
+export function generateMarkdownReport(
+  name: string,
+  goal: string,
+  targetVar: string,
+  targetMetric: string,
+  score: number,
+  trustGrade: string,
+  oneLiner: string,
+  published: boolean,
+  features: MLFeatureImportancePayload[],
+  leaderboard?: MLLeaderboardEntryPayload[],
+): string {
+  return GenerateMarkdownReport(name, goal, targetVar, targetMetric, score, trustGrade, oneLiner, published, features, leaderboard);
+}
+
 @RegisterClass(BaseAgent, 'PredictiveStudioPipelineBuilderAgent')
 export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
   /**
@@ -208,7 +239,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       result = { success: false, published: false, leakageFlagged: false, heldReason: null, errorMessage };
     }
 
-    const outcome = summarizeBuildResult(result);
+    const outcome = SummarizeBuildResult(result);
     let newPayloadObj: PredictiveStudioBuilderPayload = { ...payload, BuildResult: outcome };
     let directive: ArtifactDirective | undefined;
 
@@ -219,7 +250,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       const targetMetric = payload.TargetDefinition?.SuccessMetric ?? (isReg ? 'R²' : 'AUC');
       const scoreVal = result.trust?.headlineMetric?.value ?? 0.85;
 
-      let featureBars = parseFeatureImportance(result.model?.FeatureImportance);
+      let featureBars = ParseFeatureImportance(result.model?.FeatureImportance);
       if (featureBars.length === 0 && payload.CandidateFeatures && payload.CandidateFeatures.length > 0) {
         featureBars = payload.CandidateFeatures.slice(0, 10).map((f, idx) => ({
           feature: f.Name,
@@ -247,8 +278,8 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
             ];
 
       const bestModelName = `${name} (v${result.model?.Version ?? 1})`;
-      const summaryText = result.trust?.oneLiner ?? buildOutcomeMessage(outcome);
-      const reportMarkdown = generateMarkdownReport(
+      const summaryText = result.trust?.oneLiner ?? BuildOutcomeMessage(outcome);
+      const reportMarkdown = GenerateMarkdownReport(
         name,
         payload.Goal || `Predict ${targetVar}`,
         targetVar,
@@ -286,7 +317,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     }
 
     const newPayload = newPayloadObj as unknown as P;
-    const message = buildOutcomeMessage(outcome);
+    const message = BuildOutcomeMessage(outcome);
     return this.codeStep<P>('Success', newPayload, message, directive);
   }
 

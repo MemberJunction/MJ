@@ -36,9 +36,9 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
         return super.getInstance<TagEngineBase>();
     }
 
-    private _Tags: MJTagEntity[] = [];
-    private _TagScopes: MJTagScopeEntity[] = [];
-    private _TagSynonyms: MJTagSynonymEntity[] = [];
+    private _tags: MJTagEntity[] = [];
+    private _tagScopes: MJTagScopeEntity[] = [];
+    private _tagSynonyms: MJTagSynonymEntity[] = [];
 
     /** TagID → list of TagScope rows, populated lazily after Config(). */
     private _scopesByTagID: Map<string, MJTagScopeEntity[]> | null = null;
@@ -48,17 +48,17 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
 
     /** All loaded Tag entities */
     public get Tags(): MJTagEntity[] {
-        return this._Tags;
+        return this._tags;
     }
 
     /** All loaded TagScope rows. */
     public get TagScopes(): MJTagScopeEntity[] {
-        return this._TagScopes;
+        return this._tagScopes;
     }
 
     /** All loaded TagSynonym rows. */
     public get TagSynonyms(): MJTagSynonymEntity[] {
-        return this._TagSynonyms;
+        return this._tagSynonyms;
     }
 
     /**
@@ -71,17 +71,17 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Tags',
-                PropertyName: '_Tags'
+                PropertyName: '_tags'
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Tag Scopes',
-                PropertyName: '_TagScopes'
+                PropertyName: '_tagScopes'
             },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Tag Synonyms',
-                PropertyName: '_TagSynonyms'
+                PropertyName: '_tagSynonyms'
             },
         ];
         await this.Load(configs, provider, forceRefresh, contextUser);
@@ -119,7 +119,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
      */
     public GetVisibleTags(ctx?: TagScopeContext): MJTagEntity[] {
         const filter = TagScopeFilterBuilder.Instance.buildInMemoryFilter(ctx, this.scopesByTagIDMap());
-        return this._Tags.filter(filter);
+        return this._tags.filter(filter);
     }
 
     private scopesByTagIDMap(): Map<string, Array<{ScopeEntityID: string; ScopeRecordID: string}>> {
@@ -133,7 +133,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
 
     private rebuildScopeIndex(): void {
         const map = new Map<string, MJTagScopeEntity[]>();
-        for (const row of this._TagScopes) {
+        for (const row of this._tagScopes) {
             const list = map.get(row.TagID);
             if (list) list.push(row);
             else map.set(row.TagID, [row]);
@@ -147,7 +147,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
         // ResolveTag's exact-match tier — but we only insert explicit Synonym
         // rows here so the ResolveTag synonym pre-tier doesn't shadow the
         // exact-match tier. The exact-match tier lives in GetTagByName.
-        for (const row of this._TagSynonyms) {
+        for (const row of this._tagSynonyms) {
             const key = row.Synonym?.trim().toLowerCase();
             if (key && !map.has(key)) {
                 map.set(key, row.TagID);
@@ -166,7 +166,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
      * @returns The matching tag, or undefined if not found
      */
     public GetTagByID(id: string): MJTagEntity | undefined {
-        return this._Tags.find(t => UUIDsEqual(t.ID, id));
+        return this._tags.find(t => UUIDsEqual(t.ID, id));
     }
 
     /**
@@ -182,7 +182,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
      */
     public GetTagByName(name: string, ctx?: TagScopeContext): MJTagEntity | undefined {
         const lowerName = name.trim().toLowerCase();
-        const candidate = this._Tags.find(t => t.Name.trim().toLowerCase() === lowerName && t.Status === 'Active');
+        const candidate = this._tags.find(t => t.Name.trim().toLowerCase() === lowerName && t.Status === 'Active');
         if (!candidate) return undefined;
         if (!ctx) return candidate;
         const filter = TagScopeFilterBuilder.Instance.buildInMemoryFilter(ctx, this.scopesByTagIDMap());
@@ -195,7 +195,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
      * @returns Array of tags whose ParentID matches the given ID
      */
     public GetChildTags(parentID: string): MJTagEntity[] {
-        return this._Tags.filter(t => UUIDsEqual(t.ParentID, parentID));
+        return this._tags.filter(t => UUIDsEqual(t.ParentID, parentID));
     }
 
     /**
@@ -251,7 +251,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             if (filter && !filter(root)) return [];
             return [this.buildTreeNode(root, filter)];
         }
-        const rootTags = this._Tags.filter(t => t.ParentID == null);
+        const rootTags = this._tags.filter(t => t.ParentID == null);
         return rootTags
             .filter(t => !filter || filter(t))
             .map(t => this.buildTreeNode(t, filter));
@@ -305,7 +305,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
             throw new Error(`Failed to save new tag "${name}": ${tag.LatestResult?.Message ?? 'Unknown error'}`);
         }
 
-        this._Tags.push(tag);
+        this._tags.push(tag);
         return tag;
     }
 

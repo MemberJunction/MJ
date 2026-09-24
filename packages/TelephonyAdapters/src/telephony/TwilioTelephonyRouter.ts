@@ -47,7 +47,7 @@ interface TwilioWsMessage extends TwilioMediaFrame {
 /**
  * Creates the public router + the Media-Streams WSS attachment function for Twilio telephony.
  */
-export function createTwilioTelephonyHandler(
+export function CreateTwilioTelephonyHandler(
     publicUrl: string,
     config: TwilioTelephonyConfig,
 ): {
@@ -71,6 +71,19 @@ export function createTwilioTelephonyHandler(
         registry,
         service,
     };
+}
+
+/** @deprecated Use {@link CreateTwilioTelephonyHandler}. */
+export function createTwilioTelephonyHandler(
+    publicUrl: string,
+    config: TwilioTelephonyConfig,
+): {
+    publicRouter: Router;
+    attachMediaStreamServer: () => void;
+    registry: TwilioCallMediaRegistry;
+    service: TwilioTelephonyService;
+} {
+    return CreateTwilioTelephonyHandler(publicUrl, config);
 }
 
 /** Handles the inbound voice webhook: verify signature → resolve → start bridge → answer with stream TwiML. */

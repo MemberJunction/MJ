@@ -20,10 +20,10 @@ type PkField = { Name: string };
 type ChangeRow = { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> };
 type RecordMapRows = { Rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>; Complete: boolean };
 type KeyHost = {
-    ComposeEntityRecordID: (row: Record<string, unknown>, pkFields: PkField[]) => string;
-    BuildEntityPrimaryKey: (recordID: string, pkFields: PkField[]) => CompositeKey;
-    LoadAllMJRecords: (entityMap: unknown, companyIntegration: unknown, contextUser: unknown) => Promise<ChangeRow[]>;
-    LoadAllRecordMaps: (companyIntegrationID: string, entityID: string, contextUser: unknown) => Promise<RecordMapRows>;
+    composeEntityRecordID: (row: Record<string, unknown>, pkFields: PkField[]) => string;
+    buildEntityPrimaryKey: (recordID: string, pkFields: PkField[]) => CompositeKey;
+    loadAllMJRecords: (entityMap: unknown, companyIntegration: unknown, contextUser: unknown) => Promise<ChangeRow[]>;
+    loadAllRecordMaps: (companyIntegrationID: string, entityID: string, contextUser: unknown) => Promise<RecordMapRows>;
 };
 
 /**
@@ -36,7 +36,7 @@ function makeHost(pkFields: PkField[], existingMaps: Array<{ EntityRecordID: str
         value: { EntityByName: () => ({ PrimaryKeys: pkFields }) },
         configurable: true,
     });
-    host.LoadAllRecordMaps = async () => ({
+    host.loadAllRecordMaps = async () => ({
         Complete: true,
         Rows: existingMaps.map((m, i) => ({ ID: `map-${i}`, EntityRecordID: m.EntityRecordID, ExternalSystemRecordID: `ext-${i}` })),
     });
@@ -49,17 +49,17 @@ const CUSTOMER_KEY: PkField[] = [{ Name: 'individual_id' }];
 describe('ComposeEntityRecordID / BuildEntityPrimaryKey — the record-map identity round-trips for any key shape', () => {
     it('a single-column key with a non-ID name is just its value, and loads against THAT column', () => {
         const host = makeHost(CUSTOMER_KEY);
-        const id = host.ComposeEntityRecordID({ individual_id: 4711, Name: 'Ada' }, CUSTOMER_KEY);
+        const id = host.composeEntityRecordID({ individual_id: 4711, Name: 'Ada' }, CUSTOMER_KEY);
         expect(id).toBe('4711');
-        const key = host.BuildEntityPrimaryKey(id, CUSTOMER_KEY);
+        const key = host.buildEntityPrimaryKey(id, CUSTOMER_KEY);
         expect(key.KeyValuePairs).toEqual([{ FieldName: 'individual_id', Value: '4711' }]);
     });
 
     it('a composite key joins EVERY column in PK order and parses back onto each column', () => {
         const host = makeHost(COMPOSITE);
-        const id = host.ComposeEntityRecordID({ LineNo: 3, OrderID: '11055', Qty: 2 }, COMPOSITE);
+        const id = host.composeEntityRecordID({ LineNo: 3, OrderID: '11055', Qty: 2 }, COMPOSITE);
         expect(id).toBe('11055|3');
-        const key = host.BuildEntityPrimaryKey(id, COMPOSITE);
+        const key = host.buildEntityPrimaryKey(id, COMPOSITE);
         expect(key.KeyValuePairs).toEqual([
             { FieldName: 'OrderID', Value: '11055' },
             { FieldName: 'LineNo', Value: '3' },
@@ -68,7 +68,7 @@ describe('ComposeEntityRecordID / BuildEntityPrimaryKey — the record-map ident
 
     it('refuses to invent an `ID` column when the entity has no primary key fields', () => {
         const host = makeHost([]);
-        expect(() => host.BuildEntityPrimaryKey('x', [])).toThrow(/no primary key fields/);
+        expect(() => host.buildEntityPrimaryKey('x', [])).toThrow(/no primary key fields/);
     });
 });
 
@@ -87,7 +87,7 @@ describe('LoadAllMJRecords — Create vs Update is decided on the WHOLE key', ()
         // The pre-fix code keyed the row by its FIRST column only ('11055'), so neither row matched
         // '11055|3' and both were re-CREATED externally.
         const host = makeHost(COMPOSITE, [{ EntityRecordID: '11055|3' }]);
-        const out = await host.LoadAllMJRecords(entityMap, companyIntegration, {});
+        const out = await host.loadAllMJRecords(entityMap, companyIntegration, {});
         expect(out.map(r => [r.RecordID, r.Type])).toEqual([
             ['11055|3', 'Update'],
             ['11055|4', 'Create'],
@@ -97,7 +97,7 @@ describe('LoadAllMJRecords — Create vs Update is decided on the WHOLE key', ()
     it('a single non-ID key column is read by its real name', async () => {
         runViewResult.current = { Success: true, Results: [{ individual_id: 9, ID: 'not-the-key' }] };
         const host = makeHost(CUSTOMER_KEY, [{ EntityRecordID: '9' }]);
-        const out = await host.LoadAllMJRecords(entityMap, companyIntegration, {});
+        const out = await host.loadAllMJRecords(entityMap, companyIntegration, {});
         expect(out).toHaveLength(1);
         expect(out[0].RecordID).toBe('9');
         expect(out[0].Type).toBe('Update');
@@ -107,6 +107,6 @@ describe('LoadAllMJRecords — Create vs Update is decided on the WHOLE key', ()
         runViewResult.current = { Success: true, Results: [{ ID: '1' }] };
         const host = makeHost(CUSTOMER_KEY);
         Object.defineProperty(host, 'ProviderToUse', { value: { EntityByName: () => null }, configurable: true });
-        await expect(host.LoadAllMJRecords(entityMap, companyIntegration, {})).rejects.toThrow(/not found in metadata/);
+        await expect(host.loadAllMJRecords(entityMap, companyIntegration, {})).rejects.toThrow(/not found in metadata/);
     });
 });

@@ -56,13 +56,18 @@ import {
  * `ArrayBuffer`. Copying (rather than aliasing) protects the bridge from a native buffer the addon may
  * recycle for the next frame, and respects a `Uint8Array`'s byteOffset/byteLength window.
  */
-export function toPcmArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToPcmArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     if (data instanceof ArrayBuffer) {
         return data.slice(0);
     }
     const out = new ArrayBuffer(data.byteLength);
     new Uint8Array(out).set(data);
     return out;
+}
+
+/** @deprecated Use {@link ToPcmArrayBuffer}. */
+export function toPcmArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToPcmArrayBuffer(data);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -198,7 +203,7 @@ export interface TeamsNativeSdkConfig {
 }
 
 /** Normalizes the addon's free-form role string onto the bridge's {@link TeamsParticipantRole}. */
-export function mapNativeRole(role?: string): TeamsParticipantRole {
+export function MapNativeRole(role?: string): TeamsParticipantRole {
     switch ((role ?? '').trim().toLowerCase()) {
         case 'organizer':
             return 'Organizer';
@@ -211,30 +216,45 @@ export function mapNativeRole(role?: string): TeamsParticipantRole {
     }
 }
 
+/** @deprecated Use {@link MapNativeRole}. */
+export function mapNativeRole(role?: string): TeamsParticipantRole {
+    return MapNativeRole(role);
+}
+
 /**
  * **Pure mapping** of one native participant onto the bridge's {@link TeamsParticipant}. Isolated from the
  * addon and from I/O so it is unit-tested directly.
  */
-export function mapNativeParticipant(p: NativeParticipant): TeamsParticipant {
+export function MapNativeParticipant(p: NativeParticipant): TeamsParticipant {
     return {
         ParticipantId: String(p.participantId),
         DisplayName: p.displayName,
-        Role: mapNativeRole(p.role),
+        Role: MapNativeRole(p.role),
         IsSelf: p.isSelf,
     };
+}
+
+/** @deprecated Use {@link MapNativeParticipant}. */
+export function mapNativeParticipant(p: NativeParticipant): TeamsParticipant {
+    return MapNativeParticipant(p);
 }
 
 /**
  * **Pure mapping** of one native inbound audio frame onto the bridge's diarized {@link TeamsAudioFrame}.
  * Copies the PCM (see {@link toPcmArrayBuffer}) and resolves the speaker label. Isolated for direct testing.
  */
-export function mapNativeAudioFrame(frame: NativeAudioFrame): TeamsAudioFrame {
+export function MapNativeAudioFrame(frame: NativeAudioFrame): TeamsAudioFrame {
     return {
-        Pcm: toPcmArrayBuffer(frame.data),
+        Pcm: ToPcmArrayBuffer(frame.data),
         ParticipantId: String(frame.participantId),
         DisplayName: frame.displayName,
         TimestampMs: typeof frame.timestampMs === 'number' ? frame.timestampMs : Date.now(),
     };
+}
+
+/** @deprecated Use {@link MapNativeAudioFrame}. */
+export function mapNativeAudioFrame(frame: NativeAudioFrame): TeamsAudioFrame {
+    return MapNativeAudioFrame(frame);
 }
 
 /**
@@ -273,7 +293,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native Teams real-time-media addon: the module's default/namespace interop + that it
  * exposes `createClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeMeetingModule> => {
     try {
         const mod: unknown = await import(/* @vite-ignore */ specifier);
         const resolved = unwrapDefault(mod);
@@ -291,6 +311,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link ITeamsMeetingSdk} over the native Teams real-time-media addon (outbound audio
@@ -330,7 +353,7 @@ export class TeamsNativeMeetingSdk implements ITeamsMeetingSdk {
      * @param config Resolved credentials + raw-audio opts + the native module specifier.
      * @param loadModule The native-addon loader (defaults to the lazy specifier loader).
      */
-    constructor(config: TeamsNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: TeamsNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -433,7 +456,7 @@ export class TeamsNativeMeetingSdk implements ITeamsMeetingSdk {
             return [];
         }
         const natives = await this.client.getParticipants();
-        return natives.map(mapNativeParticipant);
+        return natives.map(MapNativeParticipant);
     }
 
     /** Registers the meeting-ended handler. */
@@ -467,8 +490,8 @@ export class TeamsNativeMeetingSdk implements ITeamsMeetingSdk {
 
     /** Wires the native client's callbacks to this adapter's handlers, mapping native shapes to the seam. */
     private wireClient(client: NativeMeetingClient): void {
-        client.onAudioFrame((frame) => this.audioHandler?.(mapNativeAudioFrame(frame)));
-        client.onParticipantJoin((p) => this.joinHandler?.(mapNativeParticipant(p)));
+        client.onAudioFrame((frame) => this.audioHandler?.(MapNativeAudioFrame(frame)));
+        client.onParticipantJoin((p) => this.joinHandler?.(MapNativeParticipant(p)));
         client.onParticipantLeave((id) => this.leaveHandler?.(String(id)));
         client.onHandRaise((id, raised) => this.handRaiseHandler?.(String(id), raised));
         client.onMeetingEnded(() => this.endedHandler?.());
@@ -492,9 +515,9 @@ export class TeamsNativeMeetingSdk implements ITeamsMeetingSdk {
  * @returns A factory `(config) => TeamsNativeMeetingSdk`.
  */
 export function BindTeamsNative(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => TeamsNativeMeetingSdk {
-    return (config?: Record<string, unknown>) => new TeamsNativeMeetingSdk(readNativeConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new TeamsNativeMeetingSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -503,7 +526,7 @@ export function BindTeamsNative(
  * partially-resolved object (and {@link TeamsNativeMeetingSdk.join} then throws a precise error if the
  * required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): TeamsNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): TeamsNativeSdkConfig {
     const cfg = config ?? {};
     return {
         AppId: readString(cfg.AppId),
@@ -514,6 +537,11 @@ export function readNativeConfig(config?: Record<string, unknown>): TeamsNativeS
         Channels: readNumber(cfg.Channels),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): TeamsNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

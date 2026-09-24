@@ -8,7 +8,7 @@
 import { EntityInfo, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { IRecordSetSource, SourceDescriptor } from '../interfaces';
 import { ProcessCursor, RecordBatch } from '../types';
-import { canUseKeyset, pageEntityByFilter } from './sourceUtil';
+import { CanUseKeyset, PageEntityByFilter } from './sourceUtil';
 
 /** A source backed by an entity + ad-hoc filter, paginated strictly via keyset. */
 export class KeysetSource implements IRecordSetSource {
@@ -33,7 +33,7 @@ export class KeysetSource implements IRecordSetSource {
         if (!entity) {
             throw new Error(`KeysetSource: entity '${this.entityName}' not found in metadata`);
         }
-        if (!canUseKeyset(entity)) {
+        if (!CanUseKeyset(entity)) {
             throw new Error(`KeysetSource: entity '${this.entityName}' lacks a single orderable PK; use FilterSource instead`);
         }
         this.entity = entity;
@@ -42,6 +42,6 @@ export class KeysetSource implements IRecordSetSource {
 
     public async NextBatch(cursor: ProcessCursor | undefined, batchSize: number, contextUser: UserInfo, provider?: IMetadataProvider): Promise<RecordBatch> {
         const entity = this.resolveEntity(provider);
-        return pageEntityByFilter({ entity, filter: this.filter, cursor, batchSize, contextUser, preferKeyset: true });
+        return PageEntityByFilter({ entity, filter: this.filter, cursor, batchSize, contextUser, preferKeyset: true });
     }
 }

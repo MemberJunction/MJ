@@ -30,19 +30,19 @@ const ENTITY_CONVERSATION_ARTIFACT = 'MJ: Conversation Artifacts';
  * aggregated client-side from `MJ: Conversation Details` rows.
  */
 export type ConversationListItem = {
-    entity: MJConversationEntity;
+    entity: MJConversationEntity;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Latest message body (or null if no messages yet). */
-    latestSnippet: string | null;
+    LatestSnippet: string | null;
     /** Latest message timestamp (Date) or fall back to UpdatedAt. */
-    latestAt: Date;
+    LatestAt: Date;
     /** Whether the latest agent task is still running. */
-    live: boolean;
+    live: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Distinct agent IDs that have participated. Empty if unknown. */
-    agentIds: string[];
+    AgentIds: string[];
     /** Distinct agent display names (parallel to agentIds when known). */
-    agentNames: string[];
+    AgentNames: string[];
     /** Total message count in the conversation. */
-    messageCount: number;
+    messageCount: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -144,11 +144,11 @@ export async function LoadConversations(contextUser?: UserInfo): Promise<Convers
         const updatedAt = (conv as unknown as { __mj_UpdatedAt?: Date }).__mj_UpdatedAt;
         return {
             entity: conv,
-            latestSnippet: latest?.Message ?? null,
-            latestAt: latest ? new Date(latest.__mj_CreatedAt) : (updatedAt ? new Date(updatedAt) : new Date()),
+            LatestSnippet: latest?.Message ?? null,
+            LatestAt: latest ? new Date(latest.__mj_CreatedAt) : (updatedAt ? new Date(updatedAt) : new Date()),
             live: details.some((d) => d.Status === 'In-Progress'),
-            agentIds,
-            agentNames,
+            AgentIds: agentIds,
+            AgentNames: agentNames,
             messageCount: details.length,
         } satisfies ConversationListItem;
     });
@@ -156,22 +156,22 @@ export async function LoadConversations(contextUser?: UserInfo): Promise<Convers
 
 /** A single `MJ: Conversation Details` row paired with its resolved agent name (for AI rows). */
 export type ConversationMessage = {
-    detail: MJConversationDetailEntity;
+    detail: MJConversationDetailEntity;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Resolved agent name if Role==='AI', else null. */
-    agentName: string | null;
+    agentName: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** A fully-loaded conversation: the `MJ: Conversations` entity, its ordered messages, and its artifacts. */
 export type ConversationDetailLoad = {
-    conversation: MJConversationEntity;
-    messages: ConversationMessage[];
-    artifacts: MJConversationArtifactEntity[];
+    Conversation: MJConversationEntity;
+    Messages: ConversationMessage[];
+    Artifacts: MJConversationArtifactEntity[];
     /**
      * Realtime-session rows for any voice sessions this conversation contains, keyed by
      * normalized id. Empty when there were none — or when the lookup failed, which is deliberate:
      * a session card degrades to its generic label rather than the thread failing to load.
      */
-    sessionMeta: Map<string, RealtimeSessionTimelineMeta>;
+    SessionMeta: Map<string, RealtimeSessionTimelineMeta>;
 };
 
 /**
@@ -248,7 +248,7 @@ export async function LoadConversation(
 
     const sessionMeta = await LoadRealtimeSessionMeta(details, currentUser);
 
-    return { conversation, messages, artifacts, sessionMeta };
+    return { Conversation: conversation, Messages: messages, Artifacts: artifacts, SessionMeta: sessionMeta };
 }
 
 /**
