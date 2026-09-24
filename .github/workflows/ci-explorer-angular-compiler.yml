@@ -1,0 +1,55 @@
+# Standalone job, not a vitest test in MJInstaller — two reasons:
+#   1. test.yml's PR runs are affected-filtered (`--filter=...[origin/next]`, test.yml:416)
+#      once the change escapes the root-only FULL-suite escape hatch (test.yml:413). Nothing
+#      in the repo depends on `mj_explorer`, so a PR touching only
+#      packages/MJExplorer/package.json never selects @memberjunction/installer's test task.
+#   2. turbo.json's `tasks.test.inputs` are package-relative (src/**/*.ts, __tests__/**,
+#      vitest/tsconfig files) and `globalDependencies` is only three vitest files — none of
+#      which include packages/MJExplorer/package.json. So even when the installer's test
+#      task does run, turbo can restore a cached PASS from before the manifest changed.
+# A vitest guard here would therefore neither run nor invalidate its cache on the exact
+# change it exists to catch. This workflow triggers directly on the manifest path instead.
+name: MJExplorer declares @angular/compiler
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/MJExplorer/package.json'
+      - '.github/scripts/check-explorer-angular-compiler.mjs'
+      - '.github/workflows/ci-explorer-angular-compiler.yml'
+
+# Pin the token instead of inheriting it. Measured on run 35645025903: this job is already
+# granted only `Contents/Metadata/Packages: read`, so nothing is being dropped today — the
+# point is that those scopes come from a REPO-LEVEL default that can be widened without
+# touching this file, and the job would silently gain write access it never uses. It runs
+# checkout + setup-node + two `node` scripts and writes nothing.
+# Matches the house shape (ci-scripts.yml:37, check-release-notes-pr.yml, new-package-gate.yml,
+# integration.yml — `contents: read` is the repo's most common block, 9 of 18).
+permissions:
+  contents: read
+
+jobs:
+  check-explorer-angular-compiler:
+    name: packages/MJExplorer/package.json must declare @angular/compiler
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Self-test the detector
+        # Same rationale as changes.yml's self-test steps: the detector's pass/fail logic is
+        # load-bearing for a failure that only shows up in a host repo produced by `mj install`
+        # (issue #4427), so its fixtures run on every PR rather than the next time someone
+        # happens to touch the manifest.
+        run: node .github/scripts/check-explorer-angular-compiler.mjs --self-test
+
+      - name: Check @angular/compiler declaration
+        run: node .github/scripts/check-explorer-angular-compiler.mjs
