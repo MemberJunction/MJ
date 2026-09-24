@@ -1,6 +1,7 @@
 -- Least-privilege identity for an external autoscaler (KEDA / ACA job scale rules).
 -- Grants SELECT on the two work-queue tables the scaler query reads, and nothing else. The bounded scaler query
--- itself (claimable Pending + InFlight, capped at 1000 per half) is documented in plan 06's KEDA / ACA runbook.
+-- itself (claimable Pending + InFlight, capped at 1000 per half) is in packages/WorkQueue/engine/README.md under
+-- "Container-job workers", next to the KEDA / Azure Container Apps recipe that uses it.
 --
 -- SQL Server (on-premises / VM / Managed Instance) — run in the MJ database:
 --   sqlcmd -S <server> -d <database> -v Schema="__mj" Password="<strong-password>" -i scripts/work-queue-scaler-login.sql
