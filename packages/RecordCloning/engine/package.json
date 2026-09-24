@@ -3,6 +3,7 @@
   "type": "module",
   "version": "6.2.0-edge.0",
   "description": "Engine for MemberJunction record cloning: planning, materialization, and composite execution",
+  "license": "BUSL-1.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
