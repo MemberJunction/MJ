@@ -100,8 +100,19 @@ echo ""
 # CodeGen handles the __mj_CreatedAt/__mj_UpdatedAt/__mj_DeletedAt EntityField
 # rows itself via ensureSpecialDateEntityFieldsExist (see CodeGenLib's
 # manage-metadata.ts) — no post-codegen patching is required.
+# A fresh DB needs more than one pass. Any pass that adds a view join (a new
+# name field or system column) can fail the entityFieldsSequenceCheck integrity
+# check, because the matching EntityField rows only land on the next pass.
+# Metadata settles within three passes, so retry until a pass after the first
+# succeeds.
 echo "Step 3: Running CodeGen..."
-node /app/packages/MJCLI/bin/run.js codegen
+node /app/packages/MJCLI/bin/run.js codegen \
+    || echo "  ⚠ CodeGen pass 1 reported failures; a later pass must succeed"
+echo "  ↻ CodeGen pass 1 complete; re-running against settled metadata..."
+node /app/packages/MJCLI/bin/run.js codegen || {
+    echo "  ⚠ CodeGen pass 2 reported failures; running pass 3"
+    node /app/packages/MJCLI/bin/run.js codegen
+}
 echo "  ✓ CodeGen complete"
 echo ""
 
@@ -122,6 +133,15 @@ node /app/packages/MJCLI/bin/run.js sync push --dir=metadata --include="prompts"
     echo "  WARNING: Prompts metadata sync failed — Computer Use prompts may be stale"
 }
 echo "  ✓ Prompts metadata sync complete"
+echo ""
+
+# Step 6: Seed an integration connection with entity/field maps (T120). Runs here,
+# before MJAPI starts, because the Integrations app reads IntegrationEngineBase —
+# which MJAPI caches, so rows inserted after it loads stay invisible.
+echo "Step 6: Seeding sample integration connection..."
+node "$SCRIPTS/seed-sample-data.cjs" integration 2>&1 || {
+    echo "  WARNING: Integration seed failed — T120 will see an empty Integrations app"
+}
 echo ""
 
 echo "  ═══════════════════════════════════════════"

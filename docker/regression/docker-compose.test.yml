@@ -69,6 +69,11 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # CodeGen's advanced generation (field ExtendedType, CHECK-constraint
+      # validators) runs on these keys. Without them demo Email/URL fields get no
+      # ExtendedType, so the generated forms render them as plain text.
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
 
   # Form generator — opt-in service (profile: gen-forms) that runs codegen
   # against a temporary DB and writes Angular entity-form components to a
@@ -87,6 +92,11 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # CodeGen's advanced generation (field ExtendedType, CHECK-constraint
+      # validators) runs on these keys. Without them demo Email/URL fields get no
+      # ExtendedType, so the generated forms render them as plain text.
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
     entrypoint: ["/bin/bash", "/app/form-gen-entrypoint.sh"]
     volumes:
       - ./form-gen-entrypoint.sh:/app/form-gen-entrypoint.sh:ro
