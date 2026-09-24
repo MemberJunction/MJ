@@ -1867,10 +1867,19 @@ export class SQLCodeGenBase {
     /**
      * Detects self-referential foreign keys in an entity (e.g., ParentTaskID pointing back to Task table)
      * Returns array of field info objects representing recursive relationships
+     *
+     * A column that IS the entity's own primary key is excluded. It can carry a self-referencing
+     * `RelatedEntityID` — FK auto-detection matches a `<prefix>_key`-style column to its own table
+     * and does not exclude that table's own key — but "my parent is me" is not a hierarchy. The
+     * generated recursive CTE then joins the key to itself and selects the same column three times,
+     * which the database rejects outright: 15 entities on one Postgres instance failed to compile
+     * with `column reference "tea_key" is ambiguous`. Nothing downstream can recover from that, and
+     * a real hierarchy always parents on a DIFFERENT column, so excluding the key loses nothing.
      */
     protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
         const hierarchyFKs = entity.Fields.filter(field =>
             field.RelatedEntityID != null &&
+            !field.IsPrimaryKey &&
             UUIDsEqual(field.RelatedEntityID, entity.ID) &&
             !field.IsVirtual &&
             field.IsHierarchy === true
