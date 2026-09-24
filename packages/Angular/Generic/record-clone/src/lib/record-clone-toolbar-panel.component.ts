@@ -17,7 +17,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RegisterClassEx, MJGlobal, MJEventType } from '@memberjunction/global';
-import { BaseEntity, CompositeKey, Metadata, type IMetadataProvider } from '@memberjunction/core';
+import { BaseEntity, CompositeKey } from '@memberjunction/core';
 import { RecordNavigationAdapter } from '@memberjunction/ng-base-types';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import type { FormToolbarItemConfig } from '@memberjunction/ng-base-forms';
@@ -162,8 +162,7 @@ export class RecordCloneToolbarPanel extends BaseFormPanel implements OnInit, On
     public OnNavigateToRecord(event: FormNavigationEvent): void {
         if (!event || !event.RecordKey) return;
 
-        const md = (this.Record?.ProviderToUse as unknown as IMetadataProvider | undefined) ?? new Metadata();
-        const entInfo = md.EntityByName(event.EntityName);
+        const entInfo = this.FormComponent?.ProviderToUse?.EntityByName(event.EntityName);
         const compKey = CompositeKey.FromURLSegment(entInfo, event.RecordKey);
 
         if (this.FormComponent) {
