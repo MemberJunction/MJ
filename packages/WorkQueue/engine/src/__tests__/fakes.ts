@@ -1,7 +1,9 @@
 import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import type { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import type { EntityTransactionScope, ExecuteSQLOptions, UserInfo } from '@memberjunction/core';
+import type { SubscriptionBinding, SubscriptionPolicy, TopicBinding, WorkJson, WorkLogger } from '@memberjunction/work-queue-core';
 import type { SqlParam, WorkQueueExecutorSource, WorkQueueIndependentExecutor } from '../sql/WorkQueueSqlExecutor';
+import type { TransportDriverDeps } from '../transports/TransportDriverDeps';
 
 export interface RecordedCall {
     SQL: string;
@@ -105,3 +107,49 @@ export class RecordingExecutor implements WorkQueueExecutorSource, WorkQueueInde
 }
 
 export const TEST_USER = {} as UserInfo;
+
+export const TOPIC_ID = 'AAAAAAAA-0000-0000-0000-000000000001';
+export const SUBSCRIPTION_ID = 'BBBBBBBB-0000-0000-0000-000000000001';
+
+export function TopicBindingFixture(overrides: Partial<TopicBinding> = {}): TopicBinding {
+    return {
+        TopicName: 'import.ready',
+        IsFifo: false,
+        MaxPayloadBytes: 262144,
+        Config: { TopicID: TOPIC_ID },
+        ...overrides,
+    };
+}
+
+export function SubscriptionBindingFixture(
+    policy: Partial<SubscriptionPolicy> = {},
+    config: Record<string, WorkJson> = {},
+): SubscriptionBinding {
+    return {
+        Policy: {
+            SubscriptionName: 'venue-import',
+            TopicName: 'import.ready',
+            PartitionMode: 'None',
+            MaxAttempts: 5,
+            BackoffBaseSeconds: 10,
+            BackoffMaxSeconds: 900,
+            LeaseSeconds: 60,
+            HeartbeatMode: 'Auto',
+            ...policy,
+        },
+        Filter: null,
+        HostType: 'MJWorker',
+        Config: { SubscriptionID: SUBSCRIPTION_ID, TopicID: TOPIC_ID, ...config },
+    };
+}
+
+export class RecordingLogger implements WorkLogger {
+    public readonly Lines: string[] = [];
+    public Info(message: string): void { this.Lines.push(`INFO ${message}`); }
+    public Warn(message: string): void { this.Lines.push(`WARN ${message}`); }
+    public Error(message: string): void { this.Lines.push(`ERROR ${message}`); }
+}
+
+export function TestDeps(executor: RecordingExecutor): TransportDriverDeps {
+    return { ContextUser: TEST_USER, Executor: executor, Log: new RecordingLogger(), InstanceID: 'test-host:1:abcd' };
+}

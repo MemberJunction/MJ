@@ -13,3 +13,8 @@ export * from './sql/CreateWorkQueueSqlBuilder';
 export * from './transaction/RunInWorkQueueTransaction';
 export * from './sql/sweepLock';
 export * from './dedup/DeduplicationLedger';
+export * from './transports/TransportDriverDeps';
+export * from './transports/OwnedExecutor';
+export * from './transports/database/bindingIds';
+export * from './transports/database/rowMapping';
+export * from './transports/database/DatabaseTransportOperator';
