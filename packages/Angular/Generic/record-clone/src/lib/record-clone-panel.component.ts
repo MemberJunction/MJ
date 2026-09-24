@@ -54,7 +54,9 @@ import type {
     CloneProgressUpdate,
     ClonePromptFieldItem,
     CloneRetargetFieldItem,
+    CloneEdgePolicyChange,
 } from './record-clone-types';
+import type { CloneScopeValues } from './clone-scope-controls.component';
 import {
     EntityToRecordCloneKey,
     CompositeKeyToRecordCloneKey,
@@ -134,17 +136,38 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                             [Hierarchy]="DisplayedScope.Hierarchy"
                             [SoftLinks]="DisplayedScope.SoftLinks"
                             [EntityActions]="DisplayedScope.EntityActions"
-                            [CanFireHooks]="CanFireHooks"
                             [MaxRecords]="DisplayedScope.MaxRecords"
-                            (ScopeChanged)="OnScopeOptionsChanged($event)">
+                            [ConfiguredScope]="ConfiguredScope"
+                            [EntityName]="EffectiveEntityName"
+                            [CanOverrideScope]="CanOverrideScope"
+                            [CanFireHooks]="CanFireHooks"
+                            (ScopeChanged)="OnScopeOptionsChanged($event)"
+                            (ResetToDefaults)="OnResetScopeToDefaults()">
                         </mj-clone-scope-controls>
 
                         <div class="tree-section">
                             <h4 class="section-heading">Planned Record Graph</h4>
                             <mj-clone-plan-tree
                                 [Plan]="ActivePlan"
-                                (NodeSelected)="OnNodeSelected($event)">
+                                [AllowNarrowing]="CanNarrowScope"
+                                [AllowWidening]="CanOverrideScope"
+                                (NodeSelected)="OnNodeSelected($event)"
+                                (EdgePolicyChanged)="OnEdgePolicyChanged($event)">
                             </mj-clone-plan-tree>
+                            @if (EdgeOverrides.length > 0) {
+                                <div class="branch-overrides">
+                                    @for (o of EdgeOverrides; track o.RelationshipID) {
+                                        <span class="branch-override">
+                                            {{ o.Policy === 'Skip' ? 'Skipping' : 'Copying' }} {{ o.RelatedEntityName || 'a relationship' }}
+                                            <button type="button" class="undo-btn" (click)="OnUndoEdgeOverride(o.RelationshipID)"
+                                                [attr.aria-label]="'Undo: ' + (o.Policy === 'Skip' ? 'copy ' : 'skip ') + (o.RelatedEntityName || 'this relationship') + ' again'">Undo</button>
+                                        </span>
+                                    }
+                                </div>
+                            }
+                            @if (CanNarrowScope) {
+                                <p class="tree-hint">Click Deep on a branch to skip all of its rows.{{ CanOverrideScope ? ' Click Skip to copy a branch the configuration leaves out.' : '' }}</p>
+                            }
                         </div>
 
                         <div class="step-footer">
@@ -318,6 +341,45 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
             flex-direction: column;
             gap: var(--mj-space-1-5);
             margin-top: var(--mj-space-1);
+        }
+
+        .branch-overrides {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--mj-space-2);
+        }
+
+        .branch-override {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--mj-space-2);
+            padding: 2px 4px 2px var(--mj-space-2-5);
+            border: 1px solid var(--mj-status-warning-border);
+            border-radius: var(--mj-radius-full);
+            background: var(--mj-status-warning-bg);
+            color: var(--mj-status-warning-text);
+            font-size: var(--mj-text-xs);
+        }
+
+        .undo-btn {
+            border: 0;
+            border-radius: var(--mj-radius-full);
+            background: var(--mj-bg-surface);
+            color: var(--mj-brand-primary);
+            font-family: inherit;
+            font-size: var(--mj-text-xs);
+            padding: 1px var(--mj-space-2);
+            cursor: pointer;
+        }
+
+        .undo-btn:focus-visible {
+            outline: 2px solid var(--mj-border-focus);
+        }
+
+        .tree-hint {
+            margin: 0;
+            font-size: var(--mj-text-xs);
+            color: var(--mj-text-muted);
         }
 
         .section-heading {
@@ -532,6 +594,37 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
      */
     public CanFireHooks = false;
 
+    /**
+     * Whether the developer scope overrides are offered: `RecordClone.Describe` reports whether the
+     * user holds `Clone Records: Override Scope`. The server applies the same rule to every request.
+     */
+    public CanOverrideScope = false;
+
+    /** Branch policies the user changed in the plan tree, sent with every plan and execute. */
+    public EdgeOverrides: CloneEdgePolicyChange[] = [];
+
+    /** Whether the user may skip branches: the entity's UserEditable allows scope changes, or they hold Override Scope. */
+    public get CanNarrowScope(): boolean {
+        const editable = this.DescribeDetails?.UserEditable ?? 'all';
+        return editable === 'scope' || editable === 'all' || this.CanOverrideScope;
+    }
+
+    /** The entity's configured scope (its `Configuration.Clone`, else the engine defaults), for the summary. */
+    public get ConfiguredScope(): CloneScopeValues {
+        const entityCfg = this.ProviderToUse?.EntityByName(this.EffectiveEntityName)?.CloneConfig;
+        const presetOptions = RecordClonePanelComponent.presetOptions(entityCfg?.Presets, this.SelectedPreset);
+        const cfg = { ...(entityCfg ?? {}), ...presetOptions } as typeof entityCfg;
+        const builtIn = RecordClonePanelComponent.builtInScope();
+        return {
+            MaxDepth: cfg?.MaxDepth ?? builtIn.MaxDepth,
+            MaxRecords: cfg?.MaxRecords ?? builtIn.MaxRecords,
+            Subtypes: cfg?.Subtypes ?? builtIn.Subtypes,
+            Hierarchy: cfg?.Hierarchy ?? builtIn.Hierarchy,
+            SoftLinks: cfg?.SoftLinks ?? builtIn.SoftLinks,
+            EntityActions: cfg?.Hooks?.EntityActions ?? builtIn.EntityActions,
+        };
+    }
+
     public RootRecordName = '';
     public NamingStrategyReason?: string;
     public PromptedFields: ClonePromptFieldItem[] = [];
@@ -598,6 +691,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     public Reset(): Promise<void> {
         // Values folded into the options on the way to Review belong to the previous run.
         this.ScopeOptions = {};
+        this.EdgeOverrides = [];
         this.SelectedPreset = undefined;
         this.ActivePlan = null;
         this.ExecutionResult = null;
@@ -617,6 +711,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
                 EntityName: this.EffectiveEntityName,
                 SourceRecordKey: this.EffectiveRecordKey,
                 Options: this.ScopeOptions,
+                EdgeOverrides: this.wireEdgeOverrides(),
                 ExpectedPlanHash: this.ActivePlan?.Hash,
             },
             this.ProviderToUse
@@ -668,6 +763,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
                     SourceRecordKey: this.EffectiveRecordKey,
                     ExpectedPlanHash: this.ActivePlan.Hash,
                     Options: this.buildOptionsWithValues(),
+                    EdgeOverrides: this.wireEdgeOverrides(),
                 },
                 this.ProviderToUse
             );
@@ -734,6 +830,32 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         void this.replanOrFail();
     }
 
+    /**
+     * A branch was switched in the plan tree. Switching a branch the user already changed drops that
+     * override (back to the configured policy); otherwise the change is remembered. Then re-plan.
+     */
+    public OnEdgePolicyChanged(change: CloneEdgePolicyChange): void {
+        const others = this.EdgeOverrides.filter((o) => o.RelationshipID !== change.RelationshipID);
+        const hadOverride = others.length !== this.EdgeOverrides.length;
+        this.EdgeOverrides = hadOverride ? others : [...others, change];
+        void this.replanOrFail();
+    }
+
+    /** Drops one branch override so that relationship follows its configured policy again. */
+    public OnUndoEdgeOverride(relationshipID: string): void {
+        this.EdgeOverrides = this.EdgeOverrides.filter((o) => o.RelationshipID !== relationshipID);
+        void this.replanOrFail();
+    }
+
+    /** Drops every scope and branch override so the entity's configured scope applies again. */
+    public OnResetScopeToDefaults(): void {
+        const next: RecordClonePlanOptions = { ...this.ScopeOptions };
+        for (const k of SCOPE_OPTION_KEYS) delete next[k];
+        this.ScopeOptions = next;
+        this.EdgeOverrides = [];
+        void this.replanOrFail();
+    }
+
     public OnStepChange(stepKey: string): void {
         this.GoToStep(stepKey as RecordCloneStep);
     }
@@ -792,6 +914,21 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     }
 
     // ── Internals ────────────────────────────────────────────────────────
+
+    /** Options of the named preset, from `Clone.Presets` in array or legacy keyed form. */
+    private static presetOptions(presets: unknown, key: string | undefined): Record<string, unknown> {
+        if (!key || !presets || typeof presets !== 'object') return {};
+        const found = Array.isArray(presets)
+            ? presets.find((p) => (p as { Key?: string })?.Key === key)
+            : (presets as Record<string, unknown>)[key];
+        const options = (found as { Options?: unknown } | undefined)?.Options;
+        return options && typeof options === 'object' ? (options as Record<string, unknown>) : {};
+    }
+
+    /** Branch overrides in the shape the operation accepts (labels stripped), or undefined when there are none. */
+    private wireEdgeOverrides(): Array<{ RelationshipID: string; Policy: 'Deep' | 'Reference' | 'Skip' }> | undefined {
+        return this.EdgeOverrides.length > 0 ? this.EdgeOverrides.map(({ RelationshipID, Policy }) => ({ RelationshipID, Policy })) : undefined;
+    }
 
     /** What the controls show before the first plan arrives; the server's effective options replace it. */
     private static builtInScope(): Required<Pick<RecordClonePlanOptions, ScopeOptionKey>> {
@@ -855,6 +992,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
             this.AvailablePresets = describe.Presets || [];
             this.CanFireHooks = describe.CanFireHooks === true;
+            this.CanOverrideScope = describe.CanOverrideScope === true;
 
             this.LoadingMessage = 'Computing dependency graph and plan...';
             this.cdr.markForCheck();

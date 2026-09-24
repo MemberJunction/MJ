@@ -40,5 +40,19 @@
       "lastModified": "2026-09-22T00:07:51.268Z",
       "checksum": "6a8381722371bd09799feeda51f1a7236f9e8cc1be04ff3a69fb43b3880b227b"
     }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Clone Records: Override Scope",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "242C42C3-64F0-4373-BCC6-1152F667044C"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T19:32:32.161Z",
+      "checksum": "79985e6118e6906d7c8bf13bf9310fd83a1b055c4debcb31116ab7c4a93dd1dc"
+    }
   }
 ]

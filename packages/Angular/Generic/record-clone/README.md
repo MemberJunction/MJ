@@ -157,6 +157,8 @@ The wizard: **Scope** (preset, caps, toggles, planned record tree) → **Values*
 | `ScopeOptions` | Options sent with every plan and execute. |
 | `TargetRecordKey` | Record-id string of the root clone after success. |
 
+**Who can change the scope.** The scope step always shows what the clone will copy, taken from the entity's `Configuration.Clone`, with anything that differs highlighted. Anyone may narrow a plan by switching a Deep branch to Skip in the tree, when the entity's `UserEditable` is `scope` or `all`. A holder of `Clone Records: Override Scope` (the Developer role by default) also gets a Developer overrides section to raise depth or the record cap, include soft links, subtypes or the hierarchy subtree, and switch Skip branches back to Deep. The Fire Entity Actions toggle needs `Clone Records: Fire Hooks`. `RecordClone.Describe` returns `CanOverrideScope` and `CanFireHooks`, and the server applies the same rules to every request, ignoring anything a caller isn't allowed with a warning on the plan.
+
 **Where the values step gets its fields.** Nothing on the values step is specific to any one entity. The prompted fields come from the entity's `Configuration.Clone.Fields.PromptFor` (for `MJ: Users`: `Email`, `FirstName`, `LastName`). They start empty unless the engine proposed a value, because a prompted field such as a unique Email must not keep the source row's value. The suggested clone name comes from the naming strategy (`Clone.Naming`; by default the name field plus any unique string field). When a prompted field is also a `Clone.Naming.Fields` entry, typing in it keeps the clone name in step until the user edits the name directly. Retarget pickers come from `Clone.UI.RetargetFields`.
 
 ### `mj-record-clone-slide-in` — `RecordCloneSlideInComponent`
@@ -171,8 +173,8 @@ The wizard: **Scope** (preset, caps, toggles, planned record tree) → **Values*
 
 | Component | Inputs | Outputs |
 |---|---|---|
-| `mj-clone-scope-controls` | `Presets`, `SelectedPreset`, `MaxDepth`, `Subtypes`, `Hierarchy`, `SoftLinks`, `EntityActions`, `CanFireHooks`, `MaxRecords` | `ScopeChanged: RecordClonePlanOptions` |
-| `mj-clone-plan-tree` | `Plan`, `SelectedNodeKey` | `NodeSelected: RecordClonePlanNode` |
+| `mj-clone-scope-controls` | `Presets`, `SelectedPreset`, `MaxDepth`, `MaxRecords`, `Subtypes`, `Hierarchy`, `SoftLinks`, `EntityActions`, `ConfiguredScope`, `EntityName`, `CanOverrideScope`, `CanFireHooks` | `ScopeChanged: RecordClonePlanOptions`, `ResetToDefaults` |
+| `mj-clone-plan-tree` | `Plan`, `SelectedNodeKey`, `AllowNarrowing`, `AllowWidening` | `NodeSelected: RecordClonePlanNode`, `EdgePolicyChanged: CloneEdgePolicyChange` |
 | `mj-clone-values` | `EntityName`, `RootName`, `NamingStrategyReason`, `PromptedFields`, `PromptedValues`, `RetargetFields`, `Reason` | `RootNameChange`, `PromptedValuesChange`, `RetargetFieldsChange`, `ReasonChange`, `ValidityChange` |
 | `mj-clone-review` | `Plan`, `RootName`, `Reason`, `IsExecuting` | `Confirm`, `Cancel`, `NodeClicked: string` |
 | `mj-clone-progress` | `Progress: CloneProgressUpdate` | — |
@@ -198,6 +200,8 @@ The plan tree also exposes `ExpandAll()` and `CollapseAll()`. The lineage chip e
 | Type | Description |
 |---|---|
 | `RecordClonePanelState`, `RecordCloneStep` | Wizard state and step unions. |
+| `CloneScopeValues` | The six scope values the scope step shows and edits. |
+| `CloneEdgePolicyChange` | `{ RelationshipID, Policy }` — a branch the user switched, sent as an edge override. |
 | `CloneCompletedEvent` | `EntityName`, `TargetKey`, `CloneLogID`, `CreatedRecordsCount`, `Result`. |
 | `CloneFailedEvent` | `EntityName`, `Message`, `ResultCode?`. |
 | `CloneNavigationEvent` | `{ Kind: 'record', EntityName, RecordKey }`. `RecordKey` is a record-id string for `CompositeKey.FromURLSegment`. |

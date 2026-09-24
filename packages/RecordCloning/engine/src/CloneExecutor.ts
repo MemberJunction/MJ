@@ -333,7 +333,7 @@ export class CloneExecutor {
                 logEntity.ReferencedCount = plan.Nodes.filter((n) => n.Action === 'Reference').length;
                 logEntity.SkippedCount = plan.Nodes.filter((n) => n.Action === 'Skip').length;
                 logEntity.EndedAt = new Date();
-                logEntity.OptionsJSON = JSON.stringify(plan.EffectiveOptions);
+                logEntity.OptionsJSON = JSON.stringify({ Effective: plan.EffectiveOptions, Overrides: plan.Overrides ?? [] });
                 if (!(await logEntity.Save())) {
                     LogError(`[RecordCloning] Clone log ${cloneLogId} not saved: ${logEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }

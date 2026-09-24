@@ -172,4 +172,44 @@ describe('ClonePlanTreeComponent (DOM)', () => {
         expect((selectedNode as { Key: string }).Key).toBe('UserRoles:2');
         expect(fixture.componentInstance.SelectedNodeKey).toBe('UserRoles:2');
     });
+
+    describe('branch policy toggles', () => {
+        const withIds = {
+            ...SAMPLE_PLAN,
+            Edges: [
+                { ...SAMPLE_PLAN.Edges[0], RelationshipID: 'rel-roles' },
+                { ...SAMPLE_PLAN.Edges[1], RelationshipID: 'rel-role' },
+            ],
+        };
+
+        it('keeps pills read-only by default', () => {
+            const fixture = renderComponentFixture(ClonePlanTreeComponent, { inputs: { Plan: withIds } });
+            expect(queryAll(fixture, 'button.policy-pill--toggle')).toHaveLength(0);
+        });
+
+        it('lets the user skip an unlocked Deep branch when narrowing is allowed', () => {
+            const fixture = renderComponentFixture(ClonePlanTreeComponent, { inputs: { Plan: withIds, AllowNarrowing: true } });
+            const toggles = queryAll(fixture, 'button.policy-pill--toggle');
+            expect(toggles).toHaveLength(1);
+            const events: unknown[] = [];
+            fixture.componentInstance.EdgePolicyChanged.subscribe((e) => events.push(e));
+            (toggles[0] as HTMLButtonElement).click();
+            expect(events).toEqual([{ RelationshipID: 'rel-roles', Policy: 'Skip', RelatedEntityName: 'User Roles' }]);
+        });
+
+        it('lets anyone put back a branch they skipped themselves', () => {
+            const userSkipped = { ...withIds, Edges: [{ ...withIds.Edges[0], Policy: 'Skip' as const, PolicySource: 'Request' }, withIds.Edges[1]] };
+            const fixture = renderComponentFixture(ClonePlanTreeComponent, { inputs: { Plan: userSkipped, AllowNarrowing: true } });
+            expect(queryAll(fixture, 'button.policy-pill--toggle')).toHaveLength(1);
+        });
+
+        it('only offers Skip to Deep when widening is allowed', () => {
+            const skipped = { ...withIds, Edges: [{ ...withIds.Edges[0], Policy: 'Skip' as const }, withIds.Edges[1]] };
+            const narrowOnly = renderComponentFixture(ClonePlanTreeComponent, { inputs: { Plan: skipped, AllowNarrowing: true } });
+            expect(queryAll(narrowOnly, 'button.policy-pill--toggle')).toHaveLength(0);
+
+            const widen = renderComponentFixture(ClonePlanTreeComponent, { inputs: { Plan: skipped, AllowNarrowing: true, AllowWidening: true } });
+            expect(queryAll(widen, 'button.policy-pill--toggle')).toHaveLength(1);
+        });
+    });
 });

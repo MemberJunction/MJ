@@ -15,6 +15,9 @@ import { AuthorizationEvaluator, AuthorizationInfo, EntityInfo, IMetadataProvide
 /** Name of the authorization that allows firing Entity Actions / AI Actions during a clone. */
 export const FIRE_HOOKS_AUTHORIZATION = 'Clone Records: Fire Hooks';
 
+/** Name of the authorization that allows widening a clone beyond the entity's configured scope. */
+export const OVERRIDE_SCOPE_AUTHORIZATION = 'Clone Records: Override Scope';
+
 /** Schema that holds MemberJunction's own entities. */
 const PLATFORM_SCHEMA = '__mj';
 
@@ -57,6 +60,11 @@ export class CloneAuthorizer {
     /** Whether `user` may fire Entity Actions and AI Actions during a clone. */
     public CanFireHooks(user: UserInfo): boolean {
         return this.userHolds(FIRE_HOOKS_AUTHORIZATION, user);
+    }
+
+    /** Whether `user` may widen a clone beyond the entity's configured scope. */
+    public CanOverrideScope(user: UserInfo): boolean {
+        return this.userHolds(OVERRIDE_SCOPE_AUTHORIZATION, user);
     }
 
     /** An authorization missing from metadata grants nothing: the check fails closed. */

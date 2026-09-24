@@ -126,5 +126,21 @@
       "lastModified": "2026-09-22T00:07:51.162Z",
       "checksum": "373a2deba232f566d913aa5cc9fa10e6e35cc3b6eb223c391f926bb554c3f224"
     }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records: Override Scope",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Cloning",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Permits widening a clone beyond the entity's configured scope for one request: raising MaxDepth or MaxRecords, or including soft links, IS-A subtypes or a hierarchy subtree the configuration leaves out. Narrowing scope never needs it."
+    },
+    "primaryKey": {
+      "ID": "F893CD89-66E6-400D-A490-468187AB09D1"
+    },
+    "sync": {
+      "lastModified": "2026-09-24T19:50:54.928Z",
+      "checksum": "28b30d2b06f1769d266e8106d7376a7e4073cf5a604a7e171f62a27fa8409b53"
+    }
   }
 ]

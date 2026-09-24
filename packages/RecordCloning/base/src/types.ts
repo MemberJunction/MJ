@@ -91,7 +91,9 @@ export type CloneWarningCode =
     /** Hooks were requested but the user lacks `Clone Records: Fire Hooks`; they stay suppressed. */
     | 'HOOKS_FORBIDDEN'
     /** A request option was ignored because the entity's `UserEditable` does not allow it. */
-    | 'OPTION_OVERRIDE_IGNORED';
+    | 'OPTION_OVERRIDE_IGNORED'
+    /** A request tried to widen scope without the `Clone Records: Override Scope` authorization; it was ignored. */
+    | 'SCOPE_OVERRIDE_FORBIDDEN';
 
 /**
  * Warning or notification emitted by the planning or execution engine.
@@ -237,6 +239,8 @@ export interface ClonePlan {
     };
     Warnings: CloneWarning[];
     Blocked: boolean;
+    /** Options widened beyond the entity's configuration through `Clone Records: Override Scope`. */
+    Overrides?: string[];
     EffectiveOptions: Required<
         Pick<
             CloneRequestOptions,

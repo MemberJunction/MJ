@@ -194,9 +194,10 @@ export class RecordCloneOperationsHandler {
         const config = entity.CloneConfig;
         const authorizer = new CloneAuthorizer(md);
         const authorization = authorizer.CanCloneEntity(entity, contextUser);
-        const base: Pick<RecordCloneDescribeOutput, 'Authorization' | 'CanFireHooks' | 'Relationships'> = {
+        const base: Pick<RecordCloneDescribeOutput, 'Authorization' | 'CanFireHooks' | 'CanOverrideScope' | 'Relationships'> = {
             Authorization: authorization,
             CanFireHooks: authorizer.CanFireHooks(contextUser),
+            CanOverrideScope: authorizer.CanOverrideScope(contextUser),
             Relationships: [],
         };
 

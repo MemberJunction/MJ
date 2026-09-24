@@ -108,6 +108,7 @@ describe('RecordCloneOperationsHandler', () => {
                 Relationships: [{ Name: 'Items', RelatedEntity: 'ChildEntity', DefaultPolicy: 'Deep', Locked: true }],
                 Authorization: { Name: 'Clone Records in Custom Schemas', Granted: true },
                 CanFireHooks: true,
+                CanOverrideScope: true,
             });
         });
 

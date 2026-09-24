@@ -93,7 +93,9 @@ export class ClonePlanner {
                 Message: `Preset '${presetKey}' is not defined for '${entityName}'.`,
             });
         }
-        const requestOptions: CloneRequestOptions = { ...(preset?.Options ?? {}), ...(request.Options ?? {}) };
+        // A preset is configured by the entity's owner, so its options act as configuration (they may
+        // widen scope for anyone); only the request's own options go through the override rules.
+        const configWithPreset = preset?.Options ? { ...(rootConfig ?? {}), ...preset.Options } : rootConfig;
         const presetEdgeOverrides: Array<{ ChildEntityName?: string; RelationshipID?: string; Policy: CloneEdgePolicy }> | undefined =
             preset?.Relationships
                 ? Object.entries(preset.Relationships).map(([ChildEntityName, cfg]) => ({ ChildEntityName, Policy: cfg.Policy }))
@@ -101,9 +103,31 @@ export class ClonePlanner {
 
         // The entity's configuration supplies the defaults; UserEditable and the Fire Hooks
         // authorization decide which request values may change them (plan §4.1, §9.4).
-        const resolved = ResolveEffectiveCloneOptions(rootConfig, requestOptions, authorizer.CanFireHooks(contextUser));
+        const resolved = ResolveEffectiveCloneOptions(configWithPreset, request.Options, {
+            CanFireHooks: authorizer.CanFireHooks(contextUser),
+            CanOverrideScope: authorizer.CanOverrideScope(contextUser),
+        });
         const effectiveOptions: ClonePlan['EffectiveOptions'] = resolved.Options;
         warnings.push(...resolved.Warnings);
+
+        // Per-edge request overrides follow the same rule as the scope options: Skip and
+        // Reference narrow the copy (allowed when UserEditable permits, or for an override
+        // holder); Deep widens it and needs Clone Records: Override Scope.
+        const canOverrideScope = authorizer.CanOverrideScope(contextUser);
+        const editable = rootConfig?.UserEditable ?? 'all';
+        const mayNarrowEdges = editable === 'scope' || editable === 'all' || canOverrideScope;
+        const edgeOverrides = (request.EdgeOverrides ?? []).filter((o) => {
+            if (o.Policy === 'Deep' ? canOverrideScope : mayNarrowEdges) return true;
+            warnings.push({
+                Code: o.Policy === 'Deep' ? 'SCOPE_OVERRIDE_FORBIDDEN' : 'OPTION_OVERRIDE_IGNORED',
+                Severity: 'Warning',
+                Field: 'EdgeOverrides',
+                Message: o.Policy === 'Deep'
+                    ? `Copying a relationship the configuration leaves out needs the 'Clone Records: Override Scope' authorization.`
+                    : `Relationship overrides were ignored: this entity's clone configuration sets UserEditable to '${editable}'.`,
+            });
+            return false;
+        });
         const maxDepth = effectiveOptions.MaxDepth;
         const maxRecords = effectiveOptions.MaxRecords;
 
@@ -251,7 +275,7 @@ export class ClonePlanner {
                         PresetConfig: presetEdgeOverrides ? {
                             EdgeOverrides: presetEdgeOverrides,
                         } : undefined,
-                        RequestOverrides: request.EdgeOverrides?.map((o) => ({
+                        RequestOverrides: edgeOverrides.map((o) => ({
                             RelationshipID: o.RelationshipID,
                             Policy: o.Policy,
                         })),
@@ -660,6 +684,7 @@ export class ClonePlanner {
             Warnings: warnings,
             Blocked: planBlocked,
             EffectiveOptions: effectiveOptions,
+            Overrides: resolved.Overrides,
         };
     }
 }

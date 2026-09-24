@@ -14,5 +14,6 @@ export function GrantedCloneAuthorizations(granted = true): AuthorizationInfo[] 
         node('auth-clone-custom', 'Clone Records in Custom Schemas', 'auth-clone-records'),
         node('auth-clone-fire-hooks', 'Clone Records: Fire Hooks', 'auth-clone-records'),
         node('auth-clone-batch', 'Clone Records: Batch', 'auth-clone-records'),
+        node('auth-clone-override-scope', 'Clone Records: Override Scope', 'auth-record-cloning'),
     ];
 }

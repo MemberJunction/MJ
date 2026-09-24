@@ -38,6 +38,14 @@ export interface CloneCompletedEvent {
     Result?: RecordCloneExecuteOutput;
 }
 
+/** A branch policy the user changed in the plan tree; sent to the planner as an edge override. */
+export interface CloneEdgePolicyChange {
+    RelationshipID: string;
+    Policy: 'Deep' | 'Reference' | 'Skip';
+    /** Related entity of the branch, for labels such as the "Skipped branches" list. Not sent to the server. */
+    RelatedEntityName?: string;
+}
+
 /** Emitted when describe, plan or execute fails. */
 export interface CloneFailedEvent {
     EntityName: string;

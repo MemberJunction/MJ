@@ -320,6 +320,62 @@ describe('ClonePlanner', () => {
             expect(plan.Blocked).toBe(false);
         });
 
+        it('ignores widening options unless the user holds Override Scope', async () => {
+            const onlySchema = GrantedCloneAuthorizations(false).map((a) =>
+                a.Name === 'Clone Records in Custom Schemas' ? ({ ...a, UserCanExecute: () => true } as typeof a) : a
+            );
+            mockTwoRows();
+            const plan = await new ClonePlanner({ Provider: withAuths(onlySchema) }).Plan(
+                { ...request, Options: { MaxDepth: 9, SoftLinks: 'include' } },
+                standardUser
+            );
+            expect(plan.EffectiveOptions).toMatchObject({ MaxDepth: 3, SoftLinks: 'skip' });
+            expect(plan.Warnings.filter((w) => w.Code === 'SCOPE_OVERRIDE_FORBIDDEN').map((w) => w.Field)).toEqual(['MaxDepth', 'SoftLinks']);
+
+            mockTwoRows();
+            const granted = await new ClonePlanner({ Provider: withAuths(GrantedCloneAuthorizations()) }).Plan(
+                { ...request, Options: { MaxDepth: 9 } },
+                standardUser
+            );
+            expect(granted.EffectiveOptions.MaxDepth).toBe(9);
+            expect(granted.Overrides).toEqual(['MaxDepth']);
+        });
+
+        it('drops a Deep edge override from a user without Override Scope', async () => {
+            const onlySchema = GrantedCloneAuthorizations(false).map((a) =>
+                a.Name === 'Clone Records in Custom Schemas' ? ({ ...a, UserCanExecute: () => true } as typeof a) : a
+            );
+            mockTwoRows();
+            const plan = await new ClonePlanner({ Provider: withAuths(onlySchema) }).Plan(
+                { ...request, EdgeOverrides: [{ RelationshipID: 'rel-children', Policy: 'Deep' }, { RelationshipID: 'rel-other', Policy: 'Skip' }] },
+                standardUser
+            );
+            const forbidden = plan.Warnings.filter((w) => w.Code === 'SCOPE_OVERRIDE_FORBIDDEN' && w.Field === 'EdgeOverrides');
+            expect(forbidden).toHaveLength(1);
+        });
+
+        it("applies a configured preset's wider options for a user without Override Scope", async () => {
+            const onlySchema = GrantedCloneAuthorizations(false).map((a) =>
+                a.Name === 'Clone Records in Custom Schemas' ? ({ ...a, UserCanExecute: () => true } as typeof a) : a
+            );
+            const withPreset = { ...parentEntity, CloneConfiguration: { Enabled: true, MaxDepth: 3, MaxRecords: 100, Presets: [{ Key: 'full', Label: 'Full', Options: { MaxDepth: 5, SoftLinks: 'include' } }] } } as EntityInfo;
+            const provider = { ...withAuths(onlySchema), EntityByName: (n: string) => (n === 'ParentEntity' ? withPreset : (childEntity as EntityInfo)) } as IMetadataProvider;
+            mockTwoRows();
+            const plan = await new ClonePlanner({ Provider: provider }).Plan({ ...request, Options: { Preset: 'full' } }, standardUser);
+            expect(plan.EffectiveOptions).toMatchObject({ MaxDepth: 5, SoftLinks: 'include' });
+            expect(plan.Warnings.some((w) => w.Code === 'SCOPE_OVERRIDE_FORBIDDEN')).toBe(false);
+        });
+
+        it('does not let a Clone Records holder pass Override Scope through the hierarchy', async () => {
+            const cloneRecordsOnly = GrantedCloneAuthorizations(false).map((a) =>
+                a.Name === 'Clone Records' ? ({ ...a, UserCanExecute: () => true } as typeof a) : a
+            );
+            mockTwoRows();
+            const plan = await new ClonePlanner({ Provider: withAuths(cloneRecordsOnly) }).Plan({ ...request, Options: { MaxDepth: 9 } }, standardUser);
+            expect(plan.EffectiveOptions.MaxDepth).toBe(3);
+            expect(plan.Warnings.some((w) => w.Code === 'SCOPE_OVERRIDE_FORBIDDEN')).toBe(true);
+        });
+
         it('refuses a root whose clone configuration is not enabled', async () => {
             const disabledParent = { ...parentEntity, CloneConfiguration: { MaxDepth: 3 } } as EntityInfo;
             const provider = {

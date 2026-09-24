@@ -23,7 +23,7 @@ import type {
     RecordClonePlanNode,
     RecordClonePlanEdge,
 } from '@memberjunction/core-entities';
-import type { CloneTreeNodeViewModel } from './record-clone-types';
+import type { CloneTreeNodeViewModel, CloneEdgePolicyChange } from './record-clone-types';
 
 @Component({
     standalone: true,
@@ -142,17 +142,31 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
                             <!-- Policy Pill (if edge connects to parent) -->
                             @if (item.ParentEdge) {
                                 <div class="edge-cell">
-                                    <span
-                                        class="policy-pill"
-                                        [class.policy-deep]="item.ParentEdge.Policy === 'Deep'"
-                                        [class.policy-ref]="item.ParentEdge.Policy === 'Reference'"
-                                        [class.policy-skip]="item.ParentEdge.Policy === 'Skip'"
-                                        [title]="GetEdgeTooltip(item.ParentEdge)">
-                                        @if (item.ParentEdge.Locked) {
-                                            <i class="fa-solid fa-lock lock-icon"></i>
-                                        }
-                                        {{item.ParentEdge.Policy}}
-                                    </span>
+                                    @if (NextPolicy(item.ParentEdge); as next) {
+                                        <button
+                                            type="button"
+                                            class="policy-pill policy-pill--toggle"
+                                            [class.policy-deep]="item.ParentEdge.Policy === 'Deep'"
+                                            [class.policy-ref]="item.ParentEdge.Policy === 'Reference'"
+                                            [class.policy-skip]="item.ParentEdge.Policy === 'Skip'"
+                                            [title]="GetEdgeTooltip(item.ParentEdge) + (next === 'Skip' ? ' Click to skip every ' + item.ParentEdge.RelatedEntityName + ' row.' : ' Click to copy these rows.')"
+                                            [attr.aria-label]="(next === 'Skip' ? 'Skip every ' : 'Copy every ') + item.ParentEdge.RelatedEntityName + ' row'"
+                                            (click)="OnPolicyToggle(item.ParentEdge, next, $event)">
+                                            {{item.ParentEdge.Policy}}
+                                        </button>
+                                    } @else {
+                                        <span
+                                            class="policy-pill"
+                                            [class.policy-deep]="item.ParentEdge.Policy === 'Deep'"
+                                            [class.policy-ref]="item.ParentEdge.Policy === 'Reference'"
+                                            [class.policy-skip]="item.ParentEdge.Policy === 'Skip'"
+                                            [title]="GetEdgeTooltip(item.ParentEdge)">
+                                            @if (item.ParentEdge.Locked) {
+                                                <i class="fa-solid fa-lock lock-icon"></i>
+                                            }
+                                            {{item.ParentEdge.Policy}}
+                                        </span>
+                                    }
                                 </div>
                             }
 
@@ -366,6 +380,19 @@ import type { CloneTreeNodeViewModel } from './record-clone-types';
             letter-spacing: 0.5px;
         }
 
+        .policy-pill--toggle {
+            border: 1px solid transparent;
+            cursor: pointer;
+            font-family: inherit;
+            line-height: inherit;
+        }
+
+        .policy-pill--toggle:hover,
+        .policy-pill--toggle:focus-visible {
+            border-color: var(--mj-border-focus);
+            outline: none;
+        }
+
         .policy-pill.policy-deep {
             background: var(--mj-status-success-bg);
             color: var(--mj-status-success-text);
@@ -481,8 +508,17 @@ export class ClonePlanTreeComponent {
     /** Key of the node to highlight, e.g. when the review step links back to it. */
     @Input() SelectedNodeKey: string | null = null;
 
+    /** Let the user switch unlocked Deep branches to Skip (narrowing). Default false (read-only tree). */
+    @Input() AllowNarrowing = false;
+
+    /** Also let the user switch Skip branches to Deep (widening; needs Clone Records: Override Scope). */
+    @Input() AllowWidening = false;
+
     /** Fires when the user selects a node row. */
     @Output() NodeSelected = new EventEmitter<RecordClonePlanNode>();
+
+    /** Fires when the user switches a branch's policy; the host re-plans with it as an edge override. */
+    @Output() EdgePolicyChanged = new EventEmitter<CloneEdgePolicyChange>();
 
     public SearchTerm = '';
     public TreeNodes: CloneTreeNodeViewModel[] = [];
@@ -527,6 +563,21 @@ export class ClonePlanTreeComponent {
         this.setAllExpanded(this.TreeNodes, false);
         this.updateVisibleNodes();
         this.cdr.markForCheck();
+    }
+
+    /** The policy a click on this edge's pill would switch to, or null when the pill is read-only. */
+    public NextPolicy(edge: RecordClonePlanEdge): 'Deep' | 'Skip' | null {
+        if (edge.Locked || !edge.RelationshipID) return null;
+        if (edge.Policy === 'Deep' && this.AllowNarrowing) return 'Skip';
+        // A branch the user skipped themselves can always be put back; the host drops that override.
+        if (edge.Policy === 'Skip' && (this.AllowWidening || edge.PolicySource === 'Request')) return 'Deep';
+        return null;
+    }
+
+    public OnPolicyToggle(edge: RecordClonePlanEdge, policy: 'Deep' | 'Skip', event: MouseEvent): void {
+        event.stopPropagation();
+        if (!edge.RelationshipID) return;
+        this.EdgePolicyChanged.emit({ RelationshipID: edge.RelationshipID, Policy: policy, RelatedEntityName: edge.RelatedEntityName });
     }
 
     public GetEdgeTooltip(edge: RecordClonePlanEdge): string {

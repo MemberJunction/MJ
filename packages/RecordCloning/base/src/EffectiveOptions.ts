@@ -4,11 +4,11 @@
  * configuration and the caller's request.
  *
  * - The entity's `Configuration.Clone` supplies every default.
- * - `UserEditable` decides how much of that a request may change (plan §4.1, §9.4):
- *   `'none'` / `'fields'` keep the configured scope; `'scope'` lets a request change the
- *   toggles and lower the caps; `'all'` (the default) also lets it raise the caps.
- * - Firing Entity Actions or AI Actions needs the `Clone Records: Fire Hooks` authorization;
- *   without it hooks stay suppressed.
+ * - **Narrowing** scope (lower caps; excluding subtypes, soft links or the hierarchy subtree) is
+ *   allowed when `UserEditable` is `'scope'` or `'all'` (the default), or for an override holder.
+ * - **Widening** scope (higher caps; including what the configuration leaves out) needs the
+ *   `Clone Records: Override Scope` authorization, whatever `UserEditable` says.
+ * - Firing Entity Actions or AI Actions needs `Clone Records: Fire Hooks`.
  *
  * Every ignored request value produces a warning, so the review shows what was not applied.
  *
@@ -31,6 +31,14 @@ export interface EffectiveOptionsConfig {
 
 export type EffectiveCloneOptions = ClonePlan['EffectiveOptions'];
 
+/** What the caller is authorized to do beyond the entity's configuration. */
+export interface CloneOptionGrants {
+    /** Holds `Clone Records: Fire Hooks`. */
+    CanFireHooks: boolean;
+    /** Holds `Clone Records: Override Scope`. */
+    CanOverrideScope: boolean;
+}
+
 /** Built-in defaults when neither the entity nor the request says otherwise. */
 export const DEFAULT_CLONE_MAX_DEPTH = 3;
 export const DEFAULT_CLONE_MAX_RECORDS = 500;
@@ -38,55 +46,86 @@ export const DEFAULT_CLONE_MAX_RECORDS = 500;
 export interface EffectiveOptionsResult {
     Options: EffectiveCloneOptions;
     Warnings: CloneWarning[];
+    /** Options where a widening request was applied through Override Scope; recorded on the clone log. */
+    Overrides: string[];
 }
 
 /**
  * Merges the request's options onto the entity's configured defaults under the rules above.
  * @param config The root entity's clone configuration, or null when it has none.
  * @param request The options the caller sent.
- * @param canFireHooks Whether the caller holds `Clone Records: Fire Hooks`.
+ * @param grants What the caller is authorized to do beyond the configuration.
  */
 export function ResolveEffectiveCloneOptions(
     config: EffectiveOptionsConfig | null | undefined,
     request: CloneRequestOptions | null | undefined,
-    canFireHooks: boolean
+    grants: CloneOptionGrants
 ): EffectiveOptionsResult {
     const warnings: CloneWarning[] = [];
+    const overrides: string[] = [];
     const editable = config?.UserEditable ?? 'all';
-    const mayChangeScope = editable === 'scope' || editable === 'all';
-    const mayRaiseCaps = editable === 'all';
+    const mayNarrow = editable === 'scope' || editable === 'all' || grants.CanOverrideScope;
 
-    const ignored = (option: string, value: unknown, why: string): void => {
+    const narrowIgnored = (option: string, value: unknown): void => {
         warnings.push({
             Code: 'OPTION_OVERRIDE_IGNORED',
             Severity: 'Warning',
             Field: option,
-            Message: `${option} = ${String(value)} was ignored: ${why}.`,
+            Message: `${option} = ${String(value)} was ignored: this entity's clone configuration sets UserEditable to '${editable}'.`,
+        });
+    };
+    const widenIgnored = (option: string, value: unknown, configured: unknown): void => {
+        warnings.push({
+            Code: 'SCOPE_OVERRIDE_FORBIDDEN',
+            Severity: 'Warning',
+            Field: option,
+            Message: `${option} = ${String(value)} was ignored: going beyond the configured ${String(configured)} needs the 'Clone Records: Override Scope' authorization.`,
         });
     };
 
-    const choose = <T>(option: string, requested: T | undefined, configured: T): T => {
+    /** A two-valued scope switch where `wide` copies more than the other value. */
+    const scope = <T extends string>(option: string, requested: T | undefined, configured: T, wide: T): T => {
         if (requested === undefined || requested === configured) return configured;
-        if (mayChangeScope) return requested;
-        ignored(option, requested, `this entity's clone configuration sets UserEditable to '${editable}'`);
+        if (requested === wide) {
+            if (grants.CanOverrideScope) {
+                overrides.push(option);
+                return requested;
+            }
+            widenIgnored(option, requested, configured);
+            return configured;
+        }
+        if (mayNarrow) return requested;
+        narrowIgnored(option, requested);
         return configured;
     };
 
     const cap = (option: 'MaxDepth' | 'MaxRecords', requested: number | undefined, configured: number): number => {
-        if (requested === undefined || !Number.isFinite(requested) || requested === configured) return configured;
-        if (requested < configured) {
-            if (mayChangeScope) return Math.max(1, Math.floor(requested));
-            ignored(option, requested, `this entity's clone configuration sets UserEditable to '${editable}'`);
+        if (requested === undefined || !Number.isFinite(requested) || Math.floor(requested) === configured) return configured;
+        const value = Math.max(1, Math.floor(requested));
+        if (value > configured) {
+            if (grants.CanOverrideScope) {
+                overrides.push(option);
+                return value;
+            }
+            widenIgnored(option, requested, configured);
             return configured;
         }
-        if (mayRaiseCaps) return Math.floor(requested);
-        ignored(option, requested, `raising it above the configured ${configured} needs UserEditable 'all'`);
+        if (mayNarrow) return value;
+        narrowIgnored(option, requested);
+        return configured;
+    };
+
+    /** A choice that is neither wider nor narrower, governed by UserEditable alone. */
+    const choice = <T>(option: string, requested: T | undefined, configured: T): T => {
+        if (requested === undefined || requested === configured) return configured;
+        if (mayNarrow) return requested;
+        narrowIgnored(option, requested);
         return configured;
     };
 
     const hook = (option: 'EntityActions' | 'AIActions', requested: 'suppress' | 'fire' | undefined, configured: 'suppress' | 'fire'): 'suppress' | 'fire' => {
         const wanted = requested ?? configured;
-        if (wanted !== 'fire' || canFireHooks) return wanted;
+        if (wanted !== 'fire' || grants.CanFireHooks) return wanted;
         warnings.push({
             Code: 'HOOKS_FORBIDDEN',
             Severity: 'Warning',
@@ -99,15 +138,15 @@ export function ResolveEffectiveCloneOptions(
     const options: EffectiveCloneOptions = {
         MaxDepth: cap('MaxDepth', request?.MaxDepth, config?.MaxDepth ?? DEFAULT_CLONE_MAX_DEPTH),
         MaxRecords: cap('MaxRecords', request?.MaxRecords, config?.MaxRecords ?? DEFAULT_CLONE_MAX_RECORDS),
-        Subtypes: choose('Subtypes', request?.Subtypes, config?.Subtypes ?? 'include'),
-        Hierarchy: choose('Hierarchy', request?.Hierarchy, config?.Hierarchy ?? 'subtree'),
-        SoftLinks: choose('SoftLinks', request?.SoftLinks, config?.SoftLinks ?? 'skip'),
-        Embeddings: choose('Embeddings', request?.Embeddings, config?.Embeddings ?? 'copy'),
+        Subtypes: scope('Subtypes', request?.Subtypes, config?.Subtypes ?? 'include', 'include'),
+        Hierarchy: scope('Hierarchy', request?.Hierarchy, config?.Hierarchy ?? 'subtree', 'subtree'),
+        SoftLinks: scope('SoftLinks', request?.SoftLinks, config?.SoftLinks ?? 'skip', 'include'),
+        Embeddings: choice('Embeddings', request?.Embeddings, config?.Embeddings ?? 'copy'),
         EntityActions: hook('EntityActions', request?.EntityActions, config?.Hooks?.EntityActions ?? 'suppress'),
         AIActions: hook('AIActions', request?.AIActions, config?.Hooks?.AIActions ?? 'suppress'),
     };
 
-    return { Options: options, Warnings: warnings };
+    return { Options: options, Warnings: warnings, Overrides: overrides };
 }
 
 /** A preset in the documented `Clone.Presets` array shape. */

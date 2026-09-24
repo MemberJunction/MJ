@@ -31,4 +31,6 @@ export interface RecordCloneDescribeOutput {
     };
     /** Whether the calling user holds `Clone Records: Fire Hooks`, so the UI may offer the Fire Entity Actions toggle. */
     CanFireHooks?: boolean;
+    /** Whether the calling user holds `Clone Records: Override Scope`, so the UI may offer scope overrides beyond the entity's configuration. */
+    CanOverrideScope?: boolean;
 }

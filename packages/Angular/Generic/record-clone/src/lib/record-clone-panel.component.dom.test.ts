@@ -343,4 +343,65 @@ describe('RecordClonePanelComponent (DOM)', () => {
 
         expect(vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0].Options).toEqual({ Preset: 'Standard' });
     });
+
+    it('sends branch overrides with the next plan and clears them on reset', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+
+        panel.OnEdgePolicyChanged({ RelationshipID: 'rel-roles', Policy: 'Skip' });
+        await new Promise((r) => setTimeout(r, 0));
+        expect(vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0].EdgeOverrides).toEqual([{ RelationshipID: 'rel-roles', Policy: 'Skip' }]);
+
+        panel.OnResetScopeToDefaults();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0].EdgeOverrides).toBeUndefined();
+    });
+
+    it('switching a branch the user already changed drops the override instead of sending a new one', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        panel.OnEdgePolicyChanged({ RelationshipID: 'rel-roles', Policy: 'Skip' });
+        panel.OnEdgePolicyChanged({ RelationshipID: 'rel-roles', Policy: 'Deep' });
+        expect(panel.EdgeOverrides).toEqual([]);
+    });
+
+    it('lists skipped branches with Undo, and sends overrides without their labels', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        panel.OnEdgePolicyChanged({ RelationshipID: 'rel-settings', Policy: 'Skip', RelatedEntityName: 'MJ: User Settings' });
+        await new Promise((r) => setTimeout(r, 0));
+        fixture.detectChanges();
+
+        expect(query(fixture, '.branch-override')?.textContent).toContain('Skipping MJ: User Settings');
+        expect(vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0].EdgeOverrides).toEqual([{ RelationshipID: 'rel-settings', Policy: 'Skip' }]);
+
+        (query(fixture, '.undo-btn') as HTMLButtonElement).click();
+        await new Promise((r) => setTimeout(r, 0));
+        expect(panel.EdgeOverrides).toEqual([]);
+    });
+
+    it('offers developer overrides only when Describe grants Override Scope', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        await fixture.componentInstance.Start();
+        expect(fixture.componentInstance.CanOverrideScope).toBe(false);
+
+        vi.mocked(mockService.DescribeRecord).mockResolvedValue({ ...MOCK_DESCRIBE, CanOverrideScope: true });
+        await fixture.componentInstance.Start();
+        expect(fixture.componentInstance.CanOverrideScope).toBe(true);
+    });
 });
