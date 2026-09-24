@@ -3,14 +3,12 @@
 "@memberjunction/ai-agents": minor
 "@memberjunction/ai-core-plus": minor
 "@memberjunction/ai-prompts": minor
-"@memberjunction/codegen-lib": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
 "@memberjunction/integration-test-suite": minor
 "@memberjunction/ng-core-entity-forms": minor
 "@memberjunction/ng-dashboards": minor
 "@memberjunction/ng-query-viewer": minor
-"@memberjunction/scheduling-engine": minor
 "@memberjunction/server": minor
 ---
 
