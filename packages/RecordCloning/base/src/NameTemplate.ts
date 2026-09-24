@@ -31,10 +31,10 @@ export function RenderNameTemplate(template: string, ctx: NameTemplateContext): 
     const counterVal = ctx.Counter !== undefined ? String(ctx.Counter) : '';
 
     return template
-        .replace(/\{Name\}/g, ctx.SourceRecordName)
-        .replace(/\{Date\}/g, dateVal)
-        .replace(/\{User\}/g, userVal)
-        .replace(/\{n\}/g, counterVal)
+        .replace(/\{Name\}/g, () => ctx.SourceRecordName)
+        .replace(/\{Date\}/g, () => dateVal)
+        .replace(/\{User\}/g, () => userVal)
+        .replace(/\{n\}/g, () => counterVal)
         .trim();
 }
 

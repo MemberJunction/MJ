@@ -7,6 +7,14 @@ import {
 
 describe('NameTemplate', () => {
     describe('RenderNameTemplate', () => {
+        it('inserts values containing $ literally instead of as replacement patterns', () => {
+            const result = RenderNameTemplate('{Name} (Copy by {User})', {
+                SourceRecordName: "Q3 $& $1 $$ Budget",
+                UserName: "a$'b",
+            });
+            expect(result).toBe("Q3 $& $1 $$ Budget (Copy by a$'b)");
+        });
+
         it('interpolates {Name}, {n}, {Date}, and {User} tokens', () => {
             const rendered = RenderNameTemplate('{User}: Copy #{n} of {Name} on {Date}', {
                 SourceRecordName: 'Quarterly Report',
