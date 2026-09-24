@@ -24,7 +24,7 @@ export type PrimaryKeyValues = NonNullable<RecordData['primaryKey']>;
  * @throws when a key field has no value. A record without its key cannot be matched to a file
  *         entry and would overwrite other records, so refusing is the only safe outcome.
  */
-export function extractPrimaryKeyValues(record: BaseEntity, entityInfo: EntityInfo): PrimaryKeyValues {
+export function ExtractPrimaryKeyValues(record: BaseEntity, entityInfo: EntityInfo): PrimaryKeyValues {
   const values: PrimaryKeyValues = {};
   for (const pk of entityInfo.PrimaryKeys) {
     const value = record.Get(pk.Name);
@@ -39,6 +39,11 @@ export function extractPrimaryKeyValues(record: BaseEntity, entityInfo: EntityIn
   return values;
 }
 
+/** @deprecated Use {@link ExtractPrimaryKeyValues}. */
+export function extractPrimaryKeyValues(record: BaseEntity, entityInfo: EntityInfo): PrimaryKeyValues {
+  return ExtractPrimaryKeyValues(record, entityInfo);
+}
+
 /**
  * True when a key field holds a value. Only a missing value counts as absent: an empty string, or
  * the text `null`, is a real key value.
@@ -48,9 +53,14 @@ function isPresentKeyValue(value: PrimaryKeyValues[string]): boolean {
 }
 
 /** True when `primaryKey` has at least one field and every field holds a value. */
-export function hasCompletePrimaryKey(primaryKey: RecordData['primaryKey']): boolean {
+export function HasCompletePrimaryKey(primaryKey: RecordData['primaryKey']): boolean {
   const values = Object.values(primaryKey ?? {});
   return values.length > 0 && values.every(isPresentKeyValue);
+}
+
+/** @deprecated Use {@link HasCompletePrimaryKey}. */
+export function hasCompletePrimaryKey(primaryKey: RecordData['primaryKey']): boolean {
+  return HasCompletePrimaryKey(primaryKey);
 }
 
 /**
@@ -59,10 +69,15 @@ export function hasCompletePrimaryKey(primaryKey: RecordData['primaryKey']): boo
  * contains the separator can't make two different keys produce the same string. The string is only
  * ever compared in memory — never parsed or persisted.
  */
-export function createPrimaryKeyLookup(primaryKey: RecordData['primaryKey']): string {
+export function CreatePrimaryKeyLookup(primaryKey: RecordData['primaryKey']): string {
   const values = primaryKey ?? {};
   return Object.keys(values)
     .sort()
     .map((field) => `${field}:${String(values[field]).replace(/[\\|]/g, '\\$&')}`)
     .join('|');
+}
+
+/** @deprecated Use {@link CreatePrimaryKeyLookup}. */
+export function createPrimaryKeyLookup(primaryKey: RecordData['primaryKey']): string {
+  return CreatePrimaryKeyLookup(primaryKey);
 }

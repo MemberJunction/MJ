@@ -9,7 +9,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...orig, LogError: vi.fn(), LogStatus: vi.fn() };
 });
 
-import { handleSlackInteraction, registerActiveForm } from '../slack/slack-interactivity.js';
+import { HandleSlackInteraction, RegisterActiveForm } from '../slack/slack-interactivity.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -53,13 +53,13 @@ describe('slack-interactivity', () => {
     describe('handleSlackInteraction', () => {
         it('should handle invalid JSON gracefully', async () => {
             await expect(
-                handleSlackInteraction('not-json', mockClient as never)
+                HandleSlackInteraction('not-json', mockClient as never)
             ).resolves.toBeUndefined();
         });
 
         it('should ignore non-block_actions payload types', async () => {
             const payload = JSON.stringify({ type: 'view_submission', trigger_id: 'x' });
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
             expect(mockClient.views.open).not.toHaveBeenCalled();
         });
 
@@ -68,7 +68,7 @@ describe('slack-interactivity', () => {
                 { action_id: 'mj:view_full:run-123', block_id: 'block-1', type: 'button' }
             ]);
 
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
 
             expect(mockClient.views.open).toHaveBeenCalledOnce();
             const callArgs = mockClient.views.open.mock.calls[0][0];
@@ -82,7 +82,7 @@ describe('slack-interactivity', () => {
                 { action_id: 'mj:view_full:run-456', block_id: 'block-1', type: 'button' }
             ]);
 
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
 
             const viewBlocks = mockClient.views.open.mock.calls[0][0].view.blocks;
             expect(viewBlocks.length).toBeGreaterThan(0);
@@ -98,7 +98,7 @@ describe('slack-interactivity', () => {
                 { action_id: 'mj:view_artifact', block_id: 'block-1', type: 'button' }
             ]);
 
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
             expect(mockClient.views.open).not.toHaveBeenCalled();
         });
 
@@ -107,7 +107,7 @@ describe('slack-interactivity', () => {
                 { action_id: 'mj:action_0', block_id: 'block-1', type: 'button', value: 'custom' }
             ]);
 
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
             expect(mockClient.views.open).not.toHaveBeenCalled();
         });
 
@@ -116,13 +116,13 @@ describe('slack-interactivity', () => {
                 { action_id: 'unknown_action', block_id: 'block-1', type: 'button' }
             ]);
 
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
             expect(mockClient.views.open).not.toHaveBeenCalled();
         });
 
         it('should handle empty actions array', async () => {
             const payload = createBlockActionsPayload([]);
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
             expect(mockClient.views.open).not.toHaveBeenCalled();
         });
 
@@ -136,7 +136,7 @@ describe('slack-interactivity', () => {
                 token: 'test'
             });
 
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
 
             expect(mockClient.views.open).toHaveBeenCalledOnce();
             const viewBlocks = mockClient.views.open.mock.calls[0][0].view.blocks;
@@ -171,7 +171,7 @@ describe('slack-interactivity', () => {
                 }
             });
 
-            await handleSlackInteraction(payload, clientWithChat as never);
+            await HandleSlackInteraction(payload, clientWithChat as never);
 
             expect(mockChat.postMessage).toHaveBeenCalledOnce();
             const msgArgs = mockChat.postMessage.mock.calls[0][0];
@@ -190,7 +190,7 @@ describe('slack-interactivity', () => {
                 }
             });
 
-            await handleSlackInteraction(payload, clientWithChat as never);
+            await HandleSlackInteraction(payload, clientWithChat as never);
 
             expect(mockChat.postMessage).toHaveBeenCalledOnce();
             const msgArgs = mockChat.postMessage.mock.calls[0][0];
@@ -209,7 +209,7 @@ describe('slack-interactivity', () => {
                 }
             });
 
-            await handleSlackInteraction(payload, clientWithChat as never);
+            await HandleSlackInteraction(payload, clientWithChat as never);
 
             expect(mockChat.postMessage).toHaveBeenCalledOnce();
             const msgArgs = mockChat.postMessage.mock.calls[0][0];
@@ -226,7 +226,7 @@ describe('slack-interactivity', () => {
                 }
             });
 
-            await handleSlackInteraction(payload, clientWithChat as never);
+            await HandleSlackInteraction(payload, clientWithChat as never);
 
             expect(mockChat.postMessage).not.toHaveBeenCalled();
         });
@@ -240,7 +240,7 @@ describe('slack-interactivity', () => {
                 'invalid-json'
             );
 
-            await handleSlackInteraction(payload, clientWithChat as never);
+            await HandleSlackInteraction(payload, clientWithChat as never);
             expect(mockChat.postMessage).not.toHaveBeenCalled();
         });
     });
@@ -254,7 +254,7 @@ describe('slack-interactivity', () => {
                 { action_id: 'mj:form_choice:color:blue', block_id: 'b1', type: 'button', value: 'Blue' }
             ]);
 
-            await handleSlackInteraction(payload, clientWithChat as never);
+            await HandleSlackInteraction(payload, clientWithChat as never);
 
             expect(mockChat.postMessage).toHaveBeenCalledOnce();
             const msgArgs = mockChat.postMessage.mock.calls[0][0];
@@ -276,7 +276,7 @@ describe('slack-interactivity', () => {
                 token: 'test'
             });
 
-            await handleSlackInteraction(payload, clientWithChat as never);
+            await HandleSlackInteraction(payload, clientWithChat as never);
             expect(mockChat.postMessage).not.toHaveBeenCalled();
         });
     });
@@ -299,7 +299,7 @@ describe('slack-interactivity', () => {
                 }
             ]);
 
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
 
             expect(mockClient.views.open).toHaveBeenCalledOnce();
             const viewArgs = mockClient.views.open.mock.calls[0][0];
@@ -316,7 +316,7 @@ describe('slack-interactivity', () => {
                 ]
             };
             // Register the form in the store
-            registerActiveForm('C123', 'msg-ts', form as never);
+            RegisterActiveForm('C123', 'msg-ts', form as never);
 
             const payload = createBlockActionsPayload([
                 {
@@ -327,7 +327,7 @@ describe('slack-interactivity', () => {
                 }
             ]);
 
-            await handleSlackInteraction(payload, mockClient as never);
+            await HandleSlackInteraction(payload, mockClient as never);
 
             expect(mockClient.views.open).toHaveBeenCalledOnce();
             const viewArgs = mockClient.views.open.mock.calls[0][0];
@@ -353,7 +353,7 @@ describe('slack-interactivity', () => {
                 message: { ts: 'expired-ts', text: 'old', blocks: [] }
             });
 
-            await handleSlackInteraction(payload, clientWithChat as never);
+            await HandleSlackInteraction(payload, clientWithChat as never);
 
             expect(mockChat.postEphemeral).toHaveBeenCalledOnce();
             expect(mockClient.views.open).not.toHaveBeenCalled();

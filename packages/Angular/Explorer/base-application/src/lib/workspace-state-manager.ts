@@ -6,7 +6,7 @@ import { UserInfoEngine, MJWorkspaceEntity } from '@memberjunction/core-entities
 import {
   WorkspaceConfiguration,
   WorkspaceTab,
-  createDefaultWorkspaceConfiguration
+  CreateDefaultWorkspaceConfiguration
 } from './interfaces/workspace-configuration.interface';
 import { TabRequest } from './interfaces/tab-request.interface';
 
@@ -211,7 +211,7 @@ export class WorkspaceStateManager {
       // Test mode — skip server load entirely. Just emit a default config so the
       // workspace starts clean for this BrowserContext. No MJWorkspaceEntity is
       // created or read; the DB row (if any) is ignored.
-      this.configuration$.next(createDefaultWorkspaceConfiguration());
+      this.configuration$.next(CreateDefaultWorkspaceConfiguration());
       return;
     }
     // Use UserInfoEngine for centralized, cached workspace loading
@@ -220,7 +220,7 @@ export class WorkspaceStateManager {
     // Permission-denied ≠ empty — don't auto-create a workspace for denied users.
     if (engine.IsPermissionConstrained) {
       LogStatus('[WorkspaceStateManager] UserInfoEngine is permission-constrained, using default workspace configuration');
-      this.configuration$.next(createDefaultWorkspaceConfiguration());
+      this.configuration$.next(CreateDefaultWorkspaceConfiguration());
       return;
     }
 
@@ -235,7 +235,7 @@ export class WorkspaceStateManager {
 
       const config = configJson
         ? JSON.parse(configJson) as WorkspaceConfiguration
-        : createDefaultWorkspaceConfiguration();
+        : CreateDefaultWorkspaceConfiguration();
 
       this.configuration$.next(config);
     }
@@ -245,13 +245,13 @@ export class WorkspaceStateManager {
       const workspace = await md.GetEntityObject<MJWorkspaceEntity>('MJ: Workspaces', md.CurrentUser);
       workspace.UserID = userId;
       workspace.Name = 'Default';
-      workspace.Configuration = JSON.stringify(createDefaultWorkspaceConfiguration());
+      workspace.Configuration = JSON.stringify(CreateDefaultWorkspaceConfiguration());
 
       const saveResult = await workspace.Save();
 
       if (saveResult) {
         this.workspace$.next(workspace);
-        this.configuration$.next(createDefaultWorkspaceConfiguration());
+        this.configuration$.next(CreateDefaultWorkspaceConfiguration());
       } else {
         console.error('[WorkspaceStateManager.loadWorkspace] Failed to save workspace');
         throw new Error('Failed to create default workspace');
@@ -297,7 +297,7 @@ export class WorkspaceStateManager {
    * Used for recovery when stale or corrupted workspace data prevents startup.
    */
   async ResetConfiguration(): Promise<void> {
-    const defaultConfig = createDefaultWorkspaceConfiguration();
+    const defaultConfig = CreateDefaultWorkspaceConfiguration();
     this.configuration$.next(defaultConfig);
     await this.persistConfiguration();
   }

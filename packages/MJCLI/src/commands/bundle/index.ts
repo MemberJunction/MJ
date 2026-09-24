@@ -1,8 +1,8 @@
 import path from 'node:path';
 import { Command, Flags } from '@oclif/core';
 import { createDistributionBundle } from '@memberjunction/installer';
-import { getOptionalConfig } from '../../config';
-import { resolveGitRef } from '../../lib/migration-fetch';
+import { GetOptionalConfig } from '../../config';
+import { ResolveGitRef } from '../../lib/migration-fetch';
 
 /**
  * `mj bundle` — produce a self-contained MemberJunction distribution zip for
@@ -41,12 +41,12 @@ export default class Bundle extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(Bundle);
-    const config = getOptionalConfig();
+    const config = GetOptionalConfig();
 
     const out = path.resolve(flags.out);
     const source = flags.source ? path.resolve(flags.source) : undefined;
     // Local source skips fetching; otherwise resolve the ref (tag → vX.Y.Z, branch unchanged).
-    const ref = source ? undefined : resolveGitRef(flags.tag ?? config?.mjRepoBranch ?? 'main');
+    const ref = source ? undefined : ResolveGitRef(flags.tag ?? config?.mjRepoBranch ?? 'main');
     const repoUrl = config?.mjRepoUrl;
 
     this.log(source ? `Bundling from local source: ${source}` : `Bundling ${ref} from ${repoUrl ?? 'the canonical MemberJunction repo'}...`);

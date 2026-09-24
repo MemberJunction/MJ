@@ -48,28 +48,43 @@ export class ActiveTasksService {
   /**
    * Observable of all active tasks as an array
    */
-  public readonly tasks$: Observable<ActiveTask[]> = this._tasks$.pipe(
+  public readonly Tasks$: Observable<ActiveTask[]> = this._tasks$.pipe(
     map(taskMap => Array.from(taskMap.values()))
   );
+
+  /** @deprecated Use {@link Tasks$}. */
+  public get tasks$(): Observable<ActiveTask[]> {
+    return this.Tasks$;
+  }
 
   /**
    * Observable of the count of active tasks
    */
-  public readonly taskCount$: Observable<number> = this.tasks$.pipe(
+  public readonly TaskCount$: Observable<number> = this.Tasks$.pipe(
     map(tasks => tasks.length)
   );
+
+  /** @deprecated Use {@link TaskCount$}. */
+  public get taskCount$(): Observable<number> {
+    return this.TaskCount$;
+  }
 
   /**
    * Observable of conversation IDs that have 1+ active tasks
    * Use this for quick lookups in conversation lists
    */
-  public readonly conversationIdsWithTasks$: Observable<Set<string>> = this._conversationIdsWithTasks$.asObservable();
+  public readonly ConversationIdsWithTasks$: Observable<Set<string>> = this._conversationIdsWithTasks$.asObservable();
+
+  /** @deprecated Use {@link ConversationIdsWithTasks$}. */
+  public get conversationIdsWithTasks$(): Observable<Set<string>> {
+    return this.ConversationIdsWithTasks$;
+  }
 
   /**
    * Observable of tasks grouped by conversation ID
    * Returns Map<conversationId, ActiveTask[]>
    */
-  public readonly tasksByConversationId$: Observable<Map<string, ActiveTask[]>> = this.tasks$.pipe(
+  public readonly TasksByConversationId$: Observable<Map<string, ActiveTask[]>> = this.Tasks$.pipe(
     map(tasks => {
       const grouped = new Map<string, ActiveTask[]>();
       for (const task of tasks) {
@@ -83,12 +98,17 @@ export class ActiveTasksService {
     })
   );
 
+  /** @deprecated Use {@link TasksByConversationId$}. */
+  public get tasksByConversationId$(): Observable<Map<string, ActiveTask[]>> {
+    return this.TasksByConversationId$;
+  }
+
   /**
    * Add a new active task
    * @param task Task details (without id and startTime)
    * @returns The generated task ID
    */
-  add(task: Omit<ActiveTask, 'id' | 'startTime'>): string {
+  Add(task: Omit<ActiveTask, 'id' | 'startTime'>): string {
     const id = `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const fullTask = {
       ...task,
@@ -113,11 +133,16 @@ export class ActiveTasksService {
     return id;
   }
 
+  /** @deprecated Use {@link Add}. */
+  add(task: Omit<ActiveTask, 'id' | 'startTime'>): string {
+    return this.Add(task);
+  }
+
   /**
    * Remove an active task
    * @param id The task ID to remove
    */
-  remove(id: string): void {
+  Remove(id: string): void {
     const current = this._tasks$.value;
     const task = current.get(id);
     current.delete(id);
@@ -131,6 +156,11 @@ export class ActiveTasksService {
     LogStatusEx({ message: `➖ Task removed:`, additionalArgs: [{id, conversationId: task?.conversationId, agentName: task?.agentName}], verboseOnly: true });
     LogStatusEx({ message: `📊 Total tasks remaining:`, additionalArgs: [this._tasks$.value.size], verboseOnly: true });
     LogStatusEx({ message: `🗂️ Conversation IDs with tasks:`, additionalArgs: [Array.from(this._conversationIdsWithTasks$.value)], verboseOnly: true });
+  }
+
+  /** @deprecated Use {@link Remove}. */
+  remove(id: string): void {
+    return this.Remove(id);
   }
 
   /**
@@ -152,7 +182,7 @@ export class ActiveTasksService {
    * @param id The task ID
    * @param status The new status text
    */
-  updateStatus(id: string, status: string): void {
+  UpdateStatus(id: string, status: string): void {
     const current = this._tasks$.value;
     const task = current.get(id);
     // Same-value updates are no-ops so high-frequency callers (e.g. the streamed
@@ -164,14 +194,24 @@ export class ActiveTasksService {
     }
   }
 
+  /** @deprecated Use {@link UpdateStatus}. */
+  updateStatus(id: string, status: string): void {
+    return this.UpdateStatus(id, status);
+  }
+
   /**
    * Get an active task by its conversation detail ID
    * @param conversationDetailId The conversation detail ID
    * @returns The task if found, undefined otherwise
    */
-  getByConversationDetailId(conversationDetailId: string): ActiveTask | undefined {
+  GetByConversationDetailId(conversationDetailId: string): ActiveTask | undefined {
     const tasks = Array.from(this._tasks$.value.values());
     return tasks.find(task => task.conversationDetailId === conversationDetailId);
+  }
+
+  /** @deprecated Use {@link GetByConversationDetailId}. */
+  getByConversationDetailId(conversationDetailId: string): ActiveTask | undefined {
+    return this.GetByConversationDetailId(conversationDetailId);
   }
 
   /**
@@ -180,13 +220,18 @@ export class ActiveTasksService {
    * @param status The new status text
    * @returns true if task was found and updated, false otherwise
    */
-  updateStatusByConversationDetailId(conversationDetailId: string, status: string): boolean {
-    const task = this.getByConversationDetailId(conversationDetailId);
+  UpdateStatusByConversationDetailId(conversationDetailId: string, status: string): boolean {
+    const task = this.GetByConversationDetailId(conversationDetailId);
     if (task) {
-      this.updateStatus(task.id, status);
+      this.UpdateStatus(task.id, status);
       return true;
     }
     return false;
+  }
+
+  /** @deprecated Use {@link UpdateStatusByConversationDetailId}. */
+  updateStatusByConversationDetailId(conversationDetailId: string, status: string): boolean {
+    return this.UpdateStatusByConversationDetailId(conversationDetailId, status);
   }
 
   /**
@@ -194,9 +239,14 @@ export class ActiveTasksService {
    * @param agentRunId The AIAgentRun ID
    * @returns The task if found, undefined otherwise
    */
-  getByAgentRunId(agentRunId: string): ActiveTask | undefined {
+  GetByAgentRunId(agentRunId: string): ActiveTask | undefined {
     const tasks = Array.from(this._tasks$.value.values());
     return tasks.find(task => task.agentRunId === agentRunId);
+  }
+
+  /** @deprecated Use {@link GetByAgentRunId}. */
+  getByAgentRunId(agentRunId: string): ActiveTask | undefined {
+    return this.GetByAgentRunId(agentRunId);
   }
 
   /**
@@ -204,20 +254,30 @@ export class ActiveTasksService {
    * @param agentRunId The AIAgentRun ID
    * @returns true if task was found and removed, false otherwise
    */
-  removeByAgentRunId(agentRunId: string): boolean {
-    const task = this.getByAgentRunId(agentRunId);
+  RemoveByAgentRunId(agentRunId: string): boolean {
+    const task = this.GetByAgentRunId(agentRunId);
     if (task) {
-      this.remove(task.id);
+      this.Remove(task.id);
       return true;
     }
     return false;
   }
 
+  /** @deprecated Use {@link RemoveByAgentRunId}. */
+  removeByAgentRunId(agentRunId: string): boolean {
+    return this.RemoveByAgentRunId(agentRunId);
+  }
+
   /**
    * Clear all active tasks
    */
-  clear(): void {
+  Clear(): void {
     this._tasks$.next(new Map());
+  }
+
+  /** @deprecated Use {@link Clear}. */
+  clear(): void {
+    return this.Clear();
   }
 
   /**
@@ -225,7 +285,7 @@ export class ActiveTasksService {
    * Call this on app initialization to restore state after browser refresh.
    * @param currentUser The current user to filter agent runs by
    */
-  async restoreFromDatabase(currentUser: UserInfo): Promise<void> {
+  async RestoreFromDatabase(currentUser: UserInfo): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
 
@@ -260,11 +320,11 @@ export class ActiveTasksService {
       for (const agentRun of result.Results) {
         // Skip if already tracked (prevents duplicates)
         if (agentRun.ConversationDetailID &&
-            this.getByConversationDetailId(agentRun.ConversationDetailID)) {
+            this.GetByConversationDetailId(agentRun.ConversationDetailID)) {
           continue;
         }
 
-        this.add({
+        this.Add({
           agentName: agentRun.Agent || 'Unknown Agent',
           agentId: agentRun.AgentID,
           agentRunId: agentRun.ID, // For finding task on completion
@@ -285,5 +345,10 @@ export class ActiveTasksService {
     } catch (error) {
       console.error('Failed to restore active tasks from database:', error);
     }
+  }
+
+  /** @deprecated Use {@link RestoreFromDatabase}. */
+  async restoreFromDatabase(currentUser: UserInfo): Promise<void> {
+    return this.RestoreFromDatabase(currentUser);
   }
 }

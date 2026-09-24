@@ -3,8 +3,10 @@ import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJMLTrainingPipelineEntity, MJMLModelEntity, PredictiveStudioTrainModelOperation } from '@memberjunction/core-entities';
+import { CompositeKey, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { MJMLTrainingPipelineEntity, MJMLModelEntity, PredictiveStudioTrainModelOperation, UserInfoEngine } from '@memberjunction/core-entities';
+import { NavigationService } from '@memberjunction/ng-shared';
+import { AngularSplitModule } from 'angular-split';
 import { PSPipelineWizardComponent } from './ps-pipeline-wizard.component';
 import {
   DOMINANCE_THRESHOLD_DEFAULT,
@@ -18,6 +20,7 @@ import {
   type ValidationStrategy,
   type ProblemType,
 } from '@memberjunction/predictive-studio-core';
+import { PSPanelKey } from '../predictive-studio.types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 
 type NodeType = 'src' | 'feat' | 'emb' | 'target' | 'algo' | 'output';
@@ -79,7 +82,7 @@ const PS_PIPELINES_STARTER_PROMPT =
 @Component({
   standalone: true,
   selector: 'ps-pipelines',
-  imports: [CommonModule, MJButtonDirective, PSPipelineWizardComponent],
+  imports: [CommonModule, MJButtonDirective, PSPipelineWizardComponent, AngularSplitModule],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.css', './ps-pipelines.component.css'],
   template: `
@@ -105,55 +108,75 @@ const PS_PIPELINES_STARTER_PROMPT =
           </div>
         </div>
       } @else {
-        <div class="pl-layout">
-          <!-- Left Column: Master Pipeline Catalog -->
-          <div class="pl-catalog" data-testid="ps-pipelines-catalog">
-            <div class="pl-catalog-header">
-              <div class="pl-catalog-title-row">
-                <h2>Pipelines ({{ filteredPipelines.length }})</h2>
-                <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-new" (click)="openWizard()">
-                  <i class="fa-solid fa-plus"></i> New
-                </button>
-              </div>
-              <div class="pl-search-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" [value]="searchQuery" (input)="onSearchInput($event)" placeholder="Filter pipelines..." />
-              </div>
-              <div class="pl-filter-chips">
-                <button class="pl-filter-chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">All</button>
-                <button class="pl-filter-chip" [class.active]="activeFilter === 'published'" (click)="setFilter('published')">Published</button>
-                <button class="pl-filter-chip" [class.active]="activeFilter === 'draft'" (click)="setFilter('draft')">Draft</button>
-                <button class="pl-filter-chip" [class.active]="activeFilter === 'core'" (click)="setFilter('core')">MJ Core</button>
-              </div>
+        <div class="pl-layout" [class.catalog-collapsed]="isCatalogCollapsed">
+          @if (isCatalogCollapsed) {
+            <div class="pl-collapsed-strip" role="region" aria-label="Pipelines catalog (collapsed)">
+              <button class="pl-rail-collapse" type="button" (click)="toggleCatalog()" aria-label="Expand pipelines catalog" title="Expand catalog">
+                <i class="fa-solid fa-chevron-right"></i>
+              </button>
+              <div class="pl-collapsed-strip-label"><i class="fa-solid fa-diagram-project"></i></div>
             </div>
+          }
 
-            <!-- Scrollable Catalog Cards List (preserves data-testid="ps-pipelines-picker" and "ps-pipelines-pill") -->
-            <div class="pl-picker" data-testid="ps-pipelines-picker">
-              @for (p of filteredPipelines; track p.ID) {
-                <button class="pl-pill pipeline-card" [class.on]="isSelectedPipeline(p)"
-                  data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)" [title]="p.Name">
-                  <div class="pl-card-top">
-                    <div class="pl-card-name">{{ p.Name }}</div>
-                    <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
+          <as-split direction="horizontal" class="pl-splitter" unit="percent" [gutterSize]="6" (dragEnd)="onSplitDragEnd($event.sizes)">
+            @if (!isCatalogCollapsed) {
+              <as-split-area [size]="catalogSizePct" [minSize]="18" [maxSize]="50">
+                <!-- Left Column: Master Pipeline Catalog -->
+                <div class="pl-catalog" data-testid="ps-pipelines-catalog">
+                  <div class="pl-catalog-header">
+                    <div class="pl-catalog-title-row">
+                      <h2>Pipelines ({{ filteredPipelines.length }})</h2>
+                      <div style="display:flex;gap:6px;align-items:center">
+                        <button mjButton variant="primary" size="sm" data-testid="ps-pipelines-new" (click)="openWizard()">
+                          <i class="fa-solid fa-plus"></i> New
+                        </button>
+                        <button class="pl-collapse-btn" type="button" (click)="toggleCatalog()" title="Collapse catalog" aria-label="Collapse catalog">
+                          <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="pl-search-box">
+                      <i class="fa-solid fa-magnifying-glass"></i>
+                      <input type="text" [value]="searchQuery" (input)="onSearchInput($event)" placeholder="Filter pipelines..." />
+                    </div>
+                    <div class="pl-filter-chips">
+                      <button class="pl-filter-chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">All</button>
+                      <button class="pl-filter-chip" [class.active]="activeFilter === 'published'" (click)="setFilter('published')">Published</button>
+                      <button class="pl-filter-chip" [class.active]="activeFilter === 'draft'" (click)="setFilter('draft')">Draft</button>
+                      <button class="pl-filter-chip" [class.active]="activeFilter === 'core'" (click)="setFilter('core')">MJ Core</button>
+                    </div>
                   </div>
-                  <div class="pl-card-meta">
-                    <span class="pl-entity-tag">{{ targetEntityName(p) }}</span>
-                    <span>&bull;</span>
-                    <span class="pl-target-tag">{{ p.TargetVariable || 'Target' }}</span>
-                  </div>
-                  <div class="pl-card-meta" style="justify-content: space-between; margin-top: 2px;">
-                    <span>{{ p.ProblemType }}</span>
-                    @if (bestMetricForPipeline(p); as bm) {
-                      <span class="pl-metric-badge"><i class="fa-solid fa-trophy" style="color:#eab308"></i> {{ bm }}</span>
+
+                  <!-- Scrollable Catalog Cards List (preserves data-testid="ps-pipelines-picker" and "ps-pipelines-pill") -->
+                  <div class="pl-picker" data-testid="ps-pipelines-picker">
+                    @for (p of filteredPipelines; track p.ID) {
+                      <button class="pl-pill pipeline-card" [class.on]="isSelectedPipeline(p)"
+                        data-testid="ps-pipelines-pill" (click)="selectPipeline(p.ID)" [title]="p.Name">
+                        <div class="pl-card-top">
+                          <div class="pl-card-name">{{ p.Name }}</div>
+                          <span class="ps-badge" [class]="statusClass(p.Status)">{{ p.Status }}</span>
+                        </div>
+                        <div class="pl-card-meta">
+                          <span class="pl-entity-tag">{{ targetEntityName(p) }}</span>
+                          <span>&bull;</span>
+                          <span class="pl-target-tag">{{ p.TargetVariable || 'Target' }}</span>
+                        </div>
+                        <div class="pl-card-meta" style="justify-content: space-between; margin-top: 2px;">
+                          <span>{{ p.ProblemType }}</span>
+                          @if (bestMetricForPipeline(p); as bm) {
+                            <span class="pl-metric-badge"><i class="fa-solid fa-trophy" style="color:#eab308"></i> {{ bm }}</span>
+                          }
+                        </div>
+                      </button>
                     }
                   </div>
-                </button>
-              }
-            </div>
-          </div>
+                </div>
+              </as-split-area>
+            }
 
-          <!-- Right Column: Human-Centric Workspace (Stages View Default + DAG View Toggle) -->
-          <div class="pl-workspace" data-testid="ps-pipelines-workspace">
+            <as-split-area [size]="isCatalogCollapsed ? 100 : workspaceSizePct" [minSize]="40">
+              <!-- Right Column: Human-Centric Workspace (Stages View Default + DAG View Toggle) -->
+              <div class="pl-workspace" data-testid="ps-pipelines-workspace">
             <div class="pl-workspace-header">
               <div class="pl-workspace-title-area">
                 <div class="pl-breadcrumbs">
@@ -275,9 +298,28 @@ const PS_PIPELINES_STARTER_PROMPT =
                       </div>
                       <div class="pl-fg-body">
                         @for (st of editSteps; track st.Id) {
-                          <div class="pl-feature-row">
-                            <span class="pl-feature-name">{{ st.Label || st.Kind }}</span>
-                            <span class="ps-tag">{{ st.Kind }}</span>
+                          <div class="pl-feature-card" data-testid="ps-pipelines-step-card" (click)="selectStep(st.Id)">
+                            <div class="pl-feature-card-header">
+                              <span class="pl-feature-name">{{ st.Label || st.Kind }}</span>
+                              <span class="ps-tag">{{ st.Kind }}</span>
+                            </div>
+                            @if (getStepColumns(st); as cols) {
+                              @if (cols.length > 0) {
+                                <div class="pl-col-chips">
+                                  @for (col of cols; track col) {
+                                    <span class="pl-col-chip">{{ col }}</span>
+                                  }
+                                </div>
+                              }
+                            }
+                            @if (getStepInputs(st); as inputs) {
+                              @if (inputs.length > 0) {
+                                <div class="pl-step-inputs">
+                                  <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                                  <span>From: {{ inputs.join(', ') }}</span>
+                                </div>
+                              }
+                            }
                           </div>
                         }
                       </div>
@@ -380,21 +422,31 @@ const PS_PIPELINES_STARTER_PROMPT =
                           <th>Holdout Score</th>
                           <th>Status</th>
                           <th>Trained At</th>
+                          <th></th>
                         </tr>
                       </thead>
                       <tbody>
                         @for (m of pipelineModels; track m.ID) {
-                          <tr [class.winner-row]="m.Status === 'Published'">
+                          <tr [class.winner-row]="m.Status === 'Published'" class="pl-model-row" (click)="openModelRecord(m.ID)" style="cursor:pointer;" title="Open model record in Explorer">
                             <td>
-                              <strong>v{{ m.Version }}</strong>
-                              @if (m.Status === 'Published') {
-                                <span class="ps-tag success" style="margin-left:6px;"><i class="fa-solid fa-trophy"></i> Winner</span>
-                              }
+                              <div style="display:flex;align-items:center;gap:6px">
+                                <a class="pl-model-link" href="javascript:void(0)" (click)="$event.stopPropagation(); openModelRecord(m.ID)">
+                                  <strong>v{{ m.Version }}</strong>
+                                </a>
+                                @if (m.Status === 'Published') {
+                                  <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Winner</span>
+                                }
+                              </div>
                             </td>
                             <td>{{ m.Algorithm || 'Algorithm' }}</td>
                             <td><strong>{{ formatHoldout(m) }}</strong></td>
                             <td><span class="ps-badge" [class]="statusClass(m.Status)">{{ m.Status }}</span></td>
                             <td>{{ m.TrainedAt | date:'short' }}</td>
+                            <td style="text-align:right">
+                              <button type="button" class="pl-action-icon-btn" (click)="$event.stopPropagation(); openModelRecord(m.ID)" title="Open model record in Explorer">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                              </button>
+                            </td>
                           </tr>
                         }
                       </tbody>
@@ -412,12 +464,20 @@ const PS_PIPELINES_STARTER_PROMPT =
                         <span class="pl-stage-subtitle">Active inference wiring and model registry status.</span>
                       </div>
                     </div>
-                    @if (publishedModel; as pub) {
-                      <a class="ps-btn ps-btn-secondary" style="font-size:11px; padding:4px 10px; text-decoration:none;"
-                        [href]="'/app/predictive-studio/Models?modelId=' + pub.ID">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in Model Registry
-                      </a>
-                    }
+                    <div style="display:flex;gap:8px;align-items:center;">
+                      @if (publishedModel; as pub) {
+                        <button mjButton variant="secondary" size="sm" type="button"
+                          (click)="openModelRecord(pub.ID)"
+                          title="Open model record in Explorer">
+                          <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Model Record
+                        </button>
+                        <button mjButton variant="secondary" size="sm" type="button"
+                          (click)="viewTrainingRuns(pub.ID)"
+                          title="View training runs for this model">
+                          <i class="fa-solid fa-flask"></i> View Training Runs
+                        </button>
+                      }
+                    </div>
                   </div>
 
                   <div class="pl-serving-box">
@@ -448,23 +508,28 @@ const PS_PIPELINES_STARTER_PROMPT =
             <!-- Graph Canvas & Inspector -->
             @if (isGraphView) {
               <div class="builder">
-                <!-- Canvas Wrap -->
-                <div class="canvas-wrap">
-                  <div class="canvas-bar">
-                    <div class="canvas-bar-left">
-                      <span class="ps-small ps-muted" style="font-weight:600">Add to Graph:</span>
-                      <button class="ps-pchip s" data-testid="ps-pipelines-add-source" (click)="addSource()"><i class="fa-solid fa-database"></i> Source</button>
-                      <button class="ps-pchip f" data-testid="ps-pipelines-add-step" (click)="addStep()"><i class="fa-solid fa-sliders"></i> Feature step</button>
-                    </div>
-                    <div class="canvas-bar-right">
-                      <div class="ps-zoom-controls">
-                        <button class="ps-icon-btn" (click)="zoomOut()" [disabled]="zoomLevel <= 0.5" title="Zoom Out"><i class="fa-solid fa-minus"></i></button>
-                        <span class="ps-zoom-label" (click)="resetZoom()" title="Reset to 100%">{{ Math.round(zoomLevel * 100) }}%</span>
-                        <button class="ps-icon-btn" (click)="zoomIn()" [disabled]="zoomLevel >= 2.0" title="Zoom In"><i class="fa-solid fa-plus"></i></button>
+                <as-split direction="horizontal" class="builder-splitter" unit="percent" [gutterSize]="6" (dragEnd)="onInspectorSplitDragEnd($event.sizes)">
+                  <as-split-area [size]="isInspectorCollapsed ? 100 : canvasSizePct" [minSize]="40">
+                    <!-- Canvas Wrap -->
+                    <div class="canvas-wrap">
+                      <div class="canvas-bar">
+                        <div class="canvas-bar-left">
+                          <span class="ps-small ps-muted" style="font-weight:600">Add to Graph:</span>
+                          <button class="ps-pchip s" data-testid="ps-pipelines-add-source" (click)="addSource()"><i class="fa-solid fa-database"></i> Source</button>
+                          <button class="ps-pchip f" data-testid="ps-pipelines-add-step" (click)="addStep()"><i class="fa-solid fa-sliders"></i> Feature step</button>
+                        </div>
+                        <div class="canvas-bar-right">
+                          <div class="ps-zoom-controls">
+                            <button class="ps-icon-btn" (click)="zoomOut()" [disabled]="zoomLevel <= 0.5" title="Zoom Out"><i class="fa-solid fa-minus"></i></button>
+                            <span class="ps-zoom-label" (click)="resetZoom()" title="Reset to 100%">{{ Math.round(zoomLevel * 100) }}%</span>
+                            <button class="ps-icon-btn" (click)="zoomIn()" [disabled]="zoomLevel >= 2.0" title="Zoom In"><i class="fa-solid fa-plus"></i></button>
+                          </div>
+                          <button class="ps-icon-btn" [class.active]="!isInspectorCollapsed" (click)="toggleInspector()" [title]="isInspectorCollapsed ? 'Open Inspector' : 'Collapse Inspector'">
+                            <i class="fa-solid fa-circle-info"></i>
+                          </button>
+                          <span class="ps-small ps-muted ps-node-count"><i class="fa-solid fa-circle-nodes"></i> {{ nodes.length }} nodes · {{ edges.length }} edges</span>
+                        </div>
                       </div>
-                      <span class="ps-small ps-muted ps-node-count"><i class="fa-solid fa-circle-nodes"></i> {{ nodes.length }} nodes · {{ edges.length }} edges</span>
-                    </div>
-                  </div>
 
                   <div class="ps-flow big" data-testid="ps-pipelines-canvas">
                     <div class="ps-graph-viewport"
@@ -527,7 +592,10 @@ const PS_PIPELINES_STARTER_PROMPT =
                     </div>
                   </div>
                 </div>
+              </as-split-area>
 
+            @if (!isInspectorCollapsed) {
+              <as-split-area [size]="inspectorSizePct" [minSize]="20" [maxSize]="55">
                 <!-- Inspector -->
                 <div class="ps-col inspector" data-testid="ps-pipelines-inspector">
                   <div class="ps-card insp">
@@ -537,6 +605,9 @@ const PS_PIPELINES_STARTER_PROMPT =
                         <h3 data-testid="ps-pipelines-inspector-title">{{ selectedNode.title }}</h3>
                         <div class="ps-small ps-muted">{{ nodeTypeLabel(selectedNode.type) }} · selected</div>
                       </div>
+                      <button class="insp-collapse-btn" type="button" (click)="toggleInspector()" title="Collapse inspector" aria-label="Collapse inspector">
+                        <i class="fa-solid fa-chevron-right"></i>
+                      </button>
                       @if (selectedNode.type === 'src' || selectedNode.type === 'feat' || selectedNode.type === 'emb') {
                         <button mjButton variant="secondary" size="sm" data-testid="ps-pipelines-delete" (click)="deleteSelected()"><i class="fa-solid fa-trash"></i></button>
                       }
@@ -593,9 +664,69 @@ const PS_PIPELINES_STARTER_PROMPT =
                       @if (selectedNode.type === 'algo') {
                         <div class="ps-field"><label>Algorithm</label><select class="mj-input" [value]="editAlgorithmId" (change)="setAlgorithm(inputVal($event))">@for (a of algorithms; track a.ID) { <option [value]="a.ID">{{ a.Name }}</option> }</select></div>
                         <div class="ps-field"><label>Hyperparameters (JSON)</label><textarea class="mj-textarea" rows="4" [value]="editHyperparams" (input)="setHyperparams(inputVal($event))"></textarea></div>
+                        @if (publishedModel; as pub) {
+                          <div style="margin-top:12px;padding:10px;border-radius:var(--mj-radius-sm);background:var(--mj-bg-surface-sunken);border:1px solid var(--mj-border-default);">
+                            <div class="ps-small ps-muted" style="margin-bottom:6px;">Current Serving Winner</div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                              <span style="font-size:var(--mj-text-xs);font-weight:600;">v{{ pub.Version }} ({{ pub.Algorithm || 'Model' }})</span>
+                              <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Active</span>
+                            </div>
+                            <div style="display:flex;gap:6px;">
+                              <button mjButton variant="secondary" size="sm" type="button" (click)="openModelRecord(pub.ID)" style="flex:1;justify-content:center;" title="Open model record in Explorer">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> Model
+                              </button>
+                              <button mjButton variant="secondary" size="sm" type="button" (click)="viewTrainingRuns(pub.ID)" style="flex:1;justify-content:center;" title="View training runs">
+                                <i class="fa-solid fa-flask"></i> Runs
+                              </button>
+                            </div>
+                          </div>
+                        }
                       }
                       @if (selectedNode.type === 'output') {
-                        <div class="ps-small ps-muted">The trained model artifact. Run <strong>Train</strong> to produce a new versioned model from this pipeline.</div>
+                        @if (pipelineModels.length === 0) {
+                          <div class="ps-small ps-muted">The trained model artifact. Run <strong>Train</strong> to produce a new versioned model from this pipeline.</div>
+                        } @else {
+                          <div style="display:flex;flex-direction:column;gap:12px;">
+                            @if (pipelineModels.length > 1) {
+                              <div class="ps-field">
+                                <label>Model Version</label>
+                                <select class="mj-input" [value]="inspectedModel?.ID" (change)="selectModelVersion(inputVal($event))">
+                                  @for (m of pipelineModels; track m.ID) {
+                                    <option [value]="m.ID">v{{ m.Version }} · {{ m.Algorithm || 'Algorithm' }} ({{ m.Status }})</option>
+                                  }
+                                </select>
+                              </div>
+                            }
+                            @if (inspectedModel; as mdl) {
+                              <div style="border:1px solid var(--mj-border-default);border-radius:var(--mj-radius-md);padding:12px;background:var(--mj-bg-surface-sunken);display:flex;flex-direction:column;gap:8px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                  <div style="display:flex;align-items:center;gap:6px;">
+                                    <strong>v{{ mdl.Version }}</strong>
+                                    @if (mdl.Status === 'Published') {
+                                      <span class="ps-tag success"><i class="fa-solid fa-trophy"></i> Winner</span>
+                                    }
+                                    <span class="ps-badge" [class]="statusClass(mdl.Status)">{{ mdl.Status }}</span>
+                                  </div>
+                                  <span class="ps-mono ps-small ps-muted" [title]="mdl.ID">{{ mdl.ID.slice(0, 8) }}…</span>
+                                </div>
+                                <div style="font-size:var(--mj-text-xs);color:var(--mj-text-secondary);">
+                                  Algorithm: <strong>{{ mdl.Algorithm || selectedAlgorithmName }}</strong>
+                                </div>
+                                <div style="font-size:var(--mj-text-xs);color:var(--mj-text-secondary);">
+                                  Holdout Score: <strong>{{ formatHoldout(mdl) }}</strong>
+                                </div>
+                                <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px;">
+                                  <button mjButton variant="primary" size="sm" type="button" (click)="openModelRecord(mdl.ID)" style="width:100%;justify-content:center;">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Model Details
+                                  </button>
+                                  <button mjButton variant="secondary" size="sm" type="button" (click)="viewTrainingRuns(mdl.ID)" style="width:100%;justify-content:center;">
+                                    <i class="fa-solid fa-flask"></i> View Training Runs
+                                  </button>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        }
                       }
                     </div>
                   </div>
@@ -629,10 +760,15 @@ const PS_PIPELINES_STARTER_PROMPT =
                       <div class="ps-field"><label>Locked holdout fraction</label><input class="mj-input" type="number" step="0.05" [value]="editValidation.LockedHoldoutFraction" (input)="setHoldout(inputVal($event))" /></div>
                     </div>
                   </div>
-                </div>
-              </div>
-            }
+                  </div>
+                </as-split-area>
+              }
+            </as-split>
           </div>
+        }
+              </div>
+            </as-split-area>
+          </as-split>
         </div>
       }
 
@@ -654,163 +790,703 @@ const PS_PIPELINES_STARTER_PROMPT =
 export class PSPipelinesComponent implements OnInit, OnChanges {
   @Input() engine!: PredictiveStudioEngine;
   @Input() provider: IMetadataProvider | null = null;
-  @Input() currentUser: UserInfo | null = null;
+  @Input() CurrentUser: UserInfo | null = null;
 
-  @Output() askAgent = new EventEmitter<string>();
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo | null) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
+
+  @Output() AskAgent = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link AskAgent}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (askAgent) keeps working. Must stay AFTER AskAgent: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() askAgent = this.AskAgent;
+  @Output() Navigate = new EventEmitter<PSPanelKey>();
+
+  /**
+   * @deprecated Use {@link Navigate}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (navigate) keeps working. Must stay AFTER Navigate: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() navigate = this.Navigate;
 
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
+  private navigationService = inject(NavigationService);
 
-  public readonly starterPrompt = PS_PIPELINES_STARTER_PROMPT;
-  public readonly sourceKinds = SOURCE_KINDS;
-  public readonly stepKinds = STEP_KINDS;
-  public readonly problemTypes = PROBLEM_TYPES;
-  public readonly imputeStrategies = IMPUTE_STRATEGIES;
+  public IsCatalogCollapsed = false;
 
-  public pipelines: MJMLTrainingPipelineEntity[] = [];
-  public selectedPipelineId = '';
+  /** @deprecated Use {@link IsCatalogCollapsed}. */
+  public get isCatalogCollapsed() {
+    return this.IsCatalogCollapsed;
+  }
+  /** @deprecated Use {@link IsCatalogCollapsed}. */
+  public set isCatalogCollapsed(value) {
+    this.IsCatalogCollapsed = value;
+  }
+  public CatalogSizePct = 28;
 
-  public showWizard = false;
-  public wizardClonePipeline: MJMLTrainingPipelineEntity | null = null;
-  public initialWizardAlgorithmId?: string;
+  /** @deprecated Use {@link CatalogSizePct}. */
+  public get catalogSizePct() {
+    return this.CatalogSizePct;
+  }
+  /** @deprecated Use {@link CatalogSizePct}. */
+  public set catalogSizePct(value) {
+    this.CatalogSizePct = value;
+  }
+  public WorkspaceSizePct = 72;
 
-  @Input() public viewMode: 'stages' | 'graph' | 'dag' = 'stages';
-  public searchQuery = '';
-  public activeFilter = 'all';
+  /** @deprecated Use {@link WorkspaceSizePct}. */
+  public get workspaceSizePct() {
+    return this.WorkspaceSizePct;
+  }
+  /** @deprecated Use {@link WorkspaceSizePct}. */
+  public set workspaceSizePct(value) {
+    this.WorkspaceSizePct = value;
+  }
+  public IsInspectorCollapsed = false;
+
+  /** @deprecated Use {@link IsInspectorCollapsed}. */
+  public get isInspectorCollapsed() {
+    return this.IsInspectorCollapsed;
+  }
+  /** @deprecated Use {@link IsInspectorCollapsed}. */
+  public set isInspectorCollapsed(value) {
+    this.IsInspectorCollapsed = value;
+  }
+  public CanvasSizePct = 72;
+
+  /** @deprecated Use {@link CanvasSizePct}. */
+  public get canvasSizePct() {
+    return this.CanvasSizePct;
+  }
+  /** @deprecated Use {@link CanvasSizePct}. */
+  public set canvasSizePct(value) {
+    this.CanvasSizePct = value;
+  }
+  public InspectorSizePct = 28;
+
+  /** @deprecated Use {@link InspectorSizePct}. */
+  public get inspectorSizePct() {
+    return this.InspectorSizePct;
+  }
+  /** @deprecated Use {@link InspectorSizePct}. */
+  public set inspectorSizePct(value) {
+    this.InspectorSizePct = value;
+  }
+
+  public readonly StarterPrompt = PS_PIPELINES_STARTER_PROMPT;
+
+  /** @deprecated Use {@link StarterPrompt}. */
+  public get starterPrompt() {
+    return this.StarterPrompt;
+  }
+  public readonly SourceKinds = SOURCE_KINDS;
+
+  /** @deprecated Use {@link SourceKinds}. */
+  public get sourceKinds() {
+    return this.SourceKinds;
+  }
+  public readonly StepKinds = STEP_KINDS;
+
+  /** @deprecated Use {@link StepKinds}. */
+  public get stepKinds() {
+    return this.StepKinds;
+  }
+  public readonly ProblemTypes = PROBLEM_TYPES;
+
+  /** @deprecated Use {@link ProblemTypes}. */
+  public get problemTypes() {
+    return this.ProblemTypes;
+  }
+  public readonly ImputeStrategies = IMPUTE_STRATEGIES;
+
+  /** @deprecated Use {@link ImputeStrategies}. */
+  public get imputeStrategies() {
+    return this.ImputeStrategies;
+  }
+
+  public Pipelines: MJMLTrainingPipelineEntity[] = [];
+
+  /** @deprecated Use {@link Pipelines}. */
+  public get pipelines(): MJMLTrainingPipelineEntity[] {
+    return this.Pipelines;
+  }
+  /** @deprecated Use {@link Pipelines}. */
+  public set pipelines(value: MJMLTrainingPipelineEntity[]) {
+    this.Pipelines = value;
+  }
+  public SelectedPipelineId = '';
+
+  /** @deprecated Use {@link SelectedPipelineId}. */
+  public get selectedPipelineId() {
+    return this.SelectedPipelineId;
+  }
+  /** @deprecated Use {@link SelectedPipelineId}. */
+  public set selectedPipelineId(value) {
+    this.SelectedPipelineId = value;
+  }
+
+  public ShowWizard = false;
+
+  /** @deprecated Use {@link ShowWizard}. */
+  public get showWizard() {
+    return this.ShowWizard;
+  }
+  /** @deprecated Use {@link ShowWizard}. */
+  public set showWizard(value) {
+    this.ShowWizard = value;
+  }
+  public WizardClonePipeline: MJMLTrainingPipelineEntity | null = null;
+
+  /** @deprecated Use {@link WizardClonePipeline}. */
+  public get wizardClonePipeline(): MJMLTrainingPipelineEntity | null {
+    return this.WizardClonePipeline;
+  }
+  /** @deprecated Use {@link WizardClonePipeline}. */
+  public set wizardClonePipeline(value: MJMLTrainingPipelineEntity | null) {
+    this.WizardClonePipeline = value;
+  }
+  public initialWizardAlgorithmId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  @Input() public ViewMode: 'stages' | 'graph' | 'dag' = 'stages';
+
+  /** @deprecated Use {@link ViewMode}. */
+  @Input() public set viewMode(value: 'stages' | 'graph' | 'dag') {
+    this.ViewMode = value;
+  }
+  /** @deprecated Use {@link ViewMode}. */
+  public get viewMode(): 'stages' | 'graph' | 'dag' {
+    return this.ViewMode;
+  }
+  public SearchQuery = '';
+
+  /** @deprecated Use {@link SearchQuery}. */
+  public get searchQuery() {
+    return this.SearchQuery;
+  }
+  /** @deprecated Use {@link SearchQuery}. */
+  public set searchQuery(value) {
+    this.SearchQuery = value;
+  }
+  public ActiveFilter = 'all';
+
+  /** @deprecated Use {@link ActiveFilter}. */
+  public get activeFilter() {
+    return this.ActiveFilter;
+  }
+  /** @deprecated Use {@link ActiveFilter}. */
+  public set activeFilter(value) {
+    this.ActiveFilter = value;
+  }
 
   public readonly NODE_W = NODE_W;
   public readonly NODE_H = NODE_H;
   public Math = Math;
-  public zoomLevel = 1;
+  public ZoomLevel = 1;
 
-  public openWizard(algoId?: string): void {
-    this.wizardClonePipeline = null;
+  /** @deprecated Use {@link ZoomLevel}. */
+  public get zoomLevel() {
+    return this.ZoomLevel;
+  }
+  /** @deprecated Use {@link ZoomLevel}. */
+  public set zoomLevel(value) {
+    this.ZoomLevel = value;
+  }
+
+  public OpenWizard(algoId?: string): void {
+    this.WizardClonePipeline = null;
     this.initialWizardAlgorithmId = algoId;
-    this.showWizard = true;
+    this.ShowWizard = true;
   }
 
+  /** @deprecated Use {@link OpenWizard}. */
+  public openWizard(algoId?: string): void {
+    return this.OpenWizard(algoId);
+  }
+
+  public CloneSelected(): void {
+    if (!this.SelectedPipeline) return;
+    this.WizardClonePipeline = this.SelectedPipeline;
+    this.initialWizardAlgorithmId = undefined;
+    this.ShowWizard = true;
+  }
+
+  /** @deprecated Use {@link CloneSelected}. */
   public cloneSelected(): void {
-    if (!this.selectedPipeline) return;
-    this.wizardClonePipeline = this.selectedPipeline;
-    this.initialWizardAlgorithmId = undefined;
-    this.showWizard = true;
+    return this.CloneSelected();
   }
 
+  public CloseWizard(): void {
+    this.ShowWizard = false;
+    this.WizardClonePipeline = null;
+    this.initialWizardAlgorithmId = undefined;
+  }
+
+  /** @deprecated Use {@link CloseWizard}. */
   public closeWizard(): void {
-    this.showWizard = false;
-    this.wizardClonePipeline = null;
-    this.initialWizardAlgorithmId = undefined;
+    return this.CloseWizard();
   }
 
-  public async onWizardSaved(pipeline: MJMLTrainingPipelineEntity): Promise<void> {
-    this.closeWizard();
-    await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
-    this.pipelines = this.engine.Pipelines;
-    this.selectPipeline(pipeline.ID);
+  public async OnWizardSaved(pipeline: MJMLTrainingPipelineEntity): Promise<void> {
+    this.CloseWizard();
+    await this.engine.Config(true, this.CurrentUser ?? undefined, this.provider ?? undefined);
+    this.Pipelines = this.engine.Pipelines;
+    this.SelectPipeline(pipeline.ID);
     this.cdr.detectChanges();
   }
 
-  public async onWizardTrainRequested(pipeline: MJMLTrainingPipelineEntity): Promise<void> {
-    this.closeWizard();
-    await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
-    this.pipelines = this.engine.Pipelines;
-    this.selectPipeline(pipeline.ID);
+  /** @deprecated Use {@link OnWizardSaved}. */
+  public async onWizardSaved(pipeline: MJMLTrainingPipelineEntity): Promise<void> {
+    return this.OnWizardSaved(pipeline);
+  }
+
+  public async OnWizardTrainRequested(pipeline: MJMLTrainingPipelineEntity): Promise<void> {
+    this.CloseWizard();
+    await this.engine.Config(true, this.CurrentUser ?? undefined, this.provider ?? undefined);
+    this.Pipelines = this.engine.Pipelines;
+    this.SelectPipeline(pipeline.ID);
     await this.train();
   }
 
-  // Editable spec state (the source of truth; nodes/edges are derived).
-  public editSources: SourceBinding[] = [];
-  public editSteps: FeatureStep[] = [];
-  public editTargetVariable = '';
-  public editProblemType: ProblemType = 'classification';
-  public editAlgorithmId = '';
-  public editHyperparams = '{}';
-  public editLeakage: LeakageGuard = { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
-  public editAsOf: AsOfStrategy = { Mode: 'none' };
-  public editValidation: ValidationStrategy = { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 };
+  /** @deprecated Use {@link OnWizardTrainRequested}. */
+  public async onWizardTrainRequested(pipeline: MJMLTrainingPipelineEntity): Promise<void> {
+    return this.OnWizardTrainRequested(pipeline);
+  }
 
-  public nodes: DagNode[] = [];
-  public edges: DagEdge[] = [];
-  public selectedId = '';
-  public canvasW = 800;
-  public canvasH = 460;
-  public dirty = false;
-  public busy = false;
+  // Editable spec state (the source of truth; nodes/edges are derived).
+  public EditSources: SourceBinding[] = [];
+
+  /** @deprecated Use {@link EditSources}. */
+  public get editSources(): SourceBinding[] {
+    return this.EditSources;
+  }
+  /** @deprecated Use {@link EditSources}. */
+  public set editSources(value: SourceBinding[]) {
+    this.EditSources = value;
+  }
+  public EditSteps: FeatureStep[] = [];
+
+  /** @deprecated Use {@link EditSteps}. */
+  public get editSteps(): FeatureStep[] {
+    return this.EditSteps;
+  }
+  /** @deprecated Use {@link EditSteps}. */
+  public set editSteps(value: FeatureStep[]) {
+    this.EditSteps = value;
+  }
+  public EditTargetVariable = '';
+
+  /** @deprecated Use {@link EditTargetVariable}. */
+  public get editTargetVariable() {
+    return this.EditTargetVariable;
+  }
+  /** @deprecated Use {@link EditTargetVariable}. */
+  public set editTargetVariable(value) {
+    this.EditTargetVariable = value;
+  }
+  public EditProblemType: ProblemType = 'classification';
+
+  /** @deprecated Use {@link EditProblemType}. */
+  public get editProblemType(): ProblemType {
+    return this.EditProblemType;
+  }
+  /** @deprecated Use {@link EditProblemType}. */
+  public set editProblemType(value: ProblemType) {
+    this.EditProblemType = value;
+  }
+  public EditAlgorithmId = '';
+
+  /** @deprecated Use {@link EditAlgorithmId}. */
+  public get editAlgorithmId() {
+    return this.EditAlgorithmId;
+  }
+  /** @deprecated Use {@link EditAlgorithmId}. */
+  public set editAlgorithmId(value) {
+    this.EditAlgorithmId = value;
+  }
+  public EditHyperparams = '{}';
+
+  /** @deprecated Use {@link EditHyperparams}. */
+  public get editHyperparams() {
+    return this.EditHyperparams;
+  }
+  /** @deprecated Use {@link EditHyperparams}. */
+  public set editHyperparams(value) {
+    this.EditHyperparams = value;
+  }
+  public EditLeakage: LeakageGuard = { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT };
+
+  /** @deprecated Use {@link EditLeakage}. */
+  public get editLeakage(): LeakageGuard {
+    return this.EditLeakage;
+  }
+  /** @deprecated Use {@link EditLeakage}. */
+  public set editLeakage(value: LeakageGuard) {
+    this.EditLeakage = value;
+  }
+  public EditAsOf: AsOfStrategy = { Mode: 'none' };
+
+  /** @deprecated Use {@link EditAsOf}. */
+  public get editAsOf(): AsOfStrategy {
+    return this.EditAsOf;
+  }
+  /** @deprecated Use {@link EditAsOf}. */
+  public set editAsOf(value: AsOfStrategy) {
+    this.EditAsOf = value;
+  }
+  public EditValidation: ValidationStrategy = { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 };
+
+  /** @deprecated Use {@link EditValidation}. */
+  public get editValidation(): ValidationStrategy {
+    return this.EditValidation;
+  }
+  /** @deprecated Use {@link EditValidation}. */
+  public set editValidation(value: ValidationStrategy) {
+    this.EditValidation = value;
+  }
+
+  public Nodes: DagNode[] = [];
+
+  /** @deprecated Use {@link Nodes}. */
+  public get nodes(): DagNode[] {
+    return this.Nodes;
+  }
+  /** @deprecated Use {@link Nodes}. */
+  public set nodes(value: DagNode[]) {
+    this.Nodes = value;
+  }
+  public Edges: DagEdge[] = [];
+
+  /** @deprecated Use {@link Edges}. */
+  public get edges(): DagEdge[] {
+    return this.Edges;
+  }
+  /** @deprecated Use {@link Edges}. */
+  public set edges(value: DagEdge[]) {
+    this.Edges = value;
+  }
+  public SelectedId = '';
+
+  /** @deprecated Use {@link SelectedId}. */
+  public get selectedId() {
+    return this.SelectedId;
+  }
+  /** @deprecated Use {@link SelectedId}. */
+  public set selectedId(value) {
+    this.SelectedId = value;
+  }
+  public CanvasW = 800;
+
+  /** @deprecated Use {@link CanvasW}. */
+  public get canvasW() {
+    return this.CanvasW;
+  }
+  /** @deprecated Use {@link CanvasW}. */
+  public set canvasW(value) {
+    this.CanvasW = value;
+  }
+  public CanvasH = 460;
+
+  /** @deprecated Use {@link CanvasH}. */
+  public get canvasH() {
+    return this.CanvasH;
+  }
+  /** @deprecated Use {@link CanvasH}. */
+  public set canvasH(value) {
+    this.CanvasH = value;
+  }
+  public Dirty = false;
+
+  /** @deprecated Use {@link Dirty}. */
+  public get dirty() {
+    return this.Dirty;
+  }
+  /** @deprecated Use {@link Dirty}. */
+  public set dirty(value) {
+    this.Dirty = value;
+  }
+  public Busy = false;
+
+  /** @deprecated Use {@link Busy}. */
+  public get busy() {
+    return this.Busy;
+  }
+  /** @deprecated Use {@link Busy}. */
+  public set busy(value) {
+    this.Busy = value;
+  }
 
   private nodeById = new Map<string, DagNode>();
   private stepSeq = 0;
 
   public ngOnChanges(_changes?: SimpleChanges): void {
-    this.refreshFromEngine();
+    this.RefreshFromEngine();
   }
 
   ngOnInit(): void {
-    this.refreshFromEngine();
+    const saved = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.pipelines.layout');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.catalogSizePct === 'number' && parsed.catalogSizePct >= 15 && parsed.catalogSizePct <= 60) {
+          this.CatalogSizePct = parsed.catalogSizePct;
+          this.WorkspaceSizePct = 100 - this.CatalogSizePct;
+        }
+        if (typeof parsed.isCatalogCollapsed === 'boolean') {
+          this.IsCatalogCollapsed = parsed.isCatalogCollapsed;
+        }
+        if (typeof parsed.canvasSizePct === 'number' && parsed.canvasSizePct >= 40 && parsed.canvasSizePct <= 85) {
+          this.CanvasSizePct = parsed.canvasSizePct;
+          this.InspectorSizePct = 100 - this.CanvasSizePct;
+        }
+        if (typeof parsed.isInspectorCollapsed === 'boolean') {
+          this.IsInspectorCollapsed = parsed.isInspectorCollapsed;
+        }
+      } catch {}
+    }
+    this.RefreshFromEngine();
   }
 
-  public refreshFromEngine(): void {
-    this.pipelines = this.engine?.Pipelines ?? [];
-    if (!this.selectedPipelineId && this.pipelines.length > 0) {
-      this.selectPipeline(this.pipelines[0].ID);
-    } else if (this.selectedPipelineId && !this.pipelines.some((p) => UUIDsEqual(p.ID, this.selectedPipelineId))) {
-      if (this.pipelines.length > 0) {
-        this.selectPipeline(this.pipelines[0].ID);
+  public OnSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
+      this.CatalogSizePct = Math.round(sizes[0]);
+      this.WorkspaceSizePct = Math.round(sizes[1]);
+      this.saveLayoutPrefs();
+    }
+  }
+
+  /** @deprecated Use {@link OnSplitDragEnd}. */
+  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    return this.OnSplitDragEnd(sizes);
+  }
+
+  public ToggleCatalog(): void {
+    this.IsCatalogCollapsed = !this.IsCatalogCollapsed;
+    this.saveLayoutPrefs();
+    this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link ToggleCatalog}. */
+  public toggleCatalog(): void {
+    return this.ToggleCatalog();
+  }
+
+  public OnInspectorSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
+      this.CanvasSizePct = Math.round(sizes[0]);
+      this.InspectorSizePct = Math.round(sizes[1]);
+      this.saveLayoutPrefs();
+    }
+  }
+
+  /** @deprecated Use {@link OnInspectorSplitDragEnd}. */
+  public onInspectorSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    return this.OnInspectorSplitDragEnd(sizes);
+  }
+
+  public ToggleInspector(): void {
+    this.IsInspectorCollapsed = !this.IsInspectorCollapsed;
+    this.saveLayoutPrefs();
+    this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link ToggleInspector}. */
+  public toggleInspector(): void {
+    return this.ToggleInspector();
+  }
+
+  private saveLayoutPrefs(): void {
+    const prefs = {
+      catalogSizePct: this.CatalogSizePct,
+      isCatalogCollapsed: this.IsCatalogCollapsed,
+      canvasSizePct: this.CanvasSizePct,
+      inspectorSizePct: this.InspectorSizePct,
+      isInspectorCollapsed: this.IsInspectorCollapsed,
+    };
+    UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.pipelines.layout', JSON.stringify(prefs));
+  }
+
+  public OpenModelRecord(modelId: string): void {
+    if (!modelId) return;
+    try {
+      const p = this.provider ?? new Metadata();
+      if (!p) return;
+      const entity = p.EntityByName('MJ: ML Models');
+      if (!entity) return;
+      const ck = CompositeKey.FromURLSegment(entity, modelId);
+      this.navigationService.OpenEntityRecord('MJ: ML Models', ck);
+    } catch (err) {
+      this.notifications.CreateSimpleNotification(`Could not open model: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+  }
+
+  /** @deprecated Use {@link OpenModelRecord}. */
+  public openModelRecord(modelId: string): void {
+    return this.OpenModelRecord(modelId);
+  }
+
+  public ViewTrainingRuns(modelId?: string): void {
+    if (this.Navigate.observed) {
+      this.Navigate.emit('experiments');
+      return;
+    }
+    try {
+      const p = this.provider ?? new Metadata();
+      if (!p) return;
+      const runs = this.engine?.TrainingRuns ?? [];
+      const match = modelId
+        ? runs.find((r) => UUIDsEqual(r.ResultingModelID, modelId))
+        : runs.find((r) => this.SelectedPipelineId && UUIDsEqual(r.PipelineID, this.SelectedPipelineId));
+      if (match) {
+        const entity = p.EntityByName('MJ: ML Training Runs');
+        if (entity) {
+          const ck = CompositeKey.FromURLSegment(entity, match.ID);
+          this.navigationService.OpenEntityRecord('MJ: ML Training Runs', ck);
+          return;
+        }
+      }
+      this.navigationService.OpenNavItemByName('Experiments');
+    } catch (err) {
+      this.notifications.CreateSimpleNotification(`Could not open training runs: ${err instanceof Error ? err.message : String(err)}`, 'error');
+    }
+  }
+
+  /** @deprecated Use {@link ViewTrainingRuns}. */
+  public viewTrainingRuns(modelId?: string): void {
+    return this.ViewTrainingRuns(modelId);
+  }
+
+  public RefreshFromEngine(): void {
+    this.Pipelines = this.engine?.Pipelines ?? [];
+    if (!this.SelectedPipelineId && this.Pipelines.length > 0) {
+      this.SelectPipeline(this.Pipelines[0].ID);
+    } else if (this.SelectedPipelineId && !this.Pipelines.some((p) => UUIDsEqual(p.ID, this.SelectedPipelineId))) {
+      if (this.Pipelines.length > 0) {
+        this.SelectPipeline(this.Pipelines[0].ID);
       }
     }
   }
 
+  /** @deprecated Use {@link RefreshFromEngine}. */
+  public refreshFromEngine(): void {
+    return this.RefreshFromEngine();
+  }
+
+  public get IsGraphView(): boolean {
+    return this.ViewMode === 'graph' || this.ViewMode === 'dag';
+  }
+
+  /** @deprecated Use {@link IsGraphView}. */
   public get isGraphView(): boolean {
-    return this.viewMode === 'graph' || this.viewMode === 'dag';
+    return this.IsGraphView;
   }
 
+  public ToggleViewMode(): void {
+    this.ViewMode = this.IsGraphView ? 'stages' : 'graph';
+  }
+
+  /** @deprecated Use {@link ToggleViewMode}. */
   public toggleViewMode(): void {
-    this.viewMode = this.isGraphView ? 'stages' : 'graph';
+    return this.ToggleViewMode();
   }
 
+  public ZoomIn(): void {
+    this.ZoomLevel = Math.min(2.0, Math.round((this.ZoomLevel + 0.15) * 100) / 100);
+  }
+
+  /** @deprecated Use {@link ZoomIn}. */
   public zoomIn(): void {
-    this.zoomLevel = Math.min(2.0, Math.round((this.zoomLevel + 0.15) * 100) / 100);
+    return this.ZoomIn();
   }
 
+  public ZoomOut(): void {
+    this.ZoomLevel = Math.max(0.5, Math.round((this.ZoomLevel - 0.15) * 100) / 100);
+  }
+
+  /** @deprecated Use {@link ZoomOut}. */
   public zoomOut(): void {
-    this.zoomLevel = Math.max(0.5, Math.round((this.zoomLevel - 0.15) * 100) / 100);
+    return this.ZoomOut();
   }
 
+  public ResetZoom(): void {
+    this.ZoomLevel = 1;
+  }
+
+  /** @deprecated Use {@link ResetZoom}. */
   public resetZoom(): void {
-    this.zoomLevel = 1;
+    return this.ResetZoom();
   }
 
-  public inputVal(e: Event): string {
+  public InputVal(e: Event): string {
     return (e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
   }
 
+  /** @deprecated Use {@link InputVal}. */
+  public inputVal(e: Event): string {
+    return this.InputVal(e);
+  }
+
+  public IsEdgeActive(edge: DagEdge): boolean {
+    return this.SelectedId === edge.from || this.SelectedId === edge.to;
+  }
+
+  /** @deprecated Use {@link IsEdgeActive}. */
   public isEdgeActive(edge: DagEdge): boolean {
-    return this.selectedId === edge.from || this.selectedId === edge.to;
+    return this.IsEdgeActive(edge);
   }
 
+  public SetFilter(f: string): void {
+    this.ActiveFilter = f;
+  }
+
+  /** @deprecated Use {@link SetFilter}. */
   public setFilter(f: string): void {
-    this.activeFilter = f;
+    return this.SetFilter(f);
   }
 
+  public OnSearchInput(ev: Event): void {
+    this.SearchQuery = ((ev.target as HTMLInputElement)?.value ?? '').toLowerCase();
+  }
+
+  /** @deprecated Use {@link OnSearchInput}. */
   public onSearchInput(ev: Event): void {
-    this.searchQuery = ((ev.target as HTMLInputElement)?.value ?? '').toLowerCase();
+    return this.OnSearchInput(ev);
   }
 
-  public get filteredPipelines(): MJMLTrainingPipelineEntity[] {
-    return (this.pipelines ?? []).filter((p) => {
-      if (this.searchQuery) {
-        const nameMatch = p.Name?.toLowerCase().includes(this.searchQuery);
-        const entityMatch = p.TargetEntity?.toLowerCase().includes(this.searchQuery);
-        const targetMatch = p.TargetVariable?.toLowerCase().includes(this.searchQuery);
+  public get FilteredPipelines(): MJMLTrainingPipelineEntity[] {
+    return (this.Pipelines ?? []).filter((p) => {
+      if (this.SearchQuery) {
+        const nameMatch = p.Name?.toLowerCase().includes(this.SearchQuery);
+        const entityMatch = p.TargetEntity?.toLowerCase().includes(this.SearchQuery);
+        const targetMatch = p.TargetVariable?.toLowerCase().includes(this.SearchQuery);
         if (!nameMatch && !entityMatch && !targetMatch) return false;
       }
-      if (this.activeFilter === 'published') return p.Status === 'Published';
-      if (this.activeFilter === 'draft') return p.Status === 'Draft';
-      if (this.activeFilter === 'core') return p.TargetEntity?.includes('AI') || p.Name?.includes('AI Agent');
+      if (this.ActiveFilter === 'published') return p.Status === 'Published';
+      if (this.ActiveFilter === 'draft') return p.Status === 'Draft';
+      if (this.ActiveFilter === 'core') return p.TargetEntity?.includes('AI') || p.Name?.includes('AI Agent');
       return true;
     });
   }
 
-  public pipelineDomain(p?: MJMLTrainingPipelineEntity): string {
+  /** @deprecated Use {@link FilteredPipelines}. */
+  public get filteredPipelines(): MJMLTrainingPipelineEntity[] {
+    return this.FilteredPipelines;
+  }
+
+  public PipelineDomain(p?: MJMLTrainingPipelineEntity): string {
     if (!p) return 'Platform';
     const n = (p.Name || '') + (p.TargetEntity || '');
     if (n.includes('MoreCheese') || n.includes('Membership') || n.includes('Event') || n.includes('Course')) return 'More Cheese Club';
@@ -818,29 +1494,125 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     return 'BizApps';
   }
 
-  public targetEntityName(p?: MJMLTrainingPipelineEntity): string {
+  /** @deprecated Use {@link PipelineDomain}. */
+  public pipelineDomain(p?: MJMLTrainingPipelineEntity): string {
+    return this.PipelineDomain(p);
+  }
+
+  public TargetEntityName(p?: MJMLTrainingPipelineEntity): string {
     if (!p) return 'Entity';
-    return p.TargetEntity || this.editSources[0]?.Ref || 'Entity';
+    return p.TargetEntity || this.EditSources[0]?.Ref || 'Entity';
   }
 
+  /** @deprecated Use {@link TargetEntityName}. */
+  public targetEntityName(p?: MJMLTrainingPipelineEntity): string {
+    return this.TargetEntityName(p);
+  }
+
+  public get PipelineModels(): MJMLModelEntity[] {
+    if (!this.SelectedPipelineId || !this.engine?.Models) return [];
+    return this.engine.Models.filter((m) => UUIDsEqual(m.PipelineID, this.SelectedPipelineId));
+  }
+
+  /** @deprecated Use {@link PipelineModels}. */
   public get pipelineModels(): MJMLModelEntity[] {
-    if (!this.selectedPipelineId || !this.engine?.Models) return [];
-    return this.engine.Models.filter((m) => UUIDsEqual(m.PipelineID, this.selectedPipelineId));
+    return this.PipelineModels;
   }
 
+  public get PublishedModel(): MJMLModelEntity | undefined {
+    return this.PipelineModels.find((m) => m.Status === 'Published') ?? this.PipelineModels[0];
+  }
+
+  /** @deprecated Use {@link PublishedModel}. */
   public get publishedModel(): MJMLModelEntity | undefined {
-    return this.pipelineModels.find((m) => m.Status === 'Published') ?? this.pipelineModels[0];
+    return this.PublishedModel;
   }
 
-  public bestMetricForPipeline(p?: MJMLTrainingPipelineEntity): string | null {
+  public SelectedModelVersionId: string | null = null;
+
+  /** @deprecated Use {@link SelectedModelVersionId}. */
+  public get selectedModelVersionId(): string | null {
+    return this.SelectedModelVersionId;
+  }
+  /** @deprecated Use {@link SelectedModelVersionId}. */
+  public set selectedModelVersionId(value: string | null) {
+    this.SelectedModelVersionId = value;
+  }
+
+  public get InspectedModel(): MJMLModelEntity | undefined {
+    if (this.SelectedModelVersionId) {
+      const found = this.PipelineModels.find((m) => UUIDsEqual(m.ID, this.SelectedModelVersionId));
+      if (found) return found;
+    }
+    return this.PublishedModel;
+  }
+
+  /** @deprecated Use {@link InspectedModel}. */
+  public get inspectedModel(): MJMLModelEntity | undefined {
+    return this.InspectedModel;
+  }
+
+  public SelectModelVersion(id: string): void {
+    this.SelectedModelVersionId = id;
+    this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link SelectModelVersion}. */
+  public selectModelVersion(id: string): void {
+    return this.SelectModelVersion(id);
+  }
+
+  public BestMetricForPipeline(p?: MJMLTrainingPipelineEntity): string | null {
     if (!p || !this.engine?.Models) return null;
     const models = this.engine.Models.filter((m) => UUIDsEqual(m.PipelineID, p.ID));
     if (models.length === 0) return null;
     const best = models.find((m) => m.Status === 'Published') ?? models[0];
-    return this.formatHoldout(best);
+    return this.FormatHoldout(best);
   }
 
-  public formatHoldout(m: MJMLModelEntity): string {
+  /** @deprecated Use {@link BestMetricForPipeline}. */
+  public bestMetricForPipeline(p?: MJMLTrainingPipelineEntity): string | null {
+    return this.BestMetricForPipeline(p);
+  }
+
+  public SelectStep(id: string): void {
+    this.SelectNode(id);
+  }
+
+  /** @deprecated Use {@link SelectStep}. */
+  public selectStep(id: string): void {
+    return this.SelectStep(id);
+  }
+
+  public GetStepColumns(step: FeatureStep): string[] {
+    switch (step.Kind) {
+      case 'select':
+      case 'standardize':
+        return step.Columns ?? [];
+      case 'impute':
+      case 'onehot':
+      case 'bin':
+        return step.Column ? [step.Column] : [];
+      default:
+        return [];
+    }
+  }
+
+  /** @deprecated Use {@link GetStepColumns}. */
+  public getStepColumns(step: FeatureStep): string[] {
+    return this.GetStepColumns(step);
+  }
+
+  public GetStepInputs(step: FeatureStep): string[] {
+    return step.Inputs ?? [];
+  }
+
+  /** @deprecated Use {@link GetStepInputs}. */
+  public getStepInputs(step: FeatureStep): string[] {
+    return this.GetStepInputs(step);
+  }
+
+  public FormatHoldout(m: MJMLModelEntity): string {
     if (!m.HoldoutMetrics) return m.Metrics ? 'Trained' : 'Pending';
     try {
       const hm = typeof m.HoldoutMetrics === 'string' ? JSON.parse(m.HoldoutMetrics) : m.HoldoutMetrics;
@@ -854,26 +1626,42 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     }
   }
 
-  public get asOfLabel(): string {
-    if (this.editAsOf.Mode === 'column') return `Column: ${this.editAsOf.Column || 'DecisionDate'}`;
-    if (this.editAsOf.Mode === 'offset') return `Offset: ${this.editAsOf.OffsetDays || 0}d prior`;
+  /** @deprecated Use {@link FormatHoldout}. */
+  public formatHoldout(m: MJMLModelEntity): string {
+    return this.FormatHoldout(m);
+  }
+
+  public get AsOfLabel(): string {
+    if (this.EditAsOf.Mode === 'column') return `Column: ${this.EditAsOf.Column || 'DecisionDate'}`;
+    if (this.EditAsOf.Mode === 'offset') return `Offset: ${this.EditAsOf.OffsetDays || 0}d prior`;
     return 'None (Static snapshot)';
   }
 
-  public get selectedAlgorithmName(): string {
-    return this.engine?.AlgorithmName(this.editAlgorithmId) || 'Auto-select (Tournament)';
+  /** @deprecated Use {@link AsOfLabel}. */
+  public get asOfLabel(): string {
+    return this.AsOfLabel;
   }
 
-  public selectPipeline(id: string): void {
-    this.selectedPipelineId = id;
-    const p = this.pipelines.find((x) => UUIDsEqual(x.ID, id));
+  public get SelectedAlgorithmName(): string {
+    return this.engine?.AlgorithmName(this.EditAlgorithmId) || 'Auto-select (Tournament)';
+  }
+
+  /** @deprecated Use {@link SelectedAlgorithmName}. */
+  public get selectedAlgorithmName(): string {
+    return this.SelectedAlgorithmName;
+  }
+
+  public SelectPipeline(id: string): void {
+    this.SelectedPipelineId = id;
+    this.SelectedModelVersionId = null;
+    const p = this.Pipelines.find((x) => UUIDsEqual(x.ID, id));
     if (!p) {
       return;
     }
 
     // Defensive parsing against non-array JSON schemas
     const rawSources = this.parse<unknown>(p.SourceBindings, []);
-    this.editSources = Array.isArray(rawSources)
+    this.EditSources = Array.isArray(rawSources)
       ? (rawSources as SourceBinding[])
       : rawSources && typeof rawSources === 'object'
       ? [{ Kind: 'Entity', Ref: (rawSources as { EntityID?: string }).EntityID || '' }]
@@ -881,32 +1669,47 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
     const rawSteps = this.parse<unknown>(p.FeatureSteps, { Steps: [] });
     if (Array.isArray(rawSteps)) {
-      this.editSteps = rawSteps as FeatureStep[];
+      this.EditSteps = rawSteps as FeatureStep[];
     } else if (rawSteps && typeof rawSteps === 'object' && 'Steps' in rawSteps && Array.isArray((rawSteps as { Steps: unknown[] }).Steps)) {
-      this.editSteps = (rawSteps as { Steps: FeatureStep[] }).Steps;
+      this.EditSteps = (rawSteps as { Steps: FeatureStep[] }).Steps;
     } else {
-      this.editSteps = [];
+      this.EditSteps = [];
     }
 
-    this.editTargetVariable = p.TargetVariable ?? '';
-    this.editProblemType = (p.ProblemType as ProblemType) ?? 'classification';
-    this.editAlgorithmId = p.AlgorithmID ?? '';
-    this.editHyperparams = p.Hyperparameters ?? '{}';
-    this.editLeakage = this.parse<LeakageGuard>(p.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT });
-    this.editAsOf = this.parse<AsOfStrategy>(p.AsOfStrategy, { Mode: 'none' });
-    this.editValidation = this.parse<ValidationStrategy>(p.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 });
-    this.stepSeq = this.editSteps.length;
-    this.dirty = false;
+    this.EditTargetVariable = p.TargetVariable ?? '';
+    this.EditProblemType = (p.ProblemType as ProblemType) ?? 'classification';
+    this.EditAlgorithmId = p.AlgorithmID ?? '';
+    this.EditHyperparams = p.Hyperparameters ?? '{}';
+    this.EditLeakage = this.parse<LeakageGuard>(p.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT });
+    this.EditAsOf = this.parse<AsOfStrategy>(p.AsOfStrategy, { Mode: 'none' });
+    this.EditValidation = this.parse<ValidationStrategy>(p.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.15 });
+    this.stepSeq = this.EditSteps.length;
+    this.Dirty = false;
     this.rebuild();
-    this.selectedId = this.nodes[0]?.id ?? '';
+    this.SelectedId = this.Nodes[0]?.id ?? '';
   }
 
+  /** @deprecated Use {@link SelectPipeline}. */
+  public selectPipeline(id: string): void {
+    return this.SelectPipeline(id);
+  }
+
+  public get SelectedPipeline(): MJMLTrainingPipelineEntity | undefined {
+    return this.Pipelines.find((p) => UUIDsEqual(p.ID, this.SelectedPipelineId));
+  }
+
+  /** @deprecated Use {@link SelectedPipeline}. */
   public get selectedPipeline(): MJMLTrainingPipelineEntity | undefined {
-    return this.pipelines.find((p) => UUIDsEqual(p.ID, this.selectedPipelineId));
+    return this.SelectedPipeline;
   }
 
+  public IsSelectedPipeline(p: MJMLTrainingPipelineEntity): boolean {
+    return UUIDsEqual(p.ID, this.SelectedPipelineId);
+  }
+
+  /** @deprecated Use {@link IsSelectedPipeline}. */
   public isSelectedPipeline(p: MJMLTrainingPipelineEntity): boolean {
-    return UUIDsEqual(p.ID, this.selectedPipelineId);
+    return this.IsSelectedPipeline(p);
   }
 
   private parse<T>(raw: string | null | undefined, fallback: T): T {
@@ -922,7 +1725,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   }
 
   private markDirty(): void {
-    this.dirty = true;
+    this.Dirty = true;
     this.rebuild();
   }
 
@@ -932,8 +1735,8 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     const nodes: DagNode[] = [];
     const edges: DagEdge[] = [];
 
-    this.editSources.forEach((sb, i) => nodes.push(this.sourceNode(sb, i)));
-    this.editSteps.forEach((step) => nodes.push(this.stepNode(step)));
+    this.EditSources.forEach((sb, i) => nodes.push(this.sourceNode(sb, i)));
+    this.EditSteps.forEach((step) => nodes.push(this.stepNode(step)));
     nodes.push(this.targetNode());
     nodes.push(this.algoNode());
     nodes.push({
@@ -941,30 +1744,49 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       type: 'output',
       title: 'Model Artifact',
       icon: 'fa-solid fa-cube',
-      tag: this.selectedPipeline?.Status ?? 'Draft',
+      tag: this.SelectedPipeline?.Status ?? 'Draft',
       x: 0,
       y: 0,
       hasIn: true,
       hasOut: false,
       rows: [
-        { k: 'status', v: this.selectedPipeline?.Status ?? 'Draft' },
-        { k: 'serving', v: this.selectedPipeline?.Status === 'Published' ? 'Active' : 'Not Serving' }
+        { k: 'status', v: this.SelectedPipeline?.Status ?? 'Draft' },
+        { k: 'serving', v: this.SelectedPipeline?.Status === 'Published' ? 'Active' : 'Not Serving' }
       ]
     });
 
-    const stepIds = new Set(this.editSteps.map((s) => s.Id));
+    const stepIds = new Set(this.EditSteps.map((s) => s.Id));
+    const sourceKeyToId = new Map<string, string>();
+    this.EditSources.forEach((sb, i) => {
+      const sid = `src:${i}`;
+      sourceKeyToId.set(sid.toLowerCase(), sid);
+      if (sb.Ref) sourceKeyToId.set(sb.Ref.toLowerCase(), sid);
+      if (sb.Alias) sourceKeyToId.set(sb.Alias.toLowerCase(), sid);
+    });
+
+    const stepSourcesConnected = new Set<string>();
     const referenced = new Set<string>();
-    for (const step of this.editSteps) {
+    for (const step of this.EditSteps) {
       for (const input of step.Inputs ?? []) {
         if (stepIds.has(input)) {
           edges.push({ from: input, to: step.Id });
           referenced.add(input);
+        } else {
+          const matchedSrc = sourceKeyToId.get(input.toLowerCase());
+          if (matchedSrc) {
+            edges.push({ from: matchedSrc, to: step.Id });
+            stepSourcesConnected.add(step.Id);
+          }
         }
       }
     }
-    const roots = this.editSteps.filter((s) => (s.Inputs ?? []).filter((i) => stepIds.has(i)).length === 0);
-    const sourceIds = this.editSources.map((_s, i) => `src:${i}`);
-    if (this.editSteps.length > 0) {
+    const roots = this.EditSteps.filter((s) => {
+      const hasStepInput = (s.Inputs ?? []).some((i) => stepIds.has(i));
+      const hasSourceInput = stepSourcesConnected.has(s.Id);
+      return !hasStepInput && !hasSourceInput;
+    });
+    const sourceIds = this.EditSources.map((_s, i) => `src:${i}`);
+    if (this.EditSteps.length > 0) {
       for (const sid of sourceIds) {
         for (const r of roots) {
           edges.push({ from: sid, to: r.Id });
@@ -975,7 +1797,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
         edges.push({ from: sid, to: '__algo' });
       }
     }
-    for (const t of this.editSteps.filter((s) => !referenced.has(s.Id))) {
+    for (const t of this.EditSteps.filter((s) => !referenced.has(s.Id))) {
       edges.push({ from: t.Id, to: '__algo' });
     }
     // Connect source to target so target sits cleanly in the feature/target layer
@@ -985,21 +1807,32 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     edges.push({ from: '__target', to: '__algo' });
     edges.push({ from: '__algo', to: '__output' });
 
-    this.nodes = nodes;
-    this.edges = edges;
+    this.Nodes = nodes;
+    this.Edges = edges;
     this.markPorts();
     this.layoutGraph();
   }
 
   private sourceNode(sb: SourceBinding, i: number): DagNode {
+    const md = this.provider ?? new Metadata();
+    let title = sb.Alias;
+    if (!title && sb.Kind === 'Entity' && sb.Ref) {
+      const entity = md.EntityByName(sb.Ref);
+      title = entity?.DisplayName || entity?.Name;
+    }
+    title = title || sb.Ref || 'source';
+
     const rows: { k: string; v: string }[] = [{ k: 'kind', v: sb.Kind }];
     if (sb.Alias) {
-      rows.push({ k: 'entity', v: sb.Ref || '—' });
+      rows.push({ k: 'alias', v: sb.Alias });
+    }
+    if (sb.Kind === 'Entity' && title !== sb.Ref) {
+      rows.push({ k: 'entity', v: sb.Ref });
     }
     return {
       id: `src:${i}`,
       type: 'src',
-      title: sb.Alias || sb.Ref || 'source',
+      title,
       icon: SOURCE_ICONS[sb.Kind] ?? 'fa-solid fa-database',
       tag: sb.Kind,
       rows,
@@ -1027,9 +1860,19 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   private stepRows(step: FeatureStep): { k: string; v: string }[] {
     switch (step.Kind) {
-      case 'select': return [{ k: 'columns', v: `${step.Columns.length} cols` }];
+      case 'select': {
+        const preview = step.Columns.length <= 3
+          ? step.Columns.join(', ')
+          : `${step.Columns.slice(0, 2).join(', ')} +${step.Columns.length - 2} more`;
+        return [{ k: 'columns', v: preview || '0 cols' }];
+      }
       case 'impute': return [{ k: 'column', v: step.Column }, { k: 'strategy', v: step.Strategy }];
-      case 'standardize': return [{ k: 'columns', v: `${step.Columns.length} cols` }, { k: 'scaler', v: 'z-score' }];
+      case 'standardize': {
+        const preview = step.Columns.length <= 3
+          ? step.Columns.join(', ')
+          : `${step.Columns.slice(0, 2).join(', ')} +${step.Columns.length - 2} more`;
+        return [{ k: 'columns', v: preview || '0 cols' }, { k: 'scaler', v: 'z-score' }];
+      }
       case 'onehot': return [{ k: 'column', v: step.Column }];
       case 'bin': return [{ k: 'column', v: step.Column }, { k: 'bins', v: String(step.Bins) }];
       case 'embedding': return [{ k: 'entity', v: step.Entity }, { k: 'dims', v: String(step.Dims) }];
@@ -1044,12 +1887,12 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     return {
       id: '__target',
       type: 'target',
-      title: `Target: ${this.editTargetVariable || '—'}`,
+      title: `Target: ${this.EditTargetVariable || '—'}`,
       icon: 'fa-solid fa-bullseye',
-      tag: this.editProblemType,
+      tag: this.EditProblemType,
       rows: [
-        { k: 'variable', v: this.editTargetVariable || '—' },
-        { k: 'type', v: this.editProblemType }
+        { k: 'variable', v: this.EditTargetVariable || '—' },
+        { k: 'type', v: this.EditProblemType }
       ],
       x: 0,
       y: 0,
@@ -1059,9 +1902,9 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   }
 
   private algoNode(): DagNode {
-    const name = this.engine?.AlgorithmName(this.editAlgorithmId) || 'Algorithm';
+    const name = this.engine?.AlgorithmName(this.EditAlgorithmId) || 'Algorithm';
     const rows = [{ k: 'algorithm', v: name }];
-    const hp = this.parse<Record<string, unknown>>(this.editHyperparams, {});
+    const hp = this.parse<Record<string, unknown>>(this.EditHyperparams, {});
     Object.entries(hp).slice(0, 1).forEach(([k, v]) => rows.push({ k, v: String(v) }));
     return {
       id: '__algo',
@@ -1078,9 +1921,9 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   }
 
   private markPorts(): void {
-    const hasIn = new Set(this.edges.map((e) => e.to));
-    const hasOut = new Set(this.edges.map((e) => e.from));
-    for (const n of this.nodes) {
+    const hasIn = new Set(this.Edges.map((e) => e.to));
+    const hasOut = new Set(this.Edges.map((e) => e.from));
+    for (const n of this.Nodes) {
       n.hasIn = hasIn.has(n.id);
       n.hasOut = hasOut.has(n.id);
     }
@@ -1088,84 +1931,174 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   // ---- selection ----
 
+  public SelectNode(id: string): void {
+    this.SelectedId = id;
+  }
+
+  /** @deprecated Use {@link SelectNode}. */
   public selectNode(id: string): void {
-    this.selectedId = id;
+    return this.SelectNode(id);
   }
 
+  public get SelectedNode(): DagNode {
+    return this.nodeById.get(this.SelectedId) ?? this.Nodes[0] ?? { id: '', type: 'feat', title: '—', icon: 'fa-solid fa-sliders', rows: [], x: 0, y: 0, hasIn: false, hasOut: false };
+  }
+
+  /** @deprecated Use {@link SelectedNode}. */
   public get selectedNode(): DagNode {
-    return this.nodeById.get(this.selectedId) ?? this.nodes[0] ?? { id: '', type: 'feat', title: '—', icon: 'fa-solid fa-sliders', rows: [], x: 0, y: 0, hasIn: false, hasOut: false };
+    return this.SelectedNode;
   }
 
+  public get SelectedSourceIndex(): number {
+    return this.SelectedId.startsWith('src:') ? Number(this.SelectedId.slice(4)) : -1;
+  }
+
+  /** @deprecated Use {@link SelectedSourceIndex}. */
   public get selectedSourceIndex(): number {
-    return this.selectedId.startsWith('src:') ? Number(this.selectedId.slice(4)) : -1;
+    return this.SelectedSourceIndex;
   }
+  public get SelectedSource(): SourceBinding | null {
+    const i = this.SelectedSourceIndex;
+    return i >= 0 ? this.EditSources[i] ?? null : null;
+  }
+
+  /** @deprecated Use {@link SelectedSource}. */
   public get selectedSource(): SourceBinding | null {
-    const i = this.selectedSourceIndex;
-    return i >= 0 ? this.editSources[i] ?? null : null;
+    return this.SelectedSource;
   }
+  public get SelectedStep(): FeatureStep | null {
+    return this.EditSteps.find((s) => s.Id === this.SelectedId) ?? null;
+  }
+
+  /** @deprecated Use {@link SelectedStep}. */
   public get selectedStep(): FeatureStep | null {
-    return this.editSteps.find((s) => s.Id === this.selectedId) ?? null;
+    return this.SelectedStep;
   }
+  public get OtherSteps(): FeatureStep[] {
+    return this.EditSteps.filter((s) => s.Id !== this.SelectedId);
+  }
+
+  /** @deprecated Use {@link OtherSteps}. */
   public get otherSteps(): FeatureStep[] {
-    return this.editSteps.filter((s) => s.Id !== this.selectedId);
+    return this.OtherSteps;
   }
-  public get algorithms() {
+  public get Algorithms() {
     return this.engine?.Algorithms ?? [];
+  }
+
+  /** @deprecated Use {@link Algorithms}. */
+  public get algorithms() {
+    return this.Algorithms;
   }
 
   // ---- source editing ----
 
-  public setSourceKind(kind: string): void { const s = this.selectedSource; if (s) { s.Kind = kind as SourceBinding['Kind']; this.markDirty(); } }
-  public setSourceRef(ref: string): void { const s = this.selectedSource; if (s) { s.Ref = ref; this.markDirty(); } }
-  public setSourceAlias(alias: string): void { const s = this.selectedSource; if (s) { s.Alias = alias || undefined; this.markDirty(); } }
+  public SetSourceKind(kind: string): void { const s = this.SelectedSource; if (s) { s.Kind = kind as SourceBinding['Kind']; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetSourceKind}. */
+  public setSourceKind(kind: string): void {
+    return this.SetSourceKind(kind);
+  }
+  public SetSourceRef(ref: string): void { const s = this.SelectedSource; if (s) { s.Ref = ref; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetSourceRef}. */
+  public setSourceRef(ref: string): void {
+    return this.SetSourceRef(ref);
+  }
+  public SetSourceAlias(alias: string): void { const s = this.SelectedSource; if (s) { s.Alias = alias || undefined; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetSourceAlias}. */
+  public setSourceAlias(alias: string): void {
+    return this.SetSourceAlias(alias);
+  }
 
   // ---- step editing ----
 
-  public get columnsText(): string {
-    const s = this.selectedStep;
+  public get ColumnsText(): string {
+    const s = this.SelectedStep;
     if (s && (s.Kind === 'select' || s.Kind === 'standardize')) {
       return s.Columns.join(', ');
     }
     return '';
   }
-  public setColumns(text: string): void {
-    const s = this.selectedStep;
+
+  /** @deprecated Use {@link ColumnsText}. */
+  public get columnsText(): string {
+    return this.ColumnsText;
+  }
+  public SetColumns(text: string): void {
+    const s = this.SelectedStep;
     if (s && (s.Kind === 'select' || s.Kind === 'standardize')) {
       s.Columns = text.split(',').map((c) => c.trim()).filter(Boolean);
       this.markDirty();
     }
   }
-  public stepField(field: string): string {
-    const s = this.selectedStep as unknown as Record<string, unknown> | null;
+
+  /** @deprecated Use {@link SetColumns}. */
+  public setColumns(text: string): void {
+    return this.SetColumns(text);
+  }
+  public StepField(field: string): string {
+    const s = this.SelectedStep as unknown as Record<string, unknown> | null;
     const v = s?.[field];
     return v == null ? '' : String(v);
   }
-  public setStepStr(field: string, value: string): void {
-    const s = this.selectedStep as unknown as Record<string, unknown> | null;
+
+  /** @deprecated Use {@link StepField}. */
+  public stepField(field: string): string {
+    return this.StepField(field);
+  }
+  public SetStepStr(field: string, value: string): void {
+    const s = this.SelectedStep as unknown as Record<string, unknown> | null;
     if (s) { s[field] = value; this.markDirty(); }
   }
-  public setStepNum(field: string, value: string): void {
-    const s = this.selectedStep as unknown as Record<string, unknown> | null;
+
+  /** @deprecated Use {@link SetStepStr}. */
+  public setStepStr(field: string, value: string): void {
+    return this.SetStepStr(field, value);
+  }
+  public SetStepNum(field: string, value: string): void {
+    const s = this.SelectedStep as unknown as Record<string, unknown> | null;
     const n = Number(value);
     if (s && !Number.isNaN(n)) { s[field] = n; this.markDirty(); }
   }
-  public setStepLabel(label: string): void { const s = this.selectedStep; if (s) { s.Label = label || undefined; this.markDirty(); } }
 
-  public setStepKind(kind: string): void {
-    const idx = this.editSteps.findIndex((s) => s.Id === this.selectedId);
+  /** @deprecated Use {@link SetStepNum}. */
+  public setStepNum(field: string, value: string): void {
+    return this.SetStepNum(field, value);
+  }
+  public SetStepLabel(label: string): void { const s = this.SelectedStep; if (s) { s.Label = label || undefined; this.markDirty(); } }
+
+  /** @deprecated Use {@link SetStepLabel}. */
+  public setStepLabel(label: string): void {
+    return this.SetStepLabel(label);
+  }
+
+  public SetStepKind(kind: string): void {
+    const idx = this.EditSteps.findIndex((s) => s.Id === this.SelectedId);
     if (idx < 0) {
       return;
     }
-    const prev = this.editSteps[idx];
-    this.editSteps[idx] = this.defaultStep(kind as FeatureStepKind, prev.Id, prev.Label, prev.Inputs);
+    const prev = this.EditSteps[idx];
+    this.EditSteps[idx] = this.defaultStep(kind as FeatureStepKind, prev.Id, prev.Label, prev.Inputs);
     this.markDirty();
   }
 
-  public hasInput(stepId: string): boolean {
-    return (this.selectedStep?.Inputs ?? []).includes(stepId);
+  /** @deprecated Use {@link SetStepKind}. */
+  public setStepKind(kind: string): void {
+    return this.SetStepKind(kind);
   }
-  public toggleInput(stepId: string): void {
-    const s = this.selectedStep;
+
+  public HasInput(stepId: string): boolean {
+    return (this.SelectedStep?.Inputs ?? []).includes(stepId);
+  }
+
+  /** @deprecated Use {@link HasInput}. */
+  public hasInput(stepId: string): boolean {
+    return this.HasInput(stepId);
+  }
+  public ToggleInput(stepId: string): void {
+    const s = this.SelectedStep;
     if (!s) {
       return;
     }
@@ -1180,8 +2113,13 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     }
     this.markDirty();
   }
+
+  /** @deprecated Use {@link ToggleInput}. */
+  public toggleInput(stepId: string): void {
+    return this.ToggleInput(stepId);
+  }
   private createsCycle(from: string, target: string): boolean {
-    const byId = new Map(this.editSteps.map((s) => [s.Id, s]));
+    const byId = new Map(this.EditSteps.map((s) => [s.Id, s]));
     const seen = new Set<string>();
     const stack = [from];
     while (stack.length) {
@@ -1200,56 +2138,141 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
 
   // ---- target / algorithm editing ----
 
-  public setTargetVariable(v: string): void { this.editTargetVariable = v; this.markDirty(); }
-  public setProblemType(v: string): void { this.editProblemType = v as ProblemType; this.markDirty(); }
-  public setAlgorithm(id: string): void { this.editAlgorithmId = id; this.markDirty(); }
-  public setHyperparams(v: string): void { this.editHyperparams = v; this.markDirty(); }
+  public SetTargetVariable(v: string): void { this.EditTargetVariable = v; this.markDirty(); }
+
+  /** @deprecated Use {@link SetTargetVariable}. */
+  public setTargetVariable(v: string): void {
+    return this.SetTargetVariable(v);
+  }
+  public SetProblemType(v: string): void { this.EditProblemType = v as ProblemType; this.markDirty(); }
+
+  /** @deprecated Use {@link SetProblemType}. */
+  public setProblemType(v: string): void {
+    return this.SetProblemType(v);
+  }
+  public SetAlgorithm(id: string): void { this.EditAlgorithmId = id; this.markDirty(); }
+
+  /** @deprecated Use {@link SetAlgorithm}. */
+  public setAlgorithm(id: string): void {
+    return this.SetAlgorithm(id);
+  }
+  public SetHyperparams(v: string): void { this.EditHyperparams = v; this.markDirty(); }
+
+  /** @deprecated Use {@link SetHyperparams}. */
+  public setHyperparams(v: string): void {
+    return this.SetHyperparams(v);
+  }
 
   // ---- leakage / as-of / validation editing ----
 
-  public get denyText(): string { return this.editLeakage.DenyFields.join(', '); }
-  public setDeny(text: string): void { this.editLeakage.DenyFields = parseDenyList(text); this.dirty = true; }
-  public setThreshold(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editLeakage.SingleFeatureDominanceThreshold = n; this.dirty = true; } }
-  public setAsOfMode(v: string): void { this.editAsOf = { ...this.editAsOf, Mode: v as AsOfStrategy['Mode'] }; this.dirty = true; }
-  public setAsOfColumn(v: string): void { this.editAsOf.Column = v; this.dirty = true; }
-  public setAsOfOffset(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editAsOf.OffsetDays = n; this.dirty = true; } }
-  public setValStrategy(v: string): void { this.editValidation = { ...this.editValidation, Strategy: v as ValidationStrategy['Strategy'] }; this.dirty = true; }
-  public setTestSize(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editValidation.TestSize = n; this.dirty = true; } }
-  public setK(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editValidation.K = n; this.dirty = true; } }
-  public setHoldout(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.editValidation.LockedHoldoutFraction = n; this.dirty = true; } }
+  public get DenyText(): string { return this.EditLeakage.DenyFields.join(', '); }
+
+  /** @deprecated Use {@link DenyText}. */
+  public get denyText(): string {
+    return this.DenyText;
+  }
+  public SetDeny(text: string): void { this.EditLeakage.DenyFields = parseDenyList(text); this.Dirty = true; }
+
+  /** @deprecated Use {@link SetDeny}. */
+  public setDeny(text: string): void {
+    return this.SetDeny(text);
+  }
+  public SetThreshold(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditLeakage.SingleFeatureDominanceThreshold = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetThreshold}. */
+  public setThreshold(v: string): void {
+    return this.SetThreshold(v);
+  }
+  public SetAsOfMode(v: string): void { this.EditAsOf = { ...this.EditAsOf, Mode: v as AsOfStrategy['Mode'] }; this.Dirty = true; }
+
+  /** @deprecated Use {@link SetAsOfMode}. */
+  public setAsOfMode(v: string): void {
+    return this.SetAsOfMode(v);
+  }
+  public SetAsOfColumn(v: string): void { this.EditAsOf.Column = v; this.Dirty = true; }
+
+  /** @deprecated Use {@link SetAsOfColumn}. */
+  public setAsOfColumn(v: string): void {
+    return this.SetAsOfColumn(v);
+  }
+  public SetAsOfOffset(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditAsOf.OffsetDays = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetAsOfOffset}. */
+  public setAsOfOffset(v: string): void {
+    return this.SetAsOfOffset(v);
+  }
+  public SetValStrategy(v: string): void { this.EditValidation = { ...this.EditValidation, Strategy: v as ValidationStrategy['Strategy'] }; this.Dirty = true; }
+
+  /** @deprecated Use {@link SetValStrategy}. */
+  public setValStrategy(v: string): void {
+    return this.SetValStrategy(v);
+  }
+  public SetTestSize(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.TestSize = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetTestSize}. */
+  public setTestSize(v: string): void {
+    return this.SetTestSize(v);
+  }
+  public SetK(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.K = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetK}. */
+  public setK(v: string): void {
+    return this.SetK(v);
+  }
+  public SetHoldout(v: string): void { const n = Number(v); if (!Number.isNaN(n)) { this.EditValidation.LockedHoldoutFraction = n; this.Dirty = true; } }
+
+  /** @deprecated Use {@link SetHoldout}. */
+  public setHoldout(v: string): void {
+    return this.SetHoldout(v);
+  }
 
   // ---- add / delete nodes ----
 
+  public AddSource(): void {
+    this.EditSources = [...this.EditSources, { Kind: 'Entity', Ref: '' }];
+    this.markDirty();
+    this.SelectedId = `src:${this.EditSources.length - 1}`;
+  }
+
+  /** @deprecated Use {@link AddSource}. */
   public addSource(): void {
-    this.editSources = [...this.editSources, { Kind: 'Entity', Ref: '' }];
-    this.markDirty();
-    this.selectedId = `src:${this.editSources.length - 1}`;
+    return this.AddSource();
   }
-  public addStep(): void {
+  public AddStep(): void {
     const id = `step_${++this.stepSeq}`;
-    this.editSteps = [...this.editSteps, this.defaultStep('select', id)];
+    this.EditSteps = [...this.EditSteps, this.defaultStep('select', id)];
     this.markDirty();
-    this.selectedId = id;
+    this.SelectedId = id;
   }
-  public deleteSelected(): void {
-    const si = this.selectedSourceIndex;
+
+  /** @deprecated Use {@link AddStep}. */
+  public addStep(): void {
+    return this.AddStep();
+  }
+  public DeleteSelected(): void {
+    const si = this.SelectedSourceIndex;
     if (si >= 0) {
-      this.editSources = this.editSources.filter((_s, i) => i !== si);
+      this.EditSources = this.EditSources.filter((_s, i) => i !== si);
       this.markDirty();
-      this.selectedId = this.nodes[0]?.id ?? '';
+      this.SelectedId = this.Nodes[0]?.id ?? '';
       return;
     }
-    const step = this.selectedStep;
+    const step = this.SelectedStep;
     if (step) {
-      this.editSteps = this.editSteps.filter((s) => s.Id !== step.Id);
-      for (const s of this.editSteps) {
+      this.EditSteps = this.EditSteps.filter((s) => s.Id !== step.Id);
+      for (const s of this.EditSteps) {
         if (s.Inputs?.includes(step.Id)) {
           s.Inputs = s.Inputs.filter((i) => i !== step.Id);
         }
       }
       this.markDirty();
-      this.selectedId = this.nodes[0]?.id ?? '';
+      this.SelectedId = this.Nodes[0]?.id ?? '';
     }
+  }
+
+  /** @deprecated Use {@link DeleteSelected}. */
+  public deleteSelected(): void {
+    return this.DeleteSelected();
   }
 
   private defaultStep(kind: FeatureStepKind, id: string, label?: string, inputs?: string[]): FeatureStep {
@@ -1261,7 +2284,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       case 'onehot': return { ...base, Kind: 'onehot', Column: '' };
       case 'bin': return { ...base, Kind: 'bin', Column: '', Bins: 5 };
       case 'embedding': return { ...base, Kind: 'embedding', Entity: '', EmbeddingModelRef: '', Dims: 384 };
-      case 'llm-derived': return { ...base, Kind: 'llm-derived', FeaturePipelineRef: '' };
+      case 'llm-derived': return { ...base, Kind: 'llm-derived', FeaturePipelineRef: '', Columns: [] };
       case 'flow-agent': return { ...base, Kind: 'flow-agent', FlowAgentRef: '', InputMapping: {}, OutputMapping: {} };
       case 'vision-llm': return { ...base, Kind: 'vision-llm', ImageColumn: '', Prompt: { InlinePrompt: '' }, Output: { FeatureName: '', Kind: 'category' } };
     }
@@ -1270,47 +2293,47 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   // ---- save / validate / train ----
 
   public async save(): Promise<void> {
-    const p = this.selectedPipeline;
-    if (!p || this.busy) {
+    const p = this.SelectedPipeline;
+    if (!p || this.Busy) {
       return;
     }
-    this.busy = true;
+    this.Busy = true;
     try {
-      p.SourceBindings = JSON.stringify(this.editSources);
-      p.FeatureSteps = JSON.stringify({ Steps: this.editSteps });
-      p.TargetVariable = this.editTargetVariable;
-      p.ProblemType = this.editProblemType;
-      p.AlgorithmID = this.editAlgorithmId;
-      p.Hyperparameters = this.editHyperparams || null;
-      p.LeakageGuard = JSON.stringify(this.editLeakage);
-      p.AsOfStrategy = JSON.stringify(this.editAsOf);
-      p.ValidationStrategy = JSON.stringify(this.editValidation);
+      p.SourceBindings = JSON.stringify(this.EditSources);
+      p.FeatureSteps = JSON.stringify({ Steps: this.EditSteps });
+      p.TargetVariable = this.EditTargetVariable;
+      p.ProblemType = this.EditProblemType;
+      p.AlgorithmID = this.EditAlgorithmId;
+      p.Hyperparameters = this.EditHyperparams || null;
+      p.LeakageGuard = JSON.stringify(this.EditLeakage);
+      p.AsOfStrategy = JSON.stringify(this.EditAsOf);
+      p.ValidationStrategy = JSON.stringify(this.EditValidation);
       const ok = await p.Save();
       if (ok) {
-        this.dirty = false;
+        this.Dirty = false;
         this.notifications.CreateSimpleNotification(`Saved "${p.Name}".`, 'success', 3000);
       } else {
         this.notifications.CreateSimpleNotification(`Save failed: ${p.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 5000);
       }
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.detectChanges();
     }
   }
 
   public validate(): void {
     const issues: string[] = [];
-    if (this.editSources.length === 0) {
+    if (this.EditSources.length === 0) {
       issues.push('at least one source');
     }
-    if (!this.editTargetVariable) {
+    if (!this.EditTargetVariable) {
       issues.push('a target variable');
     }
-    if (!this.editAlgorithmId) {
+    if (!this.EditAlgorithmId) {
       issues.push('an algorithm');
     }
     try {
-      JSON.parse(this.editHyperparams || '{}');
+      JSON.parse(this.EditHyperparams || '{}');
     } catch {
       issues.push('valid hyperparameters JSON');
     }
@@ -1322,41 +2345,46 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
   }
 
   public async train(): Promise<void> {
-    const p = this.selectedPipeline;
-    if (!p || this.busy || this.dirty) {
+    const p = this.SelectedPipeline;
+    if (!p || this.Busy || this.Dirty) {
       return;
     }
-    this.busy = true;
+    this.Busy = true;
     this.notifications.CreateSimpleNotification(`Training "${p.Name}"…`, 'info', 2500);
     try {
       const op = new PredictiveStudioTrainModelOperation();
-      const result = await op.Execute({ pipelineId: p.ID }, { provider: this.provider ?? undefined, user: this.currentUser ?? undefined });
+      const result = await op.Execute({ pipelineId: p.ID }, { provider: this.provider ?? undefined, user: this.CurrentUser ?? undefined });
       if (result.Success && result.Output) {
         const flagged = result.Output.leakageFlagged ? ' (leakage flag raised — needs sign-off)' : '';
         this.notifications.CreateSimpleNotification(`Trained ${p.Name} v${result.Output.version}${flagged}. See Registry.`, 'success', 5000);
-        await this.engine.Config(true, this.currentUser ?? undefined, this.provider ?? undefined);
+        await this.engine.Config(true, this.CurrentUser ?? undefined, this.provider ?? undefined);
       } else {
         this.notifications.CreateSimpleNotification(result.ErrorMessage || 'Training failed.', 'error', 6000);
       }
     } catch (e) {
       this.notifications.CreateSimpleNotification(`Training error: ${e instanceof Error ? e.message : String(e)}`, 'error', 6000);
     } finally {
-      this.busy = false;
+      this.Busy = false;
       this.cdr.detectChanges();
     }
   }
 
-  public refine(): void {
-    const p = this.selectedPipeline;
+  public Refine(): void {
+    const p = this.SelectedPipeline;
     if (!p) {
-      this.askAgent.emit(this.starterPrompt);
+      this.AskAgent.emit(this.StarterPrompt);
       return;
     }
     const predicts = p.TargetVariable ? ` (predicts ${p.TargetVariable})` : '';
-    this.askAgent.emit(`Help me refine the "${p.Name}" training pipeline${predicts}. Suggest improvements to the features or algorithm to raise holdout performance.`);
+    this.AskAgent.emit(`Help me refine the "${p.Name}" training pipeline${predicts}. Suggest improvements to the features or algorithm to raise holdout performance.`);
   }
 
-  public statusClass(status: string): string {
+  /** @deprecated Use {@link Refine}. */
+  public refine(): void {
+    return this.Refine();
+  }
+
+  public StatusClass(status: string): string {
     switch (status) {
       case 'Published': return 'published';
       case 'Validated': return 'validated';
@@ -1364,7 +2392,12 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     }
   }
 
-  public nodeTypeLabel(type: NodeType): string {
+  /** @deprecated Use {@link StatusClass}. */
+  public statusClass(status: string): string {
+    return this.StatusClass(status);
+  }
+
+  public NodeTypeLabel(type: NodeType): string {
     switch (type) {
       case 'src': return 'Source';
       case 'feat': return 'Feature Step';
@@ -1375,18 +2408,23 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     }
   }
 
+  /** @deprecated Use {@link NodeTypeLabel}. */
+  public nodeTypeLabel(type: NodeType): string {
+    return this.NodeTypeLabel(type);
+  }
+
   // ---- Graph layered layout ----
 
   private layoutGraph(): void {
     this.nodeById.clear();
-    for (const n of this.nodes) {
+    for (const n of this.Nodes) {
       this.nodeById.set(n.id, n);
     }
     const inEdges = new Map<string, string[]>();
-    for (const n of this.nodes) {
+    for (const n of this.Nodes) {
       inEdges.set(n.id, []);
     }
-    for (const e of this.edges) {
+    for (const e of this.Edges) {
       inEdges.get(e.to)?.push(e.from);
     }
     const layerOf = new Map<string, number>();
@@ -1407,14 +2445,14 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       layerOf.set(id, l);
       return l;
     };
-    for (const n of this.nodes) {
+    for (const n of this.Nodes) {
       computeLayer(n.id, new Set());
     }
 
-    const algoNode = this.nodes.find((n) => n.id === '__algo');
-    const outNode = this.nodes.find((n) => n.id === '__output');
+    const algoNode = this.Nodes.find((n) => n.id === '__algo');
+    const outNode = this.Nodes.find((n) => n.id === '__output');
     let maxFeatureLayer = 0;
-    for (const n of this.nodes) {
+    for (const n of this.Nodes) {
       if (n.id !== '__algo' && n.id !== '__output') {
         maxFeatureLayer = Math.max(maxFeatureLayer, layerOf.get(n.id) ?? 0);
       }
@@ -1427,7 +2465,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     }
 
     const layers = new Map<number, DagNode[]>();
-    for (const n of this.nodes) {
+    for (const n of this.Nodes) {
       const l = layerOf.get(n.id) ?? 0;
       const arr = layers.get(l) ?? [];
       arr.push(n);
@@ -1453,11 +2491,11 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       });
     });
 
-    this.canvasW = Math.max(920, PAD_X * 2 + (maxCol + 1) * NODE_W + maxCol * COL_GAP);
-    this.canvasH = Math.max(540, maxCanvasHeight);
+    this.CanvasW = Math.max(920, PAD_X * 2 + (maxCol + 1) * NODE_W + maxCol * COL_GAP);
+    this.CanvasH = Math.max(540, maxCanvasHeight);
   }
 
-  public edgePath(edge: DagEdge): string {
+  public EdgePath(edge: DagEdge): string {
     const from = this.nodeById.get(edge.from);
     const to = this.nodeById.get(edge.to);
     if (!from || !to) {
@@ -1470,5 +2508,10 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
     const y2 = to.y + NODE_H / 2;
     const dx = Math.max(36, Math.abs(x2 - x1) * 0.45);
     return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+  }
+
+  /** @deprecated Use {@link EdgePath}. */
+  public edgePath(edge: DagEdge): string {
+    return this.EdgePath(edge);
   }
 }

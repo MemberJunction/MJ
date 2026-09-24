@@ -51,10 +51,37 @@ interface NotificationPreferenceViewModel {
   styleUrls: ['./notification-preferences.component.css'],
 })
 export class NotificationPreferencesComponent extends BaseAngularComponent implements OnInit {
-  loading = true;
+  Loading = true;
+
+  /** @deprecated Use {@link Loading}. */
+  get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  set loading(value) {
+    this.Loading = value;
+  }
   saving = false;
-  viewModels: NotificationPreferenceViewModel[] = [];
-  hasChanges = false;
+  ViewModels: NotificationPreferenceViewModel[] = [];
+
+  /** @deprecated Use {@link ViewModels}. */
+  get viewModels(): NotificationPreferenceViewModel[] {
+    return this.ViewModels;
+  }
+  /** @deprecated Use {@link ViewModels}. */
+  set viewModels(value: NotificationPreferenceViewModel[]) {
+    this.ViewModels = value;
+  }
+  HasChanges = false;
+
+  /** @deprecated Use {@link HasChanges}. */
+  get hasChanges() {
+    return this.HasChanges;
+  }
+  /** @deprecated Use {@link HasChanges}. */
+  set hasChanges(value) {
+    this.HasChanges = value;
+  }
 
   constructor(private sharedService: SharedService) {
     super();}
@@ -74,7 +101,7 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
    */
   private async loadData(): Promise<void> {
     try {
-      this.loading = true;
+      this.Loading = true;
 
       // UserInfoEngine is auto-configured via @RegisterForStartup()
       // NotificationEngine (server-side) loads notification types into global cache
@@ -94,7 +121,7 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
       const prefs = UserInfoEngine.Instance.NotificationPreferences;
 
       // Build view models from cached data
-      this.viewModels = types.map((type) => {
+      this.ViewModels = types.map((type) => {
         const existingPref = prefs.find((p) => UUIDsEqual(p.NotificationTypeID, type.ID));
 
         // Get channel values: user preference > type default
@@ -115,9 +142,9 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
         };
       });
 
-      this.loading = false;
+      this.Loading = false;
     } catch (error: unknown) {
-      this.loading = false;
+      this.Loading = false;
       const message = error instanceof Error ? error.message : 'Unknown error';
       this.sharedService.CreateSimpleNotification(`Failed to load notification preferences: ${message}`, 'error', 3000);
     }
@@ -129,9 +156,14 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
    * Sets the global hasChanges flag to show/hide the save/cancel buttons.
    * @param vm The view model for the notification type being modified
    */
-  onChannelChange(vm: NotificationPreferenceViewModel): void {
+  OnChannelChange(vm: NotificationPreferenceViewModel): void {
     vm.changed = vm.inAppEnabled !== vm.originalInAppEnabled || vm.emailEnabled !== vm.originalEmailEnabled || vm.smsEnabled !== vm.originalSmsEnabled;
-    this.hasChanges = this.viewModels.some((v) => v.changed);
+    this.HasChanges = this.ViewModels.some((v) => v.changed);
+  }
+
+  /** @deprecated Use {@link OnChannelChange}. */
+  onChannelChange(vm: NotificationPreferenceViewModel): void {
+    return this.OnChannelChange(vm);
   }
 
   /**
@@ -150,7 +182,7 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
 
       // Queue all saves in transaction group - no need to await individual saves
       // Transaction group queues them and submits all in one batch
-      for (const vm of this.viewModels.filter((v) => v.changed)) {
+      for (const vm of this.ViewModels.filter((v) => v.changed)) {
         let pref = vm.preference;
 
         if (!pref) {
@@ -180,14 +212,14 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
         // Cache refresh happens automatically in MJUserNotificationPreferenceEntityExtended.Save()
 
         // Update original values
-        this.viewModels.forEach((vm) => {
+        this.ViewModels.forEach((vm) => {
           vm.originalInAppEnabled = vm.inAppEnabled;
           vm.originalEmailEnabled = vm.emailEnabled;
           vm.originalSmsEnabled = vm.smsEnabled;
           vm.changed = false;
         });
 
-        this.hasChanges = false;
+        this.HasChanges = false;
         this.sharedService.CreateSimpleNotification('Notification preferences saved successfully', 'success', 2500);
       } else {
         throw new Error('Failed to save preferences');
@@ -207,13 +239,13 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
    */
   cancel(): void {
     // Revert changes
-    this.viewModels.forEach((vm) => {
+    this.ViewModels.forEach((vm) => {
       vm.inAppEnabled = vm.originalInAppEnabled;
       vm.emailEnabled = vm.originalEmailEnabled;
       vm.smsEnabled = vm.originalSmsEnabled;
       vm.changed = false;
     });
-    this.hasChanges = false;
+    this.HasChanges = false;
   }
 
   /**
@@ -222,8 +254,13 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
    * @param type The notification type entity
    * @returns Font Awesome icon class (e.g., 'fa-bell'), defaults to 'fa-bell' if not specified
    */
-  getTypeIcon(type: MJUserNotificationTypeEntity): string {
+  GetTypeIcon(type: MJUserNotificationTypeEntity): string {
     return type.Icon || 'fa-bell';
+  }
+
+  /** @deprecated Use {@link GetTypeIcon}. */
+  getTypeIcon(type: MJUserNotificationTypeEntity): string {
+    return this.GetTypeIcon(type);
   }
 
   /**
@@ -232,8 +269,13 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
    * @param type The notification type entity
    * @returns Hex color code (e.g., '#0076B6'), defaults to '#999' if not specified
    */
-  getTypeColor(type: MJUserNotificationTypeEntity): string {
+  GetTypeColor(type: MJUserNotificationTypeEntity): string {
     return type.Color || '#999';
+  }
+
+  /** @deprecated Use {@link GetTypeColor}. */
+  getTypeColor(type: MJUserNotificationTypeEntity): string {
+    return this.GetTypeColor(type);
   }
 
   /**
@@ -242,8 +284,13 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
    * @param type The notification type entity
    * @returns Number of days until auto-expire, or null if not configured
    */
-  getTypeAutoExpireDays(type: MJUserNotificationTypeEntity): number | null {
+  GetTypeAutoExpireDays(type: MJUserNotificationTypeEntity): number | null {
     return type.AutoExpireDays || null;
+  }
+
+  /** @deprecated Use {@link GetTypeAutoExpireDays}. */
+  getTypeAutoExpireDays(type: MJUserNotificationTypeEntity): number | null {
+    return this.GetTypeAutoExpireDays(type);
   }
 
   /**
@@ -252,7 +299,12 @@ export class NotificationPreferencesComponent extends BaseAngularComponent imple
    * @param type The notification type entity
    * @returns True if user customization is allowed (default), false otherwise
    */
-  getAllowUserPreference(type: MJUserNotificationTypeEntity): boolean {
+  GetAllowUserPreference(type: MJUserNotificationTypeEntity): boolean {
     return type.AllowUserPreference !== false;
+  }
+
+  /** @deprecated Use {@link GetAllowUserPreference}. */
+  getAllowUserPreference(type: MJUserNotificationTypeEntity): boolean {
+    return this.GetAllowUserPreference(type);
   }
 }

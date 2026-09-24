@@ -14,7 +14,7 @@
  * land in a production DB. Kept in sync with those fixtures by convention.
  */
 import type { UserInfo } from '@memberjunction/core';
-import { findUserByEmail } from './rls-fixture';
+import { FindUserByEmail } from './rls-fixture';
 
 /** Seeded user holding ONLY the FLS Reader role (read-only on the FLS entity). */
 export const SEEDED_FLS_READER_EMAIL = 'it-fls-reader@integration.test';
@@ -59,10 +59,15 @@ export interface FlsSeededUsers {
 }
 
 /** Resolve the three seeded FLS users from a user list (case-insensitive email match). */
-export function discoverFlsUsers(users: UserInfo[]): FlsSeededUsers {
+export function DiscoverFlsUsers(users: UserInfo[]): FlsSeededUsers {
     return {
-        Reader: findUserByEmail(users, SEEDED_FLS_READER_EMAIL),
-        Writer: findUserByEmail(users, SEEDED_FLS_WRITER_EMAIL),
-        Multi: findUserByEmail(users, SEEDED_FLS_MULTI_EMAIL),
+        Reader: FindUserByEmail(users, SEEDED_FLS_READER_EMAIL),
+        Writer: FindUserByEmail(users, SEEDED_FLS_WRITER_EMAIL),
+        Multi: FindUserByEmail(users, SEEDED_FLS_MULTI_EMAIL),
     };
+}
+
+/** @deprecated Use {@link DiscoverFlsUsers}. */
+export function discoverFlsUsers(users: UserInfo[]): FlsSeededUsers {
+    return DiscoverFlsUsers(users);
 }

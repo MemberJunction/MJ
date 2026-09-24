@@ -125,7 +125,7 @@ export interface TelephonyResolverContext {
 /**
  * Resolves a UserInfo object from the resolver context userPayload.
  */
-export function getUserFromPayload(userPayload?: UserPayload): UserInfo | undefined {
+export function GetUserFromPayload(userPayload?: UserPayload): UserInfo | undefined {
     if (!userPayload) {
         return undefined;
     }
@@ -138,13 +138,23 @@ export function getUserFromPayload(userPayload?: UserPayload): UserInfo | undefi
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
 }
 
+/** @deprecated Use {@link GetUserFromPayload}. */
+export function getUserFromPayload(userPayload?: UserPayload): UserInfo | undefined {
+    return GetUserFromPayload(userPayload);
+}
+
 /**
  * Resolves the primary Read-Write database provider from the resolver context.
  */
-export function getReadWriteProvider(providers?: ProviderInfo[]): DatabaseProviderBase | null {
+export function GetReadWriteProvider(providers?: ProviderInfo[]): DatabaseProviderBase | null {
     if (!providers || providers.length === 0) {
         return null;
     }
     const rw = providers.find((p) => p.type === 'Read-Write');
     return rw ? rw.provider : null;
+}
+
+/** @deprecated Use {@link GetReadWriteProvider}. */
+export function getReadWriteProvider(providers?: ProviderInfo[]): DatabaseProviderBase | null {
+    return GetReadWriteProvider(providers);
 }

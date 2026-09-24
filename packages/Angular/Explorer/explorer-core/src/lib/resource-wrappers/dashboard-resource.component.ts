@@ -420,12 +420,30 @@ export class DashboardResource extends BaseResourceComponent {
         this.rehomeChildToTab(this.componentRef?.instance as BaseResourceComponent | undefined, tabId);
     }
     private dataLoaded = false;
-    @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
+    @ViewChild('container', { static: true }) ContainerElement!: ElementRef<HTMLDivElement>;
+
+    /** @deprecated Use {@link ContainerElement}. */
+    get containerElement(): ElementRef<HTMLDivElement> {
+      return this.ContainerElement;
+    }
+    /** @deprecated Use {@link ContainerElement}. */
+    set containerElement(value: ElementRef<HTMLDivElement>) {
+      this.ContainerElement = value;
+    }
 
     /** Error message to display when dashboard fails to load */
     public errorMessage: string | null = null;
     /** Technical error details (shown in expandable section) */
-    public errorDetails: string | null = null;
+    public ErrorDetails: string | null = null;
+
+    /** @deprecated Use {@link ErrorDetails}. */
+    public get errorDetails(): string | null {
+      return this.ErrorDetails;
+    }
+    /** @deprecated Use {@link ErrorDetails}. */
+    public set errorDetails(value: string | null) {
+      this.ErrorDetails = value;
+    }
 
     /** Cached dashboard categories for breadcrumb navigation */
     private categories: MJDashboardCategoryEntity[] = [];
@@ -434,17 +452,53 @@ export class DashboardResource extends BaseResourceComponent {
     private viewerInstance: DashboardViewerComponent | null = null;
 
     /** The config-based dashboard entity (null for code-based dashboards) */
-    public configDashboard: MJDashboardEntity | null = null;
+    public ConfigDashboard: MJDashboardEntity | null = null;
+
+    /** @deprecated Use {@link ConfigDashboard}. */
+    public get configDashboard(): MJDashboardEntity | null {
+      return this.ConfigDashboard;
+    }
+    /** @deprecated Use {@link ConfigDashboard}. */
+    public set configDashboard(value: MJDashboardEntity | null) {
+      this.ConfigDashboard = value;
+    }
 
     /** Whether we're in edit mode */
-    public isEditMode = false;
+    public IsEditMode = false;
+
+    /** @deprecated Use {@link IsEditMode}. */
+    public get isEditMode() {
+      return this.IsEditMode;
+    }
+    /** @deprecated Use {@link IsEditMode}. */
+    public set isEditMode(value) {
+      this.IsEditMode = value;
+    }
 
     /** Editing fields */
-    public editingName = '';
-    public editingDescription = '';
+    public EditingName = '';
+
+    /** @deprecated Use {@link EditingName}. */
+    public get editingName() {
+      return this.EditingName;
+    }
+    /** @deprecated Use {@link EditingName}. */
+    public set editingName(value) {
+      this.EditingName = value;
+    }
+    public EditingDescription = '';
+
+    /** @deprecated Use {@link EditingDescription}. */
+    public get editingDescription() {
+      return this.EditingDescription;
+    }
+    /** @deprecated Use {@link EditingDescription}. */
+    public set editingDescription(value) {
+      this.EditingDescription = value;
+    }
 
     /** Current user's permissions for this dashboard */
-    public dashboardPermissions: DashboardUserPermissions = {
+    public DashboardPermissions: DashboardUserPermissions = {
         DashboardID: '',
         CanRead: true,
         CanEdit: true,
@@ -454,8 +508,26 @@ export class DashboardResource extends BaseResourceComponent {
         PermissionSource: 'owner'
     };
 
+    /** @deprecated Use {@link DashboardPermissions}. */
+    public get dashboardPermissions(): DashboardUserPermissions {
+      return this.DashboardPermissions;
+    }
+    /** @deprecated Use {@link DashboardPermissions}. */
+    public set dashboardPermissions(value: DashboardUserPermissions) {
+      this.DashboardPermissions = value;
+    }
+
     /** Whether the share dialog is visible */
-    public showShareDialog = false;
+    public ShowShareDialog = false;
+
+    /** @deprecated Use {@link ShowShareDialog}. */
+    public get showShareDialog() {
+      return this.ShowShareDialog;
+    }
+    /** @deprecated Use {@link ShowShareDialog}. */
+    public set showShareDialog(value) {
+      this.ShowShareDialog = value;
+    }
 
     /**
      * Sets the error state with a user-friendly message and optional technical details
@@ -463,12 +535,12 @@ export class DashboardResource extends BaseResourceComponent {
     private setError(message: string, error?: unknown): void {
         this.errorMessage = message;
         if (error instanceof Error) {
-            this.errorDetails = error.message;
+            this.ErrorDetails = error.message;
             if (error.stack) {
-                this.errorDetails += '\n\nStack trace:\n' + error.stack;
+                this.ErrorDetails += '\n\nStack trace:\n' + error.stack;
             }
         } else if (error) {
-            this.errorDetails = String(error);
+            this.ErrorDetails = String(error);
         }
     }
 
@@ -477,7 +549,7 @@ export class DashboardResource extends BaseResourceComponent {
      */
     private clearError(): void {
         this.errorMessage = null;
-        this.errorDetails = null;
+        this.ErrorDetails = null;
     }
 
     constructor(
@@ -502,7 +574,7 @@ export class DashboardResource extends BaseResourceComponent {
                 this.componentRef = null;
             }
             this.clearError();
-            this.configDashboard = null;
+            this.ConfigDashboard = null;
             this.viewerInstance = null;
             this.loadDashboard();
         }
@@ -527,23 +599,28 @@ export class DashboardResource extends BaseResourceComponent {
     /**
      * Toggle between view and edit mode
      */
-    public toggleEditMode(): void {
-        if (this.isEditMode) {
-            this.cancelEdit();
+    public ToggleEditMode(): void {
+        if (this.IsEditMode) {
+            this.CancelEdit();
         } else {
             this.enterEditMode();
         }
+    }
+
+    /** @deprecated Use {@link ToggleEditMode}. */
+    public toggleEditMode(): void {
+      return this.ToggleEditMode();
     }
 
     /**
      * Enter edit mode
      */
     private enterEditMode(): void {
-        if (!this.configDashboard) return;
+        if (!this.ConfigDashboard) return;
 
-        this.isEditMode = true;
-        this.editingName = this.configDashboard.Name;
-        this.editingDescription = this.configDashboard.Description || '';
+        this.IsEditMode = true;
+        this.EditingName = this.ConfigDashboard.Name;
+        this.EditingDescription = this.ConfigDashboard.Description || '';
 
         // Tell the viewer to enter edit mode
         if (this.viewerInstance) {
@@ -556,8 +633,8 @@ export class DashboardResource extends BaseResourceComponent {
     /**
      * Cancel edit mode and discard changes
      */
-    public cancelEdit(): void {
-        this.isEditMode = false;
+    public CancelEdit(): void {
+        this.IsEditMode = false;
 
         // Tell the viewer to exit edit mode
         if (this.viewerInstance) {
@@ -567,22 +644,27 @@ export class DashboardResource extends BaseResourceComponent {
         this.cdr.detectChanges();
     }
 
+    /** @deprecated Use {@link CancelEdit}. */
+    public cancelEdit(): void {
+      return this.CancelEdit();
+    }
+
     /**
      * Save dashboard changes
      */
-    public async saveDashboard(): Promise<void> {
-        if (!this.configDashboard || !this.viewerInstance) return;
+    public async SaveDashboard(): Promise<void> {
+        if (!this.ConfigDashboard || !this.viewerInstance) return;
 
         try {
             // Update dashboard name and description
-            this.configDashboard.Name = this.editingName;
-            this.configDashboard.Description = this.editingDescription;
+            this.ConfigDashboard.Name = this.EditingName;
+            this.ConfigDashboard.Description = this.EditingDescription;
 
             // Save via the viewer (which handles layout saving)
             await this.viewerInstance.save();
 
             // Exit edit mode
-            this.isEditMode = false;
+            this.IsEditMode = false;
             this.viewerInstance.isEditing = false;
 
             this.cdr.detectChanges();
@@ -591,48 +673,73 @@ export class DashboardResource extends BaseResourceComponent {
         }
     }
 
+    /** @deprecated Use {@link SaveDashboard}. */
+    public async saveDashboard(): Promise<void> {
+      return this.SaveDashboard();
+    }
+
     /**
      * Open the add panel dialog
      */
-    public openAddPartDialog(): void {
+    public OpenAddPartDialog(): void {
         if (this.viewerInstance) {
             // Trigger the viewer's add panel flow
             this.viewerInstance.onAddPanelClick();
         }
     }
 
+    /** @deprecated Use {@link OpenAddPartDialog}. */
+    public openAddPartDialog(): void {
+      return this.OpenAddPartDialog();
+    }
+
     /**
      * Open the share dialog for this dashboard
      */
-    public openShareDialog(): void {
-        this.showShareDialog = true;
+    public OpenShareDialog(): void {
+        this.ShowShareDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OpenShareDialog}. */
+    public openShareDialog(): void {
+      return this.OpenShareDialog();
     }
 
     /**
      * Close the share dialog
      */
-    public closeShareDialog(): void {
-        this.showShareDialog = false;
+    public CloseShareDialog(): void {
+        this.ShowShareDialog = false;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link CloseShareDialog}. */
+    public closeShareDialog(): void {
+      return this.CloseShareDialog();
     }
 
     /**
      * Handle share dialog result
      */
-    public onShareDialogResult(result: ShareDialogResult): void {
-        this.showShareDialog = false;
+    public OnShareDialogResult(result: ShareDialogResult): void {
+        this.ShowShareDialog = false;
 
-        if (result.Action === 'save' && this.configDashboard) {
+        if (result.Action === 'save' && this.ConfigDashboard) {
             // Recompute permissions after sharing changes
             const md = this.ProviderToUse;
-            this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
-                this.configDashboard.ID,
+            this.DashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
+                this.ConfigDashboard.ID,
                 md.CurrentUser.ID
             );
         }
 
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link OnShareDialogResult}. */
+    public onShareDialogResult(result: ShareDialogResult): void {
+      return this.OnShareDialogResult(result);
     }
 
     /**
@@ -702,7 +809,7 @@ export class DashboardResource extends BaseResourceComponent {
         try {
             // Lazy-load the Data Explorer component to keep it out of the initial bundle
             const { DataExplorerDashboardComponent } = await import('@memberjunction/ng-dashboards/data-explorer-dashboards.module');
-            this.containerElement.nativeElement.innerHTML = '';
+            this.ContainerElement.nativeElement.innerHTML = '';
             const componentRef = this.viewContainer.createComponent(DataExplorerDashboardComponent);
             this.componentRef = componentRef;
             const instance = componentRef.instance;
@@ -732,7 +839,7 @@ export class DashboardResource extends BaseResourceComponent {
             const nativeElement = (componentRef.hostView as any).rootNodes[0];
             nativeElement.style.width = '100%';
             nativeElement.style.height = '100%';
-            this.containerElement.nativeElement.appendChild(nativeElement);
+            this.ContainerElement.nativeElement.appendChild(nativeElement);
 
             // Handle open entity record events
             instance.OpenEntityRecord.subscribe((eventData: { EntityName: string; RecordPKey: CompositeKey }) => {
@@ -795,7 +902,7 @@ export class DashboardResource extends BaseResourceComponent {
             }
 
             // Create the component instance
-            this.containerElement.nativeElement.innerHTML = '';
+            this.ContainerElement.nativeElement.innerHTML = '';
             this.componentRef = this.viewContainer.createComponent<BaseDashboard>(classReg.SubClass);
             const instance = this.componentRef.instance as BaseDashboard;
 
@@ -841,7 +948,7 @@ export class DashboardResource extends BaseResourceComponent {
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
             nativeElement.style.width = '100%';
             nativeElement.style.height = '100%';
-            this.containerElement.nativeElement.appendChild(nativeElement);
+            this.ContainerElement.nativeElement.appendChild(nativeElement);
 
             // handle open entity record events in MJ Explorer with routing
             instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
@@ -896,18 +1003,18 @@ export class DashboardResource extends BaseResourceComponent {
      */
     private async loadConfigBasedDashboard(dashboard: MJDashboardEntity): Promise<void> {
         try {
-            this.containerElement.nativeElement.innerHTML = '';
+            this.ContainerElement.nativeElement.innerHTML = '';
             const componentRef = this.viewContainer.createComponent(DashboardViewerComponent);
             this.componentRef = componentRef;
             const instance = componentRef.instance;
 
             // Store references for external toolbar control
             this.viewerInstance = instance;
-            this.configDashboard = dashboard;
+            this.ConfigDashboard = dashboard;
 
             // Compute user permissions for this dashboard
             const md = this.ProviderToUse;
-            this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
+            this.DashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 dashboard.ID,
                 md.CurrentUser.ID
             );
@@ -916,7 +1023,7 @@ export class DashboardResource extends BaseResourceComponent {
             const nativeElement = (this.componentRef.hostView as any).rootNodes[0];
             nativeElement.style.width = '100%';
             nativeElement.style.height = '100%';
-            this.containerElement.nativeElement.appendChild(nativeElement);
+            this.ContainerElement.nativeElement.appendChild(nativeElement);
 
             // Load categories for breadcrumb navigation (if not already loaded)
             if (this.categories.length === 0) {

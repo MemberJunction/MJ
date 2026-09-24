@@ -38,7 +38,7 @@ export class MJInitializationService {
   /**
    * Initialize GraphQL client with authentication token and refresh callback
    */
-  async initializeGraphQL(token: string, environment: MJEnvironmentConfig): Promise<void> {
+  async InitializeGraphQL(token: string, environment: MJEnvironmentConfig): Promise<void> {
     const url: string = environment.GRAPHQL_URI;
     const wsurl: string = environment.GRAPHQL_WS_URI;
 
@@ -66,10 +66,15 @@ export class MJInitializationService {
     }
   }
 
+  /** @deprecated Use {@link InitializeGraphQL}. */
+  async initializeGraphQL(token: string, environment: MJEnvironmentConfig): Promise<void> {
+    return this.InitializeGraphQL(token, environment);
+  }
+
   /**
    * Refresh shared data and validate user access
    */
-  async validateUserAccess(): Promise<InitializationResult> {
+  async ValidateUserAccess(): Promise<InitializationResult> {
     await SharedService.RefreshData(true);
 
     const md = new Metadata(); // global-provider-ok: app bootstrap — runs once during initialization to validate the default provider's CurrentUser
@@ -87,10 +92,15 @@ export class MJInitializationService {
     return { success: true };
   }
 
+  /** @deprecated Use {@link ValidateUserAccess}. */
+  async validateUserAccess(): Promise<InitializationResult> {
+    return this.ValidateUserAccess();
+  }
+
   /**
    * Run startup validation checks (if validation service is provided)
    */
-  runValidationChecks(): void {
+  RunValidationChecks(): void {
     if (!this.startupValidationService) {
       return; // No validation service provided
     }
@@ -101,10 +111,15 @@ export class MJInitializationService {
     }, 500);
   }
 
+  /** @deprecated Use {@link RunValidationChecks}. */
+  runValidationChecks(): void {
+    return this.RunValidationChecks();
+  }
+
   /**
    * Navigate to initial route after successful login
    */
-  navigateToInitialRoute(initialPath: string, document: Document): void {
+  NavigateToInitialRoute(initialPath: string, document: Document): void {
     localStorage.removeItem('jwt-retry-ts');
 
     if (initialPath === '/') {
@@ -119,10 +134,15 @@ export class MJInitializationService {
     }
   }
 
+  /** @deprecated Use {@link NavigateToInitialRoute}. */
+  navigateToInitialRoute(initialPath: string, document: Document): void {
+    return this.NavigateToInitialRoute(initialPath, document);
+  }
+
   /**
    * Check if error is related to missing user roles
    */
-  isNoUserRolesError(err: any): boolean {
+  IsNoUserRolesError(err: any): boolean {
     try {
       if (!err || typeof err !== 'object') return false;
 
@@ -151,7 +171,7 @@ export class MJInitializationService {
 
       // Check for nested error object
       if (err.error && typeof err.error === 'object') {
-        return this.isNoUserRolesError(err.error);
+        return this.IsNoUserRolesError(err.error);
       }
 
       return false;
@@ -161,10 +181,15 @@ export class MJInitializationService {
     }
   }
 
+  /** @deprecated Use {@link IsNoUserRolesError}. */
+  isNoUserRolesError(err: any): boolean {
+    return this.IsNoUserRolesError(err);
+  }
+
   /**
    * Handle no roles error by showing validation banner (if validation service is provided)
    */
-  handleNoRolesError(): InitializationResult {
+  HandleNoRolesError(): InitializationResult {
     this.startupValidationService?.addNoRolesValidationIssue();
 
     return {
@@ -177,10 +202,15 @@ export class MJInitializationService {
     };
   }
 
+  /** @deprecated Use {@link HandleNoRolesError}. */
+  handleNoRolesError(): InitializationResult {
+    return this.HandleNoRolesError();
+  }
+
   /**
    * Handle authentication retry logic
    */
-  async handleAuthRetry(err: any): Promise<boolean> {
+  async HandleAuthRetry(err: any): Promise<boolean> {
     const retryKey = 'auth-retry-dt';
     const lastRetryDateTime = localStorage.getItem(retryKey);
     const yesterday = +new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
@@ -199,10 +229,15 @@ export class MJInitializationService {
     return false;
   }
 
+  /** @deprecated Use {@link HandleAuthRetry}. */
+  async handleAuthRetry(err: any): Promise<boolean> {
+    return this.HandleAuthRetry(err);
+  }
+
   /**
    * Get auth error message for display
    */
-  getAuthErrorMessage(err: unknown): string {
+  GetAuthErrorMessage(err: unknown): string {
     const authError = this.authBase.classifyError(err);
 
     switch (authError.type) {
@@ -214,5 +249,10 @@ export class MJInitializationService {
       default:
         return authError.userMessage || "Welcome back! Please log in to your account.";
     }
+  }
+
+  /** @deprecated Use {@link GetAuthErrorMessage}. */
+  getAuthErrorMessage(err: unknown): string {
+    return this.GetAuthErrorMessage(err);
   }
 }

@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeMixedFreshness, type EntityFreshness } from '../MaterializationFreshness';
+import { AnalyzeMixedFreshness, type EntityFreshness } from '../MaterializationFreshness';
 
 describe('analyzeMixedFreshness (Phase 4 §13)', () => {
     it('no flag when all reads are live', () => {
-        const r = analyzeMixedFreshness([
+        const r = AnalyzeMixedFreshness([
             { entityName: 'Members', isMaterialized: false },
             { entityName: 'Donations', isMaterialized: false },
         ]);
@@ -13,7 +13,7 @@ describe('analyzeMixedFreshness (Phase 4 §13)', () => {
 
     it('no flag when all reads are healthy snapshots refreshed together', () => {
         const t = new Date('2026-07-15T00:00:00Z');
-        const r = analyzeMixedFreshness([
+        const r = AnalyzeMixedFreshness([
             { entityName: 'A', isMaterialized: true, status: 'Active', lastRefreshedAt: t },
             { entityName: 'B', isMaterialized: true, status: 'Active', lastRefreshedAt: t },
         ]);
@@ -23,7 +23,7 @@ describe('analyzeMixedFreshness (Phase 4 §13)', () => {
     });
 
     it('flags mixing live with a materialized snapshot', () => {
-        const r = analyzeMixedFreshness([
+        const r = AnalyzeMixedFreshness([
             { entityName: 'Members', isMaterialized: false },
             { entityName: 'DonationTotals', isMaterialized: true, status: 'Active', lastRefreshedAt: new Date() },
         ]);
@@ -34,7 +34,7 @@ describe('analyzeMixedFreshness (Phase 4 §13)', () => {
     });
 
     it('flags a non-Active snapshot (Stale / DriftHold)', () => {
-        const r = analyzeMixedFreshness([
+        const r = AnalyzeMixedFreshness([
             { entityName: 'DonationTotals', isMaterialized: true, status: 'DriftHold', lastRefreshedAt: new Date() },
         ]);
         expect(r.mixed).toBe(false); // all materialized, no live
@@ -43,7 +43,7 @@ describe('analyzeMixedFreshness (Phase 4 §13)', () => {
     });
 
     it('reports the refresh-time spread across multiple snapshots', () => {
-        const r = analyzeMixedFreshness([
+        const r = AnalyzeMixedFreshness([
             { entityName: 'A', isMaterialized: true, status: 'Active', lastRefreshedAt: new Date('2026-07-15T00:00:00Z') },
             { entityName: 'B', isMaterialized: true, status: 'Active', lastRefreshedAt: new Date('2026-07-15T01:00:00Z') },
         ]);
@@ -54,7 +54,7 @@ describe('analyzeMixedFreshness (Phase 4 §13)', () => {
     it('ignores an unparseable lastRefreshedAt (NaN) instead of poisoning the spread computation', () => {
         // An invalid date yields NaN from getTime(); it must be dropped, not fed to Math.max/Math.min (which
         // would return NaN and silently suppress the real cross-snapshot spread warning).
-        const r = analyzeMixedFreshness([
+        const r = AnalyzeMixedFreshness([
             { entityName: 'A', isMaterialized: true, status: 'Active', lastRefreshedAt: new Date('not-a-date') },
             { entityName: 'B', isMaterialized: true, status: 'Active', lastRefreshedAt: new Date('2026-07-15T00:00:00Z') },
             { entityName: 'C', isMaterialized: true, status: 'Active', lastRefreshedAt: new Date('2026-07-15T02:00:00Z') },

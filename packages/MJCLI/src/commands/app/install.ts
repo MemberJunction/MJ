@@ -2,7 +2,7 @@ import { Args, Command, Flags } from '@oclif/core';
 import { InstallApp } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { buildOrchestratorContext } from '../../utils/open-app-context.js';
+import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
 
 /**
  * CLI command: `mj app install <source>`.
@@ -57,7 +57,7 @@ Private repositories need a GitHub credential. GitHub returns 404 (not 403) for 
     const spinner = ora();
 
     try {
-      const context = await buildOrchestratorContext(this, flags.verbose, !flags['non-interactive']);
+      const context = await BuildOrchestratorContext(this, flags.verbose, !flags['non-interactive']);
 
       const result = await InstallApp(
         {

@@ -102,10 +102,10 @@ export interface ITeamsMeetingSdk {
      * @param args Join parameters (join URL, thread id, bot name, auth).
      * @returns The bot participant + call handles.
      */
-    join(args: TeamsJoinArgs): Promise<TeamsJoinResult>;
+    join(args: TeamsJoinArgs): Promise<TeamsJoinResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** Leaves the meeting (terminates the bot's call leg) and releases SDK resources. */
-    leave(): Promise<void>;
+    leave(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends one raw PCM audio frame as the bot's outbound audio (the agent's voice into the meeting),
@@ -113,7 +113,7 @@ export interface ITeamsMeetingSdk {
      *
      * @param pcm The PCM audio bytes to send.
      */
-    sendAudioFrame(pcm: ArrayBuffer): void;
+    sendAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound raw per-participant audio frames (what the agent hears, carrying
@@ -121,21 +121,21 @@ export interface ITeamsMeetingSdk {
      *
      * @param cb Invoked with each inbound audio frame.
      */
-    onAudioFrame(cb: (frame: TeamsAudioFrame) => void): void;
+    onAudioFrame(cb: (frame: TeamsAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant joins. "Latest handler wins."
      *
      * @param cb Invoked with the participant who joined.
      */
-    onParticipantJoin(cb: (participant: TeamsParticipant) => void): void;
+    onParticipantJoin(cb: (participant: TeamsParticipant) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a participant leaves. "Latest handler wins."
      *
      * @param cb Invoked with the participant id that left.
      */
-    onParticipantLeave(cb: (participantId: string) => void): void;
+    onParticipantLeave(cb: (participantId: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for native raised-hand signals. "Latest handler wins."
@@ -146,28 +146,28 @@ export interface ITeamsMeetingSdk {
      *
      * @param cb Invoked with the participant id and whether the hand is now raised.
      */
-    onHandRaise(cb: (participantId: string, raised: boolean) => void): void;
+    onHandRaise(cb: (participantId: string, raised: boolean) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Returns the current participant roster (including the bot).
      *
      * @returns The current participants.
      */
-    getParticipants(): Promise<TeamsParticipant[]>;
+    getParticipants(): Promise<TeamsParticipant[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Posts a message to the Teams meeting chat thread (everyone).
      *
      * @param text The chat message text.
      */
-    postChatMessage(text: string): Promise<void>;
+    postChatMessage(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Mutes a participant (requires the bot be an organizer/presenter with the relevant policy).
      *
      * @param participantId The participant to mute.
      */
-    muteParticipant(participantId: string): Promise<void>;
+    muteParticipant(participantId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the meeting/call ends (organizer ended / call terminated).
@@ -175,7 +175,7 @@ export interface ITeamsMeetingSdk {
      *
      * @param cb Invoked when the meeting has ended.
      */
-    onMeetingEnded(cb: () => void): void;
+    onMeetingEnded(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

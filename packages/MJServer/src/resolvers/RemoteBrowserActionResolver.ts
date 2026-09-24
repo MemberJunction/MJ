@@ -22,7 +22,7 @@ import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentSessionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { NormalizeInstanceKey, RemoteBrowserEngine } from '@memberjunction/remote-browser-server';
-import { beginBrowserGoalStep, finalizeBrowserGoalStep, extractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
+import { BeginBrowserGoalStep, FinalizeBrowserGoalStep, ExtractCoAgentRunID } from '../agentSessions/remoteBrowserGoalEngine.js';
 import { RemoteBrowserGoalRegistry } from '../agentSessions/remoteBrowserGoalRegistry.js';
 import { randomUUID } from 'node:crypto';
 import {
@@ -400,8 +400,8 @@ export class RemoteBrowserActionResolver extends ResolverBase {
     const providerName = await this.resolveProviderName(session, contextUser, provider);
     // Observability: nest this goal's many prompt runs under ONE "Browser goal" step on the realtime
     // co-agent run (when the session has one). Best-effort — a null step just means the goal runs unlinked.
-    const coAgentRunID = extractCoAgentRunID(session.Config_);
-    const goalStep = await beginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
+    const coAgentRunID = ExtractCoAgentRunID(session.Config_);
+    const goalStep = await BeginBrowserGoalStep(provider, contextUser, coAgentRunID, goal);
 
     // ASYNC START: a goal loop can run for minutes; do NOT hold this request open for it (browser
     // fetch / proxy / janitor timeouts would kill the request while the loop runs on, and the agent
@@ -420,14 +420,14 @@ export class RemoteBrowserActionResolver extends ResolverBase {
       AgentRunStepID: goalStep?.ID,
     })
       .then(async (result) => {
-        await finalizeBrowserGoalStep(goalStep, result);
+        await FinalizeBrowserGoalStep(goalStep, result);
         RemoteBrowserGoalRegistry.Instance.Complete(agentSessionID, goalRunID, result);
       })
       .catch(async (err) => {
         const message = err instanceof Error ? err.message : String(err);
         LogError(`ExecuteRemoteBrowserGoal failed (provider='${providerName}'): ${message}`);
         const failure = { Success: false, Status: 'Error', Detail: `Remote browser error (${providerName}): ${message}` };
-        await finalizeBrowserGoalStep(goalStep, failure);
+        await FinalizeBrowserGoalStep(goalStep, failure);
         RemoteBrowserGoalRegistry.Instance.Complete(agentSessionID, goalRunID, failure);
       });
 

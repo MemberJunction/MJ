@@ -1,7 +1,16 @@
+import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSOperateDialogComponent } from './ps-operate-dialog.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <ps-operate-dialog> — "Operate this model" (scope + output knobs → run/schedule). It

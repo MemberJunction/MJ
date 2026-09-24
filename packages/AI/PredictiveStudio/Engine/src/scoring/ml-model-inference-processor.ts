@@ -50,18 +50,22 @@ import type {
 import type {
   MJMLModelEntity,
 } from '@memberjunction/core-entities';
-import type {
-  PredictRequest,
-  PredictResponse,
-  Prediction,
-  FeatureSchemaEntry,
-  FittedPreprocessing,
-  SourceBinding,
-  AsOfStrategy,
-  LeakageGuard,
-  ProblemType,
-  FeatureStepGraph,
-  MatrixData,
+import {
+  resolveOutcomeConfig,
+  resolveScoreBand,
+  resolveOutcomeStyle,
+  type PredictRequest,
+  type PredictResponse,
+  type Prediction,
+  type FeatureSchemaEntry,
+  type FittedPreprocessing,
+  type SourceBinding,
+  type AsOfStrategy,
+  type LeakageGuard,
+  type ProblemType,
+  type FeatureStepGraph,
+  type MatrixData,
+  type OutcomeConfig,
 } from '@memberjunction/predictive-studio-core';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, type DatedSourceSpec } from '../feature-assembly';
@@ -219,6 +223,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       featureSteps: pipeline.featureSteps,
       asOf: pipeline.asOf,
       leakageGuard: pipeline.leakageGuard,
+      outcomeConfig: pipeline.outcomeConfig,
     };
   }
 
@@ -263,6 +268,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
           featureSteps: existing.featureSteps.Steps.length > 0 ? existing.featureSteps : (isFeatureStepGraph(rawSteps) ? rawSteps : { Steps: [] }),
           asOf: existing.asOf.Mode !== 'none' ? existing.asOf : parseJson<AsOfStrategy>(row.AsOfStrategy, { Mode: 'none' }),
           leakageGuard: existing.leakageGuard,
+          outcomeConfig: existing.outcomeConfig,
         };
       }
     } catch (err) {
@@ -279,6 +285,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
    */
   private resolvePipelineConfig(model: MJMLModelEntity): ResolvedScoringPipeline {
     const lineage = parseJson<Record<string, unknown>>(model.Lineage, {});
+    const outcomeConfig = resolveOutcomeConfig(model);
     return {
       // The target entity the model scores is the training-unit entity from lineage.
       targetEntityName: typeof lineage.targetEntityName === 'string' ? lineage.targetEntityName : (model.Pipeline ?? ''),
@@ -288,6 +295,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       // Scoring never re-fits or re-evaluates leakage — a permissive guard is fine here;
       // the frozen FeatureSchema is the contract that bounds which columns are produced.
       leakageGuard: { DenyFields: [], SingleFeatureDominanceThreshold: 1 },
+      outcomeConfig,
     };
   }
 
@@ -343,7 +351,7 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       artifact_b64: model.artifactB64,
       fitted_preprocessing: model.fittedPreprocessing,
       feature_schema: model.featureSchema,
-      rows: matrixToFeatureRows(assembly.matrix, model.featureSchema),
+      rows: MatrixToFeatureRows(assembly.matrix, model.featureSchema),
     };
     return this.deps.sidecar.predict(req);
   }
@@ -352,12 +360,20 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
 
   /** Shape a single sidecar prediction into the record result payload. */
   private toPayload(model: LoadedModel, prediction: Prediction): MLInferenceResultPayload {
+    const band = resolveScoreBand(prediction.score, model.outcomeConfig);
+    const style = resolveOutcomeStyle(prediction.class, model.outcomeConfig);
     return {
       modelId: model.modelId,
       target: model.targetVariable,
       problemType: model.problemType,
       score: prediction.score,
       class: prediction.class,
+      status: band?.Label,
+      band: band?.Key,
+      badgeColor: band?.BadgeColor,
+      icon: band?.Icon ?? style?.Icon,
+      scoreLabel: model.outcomeConfig.ScoreLabel,
+      statusLabel: model.outcomeConfig.StatusLabel,
       // Top signed per-record drivers behind THIS prediction (P1-5), when the model supports exact
       // per-row attribution (linear models); omitted otherwise (the UI falls back to global importance).
       drivers: prediction.contributions?.map((c) => ({ feature: c.feature, value: c.value })),
@@ -408,6 +424,18 @@ export interface MLInferenceResultPayload {
    * which moves on any edit, not just scoring.
    */
   scoredAt: string;
+  /** Qualitative status label evaluated against model OutcomeConfig (e.g. "High", "Low Risk", "Severe"). */
+  status?: string;
+  /** Normalized status tier key (e.g. "high", "medium", "low"). */
+  band?: string;
+  /** Semantic badge color for UI rendering: 'green' | 'amber' | 'red' | 'blue' | 'gray'. */
+  badgeColor?: 'green' | 'amber' | 'red' | 'blue' | 'gray';
+  /** FontAwesome icon name (e.g. 'fa-circle-check', 'fa-triangle-exclamation'). */
+  icon?: string;
+  /** Display label for the score column (e.g. "Renewal Probability", "Default Risk"). */
+  scoreLabel?: string;
+  /** Display label for the status column (e.g. "Renewal Status", "Risk Level"). */
+  statusLabel?: string;
 }
 
 /** Internal — the assembly config resolved off a model for scoring. */
@@ -417,6 +445,7 @@ interface ResolvedScoringPipeline {
   featureSteps: FeatureStepGraph;
   asOf: AsOfStrategy;
   leakageGuard: LeakageGuard;
+  outcomeConfig: OutcomeConfig;
 }
 
 /**
@@ -425,7 +454,7 @@ interface ResolvedScoringPipeline {
  * present in the matrix but not in the schema are dropped; schema columns missing
  * from the matrix are emitted as `null` (the sidecar imputes via fitted params).
  */
-export function matrixToFeatureRows(
+export function MatrixToFeatureRows(
   matrix: MatrixData,
   featureSchema: FeatureSchemaEntry[],
 ): Array<Record<string, string | number | boolean | null>> {
@@ -440,6 +469,14 @@ export function matrixToFeatureRows(
     }
     return obj;
   });
+}
+
+/** @deprecated Use {@link MatrixToFeatureRows}. */
+export function matrixToFeatureRows(
+  matrix: MatrixData,
+  featureSchema: FeatureSchemaEntry[],
+): Array<Record<string, string | number | boolean | null>> {
+  return MatrixToFeatureRows(matrix, featureSchema);
 }
 
 /** Parse a possibly-null JSON column, falling back to a default on null/parse error. */

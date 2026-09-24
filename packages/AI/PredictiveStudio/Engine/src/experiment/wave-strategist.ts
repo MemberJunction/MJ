@@ -26,7 +26,7 @@ import type {
 export class PlanOrderWaveStrategist implements IWaveStrategist {
   /** @inheritdoc */
   public proposeNextWave(context: WaveStrategistContext): ProposedExperiment[] {
-    const ordered = sortByPriority(context.remaining);
+    const ordered = SortByPriority(context.remaining);
     return ordered.slice(0, Math.max(0, context.maxWaveSize));
   }
 }
@@ -37,7 +37,7 @@ export class PlanOrderWaveStrategist implements IWaveStrategist {
  *
  * @param experiments the experiments to order
  */
-export function sortByPriority(experiments: ProposedExperiment[]): ProposedExperiment[] {
+export function SortByPriority(experiments: ProposedExperiment[]): ProposedExperiment[] {
   return experiments
     .map((experiment, index) => ({ experiment, index }))
     .sort((a, b) => {
@@ -49,6 +49,11 @@ export function sortByPriority(experiments: ProposedExperiment[]): ProposedExper
       return a.index - b.index;
     })
     .map((wrapped) => wrapped.experiment);
+}
+
+/** @deprecated Use {@link SortByPriority}. */
+export function sortByPriority(experiments: ProposedExperiment[]): ProposedExperiment[] {
+  return SortByPriority(experiments);
 }
 
 /** Read a stable numeric priority, treating missing/NaN as lowest priority. */

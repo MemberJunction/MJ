@@ -10,10 +10,10 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     VonageNativeCallSdk,
     BindVonageNativeCall,
-    readNativeConfig,
-    mapNativeMediaFrame,
-    toArrayBuffer,
-    defaultNativeLoader,
+    ReadNativeConfig,
+    MapNativeMediaFrame,
+    ToArrayBuffer,
+    DefaultNativeLoader,
     NativeCallModule,
     NativeCallClient,
     NativeMediaFrame,
@@ -104,21 +104,21 @@ describe('VonageNativeCallSdk — pure mappings', () => {
     it('toArrayBuffer copies a Uint8Array view (not aliasing the underlying buffer window)', () => {
         const backing = new Uint8Array([9, 8, 7, 6]).buffer;
         const view = new Uint8Array(backing, 1, 2); // [8,7]
-        const out = toArrayBuffer(view);
+        const out = ToArrayBuffer(view);
         expect(out.byteLength).toBe(2);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([8, 7]));
     });
 
     it('toArrayBuffer copies a standalone ArrayBuffer (caller never aliases the source)', () => {
         const src = new Uint8Array([1, 2, 3]).buffer;
-        const out = toArrayBuffer(src);
+        const out = ToArrayBuffer(src);
         expect(out).not.toBe(src);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([1, 2, 3]));
     });
 
     it('mapNativeMediaFrame copies the inbound PCM to an equal ArrayBuffer', () => {
         const view = new Uint8Array([4, 5, 6]);
-        const out = mapNativeMediaFrame({ data: view });
+        const out = MapNativeMediaFrame({ data: view });
         expect(new Uint8Array(out)).toEqual(view);
     });
 });
@@ -127,7 +127,7 @@ describe('VonageNativeCallSdk — dial/answer + auth + two-way audio', () => {
     it('dial() loads the module, constructs a client with resolved Voice creds, and returns the call UUID', async () => {
         const client = new FakeNativeCallClient();
         const fake = fakeModule(client);
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fake.module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fake.module);
         const uuid = await sdk.dial('+15558675309', '+15551112222', { region: 'us' });
         expect(uuid).toBe('call-uuid-1');
         expect(client.placed).toEqual({ to: '+15558675309', from: '+15551112222', options: { region: 'us' } });
@@ -143,14 +143,14 @@ describe('VonageNativeCallSdk — dial/answer + auth + two-way audio', () => {
 
     it('answer() accepts the inbound WebSocket media leg for the delivered call UUID', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client).module);
         await sdk.answer('inbound-uuid-9');
         expect(client.accepted).toBe('inbound-uuid-9');
     });
 
     it('sendAudioFrame forwards the agent voice to the native WebSocket media send path', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client).module);
         await sdk.dial('+1', '+2');
         const pcm = new Uint8Array([5, 5, 5]).buffer;
         sdk.sendAudioFrame(pcm);
@@ -159,13 +159,13 @@ describe('VonageNativeCallSdk — dial/answer + auth + two-way audio', () => {
     });
 
     it('sendAudioFrame before the call exists is a safe no-op (no throw)', () => {
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeCallClient()).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeCallClient()).module);
         expect(() => sdk.sendAudioFrame(new ArrayBuffer(2))).not.toThrow();
     });
 
     it('inbound native media is mapped to a copied PCM ArrayBuffer and delivered to the handler', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client).module);
         const heard: ArrayBuffer[] = [];
         sdk.onAudioFrame((pcm) => heard.push(pcm));
         await sdk.dial('+1', '+2');
@@ -176,7 +176,7 @@ describe('VonageNativeCallSdk — dial/answer + auth + two-way audio', () => {
 
     it('a handler registered AFTER the call is live still attaches and receives inbound media', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client).module);
         await sdk.dial('+1', '+2');
         const heard: ArrayBuffer[] = [];
         sdk.onAudioFrame((pcm) => heard.push(pcm));
@@ -188,7 +188,7 @@ describe('VonageNativeCallSdk — dial/answer + auth + two-way audio', () => {
 describe('VonageNativeCallSdk — DTMF, transfer, controls, teardown', () => {
     it('sendDtmf reaches the native client for the active call', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client).module);
         await sdk.dial('+1', '+2');
         await sdk.sendDtmf('123#');
         expect(client.sentDigits).toEqual([['call-uuid-1', '123#']]);
@@ -196,7 +196,7 @@ describe('VonageNativeCallSdk — DTMF, transfer, controls, teardown', () => {
 
     it('inbound DTMF reaches the registered handler', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client).module);
         const digits: string[] = [];
         sdk.onDtmf((d) => digits.push(d));
         await sdk.dial('+1', '+2');
@@ -206,7 +206,7 @@ describe('VonageNativeCallSdk — DTMF, transfer, controls, teardown', () => {
 
     it('transfer reaches the native client', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client).module);
         await sdk.dial('+1', '+2');
         await sdk.transfer('call-uuid-1', '+15559998888');
         expect(client.transfers).toEqual([['call-uuid-1', '+15559998888']]);
@@ -214,7 +214,7 @@ describe('VonageNativeCallSdk — DTMF, transfer, controls, teardown', () => {
 
     it('call-ended fires the handler; hangup() ends the call and clears the active UUID', async () => {
         const client = new FakeNativeCallClient();
-        const sdk = new VonageNativeCallSdk(readNativeConfig(cfg), async () => fakeModule(client).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig(cfg), async () => fakeModule(client).module);
         const ended = vi.fn();
         sdk.onCallEnded(ended);
         await sdk.dial('+1', '+2');
@@ -230,7 +230,7 @@ describe('VonageNativeCallSdk — DTMF, transfer, controls, teardown', () => {
 
 describe('VonageNativeCallSdk — config + errors + factory', () => {
     it('readNativeConfig extracts typed fields and ignores wrong types', () => {
-        const out = readNativeConfig({
+        const out = ReadNativeConfig({
             ApplicationId: 'app',
             PrivateKey: 'pk',
             ApiKey: 'k',
@@ -250,24 +250,24 @@ describe('VonageNativeCallSdk — config + errors + factory', () => {
     });
 
     it('readNativeConfig drops non-string / empty values', () => {
-        const out = readNativeConfig({ ApplicationId: 42, PrivateKey: '', ApiKey: true });
+        const out = ReadNativeConfig({ ApplicationId: 42, PrivateKey: '', ApiKey: true });
         expect(out.ApplicationId).toBeUndefined();
         expect(out.PrivateKey).toBeUndefined();
         expect(out.ApiKey).toBeUndefined();
     });
 
     it('dial() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new VonageNativeCallSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeCallClient()).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeCallClient()).module);
         await expect(sdk.dial('+1', '+2')).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('answer() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new VonageNativeCallSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeCallClient()).module);
+        const sdk = new VonageNativeCallSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeCallClient()).module);
         await expect(sdk.answer('inbound-1')).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('defaultNativeLoader throws an actionable error when the module specifier cannot be resolved', async () => {
-        await expect(defaultNativeLoader('@nonexistent/vonage-native-voice-xyz')).rejects.toThrow(
+        await expect(DefaultNativeLoader('@nonexistent/vonage-native-voice-xyz')).rejects.toThrow(
             /could not load the native Vonage Voice client module/,
         );
     });

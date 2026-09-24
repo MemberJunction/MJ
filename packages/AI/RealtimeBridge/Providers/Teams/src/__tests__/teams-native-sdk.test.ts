@@ -11,12 +11,12 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     TeamsNativeMeetingSdk,
     BindTeamsNative,
-    readNativeConfig,
-    mapNativeAudioFrame,
-    mapNativeParticipant,
-    mapNativeRole,
-    defaultNativeLoader,
-    toPcmArrayBuffer,
+    ReadNativeConfig,
+    MapNativeAudioFrame,
+    MapNativeParticipant,
+    MapNativeRole,
+    DefaultNativeLoader,
+    ToPcmArrayBuffer,
     NativeMeetingModule,
     NativeMeetingClient,
     NativeAudioFrame,
@@ -107,15 +107,15 @@ const cfg = { NativeModuleSpecifier: '@acme/teams-native-addon', AppId: 'app', T
 
 describe('TeamsNativeMeetingSdk — pure mappings', () => {
     it('mapNativeRole normalizes organizer/presenter/attendee', () => {
-        expect(mapNativeRole('organizer')).toBe('Organizer');
-        expect(mapNativeRole('presenter')).toBe('Presenter');
-        expect(mapNativeRole('co-organizer')).toBe('Presenter');
-        expect(mapNativeRole('attendee')).toBe('Attendee');
-        expect(mapNativeRole(undefined)).toBe('Attendee');
+        expect(MapNativeRole('organizer')).toBe('Organizer');
+        expect(MapNativeRole('presenter')).toBe('Presenter');
+        expect(MapNativeRole('co-organizer')).toBe('Presenter');
+        expect(MapNativeRole('attendee')).toBe('Attendee');
+        expect(MapNativeRole(undefined)).toBe('Attendee');
     });
 
     it('mapNativeParticipant coerces numeric ids and maps role + self flag', () => {
-        const p: TeamsParticipant = mapNativeParticipant({
+        const p: TeamsParticipant = MapNativeParticipant({
             participantId: 42,
             displayName: 'Dana',
             role: 'organizer',
@@ -126,7 +126,7 @@ describe('TeamsNativeMeetingSdk — pure mappings', () => {
 
     it('mapNativeAudioFrame copies PCM, resolves label, defaults timestamp', () => {
         const view = new Uint8Array([1, 2, 3]);
-        const frame: TeamsAudioFrame = mapNativeAudioFrame({
+        const frame: TeamsAudioFrame = MapNativeAudioFrame({
             data: view,
             participantId: 7,
             displayName: 'Lee',
@@ -141,14 +141,14 @@ describe('TeamsNativeMeetingSdk — pure mappings', () => {
     it('toPcmArrayBuffer copies a Uint8Array view (not aliasing the underlying buffer window)', () => {
         const backing = new Uint8Array([9, 8, 7, 6]).buffer;
         const view = new Uint8Array(backing, 1, 2); // [8,7]
-        const out = toPcmArrayBuffer(view);
+        const out = ToPcmArrayBuffer(view);
         expect(out.byteLength).toBe(2);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([8, 7]));
     });
 
     it('toPcmArrayBuffer copies a standalone ArrayBuffer (defensive against addon buffer reuse)', () => {
         const backing = new Uint8Array([4, 5]).buffer;
-        const out = toPcmArrayBuffer(backing);
+        const out = ToPcmArrayBuffer(backing);
         expect(out).not.toBe(backing);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([4, 5]));
     });
@@ -157,7 +157,7 @@ describe('TeamsNativeMeetingSdk — pure mappings', () => {
 describe('TeamsNativeMeetingSdk — join + two-way audio', () => {
     it('join() loads the addon, joins with the resolved token, and returns bot/call ids', async () => {
         const client = new FakeNativeClient();
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const result = await sdk.join(baseArgs);
         expect(result).toEqual({ BotParticipantId: 'bot-1', CallId: 'call-9' });
         expect(client.joined?.accessToken).toBe('bearer-token');
@@ -167,7 +167,7 @@ describe('TeamsNativeMeetingSdk — join + two-way audio', () => {
 
     it('sendAudioFrame forwards the agent voice to the native outbound socket (the real outbound path)', async () => {
         const client = new FakeNativeClient();
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         const pcm = new Uint8Array([5, 5, 5]).buffer;
         sdk.sendAudioFrame(pcm);
@@ -176,13 +176,13 @@ describe('TeamsNativeMeetingSdk — join + two-way audio', () => {
     });
 
     it('sendAudioFrame before join is a safe no-op (no throw)', () => {
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
         expect(() => sdk.sendAudioFrame(new ArrayBuffer(2))).not.toThrow();
     });
 
     it('inbound native audio is mapped to a diarized TeamsAudioFrame and delivered to the handler', async () => {
         const client = new FakeNativeClient();
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const heard: TeamsAudioFrame[] = [];
         sdk.onAudioFrame((f) => heard.push(f));
         await sdk.join(baseArgs);
@@ -196,7 +196,7 @@ describe('TeamsNativeMeetingSdk — join + two-way audio', () => {
 describe('TeamsNativeMeetingSdk — roster, signals, host controls', () => {
     it('participant join/leave + hand-raise events map and reach the handlers', async () => {
         const client = new FakeNativeClient();
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const joined: TeamsParticipant[] = [];
         const left: string[] = [];
         const hands: Array<[string, boolean]> = [];
@@ -217,7 +217,7 @@ describe('TeamsNativeMeetingSdk — roster, signals, host controls', () => {
     it('getParticipants maps the native roster', async () => {
         const client = new FakeNativeClient();
         client.roster = [{ participantId: 1, displayName: 'Org', role: 'organizer', isSelf: false }];
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         expect(await sdk.getParticipants()).toEqual([
             { ParticipantId: '1', DisplayName: 'Org', Role: 'Organizer', IsSelf: false },
@@ -225,13 +225,13 @@ describe('TeamsNativeMeetingSdk — roster, signals, host controls', () => {
     });
 
     it('getParticipants before join returns an empty roster (no client)', async () => {
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
         expect(await sdk.getParticipants()).toEqual([]);
     });
 
     it('postChatMessage + muteParticipant reach the native client (real host controls)', async () => {
         const client = new FakeNativeClient();
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         await sdk.postChatMessage('hello');
         await sdk.muteParticipant('11');
@@ -241,7 +241,7 @@ describe('TeamsNativeMeetingSdk — roster, signals, host controls', () => {
 
     it('meeting-ended fires the handler; leave() releases the client', async () => {
         const client = new FakeNativeClient();
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const ended = vi.fn();
         sdk.onMeetingEnded(ended);
         await sdk.join(baseArgs);
@@ -254,7 +254,7 @@ describe('TeamsNativeMeetingSdk — roster, signals, host controls', () => {
 
 describe('TeamsNativeMeetingSdk — config + errors', () => {
     it('readNativeConfig extracts typed fields and ignores wrong types', () => {
-        const out = readNativeConfig({
+        const out = ReadNativeConfig({
             AppId: 'app',
             TenantId: 'tenant',
             AccessToken: 'tok',
@@ -276,19 +276,19 @@ describe('TeamsNativeMeetingSdk — config + errors', () => {
     });
 
     it('readNativeConfig drops non-finite / non-string values', () => {
-        const out = readNativeConfig({ SampleRate: NaN, Channels: 'two', AppId: 42 });
+        const out = ReadNativeConfig({ SampleRate: NaN, Channels: 'two', AppId: 42 });
         expect(out.SampleRate).toBeUndefined();
         expect(out.Channels).toBeUndefined();
         expect(out.AppId).toBeUndefined();
     });
 
     it('join() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new TeamsNativeMeetingSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new TeamsNativeMeetingSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
         await expect(sdk.join(baseArgs)).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('defaultNativeLoader throws an actionable error when the addon specifier cannot be resolved', async () => {
-        await expect(defaultNativeLoader('@nonexistent/teams-native-addon-xyz')).rejects.toThrow(
+        await expect(DefaultNativeLoader('@nonexistent/teams-native-addon-xyz')).rejects.toThrow(
             /could not load the native Teams real-time-media addon/,
         );
     });

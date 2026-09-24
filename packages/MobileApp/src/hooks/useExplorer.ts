@@ -10,26 +10,26 @@ import { useFocusEffect } from 'expo-router';
 import { useMJ } from '@/providers/mj-provider';
 import { useEntityChange } from '@/hooks/useEntityChange';
 import {
-    loadEntities, loadEntityRecords, loadRecordDetail,
-    loadQueries, runQuery, loadDashboards, loadDashboard,
-    entityCount, queryCount,
+    LoadEntities, LoadEntityRecords, LoadRecordDetail,
+    LoadQueries, runQuery, LoadDashboards, LoadDashboard,
+    EntityCount, QueryCount,
     type EntityListItem, type EntityRecordsLoad, type RecordDetailLoad,
     type QueryListItem, type QueryRunResult, type DashboardListItem, type DashboardLoad,
 } from '@/data/services/explorer';
 import {
-    loadRecordForEdit, saveRecord,
+    LoadRecordForEdit, SaveRecord,
     type RecordEditLoad, type RecordSaveResult, type FieldValue, type FieldValidationError,
 } from '@/data/services/record-edit';
 
 /**
  * Hub counts for the Explorer landing screen — number of entities, queries,
  * and dashboards. Entity/query counts come from in-memory Metadata (cheap);
- * the dashboard count requires a `loadDashboards` fetch (errors coalesce to an
+ * the dashboard count requires a `LoadDashboards` fetch (errors coalesce to an
  * empty list). Guarded by a cancellation flag.
  *
  * @returns `{ entities, queries, dashboards }` counts, or `null` until loaded.
  */
-export function useExplorerCounts() {
+export function UseExplorerCounts() {
     const { status } = useMJ();
     const [counts, setCounts] = useState<{ entities: number; queries: number; dashboards: number } | null>(null);
 
@@ -37,9 +37,9 @@ export function useExplorerCounts() {
         if (status !== 'ready') return;
         let cancelled = false;
         (async () => {
-            const dashboards = await loadDashboards().catch(() => []);
+            const dashboards = await LoadDashboards().catch(() => []);
             if (cancelled) return;
-            setCounts({ entities: entityCount(), queries: queryCount(), dashboards: dashboards.length });
+            setCounts({ entities: EntityCount(), queries: QueryCount(), dashboards: dashboards.length });
         })();
         return () => { cancelled = true; };
     }, [status]);
@@ -47,28 +47,38 @@ export function useExplorerCounts() {
     return counts;
 }
 
+/** @deprecated Use {@link UseExplorerCounts}. */
+export function useExplorerCounts() {
+    return UseExplorerCounts();
+}
+
 /**
- * Lists all entities from in-memory Metadata via `loadEntities` (synchronous).
+ * Lists all entities from in-memory Metadata via `LoadEntities` (synchronous).
  * @returns The {@link EntityListItem}[] once MJ is `ready`, else `null`; on any
  *   error resolves to an empty array.
  */
-export function useEntities() {
+export function UseEntities() {
     const { status } = useMJ();
     const [entities, setEntities] = useState<EntityListItem[] | null>(null);
     useEffect(() => {
         if (status !== 'ready') return;
-        try { setEntities(loadEntities()); } catch { setEntities([]); }
+        try { setEntities(LoadEntities()); } catch { setEntities([]); }
     }, [status]);
     return entities;
 }
 
+/** @deprecated Use {@link UseEntities}. */
+export function useEntities() {
+    return UseEntities();
+}
+
 /**
- * Loads a page of records for a named entity via `loadEntityRecords` (RunView).
+ * Loads a page of records for a named entity via `LoadEntityRecords` (RunView).
  * @param entityName The entity to query; `undefined` keeps the hook idle.
  * @returns `{ data, loading, error, refresh }` — the {@link EntityRecordsLoad}
  *   (or `null`), in-flight flag, last error, and a manual `refresh` handler.
  */
-export function useEntityRecords(entityName: string | undefined) {
+export function UseEntityRecords(entityName: string | undefined) {
     const { status } = useMJ();
     const [data, setData] = useState<EntityRecordsLoad | null>(null);
     const [loading, setLoading] = useState(false);
@@ -78,7 +88,7 @@ export function useEntityRecords(entityName: string | undefined) {
         if (status !== 'ready' || !entityName) return;
         setLoading(true);
         setError(null);
-        try { setData(await loadEntityRecords(entityName)); }
+        try { setData(await LoadEntityRecords(entityName)); }
         catch (e) { setError(e instanceof Error ? e : new Error(String(e))); }
         finally { setLoading(false); }
     }, [status, entityName]);
@@ -96,8 +106,13 @@ export function useEntityRecords(entityName: string | undefined) {
     return { data, loading, error, refresh };
 }
 
+/** @deprecated Use {@link UseEntityRecords}. */
+export function useEntityRecords(entityName: string | undefined) {
+    return UseEntityRecords(entityName);
+}
+
 /**
- * Loads the full field detail for a single record via `loadRecordDetail`
+ * Loads the full field detail for a single record via `LoadRecordDetail`
  * (RunView). Cancellation-guarded against id changes / unmount.
  * @param entityName The entity of the record.
  * @param recordId The primary key of the record; both args must be defined for
@@ -105,7 +120,7 @@ export function useEntityRecords(entityName: string | undefined) {
  * @returns `{ data, loading, error }` — the {@link RecordDetailLoad} (or
  *   `null`), in-flight flag, and last error.
  */
-export function useRecordDetail(entityName: string | undefined, recordId: string | undefined) {
+export function UseRecordDetail(entityName: string | undefined, recordId: string | undefined) {
     const { status } = useMJ();
     const [data, setData] = useState<RecordDetailLoad | null>(null);
     const [loading, setLoading] = useState(false);
@@ -119,7 +134,7 @@ export function useRecordDetail(entityName: string | undefined, recordId: string
         setLoading(true);
         setError(null);
         try {
-            const d = await loadRecordDetail(entityName, recordId);
+            const d = await LoadRecordDetail(entityName, recordId);
             if (requestRef.current === token) setData(d);
         } catch (e) {
             if (requestRef.current === token) setError(e instanceof Error ? e : new Error(String(e)));
@@ -139,9 +154,14 @@ export function useRecordDetail(entityName: string | undefined, recordId: string
     return { data, loading, error, refresh };
 }
 
+/** @deprecated Use {@link UseRecordDetail}. */
+export function useRecordDetail(entityName: string | undefined, recordId: string | undefined) {
+    return UseRecordDetail(entityName, recordId);
+}
+
 /**
  * Edit-mode companion to {@link useRecordDetail}. Loads a record into an editable
- * form model via `loadRecordForEdit`, owns the mutable `values` bag + inline
+ * form model via `LoadRecordForEdit`, owns the mutable `values` bag + inline
  * validation `errors`, and exposes `setValue`/`save` handlers. Cancellation-guarded
  * against id changes / unmount. Save failures are captured into `errors`/the
  * returned {@link RecordSaveResult} rather than thrown.
@@ -150,7 +170,7 @@ export function useRecordDetail(entityName: string | undefined, recordId: string
  * @param recordId The primary key of the record; both args must be defined to load.
  * @returns `{ load, values, errors, loading, saving, error, canUpdate, setValue, save }`.
  */
-export function useRecordEditor(entityName: string | undefined, recordId: string | undefined) {
+export function UseRecordEditor(entityName: string | undefined, recordId: string | undefined) {
     const { status } = useMJ();
     const [load, setLoad] = useState<RecordEditLoad | null>(null);
     const [values, setValues] = useState<Record<string, FieldValue>>({});
@@ -166,7 +186,7 @@ export function useRecordEditor(entityName: string | undefined, recordId: string
         setError(null);
         (async () => {
             try {
-                const l = await loadRecordForEdit(entityName, recordId);
+                const l = await LoadRecordForEdit(entityName, recordId);
                 if (cancelled) return;
                 setLoad(l);
                 setValues(l ? { ...l.values } : {});
@@ -188,34 +208,44 @@ export function useRecordEditor(entityName: string | undefined, recordId: string
 
     /** Validate + persist the current edits; surfaces field errors into `errors`. */
     const save = useCallback(async (): Promise<RecordSaveResult> => {
-        if (!load) return { success: false, error: 'Nothing to save.' };
+        if (!load) return { success: false, Error: 'Nothing to save.' };
         setSaving(true);
         setErrors([]);
         try {
-            const result = await saveRecord(load, values);
-            if (!result.success && result.validationErrors) setErrors(result.validationErrors);
+            const result = await SaveRecord(load, values);
+            if (!result.success && result.ValidationErrors) setErrors(result.ValidationErrors);
             return result;
         } finally {
             setSaving(false);
         }
     }, [load, values]);
 
-    return { load, values, errors, loading, saving, error, canUpdate: load?.canUpdate ?? false, setValue, save };
+    return { load, values, errors, loading, saving, error, canUpdate: load?.CanUpdate ?? false, setValue, save };
+}
+
+/** @deprecated Use {@link UseRecordEditor}. */
+export function useRecordEditor(entityName: string | undefined, recordId: string | undefined) {
+    return UseRecordEditor(entityName, recordId);
 }
 
 /**
- * Lists all saved queries from in-memory Metadata via `loadQueries`.
+ * Lists all saved queries from in-memory Metadata via `LoadQueries`.
  * @returns The {@link QueryListItem}[] once MJ is `ready`, else `null`; on any
  *   error resolves to an empty array.
  */
-export function useQueries() {
+export function UseQueries() {
     const { status } = useMJ();
     const [queries, setQueries] = useState<QueryListItem[] | null>(null);
     useEffect(() => {
         if (status !== 'ready') return;
-        try { setQueries(loadQueries()); } catch { setQueries([]); }
+        try { setQueries(LoadQueries()); } catch { setQueries([]); }
     }, [status]);
     return queries;
+}
+
+/** @deprecated Use {@link UseQueries}. */
+export function useQueries() {
+    return UseQueries();
 }
 
 /**
@@ -228,7 +258,7 @@ export function useQueries() {
  * @returns `{ result, loading, run }` — the {@link QueryRunResult} (or `null`),
  *   in-flight flag, and a `run(parameters?)` handler.
  */
-export function useQueryRun(queryId: string | undefined) {
+export function UseQueryRun(queryId: string | undefined) {
     const { status } = useMJ();
     const [result, setResult] = useState<QueryRunResult | null>(null);
     const [loading, setLoading] = useState(false);
@@ -238,7 +268,7 @@ export function useQueryRun(queryId: string | undefined) {
         if (status !== 'ready' || !queryId) return;
         setLoading(true);
         try { setResult(await runQuery(queryId, parameters)); }
-        catch (e) { setResult({ columns: [], rows: [], rowCount: 0, success: false, errorMessage: e instanceof Error ? e.message : String(e) }); }
+        catch (e) { setResult({ Columns: [], Rows: [], RowCount: 0, success: false, errorMessage: e instanceof Error ? e.message : String(e) }); }
         finally { setLoading(false); }
     }, [status, queryId]);
 
@@ -246,31 +276,41 @@ export function useQueryRun(queryId: string | undefined) {
     return { result, loading, run };
 }
 
+/** @deprecated Use {@link UseQueryRun}. */
+export function useQueryRun(queryId: string | undefined) {
+    return UseQueryRun(queryId);
+}
+
 /**
- * Loads the list of dashboards via `loadDashboards` (async). Cancellation-
+ * Loads the list of dashboards via `LoadDashboards` (async). Cancellation-
  * guarded; errors coalesce to an empty list.
  * @returns The {@link DashboardListItem}[] once loaded, else `null`.
  */
-export function useDashboards() {
+export function UseDashboards() {
     const { status } = useMJ();
     const [dashboards, setDashboards] = useState<DashboardListItem[] | null>(null);
     useEffect(() => {
         if (status !== 'ready') return;
         let cancelled = false;
-        loadDashboards().then((d) => { if (!cancelled) setDashboards(d); }).catch(() => { if (!cancelled) setDashboards([]); });
+        LoadDashboards().then((d) => { if (!cancelled) setDashboards(d); }).catch(() => { if (!cancelled) setDashboards([]); });
         return () => { cancelled = true; };
     }, [status]);
     return dashboards;
 }
 
+/** @deprecated Use {@link UseDashboards}. */
+export function useDashboards() {
+    return UseDashboards();
+}
+
 /**
- * Loads a single dashboard resolved into renderable parts via `loadDashboard`.
+ * Loads a single dashboard resolved into renderable parts via `LoadDashboard`.
  * Cancellation-guarded against id changes / unmount.
  * @param dashboardId The dashboard to load; `undefined` keeps the hook idle.
  * @returns `{ dashboard, loading, error }` — the {@link DashboardLoad} (or
  *   `null`), in-flight flag, and last error.
  */
-export function useDashboard(dashboardId: string | undefined) {
+export function UseDashboard(dashboardId: string | undefined) {
     const { status } = useMJ();
     const [dashboard, setDashboard] = useState<DashboardLoad | null>(null);
     const [loading, setLoading] = useState(false);
@@ -283,7 +323,7 @@ export function useDashboard(dashboardId: string | undefined) {
         setError(null);
         (async () => {
             try {
-                const d = await loadDashboard(dashboardId);
+                const d = await LoadDashboard(dashboardId);
                 if (!cancelled) setDashboard(d);
             } catch (e) {
                 if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
@@ -295,4 +335,9 @@ export function useDashboard(dashboardId: string | undefined) {
     }, [status, dashboardId]);
 
     return { dashboard, loading, error };
+}
+
+/** @deprecated Use {@link UseDashboard}. */
+export function useDashboard(dashboardId: string | undefined) {
+    return UseDashboard(dashboardId);
 }

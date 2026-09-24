@@ -89,7 +89,7 @@ import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
 import { parseJudgeFrequency } from '../utils/judge-frequency-parser.js';
-import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext, findUnresolvedPlaceholders, findUnresolvedAuthPlaceholders } from '../utils/variable-substitution.js';
+import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext, FindUnresolvedPlaceholders, FindUnresolvedAuthPlaceholders } from '../utils/variable-substitution.js';
 
 import type {
     ComputerUseTestConfig,
@@ -99,26 +99,26 @@ import type {
     CheckpointDef,
 } from './types.js';
 import {
-    shouldLogToConsole,
-    resolveConsoleLogLevel,
-    formatConsoleLine,
-    readSuiteComputerUseConfig,
-    mergeComputerUseConfig,
-    isOracleAdvisory,
-    partitionGatingOracles,
-    classifyFailure,
-    isSevereBrowserFault,
-    shouldCaptureArtifact,
-    shouldRetainArtifact,
-    computeDivergence,
-    usesElementGrounding,
-    recordsReplayScript,
-    resolveReplayHeal,
+    ShouldLogToConsole,
+    ResolveConsoleLogLevel,
+    FormatConsoleLine,
+    ReadSuiteComputerUseConfig,
+    MergeComputerUseConfig,
+    IsOracleAdvisory,
+    PartitionGatingOracles,
+    ClassifyFailure,
+    IsSevereBrowserFault,
+    ShouldCaptureArtifact,
+    ShouldRetainArtifact,
+    ComputeDivergence,
+    UsesElementGrounding,
+    RecordsReplayScript,
+    ResolveReplayHeal,
     type ConsoleLogLevel,
     type FailureSignals,
     type ArtifactRetentionPolicy,
 } from './driver-policy.js';
-import { allowsLLMFallback, loadScript, saveScript } from './script-store.js';
+import { AllowsLLMFallback, LoadScript, SaveScript } from './script-store.js';
 
 import { GoalCompletionOracle } from './oracles/GoalCompletionOracle.js';
 import { UrlMatchOracle } from './oracles/UrlMatchOracle.js';
@@ -139,7 +139,7 @@ import * as path from 'node:path';
  * - Busy markers: MJ's loading component (`mj-loading` / `.mj-loading`),
  *   merged with the engine's app-neutral `[aria-busy]` / `[role=progressbar]`.
  */
-export function buildAppProfile(config: ComputerUseTestConfig): AppProfile {
+export function BuildAppProfile(config: ComputerUseTestConfig): AppProfile {
     const profile = new AppProfile();
     const cfg = config.appProfile;
 
@@ -177,6 +177,11 @@ export function buildAppProfile(config: ComputerUseTestConfig): AppProfile {
     profile.Auth = auth;
 
     return profile;
+}
+
+/** @deprecated Use {@link BuildAppProfile}. */
+export function buildAppProfile(config: ComputerUseTestConfig): AppProfile {
+ return BuildAppProfile(config);
 }
 
 /**
@@ -245,9 +250,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // The regression suite sets its profile (grounding on, temperature 0,
             // trace policy) once on the suite instead of on 380 files; per-test
             // config always wins. No-op when the suite defines no block.
-            const suiteCU = readSuiteComputerUseConfig(context.suiteContext);
+            const suiteCU = ReadSuiteComputerUseConfig(context.suiteContext);
             if (suiteCU) {
-                config = mergeComputerUseConfig(suiteCU, config);
+                config = MergeComputerUseConfig(suiteCU, config);
             }
 
             // 1b. Apply {{var}} substitution so test JSONs are reusable across targets
@@ -255,11 +260,11 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             //  "http://byo-app:3000" for a remote-target profile pointing at the BYO app).
             // Values come from the variable resolver (schema-validated) PLUS env vars
             // prefixed with MJ_TEST_VAR_ as an ad-hoc fallback when no schema is defined.
-            const variableValues = buildVariableValuesFromContext(context);
+            const variableValues = BuildVariableValuesFromContext(context);
             if (Object.keys(variableValues).length > 0) {
-                config = substituteVariables(config, variableValues);
-                input = substituteVariables(input, variableValues);
-                expected = substituteVariables(expected, variableValues);
+                config = SubstituteVariables(config, variableValues);
+                input = SubstituteVariables(input, variableValues);
+                expected = SubstituteVariables(expected, variableValues);
             }
 
             // fail fast on unresolved {{vars}} in the fields that would
@@ -268,9 +273,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // suite variable was simply never provided. Surface it here, up
             // front, naming the missing keys.
             const missingVars = [
-                ...findUnresolvedPlaceholders(input.startUrl).map(k => `startUrl:{{${k}}}`),
-                ...findUnresolvedPlaceholders(input.goal).map(k => `goal:{{${k}}}`),
-                ...findUnresolvedAuthPlaceholders(input.auth),
+                ...FindUnresolvedPlaceholders(input.startUrl).map(k => `startUrl:{{${k}}}`),
+                ...FindUnresolvedPlaceholders(input.goal).map(k => `goal:{{${k}}}`),
+                ...FindUnresolvedAuthPlaceholders(input.auth),
             ];
             if (missingVars.length > 0) {
                 throw new Error(
@@ -319,7 +324,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             // it on completion; retain-or-discard is decided post-run by outcome.
             // Default 'off' → no TracePath → no trace, no overhead.
             const tracePolicy: ArtifactRetentionPolicy = config.trace ?? 'off';
-            if (shouldCaptureArtifact(tracePolicy)) {
+            if (ShouldCaptureArtifact(tracePolicy)) {
                 runParams.TracePath = path.join(os.tmpdir(), `mj-cu-trace-${context.testRun.ID}.zip`);
             }
 
@@ -425,14 +430,14 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             //     the judge verdict, and the deterministic oracle outcome as three
             //     SEPARATE signals + their pairwise agreement, so a suite run can
             //     estimate judge error and alarm on trend shifts.
-            const divergence = computeDivergence({
-                selfReportDone: result.Steps.some(s => s.RequestedJudgement && s.ActionsRequested.length === 0),
-                judgeDone: result.FinalJudgeVerdict?.Done === true,
-                oraclesPassed: gating.length > 0 ? gating.every(r => r.passed) : result.Success,
+            const divergence = ComputeDivergence({
+                SelfReportDone: result.Steps.some(s => s.RequestedJudgement && s.ActionsRequested.length === 0),
+                JudgeDone: result.FinalJudgeVerdict?.Done === true,
+                OraclesPassed: gating.length > 0 ? gating.every(r => r.passed) : result.Success,
             });
             (actualOutput as Record<string, unknown>).divergence = divergence;
-            if (!divergence.unanimous) {
-                this.logToTestRun(context, 'info', `Divergence: self=${divergence.selfReportDone} judge=${divergence.judgeDone} oracles=${divergence.oraclesPassed} (self~judge=${divergence.selfVsJudgeAgree}, judge~oracle=${divergence.judgeVsOracleAgree})`);
+            if (!divergence.Unanimous) {
+                this.logToTestRun(context, 'info', `Divergence: self=${divergence.SelfReportDone} judge=${divergence.JudgeDone} oracles=${divergence.OraclesPassed} (self~judge=${divergence.SelfVsJudgeAgree}, judge~oracle=${divergence.JudgeVsOracleAgree})`);
             }
 
             // 7. Build structured outputs (screenshots from each step) + retain the
@@ -554,7 +559,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         const suiteLevel = typeof context.suiteContext?.applicationContext === 'string'
             ? context.suiteContext.applicationContext
             : undefined;
-        return composeApplicationContext(suiteLevel, input.applicationContext, variableValues);
+        return ComposeApplicationContext(suiteLevel, input.applicationContext, variableValues);
     }
 
     /** Map a test's JSON checkpoint (lowercase) to an engine {@link RunCheckpoint}. */
@@ -607,8 +612,8 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     ): void {
         // `this.log(msg, verboseOnly)` is the console path; invert the decision into
         // verboseOnly so a filtered line still surfaces under MJ verbose mode.
-        const show = shouldLogToConsole(level, message, this.consoleLogLevel);
-        this.log(formatConsoleLine(context.test?.Name, message), !show);
+        const show = ShouldLogToConsole(level, message, this.consoleLogLevel);
+        this.log(FormatConsoleLine(context.test?.Name, message), !show);
 
         // Record path — always, at the message's real level (never downgraded).
         if (context.options.logCallback) {
@@ -618,7 +623,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
     /** Console verbosity for this process, resolved once from `CU_LOG_LEVEL`. */
     private get consoleLogLevel(): ConsoleLogLevel {
-        this.resolvedConsoleLogLevel ??= resolveConsoleLogLevel(process.env.CU_LOG_LEVEL);
+        this.resolvedConsoleLogLevel ??= ResolveConsoleLogLevel(process.env.CU_LOG_LEVEL);
         return this.resolvedConsoleLogLevel;
     }
     private resolvedConsoleLogLevel?: ConsoleLogLevel;
@@ -651,15 +656,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
         // Element-grounded perception: on unless a test opts out. A coordinate click
         // records no durable target, so grounding is the precondition for replay.
-        params.ElementGrounding = usesElementGrounding(config);
-        params.ReplayHeal = resolveReplayHeal(config);
+        params.ElementGrounding = UsesElementGrounding(config);
+        params.ReplayHeal = ResolveReplayHeal(config);
         // Per-test controller generation overrides: determinism knobs.
         if (config.generation) {
             params.ControllerGeneration = config.generation;
         }
 
         // Adaptive settle profile: MJ-Explorer defaults, config-overridable.
-        params.AppProfile = buildAppProfile(config);
+        params.AppProfile = BuildAppProfile(config);
 
         // Browser config
         if (
@@ -865,7 +870,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         context: DriverExecutionContext,
         onLlmRestart?: () => void
     ): Promise<{ result: ComputerUseResult; tier: ReplayTier; replayInfo?: ReplayInfo; fellBackToLlm: boolean }> {
-        const trace = loadScript(context.test);
+        const trace = LoadScript(context.test);
         const appBuildHash = process.env.APP_BUILD_HASH ?? '';
         const decision = config.forceTier
             ? { tier: config.forceTier, reason: 'forced by config.forceTier' }
@@ -880,7 +885,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
             // Pinned to deterministic execution: a stale script is a finding, so the
             // divergence stands and the script is left exactly as recorded.
-            if (!allowsLLMFallback(context.test)) {
+            if (!AllowsLLMFallback(context.test)) {
                 this.logToTestRun(context, 'warn',
                     `Replay failed (${replayResult.Replay?.Diverged ?? 0} diverged step(s)) and this test sets ` +
                     `Configuration.AllowLLMFallback = false — reporting the divergence instead of re-deriving the goal`);
@@ -929,7 +934,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }): Promise<void> {
         const { result, status, gating, tier, fellBackToLlm, runParams, input, variableValues, context, config } = args;
 
-        if (!recordsReplayScript(config)) {
+        if (!RecordsReplayScript(config)) {
             return;
         }
         const ranLlmLeg = tier === 'llm' || fellBackToLlm;
@@ -969,9 +974,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 },
                 goalPostconditions,
             });
-            const saved = await saveScript(context.test, trace);
-            if (saved.saved) {
-                const where = saved.slot === 'pending'
+            const saved = await SaveScript(context.test, trace);
+            if (saved.Saved) {
+                const where = saved.Slot === 'pending'
                     ? 'Configuration.PendingReplayScript — awaiting review; run `mj test scripts` to see the diff and promote it'
                     : 'Configuration.ReplayScript';
                 this.logToTestRun(context, 'info',
@@ -1355,7 +1360,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             return; // tracing was off, or no trace file was written
         }
         try {
-            if (shouldRetainArtifact(policy, passed)) {
+            if (ShouldRetainArtifact(policy, passed)) {
                 const buffer = await fs.readFile(tracePath);
                 outputs.push({
                     outputTypeName: 'File',
@@ -1614,7 +1619,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         actualOutput: Record<string, unknown>,
         context: DriverExecutionContext
     ): Promise<OracleResult> {
-        const advisory = isOracleAdvisory(oracleConfig.type, oracleConfig.advisory);
+        const advisory = IsOracleAdvisory(oracleConfig.type, oracleConfig.advisory);
 
         // Resolve oracle: built-in first, then global registry
         const oracle = ComputerUseTestDriver.builtInOracles.get(oracleConfig.type)
@@ -1672,7 +1677,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         oracleResults: OracleResult[],
         weights?: Record<string, number>
     ): { gating: OracleResult[]; score: number } {
-        const gating = partitionGatingOracles(oracleResults);
+        const gating = PartitionGatingOracles(oracleResults);
         const scoringSet = gating.length > 0 ? gating : oracleResults;
         return { gating, score: this.calculateScore(scoringSet, weights) };
     }
@@ -1695,16 +1700,16 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         const signals: FailureSignals = {
             status: statusOverride ?? result.Status,
-            failureReason: result.FailureReason,
-            hasCrash: anyDiag(d => d.type === 'crash'),
-            hasAppError: anyDiag(isSevereBrowserFault),
-            settleBudgetExhausted: steps.length > 0 && steps[steps.length - 1].SettleReason === 'budget',
-            tailHashStable: this.tailHashStable(steps.map(s => s.ScreenshotHash)),
-            beaconConfigured,
-            beaconEverReady: steps.some(s => s.SettleReason === 'beacon-ready'),
-            oraclesFailed: gatingOracles.some(r => !r.passed),
+            FailureReason: result.FailureReason,
+            HasCrash: anyDiag(d => d.type === 'crash'),
+            HasAppError: anyDiag(IsSevereBrowserFault),
+            SettleBudgetExhausted: steps.length > 0 && steps[steps.length - 1].SettleReason === 'budget',
+            TailHashStable: this.tailHashStable(steps.map(s => s.ScreenshotHash)),
+            BeaconConfigured: beaconConfigured,
+            BeaconEverReady: steps.some(s => s.SettleReason === 'beacon-ready'),
+            OraclesFailed: gatingOracles.some(r => !r.passed),
         };
-        return classifyFailure(signals) ?? undefined;
+        return ClassifyFailure(signals) ?? undefined;
     }
 
     /** True when the last few non-empty frame hashes are perceptually stable (a frozen/stuck tail). */

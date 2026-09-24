@@ -12,22 +12,24 @@ import { describe, it, expect, vi } from 'vitest';
 // vars to even import. Mock those heavy imports out so this file stays a true,
 // isolated unit test of the token-tracking logic (mirrors the mocking convention
 // in RealtimeBridgeResolver.test.ts).
-vi.mock('../../index.js', () => ({ getDbType: vi.fn() }));
+vi.mock('../../index.js', () => ({ GetDbType: vi.fn(),
+    get getDbType() { return this.GetDbType; } }));
 vi.mock('@memberjunction/generic-database-provider', () => ({
   QueryCompositionEngine: vi.fn(() => ({ HasCompositionTokens: vi.fn(() => false) })),
 }));
 vi.mock('../../util.js', () => ({ GetReadOnlyDataSource: vi.fn(), GetReadOnlyProvider: vi.fn() }));
-vi.mock('../../auth/index.js', () => ({ getSystemUser: vi.fn() }));
+vi.mock('../../auth/index.js', () => ({ GetSystemUser: vi.fn(),
+    get getSystemUser() { return this.GetSystemUser; } }));
 vi.mock('mssql', () => ({ default: { Request: vi.fn() } }));
 
 import {
-  registerAccessToken,
-  deleteAccessToken,
-  tokenExists,
-  isTokenValid,
-  recordTokenUse,
-  pruneExpiredTokens,
-  getAccessTokenCount,
+  RegisterAccessToken,
+  DeleteAccessToken,
+  TokenExists,
+  IsTokenValid,
+  RecordTokenUse,
+  PruneExpiredTokens,
+  GetAccessTokenCount,
 } from '../GetDataResolver.js';
 
 // ---------------------------------------------------------------------------
@@ -51,88 +53,88 @@ const uniqueToken = () => `test-token-${Date.now()}-${++seq}`;
 describe('GetDataResolver access-token lifecycle', () => {
   it('registerAccessToken() creates a token that is valid and exists', () => {
     const token = uniqueToken();
-    const created = registerAccessToken(token, 60_000);
+    const created = RegisterAccessToken(token, 60_000);
     expect(created.Token).toBe(token);
-    expect(tokenExists(token)).toBe(true);
-    expect(isTokenValid(token)).toBe(true);
+    expect(TokenExists(token)).toBe(true);
+    expect(IsTokenValid(token)).toBe(true);
   });
 
   it('registerAccessToken() throws when the same custom token is registered twice', () => {
     const token = uniqueToken();
-    registerAccessToken(token, 60_000);
-    expect(() => registerAccessToken(token, 60_000)).toThrow(/already exists/);
+    RegisterAccessToken(token, 60_000);
+    expect(() => RegisterAccessToken(token, 60_000)).toThrow(/already exists/);
   });
 
   it('isTokenValid() is false for an unknown token and for an expired one', () => {
-    expect(isTokenValid('never-registered-token')).toBe(false);
+    expect(IsTokenValid('never-registered-token')).toBe(false);
 
     const token = uniqueToken();
-    registerAccessToken(token, -1); // already expired (ExpiresAt in the past)
-    expect(isTokenValid(token)).toBe(false);
+    RegisterAccessToken(token, -1); // already expired (ExpiresAt in the past)
+    expect(IsTokenValid(token)).toBe(false);
   });
 
   it('deleteAccessToken() removes a token and throws for an unknown one', () => {
     const token = uniqueToken();
-    registerAccessToken(token, 60_000);
-    expect(tokenExists(token)).toBe(true);
+    RegisterAccessToken(token, 60_000);
+    expect(TokenExists(token)).toBe(true);
 
-    deleteAccessToken(token);
-    expect(tokenExists(token)).toBe(false);
-    expect(() => deleteAccessToken(token)).toThrow(/does not exist/);
+    DeleteAccessToken(token);
+    expect(TokenExists(token)).toBe(false);
+    expect(() => DeleteAccessToken(token)).toThrow(/does not exist/);
   });
 
   it('recordTokenUse() appends to TokenUses and throws for an unknown token', () => {
     const token = uniqueToken();
-    registerAccessToken(token, 60_000);
+    RegisterAccessToken(token, 60_000);
 
-    expect(() => recordTokenUse(token, { some: 'payload' })).not.toThrow();
-    expect(() => recordTokenUse('never-registered-token', {})).toThrow(/does not exist/);
+    expect(() => RecordTokenUse(token, { some: 'payload' })).not.toThrow();
+    expect(() => RecordTokenUse('never-registered-token', {})).toThrow(/does not exist/);
   });
 
   it('pruneExpiredTokens() removes only tokens whose ExpiresAt has passed', () => {
     const expiredToken = uniqueToken();
     const liveToken = uniqueToken();
-    registerAccessToken(expiredToken, -1); // already expired
-    registerAccessToken(liveToken, 60_000); // still valid
+    RegisterAccessToken(expiredToken, -1); // already expired
+    RegisterAccessToken(liveToken, 60_000); // still valid
 
-    pruneExpiredTokens();
+    PruneExpiredTokens();
 
-    expect(tokenExists(expiredToken)).toBe(false);
-    expect(tokenExists(liveToken)).toBe(true);
+    expect(TokenExists(expiredToken)).toBe(false);
+    expect(TokenExists(liveToken)).toBe(true);
   });
 
   it('pruneExpiredTokens() accepts an injected "now" for deterministic testing', () => {
     const token = uniqueToken();
     const registeredAt = new Date('2026-01-01T00:00:00Z');
-    registerAccessToken(token, 5 * 60 * 1000); // 5-minute lifespan from real "now"
+    RegisterAccessToken(token, 5 * 60 * 1000); // 5-minute lifespan from real "now"
 
     // Simulate a check far in the future — token should count as expired at that instant.
     const farFuture = new Date(registeredAt.getTime() + 365 * 24 * 60 * 60 * 1000);
-    pruneExpiredTokens(farFuture);
+    PruneExpiredTokens(farFuture);
 
-    expect(tokenExists(token)).toBe(false);
+    expect(TokenExists(token)).toBe(false);
   });
 
   it('the core Round 7 regression: registering many expired tokens does not grow the array without bound', () => {
-    const before = getAccessTokenCount();
+    const before = GetAccessTokenCount();
 
     // Simulate 50 short-lived tokens that all expire immediately (e.g. a burst
     // of external calls with a near-zero lifespan, or tokens whose consumer
     // never came back before expiry — the exact shape of the leak this fix
     // addresses).
     for (let i = 0; i < 50; i++) {
-      registerAccessToken(`${uniqueToken()}-burst-${i}`, -1);
+      RegisterAccessToken(`${uniqueToken()}-burst-${i}`, -1);
     }
 
     // Register one more, healthy token — its registerAccessToken() call sweeps
     // all 50 expired ones out, so the count should NOT have grown by 51; it
     // should only reflect whatever was live before plus this one new token.
     const survivorToken = uniqueToken();
-    registerAccessToken(survivorToken, 60_000);
+    RegisterAccessToken(survivorToken, 60_000);
 
     // The 50 expired burst tokens must be gone — the array self-bounded rather
     // than accumulating every registration for the life of the process.
-    expect(getAccessTokenCount()).toBeLessThan(before + 51);
-    expect(tokenExists(survivorToken)).toBe(true);
+    expect(GetAccessTokenCount()).toBeLessThan(before + 51);
+    expect(TokenExists(survivorToken)).toBe(true);
   });
 });

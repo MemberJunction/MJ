@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { traverse, NodePath, createViolation, getJSXElementName, hasJSXAttribute } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, GetJSXElementName, HasJSXAttribute } from '../lint-utils';
 
 /**
  * Rule: pass-standard-props
@@ -41,10 +41,10 @@ export class PassStandardPropsRule extends BaseLintRule {
       return violations;
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       JSXElement(path: NodePath<t.JSXElement>) {
         const openingElement = path.node.openingElement;
-        const elementName = getJSXElementName(openingElement);
+        const elementName = GetJSXElementName(openingElement);
 
         // Only check if this is one of our dependency components
         if (elementName && ourComponentNames.has(elementName)) {
@@ -52,14 +52,14 @@ export class PassStandardPropsRule extends BaseLintRule {
           const missingProps: string[] = [];
 
           for (const propName of requiredProps) {
-            if (!hasJSXAttribute(openingElement, propName)) {
+            if (!HasJSXAttribute(openingElement, propName)) {
               missingProps.push(propName);
             }
           }
 
           if (missingProps.length > 0) {
             violations.push(
-              createViolation(
+              CreateViolation(
                 'pass-standard-props',
                 'critical',
                 openingElement,

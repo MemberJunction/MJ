@@ -1,5 +1,83 @@
 # @memberjunction/search-engine
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 3d633ed: Introduce `TagSearchProvider`, fix search engine zombie leaks, exclude administrative entities from user search, and promote entity-sourced content items.
+  - **Tag Search Provider**:
+    - Adds `TagSearchProvider` registered under driver class `TagSearchProvider` (SourceType: `tag`, Priority: 3), which matches queries against the taxonomy graph (tags and synonyms) using `TagEngineBase` and retrieves the associated records from `MJ: Tagged Items` and `MJ: Content Item Tags`.
+    - Weights retrieved records by multiplying the tag match confidence (0.0 to 1.0) by the tagged item's continuous relevance weight (`TaggedItem.Weight`), surfacing records tagged with a query concept even when the query term does not appear literally in the entity record's text fields.
+    - Deduplicates multi-tag matches on the same record (highest score wins) and blends tag candidates with other search sources (vector, full-text, entity LIKE) via Reciprocal Rank Fusion (RRF).
+  - **Search Engine Safeguards & 15% Zombie Leak Fix**:
+    - In `GenericDatabaseProvider.createViewUserSearchSQL`, returns `'(1=0)'` when a search string is provided but no searchable fields exist (or all are non-text/restricted), preventing unconstrained `SELECT TOP N` queries with no `WHERE` clause.
+    - In `EntitySearchProvider.convertResults`, drops records where `matchedFields === 0`, eliminating the 15% base floor score leak on non-matching rows.
+    - In `metadata/entities/.entity-search-exclusions.json`, sets `AllowUserSearchAPI = 0` and `AutoUpdateAllowUserSearchAPI = 0` for taxonomy entities (`MJ: Tags`, `MJ: Tagged Items`, `MJ: Tag Synonyms`, `MJ: Tag Scopes`, `MJ: Tag Co Occurrences`), `MJ: Content Items`, and 13 internal/zombie entities (`MJ: Magic Link Invites`, `MJ: Magic Link Invite Allowed Domains`, `MJ: Magic Link Invite Allowed Paths`, `MJ: Magic Link Invite Applications`, `MJ: Magic Link Invite Roles`, `MJ: Magic Link Redemptions`, `MJ: Materialized Results`, `MJ: Materialized Result Queries`, `MJ: RSU Pending Works`, `MJ: AI Skill Search Scopes`, `MJ: Cluster Analysis Clusters`, `MJ: Employees`).
+  - **Option B Entity-Sourced Content Item Promotion**:
+    - In `SearchEnricher.ExcludeEntitySourcedContentItems`, when vector search surfaces a content item originating from an entity record (via `EntityRecordDocumentID` or `RawMetadata`), promotes the item to the underlying entity (`EntityName`, `RecordID`), preserving score, snippet, and icon while resolving entity record names.
+    - Preserves genuine external unstructured content items (PDFs, URLs, markdown documents) as `MJ: Content Items`.
+    - In `SearchEngine`, deduplicates results after content promotion so promoted entity records merge cleanly with direct entity matches.
+
+### Patch Changes
+
+- 7fe994a: The entity search fan-out no longer queries entities that have no search surface.
+
+  `getSearchableEntities` filtered on `AllowUserSearchAPI` alone. An entity can carry that flag while declaring no `IncludeInUserSearchAPI` field at all — CodeGen defaults the entity flag to true, but the per-field flags are only set when smart-field analysis runs, which is off by default. For those entities `UserSearchString` is a documented no-op (#4581/#4582): the provider ignores the term and returns the **unfiltered** table, and `convertResults` then discards every row because `matchedFields` is 0. The round-trip could only ever produce load, never a result — on every keystroke, for every such entity.
+
+  The fan-out now also requires `EntityInfo.HasSearchFields`, the same predicate #4582 added on the data-provider side, so the two layers answer the same question the same way.
+
+  Entities whose candidate fields all drop out _at runtime_ — denied by field-level security, or not text-search targets — are still queried: they return `(1=0)` cheaply, which is a real if empty answer. Only the no-surface case is skipped, matching the (a)/(b) split #4582 established. A full-text entity with no per-field flags is deliberately not exempted either, because this provider could not use its rows; full-text coverage comes from `FullTextSearchProvider`, which calls the provider's `FullTextSearch` directly.
+
+  This is a screen, not a substitute for correct metadata — such entities belong in `.entity-search-exclusions.json`, and today's are already there. It is the backstop that keeps the next one from silently costing every keystroke a round-trip until someone notices.
+
+  **Known limitation:** the screen sits in `getSearchableEntities`, which the scoped path bypasses — `buildScopedEntityList` honours `scopeConstraints.Entities` verbatim. A search scope that names a no-search-surface entity still issues the wasted query. Left as-is deliberately: an admin picking entities explicitly is a different case from the unscoped default, and silently dropping one of their picks is a decision worth making on its own rather than inside this change.
+
+- 8d1a373: Resolve record display names in search preview and display entity friendly names instead of full schema names.
+  - **Search Record Display Name Resolution**:
+    - In `SearchEngine.ts`, enable enrichment for preview searches on top results so record display names are resolved before preview autocomplete items render.
+    - In `SearchEnricher.ts`, resolve missing record names or sentinel titles (`${EntityName} Record`, `${EntityDisplayName} Record`) via `providerToUse.GetEntityRecordNames()`, setting both `RecordName` and `Title` to the live record name.
+    - Pass `SearchEngine.ProviderToUse` to `SearchEnricher` to ensure multi-provider alignment.
+  - **Entity Display Names**:
+    - Add `EntityDisplayName` to search results across `@memberjunction/search-engine`, `@memberjunction/server`, `@memberjunction/graphql-dataprovider`, and `@memberjunction/ng-search`.
+    - In `search-suggest.component.html` and `search-results.component.html`, display `EntityDisplayName || EntityName` for both preview results and result cards/detail views.
+    - In `SearchService.buildEntityNameFilter`, use entity display names for filter labels and icons while preserving `EntityName` for filtering.
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/tag-engine-base@6.2.0-edge.0
+  - @memberjunction/storage@6.2.0-edge.0
+  - @memberjunction/ai-vectordb@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes
