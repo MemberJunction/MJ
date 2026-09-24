@@ -161,10 +161,6 @@
               "Policy": "Skip",
               "Locked": true
             },
-            "MJ: Queries": {
-              "Policy": "Skip",
-              "Locked": true
-            },
             "MJ: Workspaces": {
               "Policy": "Skip",
               "Locked": true
@@ -224,8 +220,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Users"
     },
     "sync": {
-      "lastModified": "2026-09-24T18:58:53.142Z",
-      "checksum": "c9cfab57320811da730687a018da671f616ce141a60c87a52a15b31bdfcdc0f9"
+      "lastModified": "2026-09-24T20:55:51.658Z",
+      "checksum": "fc909c3cb09d7895f03fbde2bd8251711a23b6db2c8e388aed4a6ed5832fce6b"
     }
   },
   {

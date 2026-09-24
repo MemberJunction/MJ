@@ -1,0 +1,221 @@
+<div class="mj-clone-config">
+  <p class="mj-clone-config-intro">
+    How records of this entity are copied. Most teams ship this as JSON in
+    <code>metadata/entities/.clone-configurations.json</code>; changes here save with the entity.
+  </p>
+
+  <!-- Status -->
+  <div class="mj-clone-config-group">
+    <div class="mj-clone-config-row">
+      <span class="mj-clone-config-label">Allow cloning from this entity's records</span>
+      <mj-switch [ngModel]="Config.Enabled === true" [Disabled]="!EditMode" (ngModelChange)="Patch({ Enabled: $event ? true : undefined })"></mj-switch>
+    </div>
+    <div class="mj-clone-config-row">
+      <span class="mj-clone-config-label">Never clone these rows (not even as children)</span>
+      <mj-switch [ngModel]="Config.NotCloneable === true" [Disabled]="!EditMode" (ngModelChange)="Patch({ NotCloneable: $event ? true : undefined })"></mj-switch>
+    </div>
+    @if (Config.NotCloneable || Config.Enabled === false) {
+      <label class="mj-clone-config-field mj-clone-config-field--wide">
+        <span>Reason shown to users</span>
+        <input class="mj-clone-config-input" type="text" [value]="Config.NotCloneableReason ?? ''" [disabled]="!EditMode"
+          (change)="Patch({ NotCloneableReason: $any($event.target).value })" />
+      </label>
+    }
+  </div>
+
+  <!-- Scope defaults -->
+  <h4 class="mj-clone-config-heading">Scope</h4>
+  <div class="mj-clone-config-grid">
+    <label class="mj-clone-config-field">
+      <span>Max depth</span>
+      <mj-numeric-input [ngModel]="Config.MaxDepth ?? null" [Min]="1" [Max]="10" [Disabled]="!EditMode" (ngModelChange)="OnNumberChange('MaxDepth', $event)"></mj-numeric-input>
+    </label>
+    <label class="mj-clone-config-field">
+      <span>Max records</span>
+      <mj-numeric-input [ngModel]="Config.MaxRecords ?? null" [Min]="1" [Max]="100000" [Disabled]="!EditMode" (ngModelChange)="OnNumberChange('MaxRecords', $event)"></mj-numeric-input>
+    </label>
+    <label class="mj-clone-config-field">
+      <span>IS-A subtypes</span>
+      <mj-dropdown [Data]="ScopeOptions.Subtypes" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [ngModel]="Config.Subtypes ?? 'include'" [Disabled]="!EditMode" (ngModelChange)="Patch({ Subtypes: $event === 'include' ? undefined : $event })"></mj-dropdown>
+    </label>
+    <label class="mj-clone-config-field">
+      <span>Hierarchy</span>
+      <mj-dropdown [Data]="ScopeOptions.Hierarchy" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [ngModel]="Config.Hierarchy ?? 'subtree'" [Disabled]="!EditMode" (ngModelChange)="Patch({ Hierarchy: $event === 'subtree' ? undefined : $event })"></mj-dropdown>
+    </label>
+    <label class="mj-clone-config-field">
+      <span>Soft links (tags, notes, attachments)</span>
+      <mj-dropdown [Data]="ScopeOptions.SoftLinks" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [ngModel]="Config.SoftLinks ?? 'skip'" [Disabled]="!EditMode" (ngModelChange)="Patch({ SoftLinks: $event === 'skip' ? undefined : $event })"></mj-dropdown>
+    </label>
+    <label class="mj-clone-config-field">
+      <span>Entity Actions</span>
+      <mj-dropdown [Data]="ScopeOptions.Hooks" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [ngModel]="Config.Hooks?.EntityActions ?? 'suppress'" [Disabled]="!EditMode" (ngModelChange)="OnHooksChange('EntityActions', $event)"></mj-dropdown>
+    </label>
+    <label class="mj-clone-config-field">
+      <span>AI Actions</span>
+      <mj-dropdown [Data]="ScopeOptions.Hooks" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [ngModel]="Config.Hooks?.AIActions ?? 'suppress'" [Disabled]="!EditMode" (ngModelChange)="OnHooksChange('AIActions', $event)"></mj-dropdown>
+    </label>
+    <label class="mj-clone-config-field mj-clone-config-field--wide">
+      <span>What users may change</span>
+      <mj-dropdown [Data]="ScopeOptions.UserEditable" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [ngModel]="Config.UserEditable ?? 'all'" [Disabled]="!EditMode" (ngModelChange)="Patch({ UserEditable: $event === 'all' ? undefined : $event })"></mj-dropdown>
+    </label>
+  </div>
+
+  <!-- Naming -->
+  <h4 class="mj-clone-config-heading">Naming</h4>
+  <div class="mj-clone-config-grid">
+    <label class="mj-clone-config-field">
+      <span>Name template</span>
+      <input class="mj-clone-config-input" type="text" placeholder="Copy of {Name}" [value]="Config.Naming?.Template ?? ''" [disabled]="!EditMode"
+        (change)="OnNamingChange({ Template: $any($event.target).value })" />
+    </label>
+    <label class="mj-clone-config-field">
+      <span>Strategy</span>
+      <mj-dropdown [Data]="ScopeOptions.NamingStrategy" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [ngModel]="Config.Naming?.Strategy ?? 'suffix'" [Disabled]="!EditMode" (ngModelChange)="OnNamingChange({ Strategy: $event === 'suffix' ? '' : $event })"></mj-dropdown>
+    </label>
+    <div class="mj-clone-config-field mj-clone-config-field--wide">
+      <span>Fields the template names</span>
+      <div class="mj-clone-config-chips">
+        @for (f of NamingFields; track f) {
+          <span class="mj-clone-config-chip">{{ f }}
+            @if (EditMode) {
+              <button type="button" class="mj-clone-config-chip-x" [attr.aria-label]="'Remove ' + f" (click)="RemoveNamingField(f)"><i class="fa-solid fa-xmark"></i></button>
+            }
+          </span>
+        } @empty {
+          <span class="mj-clone-config-muted">The name field and unique text fields (default)</span>
+        }
+        @if (EditMode && AvailableNamingFields.length > 0) {
+          @for (v of [AddVersion]; track v) {
+            <mj-dropdown class="mj-clone-config-add" [Data]="AvailableNamingFields" Placeholder="Add field…" [ngModel]="null" (ngModelChange)="AddNamingField($event)"></mj-dropdown>
+          }
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Field rules -->
+  <h4 class="mj-clone-config-heading">Fields</h4>
+  <div class="mj-clone-config-lists">
+    @for (list of FieldLists; track list.Key) {
+      <div class="mj-clone-config-field mj-clone-config-field--wide">
+        <span>{{ list.Label }} <span class="mj-clone-config-muted">{{ list.Hint }}</span></span>
+        <div class="mj-clone-config-chips">
+          @for (f of FieldList(list.Key); track f) {
+            <span class="mj-clone-config-chip">{{ f }}
+              @if (EditMode) {
+                <button type="button" class="mj-clone-config-chip-x" [attr.aria-label]="'Remove ' + f" (click)="RemoveField(list.Key, f)"><i class="fa-solid fa-xmark"></i></button>
+              }
+            </span>
+          } @empty {
+            <span class="mj-clone-config-muted">None</span>
+          }
+          @if (EditMode && AvailableFields(list.Key).length > 0) {
+            @for (v of [AddVersion]; track v) {
+              <mj-dropdown class="mj-clone-config-add" [Data]="AvailableFields(list.Key)" Placeholder="Add field…" [ngModel]="null" (ngModelChange)="AddField(list.Key, $event)"></mj-dropdown>
+            }
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Relationships -->
+  @if (RelationshipRows.length > 0) {
+    <div class="mj-clone-config-heading-row">
+      <h4 class="mj-clone-config-heading">Related records</h4>
+      <button type="button" mjButton Variant="ghost" Size="sm" (click)="ShowAllRelationships = !ShowAllRelationships">
+        {{ ShowAllRelationships ? 'Show configured only' : 'Show all ' + RelationshipRows.length }}
+      </button>
+    </div>
+    @if (!ShowAllRelationships && VisibleRelationshipRows.length === 0) {
+      <p class="mj-clone-config-muted">No relationship has its own policy; each uses the default. Show all to set one.</p>
+    }
+    @if (VisibleRelationshipRows.length > 0) {
+    <div class="mj-clone-config-table-wrap">
+      <table class="mj-clone-config-table">
+        <thead>
+          <tr><th>Relationship</th><th>Policy</th><th>Locked</th><th>Max records</th></tr>
+        </thead>
+        <tbody>
+          @for (row of VisibleRelationshipRows; track row.ConfigKey + row.JoinField) {
+            <tr>
+              <td>{{ row.RelatedEntity }} <span class="mj-clone-config-muted">({{ row.JoinField }})</span></td>
+              <td>
+                <mj-dropdown [Data]="ScopeOptions.Policy" TextField="text" ValueField="value" [ValuePrimitive]="true"
+                  [ngModel]="row.Policy" [Disabled]="!EditMode" (ngModelChange)="OnRelationshipChange(row, { Policy: $event })"></mj-dropdown>
+              </td>
+              <td>
+                <mj-switch [ngModel]="row.Locked" [Disabled]="!EditMode" (ngModelChange)="OnRelationshipChange(row, { Locked: $event })"></mj-switch>
+              </td>
+              <td>
+                <mj-numeric-input [ngModel]="row.MaxRecords" [Min]="1" [Disabled]="!EditMode" (ngModelChange)="OnRelationshipChange(row, { MaxRecords: $event })"></mj-numeric-input>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    }
+  }
+
+  <!-- Advanced JSON -->
+  <details class="mj-clone-config-advanced">
+    <summary>Advanced (JSON): Reset values, Rules, JsonRemap, Presets, Descendants and the rest</summary>
+    <textarea class="mj-clone-config-json" rows="14" spellcheck="false" [value]="AdvancedJson" [disabled]="!EditMode"
+      aria-label="Clone configuration JSON" (change)="OnApplyJson($any($event.target).value)"></textarea>
+    @if (JsonError) {
+      <p class="mj-clone-config-error">{{ JsonError }}</p>
+    }
+  </details>
+
+  <!-- Actions -->
+  <div class="mj-clone-config-actions">
+    <button type="button" mjButton Variant="outline" Size="sm" [disabled]="!HasConfig" (click)="Validate()">
+      <i class="fa-solid fa-list-check"></i> Validate
+    </button>
+    <button type="button" mjButton Variant="outline" Size="sm" [disabled]="!HasConfig" (click)="CopyMetadataJson()">
+      <i class="fa-regular fa-copy"></i> Copy metadata JSON
+    </button>
+    @if (CopyMessage) {
+      <span class="mj-clone-config-muted">{{ CopyMessage }}</span>
+    }
+  </div>
+
+  @if (ValidationResults) {
+    @if (ValidationResults.length === 0) {
+      <p class="mj-clone-config-ok"><i class="fa-solid fa-circle-check"></i> No problems found.</p>
+    } @else {
+      <ul class="mj-clone-config-findings">
+        @for (r of ValidationResults; track $index) {
+          <li [class.is-error]="r.Severity === 'Error'">
+            <strong>{{ r.Severity }}</strong> <code>{{ r.PropertyPath }}</code>: {{ r.Message }}
+          </li>
+        }
+      </ul>
+    }
+  }
+
+  <!-- Preview -->
+  <h4 class="mj-clone-config-heading">Preview a clone</h4>
+  <p class="mj-clone-config-muted">Plans a clone of one record with the <strong>saved</strong> configuration. Nothing is written.</p>
+  <div class="mj-clone-config-preview-row">
+    <input class="mj-clone-config-input" type="text" placeholder="Record ID" aria-label="Record ID to preview"
+      [value]="PreviewRecordId" (input)="PreviewRecordId = $any($event.target).value" (keydown.enter)="!IsPreviewing && PreviewPlanFor(PreviewRecordId)" />
+    <button type="button" mjButton Variant="outline" Size="sm" [disabled]="!PreviewRecordId.trim() || IsPreviewing" (click)="PreviewPlanFor(PreviewRecordId)">
+      @if (IsPreviewing) { <i class="fa-solid fa-spinner fa-spin"></i> } @else { <i class="fa-solid fa-diagram-project"></i> } Preview plan
+    </button>
+  </div>
+  @if (PreviewError) {
+    <p class="mj-clone-config-error">{{ PreviewError }}</p>
+  }
+  @if (PreviewPlan) {
+    <mj-clone-plan-tree [Plan]="PreviewPlan"></mj-clone-plan-tree>
+  }
+</div>

@@ -30,6 +30,7 @@ import {
     ResolveEdgePolicy,
     ResolveEffectiveCloneOptions,
     NormalizeClonePresets,
+    FieldMetaFromEntity,
 } from '@memberjunction/record-cloning-base';
 import { CloneAuthorizer } from './CloneAuthorization';
 import { DeriveTargetKey, IsUuidColumn, KeyStrategyFor, ToRecordKeyString } from './CloneKeys';
@@ -516,24 +517,7 @@ export class ClonePlanner {
 
             const fieldMappingResult = MapFieldsForClone({
                 EntityName: depNode.EntityName,
-                Fields: entInfo.Fields.map((f) => ({
-                    Name: f.Name,
-                    IsPrimaryKey: f.IsPrimaryKey,
-                    IsIdentity: f.AutoIncrement === true,
-                    IsNameField: (entInfo.NameField?.Name.toLowerCase() === f.Name.toLowerCase()) || f.Name.toLowerCase() === 'name',
-                    IsUnique: f.IsUnique,
-                    RelatedEntityID: f.RelatedEntityID,
-                    RelatedEntity: f.RelatedEntity,
-                    RelatedEntityJoinField: f.RelatedEntityFieldName,
-                    EntityIDFieldName: f.EntityIDFieldName,
-                    Type: f.Type,
-                    IsSPParameter: (upd: boolean) => (f.IsSPParameter ? f.IsSPParameter(upd) : true),
-                    DefaultValue: f.DefaultValue,
-                    AllowsNull: f.AllowsNull,
-                    IsCreatedAtField: f.Name === '__mj_CreatedAt',
-                    IsUpdatedAtField: f.Name === '__mj_UpdatedAt',
-                    IsSoftDeleteField: false,
-                })),
+                Fields: FieldMetaFromEntity(entInfo),
                 SourceRecord: depNode.RecordData,
                 CurrentUserId: contextUser.ID,
                 KeyMap: keyMap,
