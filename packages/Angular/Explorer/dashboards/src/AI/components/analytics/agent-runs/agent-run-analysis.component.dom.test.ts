@@ -37,7 +37,7 @@ const USAGE_ROWS = [
 // The fake provider ignores ExtraFilter, so the success count's `Success = 1` predicate is applied here.
 const rowsByEntity = (p: RunViewParams): unknown[] =>
   p.EntityName === 'MJ: AI Agent Runs'
-    ? (p.ExtraFilter?.includes('Success = 1') ? AGENT_RUNS.filter((r) => r.Success) : AGENT_RUNS)
+    ? (typeof p.ExtraFilter === 'string' && p.ExtraFilter.includes('Success = 1') ? AGENT_RUNS.filter((r) => r.Success) : AGENT_RUNS)
     : (LOOKUPS[p.EntityName ?? ''] ?? []);
 const usageByQuery = (p: RunQueryParams): unknown[] => (p.QueryName === 'AIUsageDaily' ? USAGE_ROWS : []);
 
