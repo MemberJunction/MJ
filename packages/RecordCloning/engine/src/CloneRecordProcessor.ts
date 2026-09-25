@@ -11,6 +11,7 @@ import { IRecordProcessor, RecordProcessorContext, RecordProcessorRegistry, Reco
 import { CloneEdgePolicy, CloneRequestOptions, RecordCloneRequest } from '@memberjunction/record-cloning-base';
 import { ClonePlanner } from './ClonePlanner';
 import { CloneExecutor } from './CloneExecutor';
+import { BATCH_AUTHORIZATION, CloneAuthorizer } from './CloneAuthorization';
 
 export interface CloneRecordProcessorConfig {
     EntityName?: string;
@@ -42,6 +43,11 @@ export class CloneRecordProcessor implements IRecordProcessor {
                 Status: 'Failed',
                 ErrorMessage: `Entity with ID '${record.EntityID}' not found in metadata.`,
             };
+        }
+
+        // A record process clones many records in one run: the same rule as the Clone Records action.
+        if (!new CloneAuthorizer(provider).CanBatchClone(user)) {
+            return { Status: 'Failed', ErrorMessage: `Cloning records in a Record Process requires the '${BATCH_AUTHORIZATION}' authorization.` };
         }
 
         const planner = new ClonePlanner({ Provider: provider });

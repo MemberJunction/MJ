@@ -10,5 +10,6 @@ export { ToRecordKeyString } from './CloneKeys';
 export * from './CloneMaterializer';
 export * from './CloneExecutor';
 export * from './CloneRecordProcessor';
+export * from './RecordCloningStartup';
 export * from './RecordCloneEngine';
 export * from './operations';

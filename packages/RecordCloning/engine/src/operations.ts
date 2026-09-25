@@ -255,9 +255,11 @@ export class RecordCloneOperationsHandler {
         const plan = await new ClonePlanner({ Provider: this.Provider }).Plan(built.request, contextUser);
 
         // Blocked first: a plan the user can no longer run is FORBIDDEN/BLOCKED, not merely changed.
+        const executor = new CloneExecutor({ Provider: this.Provider });
         if (plan.Blocked) {
             const forbidden = plan.Warnings.some((w) => w.Code === 'FORBIDDEN');
             const reasons = plan.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message).join('; ');
+            if (input.Options?.DryRun !== true) await executor.WriteRefusalLog(plan, contextUser, `${forbidden ? 'FORBIDDEN' : 'BLOCKED'}: ${reasons}`);
             return refusedExecute(forbidden ? 'FORBIDDEN' : 'BLOCKED', reasons || 'The clone plan is blocked.', plan);
         }
 
@@ -277,6 +279,7 @@ export class RecordCloneOperationsHandler {
         }
 
         if (input.ExpectedPlanHash && (plan.Hash || plan.PlanHash) !== input.ExpectedPlanHash) {
+            await executor.WriteRefusalLog(plan, contextUser, 'PLAN_CHANGED: the records changed since the plan was reviewed.');
             const changed = refusedExecute('PLAN_CHANGED', 'The records changed since the plan was reviewed. Review the new plan and confirm again.', plan);
             changed.Warnings = [
                 ...changed.Warnings,
@@ -284,7 +287,7 @@ export class RecordCloneOperationsHandler {
             ];
             return changed;
         }
-        const result: RecordCloneResult = await new CloneExecutor({ Provider: this.Provider }).Execute(plan, contextUser);
+        const result: RecordCloneResult = await executor.Execute(plan, contextUser);
         const toMapping = (m: { EntityName: string; SourceKey: CompositeKeyLike; TargetKey: CompositeKeyLike; Depth?: number }): RecordCloneRecordMapping => ({
             EntityName: m.EntityName,
             SourceKey: ToRecordKeyString(m.SourceKey),

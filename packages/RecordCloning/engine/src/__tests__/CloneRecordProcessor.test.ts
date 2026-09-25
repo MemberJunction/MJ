@@ -9,6 +9,7 @@ import { RecordProcessorRegistry, RecordProcessorContext } from '@memberjunction
 import { CloneRecordProcessor, RegisterCloneRecordProcessor } from '../CloneRecordProcessor';
 import { ClonePlanner } from '../ClonePlanner';
 import { CloneExecutor } from '../CloneExecutor';
+import { RecordCloningStartup } from '../RecordCloningStartup';
 import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 describe('CloneRecordProcessor', () => {
@@ -115,5 +116,23 @@ describe('CloneRecordProcessor', () => {
         const instance = RecordProcessorRegistry.Instance.Resolve({ WorkType: 'Clone' });
         expect(instance).toBeDefined();
         expect(instance instanceof CloneRecordProcessor).toBe(true);
+    });
+
+    it('refuses without the Clone Records: Batch authorization', async () => {
+        const plan = vi.spyOn(ClonePlanner.prototype, 'Plan');
+        const callsBefore = plan.mock.calls.length;
+        const noBatch = { ...mockProvider, Authorizations: GrantedCloneAuthorizations(false) } as unknown as IMetadataProvider;
+        const result = await new CloneRecordProcessor().ProcessRecord(
+            { EntityID: 'ent-1', RecordID: 'rec-1' } as never,
+            { provider: noBatch, contextUser: mockUser } as unknown as RecordProcessorContext
+        );
+        expect(result.Status).toBe('Failed');
+        expect(result.ErrorMessage).toContain('Clone Records: Batch');
+        expect(plan.mock.calls.length).toBe(callsBefore);
+    });
+
+    it('registers the Clone work type at startup', async () => {
+        await RecordCloningStartup.Instance.HandleStartup();
+        expect(RecordProcessorRegistry.Instance.Has('Clone')).toBe(true);
     });
 });
