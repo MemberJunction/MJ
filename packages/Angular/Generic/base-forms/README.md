@@ -64,7 +64,7 @@ registration is the generated form (the common case) get no strip.
 |---|---|---|
 | `FormMode: EntityFormMode` | `@Input` | `'default'` (the resolver's normal pick) or `'standard'` (the generated form). A change after the view initializes reloads the form and does **not** emit `FormModeChange`. If the entity has no standard form, the host falls back to the default and logs. |
 | `ShowFormModeSwitch = true` | `@Input` | Set `false` to hide the strip; `FormMode` is still honoured. |
-| `FormModeChange: EventEmitter<EntityFormMode>` | `@Output` | Emits when the mode changes from inside the host — the strip, `SwitchFormMode()`, or picking an interactive variant (which returns to `'default'`) — so the surface can persist it (Explorer keeps it in the tab and the `?form=standard` URL). |
+| `FormModeChange: EventEmitter<EntityFormMode>` | `@Output` | Emits when the mode changes from inside the host — the strip, `SwitchFormMode()`, or picking an interactive variant (which returns to `'default'`) — so the surface can persist it. |
 | `SwitchFormMode(mode): boolean` | method | Switch programmatically. Returns `false` when refused (see below), `true` otherwise (including when already in `mode`). |
 
 **What "standard" means.** The standard form is the **lowest-priority**
@@ -89,6 +89,15 @@ so fields already typed survive the switch.
 
 **Permissions are unchanged.** The standard form enforces the same entity
 permissions as any other form; switching grants nothing.
+
+**In Explorer** the mode lives in the record tab's `form` query param
+(`?form=standard`), which is the source of truth. `NavigationOptions.formMode`,
+a `?form=standard` deep link, back/forward and tab re-focus all reach the
+mounted record through `OnQueryParamsChanged`, which switches via
+`SwitchFormMode` (so the unsaved-work guard still applies; a refused switch
+writes the on-screen mode back to the URL). A strip switch writes the param
+back, so the URL always matches the form on screen, and a record URL without
+`form` means the default form.
 
 ## Related docs
 
