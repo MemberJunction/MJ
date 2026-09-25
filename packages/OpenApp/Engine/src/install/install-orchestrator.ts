@@ -1755,7 +1755,17 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
-    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore: options.AllowDoubleUnderscore });
+    // CoreSchema: on SQL Server the app schema is created owned by the core schema's owner so
+    // ownership chaining lets app views read core tables (MJ#4756).
+    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, {
+      allowDoubleUnderscore: options.AllowDoubleUnderscore,
+      CoreSchema: context.MJCoreSchema ?? '__mj'
+    });
+    if (result.Warning) {
+      // Created, but owned by the installer: core-table reads through app views will need
+      // explicit grants. Not fatal to the install, but never silent.
+      context.Callbacks?.OnWarn?.('Schema', result.Warning);
+    }
     return { Success: result.Success, ErrorMessage: result.ErrorMessage, Created: result.Success };
   }
 
