@@ -255,7 +255,7 @@ export class GraphQLServerGeneratorBase {
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput, CloneContextInput } from '@memberjunction/server';
+            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
@@ -696,9 +696,6 @@ export class ${classPrefix}${typeNameBase}Input {`;
     sRet += `
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 `;
 
     sRet += `}

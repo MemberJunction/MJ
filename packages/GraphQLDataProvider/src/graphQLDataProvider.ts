@@ -2077,33 +2077,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 };
             }
 
-            // Carry clone lineage across the network.
-            // BaseEntity._cloneContext is a client-side-only field — it doesn't
-            // serialize through GraphQL automatically. When set, mirror it onto the
-            // mutation input as CloneContext___ so the server-side resolver can
-            // call SetCloneContext() on the freshly-constructed BaseEntity before
-            // Save(). Without this, the data provider on the server reads
-            // entity.CloneContext as null and writes Source='Internal' —
-            // i.e., the clone audit trail is silently lost.
-            const clientCloneContext = entity.CloneContext;
-            if (clientCloneContext) {
-                vars.input['CloneContext___'] = {
-                    CloneLogID: clientCloneContext.CloneLogID,
-                    SourceEntityName: clientCloneContext.SourceEntityName,
-                    SourceRecordID: clientCloneContext.SourceRecordID,
-                    RootEntityName: clientCloneContext.RootEntityName,
-                    RootSourceRecordID: clientCloneContext.RootSourceRecordID,
-                    RootTargetRecordID: clientCloneContext.RootTargetRecordID,
-                    Depth: clientCloneContext.Depth,
-                    Route: clientCloneContext.Route,
-                    FieldChangeSummary: (clientCloneContext.FieldChangeSummary ?? []).map(f => ({
-                        Kind: f.Kind,
-                        Fields: f.Fields,
-                    })),
-                    Reason: clientCloneContext.Reason,
-                };
-            }
-
             // now add an OldValues prop to the vars IF the type === 'update' and the options.SkipOldValuesCheck === false
             if (type.trim().toLowerCase() === 'update' &&
                 options.SkipOldValuesCheck === false) {

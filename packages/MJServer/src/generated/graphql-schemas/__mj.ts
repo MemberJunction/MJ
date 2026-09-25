@@ -10,7 +10,7 @@
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput, CloneContextInput } from '@memberjunction/server';
+            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
@@ -87,9 +87,6 @@ export class CreateMJAIActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -121,9 +118,6 @@ export class UpdateMJAIActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -336,9 +330,6 @@ export class CreateMJAIAgentActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -388,9 +379,6 @@ export class UpdateMJAIAgentActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -537,9 +525,6 @@ export class CreateMJAIAgentArtifactTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -565,9 +550,6 @@ export class UpdateMJAIAgentArtifactTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -750,9 +732,6 @@ export class CreateMJAIAgentCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -787,9 +766,6 @@ export class UpdateMJAIAgentCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -967,9 +943,6 @@ export class CreateMJAIAgentChannelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -1013,9 +986,6 @@ export class UpdateMJAIAgentChannelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -1168,9 +1138,6 @@ export class CreateMJAIAgentClientToolInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -1199,9 +1166,6 @@ export class UpdateMJAIAgentClientToolInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -1385,9 +1349,6 @@ export class CreateMJAIAgentCoAgentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -1428,9 +1389,6 @@ export class UpdateMJAIAgentCoAgentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -1610,9 +1568,6 @@ export class CreateMJAIAgentConfigurationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -1653,9 +1608,6 @@ export class UpdateMJAIAgentConfigurationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -1823,9 +1775,6 @@ export class CreateMJAIAgentCredentialInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -1860,9 +1809,6 @@ export class UpdateMJAIAgentCredentialInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -2111,9 +2057,6 @@ export class CreateMJAIAgentDataSourceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -2187,9 +2130,6 @@ export class UpdateMJAIAgentDataSourceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -2477,9 +2417,6 @@ export class CreateMJAIAgentExampleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -2559,9 +2496,6 @@ export class UpdateMJAIAgentExampleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -2749,9 +2683,6 @@ export class CreateMJAIAgentHarnessInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -2795,9 +2726,6 @@ export class UpdateMJAIAgentHarnessInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -2952,9 +2880,6 @@ export class CreateMJAIAgentLearningCycleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -2986,9 +2911,6 @@ export class UpdateMJAIAgentLearningCycleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -3154,9 +3076,6 @@ export class CreateMJAIAgentModalityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -3191,9 +3110,6 @@ export class UpdateMJAIAgentModalityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -3346,9 +3262,6 @@ export class CreateMJAIAgentModelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -3377,9 +3290,6 @@ export class UpdateMJAIAgentModelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -3524,9 +3434,6 @@ export class CreateMJAIAgentNoteTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -3555,9 +3462,6 @@ export class UpdateMJAIAgentNoteTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -3887,9 +3791,6 @@ export class CreateMJAIAgentNoteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -3984,9 +3885,6 @@ export class UpdateMJAIAgentNoteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -4168,9 +4066,6 @@ export class CreateMJAIAgentPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -4211,9 +4106,6 @@ export class UpdateMJAIAgentPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -4378,9 +4270,6 @@ export class CreateMJAIAgentPersonaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -4415,9 +4304,6 @@ export class UpdateMJAIAgentPersonaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -4601,9 +4487,6 @@ export class CreateMJAIAgentPromptInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -4644,9 +4527,6 @@ export class UpdateMJAIAgentPromptInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -4825,9 +4705,6 @@ export class CreateMJAIAgentRelationshipInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -4868,9 +4745,6 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -5033,9 +4907,6 @@ export class CreateMJAIAgentRequestTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -5073,9 +4944,6 @@ export class UpdateMJAIAgentRequestTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -5350,9 +5218,6 @@ export class CreateMJAIAgentRequestInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -5426,9 +5291,6 @@ export class UpdateMJAIAgentRequestInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -5666,9 +5528,6 @@ export class CreateMJAIAgentRunMediaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -5733,9 +5592,6 @@ export class UpdateMJAIAgentRunMediaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -6034,9 +5890,6 @@ export class CreateMJAIAgentRunStepInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -6125,9 +5978,6 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -6632,9 +6482,6 @@ export class CreateMJAIAgentRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -6801,9 +6648,6 @@ export class UpdateMJAIAgentRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -7011,9 +6855,6 @@ export class CreateMJAIAgentSearchScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -7066,9 +6907,6 @@ export class UpdateMJAIAgentSearchScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -7248,9 +7086,6 @@ export class CreateMJAIAgentSessionBridgeParticipantInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -7291,9 +7126,6 @@ export class UpdateMJAIAgentSessionBridgeParticipantInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -7517,9 +7349,6 @@ export class CreateMJAIAgentSessionBridgeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -7581,9 +7410,6 @@ export class UpdateMJAIAgentSessionBridgeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -7752,9 +7578,6 @@ export class CreateMJAIAgentSessionChannelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -7792,9 +7615,6 @@ export class UpdateMJAIAgentSessionChannelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -8034,9 +7854,6 @@ export class CreateMJAIAgentSessionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -8098,9 +7915,6 @@ export class UpdateMJAIAgentSessionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -8248,9 +8062,6 @@ export class CreateMJAIAgentSkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -8276,9 +8087,6 @@ export class UpdateMJAIAgentSkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -8444,9 +8252,6 @@ export class CreateMJAIAgentStepPathInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -8481,9 +8286,6 @@ export class UpdateMJAIAgentStepPathInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -8747,9 +8549,6 @@ export class CreateMJAIAgentStepInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -8826,9 +8625,6 @@ export class UpdateMJAIAgentStepInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -9098,9 +8894,6 @@ export class CreateMJAIAgentTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -9180,9 +8973,6 @@ export class UpdateMJAIAgentTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -9872,9 +9662,6 @@ export class CreateMJAIAgentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -10125,9 +9912,6 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -10313,9 +10097,6 @@ export class CreateMJAIArchitectureInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -10353,9 +10134,6 @@ export class UpdateMJAIArchitectureInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -10529,9 +10307,6 @@ export class CreateMJAIBridgeAgentIdentityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -10569,9 +10344,6 @@ export class UpdateMJAIBridgeAgentIdentityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -10730,9 +10502,6 @@ export class CreateMJAIBridgeProviderChannelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -10764,9 +10533,6 @@ export class UpdateMJAIBridgeProviderChannelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -10938,9 +10704,6 @@ export class CreateMJAIBridgeProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -10981,9 +10744,6 @@ export class UpdateMJAIBridgeProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -11147,9 +10907,6 @@ export class CreateMJAIClientToolDefinitionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -11187,9 +10944,6 @@ export class UpdateMJAIClientToolDefinitionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -11345,9 +11099,6 @@ export class CreateMJAIConfigurationParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -11379,9 +11130,6 @@ export class UpdateMJAIConfigurationParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -11593,9 +11341,6 @@ export class CreateMJAIConfigurationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -11639,9 +11384,6 @@ export class UpdateMJAIConfigurationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -11823,9 +11565,6 @@ export class CreateMJAICredentialBindingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -11863,9 +11602,6 @@ export class UpdateMJAICredentialBindingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -12037,9 +11773,6 @@ export class CreateMJAIModalityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -12080,9 +11813,6 @@ export class UpdateMJAIModalityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -12229,9 +11959,6 @@ export class CreateMJAIModelActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -12257,9 +11984,6 @@ export class UpdateMJAIModelActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -12429,9 +12153,6 @@ export class CreateMJAIModelArchitectureInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -12463,9 +12184,6 @@ export class UpdateMJAIModelArchitectureInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -12691,9 +12409,6 @@ export class CreateMJAIModelCostInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -12752,9 +12467,6 @@ export class UpdateMJAIModelCostInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -12945,9 +12657,6 @@ export class CreateMJAIModelModalityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -12994,9 +12703,6 @@ export class UpdateMJAIModelModalityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -13149,9 +12855,6 @@ export class CreateMJAIModelPersonaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -13180,9 +12883,6 @@ export class UpdateMJAIModelPersonaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -13314,9 +13014,6 @@ export class CreateMJAIModelPriceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -13339,9 +13036,6 @@ export class UpdateMJAIModelPriceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -13497,9 +13191,6 @@ export class CreateMJAIModelPriceUnitTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -13531,9 +13222,6 @@ export class UpdateMJAIModelPriceUnitTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -13705,9 +13393,6 @@ export class CreateMJAIModelTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -13745,9 +13430,6 @@ export class UpdateMJAIModelTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -13992,9 +13674,6 @@ export class CreateMJAIModelVendorInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -14059,9 +13738,6 @@ export class UpdateMJAIModelVendorInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -14312,9 +13988,6 @@ export class CreateMJAIModelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -14391,9 +14064,6 @@ export class UpdateMJAIModelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -14581,9 +14251,6 @@ export class CreateMJAIPersonaVendorInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -14621,9 +14288,6 @@ export class UpdateMJAIPersonaVendorInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -14835,9 +14499,6 @@ export class CreateMJAIPersonaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -14896,9 +14557,6 @@ export class UpdateMJAIPersonaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -15057,9 +14715,6 @@ export class CreateMJAIPromptCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -15085,9 +14740,6 @@ export class UpdateMJAIPromptCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -15307,9 +14959,6 @@ export class CreateMJAIPromptModelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -15365,9 +15014,6 @@ export class UpdateMJAIPromptModelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -15587,9 +15233,6 @@ export class CreateMJAIPromptRunMediaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -15648,9 +15291,6 @@ export class UpdateMJAIPromptRunMediaInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -16391,9 +16031,6 @@ export class CreateMJAIPromptRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -16677,9 +16314,6 @@ export class UpdateMJAIPromptRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -16811,9 +16445,6 @@ export class CreateMJAIPromptTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -16836,9 +16467,6 @@ export class UpdateMJAIPromptTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -17312,9 +16940,6 @@ export class CreateMJAIPromptInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -17487,9 +17112,6 @@ export class UpdateMJAIPromptInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -17668,9 +17290,6 @@ export class CreateMJAIRemoteBrowserProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -17714,9 +17333,6 @@ export class UpdateMJAIRemoteBrowserProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -17938,9 +17554,6 @@ export class CreateMJAIResultCacheInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -17993,9 +17606,6 @@ export class UpdateMJAIResultCacheInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -18142,9 +17752,6 @@ export class CreateMJAISkillActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -18170,9 +17777,6 @@ export class UpdateMJAISkillActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -18354,9 +17958,6 @@ export class CreateMJAISkillPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -18397,9 +17998,6 @@ export class UpdateMJAISkillPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -18571,9 +18169,6 @@ export class CreateMJAISkillSearchScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -18611,9 +18206,6 @@ export class UpdateMJAISkillSearchScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -18754,9 +18346,6 @@ export class CreateMJAISkillSubAgentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -18779,9 +18368,6 @@ export class UpdateMJAISkillSubAgentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -18979,9 +18565,6 @@ export class CreateMJAISkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -19031,9 +18614,6 @@ export class UpdateMJAISkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -19165,9 +18745,6 @@ export class CreateMJAIUsageTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -19190,9 +18767,6 @@ export class UpdateMJAIUsageTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -19324,9 +18898,6 @@ export class CreateMJAIVendorTypeDefinitionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -19349,9 +18920,6 @@ export class UpdateMJAIVendorTypeDefinitionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -19505,9 +19073,6 @@ export class CreateMJAIVendorTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -19536,9 +19101,6 @@ export class UpdateMJAIVendorTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -19681,9 +19243,6 @@ export class CreateMJAIVendorInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -19709,9 +19268,6 @@ export class UpdateMJAIVendorInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -19889,9 +19445,6 @@ export class CreateMJAPIApplicationScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -19929,9 +19482,6 @@ export class UpdateMJAPIApplicationScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -20070,9 +19620,6 @@ export class CreateMJAPIApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -20098,9 +19645,6 @@ export class UpdateMJAPIApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -20241,9 +19785,6 @@ export class CreateMJAPIKeyApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -20266,9 +19807,6 @@ export class UpdateMJAPIKeyApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -20446,9 +19984,6 @@ export class CreateMJAPIKeyScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -20486,9 +20021,6 @@ export class UpdateMJAPIKeyScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -20703,9 +20235,6 @@ export class CreateMJAPIKeyUsageLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -20761,9 +20290,6 @@ export class UpdateMJAPIKeyUsageLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -20951,9 +20477,6 @@ export class CreateMJAPIKeyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -20997,9 +20520,6 @@ export class UpdateMJAPIKeyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -21192,9 +20712,6 @@ export class CreateMJAPIScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -21235,9 +20752,6 @@ export class UpdateMJAPIScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -21435,9 +20949,6 @@ export class CreateMJAccessControlRuleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -21487,9 +20998,6 @@ export class UpdateMJAccessControlRuleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -21636,9 +21144,6 @@ export class CreateMJActionAuthorizationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -21664,9 +21169,6 @@ export class UpdateMJActionAuthorizationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -21832,9 +21334,6 @@ export class CreateMJActionCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -21863,9 +21362,6 @@ export class UpdateMJActionCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -21997,9 +21493,6 @@ export class CreateMJActionContextTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -22022,9 +21515,6 @@ export class UpdateMJActionContextTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -22172,9 +21662,6 @@ export class CreateMJActionContextInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -22200,9 +21687,6 @@ export class UpdateMJActionContextInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -22422,9 +21906,6 @@ export class CreateMJActionExecutionLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -22480,9 +21961,6 @@ export class UpdateMJActionExecutionLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -22625,9 +22103,6 @@ export class CreateMJActionFilterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -22656,9 +22131,6 @@ export class UpdateMJActionFilterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -22805,9 +22277,6 @@ export class CreateMJActionLibraryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -22833,9 +22302,6 @@ export class UpdateMJActionLibraryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -23023,9 +22489,6 @@ export class CreateMJActionParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -23072,9 +22535,6 @@ export class UpdateMJActionParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -23223,9 +22683,6 @@ export class CreateMJActionResultCodeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -23254,9 +22711,6 @@ export class UpdateMJActionResultCodeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -23566,9 +23020,6 @@ export class CreateMJActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -23657,9 +23108,6 @@ export class UpdateMJActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -23825,9 +23273,6 @@ export class CreateMJApplicationEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -23856,9 +23301,6 @@ export class UpdateMJApplicationEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -24011,9 +23453,6 @@ export class CreateMJApplicationRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -24042,9 +23481,6 @@ export class UpdateMJApplicationRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -24193,9 +23629,6 @@ export class CreateMJApplicationSettingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -24224,9 +23657,6 @@ export class UpdateMJApplicationSettingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -24449,9 +23879,6 @@ export class CreateMJApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -24516,9 +23943,6 @@ export class UpdateMJApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -24732,9 +24156,6 @@ export class CreateMJArchiveConfigurationEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -24787,9 +24208,6 @@ export class UpdateMJArchiveConfigurationEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -25005,9 +24423,6 @@ export class CreateMJArchiveConfigurationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -25060,9 +24475,6 @@ export class UpdateMJArchiveConfigurationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -25263,9 +24675,6 @@ export class CreateMJArchiveRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -25312,9 +24721,6 @@ export class UpdateMJArchiveRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -25520,9 +24926,6 @@ export class CreateMJArchiveRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -25572,9 +24975,6 @@ export class UpdateMJArchiveRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -25760,9 +25160,6 @@ export class CreateMJArtifactPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -25800,9 +25197,6 @@ export class UpdateMJArtifactPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -26027,9 +25421,6 @@ export class CreateMJArtifactTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -26085,9 +25476,6 @@ export class UpdateMJArtifactTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -26241,9 +25629,6 @@ export class CreateMJArtifactUseInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -26272,9 +25657,6 @@ export class UpdateMJArtifactUseInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -26431,9 +25813,6 @@ export class CreateMJArtifactVersionAttributeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -26465,9 +25844,6 @@ export class UpdateMJArtifactVersionAttributeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -26696,9 +26072,6 @@ export class CreateMJArtifactVersionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -26760,9 +26133,6 @@ export class UpdateMJArtifactVersionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -26940,9 +26310,6 @@ export class CreateMJArtifactInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -26980,9 +26347,6 @@ export class UpdateMJArtifactInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -27152,9 +26516,6 @@ export class CreateMJAuditLogTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -27183,9 +26544,6 @@ export class UpdateMJAuditLogTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -27384,9 +26742,6 @@ export class CreateMJAuditLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -27427,9 +26782,6 @@ export class UpdateMJAuditLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -27672,9 +27024,6 @@ export class CreateMJAuthenticationProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -27745,9 +27094,6 @@ export class UpdateMJAuthenticationProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -27895,9 +27241,6 @@ export class CreateMJAuthorizationRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -27923,9 +27266,6 @@ export class UpdateMJAuthorizationRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -28106,9 +27446,6 @@ export class CreateMJAuthorizationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -28140,9 +27477,6 @@ export class UpdateMJAuthorizationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -28344,9 +27678,6 @@ export class CreateMJClusterAnalysisInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -28393,9 +27724,6 @@ export class UpdateMJClusterAnalysisInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -28557,9 +27885,6 @@ export class CreateMJClusterAnalysisClusterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -28594,9 +27919,6 @@ export class UpdateMJClusterAnalysisClusterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -28755,9 +28077,6 @@ export class CreateMJCollectionArtifactInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -28789,9 +28108,6 @@ export class UpdateMJCollectionArtifactInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -28967,9 +28283,6 @@ export class CreateMJCollectionPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -29007,9 +28320,6 @@ export class UpdateMJCollectionPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -29210,9 +28520,6 @@ export class CreateMJCollectionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -29253,9 +28560,6 @@ export class UpdateMJCollectionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -29405,9 +28709,6 @@ export class CreateMJCommunicationBaseMessageTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -29439,9 +28740,6 @@ export class UpdateMJCommunicationBaseMessageTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -29625,9 +28923,6 @@ export class CreateMJCommunicationLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -29668,9 +28963,6 @@ export class UpdateMJCommunicationLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -29831,9 +29123,6 @@ export class CreateMJCommunicationProviderMessageTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -29865,9 +29154,6 @@ export class UpdateMJCommunicationProviderMessageTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -30042,9 +29328,6 @@ export class CreateMJCommunicationProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -30088,9 +29371,6 @@ export class UpdateMJCommunicationProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -30258,9 +29538,6 @@ export class CreateMJCommunicationRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -30298,9 +29575,6 @@ export class UpdateMJCommunicationRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -30454,9 +29728,6 @@ export class CreateMJCompanyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -30488,9 +29759,6 @@ export class UpdateMJCompanyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -30707,9 +29975,6 @@ export class CreateMJCompanyIntegrationEntityMapInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -30762,9 +30027,6 @@ export class UpdateMJCompanyIntegrationEntityMapInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -30966,9 +30228,6 @@ export class CreateMJCompanyIntegrationFieldMapInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -31021,9 +30280,6 @@ export class UpdateMJCompanyIntegrationFieldMapInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -31178,9 +30434,6 @@ export class CreateMJCompanyIntegrationRecordMapInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -31209,9 +30462,6 @@ export class UpdateMJCompanyIntegrationRecordMapInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -31372,9 +30622,6 @@ export class CreateMJCompanyIntegrationRunAPILogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -31409,9 +30656,6 @@ export class UpdateMJCompanyIntegrationRunAPILogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -31580,9 +30824,6 @@ export class CreateMJCompanyIntegrationRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -31617,9 +30858,6 @@ export class UpdateMJCompanyIntegrationRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -31851,9 +31089,6 @@ export class CreateMJCompanyIntegrationRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -31918,9 +31153,6 @@ export class UpdateMJCompanyIntegrationRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -32082,9 +31314,6 @@ export class CreateMJCompanyIntegrationSyncWatermarkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -32119,9 +31348,6 @@ export class UpdateMJCompanyIntegrationSyncWatermarkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -32444,9 +31670,6 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -32544,9 +31767,6 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -32687,9 +31907,6 @@ export class CreateMJComponentDependencyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -32712,9 +31929,6 @@ export class UpdateMJComponentDependencyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -32920,9 +32134,6 @@ export class CreateMJComponentLibraryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -32978,9 +32189,6 @@ export class UpdateMJComponentLibraryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -33128,9 +32336,6 @@ export class CreateMJComponentLibraryLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -33156,9 +32361,6 @@ export class UpdateMJComponentLibraryLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -33318,9 +32520,6 @@ export class CreateMJComponentRegistryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -33355,9 +32554,6 @@ export class UpdateMJComponentRegistryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -33645,9 +32841,6 @@ export class CreateMJComponentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -33742,9 +32935,6 @@ export class UpdateMJComponentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -33877,9 +33067,6 @@ export class CreateMJContentFileTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -33902,9 +33089,6 @@ export class UpdateMJContentFileTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -34047,9 +33231,6 @@ export class CreateMJContentItemAttributeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -34075,9 +33256,6 @@ export class UpdateMJContentItemAttributeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -34355,9 +33533,6 @@ export class CreateMJContentItemChunkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -34437,9 +33612,6 @@ export class UpdateMJContentItemChunkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -34624,9 +33796,6 @@ export class CreateMJContentItemDuplicateInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -34667,9 +33836,6 @@ export class UpdateMJContentItemDuplicateInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -34840,9 +34006,6 @@ export class CreateMJContentItemTagInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -34877,9 +34040,6 @@ export class UpdateMJContentItemTagInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -35164,9 +34324,6 @@ export class CreateMJContentItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -35237,9 +34394,6 @@ export class UpdateMJContentItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -35452,9 +34606,6 @@ export class CreateMJContentProcessRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -35510,9 +34661,6 @@ export class UpdateMJContentProcessRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -35656,9 +34804,6 @@ export class CreateMJContentProcessRunPromptRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -35684,9 +34829,6 @@ export class UpdateMJContentProcessRunPromptRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -35894,9 +35036,6 @@ export class CreateMJContentProcessRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -35952,9 +35091,6 @@ export class UpdateMJContentProcessRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -36097,9 +35233,6 @@ export class CreateMJContentSourceParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -36125,9 +35258,6 @@ export class UpdateMJContentSourceParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -36278,9 +35408,6 @@ export class CreateMJContentSourceTypeParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -36312,9 +35439,6 @@ export class UpdateMJContentSourceTypeParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -36460,9 +35584,6 @@ export class CreateMJContentSourceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -36491,9 +35612,6 @@ export class UpdateMJContentSourceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -36734,9 +35852,6 @@ export class CreateMJContentSourceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -36792,9 +35907,6 @@ export class UpdateMJContentSourceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -36939,9 +36051,6 @@ export class CreateMJContentTypeAttributeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -36970,9 +36079,6 @@ export class UpdateMJContentTypeAttributeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -37169,9 +36275,6 @@ export class CreateMJContentTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -37218,9 +36321,6 @@ export class UpdateMJContentTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -37364,9 +36464,6 @@ export class CreateMJConversationArtifactPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -37392,9 +36489,6 @@ export class UpdateMJConversationArtifactPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -37548,9 +36642,6 @@ export class CreateMJConversationArtifactVersionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -37582,9 +36673,6 @@ export class UpdateMJConversationArtifactVersionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -37751,9 +36839,6 @@ export class CreateMJConversationArtifactInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -37788,9 +36873,6 @@ export class UpdateMJConversationArtifactInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -37931,9 +37013,6 @@ export class CreateMJConversationCompactionRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -37956,9 +37035,6 @@ export class UpdateMJConversationCompactionRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -38106,9 +37182,6 @@ export class CreateMJConversationDetailArtifactInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -38134,9 +37207,6 @@ export class UpdateMJConversationDetailArtifactInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -38361,9 +37431,6 @@ export class CreateMJConversationDetailAttachmentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -38422,9 +37489,6 @@ export class UpdateMJConversationDetailAttachmentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -38577,9 +37641,6 @@ export class CreateMJConversationDetailRatingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -38608,9 +37669,6 @@ export class UpdateMJConversationDetailRatingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -38962,9 +38020,6 @@ export class CreateMJConversationDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -39068,9 +38123,6 @@ export class UpdateMJConversationDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -39235,9 +38287,6 @@ export class CreateMJConversationSkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -39269,9 +38318,6 @@ export class UpdateMJConversationSkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -39506,9 +38552,6 @@ export class CreateMJConversationWidgetInstanceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -39573,9 +38616,6 @@ export class UpdateMJConversationWidgetInstanceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -39884,9 +38924,6 @@ export class CreateMJConversationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -39969,9 +39006,6 @@ export class UpdateMJConversationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -40141,9 +39175,6 @@ export class CreateMJCountryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -40184,9 +39215,6 @@ export class UpdateMJCountryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -40352,9 +39380,6 @@ export class CreateMJCredentialCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -40383,9 +39408,6 @@ export class UpdateMJCredentialCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -40544,9 +39566,6 @@ export class CreateMJCredentialTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -40581,9 +39600,6 @@ export class UpdateMJCredentialTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -40780,9 +39796,6 @@ export class CreateMJCredentialInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -40832,9 +39845,6 @@ export class UpdateMJCredentialInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -41004,9 +40014,6 @@ export class CreateMJDashboardCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -41035,9 +40042,6 @@ export class UpdateMJDashboardCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -41202,9 +40206,6 @@ export class CreateMJDashboardCategoryLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -41236,9 +40237,6 @@ export class UpdateMJDashboardCategoryLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -41414,9 +40412,6 @@ export class CreateMJDashboardCategoryPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -41454,9 +40449,6 @@ export class UpdateMJDashboardCategoryPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -41627,9 +40619,6 @@ export class CreateMJDashboardPartTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -41670,9 +40659,6 @@ export class UpdateMJDashboardPartTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -41848,9 +40834,6 @@ export class CreateMJDashboardPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -41888,9 +40871,6 @@ export class UpdateMJDashboardPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -42055,9 +41035,6 @@ export class CreateMJDashboardUserPreferenceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -42089,9 +41066,6 @@ export class UpdateMJDashboardUserPreferenceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -42238,9 +41212,6 @@ export class CreateMJDashboardUserStateInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -42266,9 +41237,6 @@ export class UpdateMJDashboardUserStateInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -42484,9 +41452,6 @@ export class CreateMJDashboardInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -42539,9 +41504,6 @@ export class UpdateMJDashboardInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -42749,9 +41711,6 @@ export class CreateMJDataContextItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -42801,9 +41760,6 @@ export class UpdateMJDataContextItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -42952,9 +41908,6 @@ export class CreateMJDataContextInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -42983,9 +41936,6 @@ export class UpdateMJDataContextInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -43164,9 +42114,6 @@ export class CreateMJDatasetItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -43207,9 +42154,6 @@ export class UpdateMJDatasetItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -43341,9 +42285,6 @@ export class CreateMJDatasetInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -43366,9 +42307,6 @@ export class UpdateMJDatasetInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -43622,9 +42560,6 @@ export class CreateMJDuplicateRunDetailMatchInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -43695,9 +42630,6 @@ export class UpdateMJDuplicateRunDetailMatchInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -43884,9 +42816,6 @@ export class CreateMJDuplicateRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -43933,9 +42862,6 @@ export class UpdateMJDuplicateRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -44166,9 +43092,6 @@ export class CreateMJDuplicateRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -44230,9 +43153,6 @@ export class UpdateMJDuplicateRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -44386,9 +43306,6 @@ export class CreateMJEmployeeCompanyIntegrationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -44417,9 +43334,6 @@ export class UpdateMJEmployeeCompanyIntegrationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -44560,9 +43474,6 @@ export class CreateMJEmployeeRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -44585,9 +43496,6 @@ export class UpdateMJEmployeeRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -44728,9 +43636,6 @@ export class CreateMJEmployeeSkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -44753,9 +43658,6 @@ export class UpdateMJEmployeeSkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -44953,9 +43855,6 @@ export class CreateMJEmployeeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -44996,9 +43895,6 @@ export class UpdateMJEmployeeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -45171,9 +44067,6 @@ export class CreateMJEncryptionAlgorithmInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -45211,9 +44104,6 @@ export class UpdateMJEncryptionAlgorithmInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -45378,9 +44268,6 @@ export class CreateMJEncryptionKeySourceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -45418,9 +44305,6 @@ export class UpdateMJEncryptionKeySourceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -45620,9 +44504,6 @@ export class CreateMJEncryptionKeyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -45672,9 +44553,6 @@ export class UpdateMJEncryptionKeyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -46265,9 +45143,6 @@ export class CreateMJEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -46491,9 +45366,6 @@ export class UpdateMJEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -46718,9 +45590,6 @@ export class CreateMJEntityAIActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -46773,9 +45642,6 @@ export class UpdateMJEntityAIActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -46934,9 +45800,6 @@ export class CreateMJEntityActionFilterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -46965,9 +45828,6 @@ export class UpdateMJEntityActionFilterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -47105,9 +45965,6 @@ export class CreateMJEntityActionInvocationTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -47133,9 +45990,6 @@ export class UpdateMJEntityActionInvocationTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -47286,9 +46140,6 @@ export class CreateMJEntityActionInvocationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -47317,9 +46168,6 @@ export class UpdateMJEntityActionInvocationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -47481,9 +46329,6 @@ export class CreateMJEntityActionParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -47518,9 +46363,6 @@ export class UpdateMJEntityActionParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -47706,9 +46548,6 @@ export class CreateMJEntityActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -47749,9 +46588,6 @@ export class UpdateMJEntityActionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -47894,9 +46730,6 @@ export class CreateMJEntityCommunicationFieldInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -47922,9 +46755,6 @@ export class UpdateMJEntityCommunicationFieldInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -48071,9 +46901,6 @@ export class CreateMJEntityCommunicationMessageTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -48099,9 +46926,6 @@ export class UpdateMJEntityCommunicationMessageTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -48250,9 +47074,6 @@ export class CreateMJEntityDocumentRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -48281,9 +47102,6 @@ export class UpdateMJEntityDocumentRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -48432,9 +47250,6 @@ export class CreateMJEntityDocumentSettingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -48463,9 +47278,6 @@ export class UpdateMJEntityDocumentSettingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -48597,9 +47409,6 @@ export class CreateMJEntityDocumentTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -48622,9 +47431,6 @@ export class UpdateMJEntityDocumentTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -48889,9 +47695,6 @@ export class CreateMJEntityDocumentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -48959,9 +47762,6 @@ export class UpdateMJEntityDocumentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -49123,9 +47923,6 @@ export class CreateMJEntityFieldPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -49157,9 +47954,6 @@ export class UpdateMJEntityFieldPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -49323,9 +48117,6 @@ export class CreateMJEntityFieldValueInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -49357,9 +48148,6 @@ export class UpdateMJEntityFieldValueInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -49915,9 +48703,6 @@ export class CreateMJEntityFieldInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -50096,9 +48881,6 @@ export class UpdateMJEntityFieldInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -50310,9 +49092,6 @@ export class CreateMJEntityFormOverrideInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -50359,9 +49138,6 @@ export class UpdateMJEntityFormOverrideInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -50570,9 +49346,6 @@ export class CreateMJEntityOrganicKeyRelatedEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -50625,9 +49398,6 @@ export class UpdateMJEntityOrganicKeyRelatedEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -50809,9 +49579,6 @@ export class CreateMJEntityOrganicKeyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -50855,9 +49622,6 @@ export class UpdateMJEntityOrganicKeyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -51077,9 +49841,6 @@ export class CreateMJEntityPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -51129,9 +49890,6 @@ export class UpdateMJEntityPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -51325,9 +50083,6 @@ export class CreateMJEntityRecordDocumentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -51368,9 +50123,6 @@ export class UpdateMJEntityRecordDocumentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -51509,9 +50261,6 @@ export class CreateMJEntityRelationshipDisplayComponentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -51537,9 +50286,6 @@ export class UpdateMJEntityRelationshipDisplayComponentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -51850,9 +50596,6 @@ export class CreateMJEntityRelationshipInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -51938,9 +50681,6 @@ export class UpdateMJEntityRelationshipInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -52099,9 +50839,6 @@ export class CreateMJEntitySettingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -52130,9 +50867,6 @@ export class UpdateMJEntitySettingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -52276,9 +51010,6 @@ export class CreateMJEnvironmentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -52307,9 +51038,6 @@ export class UpdateMJEnvironmentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -52490,9 +51218,6 @@ export class CreateMJErrorLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -52533,9 +51258,6 @@ export class UpdateMJErrorLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -52720,9 +51442,6 @@ export class CreateMJExperimentSessionIterationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -52766,9 +51485,6 @@ export class UpdateMJExperimentSessionIterationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -52947,9 +51663,6 @@ export class CreateMJExperimentSessionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -52990,9 +51703,6 @@ export class UpdateMJExperimentSessionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -53157,9 +51867,6 @@ export class CreateMJExperimentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -53197,9 +51904,6 @@ export class UpdateMJExperimentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -53375,9 +52079,6 @@ export class CreateMJExplorerNavigationItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -53421,9 +52122,6 @@ export class UpdateMJExplorerNavigationItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -53619,9 +52317,6 @@ export class CreateMJExternalDataSourceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -53671,9 +52366,6 @@ export class UpdateMJExternalDataSourceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -53872,9 +52564,6 @@ export class CreateMJExternalDataSourceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -53924,9 +52613,6 @@ export class UpdateMJExternalDataSourceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -54144,9 +52830,6 @@ export class CreateMJFeatureValueCacheInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -54205,9 +52888,6 @@ export class UpdateMJFeatureValueCacheInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -54471,9 +53151,6 @@ export class CreateMJFeatureValueInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -54547,9 +53224,6 @@ export class UpdateMJFeatureValueInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -54708,9 +53382,6 @@ export class CreateMJFileCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -54736,9 +53407,6 @@ export class UpdateMJFileCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -54886,9 +53554,6 @@ export class CreateMJFileEntityRecordLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -54914,9 +53579,6 @@ export class UpdateMJFileEntityRecordLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -55087,9 +53749,6 @@ export class CreateMJFileStorageAccountPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -55124,9 +53783,6 @@ export class UpdateMJFileStorageAccountPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -55286,9 +53942,6 @@ export class CreateMJFileStorageAccountInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -55320,9 +53973,6 @@ export class UpdateMJFileStorageAccountInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -55498,9 +54148,6 @@ export class CreateMJFileStorageProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -55544,9 +54191,6 @@ export class UpdateMJFileStorageProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -55721,9 +54365,6 @@ export class CreateMJFileInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -55761,9 +54402,6 @@ export class UpdateMJFileInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -55944,9 +54582,6 @@ export class CreateMJFormChromeRuleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -55987,9 +54622,6 @@ export class UpdateMJFormChromeRuleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -56148,9 +54780,6 @@ export class CreateMJGeneratedCodeCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -56176,9 +54805,6 @@ export class UpdateMJGeneratedCodeCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -56381,9 +55007,6 @@ export class CreateMJGeneratedCodeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -56433,9 +55056,6 @@ export class UpdateMJGeneratedCodeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -56592,9 +55212,6 @@ export class CreateMJIdentityClaimTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -56629,9 +55246,6 @@ export class UpdateMJIdentityClaimTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -56835,9 +55449,6 @@ export class CreateMJIdentityClaimInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -56887,9 +55498,6 @@ export class UpdateMJIdentityClaimInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -57054,9 +55662,6 @@ export class CreateMJInstanceConfigurationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -57094,9 +55699,6 @@ export class UpdateMJInstanceConfigurationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -57365,9 +55967,6 @@ export class CreateMJIntegrationObjectFieldInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -57450,9 +56049,6 @@ export class UpdateMJIntegrationObjectFieldInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -57839,9 +56435,6 @@ export class CreateMJIntegrationObjectInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -57978,9 +56571,6 @@ export class UpdateMJIntegrationObjectInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -58133,9 +56723,6 @@ export class CreateMJIntegrationSourceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -58167,9 +56754,6 @@ export class UpdateMJIntegrationSourceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -58327,9 +56911,6 @@ export class CreateMJIntegrationURLFormatInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -58358,9 +56939,6 @@ export class UpdateMJIntegrationURLFormatInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -58559,9 +57137,6 @@ export class CreateMJIntegrationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -58608,9 +57183,6 @@ export class UpdateMJIntegrationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -58788,9 +57360,6 @@ export class CreateMJKnowledgeHubSavedSearchInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -58828,9 +57397,6 @@ export class UpdateMJKnowledgeHubSavedSearchInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -58981,9 +57547,6 @@ export class CreateMJLibraryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -59015,9 +57578,6 @@ export class UpdateMJLibraryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -59161,9 +57721,6 @@ export class CreateMJLibraryItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -59189,9 +57746,6 @@ export class UpdateMJLibraryItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -59361,9 +57915,6 @@ export class CreateMJListCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -59392,9 +57943,6 @@ export class UpdateMJListCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -59550,9 +58098,6 @@ export class CreateMJListDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -59584,9 +58129,6 @@ export class UpdateMJListDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -59761,9 +58303,6 @@ export class CreateMJListInvitationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -59801,9 +58340,6 @@ export class UpdateMJListInvitationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -59958,9 +58494,6 @@ export class CreateMJListShareInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -59989,9 +58522,6 @@ export class UpdateMJListShareInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -60221,9 +58751,6 @@ export class CreateMJListInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -60279,9 +58806,6 @@ export class UpdateMJListInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -60451,9 +58975,6 @@ export class CreateMJMCPServerConnectionPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -60488,9 +59009,6 @@ export class UpdateMJMCPServerConnectionPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -60649,9 +59167,6 @@ export class CreateMJMCPServerConnectionToolInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -60683,9 +59198,6 @@ export class UpdateMJMCPServerConnectionToolInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -60918,9 +59430,6 @@ export class CreateMJMCPServerConnectionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -60985,9 +59494,6 @@ export class UpdateMJMCPServerConnectionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -61196,9 +59702,6 @@ export class CreateMJMCPServerToolInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -61251,9 +59754,6 @@ export class UpdateMJMCPServerToolInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -61520,9 +60020,6 @@ export class CreateMJMCPServerInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -61605,9 +60102,6 @@ export class UpdateMJMCPServerInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -61814,9 +60308,6 @@ export class CreateMJMCPToolExecutionLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -61869,9 +60360,6 @@ export class UpdateMJMCPToolExecutionLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -62012,9 +60500,6 @@ export class CreateMJMCPToolFavoriteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -62037,9 +60522,6 @@ export class UpdateMJMCPToolFavoriteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -62199,9 +60681,6 @@ export class CreateMJMLAlgorithmUseCaseRankingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -62233,9 +60712,6 @@ export class UpdateMJMLAlgorithmUseCaseRankingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -62386,9 +60862,6 @@ export class CreateMJMLAlgorithmUseCaseInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -62420,9 +60893,6 @@ export class UpdateMJMLAlgorithmUseCaseInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -62593,9 +61063,6 @@ export class CreateMJMLAlgorithmInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -62636,9 +61103,6 @@ export class UpdateMJMLAlgorithmInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -62819,9 +61283,6 @@ export class CreateMJMLModelScoringBindingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -62862,9 +61323,6 @@ export class UpdateMJMLModelScoringBindingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -63097,9 +61555,6 @@ export class CreateMJMLModelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -63164,9 +61619,6 @@ export class UpdateMJMLModelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -63383,9 +61835,6 @@ export class CreateMJMLTrainingPipelineInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -63444,9 +61893,6 @@ export class UpdateMJMLTrainingPipelineInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -63660,9 +62106,6 @@ export class CreateMJMLTrainingRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -63718,9 +62161,6 @@ export class UpdateMJMLTrainingRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -63853,9 +62293,6 @@ export class CreateMJMagicLinkInviteAllowedDomainInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -63878,9 +62315,6 @@ export class UpdateMJMagicLinkInviteAllowedDomainInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -64013,9 +62447,6 @@ export class CreateMJMagicLinkInviteAllowedPathInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -64038,9 +62469,6 @@ export class UpdateMJMagicLinkInviteAllowedPathInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -64177,9 +62605,6 @@ export class CreateMJMagicLinkInviteApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -64202,9 +62627,6 @@ export class UpdateMJMagicLinkInviteApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -64341,9 +62763,6 @@ export class CreateMJMagicLinkInviteRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -64366,9 +62785,6 @@ export class UpdateMJMagicLinkInviteRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -64597,9 +63013,6 @@ export class CreateMJMagicLinkInviteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -64658,9 +63071,6 @@ export class UpdateMJMagicLinkInviteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -64831,9 +63241,6 @@ export class CreateMJMagicLinkRedemptionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -64871,9 +63278,6 @@ export class UpdateMJMagicLinkRedemptionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -65010,9 +63414,6 @@ export class CreateMJMaterializedResultQueryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -65035,9 +63436,6 @@ export class UpdateMJMaterializedResultQueryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -65306,9 +63704,6 @@ export class CreateMJMaterializedResultInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -65391,9 +63786,6 @@ export class UpdateMJMaterializedResultInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -65602,9 +63994,6 @@ export class CreateMJOAuthAuthServerMetadataCacheInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -65663,9 +64052,6 @@ export class UpdateMJOAuthAuthServerMetadataCacheInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -65892,9 +64278,6 @@ export class CreateMJOAuthAuthorizationStateInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -65956,9 +64339,6 @@ export class UpdateMJOAuthAuthorizationStateInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -66182,9 +64562,6 @@ export class CreateMJOAuthClientRegistrationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -66246,9 +64623,6 @@ export class UpdateMJOAuthClientRegistrationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -66428,9 +64802,6 @@ export class CreateMJOAuthTokenInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -66471,9 +64842,6 @@ export class UpdateMJOAuthTokenInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -66642,9 +65010,6 @@ export class CreateMJOpenAppDependencyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -66679,9 +65044,6 @@ export class UpdateMJOpenAppDependencyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -66892,9 +65254,6 @@ export class CreateMJOpenAppInstallHistoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -66950,9 +65309,6 @@ export class UpdateMJOpenAppInstallHistoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -67212,9 +65568,6 @@ export class CreateMJOpenAppInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -67291,9 +65644,6 @@ export class UpdateMJOpenAppInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -67425,9 +65775,6 @@ export class CreateMJOutputDeliveryTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -67450,9 +65797,6 @@ export class UpdateMJOutputDeliveryTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -67590,9 +65934,6 @@ export class CreateMJOutputFormatTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -67618,9 +65959,6 @@ export class UpdateMJOutputFormatTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -67810,9 +66148,6 @@ export class CreateMJPermissionDomainInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -67862,9 +66197,6 @@ export class UpdateMJPermissionDomainInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -68073,9 +66405,6 @@ export class CreateMJProcessRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -68128,9 +66457,6 @@ export class UpdateMJProcessRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -68412,9 +66738,6 @@ export class CreateMJProcessRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -68500,9 +66823,6 @@ export class UpdateMJProcessRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -68692,9 +67012,6 @@ export class CreateMJProjectInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -68732,9 +67049,6 @@ export class UpdateMJProjectInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -68916,9 +67230,6 @@ export class CreateMJPublicLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -68962,9 +67273,6 @@ export class UpdateMJPublicLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -69249,9 +67557,6 @@ export class CreateMJQueryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -69340,9 +67645,6 @@ export class UpdateMJQueryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -69536,9 +67838,6 @@ export class CreateMJQueryCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -69579,9 +67878,6 @@ export class UpdateMJQueryCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -69749,9 +68045,6 @@ export class CreateMJQueryDependencyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -69786,9 +68079,6 @@ export class UpdateMJQueryDependencyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -69942,9 +68232,6 @@ export class CreateMJQueryEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -69973,9 +68260,6 @@ export class UpdateMJQueryEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -70193,9 +68477,6 @@ export class CreateMJQueryFieldInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -70254,9 +68535,6 @@ export class UpdateMJQueryFieldInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -70443,9 +68721,6 @@ export class CreateMJQueryParameterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -70492,9 +68767,6 @@ export class UpdateMJQueryParameterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -70635,9 +68907,6 @@ export class CreateMJQueryPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -70660,9 +68929,6 @@ export class UpdateMJQueryPermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -70809,9 +69075,6 @@ export class CreateMJQuerySQLInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -70837,9 +69100,6 @@ export class UpdateMJQuerySQLInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -71018,9 +69278,6 @@ export class CreateMJQueueTaskInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -71064,9 +69321,6 @@ export class UpdateMJQueueTaskInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -71218,9 +69472,6 @@ export class CreateMJQueueTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -71252,9 +69503,6 @@ export class UpdateMJQueueTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -71485,9 +69733,6 @@ export class CreateMJQueueInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -71552,9 +69797,6 @@ export class UpdateMJQueueInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -71709,9 +69951,6 @@ export class CreateMJRSUPendingWorkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -71743,9 +69982,6 @@ export class UpdateMJRSUPendingWorkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -71898,9 +70134,6 @@ export class CreateMJRecommendationItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -71929,9 +70162,6 @@ export class UpdateMJRecommendationItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -72063,9 +70293,6 @@ export class CreateMJRecommendationProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -72088,9 +70315,6 @@ export class UpdateMJRecommendationProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -72256,9 +70480,6 @@ export class CreateMJRecommendationRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -72293,9 +70514,6 @@ export class UpdateMJRecommendationRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -72442,9 +70660,6 @@ export class CreateMJRecommendationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -72470,9 +70685,6 @@ export class UpdateMJRecommendationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -72621,9 +70833,6 @@ export class CreateMJRecordChangeReplayRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -72652,9 +70861,6 @@ export class UpdateMJRecordChangeReplayRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -72904,9 +71110,6 @@ export class CreateMJRecordChangeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -72974,9 +71177,6 @@ export class UpdateMJRecordChangeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -73165,9 +71365,6 @@ export class CreateMJRecordCloneLogItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -73214,9 +71411,6 @@ export class UpdateMJRecordCloneLogItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -73452,9 +71646,6 @@ export class CreateMJRecordCloneLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -73522,9 +71713,6 @@ export class UpdateMJRecordCloneLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -73748,9 +71936,6 @@ export class CreateMJRecordGeoCodeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -73809,9 +71994,6 @@ export class UpdateMJRecordGeoCodeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -73985,9 +72167,6 @@ export class CreateMJRecordLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -74025,9 +72204,6 @@ export class UpdateMJRecordLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -74177,9 +72353,6 @@ export class CreateMJRecordMergeDeletionLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -74208,9 +72381,6 @@ export class UpdateMJRecordMergeDeletionLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -74407,9 +72577,6 @@ export class CreateMJRecordMergeLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -74456,9 +72623,6 @@ export class UpdateMJRecordMergeLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -74617,9 +72781,6 @@ export class CreateMJRecordProcessCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -74645,9 +72806,6 @@ export class UpdateMJRecordProcessCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -74808,9 +72966,6 @@ export class CreateMJRecordProcessWatermarkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -74842,9 +72997,6 @@ export class UpdateMJRecordProcessWatermarkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -75168,9 +73320,6 @@ export class CreateMJRecordProcessInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -75268,9 +73417,6 @@ export class UpdateMJRecordProcessInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -75429,9 +73575,6 @@ export class CreateMJRemoteOperationCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -75457,9 +73600,6 @@ export class UpdateMJRemoteOperationCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -75754,9 +73894,6 @@ export class CreateMJRemoteOperationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -75851,9 +73988,6 @@ export class UpdateMJRemoteOperationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -76008,9 +74142,6 @@ export class CreateMJResourceLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -76039,9 +74170,6 @@ export class UpdateMJResourceLinkInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -76244,9 +74372,6 @@ export class CreateMJResourcePermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -76293,9 +74418,6 @@ export class UpdateMJResourcePermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -76470,9 +74592,6 @@ export class CreateMJResourceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -76510,9 +74629,6 @@ export class UpdateMJResourceTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -76658,9 +74774,6 @@ export class CreateMJRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -76689,9 +74802,6 @@ export class UpdateMJRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -76839,9 +74949,6 @@ export class CreateMJRowLevelSecurityFilterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -76867,9 +74974,6 @@ export class UpdateMJRowLevelSecurityFilterInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -77053,9 +75157,6 @@ export class CreateMJSQLDialectInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -77096,9 +75197,6 @@ export class UpdateMJSQLDialectInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -77282,9 +75380,6 @@ export class CreateMJScheduledJobRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -77328,9 +75423,6 @@ export class UpdateMJScheduledJobRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -77489,9 +75581,6 @@ export class CreateMJScheduledJobTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -77526,9 +75615,6 @@ export class UpdateMJScheduledJobTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -77838,9 +75924,6 @@ export class CreateMJScheduledJobInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -77941,9 +76024,6 @@ export class UpdateMJScheduledJobInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -78114,9 +76194,6 @@ export class CreateMJSchemaInfoInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -78157,9 +76234,6 @@ export class UpdateMJSchemaInfoInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -78427,9 +76501,6 @@ export class CreateMJScopedPromptConfigInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -78506,9 +76577,6 @@ export class UpdateMJScopedPromptConfigInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -78714,9 +76782,6 @@ export class CreateMJScopedPromptPartInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -78769,9 +76834,6 @@ export class UpdateMJScopedPromptPartInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -78998,9 +77060,6 @@ export class CreateMJSearchExecutionLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -79059,9 +77118,6 @@ export class UpdateMJSearchExecutionLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -79262,9 +77318,6 @@ export class CreateMJSearchProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -79317,9 +77370,6 @@ export class UpdateMJSearchProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -79478,9 +77528,6 @@ export class CreateMJSearchScopeEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -79512,9 +77559,6 @@ export class UpdateMJSearchScopeEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -79687,9 +77731,6 @@ export class CreateMJSearchScopeExternalIndexInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -79727,9 +77768,6 @@ export class UpdateMJSearchScopeExternalIndexInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -79907,9 +77945,6 @@ export class CreateMJSearchScopePermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -79947,9 +77982,6 @@ export class UpdateMJSearchScopePermissionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -80119,9 +78151,6 @@ export class CreateMJSearchScopeProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -80156,9 +78185,6 @@ export class UpdateMJSearchScopeProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -80306,9 +78332,6 @@ export class CreateMJSearchScopeStorageAccountInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -80334,9 +78357,6 @@ export class UpdateMJSearchScopeStorageAccountInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -80499,9 +78519,6 @@ export class CreateMJSearchScopeTestQueryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -80536,9 +78553,6 @@ export class UpdateMJSearchScopeTestQueryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -80737,9 +78751,6 @@ export class CreateMJSearchScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -80792,9 +78803,6 @@ export class UpdateMJSearchScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -80985,9 +78993,6 @@ export class CreateMJSignatureAccountInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -81031,9 +79036,6 @@ export class UpdateMJSignatureAccountInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -81202,9 +79204,6 @@ export class CreateMJSignatureProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -81245,9 +79244,6 @@ export class UpdateMJSignatureProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -81419,9 +79415,6 @@ export class CreateMJSignatureRequestDocumentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -81456,9 +79449,6 @@ export class UpdateMJSignatureRequestDocumentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -81621,9 +79611,6 @@ export class CreateMJSignatureRequestLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -81658,9 +79645,6 @@ export class UpdateMJSignatureRequestLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -81837,9 +79821,6 @@ export class CreateMJSignatureRequestRecipientInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -81880,9 +79861,6 @@ export class UpdateMJSignatureRequestRecipientInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -82076,9 +80054,6 @@ export class CreateMJSignatureRequestInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -82125,9 +80100,6 @@ export class UpdateMJSignatureRequestInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -82280,9 +80252,6 @@ export class CreateMJSkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -82305,9 +80274,6 @@ export class UpdateMJSkillInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -82492,9 +80458,6 @@ export class CreateMJStateProvinceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -82535,9 +80498,6 @@ export class UpdateMJStateProvinceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -82702,9 +80662,6 @@ export class CreateMJTagAuditLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -82736,9 +80693,6 @@ export class UpdateMJTagAuditLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -82891,9 +80845,6 @@ export class CreateMJTagCoOccurrenceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -82922,9 +80873,6 @@ export class UpdateMJTagCoOccurrenceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -83072,9 +81020,6 @@ export class CreateMJTagScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -83100,9 +81045,6 @@ export class UpdateMJTagScopeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -83332,9 +81274,6 @@ export class CreateMJTagSuggestionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -83390,9 +81329,6 @@ export class UpdateMJTagSuggestionInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -83543,9 +81479,6 @@ export class CreateMJTagSynonymInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -83574,9 +81507,6 @@ export class UpdateMJTagSynonymInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -83730,9 +81660,6 @@ export class CreateMJTaggedItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -83761,9 +81688,6 @@ export class UpdateMJTaggedItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -84006,9 +81930,6 @@ export class CreateMJTagInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -84070,9 +81991,6 @@ export class UpdateMJTagInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -84245,9 +82163,6 @@ export class CreateMJTaskDependencyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -84285,9 +82200,6 @@ export class UpdateMJTaskDependencyInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -84419,9 +82331,6 @@ export class CreateMJTaskTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -84444,9 +82353,6 @@ export class UpdateMJTaskTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -84779,9 +82685,6 @@ export class CreateMJTaskInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -84870,9 +82773,6 @@ export class UpdateMJTaskInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -85042,9 +82942,6 @@ export class CreateMJTemplateCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -85073,9 +82970,6 @@ export class UpdateMJTemplateCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -85214,9 +83108,6 @@ export class CreateMJTemplateContentTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -85242,9 +83133,6 @@ export class UpdateMJTemplateContentTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -85403,9 +83291,6 @@ export class CreateMJTemplateContentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -85437,9 +83322,6 @@ export class UpdateMJTemplateContentInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -85656,9 +83538,6 @@ export class CreateMJTemplateParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -85714,9 +83593,6 @@ export class UpdateMJTemplateParamInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -85894,9 +83770,6 @@ export class CreateMJTemplateInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -85937,9 +83810,6 @@ export class UpdateMJTemplateInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -86108,9 +83978,6 @@ export class CreateMJTestRubricInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -86148,9 +84015,6 @@ export class UpdateMJTestRubricInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -86321,9 +84185,6 @@ export class CreateMJTestRunFeedbackInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -86361,9 +84222,6 @@ export class UpdateMJTestRunFeedbackInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -86495,9 +84353,6 @@ export class CreateMJTestRunOutputTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -86520,9 +84375,6 @@ export class UpdateMJTestRunOutputTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -86731,9 +84583,6 @@ export class CreateMJTestRunOutputInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -86789,9 +84638,6 @@ export class UpdateMJTestRunOutputInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -87111,9 +84957,6 @@ export class CreateMJTestRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -87217,9 +85060,6 @@ export class UpdateMJTestRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -87513,9 +85353,6 @@ export class CreateMJTestSuiteRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -87610,9 +85447,6 @@ export class UpdateMJTestSuiteRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -87772,9 +85606,6 @@ export class CreateMJTestSuiteTestInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -87806,9 +85637,6 @@ export class UpdateMJTestSuiteTestInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -87998,9 +85826,6 @@ export class CreateMJTestSuiteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -88041,9 +85866,6 @@ export class UpdateMJTestSuiteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -88195,9 +86017,6 @@ export class CreateMJTestTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -88229,9 +86048,6 @@ export class UpdateMJTestTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -88441,9 +86257,6 @@ export class CreateMJTestInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -88502,9 +86315,6 @@ export class UpdateMJTestInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -88695,9 +86505,6 @@ export class CreateMJThemeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -88747,9 +86554,6 @@ export class UpdateMJThemeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -88900,9 +86704,6 @@ export class CreateMJUserApplicationEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -88928,9 +86729,6 @@ export class UpdateMJUserApplicationEntityInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -89083,9 +86881,6 @@ export class CreateMJUserApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -89114,9 +86909,6 @@ export class UpdateMJUserApplicationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -89268,9 +87060,6 @@ export class CreateMJUserFavoriteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -89296,9 +87085,6 @@ export class UpdateMJUserFavoriteInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -89463,9 +87249,6 @@ export class CreateMJUserNotificationPreferenceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -89500,9 +87283,6 @@ export class UpdateMJUserNotificationPreferenceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -89707,9 +87487,6 @@ export class CreateMJUserNotificationTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -89762,9 +87539,6 @@ export class UpdateMJUserNotificationTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -89954,9 +87728,6 @@ export class CreateMJUserNotificationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -90000,9 +87771,6 @@ export class UpdateMJUserNotificationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -90184,9 +87952,6 @@ export class CreateMJUserRecordLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -90221,9 +87986,6 @@ export class UpdateMJUserRecordLogInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -90364,9 +88126,6 @@ export class CreateMJUserRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -90389,9 +88148,6 @@ export class UpdateMJUserRoleInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -90562,9 +88318,6 @@ export class CreateMJUserRoutineRecipientInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -90596,9 +88349,6 @@ export class UpdateMJUserRoutineRecipientInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -90805,9 +88555,6 @@ export class CreateMJUserRoutineRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -90857,9 +88604,6 @@ export class UpdateMJUserRoutineRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -91152,9 +88896,6 @@ export class CreateMJUserRoutineInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -91243,9 +88984,6 @@ export class UpdateMJUserRoutineInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -91388,9 +89126,6 @@ export class CreateMJUserSettingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -91416,9 +89151,6 @@ export class UpdateMJUserSettingInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -91599,9 +89331,6 @@ export class CreateMJUserViewCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -91633,9 +89362,6 @@ export class UpdateMJUserViewCategoryInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -91780,9 +89506,6 @@ export class CreateMJUserViewRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -91805,9 +89528,6 @@ export class UpdateMJUserViewRunDetailInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -91954,9 +89674,6 @@ export class CreateMJUserViewRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -91982,9 +89699,6 @@ export class UpdateMJUserViewRunInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -92258,9 +89972,6 @@ export class CreateMJUserViewInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -92340,9 +90051,6 @@ export class UpdateMJUserViewInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -92584,9 +90292,6 @@ export class CreateMJUserInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -92642,9 +90347,6 @@ export class UpdateMJUserInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -92817,9 +90519,6 @@ export class CreateMJVectorDatabaseInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -92854,9 +90553,6 @@ export class UpdateMJVectorDatabaseInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -93036,9 +90732,6 @@ export class CreateMJVectorIndexInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -93079,9 +90772,6 @@ export class UpdateMJVectorIndexInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -93254,9 +90944,6 @@ export class CreateMJVersionInstallationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -93297,9 +90984,6 @@ export class UpdateMJVersionInstallationInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -93458,9 +91142,6 @@ export class CreateMJVersionLabelItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -93489,9 +91170,6 @@ export class UpdateMJVersionLabelItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -93686,9 +91364,6 @@ export class CreateMJVersionLabelRestoreInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -93735,9 +91410,6 @@ export class UpdateMJVersionLabelRestoreInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -93958,9 +91630,6 @@ export class CreateMJVersionLabelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -94010,9 +91679,6 @@ export class UpdateMJVersionLabelInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -94190,9 +91856,6 @@ export class CreateMJViewTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -94236,9 +91899,6 @@ export class UpdateMJViewTypeInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -94439,9 +92099,6 @@ export class CreateMJWebSearchProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -94494,9 +92151,6 @@ export class UpdateMJWebSearchProviderInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -94669,9 +92323,6 @@ export class CreateMJWorkspaceItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -94709,9 +92360,6 @@ export class UpdateMJWorkspaceItemInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************
@@ -94860,9 +92508,6 @@ export class CreateMJWorkspaceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 
@@ -94891,9 +92536,6 @@ export class UpdateMJWorkspaceInput {
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
-
-    @Field(() => CloneContextInput, { nullable: true })
-    CloneContext___?: CloneContextInput;
 }
     
 //****************************************************************************

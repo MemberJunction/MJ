@@ -52,6 +52,10 @@ export class RecordDependencyResult {
   @Field(() => CompositeKeyOutputType)
   PrimaryKey: CompositeKey;
 
+  /** The same key under its pre-6.2 name, so older clients keep working. */
+  @Field(() => CompositeKeyOutputType, { deprecationReason: 'Use PrimaryKey. CompositeKey will be removed in a future release.' })
+  CompositeKey: CompositeKey;
+
   @Field(() => Boolean, { nullable: true })
   IsSoftLink?: boolean;
 
@@ -78,6 +82,7 @@ export class RecordDependencyResolver {
         RelatedEntityName: dep.RelatedEntityName,
         FieldName: dep.FieldName,
         PrimaryKey: dep.PrimaryKey,
+        CompositeKey: dep.PrimaryKey,
         IsSoftLink: dep.IsSoftLink,
         EntityIDFieldName: dep.EntityIDFieldName,
       }));

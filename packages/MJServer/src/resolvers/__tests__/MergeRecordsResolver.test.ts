@@ -52,8 +52,8 @@ describe('RecordDependencyResolver', () => {
     expect(result[0].IsSoftLink).toBe(true);
     expect(result[0].EntityIDFieldName).toBe('EntityID');
 
-    // Confirm deprecated CompositeKey field does not exist on the type
-    expect('CompositeKey' in result[0]).toBe(false);
+    // The pre-6.2 name stays as a deprecated alias for one release, so older clients keep working
+    expect(result[0].CompositeKey).toBe(mockDep.PrimaryKey);
   });
 
   it('handles hard foreign key dependencies with undefined soft-link flags', async () => {

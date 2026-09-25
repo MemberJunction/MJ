@@ -184,7 +184,6 @@ export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';
 export * from './generic/RestoreContextInput.js';
-export * from './generic/CloneContextInput.js';
 
 
 export * from './resolvers/GeoResolver.js';
