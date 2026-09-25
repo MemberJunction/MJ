@@ -530,6 +530,39 @@ describe('AnthropicLLM', () => {
             expect(result[2].content[0].cache_control).toBeUndefined();
         });
 
+        it('should keep the breakpoint before the volatile fragment when an assistant prefill follows it', () => {
+            const messages = [
+                { role: 'user' as const, content: 'User instruction' },
+                { role: 'assistant' as const, content: 'Assistant response' },
+                { role: 'user' as const, content: '<mj-runtime-state>\nDate: 2026-09-21\n</mj-runtime-state>', metadata: { volatileState: true } },
+                { role: 'assistant' as const, content: '```json' }
+            ];
+            const result = callMethod(messages, true);
+            // user -> assistant -> user fragment -> assistant prefill: no fillers needed
+            expect(result).toHaveLength(4);
+            expect(result[1].content).toEqual([
+                { type: 'text', text: 'Assistant response', cache_control: { type: 'ephemeral' } }
+            ]);
+            expect(result[2].content[0].cache_control).toBeUndefined();
+            expect(result[3].role).toBe('assistant');
+            expect(result[3].content).toEqual([{ type: 'text', text: '```json' }]);
+        });
+
+        it('should still insert the OK filler before the fragment when a prefill follows and the last real turn is a user turn', () => {
+            const messages = [
+                { role: 'user' as const, content: 'Initial user turn' },
+                { role: 'user' as const, content: '<mj-runtime-state>\nSome state\n</mj-runtime-state>', metadata: { volatileState: true } },
+                { role: 'assistant' as const, content: '{' }
+            ];
+            const result = callMethod(messages, true);
+            // user (cached) -> assistant OK -> user fragment -> assistant prefill
+            expect(result.map(m => m.role)).toEqual(['user', 'assistant', 'user', 'assistant']);
+            expect(result[0].content[0].cache_control).toEqual({ type: 'ephemeral' });
+            expect(result[1].content).toEqual([{ type: 'text', text: 'OK' }]);
+            expect(result[2].content[0].cache_control).toBeUndefined();
+            expect(result[3].content[0].cache_control).toBeUndefined();
+        });
+
         it('should not add cache_control when enableCaching is false even with volatile state fragment', () => {
             const messages = [
                 { role: 'user' as const, content: 'Initial user turn' },

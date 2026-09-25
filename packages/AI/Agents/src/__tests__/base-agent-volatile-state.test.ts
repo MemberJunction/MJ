@@ -123,13 +123,39 @@ describe('BaseAgent.buildVolatileStateMessage', () => {
         );
     });
 
-    it('template sync guard: emits trailing fragment when system prompt template has synced (no volatile blocks)', async () => {
-        templates.byId.set('tmpl-parent-synced', '# System Prompt\n\n## Runtime State\nPointer to trailing message.');
+    it('template sync guard: emits trailing fragment when system prompt template has synced (pointer present, no volatile blocks)', async () => {
+        templates.byId.set('tmpl-parent-synced', `# System Prompt\n\n## Runtime State\nDelivered in the FINAL message inside \`<${RUNTIME_STATE_TAG}>\` tags.`);
         const syncedSystemPrompt = { ID: 'parent-1', Name: 'Synced System Prompt', TemplateID: 'tmpl-parent-synced' } as unknown as MJAIPromptEntityExtended;
 
         const a = agentUnderTest();
         const { params, promptParams } = makeInputs(TRAILING);
         const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, syncedSystemPrompt);
+        expect(msg).not.toBeNull();
+        expect(msg!.metadata?.volatileState).toBe(true);
+    });
+
+    it('delivery gate: a system prompt with neither the pointer nor the old blocks (Harness, custom prompt) gets no fragment', async () => {
+        templates.byId.set('tmpl-harness', '# Harness Agent\n\nYou run tools through the harness. Permissions and payload rules apply.');
+        const harnessSystemPrompt = { ID: 'harness-1', Name: 'Harness System Prompt', TemplateID: 'tmpl-harness' } as unknown as MJAIPromptEntityExtended;
+
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, harnessSystemPrompt);
+        expect(msg).toBeNull();
+        expect(a.logStatus).toHaveBeenCalledWith(expect.stringContaining(`no <${RUNTIME_STATE_TAG}> pointer`), true, params);
+
+        // The custom-prompt path runs a child prompt AS the prompt (no Loop system prompt): same outcome
+        templates.byId.set('tmpl-custom', '# Custom\n\nAnswer in one line.');
+        const custom = makeInputs(TRAILING);
+        custom.promptParams.prompt = { ID: 'custom-1', Name: 'Custom', TemplateID: 'tmpl-custom' } as unknown as MJAIPromptEntityExtended;
+        expect(await a.buildVolatileStateMessage(custom.params, custom.promptParams, { step: 1 }, CHILD, AGENT_TYPE)).toBeNull();
+    });
+
+    it('delivery gate fails OPEN when there is no template text to inspect (lookup failure)', async () => {
+        const a = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        const unknownTemplate = { ID: 'x-1', Name: 'Missing', TemplateID: 'tmpl-does-not-exist' } as unknown as MJAIPromptEntityExtended;
+        const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, unknownTemplate);
         expect(msg).not.toBeNull();
         expect(msg!.metadata?.volatileState).toBe(true);
     });

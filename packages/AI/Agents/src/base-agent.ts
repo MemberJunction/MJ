@@ -115,7 +115,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams } from '@memberjunction/actions-base';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
+import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage, RUNTIME_STATE_TAG } from './runtime-state-fragment';
 import { ResolveSpecializationPlacement } from './volatile-child-prompt';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
@@ -4623,13 +4623,21 @@ export class BaseAgent {
         const data = promptParams.data ?? {};
         const agentTypePromptParams = data.__agentTypePromptParams as Record<string, unknown> | undefined;
 
-        // Guard: if the system prompt template still embeds volatile state blocks (e.g. on an environment
-        // where TemplateContent has not yet synced the new template), suppress the trailing fragment so
-        // the model never receives duplicate state.
+        // Delivery gate: the fragment is emitted only for a system prompt whose template points the model
+        // at it. See resolveRuntimeStateDelivery for the two ways a template can fail that test.
         const effectiveSystemPrompt = systemPrompt ?? (promptParams.prompt as MJAIPromptEntityExtended | undefined);
-        if (await this.systemPromptTemplateContainsVolatileState(effectiveSystemPrompt, params.contextUser)) {
+        const delivery = await this.resolveRuntimeStateDelivery(effectiveSystemPrompt, params.contextUser);
+        if (delivery === 'embedded') {
             this.logStatus(
                 '⚠️ System prompt template still contains volatile blocks (database template unsynced); skipping trailing runtime-state fragment to avoid duplicate state.',
+                true,
+                params
+            );
+            return null;
+        }
+        if (delivery === 'unsupported') {
+            this.logStatus(
+                `System prompt template has no <${RUNTIME_STATE_TAG}> pointer (not a Loop agent system prompt); skipping trailing runtime-state fragment.`,
                 true,
                 params
             );
@@ -4693,21 +4701,41 @@ export class BaseAgent {
     }
 
     /**
-     * Inspects the system prompt's unrendered template text for volatile state blocks
-     * (`## Current Date/Time`, `## Scratchpad State`, `## Current State`, or temporal/payload placeholders).
+     * Decides, from the system prompt's UNRENDERED template text, whether the trailing runtime-state
+     * fragment belongs on this request:
      *
-     * Returns true when the template still embeds volatile state — which indicates an unsynced
-     * database still running the legacy Arm A template. Under this condition, trailing state
-     * emission is suppressed to prevent the model from receiving duplicate state.
+     * - `'trailing'` — the template carries the `<mj-runtime-state>` pointer, so the model is told where
+     *   the state lives. The Loop agent system prompt.
+     * - `'embedded'` — the template still renders the state blocks itself (an environment whose
+     *   TemplateContent has not synced the new Loop template, or the Flow template, which embeds the
+     *   payload). Emitting the fragment would deliver the same state twice.
+     * - `'unsupported'` — the template has neither. The Harness system prompt, or a custom prompt run
+     *   without the Loop system prompt. The model would receive an unexplained block.
+     * - `'unknown'` — no template text to inspect (no TemplateID, or the lookup failed). The caller
+     *   fails OPEN here: a Loop agent losing its payload from the model's view is far worse than a
+     *   non-Loop agent receiving an unexplained fragment, and in practice every agent type's system
+     *   prompt has a template, so this arises only from a lookup failure.
      */
-    protected async systemPromptTemplateContainsVolatileState(
+    protected async resolveRuntimeStateDelivery(
         systemPrompt: MJAIPromptEntityExtended | undefined,
         contextUser: UserInfo
-    ): Promise<boolean> {
+    ): Promise<'trailing' | 'embedded' | 'unsupported' | 'unknown'> {
         const templateText = await this.loadPromptTemplateText(systemPrompt, contextUser);
-        if (!templateText) {
-            return false;
+        if (templateText === null) {
+            return 'unknown';
         }
+        if (this.templateTextEmbedsVolatileState(templateText)) {
+            return 'embedded';
+        }
+        return templateText.includes(`<${RUNTIME_STATE_TAG}>`) ? 'trailing' : 'unsupported';
+    }
+
+    /**
+     * True when unrendered template text still renders the volatile state blocks itself
+     * (`## Current Date/Time`, `## Scratchpad State`, `## Current State`, or the temporal / payload
+     * placeholders) — the legacy Loop layout, or any template that embeds the payload.
+     */
+    protected templateTextEmbedsVolatileState(templateText: string): boolean {
         return (
             templateText.includes('## Current Date/Time') ||
             templateText.includes('## Scratchpad State') ||

@@ -340,9 +340,6 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * Format messages for Anthropic API with caching support.
-     * Handles both text and multi-modal content (images).
-    /**
      * Checks if a message represents a trailing volatile runtime-state or agent-specialization fragment.
      */
     protected isTrailingStateFragment(message?: ChatMessage<{ volatileState?: boolean }>): boolean {
@@ -365,18 +362,37 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * Format messages for Anthropic API with caching support
+     * Index of the trailing runtime-state fragment in an outgoing request: the last message, or the
+     * one before it when an assistant prefill has been appended after it. Returns -1 when there is no
+     * trailing fragment, or when nothing precedes it to carry the cache breakpoint.
+     */
+    protected trailingStateFragmentIndex(messages: ChatMessage[]): number {
+        const last = messages.length - 1;
+        if (last >= 1 && this.isTrailingStateFragment(messages[last])) {
+            return last;
+        }
+        if (last >= 2 && messages[last].role === ChatMessageRole.assistant && this.isTrailingStateFragment(messages[last - 1])) {
+            return last - 1;
+        }
+        return -1;
+    }
+
+    /**
+     * Format messages for Anthropic API with caching support.
+     * Handles both text and multi-modal content (images).
      * @param messages Messages to format
      * @param enableCaching Whether to enable caching
      * @returns Formatted messages
      */
     protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
-        // When the final message is a trailing runtime state fragment, place the ephemeral
-        // cache breakpoint on the last real history message instead, so the next iteration's
-        // prefix still ends at a cached boundary.
-        if (enableCaching && messages.length >= 2 && this.isTrailingStateFragment(messages[messages.length - 1])) {
-            const head = this.formatMessagesWithCaching(messages.slice(0, -1), true);
-            const tail = this.formatMessagesWithCaching(messages.slice(-1), false);
+        // When the request ends with a trailing runtime state fragment (optionally followed by an
+        // assistant prefill), place the ephemeral cache breakpoint on the last real history message
+        // instead, so the next iteration's prefix still ends at a cached boundary. Otherwise the
+        // volatile fragment would sit inside the cached prefix and miss on every iteration.
+        const fragmentIndex = enableCaching ? this.trailingStateFragmentIndex(messages) : -1;
+        if (fragmentIndex >= 1) {
+            const head = this.formatMessagesWithCaching(messages.slice(0, fragmentIndex), true);
+            const tail = this.formatMessagesWithCaching(messages.slice(fragmentIndex), false);
             if (head[head.length - 1]?.role === 'user' && tail[0]?.role === 'user') {
                 head.push({
                     role: 'assistant',
