@@ -4539,18 +4539,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /**
    * `true` when the current user is allowed to create new shares on this
-   * conversation. Only the conversation's owner — or a user with an existing
-   * Owner-level grant — may do so. Matches the server-side gate in
-   * {@link MJResourcePermissionEntityExtended.callerMayGrantShare}, so the UI
-   * doesn't offer an action the save would refuse.
+   * conversation: the owner, or a user with an Owner-level grant. Uses the same
+   * rule as the sidebar's Share action.
    */
   public get CanShareConversation(): boolean {
     if (!this.Conversation || !this.CurrentUser) return false;
-    if (this.Conversation.UserID && this.Conversation.UserID.toLowerCase() === this.CurrentUser.ID.toLowerCase()) {
-      return true;
-    }
-    const info = this.engine.GetSharedByInfo(this.Conversation.ID);
-    return info?.Level === 'Owner';
+    return this.engine.CanShareConversation(this.Conversation, this.CurrentUser.ID);
   }
 
   /** @deprecated Use {@link CanShareConversation}. */
