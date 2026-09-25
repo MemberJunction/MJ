@@ -308,6 +308,8 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   }
 
   ngDoCheck(): void {
+    // Inputs and record state may have changed since the last pass: resolve the items afresh.
+    this._resolvedItems = null;
     if (this._formRef) {
       this.syncFromFormRef();
     }
@@ -684,6 +686,14 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * evaluated against the current Record and EditMode.
    */
   public get ResolvedToolbarItems(): ResolvedToolbarItem[] {
+    // Many template bindings read this per pass (five per More-menu row); resolve once per pass.
+    return (this._resolvedItems ??= this.resolveToolbarItems());
+  }
+
+  /** The resolved items for the current change-detection pass; cleared in ngDoCheck. */
+  private _resolvedItems: ResolvedToolbarItem[] | null = null;
+
+  private resolveToolbarItems(): ResolvedToolbarItem[] {
     const rawItems: FormToolbarItemConfig[] = [];
 
     // 1. Standard Built-in Items
@@ -1039,23 +1049,31 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     this.cdr.markForCheck();
   }
 
+  private static nextMenuId = 0;
+  /** Prefix for the More and View panels' ids, unique per toolbar, for the triggers' aria-controls. */
+  public readonly MenuIdPrefix = `mj-forms-toolbar-${++MjFormToolbarComponent.nextMenuId}`;
+
   public ToggleMoreMenu(): void {
     this.MoreMenuOpen = !this.MoreMenuOpen;
     this.ViewMenuOpen = false;
     this.cdr.markForCheck();
+    if (this.MoreMenuOpen) this.focusFirstIn(`#${this.MenuIdPrefix}-more`);
   }
 
   public ToggleViewMenu(): void {
     this.ViewMenuOpen = !this.ViewMenuOpen;
     this.MoreMenuOpen = false;
     this.cdr.markForCheck();
-    if (this.ViewMenuOpen) this.focusSectionSearch();
+    // The section search if there is one, otherwise the first control.
+    if (this.ViewMenuOpen) this.focusFirstIn(`#${this.MenuIdPrefix}-view`);
   }
 
-  /** Puts the cursor in the View menu's section search once the menu has rendered. */
-  private focusSectionSearch(): void {
+  /** Moves focus into a just-opened panel, once it has rendered, so keyboard users land in it. */
+  private focusFirstIn(panelSelector: string): void {
     setTimeout(() => {
-      (this.host.nativeElement.querySelector('.mj-forms-menu-search input') as HTMLInputElement | null)?.focus();
+      const panel = this.host.nativeElement.querySelector(panelSelector) as HTMLElement | null;
+      const first = panel?.querySelector('input, button:not([disabled])') as HTMLElement | null;
+      first?.focus();
     });
   }
 
@@ -1095,7 +1113,13 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   @HostListener('document:keydown.escape')
   OnEscape(): void {
+    // Closing a panel that holds focus returns focus to the button that opened it.
+    const open = this.MoreMenuOpen ? 'more' : this.ViewMenuOpen ? 'view' : null;
+    const focusInside = open !== null && this.host.nativeElement.contains(document.activeElement);
     this.CloseMenus();
+    if (open && focusInside) {
+      (this.host.nativeElement.querySelector(`[data-menu-trigger="${open}"]`) as HTMLElement | null)?.focus();
+    }
   }
 
   private readPins(): string[] | null {
