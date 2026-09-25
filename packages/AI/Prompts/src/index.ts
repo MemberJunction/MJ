@@ -1,4 +1,7 @@
 export { BaseModelRunner } from './BaseModelRunner';
+// Named by BaseModelRunner's protected extension points, so a subclass outside this package can
+// declare its overrides (the same reason FailoverConfiguration is exported).
+export type { ModelVendorCandidate, FailoverAttempt, ResolvedScalarInferenceParams } from './BaseModelRunner';
 export * from './AIPromptRunner';
 export * from './AIPromptTimeoutError';
 // The native tool-calling gate. Exported because the agent loop needs to reason
