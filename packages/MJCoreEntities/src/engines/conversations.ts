@@ -15,6 +15,7 @@ import {
     MJUserEntityType,
     MJProjectEntity
 } from "../generated/entity_subclasses";
+import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
 
@@ -688,31 +689,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // the newest one — see _conversationsLoadGeneration.
         const generation = ++this._conversationsLoadGeneration;
 
-        // Include conversations the user has been granted access to via
-        // `MJ: Resource Permissions`. ResourcePermissionEngine caches the full
-        // permission table; GetUserAvailableResources filters it to approved
-        // grants (direct + role-inherited) for this user + resource type.
-        await ResourcePermissionEngine.Instance.Config(false, contextUser);
-        const sharedPermissions = ResourcePermissionEngine.Instance
-            .GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
-        const sharedConversationIds = sharedPermissions.map((p) => p.ResourceRecordID);
+        const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const filter = this.buildVisibleConversationsFilter(
+            environmentId,
+            contextUser.ID,
+            sharedPermissions.map((p) => p.ResourceRecordID),
+            options
+        );
 
         const rv = new RunView();
-        const ownershipClause = `UserID='${contextUser.ID}'`;
-        const sharedClause =
-            sharedConversationIds.length > 0
-                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
-                : '';
-        // Default main-chat view shows Global + Both. App-scoped
-        // conversations live inside their owning Application's embedded
-        // surface and are filtered out here. Callers that want to surface
-        // them (e.g. an "Include app conversations" toggle) pass
-        // includeApplicationScoped=true to drop the scope predicate.
-        const scopeClause = options?.includeApplicationScoped
-            ? ''
-            : ` AND ApplicationScope IN ('Global', 'Both')`;
-        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
-
         const result = await rv.RunView<MJConversationEntity>(
             {
                 EntityName: 'MJ: Conversations',
@@ -767,6 +752,60 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // delayed) and after the early-return guard above; LoadProjects has its
         // own per-environment guard to avoid redundant reloads.
         await this.LoadProjects(environmentId, contextUser, forceRefresh);
+    }
+
+    /**
+     * Returns an `ExtraFilter` for `MJ: Conversations` that matches exactly the conversations
+     * {@link LoadConversations} shows the user: owned by the user or shared with them, not
+     * archived, and (unless `includeApplicationScoped`) Global or Both scope.
+     *
+     * Use it anywhere that reads conversations for display (search, pickers) so those reads
+     * cannot show more than the conversation list does. It is not capped, unlike the list load.
+     *
+     * @param environmentId - The environment to filter conversations by
+     * @param contextUser - The user whose conversations to match
+     * @param options - `includeApplicationScoped` also matches app-scoped conversations
+     */
+    public async GetVisibleConversationsFilter(
+        environmentId: string,
+        contextUser: UserInfo,
+        options?: { includeApplicationScoped?: boolean }
+    ): Promise<string> {
+        const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        return this.buildVisibleConversationsFilter(
+            environmentId,
+            contextUser.ID,
+            sharedPermissions.map((p) => p.ResourceRecordID),
+            options
+        );
+    }
+
+    /**
+     * Approved conversation grants (direct and role-inherited) for the user, from
+     * `MJ: Resource Permissions`. ResourcePermissionEngine caches the full permission table.
+     */
+    private async getSharedConversationPermissions(contextUser: UserInfo): Promise<MJResourcePermissionEntity[]> {
+        await ResourcePermissionEngine.Instance.Config(false, contextUser);
+        return ResourcePermissionEngine.Instance.GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
+    }
+
+    private buildVisibleConversationsFilter(
+        environmentId: string,
+        userId: string,
+        sharedConversationIds: string[],
+        options?: { includeApplicationScoped?: boolean }
+    ): string {
+        const ownershipClause = `UserID='${userId}'`;
+        const sharedClause =
+            sharedConversationIds.length > 0
+                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
+                : '';
+        // The main chat view shows Global and Both. App-scoped conversations live inside
+        // their owning Application's embedded surface.
+        const scopeClause = options?.includeApplicationScoped
+            ? ''
+            : ` AND ApplicationScope IN ('Global', 'Both')`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
     }
 
     /**

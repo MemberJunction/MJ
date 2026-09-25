@@ -4,7 +4,8 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ResolveChatSearchRoute } from './chat-search-routing.js';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult } from '@memberjunction/ng-conversations';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
@@ -53,7 +54,8 @@ import { Subject, takeUntil } from 'rxjs';
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
                 (unpinSidebarRequested)="unpinSidebar()"
-                (refreshRequested)="onRefreshRequested()">
+                (refreshRequested)="onRefreshRequested()"
+                (SearchEscalated)="OpenSearch($event)">
               </mj-conversation-list>
               <!-- Routines — pinned at the very bottom of the sidebar. Gated inside the
                    section component by Read permission on 'MJ: User Routines'. -->
@@ -109,6 +111,18 @@ import { Subject, takeUntil } from 'rxjs';
       </div>
     }
     
+    <!-- Cross-entity search panel (conversations / messages / artifacts / collections / tasks) -->
+    @if (CurrentUser) {
+      <mj-search-panel
+        [InitialQuery]="SearchSeedQuery"
+        [IsOpen]="IsSearchPanelOpen"
+        [EnvironmentId]="EnvironmentId"
+        [CurrentUser]="CurrentUser"
+        (close)="CloseSearch()"
+        (ResultSelected)="OnSearchResultSelected($event)">
+      </mj-search-panel>
+    }
+
     <!-- Toast notifications container -->
     <mj-toast></mj-toast>
     `,
@@ -1410,6 +1424,54 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   OnOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  // ========================================
+  // CROSS-ENTITY SEARCH PANEL
+  // ========================================
+
+  /** Whether the cross-entity search panel is open. */
+  public IsSearchPanelOpen = false;
+
+  /** Term the panel opens with, handed over from the conversation list's own filter. */
+  public SearchSeedQuery = '';
+
+  /**
+   * Open the cross-entity search panel, carrying over the term the user had already typed
+   * into the conversation list's filter so they do not retype it.
+   */
+  OpenSearch(query: string = ''): void {
+    this.SearchSeedQuery = query;
+    this.IsSearchPanelOpen = true;
+  }
+
+  /** Close the cross-entity search panel. */
+  CloseSearch(): void {
+    this.IsSearchPanelOpen = false;
+  }
+
+  /**
+   * Route a search result to the right Explorer surface.
+   *
+   * Explorer renders each chat surface as a separate resource, so results for another
+   * surface go through NavigationService. Conversations and messages resolve to a
+   * conversation, which this component owns, so they are selected in place.
+   */
+  OnSearchResultSelected(result: SearchResult): void {
+    this.CloseSearch();
+
+    const route = ResolveChatSearchRoute(result);
+    switch (route?.Kind) {
+      case 'conversation':
+        void this.OnConversationSelected(route.ConversationId);
+        break;
+      case 'artifact':
+        this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
+        break;
+      case 'nav-item':
+        void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        break;
+    }
   }
 
   /** @deprecated Use {@link OnOpenEntityRecord}. */
