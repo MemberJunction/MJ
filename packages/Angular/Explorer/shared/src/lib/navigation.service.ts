@@ -1463,8 +1463,14 @@ export class NavigationService implements OnDestroy {
 
     // Resource type and entity names can vary by casing/metadata spelling; class names,
     // record IDs, and nav labels are canonical tab identity fields and stay exact-match.
+    //
+    // The driver class is compared only when the TAB records one. Record tabs never
+    // persist it, yet the tab container injects it into the component's
+    // Data.Configuration — where the guard is built — so requiring a match would drop
+    // every record resource's writes (MJ#4755). Identity is still held by resource
+    // type, record, nav item and entity; a tab that records a DIFFERENT class still fails.
     return matches(guard.resourceType, config['resourceType'], true) &&
-      matches(guard.driverClass, currentDriverClass) &&
+      (currentDriverClass == null || matches(guard.driverClass, currentDriverClass)) &&
       matches(guard.recordId, currentRecordId) &&
       matches(guard.navItemName, config['navItemName']) &&
       matches(guard.entity, currentEntity, true);

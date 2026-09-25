@@ -518,6 +518,48 @@ describe('UpdateTabQueryParams guard', () => {
     expect(updateTabConfiguration).toHaveBeenCalledTimes(1);
   });
 
+  // A Records tab's persisted config never records a driver class, but the tab
+  // container injects `resourceTypeDriverClass: 'RecordResource'` into the
+  // COMPONENT's Data.Configuration — which is where BaseResourceComponent builds
+  // its guard. Treating that as a mismatch dropped every record resource's
+  // UpdateQueryParams (MJ#4755: the standard-form strip never reached the URL).
+  const recordsTab = (configuration: Record<string, unknown> = {}): TestTab => ({
+    id: 'tab-1',
+    resourceRecordId: '499EB',
+    configuration: { resourceType: 'Records', recordId: '499EB', Entity: 'Caliber: Assessments', ...configuration }
+  });
+  const recordResourceGuard: TabQueryParamUpdateGuard = {
+    resourceType: 'Records',
+    driverClass: 'RecordResource',
+    recordId: '499EB',
+    entity: 'Caliber: Assessments'
+  };
+
+  it('applies writes when the tab records no driver class (identity still held by type, record and entity)', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab());
+
+    const updated = service.UpdateTabQueryParams('tab-1', { form: 'standard' }, recordResourceGuard);
+
+    expect(updated).toBe(true);
+    expect(updateTabConfiguration).toHaveBeenCalledWith('tab-1', { queryParams: { form: 'standard' } });
+  });
+
+  it('still drops writes when the tab records a DIFFERENT driver class', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab({ driverClass: 'Other' }));
+
+    expect(service.UpdateTabQueryParams('tab-1', { form: 'standard' }, recordResourceGuard)).toBe(false);
+    expect(updateTabConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('still drops writes when the record differs, even without a recorded driver class', () => {
+    const { service, updateTabConfiguration } = createService(recordsTab());
+
+    const updated = service.UpdateTabQueryParams('tab-1', { form: 'standard' }, { ...recordResourceGuard, recordId: 'OTHER' });
+
+    expect(updated).toBe(false);
+    expect(updateTabConfiguration).not.toHaveBeenCalled();
+  });
+
   it('quietly ignores writes to closed or removed tabs', () => {
     const { service, updateTabConfiguration } = createService(null);
 
