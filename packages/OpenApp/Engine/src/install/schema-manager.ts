@@ -305,32 +305,19 @@ export async function CreateAppSchema(
 
     const coreSchema = options.CoreSchema ?? '__mj';
     const owner = await ResolveCoreSchemaOwner(coreSchema, provider);
-    if (owner.CanAssign) {
-      // The owner name comes from the catalog, not from us, so it may contain `]`. The SQL Server
-      // dialect's QuoteIdentifier wraps in brackets WITHOUT doubling an embedded `]` (unlike the PG
-      // dialect, which doubles `"`), so double it here, on the SQL-Server-only path, before quoting.
-      const escapedOwner = owner.OwnerName.replace(/]/g, ']]');
-      await provider.ExecuteSQL(
-        `CREATE SCHEMA ${quotedSchema} AUTHORIZATION ${provider.Dialect.QuoteIdentifier(escapedOwner)}`
-      );
-      return { Success: true };
+    if ('Reason' in owner) {
+      await provider.ExecuteSQL(`CREATE SCHEMA ${quotedSchema}`);
+      return { Success: true, Warning: BuildOwnerFallbackWarning(schemaName, coreSchema, owner) };
     }
 
-    await provider.ExecuteSQL(`CREATE SCHEMA ${quotedSchema}`);
-    const ownerLabel = owner.OwnerName ? `'${owner.OwnerName}'` : `the owner of ${coreSchema}`;
-    const grantee = owner.OwnerName ?? `<owner of ${coreSchema}>`;
-    return {
-      Success: true,
-      Warning:
-        `Schema '${schemaName}' was created owned by the installing login, not ${ownerLabel} ` +
-        `(the owner of core schema '${coreSchema}'), because the installing login cannot both assign that owner ` +
-        `and grant on the schema's objects afterwards (that needs IMPERSONATE on the owner and CONTROL on the database). ` +
-        `SQL Server ownership chaining to '${coreSchema}' will not apply, so app views reading core tables ` +
-        `need explicit SELECT grants on those tables for every role that reads the views. ` +
-        `Remedy: run the install as a member of db_owner (which may both assign '${grantee}' as owner and ` +
-        `grant on the schema's objects afterwards) and reinstall, or see the Open App README section ` +
-        `"Schema ownership on SQL Server".`
-    };
+    // The owner name comes from the catalog, not from us, so it may contain `]`. The SQL Server
+    // dialect's QuoteIdentifier wraps in brackets WITHOUT doubling an embedded `]` (unlike the PG
+    // dialect, which doubles `"`), so double it here, on the SQL-Server-only path, before quoting.
+    const escapedOwner = owner.OwnerName.replace(/]/g, ']]');
+    await provider.ExecuteSQL(
+      `CREATE SCHEMA ${quotedSchema} AUTHORIZATION ${provider.Dialect.QuoteIdentifier(escapedOwner)}`
+    );
+    return { Success: true };
   }
   catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -341,10 +328,47 @@ export async function CreateAppSchema(
   }
 }
 
-/** Result of {@link ResolveCoreSchemaOwner}: the owner is only assignable when it is known. */
+/**
+ * Result of {@link ResolveCoreSchemaOwner}. When the owner cannot be assigned, `Reason` says why,
+ * because the two causes need different remedies: a missing/invisible core schema is a
+ * configuration or visibility problem, while a permission gap is fixed by installing as db_owner.
+ */
 type CoreSchemaOwner =
   | { CanAssign: true; OwnerName: string }
-  | { CanAssign: false; OwnerName: string | null };
+  | { CanAssign: false; Reason: 'CoreSchemaNotFound' }
+  | { CanAssign: false; Reason: 'MissingPermission'; OwnerName: string };
+
+/** The operator-facing Warning for {@link CreateAppSchema}'s installer-owned fallback, per cause. */
+function BuildOwnerFallbackWarning(
+  schemaName: string,
+  coreSchema: string,
+  owner: Extract<CoreSchemaOwner, { CanAssign: false }>
+): string {
+  const consequence =
+    `SQL Server ownership chaining to '${coreSchema}' will not apply, so app views reading core tables ` +
+    `need explicit SELECT grants on those tables for every role that reads the views. `;
+  if (owner.Reason === 'CoreSchemaNotFound') {
+    return (
+      `Schema '${schemaName}' was created owned by the installing login because core schema '${coreSchema}' ` +
+      `was not found or is not visible to the installing login, so its owner could not be determined. ` +
+      consequence +
+      `Remedy: check that the configured MJ core schema ('${coreSchema}') is correct and visible to the ` +
+      `installing login, then reinstall, or see the Open App README section "Schema ownership on SQL Server".`
+    );
+  }
+  return (
+    `Schema '${schemaName}' was created owned by the installing login, not '${owner.OwnerName}' ` +
+    `(the owner of core schema '${coreSchema}'), because the installing login cannot both assign that owner ` +
+    `and grant on the schema's objects afterwards (that needs IMPERSONATE on the owner and CONTROL on the database). ` +
+    consequence +
+    `Remedy: remove the app (without --keep-data, which keeps this schema and makes the next install ` +
+    `reuse it as-is) and reinstall as a member of db_owner, which may both assign '${owner.OwnerName}' as ` +
+    `owner and grant on the schema's objects afterwards. To keep the data instead, run ` +
+    `ALTER AUTHORIZATION ON SCHEMA::[${schemaName.replace(/]/g, ']]')}] TO [${owner.OwnerName.replace(/]/g, ']]')}] ` +
+    `as db_owner after scripting out the schema's grants, because it drops them — see the Open App ` +
+    `README section "Schema ownership on SQL Server".`
+  );
+}
 
 /**
  * SQL Server only. Reads who owns `coreSchema` and whether the executing principal may make
@@ -363,8 +387,9 @@ type CoreSchemaOwner =
  * CREATE and catching Msg 15151: that error ("Cannot find the user … or you do not have
  * permission") is the same one a genuinely missing user raises, so catching it would conflate a
  * permission gap with a real fault. The probe was verified to predict the CREATE's outcome for
- * db_owner, sysadmin and a db_ddladmin-only login. No row (core schema invisible) or a NULL owner
- * both mean "cannot assign".
+ * db_owner, sysadmin and a db_ddladmin-only login. No row (core schema missing or invisible) or a
+ * NULL owner is `CoreSchemaNotFound` — the permissions were never measured, so it must not be
+ * reported as a permission gap.
  */
 async function ResolveCoreSchemaOwner(
   coreSchema: string,
@@ -372,10 +397,11 @@ async function ResolveCoreSchemaOwner(
 ): Promise<CoreSchemaOwner> {
   const rows = await provider.ExecuteSQL<{
     OwnerName: string | null;
+    CurrentUser: string | null;
     CanImpersonateOwner: number | null;
     CanControlDatabase: number | null;
   }>(
-    `SELECT USER_NAME(s.principal_id) AS OwnerName, ` +
+    `SELECT USER_NAME(s.principal_id) AS OwnerName, USER_NAME() AS CurrentUser, ` +
     // QUOTENAME: HAS_PERMS_BY_NAME parses the securable as an identifier, so a raw owner name
     // containing `.`, `[` or `]` returns 0/NULL even for db_owner (verified on SQL Server 2022).
     `HAS_PERMS_BY_NAME(QUOTENAME(USER_NAME(s.principal_id)), 'USER', 'IMPERSONATE') AS CanImpersonateOwner, ` +
@@ -383,10 +409,19 @@ async function ResolveCoreSchemaOwner(
     `FROM sys.schemas s WHERE s.name = '${EscapeSQLString(coreSchema)}'`
   );
   const row = rows[0];
-  if (row?.OwnerName && row.CanImpersonateOwner === 1 && row.CanControlDatabase === 1) {
+  if (!row?.OwnerName) {
+    return { CanAssign: false, Reason: 'CoreSchemaNotFound' };
+  }
+  // The installer already owns the core schema (e.g. the least-privilege login that ran MJ's
+  // migrations): naming itself needs no IMPERSONATE, and its migrations keep owning their objects,
+  // so CONTROL on the database is not needed either (verified on SQL Server 2022, db_ddladmin).
+  if (row.OwnerName === row.CurrentUser) {
     return { CanAssign: true, OwnerName: row.OwnerName };
   }
-  return { CanAssign: false, OwnerName: row?.OwnerName ?? null };
+  if (row.CanImpersonateOwner === 1 && row.CanControlDatabase === 1) {
+    return { CanAssign: true, OwnerName: row.OwnerName };
+  }
+  return { CanAssign: false, Reason: 'MissingPermission', OwnerName: row.OwnerName };
 }
 
 /**

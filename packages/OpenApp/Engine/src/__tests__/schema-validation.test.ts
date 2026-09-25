@@ -358,6 +358,11 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
         expect(result.Warning).toContain('bcsaas');
         expect(result.Warning).toContain('dbo');
         expect(result.Warning).toContain('__mj');
+        // A reinstall only re-creates the schema if it was dropped: after `mj app remove --keep-data`
+        // the install adopts the existing schema and never revisits its owner, so the warning must
+        // name the data-preserving remedy too.
+        expect(result.Warning).toMatch(/--keep-data/);
+        expect(result.Warning).toMatch(/ALTER AUTHORIZATION ON SCHEMA::\[bcsaas\] TO \[dbo\]/);
     });
 
     it('falls back when the installer may impersonate the owner but lacks CONTROL on the database', async () => {
@@ -383,15 +388,33 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
         expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA [bcsaas]');
         expect(result.Warning).toBeDefined();
         expect(result.Warning).toMatch(/ownership chaining/);
-        expect(result.Warning).toContain('the owner of __mj');
+        // The probe never measured the installer's permissions here, so the warning must name the
+        // real cause (core schema not found) rather than blame IMPERSONATE/CONTROL — a db_owner
+        // installer with a mistyped core schema would otherwise be told to become db_owner.
+        expect(result.Warning).toMatch(/core schema '__mj' was not found/);
+        expect(result.Warning).not.toMatch(/IMPERSONATE|CONTROL|db_owner/);
     });
 
-    it('falls back with a warning when the owner name comes back NULL', async () => {
+    it('falls back with a not-found warning when the owner name comes back NULL', async () => {
         const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: null, CanImpersonateOwner: null, CanControlDatabase: null }]]);
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
         expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA [bcsaas]');
-        expect(result.Warning).toBeDefined();
+        expect(result.Warning).toMatch(/core schema '__mj' was not found/);
+        expect(result.Warning).not.toMatch(/IMPERSONATE|CONTROL|db_owner/);
+    });
+
+    it('assigns the owner without a warning when the installer already owns the core schema', async () => {
+        // MJ's baseline creates __mj with a plain CREATE SCHEMA, so a least-privilege db_ddladmin
+        // login that ran the migrations owns __mj. It lacks CONTROL on the database, but naming
+        // itself in AUTHORIZATION needs no extra permission (verified on SQL Server 2022) and its
+        // migrations still own their objects, so chaining works and there is nothing to warn about.
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'mj_codegen', CurrentUser: 'mj_codegen', CanImpersonateOwner: 1, CanControlDatabase: 0 }]]);
+        const result = await CreateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+        expect(result.Warning).toBeUndefined();
+        expect(executeSql.mock.calls[1][0] as string).toContain('USER_NAME() AS CurrentUser');
+        expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA [bcsaas] AUTHORIZATION [mj_codegen]');
     });
 
     it('passes the owner name to HAS_PERMS_BY_NAME as a quoted identifier', async () => {
