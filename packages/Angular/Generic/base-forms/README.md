@@ -96,8 +96,9 @@ a `?form=standard` deep link, back/forward and tab re-focus all reach the
 mounted record through `OnQueryParamsChanged`, which switches via
 `SwitchFormMode` (so the unsaved-work guard still applies; a refused switch
 writes the on-screen mode back to the URL). A strip switch writes the param
-back, so the URL always matches the form on screen, and a record URL without
-`form` means the default form.
+back, so the URL records the requested mode, and a record URL without `form`
+means the default form. (When the entity has no standard form, the host falls
+back to the default form even if `form=standard` is requested.)
 
 ## Related docs
 
