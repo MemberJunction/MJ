@@ -464,6 +464,8 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
 
     const mockMetadata: IMetadataProvider = {
         Authorizations: GrantedCloneAuthorizations(),
+        SupportsEntityTransactions: true,
+        BeginEntityTransaction: async () => ({ Commit: async () => {}, Rollback: async () => {} }),
         Entities: Object.values(mockEntities),
         EntityByName: (name: string) => mockEntities[name] || null,
         EntityByID: (id: string) => Object.values(mockEntities).find((e) => e.ID === id) || null,

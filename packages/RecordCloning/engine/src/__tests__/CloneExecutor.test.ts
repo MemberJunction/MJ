@@ -303,6 +303,66 @@ describe('CloneExecutor', () => {
         expect(note?.CloneContext?.SourceRecordID).toBe('n-1');
     });
 
+    it('rolls the whole clone back when a later row fails, and commits nothing', async () => {
+        const noteInfo = {
+            ID: 'ent-note', Name: 'Notes', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
+            Fields: [{ Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier' }, { Name: 'ParentID', IsPrimaryKey: false, Type: 'uniqueidentifier' }],
+            RelatedEntities: [],
+        } as unknown as EntityInfo;
+        const commit = vi.fn(async () => {});
+        const rollback = vi.fn(async () => {});
+        const declare = vi.spyOn(BaseEntity.prototype, 'DeclareRelatedRecordsDynamic').mockImplementation(() => {
+            throw new Error('no dynamic collections');
+        });
+        let noteSaves = 0;
+        const provider = {
+            ...mockMetadataProvider,
+            BeginEntityTransaction: async () => ({ Commit: commit, Rollback: rollback }),
+            EntityByName: (n: string) => (n === 'Notes' ? noteInfo : n === 'ParentEntity' ? (parentEntityInfo as EntityInfo) : null),
+            GetEntityObject: async <T extends BaseEntity>(n: string): Promise<T> => {
+                const ent = new MockEntity((n === 'Notes' ? noteInfo : parentEntityInfo) as EntityInfo, mockDataProvider);
+                // The second note fails, after the root and the first note were written.
+                vi.spyOn(ent, 'Save').mockImplementation(async () => (n === 'Notes' && ++noteSaves === 2 ? false : (savedEntities.push(ent), true)));
+                return ent as unknown as T;
+            },
+        } as unknown as IMetadataProvider;
+        const nodes = [
+            { NodeKey: 'root', EntityName: 'ParentEntity', SourceKey: 'src-1', TargetKey: 'tgt-1', Action: 'Create' as const, Depth: 0, Route: 'RootSave' as const, FieldChanges: [] },
+            { NodeKey: 'n1', EntityName: 'Notes', SourceKey: 'n-1', TargetKey: 'n-11', Action: 'Create' as const, Depth: 1, Route: 'Collection' as const, FieldChanges: [] },
+            { NodeKey: 'n2', EntityName: 'Notes', SourceKey: 'n-2', TargetKey: 'n-12', Action: 'Create' as const, Depth: 1, Route: 'Collection' as const, FieldChanges: [] },
+        ];
+        const plan = {
+            RootEntityName: 'ParentEntity', RootSourceKey: 'src-1', RootTargetKey: 'tgt-1', Blocked: false, Warnings: [], Nodes: nodes,
+            Edges: [
+                { FromKey: 'root', ToKey: 'n1', JoinField: 'ParentID', Policy: 'Deep' },
+                { FromKey: 'root', ToKey: 'n2', JoinField: 'ParentID', Policy: 'Deep' },
+            ],
+            Excluded: [],
+        } as unknown as ClonePlan;
+        plan.PlanHash = ComputeClonePlanHash(plan);
+
+        const result = await new CloneExecutor({ Provider: provider }).Execute(plan, mockUser);
+        declare.mockRestore();
+
+        expect(result.ResultCode).toBe('EXECUTION_ERROR');
+        expect(rollback).toHaveBeenCalledOnce();
+        expect(commit).not.toHaveBeenCalled();
+        expect(savedEntities.length).toBeGreaterThanOrEqual(2); // root and first note were written before the failure
+    });
+
+    it('refuses to run on a provider without transactions rather than clone part of the graph', async () => {
+        const provider = { ...mockMetadataProvider, SupportsEntityTransactions: false } as unknown as IMetadataProvider;
+        const nodes = [{ NodeKey: 'root', EntityName: 'ParentEntity', SourceKey: 'src-1', TargetKey: 'tgt-1', Action: 'Create' as const, Depth: 0, Route: 'RootSave' as const, FieldChanges: [] }];
+        const plan = { RootEntityName: 'ParentEntity', RootSourceKey: 'src-1', Blocked: false, Warnings: [], Nodes: nodes, Edges: [], Excluded: [] } as unknown as ClonePlan;
+        plan.PlanHash = ComputeClonePlanHash(plan);
+
+        const result = await new CloneExecutor({ Provider: provider }).Execute(plan, mockUser);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('transaction');
+        expect(savedEntities).toHaveLength(0);
+    });
+
     it('suppresses Entity Actions and AI Actions on clone saves unless the plan fires them', async () => {
         const run = async (effective?: Record<string, string>) => {
             savedEntities = [];

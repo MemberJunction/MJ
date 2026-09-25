@@ -112,16 +112,23 @@ export class CloneExecutor {
             };
         }
 
+        // A clone is all or nothing (plan §6): refuse rather than run it without a transaction.
+        const transProvider = md as unknown as {
+            SupportsEntityTransactions?: boolean;
+            BeginEntityTransaction?(): Promise<import('@memberjunction/core').EntityTransactionScope>;
+        };
+        if (transProvider.SupportsEntityTransactions !== true || typeof transProvider.BeginEntityTransaction !== 'function') {
+            const message = 'This provider cannot run the clone in a transaction, so it was not started (a partial clone cannot be undone).';
+            await this.WriteRefusalLog(plan, contextUser, message);
+            return { Success: false, ResultCode: 'EXECUTION_ERROR', RootRecordKey: plan.RootTargetKey, RecordsCloned: 0, Warnings: plan.Warnings, ErrorMessage: message };
+        }
+
         const cloneLogId = GenerateUUID();
         const startedAt = new Date();
         const saveOptions = CloneExecutor.saveOptionsFor(plan);
         const materializer = new CloneMaterializer(md);
 
         try {
-            const transProvider = md as unknown as {
-                SupportsEntityTransactions?: boolean;
-                BeginEntityTransaction?(): Promise<import('@memberjunction/core').EntityTransactionScope>;
-            };
             return await RunInEntityTransaction(transProvider, async () => {
                 // 3. Materialize in-memory graph
                 const {

@@ -208,6 +208,23 @@ describe('RecordCloneOperationsHandler', () => {
             expect(res.ResultCode).toBe('BLOCKED');
         });
 
+        it('refuses an unauthorized user end to end, with the real planner, before anything is written', async () => {
+            // No planner mock: the real planner resolves the authorization and blocks the plan.
+            vi.spyOn(RunView, 'FromMetadataProvider').mockReturnValue({
+                RunView: async () => ({ Success: true, Results: [{ ID: 'src-1' }] }),
+            } as unknown as RunView);
+            const exec = vi.spyOn(CloneExecutor.prototype, 'Execute');
+            const denied = new RecordCloneOperationsHandler(providerWith(false));
+
+            const res = await denied.Execute({ EntityName: 'ParentEntity', SourceRecordKey: key }, mockUser);
+
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('FORBIDDEN');
+            expect(res.ErrorMessage).toContain('Clone Records');
+            expect(res.Created).toEqual([]);
+            expect(exec).not.toHaveBeenCalled();
+        });
+
         it('refuses a blocked plan with FORBIDDEN when an authorization caused it', async () => {
             vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(
                 enginePlan({ Blocked: true, Warnings: [{ Code: 'FORBIDDEN', Severity: 'Error', Message: 'needs auth' }] }) as never
