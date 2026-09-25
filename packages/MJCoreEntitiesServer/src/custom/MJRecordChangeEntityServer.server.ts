@@ -15,6 +15,8 @@ import { MJRecordChangeEntity } from '@memberjunction/core-entities';
  * An update on a Record Change record is permitted ONLY when:
  * 1. The only dirty field being updated is `Comments`.
  * 2. The user holds the `Record Changes: Annotate` authorization (evaluated with ancestors).
+ * 3. The entity's own Update permission allows it, as for any other entity. The authorization
+ *    narrows who may annotate; it doesn't replace the role permission.
  *
  * Any other update is strictly forbidden to protect audit trail integrity.
  */
@@ -56,8 +58,6 @@ export class MJRecordChangeEntityServer extends MJRecordChangeEntity {
                 }
                 return false;
             }
-
-            return true;
         }
 
         return super.CheckPermissions(type, throwError);

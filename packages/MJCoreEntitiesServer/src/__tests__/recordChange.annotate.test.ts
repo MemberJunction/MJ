@@ -47,8 +47,11 @@ vi.mock('@memberjunction/core-entities', () => {
             throw new Error(`Permission denied for ${type}`);
         }
 
+        /** The role-based Update check the subclass must still pass. */
+        public static RoleAllowsUpdate = true;
         public CheckPermissions(type: unknown, throwError: boolean): boolean {
-            return true;
+            if (!StubRecordChangeEntity.RoleAllowsUpdate && throwError) throw new Error('Role may not update');
+            return StubRecordChangeEntity.RoleAllowsUpdate;
         }
     }
 
@@ -89,6 +92,19 @@ describe('MJRecordChangeEntityServer.CheckPermissions', () => {
 
         const allowed = entity.CheckPermissions(EntityPermissionType.Update, false);
         expect(allowed).toBe(true);
+    });
+
+    it('still requires the role\'s Update permission from an Annotate holder', async () => {
+        entity.Fields = [{ Name: 'Comments', Dirty: true }];
+        annotateAuthAllowed = true;
+        const { MJRecordChangeEntity } = await import('@memberjunction/core-entities');
+        const stub = MJRecordChangeEntity as unknown as { RoleAllowsUpdate: boolean };
+        stub.RoleAllowsUpdate = false;
+        try {
+            expect(entity.CheckPermissions(EntityPermissionType.Update, false)).toBe(false);
+        } finally {
+            stub.RoleAllowsUpdate = true;
+        }
     });
 
     it('refuses update when Comments is dirty but user lacks Record Changes: Annotate', () => {
