@@ -104,18 +104,6 @@ export interface FormToolbarConfig {
   /** Show the "Manage Sections" button (section manager drawer). Default: true */
   ShowSectionManager: boolean;
 
-  /**
-   * How many pinnable actions a user may pin as toolbar buttons; the rest are in the More menu.
-   * The same for every user and screen width. Default: 3.
-   */
-  MaxPinnedActions?: number;
-
-  /**
-   * Pinnable actions shown as buttons for a user who has not chosen their own pins yet.
-   * Default: `['favorite', 'history']`.
-   */
-  DefaultPinnedActions?: string[];
-
   // ---- Behavior ----
 
   /**
