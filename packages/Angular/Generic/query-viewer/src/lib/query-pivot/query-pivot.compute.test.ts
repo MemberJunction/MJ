@@ -24,6 +24,13 @@ describe('query-pivot.compute', () => {
             expect(FormatMeasureValue(10, 'currency')).toBe('$10.00');
         });
 
+        it('shows a real sub-cent amount as under a cent, never as $0.00', () => {
+            expect(FormatMeasureValue(0.004, 'currency')).toBe('<$0.01');
+            expect(FormatMeasureValue(0.004, 'currency', 'EUR')).toBe('<€0.01');
+            expect(FormatMeasureValue(0.005, 'currency')).toBe('$0.01');
+            expect(FormatMeasureValue(0, 'currency')).toBe('$0.00');
+        });
+
         it('formats numbers with commas and appropriate decimal places', () => {
             expect(FormatMeasureValue(1000, 'number')).toBe('1,000');
             expect(FormatMeasureValue(1234.567, 'number')).toBe('1,234.57');

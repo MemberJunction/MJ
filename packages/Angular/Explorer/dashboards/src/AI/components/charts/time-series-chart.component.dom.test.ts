@@ -52,6 +52,17 @@ describe('TimeSeriesChartComponent (DOM)', () => {
     expect(query(fixture, '.chart-legend')).toBeNull();
   });
 
+  it('sizes the shared count axis to the series still shown, so hiding Tokens rescales Executions', () => {
+    const fixture = render({ data: [trend({ executions: 120, tokens: 1_000_000 })] });
+    const chart = fixture.componentInstance as unknown as {
+      createMetricScales(): Record<string, { domain(): number[] }>;
+      ToggleMetric(metric: string): void;
+    };
+    expect(chart.createMetricScales()['executions'].domain()[1]).toBeGreaterThanOrEqual(1_000_000);
+    chart.ToggleMetric('tokens');
+    expect(chart.createMetricScales()['executions'].domain()[1]).toBeLessThan(1_000);
+  });
+
   it('marks a metric legend item disabled after it is toggled off via click', () => {
     const fixture = render({ title: 'T' });
     (queryAll(fixture, '.legend-item')[0] as HTMLElement).click();

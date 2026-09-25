@@ -47,12 +47,18 @@ export function FormatMeasureValue(value: number | null | undefined, format: Piv
  */
 function formatCurrencyAmount(value: number, currencyCode: string): string {
     try {
-        return new Intl.NumberFormat('en-US', {
+        const format = new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: currencyCode,
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
-        }).format(value);
+        });
+        // A real but sub-cent amount is not "$0.00": that reads as free, and free is what an
+        // unpriced value (rendered '—') is easily mistaken for.
+        if (value !== 0 && Math.abs(value) < 0.005) {
+            return `${value < 0 ? '>' : '<'}${format.format(value < 0 ? -0.01 : 0.01)}`;
+        }
+        return format.format(value);
     } catch {
         return `${value.toFixed(2)} ${currencyCode}`;
     }

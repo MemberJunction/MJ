@@ -20,7 +20,8 @@ export interface TrendData {
   executions: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   cost: number | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   tokens: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
-  avgTime: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Null when the bucket has no measured runs: no runs means no latency, not a latency of 0. */
+  avgTime: number | null;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   errors: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
@@ -460,7 +461,9 @@ export function ComputeTrends(rows: AIUsageHourlyRow[], start: Date, end: Date, 
       executions,
       cost: ComputeTotalCost(bucketRows, costCurrency),
       tokens: ComputeTotalTokens(bucketRows),
-      avgTime: ComputeAverageExecutionTime(bucketRows),
+      avgTime: bucketRows.some(r => typeof r.LatencyP50 === 'number' && (r.Runs ?? 0) > 0)
+        ? ComputeAverageExecutionTime(bucketRows)
+        : null,
       errors
     };
   });

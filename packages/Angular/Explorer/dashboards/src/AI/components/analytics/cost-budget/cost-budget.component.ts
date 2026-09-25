@@ -858,9 +858,10 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         const prevTotalCost = ComputeTotalCost(this.prevDailyRows, this.costCurrency);
         const currentTotalCost = ComputeTotalCost(this.dailyRows, this.costCurrency);
 
-        // Project monthly cost based on current daily average
-        const daysIntoMonth = Math.max(1, now.getDate());
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        // Project monthly cost from the month-to-date average. monthSpend is summed over UTC days, so
+        // the day count is UTC too (a local count is a day short every evening west of UTC).
+        const daysIntoMonth = Math.max(1, now.getUTCDate());
+        const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
         const projectedMonthly = monthSpend !== null ? (monthSpend / daysIntoMonth) * daysInMonth : null;
 
         const delta = prevTotalCost !== null && prevTotalCost > 0 && currentTotalCost !== null
@@ -884,7 +885,9 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
         this.CostKpis = [
             {
-                Label: "Today's Spend",
+                // Days are UTC (DayBucket), so "today" rolls over at UTC midnight — the label says so
+                // rather than letting a US viewer's figure reset to $0 in the early evening.
+                Label: 'Today (UTC)',
                 Value: this.FormatCurrency(todaySpend),
                 Subtitle: covSubtitle,
                 Delta: null,

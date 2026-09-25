@@ -574,6 +574,9 @@ describe('ai-usage-analytics.compute', () => {
       expect(trends[0].errors).toBe(1);
       expect(trends[1].executions).toBe(0);
       expect(trends[1].cost).toBe(0);
+      expect(trends[0].avgTime).toBe(120);
+      // A bucket with no runs has no latency: null (a gap on the chart), not 0s.
+      expect(trends[1].avgTime).toBeNull();
     });
 
     describe('outside UTC', () => {

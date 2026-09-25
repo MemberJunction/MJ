@@ -448,9 +448,15 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       // Dual axis mode: Left axis (cost, avgTime), Right axis (executions, tokens, errors)
       const leftAxisMetrics = ['cost', 'avgTime'];
       const rightAxisMetrics = ['executions', 'tokens', 'errors'];
+      // Each axis is sized to the series still shown on it: hiding Tokens (millions) must let
+      // Executions (hundreds) use the axis instead of staying flat on the baseline.
+      const shown = (metrics: string[]) => {
+        const visible = metrics.filter(m => !this.hiddenMetrics.has(m));
+        return visible.length > 0 ? visible : metrics;
+      };
 
       // Create left axis scale (cost and time)
-      const leftValues = leftAxisMetrics.flatMap(metric =>
+      const leftValues = shown(leftAxisMetrics).flatMap(metric =>
         this.Data.map(d => {
           const value = this.getMetricValue(d, metric);
           // Normalize avgTime to seconds for better scale comparison with cost
@@ -469,7 +475,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       }
 
       // Create right axis scale (count-based metrics)
-      const rightValues = rightAxisMetrics.flatMap(metric =>
+      const rightValues = shown(rightAxisMetrics).flatMap(metric =>
         this.Data.map(d => this.getMetricValue(d, metric)).filter((v): v is number => v != null)
       );
 
@@ -765,7 +771,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       <div>Executions: ${data.executions.toLocaleString()}</div>
       <div>Cost: ${costDisplay}</div>
       <div>Tokens: ${data.tokens.toLocaleString()}</div>
-      <div>Avg Time: ${(data.avgTime / 1000).toFixed(1)}s</div>
+      <div>Avg Time: ${data.avgTime != null ? (data.avgTime / 1000).toFixed(1) + 's' : '\u2014'}</div>
       <div>Errors: ${data.errors}</div>
       ${this.IsDrillDownEnabled ? '<div class="chart-tooltip__hint">Click a point to drill down</div>' : ''}
     `;

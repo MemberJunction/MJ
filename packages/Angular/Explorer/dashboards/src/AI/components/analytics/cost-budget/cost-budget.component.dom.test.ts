@@ -73,7 +73,7 @@ describe('AnalyticsCostBudgetComponent (DOM)', () => {
     installProvider({ RunQueryResults: [], runViewResults: [] });
     const fixture = await render();
     const labels = queryAll(fixture, '.kpi-card .kpi-label').map((e) => e.textContent?.trim());
-    expect(labels).toEqual(expect.arrayContaining(["Today's Spend", 'This Week', 'This Month', 'Projected Monthly']));
+    expect(labels).toEqual(expect.arrayContaining(['Today (UTC)', 'This Week', 'This Month', 'Projected Monthly']));
   });
 
   it('shows the chart + treemap + table empty states when there is no data', async () => {
