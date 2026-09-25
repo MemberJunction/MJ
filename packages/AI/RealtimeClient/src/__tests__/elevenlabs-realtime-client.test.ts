@@ -79,6 +79,13 @@ class FakePlayback implements IRealtimePcmPlayback {
         this.Closed = true;
         this.IsPlaying = false;
     }
+    /** Records the speaker-mute requests the driver made (obligation #10). */
+    public IsMuted = false;
+    public MuteCalls: boolean[] = [];
+    public SetMuted(muted: boolean): void {
+        this.IsMuted = muted;
+        this.MuteCalls.push(muted);
+    }
 }
 
 /** Fake mic capture handle. */
@@ -662,6 +669,31 @@ describe('ElevenLabsRealtimeClient', () => {
             client.Playback.IsPlaying = false; // playhead caught up with the clock
             expect(client.IsAudioPlaying).toBe(false);
         });
+    });
+
+    describe('SetOutputMuted (speaker mute — obligation #10)', () => {
+        it('silences only the local playout engine; nothing reaches ElevenLabs', async () => {
+            const track = await connect(client);
+            const framesBefore = client.Fake.Sent.length;
+            client.SetOutputMuted(true);
+            expect(client.IsOutputMuted).toBe(true);
+            expect(client.Playback.IsMuted).toBe(true);
+            // The mic is untouched (speaker mute is not mic mute) and no frame went to the provider.
+            expect(track.enabled).toBe(true);
+            expect(client.Fake.Sent.length).toBe(framesBefore);
+            client.SetOutputMuted(false);
+            expect(client.IsOutputMuted).toBe(false);
+            expect(client.Playback.IsMuted).toBe(false);
+        });
+
+        it('applies a mute requested BEFORE Connect once the playout engine exists', async () => {
+            client.SetOutputMuted(true);
+            expect(client.Playback.MuteCalls).toEqual([]); // no engine yet — nothing to apply
+            await connect(client);
+            expect(client.Playback.IsMuted).toBe(true);
+            expect(client.Playback.MuteCalls).toEqual([true]);
+        });
+
     });
 
     describe('SetMuted / Disconnect / errors', () => {

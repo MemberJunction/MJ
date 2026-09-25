@@ -83,6 +83,7 @@ class MeterProbeClient extends BaseRealtimeClient {
   public RequestSpokenUpdate(): void { /* not used */ }
   public SendToolResult(): void { /* not used */ }
   public SetMuted(): void { /* not used */ }
+  protected applyOutputMute(): void { /* not used */ }
   public async Disconnect(): Promise<void> { /* not used */ }
   public get IsBusy(): boolean { return false; }
   public get IsAudioPlaying(): boolean { return false; }

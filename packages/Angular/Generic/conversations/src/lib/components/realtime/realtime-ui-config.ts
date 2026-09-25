@@ -69,6 +69,7 @@ export type RealtimeChromeMode = 'orb' | 'console' | 'auto';
  */
 export type RealtimeControlId =
   | 'mute'
+  | 'speaker'
   | 'captions'
   | 'type'
   | 'end'

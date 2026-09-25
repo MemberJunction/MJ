@@ -329,6 +329,8 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         this.negotiateTracks(requestedTracks, supportedTracks);
 
         this.playback = this.createPlayback();
+        // A speaker mute requested before the playout engine existed sticks (obligation #10).
+        this.playback.SetMuted(this.outputMuted);
         const connectArgs: GeminiClientConnectArgs = {
             Model: model,
             Config: liveConfig,
@@ -556,6 +558,15 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         for (const track of tracks) {
             track.enabled = !muted;
         }
+    }
+
+    /**
+     * Speaker mute (obligation #10): silences the local playout engine's output stage. Audio
+     * keeps being enqueued and scheduled, so {@link IsAudioPlaying} and the output meter stay
+     * honest — only the speaker goes quiet. No frame is sent to Gemini.
+     */
+    protected applyOutputMute(muted: boolean): void {
+        this.playback?.SetMuted(muted);
     }
 
     /** @inheritdoc */

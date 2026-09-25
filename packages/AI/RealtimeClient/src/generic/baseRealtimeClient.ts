@@ -227,6 +227,15 @@ export interface RealtimeClientError {
  *    client-owned-audio drivers, the remote WebRTC stream on peer-connection drivers.
  *    Meters must be released on disconnect ({@link closeAudioMeters}). A driver with no
  *    tappable plane simply attaches nothing — hosts fall back to turn-state animation.
+ * 10. **Speaker mute is LOCAL and invisible to the provider.** {@link SetOutputMuted} silences
+ *    what the listener hears and nothing else: the session, the model's turn, playback
+ *    scheduling, {@link IsAudioPlaying} and the output meter all continue exactly as if the
+ *    speaker were on (a muted agent still "speaks" on the UI). Drivers implement
+ *    {@link applyOutputMute} against the audio plane they own — the shared
+ *    `RealtimePcmPlayback.SetMuted` on client-owned-audio drivers, the hidden `<audio>` sink's
+ *    `muted` flag on peer-connection drivers — and MUST re-apply {@link outputMuted} whenever
+ *    they (re)create that plane, so a mute set before `Connect` sticks. No provider frame is
+ *    ever sent for it: muting must never interrupt or otherwise signal the agent.
  */
 export abstract class BaseRealtimeClient {
     // ── Registered handlers (single-handler style, like IRealtimeSession) ─────
@@ -457,6 +466,35 @@ export abstract class BaseRealtimeClient {
      * @param muted `true` to mute the mic, `false` to unmute.
      */
     public abstract SetMuted(muted: boolean): void;
+
+    // ── Speaker (output) mute — driver obligation #10 ─────────────────────────
+    /** The requested speaker-mute state; drivers re-apply it whenever they (re)create their audio plane. */
+    protected outputMuted = false;
+
+    /**
+     * Mutes / unmutes the SPEAKER — what the listener hears of the agent — and nothing else.
+     * The provider is never told: the model keeps talking, tool calls keep flowing,
+     * {@link IsAudioPlaying} and the output meter stay honest, so the UI still shows the agent
+     * speaking. Safe to call before `Connect` (the state is applied once the audio plane exists).
+     *
+     * @param muted `true` to silence the speaker, `false` to restore it.
+     */
+    public SetOutputMuted(muted: boolean): void {
+        this.outputMuted = muted;
+        this.applyOutputMute(muted);
+    }
+
+    /** `true` while the speaker is muted via {@link SetOutputMuted}. */
+    public get IsOutputMuted(): boolean {
+        return this.outputMuted;
+    }
+
+    /**
+     * Driver hook for {@link SetOutputMuted}: silence / restore the audio plane this driver
+     * owns. Must be a no-op when that plane does not exist yet — {@link outputMuted} is
+     * re-applied at creation time.
+     */
+    protected abstract applyOutputMute(muted: boolean): void;
 
     /**
      * Tears down the provider connection and all client-held resources (control channel,

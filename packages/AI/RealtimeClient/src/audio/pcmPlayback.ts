@@ -16,6 +16,15 @@ export interface IRealtimePcmPlayback {
     Enqueue(pcm16: ArrayBuffer): void;
     /** Stops + clears every scheduled source (barge-in / interruption). */
     Flush(): void;
+    /**
+     * Silences / restores what reaches the SPEAKER without touching the schedule: audio keeps
+     * being enqueued and played out (so {@link IsPlaying} and any meter stay honest), the
+     * listener just doesn't hear it. This is the local "speaker mute" — nothing about it is
+     * visible to the provider.
+     */
+    SetMuted(muted: boolean): void;
+    /** `true` while {@link SetMuted} has silenced the speaker. */
+    readonly IsMuted: boolean;
     /** `true` while scheduled audio is audibly playing (playhead ahead of the context clock). */
     readonly IsPlaying: boolean;
     /** Flushes and releases the underlying audio context. */
@@ -52,6 +61,14 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
      * the single tap point {@link CreateMeter} analyses without altering the audio path.
      */
     private masterGain: GainNode;
+    /**
+     * The speaker-mute stage, DOWNSTREAM of {@link masterGain}: `masterGain → outputGain →
+     * destination`. Muting drives this gain to 0, so the meter tapped at `masterGain` keeps
+     * seeing the agent's voice (the call UI's audio-reactive visuals stay alive) while the
+     * listener hears nothing.
+     */
+    private outputGain: GainNode;
+    private muted = false;
     /** The absolute context time up to which audio has been scheduled. */
     private playheadTime = 0;
     /** Sources scheduled and not yet ended (so Flush can stop them). */
@@ -66,7 +83,9 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
         this.sampleRate = sampleRate;
         this.context = new AudioContext({ sampleRate });
         this.masterGain = this.context.createGain();
-        this.masterGain.connect(this.context.destination);
+        this.outputGain = this.context.createGain();
+        this.masterGain.connect(this.outputGain);
+        this.outputGain.connect(this.context.destination);
     }
 
     /** @inheritdoc */
@@ -103,6 +122,17 @@ export class RealtimePcmPlayback implements IRealtimePcmPlayback {
     /** @inheritdoc */
     public get IsPlaying(): boolean {
         return this.activeSources.size > 0 && this.playheadTime > this.context.currentTime;
+    }
+
+    /** @inheritdoc */
+    public SetMuted(muted: boolean): void {
+        this.muted = muted;
+        this.outputGain.gain.value = muted ? 0 : 1;
+    }
+
+    /** @inheritdoc */
+    public get IsMuted(): boolean {
+        return this.muted;
     }
 
     /** @inheritdoc */

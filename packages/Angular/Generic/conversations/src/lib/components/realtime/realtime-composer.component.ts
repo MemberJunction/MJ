@@ -19,8 +19,10 @@ import { RealtimeSessionService } from '../../services/realtime-session.service'
  *    Submit calls {@link RealtimeSessionService.SendText}, which injects the text as a user
  *    turn into the SAME live voice call.
  *
- * Mute talks to the session service directly (pure local toggle); captions / Details /
- * End are emitted up so the overlay shell owns that state and lifecycle.
+ * Mute (mic) and Speaker (the agent's voice, a local output mute that never reaches the
+ * provider — the demo-call control) talk to the session service directly (pure local
+ * toggles); captions / Details / End are emitted up so the overlay shell owns that state
+ * and lifecycle.
  */
 @Component({
   standalone: true,
@@ -70,6 +72,9 @@ export class RealtimeComposerComponent {
   /** Emitted with the new muted state whenever the user toggles the mic from the dock. */
   @Output() MuteChanged = new EventEmitter<boolean>();
 
+  /** Emitted with the new speaker-muted state whenever the user toggles the agent's sound from the dock. */
+  @Output() OutputMuteChanged = new EventEmitter<boolean>();
+
   /** Current draft text in the dock's composer input. */
   public Draft = '';
 
@@ -79,6 +84,13 @@ export class RealtimeComposerComponent {
    * component updates it locally + emits {@link MuteChanged} when its own button is used.
    */
   @Input() IsMuted = false;
+
+  /**
+   * The speaker (agent output) mute state — same two-way reflection as {@link IsMuted}. While
+   * on, the agent keeps talking (captions, orb and tool calls continue); the listener just
+   * doesn't hear it. Nothing is sent to the provider, so it never interrupts the agent.
+   */
+  @Input() IsOutputMuted = false;
 
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement | HTMLTextAreaElement>;
 
@@ -118,6 +130,17 @@ export class RealtimeComposerComponent {
   public ToggleMute(): void {
     this.IsMuted = this.realtime.ToggleMute();
     this.MuteChanged.emit(this.IsMuted);
+  }
+
+  /** Toggle the local speaker mute (the agent's voice) and surface the new state to the overlay. */
+  public ToggleOutputMute(): void {
+    this.IsOutputMuted = this.realtime.ToggleOutputMute();
+    this.OutputMuteChanged.emit(this.IsOutputMuted);
+  }
+
+  /** Tooltip for the speaker control — spells out that muting does NOT stop the agent. */
+  public get OutputMuteTitle(): string {
+    return this.IsOutputMuted ? 'Unmute speaker' : 'Mute speaker (the agent keeps going, you just won\'t hear it)';
   }
 
   /** Toggle captions visibility and notify the overlay. */
