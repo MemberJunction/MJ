@@ -112,18 +112,22 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
 
     for (const result of [exclusion, heuristic]) {
         if (!result.Excluded) continue;
+        // Say so only when something would otherwise copy these rows. Unlisted relationships are
+        // skipped anyway, and a note for each of them buries the warnings that matter.
         return {
             Policy: 'Skip',
             PolicySource: 'Entity',
             Locked: true,
-            Warnings: [
-                {
-                    Code: 'NOT_CLONEABLE',
-                    Severity: 'Warning',
-                    NodeKey: ctx.ToKey,
-                    Message: result.Reason || `Child entity '${ctx.ChildEntityName}' is excluded or NotCloneable.`,
-                },
-            ],
+            Warnings: wouldCopy(ctx, configuredPolicy)
+                ? [
+                      {
+                          Code: 'NOT_CLONEABLE',
+                          Severity: 'Warning',
+                          NodeKey: ctx.ToKey,
+                          Message: result.Reason || `Child entity '${ctx.ChildEntityName}' is excluded or NotCloneable.`,
+                      },
+                  ]
+                : [],
         };
     }
 
@@ -283,4 +287,20 @@ function parentRelationship(ctx: EdgePolicyResolutionContext): { Policy?: CloneE
     const rels = ctx.ParentEntityConfig?.Relationships;
     if (!rels) return undefined;
     return (ctx.RelationshipID ? rels[ctx.RelationshipID] : undefined) ?? rels[`${ctx.ChildEntityName}.${ctx.JoinField}`] ?? rels[ctx.ChildEntityName];
+}
+
+/** Whether anything asks for this edge to be copied: configuration, the edge kind's default, a preset or the request. */
+function wouldCopy(ctx: EdgePolicyResolutionContext, configuredPolicy: CloneEdgePolicy | undefined): boolean {
+    if (configuredPolicy === 'Deep') return true;
+    if (configuredPolicy === undefined) {
+        const deepByDefault = ctx.Kind === 'IsASubtype' || ctx.Kind === 'Embedded' || ctx.Kind === 'Collection' || (ctx.Kind === 'Hierarchy' && ctx.IsHierarchyField === true);
+        if (deepByDefault) return true;
+    }
+    const preset = ctx.PresetConfig?.EdgeOverrides?.some(
+        (o) => o.Policy === 'Deep' && ((ctx.RelationshipID && o.RelationshipID === ctx.RelationshipID) || o.ChildEntityName === ctx.ChildEntityName)
+    );
+    const request = ctx.RequestOverrides?.some(
+        (o) => o.Policy === 'Deep' && ((o.RelationshipID && o.RelationshipID === ctx.RelationshipID) || (o.FromKey === ctx.FromKey && o.ToKey === ctx.ToKey))
+    );
+    return !!preset || !!request;
 }

@@ -144,4 +144,25 @@ describe('CloneReviewComponent (DOM)', () => {
 
         expect(clickedKey).toBe('Users:1');
     });
+
+    it('lists only the field changes a reviewer needs, not plain copies or automatic exclusions', () => {
+        const node = UNBLOCKED_PLAN.Nodes[0];
+        const plan = {
+            ...UNBLOCKED_PLAN,
+            Nodes: [{
+                ...node,
+                FieldChanges: [
+                    { Field: 'ID', Kind: 'Excluded', OldValue: 'u-1', NewValue: null, Reason: 'Primary key is not copied from source record.' },
+                    { Field: '__mj_CreatedAt', Kind: 'Excluded', OldValue: 'x', NewValue: null, Reason: 'Audit or soft-delete metadata field excluded.' },
+                    { Field: 'FirstLast', Kind: 'NotWritable', OldValue: 'A B', NewValue: null, Reason: '' },
+                    { Field: 'Title', Kind: 'Copy', OldValue: 'Eng', NewValue: 'Eng', Reason: '' },
+                    { Field: 'Secret', Kind: 'Excluded', OldValue: 's', NewValue: null, Reason: 'Configured field exclusion.' },
+                    { Field: 'IsActive', Kind: 'Reset', OldValue: true, NewValue: false, Reason: '' },
+                ],
+            }],
+        } as RecordClonePlanDetails;
+        const fixture = renderComponentFixture(CloneReviewComponent, { inputs: { Plan: plan } });
+        expect(fixture.componentInstance.NodesWithFieldChanges[0].Changes.map((c) => c.Field)).toEqual(['Secret', 'IsActive']);
+        expect(fixture.componentInstance.TotalFieldChangesCount).toBe(2);
+    });
 });

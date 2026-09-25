@@ -51,7 +51,7 @@ interface ScopeFact {
                         (ngModelChange)="OnPresetChange($event)">
                         <option value="">Default (Custom)</option>
                         @for (preset of Presets; track preset) {
-                            <option [value]="preset">{{preset}}</option>
+                            <option [value]="preset" [title]="PresetLabels[preset]?.Description ?? ''">{{ PresetLabels[preset]?.Label ?? preset }}</option>
                         }
                     </select>
                 </div>
@@ -313,6 +313,8 @@ interface ScopeFact {
 export class CloneScopeControlsComponent {
     /** Preset keys from the entity's `Clone.Presets`. */
     @Input() Presets: string[] = [];
+    /** Label and description to show for each preset key; a key with none is shown as-is. */
+    @Input() PresetLabels: Record<string, { Label: string; Description?: string }> = {};
     /** The preset currently applied, if any. */
     @Input() SelectedPreset?: string;
 

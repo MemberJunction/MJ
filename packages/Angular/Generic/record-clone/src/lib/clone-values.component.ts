@@ -365,10 +365,11 @@ export class CloneValuesComponent implements OnInit, OnChanges {
         };
         this.PromptedValuesChange.emit(this.PromptedValues);
 
+        // Mirror a naming field into the name box for display only. RootNameChange means the user
+        // typed a name (the host then sends it as an override); the host mirrors prompted values itself.
         if (!this.HasUserEditedRootName && (fieldName.toLowerCase() === 'name' || fieldName.toLowerCase() === 'email')) {
             if (typeof value === 'string' && value.trim().length > 0) {
                 this.RootName = value;
-                this.RootNameChange.emit(this.RootName);
             }
         }
 

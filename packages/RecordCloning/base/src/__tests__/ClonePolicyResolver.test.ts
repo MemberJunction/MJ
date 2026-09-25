@@ -172,7 +172,12 @@ describe('ClonePolicyResolver', () => {
     it('applies name heuristics only when no configuration names the edge', () => {
         const heuristic = ResolveEdgePolicy({ ...baseContext, ChildEntityName: 'MJ: User Notification Preferences' });
         expect(heuristic.Policy).toBe('Skip');
-        expect(heuristic.Warnings[0].Code).toBe('NOT_CLONEABLE');
+        // An unlisted relationship is skipped anyway, so nothing to report.
+        expect(heuristic.Warnings).toEqual([]);
+        // A collection is followed by default, so skipping it is worth a note.
+        const collection = ResolveEdgePolicy({ ...baseContext, Kind: 'Collection', ChildEntityName: 'MJ: User Notification Preferences' });
+        expect(collection.Policy).toBe('Skip');
+        expect(collection.Warnings[0].Code).toBe('NOT_CLONEABLE');
 
         const configured = ResolveEdgePolicy({
             ...baseContext,
@@ -197,5 +202,12 @@ describe('ClonePolicyResolver', () => {
         expect(ResolveEdgePolicy({ ...edge, ParentEntityConfig: parent }).Policy).toBe('Deep');
         expect(ResolveEdgePolicy({ ...edge, ParentEntityConfig: parent, RootEntityConfig: { Relationships: { 'MJ: Template Contents': { Policy: 'Skip' } } } }).Policy).toBe('Skip');
         expect(ResolveEdgePolicy(edge).Policy).toBe('Skip');
+    });
+
+    it('reports a NotCloneable child only when something asks to copy it', () => {
+        const notCloneable = { ...baseContext, ChildEntityConfig: { NotCloneable: true } };
+        expect(ResolveEdgePolicy(notCloneable).Warnings).toEqual([]);
+        expect(ResolveEdgePolicy({ ...notCloneable, RootEntityConfig: { Relationships: { OrderDetails: { Policy: 'Deep' } } } }).Warnings[0].Code).toBe('NOT_CLONEABLE');
+        expect(ResolveEdgePolicy({ ...notCloneable, RequestOverrides: [{ RelationshipID: 'rel-orders-details', Policy: 'Deep' }] }).Warnings[0].Code).toBe('NOT_CLONEABLE');
     });
 });

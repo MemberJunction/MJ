@@ -130,6 +130,7 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                     <div class="step-container" [class.step-hidden]="CurrentStep !== 'scope'">
                         <mj-clone-scope-controls
                             [Presets]="AvailablePresets"
+                            [PresetLabels]="PresetLabels"
                             [SelectedPreset]="SelectedPreset"
                             [MaxDepth]="DisplayedScope.MaxDepth"
                             [Subtypes]="DisplayedScope.Subtypes"
@@ -588,6 +589,8 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
      */
     public ScopeOptions: RecordClonePlanOptions = {};
     public AvailablePresets: string[] = [];
+    /** How each preset is shown in the picker, from the entity's clone configuration. */
+    public PresetLabels: Record<string, { Label: string; Description?: string }> = {};
     public SelectedPreset?: string;
     /**
      * Whether the Run Entity Actions toggle is offered: `RecordClone.Describe` reports whether the user
@@ -932,6 +935,21 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     // ── Internals ────────────────────────────────────────────────────────
 
+    /** Label and description of each preset, by key, from `Clone.Presets` in array or legacy keyed form. */
+    private static presetLabels(presets: unknown): Record<string, { Label: string; Description?: string }> {
+        const labels: Record<string, { Label: string; Description?: string }> = {};
+        if (!presets || typeof presets !== 'object') return labels;
+        const entries: Array<[string | undefined, unknown]> = Array.isArray(presets)
+            ? presets.map((p) => [(p as { Key?: string })?.Key, p])
+            : Object.entries(presets as Record<string, unknown>);
+        for (const [key, raw] of entries) {
+            if (!key) continue;
+            const p = raw as { Label?: string; Description?: string } | undefined;
+            labels[key] = { Label: p?.Label || key, Description: p?.Description };
+        }
+        return labels;
+    }
+
     /** Options of the named preset, from `Clone.Presets` in array or legacy keyed form. */
     private static presetOptions(presets: unknown, key: string | undefined): Record<string, unknown> {
         if (!key || !presets || typeof presets !== 'object') return {};
@@ -1008,6 +1026,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
             }
 
             this.AvailablePresets = describe.Presets || [];
+            this.PresetLabels = RecordClonePanelComponent.presetLabels(this.ProviderToUse?.EntityByName(this.EffectiveEntityName)?.CloneConfig?.Presets);
             this.CanFireHooks = describe.CanFireHooks === true;
             this.CanOverrideScope = describe.CanOverrideScope === true;
 

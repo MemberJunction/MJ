@@ -113,4 +113,19 @@ describe('CloneValuesComponent (DOM)', () => {
         expect(emittedRetargets).not.toBeNull();
         expect(emittedRetargets![0].NewValue).toBe('acc-999');
     });
+
+    it('mirrors a typed email into the name box without reporting a name edit', () => {
+        const fixture = renderComponentFixture(CloneValuesComponent, { inputs: { RootName: 'Copy of Ada', PromptedFields: [] } });
+        const emitted: string[] = [];
+        fixture.componentInstance.RootNameChange.subscribe((n) => emitted.push(n));
+
+        fixture.componentInstance.OnFieldChange('Email', 'bob@example.com');
+        expect(fixture.componentInstance.RootName).toBe('bob@example.com');
+        expect(emitted).toEqual([]);
+
+        const input = document.createElement('input');
+        input.value = 'Bob';
+        fixture.componentInstance.OnRootNameInput({ target: input } as unknown as Event);
+        expect(emitted).toEqual(['Bob']);
+    });
 });

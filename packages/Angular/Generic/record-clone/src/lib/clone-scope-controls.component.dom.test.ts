@@ -56,6 +56,14 @@ describe('CloneScopeControlsComponent (DOM)', () => {
         expect(queryAll(withHooks, '.toggle-label').some((l) => l.textContent?.includes('Run Entity Actions'))).toBe(true);
     });
 
+    it('shows each preset by its label, falling back to the key', () => {
+        const f = renderComponentFixture(CloneScopeControlsComponent, {
+            inputs: { Presets: ['with-settings', 'bare'], PresetLabels: { 'with-settings': { Label: 'Include personal settings' } } },
+        });
+        const options = queryAll(f, '#preset-select option').map((o) => o.textContent?.trim());
+        expect(options).toEqual(['Default (Custom)', 'Include personal settings', 'bare']);
+    });
+
     it('asks to reset to the entity defaults', () => {
         const f = renderComponentFixture(CloneScopeControlsComponent, {
             inputs: { ...CONFIGURED, MaxDepth: 5, ConfiguredScope: CONFIGURED, CanOverrideScope: true },

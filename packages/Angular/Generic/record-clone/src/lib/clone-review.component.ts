@@ -142,7 +142,7 @@ interface NodeFieldChangesSummary {
                         Field Value Modifications ({{TotalFieldChangesCount}})
                     </h4>
                     <p class="section-description">
-                        Values adjusted by naming rules, identity swaps, or requested overrides:
+                        Values the clone sets instead of copying (configured rules, names, remapped references and your entries):
                     </p>
 
                     <div class="diff-nodes-list">
@@ -531,18 +531,31 @@ export class CloneReviewComponent {
         return this.AllWarnings.length;
     }
 
+    /**
+     * The field changes a reviewer needs: every rule the clone applies (reset, ownership, rename,
+     * remap, derived rule, override, prompt), configured exclusions and FLS denials. Plain copies,
+     * columns that can't be written, and the automatic key and __mj_ timestamp exclusions are left out:
+     * they are the same for every clone and would bury the rest.
+     */
     public get NodesWithFieldChanges(): NodeFieldChangesSummary[] {
         if (!this.Plan?.Nodes) return [];
         const summaries: NodeFieldChangesSummary[] = [];
         for (const node of this.Plan.Nodes) {
-            if (node.FieldChanges && node.FieldChanges.length > 0) {
-                summaries.push({
-                    Node: node,
-                    Changes: node.FieldChanges,
-                });
+            const changes = (node.FieldChanges ?? []).filter((c) => CloneReviewComponent.isReviewable(c));
+            if (changes.length > 0) {
+                summaries.push({ Node: node, Changes: changes });
             }
         }
         return summaries;
+    }
+
+    private static isReviewable(change: { Kind: string; Field: string; Reason: string }): boolean {
+        if (change.Kind === 'Copy' || change.Kind === 'NotWritable') return false;
+        if (change.Kind === 'Excluded') {
+            // The engine always excludes the primary key and the __mj_ audit columns.
+            return !change.Field.startsWith('__mj_') && !change.Reason.startsWith('Primary key');
+        }
+        return true;
     }
 
     public get TotalFieldChangesCount(): number {
