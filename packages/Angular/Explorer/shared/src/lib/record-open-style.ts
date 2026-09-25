@@ -31,6 +31,29 @@ export type RecordOpenStyle = 'records' | 'classic';
  */
 export const RECORDS_RESOURCE_TYPE = 'Records';
 
+/** Query param that opens a record in the CodeGen standard form (MJ#4755). Value: 'standard'. */
+export const FORM_MODE_QUERY_PARAM = 'form';
+
+/** Reads FORM_MODE_QUERY_PARAM; returns 'standard' only for that exact (case-insensitive) value. */
+export function ReadStandardFormQuery(
+  queryParams: { [key: string]: string | string[] | undefined | null }
+): 'standard' | undefined {
+  const raw = queryParams[FORM_MODE_QUERY_PARAM];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value?.trim().toLowerCase() === 'standard' ? 'standard' : undefined;
+}
+
+/**
+ * The shell-side half of {@link ReadStandardFormQuery}: the query params a
+ * record tab's URL must carry so a standard-form tab survives the shell
+ * rebuilding its URL from the tab configuration. Empty for any other tab.
+ */
+export function StandardFormQueryParams(
+  configuration: Record<string, unknown> | undefined | null
+): Record<string, string> {
+  return configuration?.['FormMode'] === 'standard' ? { [FORM_MODE_QUERY_PARAM]: 'standard' } : {};
+}
+
 /** True when a workspace tab's configuration marks it as an entity-record tab */
 export function IsRecordsTabConfiguration(configuration: Record<string, unknown> | undefined | null): boolean {
   return configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE;

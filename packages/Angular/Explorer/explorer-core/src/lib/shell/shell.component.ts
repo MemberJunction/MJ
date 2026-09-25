@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery, StandardFormQueryParams } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -1542,17 +1542,21 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * another forced tab, which is the loop that killed the browser.
    */
   private openRecordFromUrl(entityName: string, recordId: string, queryParams: URLSearchParams): void {
+    // Recreating from browser history must keep `?form=standard` (MJ#4755),
+    // or back/forward would reopen the record in the custom form.
+    const formMode = ReadStandardFormQuery({ [FORM_MODE_QUERY_PARAM]: queryParams.get(FORM_MODE_QUERY_PARAM) });
     if (IsNewEntityRecordUrlId(recordId)) {
       const nrv = queryParams.get(NEW_RECORD_VALUES_QUERY_PARAM) ?? undefined;
       this.navigationService.OpenNewEntityRecord(entityName, {
         newRecordValues: nrv,
         recordSource: 'none',
+        formMode,
       });
       return;
     }
     const compositeKey = new CompositeKey();
     compositeKey.SimpleLoadFromURLSegment(recordId);
-    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none', formMode });
   }
 
   private recordTabMatchesUrl(tab: WorkspaceTab, entityName: string, recordId: string): boolean {
@@ -1814,6 +1818,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return `${url}${separator}${params.toString()}`;
     };
 
+    // Query params a record tab's URL carries: initial values for an unsaved
+    // record, and the standard-form switch (MJ#4755) so a `?form=standard` tab
+    // keeps it when the URL is rebuilt from the tab config.
+    const recordQueryParams = (isNewRecord: boolean): Record<string, string> => {
+      const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+      return { ...(nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : {}), ...StandardFormQueryParams(config) };
+    };
+
     // Helper function to get app path for URL
     const getAppPath = (appIdOrName: string): string | null => {
       // First try by ID
@@ -1939,10 +1951,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
               // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
               // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
               // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
-              const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
               return appendQP(
                 `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
-                nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+                recordQueryParams(isNewRecord),
               );
             }
           }
@@ -2019,10 +2030,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           if (idSeg) {
             // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
             // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
-            const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
             return appendQP(
               `/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
-              nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+              recordQueryParams(isNewRecord),
             );
           }
         }
