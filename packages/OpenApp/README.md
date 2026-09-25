@@ -678,7 +678,7 @@ When the dependency includes a `repository`, the CLI will automatically install 
 | 4 | Dependencies | Resolve dependency graph with topological sort |
 | 5 | Dependencies | Recursively install any missing dependency apps |
 | 6 | Schema | Check for schema name collisions |
-| 7 | Schema | Create the database schema (`CREATE SCHEMA acme_crm`) |
+| 7 | Schema | Create the database schema (`CREATE SCHEMA acme_crm`; on SQL Server `CREATE SCHEMA acme_crm AUTHORIZATION <core schema owner>` — see [Schema ownership on SQL Server](#schema-ownership-on-sql-server)) |
 | 8 | Migrations | Download and run Skyway migrations against the app's schema |
 | 9 | Record | Create `MJ: Open Apps` record with status `Installing` |
 | 10 | Packages | Add npm packages to server/client workspace `package.json` files |
@@ -778,6 +778,46 @@ After install/upgrade/remove, you must:
 2. Skyway runs your migrations against that schema
 3. A `flyway_schema_history` table tracks applied migrations within the schema
 4. MJ CodeGen can register your tables as MJ entities for full CRUD support
+
+### Schema ownership on SQL Server
+
+**Why it matters.** App views routinely read core tables (e.g. a view in `acme_crm` joining `__mj.Task`). SQL Server's *ownership chaining* skips the permission check on a table a view references only when the view and the table have the same owner — and an object's owner is its schema's owner. If the app schema is owned by the login that ran the install while `__mj` is owned by `dbo`, the chain breaks: the API login is then asked for `SELECT` on `__mj.Task` itself, and reads through the app view fail with `The SELECT permission was denied on the object 'Task', database '…', schema '__mj'.`
+
+**What install does.** On SQL Server the engine reads the owner of the MJ core schema (`MJCoreSchema`, default `__mj`) and creates the app schema with `CREATE SCHEMA [acme_crm] AUTHORIZATION [<that owner>]` (usually `dbo`). Granting the API role `SELECT` on the app's views is then enough.
+
+**Fallback.** Assigning another user as a schema's owner requires `IMPERSONATE` on that user (members of `db_owner` have it). The engine checks this first (`HAS_PERMS_BY_NAME(<owner>, 'USER', 'IMPERSONATE')`). When the installer cannot assign the owner — or cannot see the core schema — the install still succeeds with a plain `CREATE SCHEMA`, and a `Schema` warning is printed naming the consequence. To fix it, either install as a member of `db_owner`, or grant the installing login the permission and reinstall:
+
+```sql
+GRANT IMPERSONATE ON USER::[dbo] TO [<installer user>];
+```
+
+**PostgreSQL is not affected.** PostgreSQL has no ownership chaining through schemas: a view checks its base tables' privileges as the *view's* owner, not the schema's, so install creates the schema exactly as before.
+
+**Retrofitting an existing install.** An app schema created before this change is owned by whichever login installed it. Transfer it to the core schema's owner with:
+
+```sql
+ALTER AUTHORIZATION ON SCHEMA::[acme_crm] TO [dbo];
+```
+
+> **Caution — this drops permissions.** `ALTER AUTHORIZATION` removes every explicit permission on the schema **and** on the objects in it that are owned through the schema (verified on SQL Server 2022: both a `GRANT EXECUTE ON SCHEMA::` and an object-level `GRANT SELECT` on a view disappeared). Script the grants out **first**, run the `ALTER AUTHORIZATION`, then run the scripted statements:
+
+```sql
+DECLARE @app sysname = N'acme_crm';
+SELECT
+    CASE p.state WHEN 'W' THEN N'GRANT' ELSE p.state_desc END + N' ' + p.permission_name
+    + N' ON ' + CASE p.class
+                  WHEN 3 THEN N'SCHEMA::' + QUOTENAME(s.name)
+                  ELSE N'OBJECT::' + QUOTENAME(OBJECT_SCHEMA_NAME(p.major_id)) + N'.' + QUOTENAME(OBJECT_NAME(p.major_id))
+                END
+    + CASE WHEN p.class = 1 AND p.minor_id > 0 THEN N' (' + QUOTENAME(COL_NAME(p.major_id, p.minor_id)) + N')' ELSE N'' END
+    + N' TO ' + QUOTENAME(USER_NAME(p.grantee_principal_id))
+    + CASE p.state WHEN 'W' THEN N' WITH GRANT OPTION' ELSE N'' END
+    + N';' AS ReapplyStatement
+FROM sys.database_permissions p
+LEFT JOIN sys.schemas s ON p.class = 3 AND s.schema_id = p.major_id
+WHERE (p.class = 3 AND s.name = @app)
+   OR (p.class = 1 AND OBJECT_SCHEMA_NAME(p.major_id) = @app);
+```
 
 ---
 
