@@ -1,9 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { BaseEntity, EntityInfo } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { MjFormToolbarComponent } from './form-toolbar.component';
+import { DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import type { BeforeSaveEventArgs, BeforeRefreshEventArgs, BeforeCloneEventArgs } from '../types/form-events';
 import { RecordCloneService, RecordCloneSlideInComponent } from '@memberjunction/ng-record-clone';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { TOOLBAR_PINS_SETTING_KEY } from './form-toolbar.component';
 import type { RecordNavigationEvent } from '../types/navigation-events';
 
 /**
@@ -42,32 +45,41 @@ const render = (inputs: Record<string, unknown> = {}) =>
 
 type Fx = ReturnType<typeof render>;
 const btn = (f: Fx, sel: string) => query(f, sel) as HTMLElement | null;
+/** Opens the More menu, where unpinned actions and Delete live. */
+const openMore = (f: Fx) => { btn(f, 'button[title="More actions"]')?.click(); f.detectChanges(); };
+/** Opens the View menu, where section and layout controls live. */
+const openView = (f: Fx) => { btn(f, 'button[title="Sections and layout"]')?.click(); f.detectChanges(); };
 
 describe('MjFormToolbarComponent (DOM)', () => {
+  afterEach(() => vi.restoreAllMocks());
   describe('view mode', () => {
     it('renders the edit / delete / refresh / favorite / history / list / tags actions', () => {
       const f = render();
       expect(btn(f, 'button[title="Edit this Record"]')).not.toBeNull();
+      openMore(f);
       expect(btn(f, 'button[title="Delete this Record"]')).not.toBeNull();
       expect(btn(f, 'button[title="Refresh record from database"]')).not.toBeNull();
       expect(btn(f, 'button[title="Make Favorite"]')).not.toBeNull();
       expect(btn(f, '.mj-forms-btn--history')).not.toBeNull();
-      expect(btn(f, '.mj-forms-btn--list')).not.toBeNull();
+      expect(btn(f, '.mj-forms-menu-item[title="Add to a list"]')).not.toBeNull();
     });
 
     it('hides the edit button when the user cannot edit, delete when they cannot delete', () => {
       const f = render({ UserCanEdit: false, UserCanDelete: false });
       expect(btn(f, 'button[title="Edit this Record"]')).toBeNull();
+      openMore(f);
       expect(btn(f, 'button[title="Delete this Record"]')).toBeNull();
     });
 
     it('hides the refresh button when ShowRefreshButton is false', () => {
       const f = render({ Config: { ShowRefreshButton: false } });
+      openMore(f);
       expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
     });
 
     it('hides the refresh button when record is unsaved', () => {
       const f = render({ Record: { ...RECORD, IsSaved: false } });
+      openMore(f);
       expect(btn(f, 'button[title="Refresh record from database"]')).toBeNull();
     });
 
@@ -85,6 +97,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('emits RefreshRequested and BeforeRefresh when refresh is clicked', () => {
       const f = render();
+      openMore(f);
       const refreshOut = capture(f.componentInstance.RefreshRequested);
       const beforeOut = capture(f.componentInstance.BeforeRefresh);
       btn(f, 'button[title="Refresh record from database"]')!.click();
@@ -94,6 +107,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('does not emit RefreshRequested when BeforeRefresh handler cancels', () => {
       const f = render();
+      openMore(f);
       f.componentInstance.BeforeRefresh.subscribe((e: BeforeRefreshEventArgs) => (e.Cancel = true));
       const refreshOut = capture(f.componentInstance.RefreshRequested);
       btn(f, 'button[title="Refresh record from database"]')!.click();
@@ -102,6 +116,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('disables the refresh button and shows spinner when IsRefreshing is true', () => {
       const f = render({ IsRefreshing: true });
+      openMore(f);
       const refreshBtn = btn(f, 'button[title="Refresh record from database"]');
       expect(refreshBtn).not.toBeNull();
       expect((refreshBtn as HTMLButtonElement).disabled).toBe(true);
@@ -117,6 +132,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('emits TagsPanelToggled when the tags button is clicked', () => {
       const f = render();
+      openMore(f);
       const out = capture(f.componentInstance.TagsPanelToggled);
       btn(f, 'button[title="View tags"]')!.click();
       expect(out.length).toBe(1);
@@ -132,13 +148,15 @@ describe('MjFormToolbarComponent (DOM)', () => {
     it('renders the version / list / tag count badges when counts are positive', () => {
       const f = render({ VersionCount: 3, ListCount: 2, TagCount: 5 });
       expect(query(f, '.mj-version-count-badge')?.textContent?.trim()).toBe('v3');
-      expect(query(f, '.mj-list-count-badge')).not.toBeNull();
+      openMore(f);
+      expect(queryAll(f, '.mj-forms-menu-badge').map((b) => b.textContent?.trim())).toEqual(expect.arrayContaining(['2', '5']));
     });
   });
 
   describe('delete confirmation', () => {
     it('opens the delete dialog on Delete click, then emits DeleteRequested on confirm', () => {
       const f = render();
+      openMore(f);
       const out = capture(f.componentInstance.DeleteRequested);
       btn(f, 'button[title="Delete this Record"]')!.click();
       f.detectChanges();
@@ -202,6 +220,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
     it('emits ExpandAll / CollapseAll from the section control buttons', () => {
       // counts chosen so both buttons are enabled (expand disabled when all expanded, collapse when none)
       const f = render({ VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      openView(f);
       const expand = capture(f.componentInstance.ExpandAllRequested);
       const collapse = capture(f.componentInstance.CollapseAllRequested);
       btn(f, 'button[title="Expand all sections"]')!.click();
@@ -212,20 +231,23 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('hides expand/collapse-all in left-nav chrome', () => {
       const f = render({ ChromeLayout: 'left-nav', VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      openView(f);
       expect(btn(f, 'button[title="Expand all sections"]')).toBeNull();
       expect(btn(f, 'button[title="Collapse all sections"]')).toBeNull();
     });
 
     it('hides expand/collapse-all in right-nav chrome', () => {
       const f = render({ ChromeLayout: 'right-nav', VisibleSectionCount: 3, ExpandedSectionCount: 1 });
+      openView(f);
       expect(btn(f, 'button[title="Expand all sections"]')).toBeNull();
       expect(btn(f, 'button[title="Collapse all sections"]')).toBeNull();
     });
 
     it('emits FilterChange as the user types in the section filter', () => {
       const f = render();
+      openView(f);
       const out = capture(f.componentInstance.FilterChange);
-      const input = query(f, 'input') as HTMLInputElement;
+      const input = query(f, '.mj-forms-menu-search input') as HTMLInputElement;
       input.value = 'abc';
       input.dispatchEvent(new Event('input'));
       expect(out).toEqual(['abc']);
@@ -233,10 +255,164 @@ describe('MjFormToolbarComponent (DOM)', () => {
 
     it('clears the filter (FilterChange="") via the clear button when a filter is set', () => {
       const f = render({ SearchFilter: 'x' });
+      openView(f);
       const out = capture(f.componentInstance.FilterChange);
       const clear = queryAll(f, '.mj-clear-search')[0] as HTMLElement;
       clear.click();
       expect(out).toEqual(['']);
+    });
+  });
+
+  describe('pinned actions', () => {
+    const pinnedTitles = (f: Fx) =>
+      queryAll(f, '.mj-forms-toolbar > .mj-forms-toolbar-group > button').map((b) => b.getAttribute('title'));
+
+    it('shows Edit as an icon-only button, Favorite and History pinned, everything else in More', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = render();
+      const edit = btn(f, 'button[title="Edit this Record"]')!;
+      expect(edit.querySelector('.mj-forms-btn-text')).toBeNull();
+      expect(pinnedTitles(f)).toEqual(['Edit this Record', 'Make Favorite', 'Record Changes']);
+      expect(btn(f, 'button[title="View tags"]')).toBeNull();
+      openMore(f);
+      expect(btn(f, '.mj-forms-menu-item[title="View tags"]')).not.toBeNull();
+    });
+
+    it('uses the pins the user saved', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: ['tags'] }) : undefined
+      );
+      const f = render();
+      expect(pinnedTitles(f)).toEqual(['Edit this Record', 'View tags']);
+    });
+
+    it('pins and unpins from the More menu and saves the choice for the user', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = render();
+      openMore(f);
+
+      btn(f, 'button[aria-label="Pin Tags"]')!.click();
+      f.detectChanges();
+      expect(pinnedTitles(f)).toContain('View tags');
+      expect(save).toHaveBeenLastCalledWith(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: ['favorite', 'history', 'tags'] }));
+
+      btn(f, 'button[aria-label="Unpin Favorite"]')!.click();
+      f.detectChanges();
+      expect(pinnedTitles(f)).not.toContain('Make Favorite');
+    });
+
+    it('stops at MaxPinnedActions, the same for every user', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = render({ Config: { ...DEFAULT_TOOLBAR_CONFIG, MaxPinnedActions: 2 } });
+      openMore(f);
+      const pinTags = btn(f, 'button[aria-label="Pin Tags"]') as HTMLButtonElement;
+      expect(pinTags.disabled).toBe(true);
+    });
+
+    it('keeps custom items inline unless they opt in with Pinnable', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = render({
+        RegisteredItems: [
+          { Key: 'confirm-order', Text: 'Confirm Order', Description: 'Confirm this order' },
+          { Key: 'export', Text: 'Export', Description: 'Export record', Pinnable: true },
+        ],
+      });
+      expect(pinnedTitles(f)).toContain('Confirm this order');
+      expect(pinnedTitles(f)).not.toContain('Export record');
+      openMore(f);
+      expect(btn(f, '.mj-forms-menu-item[title="Export record"]')).not.toBeNull();
+    });
+
+    it('does not let pins for actions this form lacks use up slots', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: ['clone', 'list', 'tags'] }) : undefined
+      );
+      const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+      const f = render();
+      expect(pinnedTitles(f)).toEqual(['Edit this Record', 'Add to a list', 'View tags']);
+      openMore(f);
+      const pinFav = btn(f, 'button[aria-label="Pin Favorite"]') as HTMLButtonElement;
+      expect(pinFav.disabled).toBe(false);
+      pinFav.click();
+      expect(save).toHaveBeenLastCalledWith(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: ['clone', 'list', 'tags', 'favorite'] }));
+    });
+
+    it('re-reads pins so a change made in another form shows up', () => {
+      let stored: string | undefined;
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation(() => stored);
+      const f = render();
+      expect(pinnedTitles(f)).toContain('Make Favorite');
+      stored = JSON.stringify({ Version: 1, Pinned: ['tags'] });
+      expect(f.componentInstance.PinnedActionItems.map((i) => i.Key)).toEqual(['tags']);
+    });
+
+    it('does not render Delete twice when a host makes it an inline button', () => {
+      const f = render({ RegisteredItems: [{ Key: 'delete', Pinnable: false }] });
+      expect(queryAll(f, 'button[title="Delete this Record"]')).toHaveLength(1);
+      openMore(f);
+      expect(queryAll(f, 'button[title="Delete this Record"]')).toHaveLength(1);
+    });
+
+    it('lists Delete last in the More menu, apart from the pinnable actions', () => {
+      const f = render();
+      openMore(f);
+      const items = queryAll(f, '.mj-forms-menu .mj-forms-menu-item');
+      expect(items.at(-1)?.getAttribute('title')).toBe('Delete this Record');
+      expect(btn(f, 'button[aria-label="Pin Delete record"]')).toBeNull();
+    });
+  });
+
+  describe('keyboard and screen readers', () => {
+    it('uses a disclosure panel: the trigger controls it by id, and nothing claims the menu role', () => {
+      const f = render();
+      openMore(f);
+      const trigger = btn(f, 'button[title="More actions"]')!;
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(trigger.hasAttribute('aria-haspopup')).toBe(false);
+      const panel = query(f, `#${trigger.getAttribute('aria-controls')}`);
+      expect(panel).not.toBeNull();
+      expect(queryAll(f, '[role="menu"], [role="menuitem"]')).toHaveLength(0);
+    });
+
+    it('moves focus into the panel on open, and back to its trigger on Escape', async () => {
+      const f = render();
+      document.body.appendChild(f.nativeElement);
+      openMore(f);
+      await tick();
+      const panelId = btn(f, 'button[title="More actions"]')!.getAttribute('aria-controls');
+      expect(document.activeElement?.closest(`#${panelId}`)).not.toBeNull();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      f.detectChanges();
+      expect(document.activeElement).toBe(btn(f, 'button[title="More actions"]'));
+      f.nativeElement.remove();
+    });
+  });
+
+  describe('view menu', () => {
+    it('keeps an active section filter visible, with a clear button, once the menu closes', () => {
+      const f = render({ SearchFilter: 'addr' });
+      expect(query(f, '.mj-forms-filter-chip')?.textContent).toContain('addr');
+      const out = capture(f.componentInstance.FilterChange);
+      btn(f, '.mj-forms-filter-chip-clear')!.click();
+      expect(out).toEqual(['']);
+    });
+
+    it('closes after a form variant is picked', () => {
+      const f = render({ Variants: [{ ID: 'v1', Label: 'Admin layout', Scope: 'Role', Status: 'Active' }] });
+      openView(f);
+      (queryAll(f, '.mj-form-variant-picker-row')[1] as HTMLElement).click();
+      expect(f.componentInstance.ViewMenuOpen).toBe(false);
+    });
+
+    it('hides the View button when nothing inside it would render', () => {
+      const f = render({
+        ChromeLayout: 'left-nav',
+        Config: { ...DEFAULT_TOOLBAR_CONFIG, ShowSectionFilter: false, ShowSectionManager: false, ShowWidthToggle: false, ShowFormVariantPicker: false },
+      });
+      expect(btn(f, 'button[title="Sections and layout"]')).toBeNull();
     });
   });
 
@@ -261,7 +437,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       return { f, service };
     };
     const settle = async (f: Fx) => { f.detectChanges(); await tick(); f.detectChanges(); };
-    const cloneBtn = (f: Fx) => btn(f, 'button[title^="Clone this"]');
+    const cloneBtn = (f: Fx) => { if (!btn(f, 'button[title^="Clone this"]')) openMore(f); return btn(f, 'button[title^="Clone this"]'); };
 
     it('shows Clone when the config turns it on and Describe allows it', async () => {
       const { f, service } = renderClone(true);
@@ -384,7 +560,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       ];
 
       const f = render({ RegisteredItems: registeredItems });
-      expect(btn(f, 'button:has(.mj-forms-btn-text)')).toBeNull();
+      expect(queryAll(f, 'button').some((b) => b.textContent?.includes('Confirm Order'))).toBe(false);
     });
 
     it('evaluates dynamic Visible predicate function to show items', () => {
@@ -397,7 +573,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       ];
 
       const f = render({ RegisteredItems: registeredItems });
-      expect(btn(f, 'button:has(.mj-forms-btn-text)')).not.toBeNull();
+      expect(queryAll(f, 'button').some((b) => b.textContent?.includes('Confirm Order'))).toBe(true);
     });
 
     it('evaluates dynamic Disabled reason string predicate and sets tooltip', () => {

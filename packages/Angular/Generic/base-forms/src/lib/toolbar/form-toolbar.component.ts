@@ -1,9 +1,10 @@
-import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck, OnInit, OnDestroy, HostListener, ElementRef } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { RecordCloneService, type CloneCompletedEvent, type CloneNavigationEvent } from '@memberjunction/ng-record-clone';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs, ResolvedToolbarItem } from '../types/form-toolbar-item';
@@ -23,6 +24,25 @@ import {
   CustomToolbarButtonClickEventArgs,
   CustomToolbarButton
 } from '../types/form-events';
+
+/** User setting that stores the toolbar actions a user pinned, shared across every form. */
+export const TOOLBAR_PINS_SETTING_KEY = 'MJ.Forms.Toolbar.PinnedActions';
+
+/** Built-in actions that start pinned for a user who has not chosen pins. */
+export const DEFAULT_PINNED_TOOLBAR_ACTIONS: readonly string[] = ['favorite', 'history'];
+
+/** More-menu labels for the built-in actions, whose buttons are icon-only. */
+const STANDARD_MENU_LABELS: Record<string, string> = {
+  edit: 'Edit',
+  delete: 'Delete record',
+  refresh: 'Refresh',
+  clone: 'Clone',
+  favorite: 'Favorite',
+  history: 'History',
+  list: 'Add to list',
+  tags: 'Tags',
+  attachments: 'Attachments',
+};
 
 /**
  * Configurable form toolbar component.
@@ -57,6 +77,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   private cdr = inject(ChangeDetectorRef);
   private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
   private cloneService = inject(RecordCloneService);
+  private host = inject(ElementRef<HTMLElement>);
   private destroy$ = new Subject<void>();
 
   // ---- Deprecated form reference (backward compat) ----
@@ -287,11 +308,23 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   }
 
   ngDoCheck(): void {
+    // Inputs and record state may have changed since the last pass: resolve the items afresh.
+    this._resolvedItems = null;
     if (this._formRef) {
       this.syncFromFormRef();
     }
     this.checkDescendantChains();
     this.checkCloneCapability();
+    this.checkPinsChanged();
+  }
+
+  /** Redraws when the saved pins changed elsewhere (another open form, another tab). */
+  private checkPinsChanged(): void {
+    const before = this._pinsRaw;
+    this.readPins();
+    if (this._pinsRaw !== before) {
+      this.cdr.markForCheck();
+    }
   }
 
   /**
@@ -653,6 +686,14 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * evaluated against the current Record and EditMode.
    */
   public get ResolvedToolbarItems(): ResolvedToolbarItem[] {
+    // Many template bindings read this per pass (five per More-menu row); resolve once per pass.
+    return (this._resolvedItems ??= this.resolveToolbarItems());
+  }
+
+  /** The resolved items for the current change-detection pass; cleared in ngDoCheck. */
+  private _resolvedItems: ResolvedToolbarItem[] | null = null;
+
+  private resolveToolbarItems(): ResolvedToolbarItem[] {
     const rawItems: FormToolbarItemConfig[] = [];
 
     // 1. Standard Built-in Items
@@ -881,6 +922,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       }
 
       const description = disabled && disabledReason ? disabledReason : (merged.Description ?? '');
+      const isStandard = standardKeys.has(merged.Key);
 
       resolved.push({
         Key: merged.Key,
@@ -897,7 +939,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         Badge: badge,
         IsLoading: isLoading,
         CssClass: merged.CssClass ?? '',
-        IsStandard: standardKeys.has(merged.Key),
+        IsStandard: isStandard,
+        MenuLabel: merged.MenuLabel || merged.Text || (isStandard ? STANDARD_MENU_LABELS[merged.Key] : '') || merged.Description || merged.Key,
+        Pinnable: merged.Pinnable ?? (isStandard && merged.Key !== 'edit'),
         Config: merged,
       });
     }
@@ -919,6 +963,194 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   public get ResolvedRightItems(): ResolvedToolbarItem[] {
     return this.ResolvedToolbarItems.filter(item => item.Placement === 'right');
+  }
+
+  // ── Pinned actions and the More menu ────────────────────────────
+
+  /** Whether the More menu is open. */
+  public MoreMenuOpen = false;
+
+  /** Whether the View menu (section and layout controls) is open. */
+  public ViewMenuOpen = false;
+
+  /** Last raw pins setting read from UserInfoEngine, and its parse, so each change detection pass doesn't re-parse. */
+  private _pinsRaw: string | undefined;
+  private _pinsParsed: string[] | null = null;
+  /** Pins set in this session when no user settings are available (tests, anonymous hosts). */
+  private _localPins: string[] | null = null;
+
+  /** The maximum number of pinned buttons, the same for every user. */
+  public get MaxPinnedActions(): number {
+    return Math.max(0, this.Config.MaxPinnedActions ?? 3);
+  }
+
+  /**
+   * Keys the user pinned, in their order, or the configured defaults until they choose. Read from
+   * UserInfoEngine on every pass (pending debounced writes included), so every open form agrees.
+   * May include actions this form doesn't offer; those neither render nor use a slot here.
+   */
+  public get PinnedKeys(): string[] {
+    return this.readPins() ?? this._localPins ?? this.Config.DefaultPinnedActions ?? [...DEFAULT_PINNED_TOOLBAR_ACTIONS];
+  }
+
+  /** Read-mode actions that always render as buttons: Edit and custom items that are not pinnable. */
+  public get InlineActionItems(): ResolvedToolbarItem[] {
+    return this.ResolvedActionItems.filter(item => !item.Pinnable);
+  }
+
+  /** Pinned actions this form offers, in pin order, up to MaxPinnedActions. */
+  public get PinnedActionItems(): ResolvedToolbarItem[] {
+    const byKey = new Map(this.MoreMenuItems.map(i => [i.Key, i]));
+    return this.PinnedKeys
+      .map(k => byKey.get(k))
+      .filter((i): i is ResolvedToolbarItem => !!i)
+      .slice(0, this.MaxPinnedActions);
+  }
+
+  /** Pinnable actions listed in the More menu, Delete excluded (it has its own row). */
+  public get MoreMenuItems(): ResolvedToolbarItem[] {
+    return this.ResolvedActionItems.filter(i => i.Pinnable && i.Key !== 'delete');
+  }
+
+  /** The Delete action, shown last in the More menu, unless a host made it an inline button. */
+  public get DeleteMenuItem(): ResolvedToolbarItem | undefined {
+    return this.ResolvedActionItems.find(i => i.Key === 'delete' && i.Pinnable);
+  }
+
+  public get ShowMoreMenu(): boolean {
+    return this.MoreMenuItems.length > 0 || !!this.DeleteMenuItem;
+  }
+
+  /** Whether the action is pinned and shown as a button on this form. */
+  public IsPinned(key: string): boolean {
+    return this.PinnedActionItems.some(i => i.Key === key);
+  }
+
+  /** Whether another action can be pinned; counts only the pinned buttons this form shows. */
+  public get CanPinMore(): boolean {
+    return this.PinnedActionItems.length < this.MaxPinnedActions;
+  }
+
+  /**
+   * Pins or unpins an action for this user and saves the choice. Pins for actions this form
+   * doesn't offer are kept, so they come back on forms that do.
+   */
+  public TogglePin(key: string, event?: Event): void {
+    event?.stopPropagation();
+    const pins = [...this.PinnedKeys];
+    if (this.IsPinned(key)) {
+      pins.splice(pins.indexOf(key), 1);
+    } else if (this.CanPinMore) {
+      if (!pins.includes(key)) pins.push(key);
+    } else {
+      return;
+    }
+    this.writePins(pins);
+    this.cdr.markForCheck();
+  }
+
+  private static nextMenuId = 0;
+  /** Prefix for the More and View panels' ids, unique per toolbar, for the triggers' aria-controls. */
+  public readonly MenuIdPrefix = `mj-forms-toolbar-${++MjFormToolbarComponent.nextMenuId}`;
+
+  public ToggleMoreMenu(): void {
+    this.MoreMenuOpen = !this.MoreMenuOpen;
+    this.ViewMenuOpen = false;
+    this.cdr.markForCheck();
+    if (this.MoreMenuOpen) this.focusFirstIn(`#${this.MenuIdPrefix}-more`);
+  }
+
+  public ToggleViewMenu(): void {
+    this.ViewMenuOpen = !this.ViewMenuOpen;
+    this.MoreMenuOpen = false;
+    this.cdr.markForCheck();
+    // The section search if there is one, otherwise the first control.
+    if (this.ViewMenuOpen) this.focusFirstIn(`#${this.MenuIdPrefix}-view`);
+  }
+
+  /** Moves focus into a just-opened panel, once it has rendered, so keyboard users land in it. */
+  private focusFirstIn(panelSelector: string): void {
+    setTimeout(() => {
+      const panel = this.host.nativeElement.querySelector(panelSelector) as HTMLElement | null;
+      const first = panel?.querySelector('input, button:not([disabled])') as HTMLElement | null;
+      first?.focus();
+    });
+  }
+
+  /** Runs a More-menu item and closes the menu. */
+  public OnMenuItemClick(item: ResolvedToolbarItem, event: MouseEvent): void {
+    this.MoreMenuOpen = false;
+    void this.OnToolbarItemClick(item, event);
+  }
+
+  public CloseMenus(): void {
+    if (this.MoreMenuOpen || this.ViewMenuOpen || this.VariantMenuOpen) {
+      this.MoreMenuOpen = false;
+      this.ViewMenuOpen = false;
+      this.VariantMenuOpen = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Whether the View menu has anything to show. */
+  public get ShowViewMenu(): boolean {
+    const sections = !!this.Config.ShowSectionControls && (
+      !!this.Config.ShowSectionFilter ||
+      this.ShowExpandCollapseAll ||
+      !!this.Config.ShowSectionManager ||
+      this.HasCustomSectionOrder ||
+      !!this.Config.ShowWidthToggle
+    );
+    return sections || this.ShowVariantPickerButton;
+  }
+
+  @HostListener('document:click', ['$event'])
+  OnDocumentClick(event: MouseEvent): void {
+    if (!this.host.nativeElement.contains(event.target as Node)) {
+      this.CloseMenus();
+    }
+  }
+
+  @HostListener('document:keydown.escape')
+  OnEscape(): void {
+    // Closing a panel that holds focus returns focus to the button that opened it.
+    const open = this.MoreMenuOpen ? 'more' : this.ViewMenuOpen ? 'view' : null;
+    const focusInside = open !== null && this.host.nativeElement.contains(document.activeElement);
+    this.CloseMenus();
+    if (open && focusInside) {
+      (this.host.nativeElement.querySelector(`[data-menu-trigger="${open}"]`) as HTMLElement | null)?.focus();
+    }
+  }
+
+  private readPins(): string[] | null {
+    let raw: string | undefined;
+    try {
+      raw = UserInfoEngine.Instance.GetSetting(TOOLBAR_PINS_SETTING_KEY);
+    } catch {
+      return null;
+    }
+    if (raw !== this._pinsRaw) {
+      this._pinsRaw = raw;
+      this._pinsParsed = null;
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as { Pinned?: unknown };
+          this._pinsParsed = Array.isArray(parsed.Pinned) ? parsed.Pinned.filter((k): k is string => typeof k === 'string') : null;
+        } catch {
+          this._pinsParsed = null;
+        }
+      }
+    }
+    return this._pinsParsed;
+  }
+
+  private writePins(pins: string[]): void {
+    this._localPins = pins;
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: pins }));
+    } catch {
+      // No user context (tests, anonymous hosts): the pins still apply for this session.
+    }
   }
 
   public async OnToolbarItemClick(item: ResolvedToolbarItem, event: MouseEvent): Promise<void> {
@@ -1118,6 +1350,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    */
   public OnVariantClick(variantID: string | null): void {
     this.VariantMenuOpen = false;
+    this.ViewMenuOpen = false;
     if (variantID === this.CurrentVariantID) {
       this.cdr.markForCheck();
       return;
