@@ -195,55 +195,78 @@ describe('NavigationService record opens — temp-tab scope', () => {
 
 // ===================== Standard-form escape hatch (MJ#4755) =====================
 // A custom form registered at a higher priority hides the CodeGen form. The
-// tab's Configuration.FormMode is what the record resource reads to ask the
-// form host for the standard form, so every entry point has to carry it.
+// requested form mode travels as the tab's `form=standard` QUERY PARAM — the
+// channel the shell mirrors into the URL and BaseResourceComponent delivers
+// live to a mounted record (OnQueryParamsChanged). Every open path has to land
+// it on the tab the open actually reaches: a new tab, a forced tab, or an
+// existing tab that dedup focused instead.
 describe('NavigationService record opens — formMode', () => {
+  const STANDARD_PARAMS = { queryParams: { form: 'standard' } };
+
   beforeEach(() => {
     vi.clearAllMocks();
     SetRecordOpenStyle('records');
   });
 
-  it('OpenNewEntityRecord carries formMode into the tab Configuration', () => {
+  it('OpenNewEntityRecord puts form=standard on the new tab', () => {
     const { service, stubs } = createService();
     service.OpenNewEntityRecord('Widgets', { formMode: 'standard' });
-    expect(requestFrom(stubs.openTabForced).Configuration['FormMode']).toBe('standard');
-  });
-
-  it('OpenNewEntityRecord without formMode leaves FormMode out entirely', () => {
-    const { service, stubs } = createService();
-    service.OpenNewEntityRecord('Widgets');
-    // Absent, not undefined-valued: the tab config is persisted, and a stray
-    // key would make every record tab look like it had an opinion.
+    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-forced', STANDARD_PARAMS);
+    // The query param is the ONLY channel — no parallel Configuration key to drift.
     expect('FormMode' in requestFrom(stubs.openTabForced).Configuration).toBe(false);
   });
 
-  it('OpenEntityRecord carries formMode into a new tab', () => {
+  it('OpenNewEntityRecord without formMode leaves the tab params alone', () => {
     const { service, stubs } = createService();
-    service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
-    expect(requestFrom(stubs.openTab).Configuration['FormMode']).toBe('standard');
+    service.OpenNewEntityRecord('Widgets');
+    expect(stubs.updateTabConfiguration).not.toHaveBeenCalled();
   });
 
-  it('OpenEntityRecord without formMode leaves FormMode out entirely', () => {
+  it('OpenNewEntityRecord lands form=standard on whichever tab the open reached (classic dedup)', () => {
+    // Classic style does not force: OpenTab can hand back an EXISTING new-record
+    // tab — the dead-end custom form the user is escaping. The param must land there.
+    SetRecordOpenStyle('classic');
     const { service, stubs } = createService();
-    service.OpenEntityRecord('Widgets', pkey);
+    stubs.openTab.mockReturnValue('tab-dead-end');
+    service.OpenNewEntityRecord('Widgets', { formMode: 'standard' });
+    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-dead-end', STANDARD_PARAMS);
+  });
+
+  it('OpenEntityRecord puts form=standard on a new tab', () => {
+    const { service, stubs } = createService();
+    service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
+    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-opened', STANDARD_PARAMS);
     expect('FormMode' in requestFrom(stubs.openTab).Configuration).toBe(false);
   });
 
-  it('re-opening an already-open record in standard form switches that tab', () => {
-    const { service, stubs } = createService({ existingTab: { id: 'tab-existing' } });
+  it('OpenEntityRecord puts form=standard on a forced (shift) tab', () => {
+    const { service, stubs } = createService({ shift: true });
     service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
-    // Dedup focuses the existing tab — without this update the user would land
-    // on the custom form they were trying to get away from.
-    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-existing', { FormMode: 'standard' });
+    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-forced', STANDARD_PARAMS);
+  });
+
+  it('OpenEntityRecord without formMode leaves the tab params alone', () => {
+    const { service, stubs } = createService();
+    service.OpenEntityRecord('Widgets', pkey);
+    expect(stubs.updateTabConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('re-opening an already-open record in standard form applies form=standard to the EXISTING tab', () => {
+    const { service, stubs } = createService({ existingTab: { id: 'tab-existing' } });
+    // The existing tab already carries another param — it must survive the merge.
+    stubs.getTab.mockReturnValue({ id: 'tab-existing', configuration: { queryParams: { other: 'x' } } });
+    service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
+    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-existing', { queryParams: { other: 'x', form: 'standard' } });
     expect(stubs.setActiveTab).toHaveBeenCalledWith('tab-existing');
   });
 
-  it('a plain re-open does not touch the existing tab form mode', () => {
+  it('a plain re-open does not touch the existing tab params', () => {
     const { service, stubs } = createService({ existingTab: { id: 'tab-existing' } });
     service.OpenEntityRecord('Widgets', pkey);
     expect(stubs.updateTabConfiguration).not.toHaveBeenCalled();
   });
 });
+
 
 // ===================== Record origin chain (crumb ping-pong) =====================
 // Under the preview-tab model an in-record link CONSUMES the parent's tab, so

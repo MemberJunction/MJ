@@ -3,6 +3,7 @@
   [PrimaryKey]="PrimaryKey"
   [NewRecordValues]="newRecordValues"
   [FormMode]="FormMode"
+  (FormModeChange)="FormModeChange.emit($event)"
   [Provider]="Provider"
   (LoadComplete)="onLoadComplete()"
   (LoadError)="onLoadComplete()"

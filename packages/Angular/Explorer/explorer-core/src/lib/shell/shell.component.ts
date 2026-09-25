@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery, StandardFormQueryParams } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration, FORM_MODE_QUERY_PARAM, ReadStandardFormQuery } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -1818,12 +1818,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       return `${url}${separator}${params.toString()}`;
     };
 
-    // Query params a record tab's URL carries: initial values for an unsaved
-    // record, and the standard-form switch (MJ#4755) so a `?form=standard` tab
-    // keeps it when the URL is rebuilt from the tab config.
+    // Extra query params a record tab's URL carries beyond the tab's own
+    // queryParams (which appendQP already merges — that is where the
+    // standard-form `form` param lives, MJ#4755): initial values for an
+    // unsaved record.
     const recordQueryParams = (isNewRecord: boolean): Record<string, string> => {
       const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
-      return { ...(nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : {}), ...StandardFormQueryParams(config) };
+      return nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : {};
     };
 
     // Helper function to get app path for URL

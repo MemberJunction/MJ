@@ -4,13 +4,14 @@ import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecordUrlId } from '@memberjunction/core';
 import { EntityFormMode } from '@memberjunction/ng-base-forms';
+import { FormModeFromQueryParams, FormModeQueryParams, ReconcileFormMode } from './record-form-mode';
 import { SingleRecordComponent } from '../single-record/single-record.component';
 @RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
   standalone: false,
     selector: 'mj-record-resource',
     styles: [`:host { display: block; height: 100%; width: 100%; }`],
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" [FormMode]="FormMode" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()"></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" [FormMode]="FormMode" (FormModeChange)="OnFormModeChange($event)" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     @ViewChild(SingleRecordComponent) private singleRecord?: SingleRecordComponent;
@@ -25,12 +26,50 @@ export class EntityRecordResource extends BaseResourceComponent {
     }
 
     /**
-     * The tab's requested form mode (MJ#4755). Written by
-     * `NavigationOptions.formMode` and the `?form=standard` deep link; any
-     * other value means the normal (highest-priority) form.
+     * Custom vs standard form (MJ#4755). The tab's `form` query param is the
+     * source of truth — the URL, back/forward, tab re-focus and a cached
+     * component all read it — and this tracks the mode actually on screen.
      */
+    private _formMode: EntityFormMode = 'default';
+
+    /** The mode bound to the form host: seeded from the tab's params, so a deep link mounts the standard form directly. */
     public get FormMode(): EntityFormMode {
-        return this.Data?.Configuration?.FormMode === 'standard' ? 'standard' : 'default';
+        return this._formMode;
+    }
+
+    public override set Data(value: ResourceData) {
+        super.Data = value;
+        // Seed only before the form mounts: afterwards a changed input would
+        // remount the host WITHOUT its unsaved-work guard. Later changes arrive
+        // through OnQueryParamsChanged instead.
+        if (!this.singleRecord) {
+            this._formMode = FormModeFromQueryParams(this.GetQueryParams());
+        }
+    }
+    public override get Data(): ResourceData {
+        return super.Data;
+    }
+
+    /**
+     * Follow the tab's `form` param — a standard-form open that dedup routed
+     * to this tab, a deep link, back/forward, or a plain URL clearing it.
+     */
+    protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+        const result = ReconcileFormMode(params, this._formMode, this.singleRecord ?? null);
+        this._formMode = result.Mode;
+        const writeBack = result.WriteBack;
+        if (writeBack) {
+            // The switch was refused (unsaved work; the host warned the user):
+            // put the URL back to what is on screen. Deferred a microtask because
+            // UpdateQueryParams is suppressed for the whole delivery that called us.
+            void Promise.resolve().then(() => this.UpdateQueryParams(writeBack));
+        }
+    }
+
+    /** The user switched forms from the host's strip: record it on the tab (and so the URL). */
+    public OnFormModeChange(mode: EntityFormMode): void {
+        this._formMode = mode;
+        this.UpdateQueryParams(FormModeQueryParams(mode));
     }
 
     public static GetPrimaryKey(data: ResourceData, provider?: IMetadataProvider): CompositeKey {

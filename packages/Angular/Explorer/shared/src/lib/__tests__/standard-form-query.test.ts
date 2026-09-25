@@ -1,11 +1,10 @@
 /**
- * The `?form=standard` record deep link (MJ#4755). The router reads it into
- * the tab's Configuration.FormMode and the shell writes it back when it
- * rebuilds the URL from that config, so the two halves must agree exactly or
- * the link is dropped the first time the shell syncs the URL.
+ * The `?form=standard` record deep link (MJ#4755). The router, the shell's
+ * history path and the record resource all read the tab's `form` query param
+ * through this one reader, so they agree on what counts as "standard".
  */
 import { describe, it, expect } from 'vitest';
-import { FORM_MODE_QUERY_PARAM, ReadStandardFormQuery, StandardFormQueryParams } from '../record-open-style';
+import { ReadStandardFormQuery } from '../record-open-style';
 
 describe('ReadStandardFormQuery', () => {
   it('reads the exact value', () => {
@@ -30,22 +29,5 @@ describe('ReadStandardFormQuery', () => {
 
   it('is undefined for a null param', () => {
     expect(ReadStandardFormQuery({ form: null })).toBeUndefined();
-  });
-});
-
-describe('StandardFormQueryParams (the shell writer)', () => {
-  it('writes the param for a standard-form tab', () => {
-    expect(StandardFormQueryParams({ FormMode: 'standard' })).toEqual({ [FORM_MODE_QUERY_PARAM]: 'standard' });
-  });
-
-  it('writes nothing for a normal tab', () => {
-    expect(StandardFormQueryParams({})).toEqual({});
-    expect(StandardFormQueryParams({ FormMode: 'default' })).toEqual({});
-    expect(StandardFormQueryParams(undefined)).toEqual({});
-  });
-
-  it('round-trips through the reader', () => {
-    const written = StandardFormQueryParams({ FormMode: 'standard' });
-    expect(ReadStandardFormQuery(written)).toBe('standard');
   });
 });

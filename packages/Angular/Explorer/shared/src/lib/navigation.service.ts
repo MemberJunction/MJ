@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
-import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
+import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, FORM_MODE_QUERY_PARAM, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
 import { CompositeKey, Metadata, IsNewEntityRecordUrlId } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
@@ -64,15 +64,6 @@ export const SYSTEM_APP_ID = '__explorer';
  * Neutral color for fallback when no app is available
  */
 const NEUTRAL_APP_COLOR = '#9E9E9E'; // Material Design Gray 500
-
-/**
- * The tab-Configuration fragment for a standard-form open (MJ#4755). Returns
- * an empty object when no form mode was requested, so the key is absent from
- * the persisted config rather than present-but-undefined.
- */
-function formModeConfiguration(options?: NavigationOptions): { FormMode?: 'standard' } {
-  return options?.formMode ? { FormMode: options.formMode } : {};
-}
 
 /**
  * Centralized navigation service that handles all navigation operations
@@ -498,12 +489,9 @@ export class NavigationService implements OnDestroy {
         // THIS open, not wherever they were when the tab was first created
         // (possibly days ago, possibly under an older origin schema).
         this.refreshSourceContext(existing.id, options);
-        // An explicit standard-form open must switch the tab it lands on;
-        // otherwise dedup would focus the custom form the user asked to leave.
-        // A plain re-open leaves the tab's current form mode alone.
-        if (options?.formMode) {
-          this.workspaceManager.UpdateTabConfiguration(existing.id, { FormMode: options.formMode });
-        }
+        // Before activation, so the URL synced for the focused tab already
+        // carries it; the mounted record switches via OnQueryParamsChanged.
+        this.applyFormMode(existing.id, options);
         // The activation assert applies to RE-opens too — the same-click
         // stale-stomp that motivated it for fresh opens is equally possible
         // here, and without it the symptom is maddening: opening a record
@@ -536,8 +524,7 @@ export class NavigationService implements OnDestroy {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
         recordId: recordId,  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
-        ...this.resolveSourceContext(options),
-        ...formModeConfiguration(options)
+        ...this.resolveSourceContext(options)
       },
       ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false,
@@ -558,6 +545,7 @@ export class NavigationService implements OnDestroy {
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
     }
+    this.applyFormMode(tabId, options);
 
     // If the friendly record name was not already in the LRU cache, fire-and-forget
     // an async lookup so the tab title upgrades smoothly once resolved without stalling tab open.
@@ -1095,8 +1083,7 @@ export class NavigationService implements OnDestroy {
         recordId: '',        // Empty recordId indicates new record
         isNew: true,         // Flag to indicate this is a new record
         NewRecordValues: options?.newRecordValues,  // Pass through initial values if provided
-        ...this.resolveSourceContext(options),
-        ...formModeConfiguration(options)
+        ...this.resolveSourceContext(options)
       },
       ResourceRecordId: '',  // Empty for new records
       // Pinned under the records style so the region's preview replacement can
@@ -1116,12 +1103,29 @@ export class NavigationService implements OnDestroy {
     } else {
       tabId = this.workspaceManager.OpenTab(request, appColor);
     }
+    // The open may have focused an EXISTING new-record tab (forced opens and
+    // classic OpenTab both dedup on entity + empty id) — often the dead-end
+    // custom form the user is escaping. The param reaches it either way.
+    this.applyFormMode(tabId, options);
 
     if (tabsMode) {
       this.assertRecordActivation(tabId);
     }
 
     return tabId;
+  }
+
+  /**
+   * Land a standard-form request (MJ#4755) on the tab an open reached. The
+   * mode lives ONLY in the tab's `form` query param: the shell mirrors it into
+   * the URL, and BaseResourceComponent delivers it live to a mounted record —
+   * including one on a tab that dedup focused rather than created. A plain
+   * open leaves the tab's current mode alone.
+   */
+  private applyFormMode(tabId: string, options?: NavigationOptions): void {
+    if (options?.formMode) {
+      this.applyQueryParamsToTab(tabId, { [FORM_MODE_QUERY_PARAM]: options.formMode });
+    }
   }
 
   /**

@@ -43,17 +43,6 @@ export function ReadStandardFormQuery(
   return value?.trim().toLowerCase() === 'standard' ? 'standard' : undefined;
 }
 
-/**
- * The shell-side half of {@link ReadStandardFormQuery}: the query params a
- * record tab's URL must carry so a standard-form tab survives the shell
- * rebuilding its URL from the tab configuration. Empty for any other tab.
- */
-export function StandardFormQueryParams(
-  configuration: Record<string, unknown> | undefined | null
-): Record<string, string> {
-  return configuration?.['FormMode'] === 'standard' ? { [FORM_MODE_QUERY_PARAM]: 'standard' } : {};
-}
-
 /** True when a workspace tab's configuration marks it as an entity-record tab */
 export function IsRecordsTabConfiguration(configuration: Record<string, unknown> | undefined | null): boolean {
   return configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE;

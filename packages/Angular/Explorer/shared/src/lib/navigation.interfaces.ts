@@ -52,9 +52,9 @@ export interface NavigationOptions {
 
   /**
    * Open the record in the CodeGen standard form even when a custom form is
-   * registered (MJ#4755). Carried into the tab's `Configuration.FormMode`,
-   * which the record resource hands to the form host. Omit for the normal
-   * resolution (the highest-priority registered form).
+   * registered (MJ#4755). Applied as the tab's `form=standard` query param —
+   * on a new tab or on the existing tab the open focused — which the record
+   * resource hands to the form host. Omit to leave the tab's mode unchanged.
    */
   formMode?: 'standard';
 }
