@@ -533,3 +533,216 @@ describe('ExecutePrompt — failover through the full pipeline', () => {
     expect(testLLM.CalledModels).toHaveLength(1); // single attempt, no failover
   });
 });
+
+// ===========================================================================
+// (e) The configured failover budget is HONOURED.
+//
+// `FailoverMaxAttempts` (defaulted to 3 by getFailoverConfiguration) was read into
+// failoverConfig.maxAttempts and then consulted by nobody: its only readers were
+// shouldAttemptFailover and transitionToNextCandidate, neither of which has a caller. The live
+// walk below iterated the FULL priority-ordered candidate list instead — every active model of
+// the prompt's type crossed with every active inference vendor, 317 entries on a stock tenant —
+// so one stalling or 5xx-ing provider was retried candidate after candidate. On a 2-vCPU box
+// running five entities in parallel that is what turned a 27-table CodeGen step into a
+// 20-minute one.
+//
+// These tests drive the real loop and assert on the number of calls a provider actually saw.
+// ===========================================================================
+describe('executeModelWithFailover — the configured attempt budget', () => {
+  /** Five candidates on five credentialed drivers, so nothing is skipped for missing keys. */
+  function fiveCredentialedCandidates(): TestCandidate[] {
+    return [
+      candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100),
+      candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90),
+      candidate('m-groq', 'GroqLLM', 'v-groq', 'Groq', 'api-groq', 80),
+      candidate('m-deepseek', 'DeepSeekLLM', 'v-deepseek', 'DeepSeek', 'api-deepseek', 70),
+      candidate('m-gpt2', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt2', 60),
+    ];
+  }
+
+  it('stops after the default 3 attempts instead of walking all 5 candidates', async () => {
+    const candidates = fiveCredentialedCandidates();
+    // Every candidate fails with a failover-eligible NetworkError. Before the fix this walked
+    // all five; the 4th and 5th must now never be reached.
+    testLLM.Script(
+      ...Array.from({ length: 5 }, () => ({
+        kind: 'fail' as const,
+        error: new Error('fetch failed: network socket disconnected'),
+      })),
+    );
+
+    const result = await runFailover(runner, candidates, {}); // no FailoverMaxAttempts → 3
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-claude', 'api-gpt', 'api-groq']);
+    expect(testLLM.CalledModels).toHaveLength(3);
+  });
+
+  it('walks deeper when the prompt raises FailoverMaxAttempts — the cap is read, not hardcoded', async () => {
+    const candidates = fiveCredentialedCandidates();
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'recovered on the fifth candidate' },
+    );
+
+    const result = await runFailover(runner, candidates, { FailoverMaxAttempts: 5 });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.choices[0].message.content).toBe('recovered on the fifth candidate');
+    expect(testLLM.CalledModels).toHaveLength(5);
+  });
+
+  it('does not spend the budget on candidates skipped for missing credentials', async () => {
+    // The three highest-priority candidates sit on drivers with no key in this environment, so
+    // the walk skips them without issuing a request. A budget counted off the LOOP INDEX would
+    // be exhausted by those three and would never reach the credentialed pair below — which is
+    // why the check is placed after the credential skip and counts only calls actually issued.
+    // Driver classes deliberately absent from DEFAULT_CONFIGURED_DRIVERS, so GetAIAPIKey returns ''
+    // for them and candidateHasCredentials is false.
+    const keyless = [
+      candidate('m-mistral', 'MistralLLM', 'v-mistral', 'Mistral', 'api-mistral', 100),
+      candidate('m-cohere', 'CohereLLM', 'v-cohere', 'Cohere', 'api-cohere', 95),
+      candidate('m-ollama', 'OllamaLLM', 'v-ollama', 'Ollama', 'api-ollama', 90),
+    ];
+    const credentialed = [
+      candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 80),
+      candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 70),
+    ];
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'reached the credentialed candidate' },
+    );
+
+    const result = await runFailover(runner, [...keyless, ...credentialed], {});
+
+    expect(result.success).toBe(true);
+    expect(result.data?.choices[0].message.content).toBe('reached the credentialed candidate');
+    // Only the two credentialed candidates were ever called; the keyless three cost nothing.
+    expect(testLLM.CalledModels).toEqual(['api-claude', 'api-gpt']);
+  });
+
+  it('treats a non-positive configured cap as unconfigured rather than as "no calls allowed"', async () => {
+    // A negative row must not stop the walk before the FIRST call — that would fail every prompt
+    // on the tenant. It falls back to the same default of 3.
+    const candidates = fiveCredentialedCandidates();
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'still ran despite a nonsense cap' },
+    );
+
+    const result = await runFailover(runner, candidates, { FailoverMaxAttempts: -1 });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.choices[0].message.content).toBe('still ran despite a nonsense cap');
+    expect(testLLM.CalledModels).toHaveLength(2);
+  });
+});
+
+// ===========================================================================
+// (f) The budget bounds SPEND, not DIVERSITY — one last-resort call.
+//
+// The budget above is right about how much a prompt may spend and silent about where it goes,
+// and by default it all goes to one place: a priority-ordered candidate list is usually the same
+// driver class repeated across vendors and models, so three attempts are three requests to one
+// upstream having one bad minute, and the prompt fails without anyone else being asked.
+//
+// That is the ordinary shape on a tenant running on platform credits — a single metered provider
+// in front of everything, whose failure reads "101 candidates" and looks like a broken chain.
+//
+// So when the whole budget went to ONE driver class, the walk continues WITHOUT spending until it
+// finds a credentialed candidate on a different class, and allows exactly one call there. The
+// ceiling is maxAttempts + 1 and never more.
+// ===========================================================================
+describe('executeModelWithFailover — one last-resort call on a different provider', () => {
+  const NET = () => ({ kind: 'fail' as const, error: new Error('fetch failed: network socket disconnected') });
+
+  /** OpenRouter is not in the default fixture set; give it a key so it is not skipped. */
+  function credentialOpenRouter(): void {
+    loadCatalog(buildRealisticCatalog(), [...DEFAULT_CONFIGURED_DRIVERS, ...DIRECT_DRIVE_DRIVERS, 'OpenRouterLLM']);
+  }
+
+  /** Four OpenRouter rows (the shape of a platform-credit tenant) then one on another provider. */
+  function oneClassThenAnother(): TestCandidate[] {
+    return [
+      candidate('m-or-1', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-1', 100),
+      candidate('m-or-2', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-2', 95),
+      candidate('m-or-3', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-3', 90),
+      candidate('m-or-4', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-4', 85),
+      candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 10),
+    ];
+  }
+
+  it('spends the budget on one provider, then reaches a different one and succeeds', async () => {
+    // THE CASE THIS EXISTS FOR. Without the escape the walk stops at the 4th OpenRouter row and
+    // the Anthropic candidate — which has a working key and would have answered — is never
+    // called. Note the skip: candidate 4 is same-class, so it costs no request.
+    credentialOpenRouter();
+    testLLM.Script(NET(), NET(), NET(), { kind: 'succeed', content: 'answered by the other provider' });
+
+    const result = await runFailover(runner, oneClassThenAnother(), {}); // default budget of 3
+
+    expect(result.success).toBe(true);
+    expect(result.data?.choices[0].message.content).toBe('answered by the other provider');
+    expect(testLLM.CalledModels).toEqual(['api-or-1', 'api-or-2', 'api-or-3', 'api-claude']);
+  });
+
+  it('allows exactly ONE extra call — never two, however many other providers follow', async () => {
+    // The bound that makes this safe to ship. If the last-resort call also fails, the walk ends:
+    // a second different-class candidate must not get a turn, or the budget means nothing.
+    credentialOpenRouter();
+    const candidates = [
+      ...oneClassThenAnother(),
+      candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 5),
+      candidate('m-groq', 'GroqLLM', 'v-groq', 'Groq', 'api-groq', 1),
+    ];
+    testLLM.Script(NET(), NET(), NET(), NET(), NET(), NET());
+
+    const result = await runFailover(runner, candidates, {});
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-or-1', 'api-or-2', 'api-or-3', 'api-claude']);
+    expect(testLLM.CalledModels).toHaveLength(4); // 3 budgeted + 1 last resort, and no more
+  });
+
+  it('does NOT fire when the budget was already spread across more than one provider', async () => {
+    // The escape answers "everything went to one place", not "the budget ran out". A walk that
+    // already asked three different providers has had its diversity; extending it would just be
+    // a budget of four. This is the assertion that keeps the existing cap meaningful.
+    const candidates = [
+      candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100),
+      candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90),
+      candidate('m-groq', 'GroqLLM', 'v-groq', 'Groq', 'api-groq', 80),
+      candidate('m-deepseek', 'DeepSeekLLM', 'v-deepseek', 'DeepSeek', 'api-deepseek', 70),
+    ];
+    testLLM.Script(NET(), NET(), NET(), { kind: 'succeed', content: 'must never be reached' });
+
+    const result = await runFailover(runner, candidates, {});
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-claude', 'api-gpt', 'api-groq']);
+  });
+
+  it('never calls a keyless candidate to satisfy the diversity rule', async () => {
+    // The escape must obey the credential skip like every other step of the walk. A different
+    // driver class with no key in this environment returns a 401 that failover treats as fatal —
+    // so reaching for one "because it is different" would end the walk on a misleading error.
+    // MistralLLM and CohereLLM are deliberately absent from the configured set.
+    credentialOpenRouter();
+    const candidates = [
+      candidate('m-or-1', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-1', 100),
+      candidate('m-or-2', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-2', 95),
+      candidate('m-or-3', 'OpenRouterLLM', 'v-or', 'OpenRouter', 'api-or-3', 90),
+      candidate('m-mistral', 'MistralLLM', 'v-mistral', 'Mistral', 'api-mistral', 50),
+      candidate('m-cohere', 'CohereLLM', 'v-cohere', 'Cohere', 'api-cohere', 40),
+    ];
+    testLLM.Script(NET(), NET(), NET(), { kind: 'succeed', content: 'must never be reached' });
+
+    const result = await runFailover(runner, candidates, {});
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-or-1', 'api-or-2', 'api-or-3']);
+  });
+});

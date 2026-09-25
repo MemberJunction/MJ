@@ -11,6 +11,7 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
+import { buildNoModelFoundMessage, NOT_EVALUATED_REASON } from './no-model-found-message';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -251,7 +252,7 @@ export class AIPromptRunner {
    * that were intentionally NOT credential-checked because a higher-priority candidate had
    * already been selected. See the DECISION note in {@link selectModelWithAPIKeyTracked}.
    */
-  private static readonly NOT_EVALUATED_REASON = 'Not evaluated (a higher-priority candidate was already selected; set AIPromptParams.forceFullModelEvaluation to probe all)';
+  private static readonly NOT_EVALUATED_REASON = NOT_EVALUATED_REASON;
 
   /**
    * Optional metadata provider override. Callers should set
@@ -1769,6 +1770,8 @@ export class AIPromptRunner {
       const modelsConsidered: Array<{
         model: MJAIModelEntityExtended;
         vendor?: MJAIVendorEntity;
+        /** The provider implementation, e.g. `OpenRouterLLM`. See summarizeDriverClasses. */
+        driverClass?: string;
         priority: number;
         available: boolean;
         unavailableReason?: string;
@@ -2628,6 +2631,8 @@ export class AIPromptRunner {
     modelsConsidered: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
+      /** The provider implementation, e.g. `OpenRouterLLM`. See summarizeDriverClasses. */
+      driverClass?: string;
       priority: number;
       available: boolean;
       unavailableReason?: string;
@@ -2662,6 +2667,8 @@ export class AIPromptRunner {
     consideredModels: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
+      /** The provider implementation, e.g. `OpenRouterLLM`. See summarizeDriverClasses. */
+      driverClass?: string;
       priority: number;
       available: boolean;
       unavailableReason?: string;
@@ -2680,6 +2687,8 @@ export class AIPromptRunner {
     const consideredModels: Array<{
       model: MJAIModelEntityExtended;
       vendor?: MJAIVendorEntity;
+      /** The provider implementation, e.g. `OpenRouterLLM`. See summarizeDriverClasses. */
+      driverClass?: string;
       priority: number;
       available: boolean;
       unavailableReason?: string;
@@ -2708,6 +2717,7 @@ export class AIPromptRunner {
         consideredModels.push({
           model: candidate.model,
           vendor: vendorEntity,
+          driverClass: candidate.driverClass,
           priority: candidate.priority,
           available: false,
           unavailableReason: AIPromptRunner.NOT_EVALUATED_REASON
@@ -2738,6 +2748,7 @@ export class AIPromptRunner {
       const considered = {
         model: candidate.model,
         vendor: vendorEntity,
+        driverClass: candidate.driverClass,
         priority: candidate.priority,
         available: hasCredentials,
         unavailableReason: hasCredentials ? undefined : `No credentials configured for driver ${candidate.driverClass}`
@@ -2784,31 +2795,13 @@ export class AIPromptRunner {
 
   /**
    * Builds a descriptive error message when no model could be selected for a prompt.
-   * Includes details about which models were considered and why they were unavailable
-   * so the error message is actionable for end users (e.g., missing API credentials).
+   *
+   * The body lives in `no-model-found-message.ts` so it can be tested directly — as a private
+   * method its only coverage was a re-implementation of it in the test file, which asserted
+   * against its own copy rather than this code.
    */
   private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
-    const base = `No suitable model found for prompt ${promptName}`;
-
-    if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
-      return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
-    }
-
-    // Check if all models were unavailable due to missing credentials
-    const unavailableModels = selectionInfo.modelsConsidered.filter(m => !m.available);
-    if (unavailableModels.length === selectionInfo.modelsConsidered.length) {
-      const triedSummary = unavailableModels.slice(0, 5).map(m => {
-        const vendorName = m.vendor?.Name || 'default';
-        return `${m.model.Name}/${vendorName}`;
-      }).join(', ');
-
-      const suffix = unavailableModels.length > 5 ? ` (${unavailableModels.length} total)` : '';
-      return `${base}. No valid API credentials/keys are configured for any of the candidate model-vendor combinations. ` +
-        `Tried: ${triedSummary}${suffix}. ` +
-        `Please configure API credentials in your environment or AI Credential settings.`;
-    }
-
-    return `${base}. ${selectionInfo.selectionReason || 'Unknown reason'}`;
+    return buildNoModelFoundMessage(promptName, selectionInfo);
   }
 
   /**
@@ -2896,6 +2889,7 @@ export class AIPromptRunner {
             modelName: mc.model.Name,
             vendorId: mc.vendor?.ID,
             vendorName: mc.vendor?.Name || 'default',
+            driverClass: mc.driverClass,
             priority: mc.priority,
             available: mc.available,
             unavailableReason: mc.unavailableReason
@@ -3202,6 +3196,30 @@ export class AIPromptRunner {
       return has;
     };
     let skippedForCredentials = 0;
+    // Calls actually issued to a provider during this walk. NOT the loop index: candidates skipped
+    // for missing credentials below never reach a provider and must not consume the budget, and a
+    // rate-limit retry re-runs the same index and must consume one.
+    let attemptedCalls = 0;
+    // `FailoverMaxAttempts` (defaulted to 3 by getFailoverConfiguration) bounds how many provider
+    // calls one prompt execution may make. Honouring it here is what makes the column live: the
+    // walk below is over the FULL priority-ordered candidate list — every active model of the
+    // prompt's type crossed with every active inference vendor, which is 317 entries on a stock
+    // tenant — and until now nothing consulted the configured cap, so a provider returning 5xx (or
+    // stalling, where there is no per-call deadline either) was retried against candidate after
+    // candidate. The intended semantics are the ones the existing `shouldAttemptFailover` helper
+    // documents: `attemptNumber` is 1-based and `attemptNumber > maxAttempts` is refused, i.e.
+    // maxAttempts is the TOTAL number of calls including the first, not the number of retries
+    // after it.
+    // A non-positive value would stop the walk before the FIRST call and fail every prompt on the
+    // tenant, so it is treated as "not configured" rather than "no calls allowed". `|| 3` in
+    // getFailoverConfiguration already turns 0/null into 3; this covers a negative row.
+    const maxAttemptedCalls = failoverConfig.maxAttempts > 0 ? failoverConfig.maxAttempts : 3;
+
+    // Driver classes a provider call was actually ISSUED against. See the LAST RESORT note at
+    // the budget check — this set is also what bounds that escape to a single call.
+    const attemptedDriverClasses = new Set<string>();
+    /** The budget line is logged once, not once per candidate skipped during the scan below. */
+    let budgetReported = false;
 
     // Iterate through all candidates in priority order with instant failover
     for (let i = 0; i < allCandidates.length; i++) {
@@ -3220,6 +3238,80 @@ export class AIPromptRunner {
         skippedForCredentials++;
         continue;
       }
+
+      // Budget check AFTER the credential skip and BEFORE the call, so a keyless tail costs
+      // nothing and the cap counts only calls a provider actually saw. Stopping here leaves
+      // `lastError` holding the most recent real failure, which is what the caller needs to see —
+      // reporting "budget exhausted" instead would hide why the candidates failed.
+      if (attemptedCalls >= maxAttemptedCalls) {
+        if (!budgetReported) {
+          budgetReported = true;
+          LogStatusEx({
+            message:
+              `⛔ Failover budget reached for prompt "${prompt.Name}": ${attemptedCalls} of a ` +
+              `configured ${maxAttemptedCalls} attempt(s) used across ${allCandidates.length} ` +
+              `candidate(s). No further candidate is called from here, except the single ` +
+              `last-resort attempt on a different provider described below. Raise the prompt's ` +
+              `FailoverMaxAttempts to allow a deeper walk.`,
+            category: 'AI',
+            additionalArgs: [{
+              promptId: prompt.ID,
+              attemptedCalls,
+              maxAttemptedCalls,
+              candidateCount: allCandidates.length,
+              skippedForCredentials,
+              driverClassesAttempted: [...attemptedDriverClasses]
+            }]
+          });
+        }
+
+        // LAST RESORT — one call beyond the budget, and only to a DIFFERENT driver class.
+        //
+        // The budget bounds how much a prompt may SPEND. It does not say the spend must all go to
+        // one provider, and by default it does: three attempts down a priority-ordered list are
+        // usually three vendors of the SAME driver class, so one provider having a bad minute
+        // consumes the whole budget and the prompt fails without anyone else being asked.
+        //
+        // That is the common case rather than an edge one. A tenant on platform credits has a
+        // single metered provider in front of everything, so its candidate list really does read
+        // "101 candidates over 1 driver class" — and all three attempts are the same upstream
+        // having the same bad minute.
+        //
+        // So when every call so far went to ONE driver class, keep walking without spending —
+        // same-class candidates are skipped, not called — until the first credentialed candidate
+        // on a different class, and allow exactly that one.
+        //
+        // ONE is bounded by the set itself, with no separate flag: the extra call adds its own
+        // class, so `size === 1` is false at every later candidate and the walk stops there. The
+        // ceiling is maxAttempts + 1 and never more, and the scan issues no requests of its own.
+        // `lastError` semantics are untouched: the extra call either succeeds like any other
+        // candidate or records its failure like any other.
+        const soleDriverClass =
+          attemptedDriverClasses.size === 1 ? [...attemptedDriverClasses][0] : null;
+        if (soleDriverClass === null) {
+          break;
+        }
+        if (candidate.driverClass === soleDriverClass) {
+          continue;
+        }
+
+        LogStatusEx({
+          message:
+            `↪️ Failover budget for prompt "${prompt.Name}" was spent entirely on ` +
+            `${soleDriverClass}. Trying ONE more candidate on a different provider ` +
+            `(${candidate.driverClass}) before giving up.`,
+          category: 'AI',
+          additionalArgs: [{
+            promptId: prompt.ID,
+            exhaustedDriverClass: soleDriverClass,
+            lastResortDriverClass: candidate.driverClass,
+            attemptedCalls,
+            maxAttemptedCalls
+          }]
+        });
+      }
+      attemptedCalls++;
+      attemptedDriverClasses.add(candidate.driverClass);
 
       try {
         // Log the attempt if not the first one
