@@ -1,0 +1,23 @@
+{
+  "ManifestVersion": 1,
+  "GeneratedAt": "2026-09-16T12:00:00.000Z",
+  "Transport": { "Name": "AWS-prod", "DriverClass": "AWS", "Configuration": { "Region": "us-east-1" } },
+  "Topics": [
+    {
+      "Name": "integration.batch-ready",
+      "IsFifo": true,
+      "MaxPayloadBytes": 262144,
+      "Subscriptions": [
+        {
+          "Name": "integration.apply",
+          "Filter": null,
+          "Policy": { "SubscriptionName": "integration.apply", "TopicName": "integration.batch-ready", "PartitionMode": "Ordered", "MaxAttempts": 3, "BackoffBaseSeconds": 60, "BackoffMaxSeconds": 1800, "LeaseSeconds": 300, "HeartbeatMode": "Manual" },
+          "HostType": "MJWorker",
+          "Status": "Active",
+          "ExternalRef": null,
+          "DriverArtifacts": { "SnsFilterPolicy": null }
+        }
+      ]
+    }
+  ]
+}

@@ -245,3 +245,9 @@ migrations/v*/*__RSU_*.sql
 # .github/scripts/stage-package-licenses.mjs. The root LICENSE is the only
 # source of truth; committing 300 copies would let them drift from it.
 packages/**/LICENSE
+
+# Terraform working directories and state (infrastructure/terraform/**)
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
