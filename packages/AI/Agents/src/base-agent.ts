@@ -188,6 +188,17 @@ export interface ActionResultCrushConfig {
     codeLang: CodeLang | undefined;
 }
 
+/** What a While loop produced, handed from executeWhileIterations to completeWhileLoop. */
+interface WhileLoopResults {
+    results: BaseAgentNextStep[];
+    /** Iteration failures, plus the condition failure when there is one. */
+    errors: unknown[];
+    finalPayload: BaseAgentNextStep['newPayload'];
+    iterations: number;
+    /** Set when the loop condition could not be evaluated — distinct from evaluating to false. */
+    conditionError?: string;
+}
+
 interface BaseIterationContext {
     loopType: 'ForEach' | 'While';
 
@@ -13873,7 +13884,7 @@ The context is now within limits. Please retry your request with the recovered c
         loopStepEntity.PayloadAtEnd = this.serializePayloadAtEnd(loopResults.finalPayload);
         await this.finalizeStepEntity(loopStepEntity,
                                       loopResults.errors.length === 0,
-                                      loopResults.errors.join('\n\n'),
+                                      this.formatLoopErrors(loopResults.errors),
                                       loopResults);
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
@@ -13933,6 +13944,23 @@ The context is now within limits. Please retry your request with the recovered c
      * handler), while action formatting happens at render time (here). Both produce the same
      * markdown style used by non-loop results, ensuring consistency across the codebase.
      */
+    /**
+     * One loop error as readable text. Loop errors are `{ index, item, message }` objects — joining
+     * the array directly wrote "[object Object]" into the step's ErrorMessage.
+     */
+    private describeLoopError(err: unknown): string {
+        if (typeof err === 'string') {
+            return err;
+        }
+        const message = (err as Record<string, unknown> | null)?.message;
+        return typeof message === 'string' && message ? message : JSON.stringify(err);
+    }
+
+    /** All loop errors as text for a step's ErrorMessage. */
+    private formatLoopErrors(errors: unknown[]): string {
+        return errors.map(err => this.describeLoopError(err)).join('\n\n');
+    }
+
     private formatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: unknown[]): string {
         const lines: string[] = [];
 
@@ -13959,8 +13987,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (errors.length > 0) {
             lines.push(`### Errors`);
             for (const err of errors) {
-                const errMsg = typeof err === 'string' ? err : (err as Record<string, unknown>)?.message || JSON.stringify(err);
-                lines.push(`• ✗ ${errMsg}`);
+                lines.push(`• ✗ ${this.describeLoopError(err)}`);
             }
         }
 
@@ -14141,12 +14168,13 @@ The context is now within limits. Please retry your request with the recovered c
         parentStepId: string,
         params: ExecuteAgentParams,
         config: AgentConfiguration
-    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any, iterations: number }> {
+    ): Promise<WhileLoopResults> {
         let currentPayload = initialPayload;
         const maxIterations = whileOp.maxIterations ?? 100;
         const results: BaseAgentNextStep[] = [];
         const errors = [];
         let iterationCount = 0;
+        let conditionError: string | undefined;
 
         const evaluator = new SafeExpressionEvaluator();
 
@@ -14157,7 +14185,15 @@ The context is now within limits. Please retry your request with the recovered c
             }
 
             const evalResult = evaluator.evaluate(whileOp.condition, { payload: currentPayload, results, errors });
-            if (!evalResult.success || !evalResult.value) {
+            if (!evalResult.success) {
+                // "Could not evaluate" is not "evaluated false". Treating it as false used to end the
+                // loop silently and finalize it as a success — a malformed condition produced a green,
+                // zero-iteration loop with the evaluator's error discarded.
+                conditionError = `While condition '${whileOp.condition}' could not be evaluated: ${evalResult.error ?? 'unknown error'}`;
+                errors.push({ index: iterationCount, message: conditionError });
+                break;
+            }
+            if (!evalResult.value) {
                 break;
             }
 
@@ -14183,7 +14219,7 @@ The context is now within limits. Please retry your request with the recovered c
             iterationCount++;
         }
 
-        return { results, errors, finalPayload: currentPayload, iterations: iterationCount };
+        return { results, errors, finalPayload: currentPayload, iterations: iterationCount, conditionError };
     }
 
     /**
@@ -14259,7 +14295,7 @@ The context is now within limits. Please retry your request with the recovered c
     private async completeWhileLoop(
         whileOp: WhileOperation,
         loopStepEntity: MJAIAgentRunStepEntityExtended,
-        loopResults: { results: BaseAgentNextStep[], errors: any[], finalPayload: any, iterations: number },
+        loopResults: WhileLoopResults,
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams
     ): Promise<BaseAgentNextStep> {
@@ -14267,16 +14303,25 @@ The context is now within limits. Please retry your request with the recovered c
 
         await this.finalizeStepEntity(loopStepEntity,
                                       loopResults.errors.length === 0,
-                                      loopResults.errors.join('\n\n'),
+                                      this.formatLoopErrors(loopResults.errors),
                                       loopResults);
+
+        // A condition that never evaluated means the loop never ran: fail the step rather than
+        // report a completed zero-iteration loop.
+        if (loopResults.conditionError && loopResults.iterations === 0) {
+            return this.createFailedStep(loopResults.conditionError, previousDecision);
+        }
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
             this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name);
         }
 
+        const retryInstructions = loopResults.conditionError
+            ? `While loop request using condition '${whileOp.condition}' stopped after ${loopResults.iterations} iteration(s): ${loopResults.conditionError}`
+            : `Completed While loop request using condition '${whileOp.condition}' after ${loopResults.iterations} iteration(s)`;
         return {
             step: 'Retry',
-            retryInstructions: `Completed While loop request using condition '${whileOp.condition}' after ${loopResults.iterations} iteration(s)`,
+            retryInstructions,
             terminate: false,
             newPayload: loopResults.finalPayload,
             previousPayload: previousDecision.previousPayload
