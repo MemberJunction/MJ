@@ -1,0 +1,59 @@
+[
+  {
+    "fields": {
+      "Name": "samples.hello-log",
+      "Description": "Hello World sample: no partitioning, every delivery runs as soon as a worker is free.",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=samples.hello",
+      "PartitionMode": "None",
+      "MaxAttempts": 3,
+      "BackoffBaseSeconds": 2,
+      "BackoffMaxSeconds": 30,
+      "LeaseSeconds": 60,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "samples.hello",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D6FE9B73-6F03-4FD0-A2CD-2E3B18DFD29D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "samples.hello-exclusive",
+      "Description": "Hello World sample: Exclusive — one delivery in flight per PartitionKey.",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=samples.hello",
+      "PartitionMode": "Exclusive",
+      "MaxAttempts": 3,
+      "BackoffBaseSeconds": 2,
+      "BackoffMaxSeconds": 30,
+      "LeaseSeconds": 60,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "samples.hello",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "95414C38-F680-42D9-947F-8AC5D61C5012"
+    }
+  },
+  {
+    "fields": {
+      "Name": "samples.hello-ordered",
+      "Description": "Hello World sample: Ordered — deliveries with the same PartitionKey run one at a time in publish order; a dead-lettered head blocks its key until replayed or discarded.",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=samples.hello",
+      "PartitionMode": "Ordered",
+      "MaxAttempts": 3,
+      "BackoffBaseSeconds": 2,
+      "BackoffMaxSeconds": 30,
+      "LeaseSeconds": 60,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "samples.hello",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "FA9F25B1-7EFD-41B4-89B9-66D610B0215F"
+    }
+  }
+]
