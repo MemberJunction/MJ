@@ -60,7 +60,15 @@ export interface ConnectorCreationPipelineOptions {
      */
     DeactivateAbsent?: boolean;
     /**
-     * Hard ceiling for the WHOLE run. Default {@link DEFAULT_RUN_DEADLINE_MS}; 0 disables it.
+     * Hard ceiling for the WHOLE run. `0` disables it.
+     *
+     * Resolution order — explicit argument, then the connection's own
+     * `Configuration.runDeadlineMs`, then `MJ_INTEGRATION_RUN_DEADLINE_MS`, then
+     * {@link DEFAULT_RUN_DEADLINE_MS}. Every other discovery bound
+     * (`discoveryTimeBudgetMs`, `discoveryBatchSize`, `discoveryMaxRecords`) is already settable per
+     * connection; this one — the OUTERMOST bound, the only one that can fail a whole run — was not,
+     * so the sole way to change it was editing the constant and redeploying. A 5-object connector and
+     * an 888-object one are not the same workload and should not share a hardcoded ceiling.
      *
      * Every other budget in this system bounds something INSIDE a stage, and none of them can preempt
      * an `await` that never settles. A connector's `outOfTime()` is only checked BETWEEN requests; an
@@ -158,6 +166,36 @@ export class IntegrationConnectorCreationPipeline {
      * fires on work that has genuinely stopped, never on work that is merely big.
      */
     private static readonly DEFAULT_RUN_DEADLINE_MS = 45 * 60_000;
+
+    /**
+     * Resolves the whole-run ceiling: explicit argument → the connection's `Configuration.runDeadlineMs`
+     * → `MJ_INTEGRATION_RUN_DEADLINE_MS` → {@link DEFAULT_RUN_DEADLINE_MS}.
+     *
+     * `0` is a MEANINGFUL value here (it disables the ceiling), which is why this does not reuse the
+     * positive-only reader the inner discovery knobs share — that one treats 0 as absent and would make
+     * "no ceiling" unexpressible. Negatives and non-numerics are rejected rather than honoured, so a
+     * malformed Configuration falls through to the next source instead of disabling the one mechanism
+     * that rescues a run stuck in-flight forever.
+     */
+    private static ResolveRunDeadlineMs(opts: ConnectorCreationPipelineOptions): number {
+        const valid = (v: unknown): number | undefined =>
+            typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined;
+
+        const explicit = valid(opts.RunDeadlineMs);
+        if (explicit != null) return explicit;
+
+        let fromConfig: number | undefined;
+        try {
+            const raw = opts.CompanyIntegration?.Configuration;
+            if (raw) fromConfig = valid((JSON.parse(raw) as Record<string, unknown>).runDeadlineMs);
+        } catch { /* malformed Configuration → fall through to env/default */ }
+        if (fromConfig != null) return fromConfig;
+
+        const fromEnv = Number.parseInt(process.env.MJ_INTEGRATION_RUN_DEADLINE_MS ?? '', 10);
+        if (Number.isFinite(fromEnv) && fromEnv >= 0) return fromEnv;
+
+        return IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+    }
     /** Just-completed runs by CompanyIntegrationID — coalesces a *sequential* duplicate within the window. */
     private static readonly recentRuns = new Map<string, { result: ConnectorCreationPipelineResult; at: number }>();
     /** Default coalesce window (ms) when the env override is unset/invalid. */
@@ -357,8 +395,8 @@ export class IntegrationConnectorCreationPipeline {
         // THE RUN MUST END. Raced rather than awaited: a stage that never settles cannot be cancelled,
         // but it can be stopped being waited on — which is the difference between a run that fails and
         // one that is in-flight forever. See RunDeadlineMs.
-        const deadlineMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
-        // The default is 45min, but RunDeadlineMs is a public knob and a caller may set seconds — in
+        const deadlineMs = IntegrationConnectorCreationPipeline.ResolveRunDeadlineMs(opts);
+        // The ceiling is configurable and a caller (or a connection) may set seconds — in
         // which case rounding to minutes reported the failure as a "deadline of 0min", which reads as
         // a bug in the pipeline rather than the limit the caller actually asked for.
         const deadlineLabel = deadlineMs >= 60_000
@@ -460,7 +498,7 @@ export class IntegrationConnectorCreationPipeline {
         // it, so the two differ by one connectivity probe. The approximation can only ever stop
         // work LATER than the race — never earlier — so it cannot truncate a run that would
         // otherwise have completed.
-        const budgetMs = opts.RunDeadlineMs ?? IntegrationConnectorCreationPipeline.DEFAULT_RUN_DEADLINE_MS;
+        const budgetMs = IntegrationConnectorCreationPipeline.ResolveRunDeadlineMs(opts);
         const outOfTime = (): boolean => budgetMs > 0 && Date.now() - startMs >= budgetMs;
         try {
             // U11 — determinate discovery progress: surface scanned/total on the structured
