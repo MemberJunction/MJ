@@ -31,7 +31,7 @@ describe('RealtimeManagementComponent (DOM)', () => {
 
   it('renders the seven sub-tabs through mj-tab-nav with Live Sessions selected', async () => {
     installProvider({ runViewResults: [] });
-    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined as never);
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
     const fixture = await render();
     expect(queryAll(fixture, 'button.subtab').length).toBe(0);
     const tabs = queryAll(fixture, 'mj-tab-nav [role="tab"]');
@@ -44,8 +44,8 @@ describe('RealtimeManagementComponent (DOM)', () => {
 
   it('switches the view and persists the choice when a tab is chosen', async () => {
     installProvider({ runViewResults: [] });
-    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined as never);
-    const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined as never);
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    const save = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
     const fixture = await render();
     const providersTab = queryAll(fixture, 'mj-tab-nav [role="tab"]').find((t) => t.textContent?.includes('Bridge Providers')) as HTMLElement;
     providersTab.click();
@@ -59,7 +59,7 @@ describe('RealtimeManagementComponent (DOM)', () => {
 
   it('ignores an unknown tab key', async () => {
     installProvider({ runViewResults: [] });
-    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined as never);
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
     const fixture = await render();
     fixture.componentInstance.OnSubTabChange('not-a-tab');
     expect(fixture.componentInstance.ActiveSubTab).toBe('live-sessions');
