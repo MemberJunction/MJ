@@ -19,7 +19,7 @@ describe('DeduplicationLedger.Reserve (03 §2.1, F1)', () => {
     it('reports Duplicate only for a Confirmed owner', async () => {
         const executor = new RecordingExecutor().QueueRows([]).QueueRows([{ MessageID: OTHER, Status: 'Confirmed' }]);
         const result = await new DeduplicationLedger(executor, TEST_USER).Reserve(TOPIC, 'k1', MSG);
-        expect(result).toEqual({ Kind: 'Duplicate', OwnerMessageID: OTHER });
+        expect(result).toEqual({ Kind: 'Duplicate', OwnerMessageID: OTHER.toLowerCase() });
         expect(executor.Calls[1].SQL).toContain('[spWorkQueueSelectDeduplicationOwner]');
     });
 
@@ -29,10 +29,16 @@ describe('DeduplicationLedger.Reserve (03 §2.1, F1)', () => {
             .toEqual({ Kind: 'Duplicate', OwnerMessageID: MSG.toLowerCase() });
     });
 
+    it('hands the owning MessageID back lowercase whatever case the database returned (UUID guide)', async () => {
+        const executor = new RecordingExecutor().QueueRows([]).QueueRows([{ MessageID: OTHER.toUpperCase(), Status: 'Confirmed' }]);
+        const result = await new DeduplicationLedger(executor, TEST_USER).Reserve(TOPIC, 'k1', MSG);
+        expect(result).toEqual({ Kind: 'Duplicate', OwnerMessageID: OTHER.toLowerCase() });
+    });
+
     it("reports Pending, never Duplicate, for another message's unexpired reservation", async () => {
         const executor = new RecordingExecutor().QueueRows([]).QueueRows([{ MessageID: OTHER, Status: 'Reserved' }]);
         expect(await new DeduplicationLedger(executor, TEST_USER).Reserve(TOPIC, 'k1', MSG))
-            .toEqual({ Kind: 'Pending', OwnerMessageID: OTHER });
+            .toEqual({ Kind: 'Pending', OwnerMessageID: OTHER.toLowerCase() });
     });
 
     it('treats a unique-constraint race on the key as "not taken" and reads the winner', async () => {
@@ -41,7 +47,7 @@ describe('DeduplicationLedger.Reserve (03 §2.1, F1)', () => {
             .QueueError(race)                                              // reserve: lost the insert race
             .QueueRows([{ MessageID: OTHER, Status: 'Confirmed' }]);      // owner: the winner, already confirmed
         const result = await new DeduplicationLedger(executor, TEST_USER).Reserve(TOPIC, 'k1', MSG);
-        expect(result).toEqual({ Kind: 'Duplicate', OwnerMessageID: OTHER });
+        expect(result).toEqual({ Kind: 'Duplicate', OwnerMessageID: OTHER.toLowerCase() });
         expect(executor.Calls).toHaveLength(2);
     });
 

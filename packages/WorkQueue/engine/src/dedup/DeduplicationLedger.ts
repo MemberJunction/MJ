@@ -1,4 +1,5 @@
 import type { UserInfo } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
 import { DEDUP_RESERVATION_SECONDS, DEDUPLICATION_KEY_INDEX } from '../constants';
 import { CreateWorkQueueSqlBuilder } from '../sql/CreateWorkQueueSqlBuilder';
 import type { ReservationRow } from '../sql/rows';
@@ -34,9 +35,11 @@ export class DeduplicationLedger {
             }
             const owner = await this.readOwner(topicID, key);
             if (owner) {
+                // SQL Server returns the owner UPPERCASE; publishers get every MessageID back lowercase (rowMapping).
+                const ownerMessageID = NormalizeUUID(owner.MessageID);
                 return owner.Status === 'Confirmed'
-                    ? { Kind: 'Duplicate', OwnerMessageID: owner.MessageID }
-                    : { Kind: 'Pending', OwnerMessageID: owner.MessageID };
+                    ? { Kind: 'Duplicate', OwnerMessageID: ownerMessageID }
+                    : { Kind: 'Pending', OwnerMessageID: ownerMessageID };
             }
         }
         throw new Error(`Deduplication reservation for key '${key}' was not resolved after ${RESERVE_ATTEMPTS} attempts`);
