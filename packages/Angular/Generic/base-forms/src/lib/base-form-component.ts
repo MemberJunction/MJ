@@ -340,6 +340,23 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return false;
   }
 
+  /**
+   * Whether the form holds unsaved work that its record's own fields don't show: pending related
+   * records (a child grid's edits or deletes) or {@link HasAdditionalUnsavedChanges}. Hosts consult
+   * it before tearing the form down (e.g. the standard-form switch); combine with `record.Dirty`
+   * for the full picture.
+   *
+   * A pure read, unlike {@link PendingRecordsDirty}: that path raises EDITING_COMPLETE (child grids
+   * commit in-progress cell edits on it) and rebuilds `_pendingRecords`, which the save pipeline
+   * owns. Here descendants only report their pending changes into a throwaway event, so asking
+   * changes nothing. An edit still open in a grid cell (not yet committed to its entity) is not seen.
+   */
+  public get HasUnsavedChangesBeyondRecord(): boolean {
+    if (this.HasAdditionalUnsavedChanges) return true;
+    const reported = this.RaiseEvent(BaseFormComponentEventCodes.POPULATE_PENDING_RECORDS).pendingChanges;
+    return reported.some(p => p.action === 'delete' || p.entityObject.Dirty);
+  }
+
   protected PendingRecordsDirty(): boolean {
     this.PopulatePendingRecords();
     const pendingRecords = this.PendingRecords;

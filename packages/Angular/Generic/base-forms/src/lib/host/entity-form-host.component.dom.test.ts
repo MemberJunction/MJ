@@ -86,6 +86,13 @@ class CustomForm extends BaseFormComponent {
   override async ngOnInit(): Promise<void> { /* skip provider-backed bootstrap */ }
 }
 
+/** A custom form holding unsaved work its record doesn't show (e.g. a canvas/designer section). */
+@Component({ standalone: true, selector: 'test-busy-custom-form', template: '<p class="custom">custom</p>' })
+class BusyCustomForm extends BaseFormComponent {
+  override async ngOnInit(): Promise<void> { /* skip provider-backed bootstrap */ }
+  override get HasAdditionalUnsavedChanges(): boolean { return true; }
+}
+
 const ENTITY_NAME = 'Test Switch Entities';
 
 function makeEntityInfo(): EntityInfo {
@@ -114,7 +121,7 @@ function makeRecord(entityInfo: EntityInfo): SwitchRecord {
   return record;
 }
 
-const classResolution = (standard: typeof GenForm | null, subClass: typeof GenForm | typeof CustomForm = CustomForm): FormResolution =>
+const classResolution = (standard: typeof GenForm | null, subClass: typeof GenForm | typeof CustomForm | typeof BusyCustomForm = CustomForm): FormResolution =>
   ({ kind: 'class', subClass, variants: [], standard });
 
 function stubResolver(resolution: FormResolution): Pick<FormResolverService, 'ResolveFormForEntity' | 'SetExplicitDefault' | 'SetSelectedVariant'> {
@@ -191,6 +198,7 @@ describe('MjEntityFormHostComponent — standard-form switch (DOM)', () => {
     expect(f.componentInstance.SwitchFormMode('default')).toBe(true);
     await settle(f);
     expect(query(f, '.custom')).not.toBeNull();
+    expect(query(f, '.gen')).toBeNull();
     expect(modeChanges).toEqual(['standard', 'default']);
   });
 
@@ -254,5 +262,79 @@ describe('MjEntityFormHostComponent — standard-form switch (DOM)', () => {
     expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
     expect(query(f, '.mj-form-host-error')).toBeNull();
     expect(vi.mocked(LogError)).toHaveBeenCalledWith(expect.stringContaining(ENTITY_NAME));
+  });
+
+  it('refuses to switch while the form holds unsaved work its record does not show', async () => {
+    const { f, modeChanges, notifications } = await mountSwitchHost({ resolution: classResolution(GenForm, BusyCustomForm) });
+    expect(f.componentInstance.SwitchFormMode('standard')).toBe(false);
+    await settle(f);
+    expect(notifications.map((n) => n.Type)).toEqual(['warning']);
+    expect(modeChanges).toEqual([]);
+    expect(query(f, '.custom')).not.toBeNull();
+  });
+
+  it('refuses a new record whose form holds unsaved work (only its own fields are carried across)', async () => {
+    const record = makeRecord(makeEntityInfo());
+    record.Saved = false;
+    const { f, notifications } = await mountSwitchHost({ resolution: classResolution(GenForm, BusyCustomForm), record });
+    expect(f.componentInstance.SwitchFormMode('standard')).toBe(false);
+    expect(notifications.map((n) => n.Type)).toEqual(['warning']);
+  });
+
+  it('returns keyboard focus to the switch button after a strip-initiated switch', async () => {
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    const before = switchButton(f);
+    before?.focus();
+    before?.click();
+    f.detectChanges(false); // the post-click CD pass the app's zone would run: the strip unmounts while loading
+    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+    await settle(f);
+    const after = switchButton(f);
+    expect(after?.textContent?.trim()).toBe('Back to custom view');
+    expect(document.activeElement).toBe(after);
+  });
+
+  it('announces the mode text politely and is not a landmark', async () => {
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    expect(query(f, '.mj-form-host-mode-text')?.getAttribute('aria-live')).toBe('polite');
+    expect(query(f, '.mj-form-host-mode-strip')?.getAttribute('role')).toBeNull();
+  });
+
+  it('hides the strip when the record then fails to load', async () => {
+    const entityInfo = makeEntityInfo();
+    const provider = Object.assign(
+      createFakeProvider({ entityByName: (n) => (n === ENTITY_NAME ? entityInfo : undefined) }),
+      { GetEntityObject: async () => null },
+    );
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), provider, inputs: { EntityName: ENTITY_NAME } });
+    expect(query(f, '.mj-form-host-error')).not.toBeNull();
+    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+    expect(f.componentInstance.HasStandardFormAlternative).toBe(false);
+  });
+
+  it('a FormMode input change after init mounts the standard form without echoing FormModeChange', async () => {
+    const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    f.componentRef.setInput('FormMode', 'standard');
+    await settle(f);
+    expect(query(f, '.gen')).not.toBeNull();
+    expect(query(f, '.custom')).toBeNull();
+    expect(modeChanges).toEqual([]);
+  });
+
+  it('picking a variant while on the standard form flips back to default and emits', async () => {
+    // A variant pick drops the bound record and reloads it, so the host loads through the provider.
+    const entityInfo = makeEntityInfo();
+    const provider = Object.assign(
+      createFakeProvider({ entityByName: (n) => (n === ENTITY_NAME ? entityInfo : undefined) }),
+      { GetEntityObject: async () => makeRecord(entityInfo) },
+    );
+    const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm), provider, inputs: { EntityName: ENTITY_NAME } });
+    expect(f.componentInstance.SwitchFormMode('standard')).toBe(true);
+    await settle(f);
+    f.componentInstance.Form?.OnVariantChanged(null);
+    await settle(f);
+    expect(modeChanges).toEqual(['standard', 'default']);
+    expect(f.componentInstance.FormMode).toBe('default');
+    expect(query(f, '.custom')).not.toBeNull();
   });
 });

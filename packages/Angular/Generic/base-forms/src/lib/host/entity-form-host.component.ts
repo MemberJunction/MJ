@@ -1,5 +1,5 @@
 import {
-  Component, Input, Output, EventEmitter, ViewChild, ViewContainerRef,
+  Component, Input, Output, EventEmitter, ViewChild, ViewContainerRef, ElementRef,
   ComponentRef, ChangeDetectorRef, inject, AfterViewInit, OnDestroy, Type
 } from '@angular/core';
 import {
@@ -13,7 +13,8 @@ import { BaseFormComponent } from '../base-form-component';
 import { BaseFormSectionComponent } from '../base-form-section-component';
 import { InteractiveFormComponent } from '../interactive-form/interactive-form.component';
 import {
-  EntityFormMode, FormResolution, FormResolverService, HasStandardFormAlternative
+  EntityFormMode, FormResolution, FormResolverService,
+  HasStandardFormAlternative as hasStandardFormAlternative
 } from '../resolver/form-resolver.service';
 import { EntityFormConfig } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
@@ -71,6 +72,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
   /** Anchor for the dynamically-created form component. Always present in the DOM. */
   @ViewChild('anchor', { read: ViewContainerRef, static: true }) private anchor!: ViewContainerRef;
+  /** The strip's switch button — present only while the strip renders. */
+  @ViewChild('modeSwitch') private modeSwitchButton?: ElementRef<HTMLButtonElement>;
 
   // ── Inputs ──────────────────────────────────────────────────────────────
 
@@ -229,6 +232,12 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
    * so whatever the user typed survives. Consumed by the next {@link obtainRecord}.
    */
   private _carryNewRecord: BaseEntity | null = null;
+  /**
+   * Set when the strip's own button started a switch. The reload unmounts the
+   * strip (and the focused button with it), so focus is handed to the new
+   * button once the mount completes instead of falling to `<body>`.
+   */
+  private _refocusModeSwitch = false;
 
   /** The live form component instance, or null before mount / after teardown. */
   get Form(): BaseFormComponent | null {
@@ -289,22 +298,43 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
   /**
    * Switch between the custom (`'default'`) and the standard form. Refuses —
-   * returning false and emitting a `warning` Notification — when the saved
-   * record has unsaved edits, because remounting would silently discard them.
+   * returning false and emitting a `warning` Notification — when remounting
+   * would silently discard unsaved work (see {@link hasUnsavedWorkToLose}).
    * A brand-new record is carried across instead (see {@link _carryNewRecord}).
    */
   public SwitchFormMode(mode: EntityFormMode): boolean {
     if (mode === this._formMode) return true;
-    const record = this._currentRecord;
-    if (record?.IsSaved && record.Dirty) {
+    if (this.hasUnsavedWorkToLose()) {
       this.Notification.emit({ Message: 'Save or discard your changes before switching forms.', Type: 'warning', Duration: 4000 });
       return false;
     }
-    if (record && !record.IsSaved) this._carryNewRecord = record;
+    const record = this._currentRecord;
+    // A bound Record input is reused by every reload anyway; only a host-created new record needs carrying.
+    if (record && !record.IsSaved && !this._record) this._carryNewRecord = record;
     this._formMode = mode;
     this.FormModeChange.emit(mode);
     this.reload();
     return true;
+  }
+
+  /** Template handler for the strip's button: switch, and keep keyboard focus on the button. */
+  public OnModeSwitchClick(): void {
+    this._refocusModeSwitch = true;
+    const next: EntityFormMode = this._formMode === 'standard' ? 'default' : 'standard';
+    if (!this.SwitchFormMode(next)) this._refocusModeSwitch = false; // refused: the button never left
+  }
+
+  /**
+   * Whether tearing the mounted form down would lose unsaved work. A saved
+   * record's field edits count; a brand-new record's don't, because its live
+   * instance is carried across the switch. Work the form holds outside the
+   * record (pending related records, designer/canvas state) always counts —
+   * it lives in the form component, which the switch destroys.
+   */
+  private hasUnsavedWorkToLose(): boolean {
+    const record = this._currentRecord;
+    if (record?.IsSaved && record.Dirty) return true;
+    return this.Form?.HasUnsavedChangesBeyondRecord ?? false;
   }
 
   // ── Core: resolve → load → create → bind → wire ──────────────────────────
@@ -344,7 +374,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       }
 
       const resolution = await this.formResolver.ResolveFormForEntity(entity, md.CurrentUser, md);
-      this.HasStandardFormAlternative = HasStandardFormAlternative(resolution);
+      this.HasStandardFormAlternative = hasStandardFormAlternative(resolution);
       if (resolution.kind === 'none') {
         this.fail(`No form is registered for "${entityName}".`,
           `No EntityFormOverride or class-based form (@RegisterClass(BaseFormComponent, '${entityName}')) was found. Run CodeGen or register a custom form.`);
@@ -397,7 +427,15 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     } finally {
       this.Loading = false;
       this.cdr.detectChanges();
+      this.restoreModeSwitchFocus();
     }
+  }
+
+  /** After a strip-initiated switch, hand focus to the re-rendered switch button (if the strip is back). */
+  private restoreModeSwitchFocus(): void {
+    if (!this._refocusModeSwitch) return;
+    this._refocusModeSwitch = false;
+    this.modeSwitchButton?.nativeElement.focus();
   }
 
   /**
@@ -414,7 +452,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       LogError(`MjEntityFormHost: standard form requested for "${entityName}" but none is registered; showing the default form`);
       return null;
     }
-    return HasStandardFormAlternative(resolution) ? resolution.standard : null;
+    return hasStandardFormAlternative(resolution) ? resolution.standard : null;
   }
 
   /**
@@ -595,6 +633,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     this.ErrorTitle = title;
     this.errorDetail = detail;
     this.Loading = false;
+    this.HasStandardFormAlternative = false; // no form mounted → nothing to switch between
     if (this._formComponentRef) {
       try { this._formComponentRef.destroy(); } catch { /* noop */ }
       this._formComponentRef = null;
