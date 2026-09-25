@@ -1,0 +1,5 @@
+---
+"@memberjunction/ng-entity-viewer": patch
+---
+
+Stop `computeFieldsList()` sending a saved view's column names to `RunView` unvalidated (MemberJunction/MJ#4655). The host-column branch already resolved every name against the entity and added the entity's own spelling, because the list is interpolated into the GraphQL selection set where field names are case sensitive and an unknown field fails the **whole view with zero rows** rather than producing one odd column — but the grid-state branch a few lines below added `col.Name` raw, so a stale or cross-entity `[GridState]` asked the new entity for the old entity's fields. Grid-state names are now resolved the same way, unresolvable ones are dropped, and the entity's spelling is what goes on the wire. When **no** saved name resolves, the branch falls through to `DefaultInView` — matching the floor `buildAgColumnDefs()` applies for the same case (#4244), so the columns that render are the columns that were fetched instead of rendering with every cell empty. A partial match is deliberately left alone, since widening it to `DefaultInView` would silently re-add columns the user had removed.
