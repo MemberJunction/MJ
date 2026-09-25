@@ -1,0 +1,43 @@
+{
+  "name": "@memberjunction/work-queue-aws",
+  "type": "module",
+  "version": "6.1.0",
+  "description": "MemberJunction: AWS (SNS + SQS) transport and Lambda adapter for the durable work queue. No MemberJunction runtime dependencies.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@aws-sdk/client-sns": "^3.984.0",
+    "@aws-sdk/client-sqs": "^3.984.0",
+    "@memberjunction/work-queue-core": "6.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
