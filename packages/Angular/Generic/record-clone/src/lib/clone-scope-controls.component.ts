@@ -4,9 +4,9 @@
  * Implements §12.3 of the record cloning plan with the scope rules from the review:
  * everyone sees the preset picker and a summary of what the clone will copy, taken from the
  * entity's `Configuration.Clone`. Only a holder of `Clone Records: Override Scope` gets the
- * developer overrides (depth, record cap, soft links, subtypes, hierarchy). Entity Actions run
- * by default; the toggle that turns them off (or on, where the entity suppresses them) needs
- * `Clone Records: Fire Hooks`. The server applies the same rules.
+ * developer overrides (depth, record cap, soft links, subtypes, hierarchy). The summary says
+ * whether Entity Actions run; changing that is not offered here (a caller holding
+ * `Clone Records: Fire Hooks` can set `EntityActions` on the request). The server applies the same rules.
  */
 
 import {
@@ -69,7 +69,7 @@ interface ScopeFact {
                 </div>
             </div>
 
-            @if (CanOverrideScope || CanFireHooks) {
+            @if (CanOverrideScope) {
                 <details class="dev-overrides" [open]="ChangedKeys.length > 0">
                     <summary>
                         <span><i class="fa-solid fa-code"></i>&nbsp; Developer overrides</span>
@@ -103,13 +103,6 @@ interface ScopeFact {
                             <div class="field-row">
                                 <span class="toggle-label" [id]="IdPrefix + '-hierarchy'" (click)="OnHierarchyToggle(Hierarchy !== 'subtree')">Copy the whole hierarchy subtree</span>
                                 <mj-switch [AriaLabelledBy]="IdPrefix + '-hierarchy'" [ngModel]="Hierarchy === 'subtree'" (ngModelChange)="OnHierarchyToggle($event)"></mj-switch>
-                            </div>
-                        }
-
-                        @if (CanFireHooks) {
-                            <div class="field-row">
-                                <span class="toggle-label" [id]="IdPrefix + '-entityactions'" (click)="OnEntityActionsToggle(EntityActions !== 'fire')">Run Entity Actions</span>
-                                <mj-switch [AriaLabelledBy]="IdPrefix + '-entityactions'" [ngModel]="EntityActions === 'fire'" (ngModelChange)="OnEntityActionsToggle($event)"></mj-switch>
                             </div>
                         }
 
@@ -342,9 +335,6 @@ export class CloneScopeControlsComponent {
     /** Prefix for this instance's element ids, so the switches' labels stay unique on a page with two panels. */
     public readonly IdPrefix = `mj-clone-scope-${++CloneScopeControlsComponent.nextId}`;
 
-    /** Show the Run Entity Actions toggle. True only for holders of `Clone Records: Fire Hooks`. */
-    @Input() CanFireHooks = false;
-
     /** Fires with the full option set whenever any control changes. */
     @Output() ScopeChanged = new EventEmitter<RecordClonePlanOptions>();
     /** Fires when the user asks to drop every override and use the entity's configured scope. */
@@ -427,11 +417,6 @@ export class CloneScopeControlsComponent {
 
     public OnSoftLinksToggle(checked: boolean): void {
         this.SoftLinks = checked ? 'include' : 'skip';
-        this.EmitScopeChanged();
-    }
-
-    public OnEntityActionsToggle(checked: boolean): void {
-        this.EntityActions = checked ? 'fire' : 'suppress';
         this.EmitScopeChanged();
     }
 

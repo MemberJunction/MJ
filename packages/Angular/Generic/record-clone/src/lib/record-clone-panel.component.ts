@@ -141,7 +141,6 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                             [ConfiguredScope]="ConfiguredScope"
                             [EntityName]="EffectiveEntityName"
                             [CanOverrideScope]="CanOverrideScope"
-                            [CanFireHooks]="CanFireHooks"
                             (ScopeChanged)="OnScopeOptionsChanged($event)"
                             (ResetToDefaults)="OnResetScopeToDefaults()">
                         </mj-clone-scope-controls>
@@ -592,11 +591,6 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     /** How each preset is shown in the picker, from the entity's clone configuration. */
     public PresetLabels: Record<string, { Label: string; Description?: string }> = {};
     public SelectedPreset?: string;
-    /**
-     * Whether the Run Entity Actions toggle is offered: `RecordClone.Describe` reports whether the user
-     * holds `Clone Records: Fire Hooks` (plan §9). Without it the server runs hooks as configured.
-     */
-    public CanFireHooks = false;
 
     /**
      * Whether the developer scope overrides are offered: `RecordClone.Describe` reports whether the
@@ -1027,7 +1021,6 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
             this.AvailablePresets = describe.Presets || [];
             this.PresetLabels = RecordClonePanelComponent.presetLabels(this.ProviderToUse?.EntityByName(this.EffectiveEntityName)?.CloneConfig?.Presets);
-            this.CanFireHooks = describe.CanFireHooks === true;
             this.CanOverrideScope = describe.CanOverrideScope === true;
 
             this.LoadingMessage = 'Computing dependency graph and plan...';

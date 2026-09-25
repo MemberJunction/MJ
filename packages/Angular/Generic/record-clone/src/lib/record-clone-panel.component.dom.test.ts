@@ -370,17 +370,15 @@ describe('RecordClonePanelComponent (DOM)', () => {
         expect(failed).toMatchObject({ Message: 'FORBIDDEN: soft links' });
     });
 
-    it('offers the Fire Hooks toggle only when Describe says the user may fire hooks', async () => {
+    it('offers no Entity Actions control, even to a Fire Hooks holder', async () => {
+        vi.mocked(mockService.DescribeRecord).mockResolvedValue({ ...MOCK_DESCRIBE, CanFireHooks: true, CanOverrideScope: true });
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],
             inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
         });
         await fixture.componentInstance.Start();
-        expect(fixture.componentInstance.CanFireHooks).toBe(false);
-
-        vi.mocked(mockService.DescribeRecord).mockResolvedValue({ ...MOCK_DESCRIBE, CanFireHooks: true });
-        await fixture.componentInstance.Start();
-        expect(fixture.componentInstance.CanFireHooks).toBe(true);
+        fixture.detectChanges();
+        expect(queryAll(fixture, '.toggle-label').some((l) => l.textContent?.includes('Entity Actions'))).toBe(false);
     });
 
     it('shows the effective options and sends only the scope values the user changed', async () => {

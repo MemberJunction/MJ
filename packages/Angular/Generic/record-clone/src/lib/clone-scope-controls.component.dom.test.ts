@@ -46,14 +46,10 @@ describe('CloneScopeControlsComponent (DOM)', () => {
         expect(out.at(-1)).toMatchObject({ MaxDepth: 4, SoftLinks: 'include' });
     });
 
-    it('shows the Run Entity Actions toggle only with CanFireHooks', () => {
-        const without = renderComponentFixture(CloneScopeControlsComponent, { inputs: { CanOverrideScope: true } });
-        expect(queryAll(without, '.toggle-label').some((l) => l.textContent?.includes('Run Entity Actions'))).toBe(false);
-
-        const withHooks = renderComponentFixture(CloneScopeControlsComponent, { inputs: { CanFireHooks: true } });
-        expect(query(withHooks, '.dev-overrides')).not.toBeNull();
-        expect(query(withHooks, '#max-depth-input')).toBeNull();
-        expect(queryAll(withHooks, '.toggle-label').some((l) => l.textContent?.includes('Run Entity Actions'))).toBe(true);
+    it('shows whether Entity Actions run, but no control to change it', () => {
+        const f = renderComponentFixture(CloneScopeControlsComponent, { inputs: { CanOverrideScope: true, EntityActions: 'suppress' } });
+        expect(queryAll(f, '.toggle-label').some((l) => l.textContent?.includes('Entity Actions'))).toBe(false);
+        expect(f.nativeElement.textContent).toContain('Entity actions suppressed');
     });
 
     it('shows each preset by its label, falling back to the key', () => {
