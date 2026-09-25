@@ -58,6 +58,7 @@ describe('CloneFieldMapper', () => {
                 Reset: { Status: 'Draft' },
                 Ownership: ['OwnerID'],
                 ServerAllocated: ['OrderNumber'],
+                PromptFor: ['Email'],
                 JsonRemap: [
                     {
                         Field: 'ConfigJSON',
@@ -146,29 +147,52 @@ describe('CloneFieldMapper', () => {
         expect(result.MappedValues.ReadDeniedField).toBeUndefined();
     });
 
-    it('records field change ledger in correct pipeline order (§7.2)', () => {
+    it('never lets a request override a field the configuration resets or stamps', () => {
         const result = MapFieldsForClone({
-            EntityName: 'Project',
+            EntityName: 'MJ: Users',
             Fields: [
                 { Name: 'Name', IsPrimaryKey: false, IsNameField: true },
-                { Name: 'Status', IsPrimaryKey: false },
+                { Name: 'Type', IsPrimaryKey: false },
+                { Name: 'OwnerID', IsPrimaryKey: false },
+                { Name: 'Title', IsPrimaryKey: false },
             ],
-            SourceRecord: {
-                Name: 'Task 1',
-                Status: 'Active',
-            },
-            FieldRules: {
-                Reset: { Status: 'Draft' },
-            },
-            RequestOverrides: {
-                Status: 'Pending Review',
-            },
+            SourceRecord: { Name: 'Task 1', Type: 'Owner', OwnerID: 'someone', Title: 'Engineer' },
+            CurrentUserId: 'cloner',
+            FieldRules: { Reset: { Type: 'User' }, Ownership: ['OwnerID'] },
+            RequestOverrides: { Type: 'Owner', OwnerID: 'someone', Title: 'Architect' },
         });
 
-        // For Status: should see Copy -> Reset -> Override in that exact chronological order
-        const statusChanges = result.FieldChanges.filter((fc) => fc.Field === 'Status');
-        expect(statusChanges.map((c) => c.Kind)).toEqual(['Copy', 'Reset', 'Override']);
-        expect(result.MappedValues.Status).toBe('Pending Review');
+        // Copy -> Reset, and the override never lands
+        expect(result.FieldChanges.filter((fc) => fc.Field === 'Type').map((c) => c.Kind)).toEqual(['Copy', 'Reset']);
+        expect(result.MappedValues).toMatchObject({ Type: 'User', OwnerID: 'cloner', Title: 'Architect' });
+        expect(result.IgnoredRequestValues.map((i) => i.Field)).toEqual(['Type', 'OwnerID']);
+    });
+
+    it('applies no overrides when UserEditable does not allow field edits', () => {
+        const result = MapFieldsForClone({
+            EntityName: 'Project',
+            Fields: [{ Name: 'Title', IsPrimaryKey: false }],
+            SourceRecord: { Title: 'Engineer' },
+            RequestOverrides: { Title: 'Architect' },
+            RequestFieldsEditable: false,
+        });
+        expect(result.MappedValues.Title).toBe('Engineer');
+        expect(result.IgnoredRequestValues).toEqual([expect.objectContaining({ Field: 'Title', Kind: 'Override' })]);
+    });
+
+    it('accepts prompted values only for PromptFor fields', () => {
+        const result = MapFieldsForClone({
+            EntityName: 'MJ: Users',
+            Fields: [
+                { Name: 'Email', IsPrimaryKey: false },
+                { Name: 'IsActive', IsPrimaryKey: false },
+            ],
+            SourceRecord: { Email: 'alice@example.com', IsActive: false },
+            FieldRules: { PromptFor: ['Email'] },
+            PromptedValues: { Email: 'bob@example.com', IsActive: true },
+        });
+        expect(result.MappedValues).toMatchObject({ Email: 'bob@example.com', IsActive: false });
+        expect(result.IgnoredRequestValues).toEqual([expect.objectContaining({ Field: 'IsActive', Kind: 'Prompt' })]);
     });
 
     it('derives field values using field rules (Stage 13)', () => {
@@ -188,6 +212,7 @@ describe('CloneFieldMapper', () => {
                 Email: 'bob@example.com',
             },
             FieldRules: {
+                PromptFor: ['Email'],
                 Rules: {
                     Rules: [
                         {

@@ -68,8 +68,12 @@ export interface CloneFieldMappingContext {
         DeniedReadFields?: string[];
         DeniedCreateFields?: string[];
     };
+    /** Request-level field values. Applied only when `RequestFieldsEditable`, and never to a field the configuration governs. */
     RequestOverrides?: Record<string, unknown>;
+    /** Values the user supplied for `FieldRules.PromptFor` fields. Other fields are ignored. */
     PromptedValues?: Record<string, unknown>;
+    /** The entity's `UserEditable` allows field edits ('fields' or 'all'). Default true. */
+    RequestFieldsEditable?: boolean;
     IsRoot?: boolean;
     NewParentKey?: unknown;
     HierarchyParentField?: string;
@@ -79,6 +83,8 @@ export interface CloneFieldMappingResult {
     FieldChanges: CloneFieldChange[];
     MappedValues: Record<string, unknown>;
     RequiresIdentitySecondPass: boolean;
+    /** Request values the mapper refused, with why; the planner reports each as a warning. */
+    IgnoredRequestValues: Array<{ Field: string; Kind: 'Override' | 'Prompt'; Reason: string }>;
 }
 
 /**
@@ -356,9 +362,28 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
         }
     }
 
+    // Fields the configuration decides; a request may not change them (that would undo a reset
+    // such as Type or IsActive on a user clone, or an ownership stamp).
+    const ignored: CloneFieldMappingResult['IgnoredRequestValues'] = [];
+    const governed = new Set<string>([
+        ...Object.keys(fieldRules.Reset ?? {}),
+        ...(fieldRules.Ownership ?? []),
+        ...(fieldRules.ServerAllocated ?? []),
+        ...(fieldRules.Rules?.Rules ?? []).map((r) => r.TargetField || r.Field || '').filter(Boolean),
+    ]);
+    const promptFor = new Set(fieldRules.PromptFor ?? []);
+
     // 11. Stage 11: Override (Request-level field overrides)
     for (const [fieldName, overrideVal] of Object.entries(reqOverrides)) {
         if (excludedOrDenied.has(fieldName)) continue;
+        if (ctx.RequestFieldsEditable === false) {
+            ignored.push({ Field: fieldName, Kind: 'Override', Reason: "this entity's clone configuration doesn't allow field edits (UserEditable)" });
+            continue;
+        }
+        if (governed.has(fieldName)) {
+            ignored.push({ Field: fieldName, Kind: 'Override', Reason: 'the clone configuration sets this field' });
+            continue;
+        }
         const oldVal = values[fieldName];
         values[fieldName] = overrideVal;
         changes.push({
@@ -370,9 +395,13 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
         });
     }
 
-    // 12. Stage 12: Prompt (Prompted values)
+    // 12. Stage 12: Prompt (Prompted values, for the configured PromptFor fields only)
     for (const [fieldName, promptVal] of Object.entries(promptedValues)) {
         if (excludedOrDenied.has(fieldName)) continue;
+        if (!promptFor.has(fieldName)) {
+            ignored.push({ Field: fieldName, Kind: 'Prompt', Reason: 'the clone configuration does not prompt for this field' });
+            continue;
+        }
         const oldVal = values[fieldName];
         values[fieldName] = promptVal;
         changes.push({
@@ -419,5 +448,6 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
         FieldChanges: changes,
         MappedValues: values,
         RequiresIdentitySecondPass: requiresIdentitySecondPass,
+        IgnoredRequestValues: ignored,
     };
 }

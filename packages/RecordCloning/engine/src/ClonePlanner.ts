@@ -610,11 +610,22 @@ export class ClonePlanner {
                 })(),
                 RequestOverrides: isRoot ? (request.FieldOverrides ?? request.Options?.FieldOverrides) : undefined,
                 PromptedValues: isRoot ? (request.PromptedValues ?? request.Options?.PromptedValues) : undefined,
+                RequestFieldsEditable: ['fields', 'all'].includes(rootConfig?.UserEditable ?? 'all'),
                 FLS: fieldLevelDenials(entInfo, contextUser),
                 IsRoot: isRoot,
                 HierarchyParentField: entInfo.Fields.find((f) => f.IsHierarchy)?.Name,
                 NewParentKey: isRoot ? (request.Options?.NewParentKey ?? null) : undefined,
             });
+
+            for (const ignored of fieldMappingResult.IgnoredRequestValues) {
+                warnings.push({
+                    Code: 'OPTION_OVERRIDE_IGNORED',
+                    Severity: 'Warning',
+                    NodeKey: nodeKey,
+                    Field: ignored.Field,
+                    Message: `${ignored.Kind === 'Prompt' ? 'Prompted value' : 'Override'} for '${ignored.Field}' was ignored: ${ignored.Reason}.`,
+                });
+            }
 
             const planNode: ClonePlanNode = {
                 Key: nodeKey,
