@@ -1,5 +1,6 @@
 import type { EntityFormMode } from '@memberjunction/ng-base-forms';
 import { FORM_MODE_QUERY_PARAM, ReadStandardFormQuery } from '@memberjunction/ng-shared';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * A record tab's form mode (MJ#4755) lives in its `form` query param, so the
@@ -26,15 +27,16 @@ export interface RecordTabIdentity {
 
 /**
  * Whether a record component still owns its tab: the live tab hosts the same
- * record (entity compared case- and whitespace-insensitively, like the tab
- * identity guard; record id exact). False for a closed tab. A cached
+ * record (entity compared case- and whitespace-insensitively; record id via
+ * UUIDsEqual, like the tab identity guard — a save rewrites the component's id
+ * in the server's casing). False for a closed tab. A cached
  * component whose tab id was reused for another record is not the owner, so
  * that tab's `form` param is not addressed to it.
  */
 export function IsRecordTabOwner(liveTab: RecordTabIdentity | null, own: RecordTabIdentity): boolean {
   if (!liveTab) return false;
   const entityKey = (entity: string | undefined): string => (entity ?? '').trim().toLowerCase();
-  return entityKey(liveTab.Entity) === entityKey(own.Entity) && liveTab.RecordId === own.RecordId;
+  return entityKey(liveTab.Entity) === entityKey(own.Entity) && UUIDsEqual(liveTab.RecordId, own.RecordId);
 }
 
 /** Whatever can switch a mounted form (SingleRecordComponent → the form host). */

@@ -1460,8 +1460,12 @@ export class NavigationService implements OnDestroy {
     const currentDriverClass = (config['resourceTypeDriverClass'] || config['driverClass']) as string | undefined;
     const { Entity: currentEntity, RecordId: currentRecordId } = this.recordIdentityOf(tab);
 
-    // Resource type and entity names can vary by casing/metadata spelling; class names,
-    // record IDs, and nav labels are canonical tab identity fields and stay exact-match.
+    // Resource type and entity names can vary by casing/metadata spelling; class names
+    // and nav labels are canonical tab identity fields and stay exact-match. Record IDs
+    // compare like UUIDs (UUIDsEqual: trimmed, case-insensitive — see
+    // guides/UUID_COMPARISON_GUIDE.md): a save rewrites the component's id from
+    // PrimaryKey.ToURLSegment() in the server's casing while the tab keeps the casing it
+    // was opened with, and an exact match then dropped every later write (MJ#4755).
     //
     // The driver class is compared only when the TAB records one. Record tabs never
     // persist it, yet the tab container injects it into the component's
@@ -1470,7 +1474,7 @@ export class NavigationService implements OnDestroy {
     // type, record, nav item and entity; a tab that records a DIFFERENT class still fails.
     return matches(guard.resourceType, config['resourceType'], true) &&
       (currentDriverClass == null || matches(guard.driverClass, currentDriverClass)) &&
-      matches(guard.recordId, currentRecordId) &&
+      (guard.recordId == null || UUIDsEqual(guard.recordId, currentRecordId)) &&
       matches(guard.navItemName, config['navItemName']) &&
       matches(guard.entity, currentEntity, true);
   }

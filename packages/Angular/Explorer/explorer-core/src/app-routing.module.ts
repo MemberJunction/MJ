@@ -8,7 +8,7 @@ import {
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM, CompositeKey } from '@memberjunction/core';
-import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, ReadStandardFormQuery, FORM_MODE_QUERY_PARAM } from '@memberjunction/ng-shared';
+import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE, RecordTabQueryParams } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -155,19 +155,6 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
       componentRef.instance[hookName]();
     }
   }
-}
-
-/**
- * A record tab's `queryParams` from its URL (MJ#4755): `{ form: 'standard' }`
- * for a `?form=standard` link, otherwise explicitly `undefined`. The key is
- * present either way ON PURPOSE — WorkspaceStateManager.OpenTab merges the
- * request config over an already-open tab, so a plain record URL must clear a
- * standard-mode tab's param: the URL is the source of truth, and the mounted
- * record follows via OnQueryParamsChanged (the same rule the shell applies on
- * back/forward). Only `form` rides here; NewRecordValues has its own channel.
- */
-function recordTabQueryParams(queryParams: { [key: string]: string | string[] | undefined | null }): { queryParams: Record<string, string> | undefined } {
-  return { queryParams: ReadStandardFormQuery(queryParams) ? { [FORM_MODE_QUERY_PARAM]: 'standard' } : undefined };
 }
 
 function readNewRecordValuesQuery(queryParams: { [key: string]: string | string[] | undefined | null }): string | undefined {
@@ -335,7 +322,7 @@ export class ResourceResolver implements Resolve<void> {
               recordId: isNew ? '' : recordId,
               isNew: isNew || undefined,
               NewRecordValues: newRecordValues,
-              ...recordTabQueryParams(route.queryParams),
+              ...RecordTabQueryParams(route.queryParams),
               appName: appName,
               appId: app.ID
             },
@@ -596,7 +583,7 @@ export class ResourceResolver implements Resolve<void> {
           recordId: isNew ? '' : recordId,
           isNew: isNew || undefined,
           NewRecordValues: newRecordValues,
-          ...recordTabQueryParams(route.queryParams)
+          ...RecordTabQueryParams(route.queryParams)
         },
         ResourceRecordId: isNew ? '' : recordId,
         IsPinned: false

@@ -43,6 +43,22 @@ export function ReadStandardFormQuery(
   return value?.trim().toLowerCase() === 'standard' ? 'standard' : undefined;
 }
 
+/**
+ * A record tab's `queryParams`, built from its URL by the record routes
+ * (MJ#4755): `{ form: 'standard' }` for a `?form=standard` link, otherwise
+ * explicitly `undefined`. The key is present either way ON PURPOSE —
+ * WorkspaceStateManager.OpenTab merges the request config over an already-open
+ * tab, so a plain record URL must clear a standard-mode tab's param: the URL is
+ * the source of truth, and the mounted record follows via OnQueryParamsChanged
+ * (the same rule the shell applies on back/forward). Only `form` rides here;
+ * NewRecordValues has its own channel.
+ */
+export function RecordTabQueryParams(
+  queryParams: { [key: string]: string | string[] | undefined | null }
+): { queryParams: Record<string, string> | undefined } {
+  return { queryParams: ReadStandardFormQuery(queryParams) ? { [FORM_MODE_QUERY_PARAM]: 'standard' } : undefined };
+}
+
 /** True when a workspace tab's configuration marks it as an entity-record tab */
 export function IsRecordsTabConfiguration(configuration: Record<string, unknown> | undefined | null): boolean {
   return configuration?.['resourceType'] === RECORDS_RESOURCE_TYPE;

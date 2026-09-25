@@ -78,6 +78,13 @@ describe('IsRecordTabOwner', () => {
     expect(IsRecordTabOwner({ Entity: ' caliber: assessments ', RecordId: 'ID|A' }, own)).toBe(true);
   });
 
+  it('compares record ids case-insensitively (a save rewrites the id to the server casing)', () => {
+    // ResourceRecordSaved rewrites Data.ResourceRecordID from PrimaryKey.ToURLSegment();
+    // a tab opened from a lowercase-UUID link keeps its original casing.
+    expect(IsRecordTabOwner({ Entity: 'Caliber: Assessments', RecordId: 'ID|a1b2c3d4-e5f6' }, { Entity: 'Caliber: Assessments', RecordId: 'ID|A1B2C3D4-E5F6' })).toBe(true);
+    expect(IsRecordTabOwner({ Entity: 'Caliber: Assessments', RecordId: ' ID|A ' }, own)).toBe(true);
+  });
+
   it('does not own a tab reused for another record of the same entity', () => {
     expect(IsRecordTabOwner({ Entity: 'Caliber: Assessments', RecordId: 'ID|B' }, own)).toBe(false);
   });
