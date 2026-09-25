@@ -461,7 +461,7 @@ All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for
 > setting either pair works. Set neither and the run stops at the first test naming the
 > unresolved variable — it no longer submits a blank login.
 
-\* At least one AI vendor key is required. Variable names match the root `.env` convention (`AI_VENDOR_API_KEY__<Vendor>LLM`).
+\* At least one AI vendor key is required. Variable names match the root `.env` convention (`AI_VENDOR_API_KEY__<Vendor>LLM`). The same keys are also passed to `db-setup` and `form-generator`: CodeGen's advanced generation uses them to set field `ExtendedType` (Email/URL/Image). Without them, demo email and URL fields render as plain text, and T044 fails.
 
 ### Auth0 Setup Requirements
 
