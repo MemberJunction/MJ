@@ -612,7 +612,12 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  width: 100%;
   padding: 8px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   color: var(--mj-text-primary);
   font-size: 13px;
@@ -621,6 +626,11 @@
 
 .mj-form-variant-picker-row:hover {
   background: var(--mj-bg-surface-hover);
+}
+
+.mj-form-variant-picker-row:focus-visible {
+  outline: none;
+  box-shadow: var(--mj-focus-ring);
 }
 
 .mj-form-variant-picker-row.current {

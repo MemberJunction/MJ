@@ -95,17 +95,17 @@
 
       @if (ShowMoreMenu) {
         <div class="mj-forms-menu-host" [class.open]="MoreMenuOpen">
-          <button class="mj-forms-btn mj-forms-menu-trigger" type="button"
-            aria-haspopup="menu" [attr.aria-expanded]="MoreMenuOpen"
+          <button class="mj-forms-btn mj-forms-menu-trigger" type="button" data-menu-trigger="more"
+            [attr.aria-expanded]="MoreMenuOpen" [attr.aria-controls]="MenuIdPrefix + '-more'"
             title="More actions" (click)="ToggleMoreMenu()">
             <i class="fa-solid fa-ellipsis"></i>
             <span class="mj-forms-btn-text">More</span>
           </button>
           @if (MoreMenuOpen) {
-            <div class="mj-forms-menu mj-forms-menu--left" role="menu">
+            <div class="mj-forms-menu mj-forms-menu--left" [id]="MenuIdPrefix + '-more'" role="group" aria-label="More actions">
               @for (item of MoreMenuItems; track item.Key) {
                 <div class="mj-forms-menu-row" [class.disabled]="item.Disabled">
-                  <button class="mj-forms-menu-item" type="button" role="menuitem"
+                  <button class="mj-forms-menu-item" type="button"
                     [disabled]="item.Disabled || item.IsLoading" [title]="item.Description"
                     (click)="OnMenuItemClick(item, $event)">
                     <span class="mj-forms-menu-icon">
@@ -127,7 +127,7 @@
               }
               @if (DeleteMenuItem; as del) {
                 @if (MoreMenuItems.length > 0) { <div class="mj-forms-menu-sep"></div> }
-                <button class="mj-forms-menu-item mj-forms-menu-item--danger" type="button" role="menuitem"
+                <button class="mj-forms-menu-item mj-forms-menu-item--danger" type="button"
                   [disabled]="del.Disabled" [title]="del.Description" (click)="OnMenuItemClick(del, $event)">
                   <span class="mj-forms-menu-icon"><i [class]="del.Icon"></i></span>
                   <span class="mj-forms-menu-label">{{ del.MenuLabel }}</span>
@@ -155,14 +155,14 @@
 
     @if (ShowViewMenu) {
       <div class="mj-forms-menu-host" [class.open]="ViewMenuOpen">
-        <button class="mj-forms-btn mj-forms-menu-trigger" type="button"
-          aria-haspopup="menu" [attr.aria-expanded]="ViewMenuOpen"
+        <button class="mj-forms-btn mj-forms-menu-trigger" type="button" data-menu-trigger="view"
+          [attr.aria-expanded]="ViewMenuOpen" [attr.aria-controls]="MenuIdPrefix + '-view'"
           title="Sections and layout" (click)="ToggleViewMenu()">
           <i class="fa-solid fa-sliders"></i>
           <span class="mj-forms-btn-text">View</span>
         </button>
         @if (ViewMenuOpen) {
-          <div class="mj-forms-menu mj-forms-menu--right" role="menu">
+          <div class="mj-forms-menu mj-forms-menu--right" [id]="MenuIdPrefix + '-view'" role="group" aria-label="Sections and layout">
             @if (Config.ShowSectionControls) {
               @if (Config.ShowSectionFilter) {
                 <div class="mj-forms-menu-search">
@@ -184,32 +184,32 @@
                 <div class="mj-forms-menu-heading">Sections</div>
               }
               @if (ShowExpandCollapseAll) {
-                <button class="mj-forms-menu-item" type="button" role="menuitem"
+                <button class="mj-forms-menu-item" type="button"
                   [disabled]="ExpandedSectionCount >= VisibleSectionCount" title="Expand all sections" (click)="OnExpandAll()">
                   <span class="mj-forms-menu-icon"><i class="fa-solid fa-angles-down"></i></span>
                   <span class="mj-forms-menu-label">Expand all</span>
                 </button>
-                <button class="mj-forms-menu-item" type="button" role="menuitem"
+                <button class="mj-forms-menu-item" type="button"
                   [disabled]="ExpandedSectionCount === 0" title="Collapse all sections" (click)="OnCollapseAll()">
                   <span class="mj-forms-menu-icon"><i class="fa-solid fa-angles-up"></i></span>
                   <span class="mj-forms-menu-label">Collapse all</span>
                 </button>
               }
               @if (Config.ShowSectionManager) {
-                <button class="mj-forms-menu-item" type="button" role="menuitem" (click)="ViewMenuOpen = false; OnManageSections()">
+                <button class="mj-forms-menu-item" type="button" (click)="ViewMenuOpen = false; OnManageSections()">
                   <span class="mj-forms-menu-icon"><i class="fa-solid fa-bars-staggered"></i></span>
                   <span class="mj-forms-menu-label">Reorder sections</span>
                 </button>
               }
               @if (HasCustomSectionOrder) {
-                <button class="mj-forms-menu-item" type="button" role="menuitem" (click)="OnResetSectionOrder()">
+                <button class="mj-forms-menu-item" type="button" (click)="OnResetSectionOrder()">
                   <span class="mj-forms-menu-icon"><i class="fa-solid fa-arrow-rotate-left"></i></span>
                   <span class="mj-forms-menu-label">Reset section order</span>
                 </button>
               }
               @if (Config.ShowWidthToggle) {
                 <div class="mj-forms-menu-heading">Layout</div>
-                <button class="mj-forms-menu-item" type="button" role="menuitem" (click)="OnToggleWidthMode()">
+                <button class="mj-forms-menu-item" type="button" (click)="OnToggleWidthMode()">
                   <span class="mj-forms-menu-icon">
                     <i [class]="WidthMode === 'centered' ? 'fa-solid fa-arrows-left-right-to-line' : 'fa-solid fa-compress'"></i>
                   </span>
@@ -219,8 +219,8 @@
             }
             @if (ShowVariantPickerButton) {
               <div class="mj-forms-menu-heading">Form</div>
-              <div class="mj-form-variant-picker-row mj-form-variant-picker-default"
-                   [class.current]="!CurrentVariantID"
+              <button type="button" class="mj-form-variant-picker-row mj-form-variant-picker-default"
+                   [class.current]="!CurrentVariantID" [attr.aria-pressed]="!CurrentVariantID"
                    (click)="OnVariantClick(null)">
                 <div class="mj-form-variant-picker-row-main">
                   <span class="mj-form-variant-picker-row-title">
@@ -231,10 +231,10 @@
                 @if (!CurrentVariantID) {
                   <i class="fa-solid fa-check mj-form-variant-picker-check"></i>
                 }
-              </div>
+              </button>
               @for (v of Variants; track v.ID) {
-                <div class="mj-form-variant-picker-row"
-                     [class.current]="v.ID === CurrentVariantID"
+                <button type="button" class="mj-form-variant-picker-row"
+                     [class.current]="v.ID === CurrentVariantID" [attr.aria-pressed]="v.ID === CurrentVariantID"
                      [class.inactive]="v.Status !== 'Active'"
                      (click)="OnVariantClick(v.ID)">
                   <div class="mj-form-variant-picker-row-main">
@@ -244,7 +244,7 @@
                   @if (v.ID === CurrentVariantID) {
                     <i class="fa-solid fa-check mj-form-variant-picker-check"></i>
                   }
-                </div>
+                </button>
               }
             }
           </div>

@@ -364,6 +364,33 @@ describe('MjFormToolbarComponent (DOM)', () => {
     });
   });
 
+  describe('keyboard and screen readers', () => {
+    it('uses a disclosure panel: the trigger controls it by id, and nothing claims the menu role', () => {
+      const f = render();
+      openMore(f);
+      const trigger = btn(f, 'button[title="More actions"]')!;
+      expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(trigger.hasAttribute('aria-haspopup')).toBe(false);
+      const panel = query(f, `#${trigger.getAttribute('aria-controls')}`);
+      expect(panel).not.toBeNull();
+      expect(queryAll(f, '[role="menu"], [role="menuitem"]')).toHaveLength(0);
+    });
+
+    it('moves focus into the panel on open, and back to its trigger on Escape', async () => {
+      const f = render();
+      document.body.appendChild(f.nativeElement);
+      openMore(f);
+      await tick();
+      const panelId = btn(f, 'button[title="More actions"]')!.getAttribute('aria-controls');
+      expect(document.activeElement?.closest(`#${panelId}`)).not.toBeNull();
+
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      f.detectChanges();
+      expect(document.activeElement).toBe(btn(f, 'button[title="More actions"]'));
+      f.nativeElement.remove();
+    });
+  });
+
   describe('view menu', () => {
     it('keeps an active section filter visible, with a clear button, once the menu closes', () => {
       const f = render({ SearchFilter: 'addr' });
