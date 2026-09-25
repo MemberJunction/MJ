@@ -546,28 +546,50 @@ export class BaseAgent {
      * (a search provider using 403 as a rate limit), so they fall through to the parameter-aware
      * failure history where the identical-arguments rule and the consecutive-attempt budget
      * bound them without disabling the tool for every other resource.
+     *
+     * Also NOT fatal, for the same reason: a failure the model can fix by changing its arguments.
+     * A message that names a parameter is treated as an argument problem whatever else it says,
+     * and a call that itself carried credential-shaped arguments (password, API key, token) is
+     * never fatal even on "authentication failed", because the credential came from the model,
+     * not the environment. Demoting a message from fatal costs at most the attempt budget.
+     *
+     * @param message The action's failure message.
+     * @param actionParams The arguments the call was made with, when known.
      */
-    protected isFatalActionError(message: string | null | undefined): boolean {
+    protected isFatalActionError(message: string | null | undefined, actionParams?: Record<string, unknown> | null): boolean {
         if (!message) {
             return false;
         }
 
-        // 1. Missing or invalid credentials, API keys, or authentication failures are unrecoverable in this run
+        // 1. Parameter/argument/input problems are recoverable (the agent can adjust inputs), so they
+        // never trip the fatal breaker, however the rest of the message is phrased.
+        const isParamError = /\b(?:parameter|argument|param|input|field|option|property|value|column|filter|header)\b/i.test(message);
+        if (isParamError || this.hasCredentialShapedArguments(actionParams)) {
+            return false;
+        }
+
+        // 2. Missing or invalid credentials, API keys, or authentication failures are unrecoverable in this run
         const fatalCredentialPattern = /(?:api[\s_-]?key\s+(?:is\s+)?(?:not\s+found|missing|required|invalid)|(?:missing|invalid)\s+api[\s_-]?key|no\s+api[\s_-]?key|credentials?\s+(?:not\s+found|missing)|authentication\s+failed)/i;
         if (fatalCredentialPattern.test(message)) {
             return true;
         }
 
-        // 2. Parameter/argument/input validation errors are recoverable (the agent can adjust inputs),
-        // so they must never trip the fatal action circuit breaker even if phrased as "not configured".
-        const isParamError = /\b(?:parameter|argument|param|input|field|option|property|value|column|filter|header)\b/i.test(message);
-        if (isParamError) {
-            return false;
-        }
-
         // 3. Action/service/provider-level configuration problems where the tool itself cannot execute in this environment
         const fatalConfigPattern = /(?:(?:action|tool|service|provider|integration|driver|client|api|extension|engine|server)\s+(?:is\s+)?not\s+configured|not\s+configured\s+(?:for\s+(?:this\s+)?tenant|in\s+(?:this\s+)?environment|on\s+this\s+server|in\s+(?:config|mj\.config))|^\s*(?:action\s+)?(?:is\s+)?not\s+configured[.!]*\s*$)/i;
         return fatalConfigPattern.test(message);
+    }
+
+    /**
+     * True when any top-level argument name looks like a credential the model supplied itself
+     * (password, secret, credential, API key, or an access / auth / bearer / refresh / ID token).
+     * `maxTokens`-style names are deliberately not matched.
+     */
+    protected hasCredentialShapedArguments(actionParams?: Record<string, unknown> | null): boolean {
+        if (!actionParams || typeof actionParams !== 'object') {
+            return false;
+        }
+        const credentialKey = /password|passwd|secret|credential|api[_-]?key|(?:access|auth|bearer|refresh|id)[_-]?token|^token$/i;
+        return Object.keys(actionParams).some(key => credentialKey.test(key));
     }
 
     /**
@@ -577,7 +599,7 @@ export class BaseAgent {
      * consecutive-attempt budget.
      */
     protected recordActionFailure(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, message: string | null | undefined, normalizedParams: string): void {
-        if (this.isFatalActionError(message)) {
+        if (this.isFatalActionError(message, action.params)) {
             this._fatalActionFailures.add(action.name);
             if (actionEntity?.Name) {
                 this._fatalActionFailures.add(actionEntity.Name);
@@ -657,15 +679,17 @@ export class BaseAgent {
     /**
      * Names the rule behind a failed action summary so the directive matches what actually
      * happened. A blocked call reports the rule that blocked it. A dispatched failure is fatal if
-     * its message says so; otherwise the budget is checked BEFORE the identical-arguments rule,
-     * because once the budget is spent the action is blocked whatever the arguments are, and
-     * telling the model to change them would send it in circles.
+     * `recordActionFailure` locked the action out (the summary has no access to the call's
+     * arguments, so the decision is read back rather than re-derived from the message); otherwise
+     * the budget is checked BEFORE the identical-arguments rule, because once the budget is spent
+     * the action is blocked whatever the arguments are, and telling the model to change them
+     * would send it in circles.
      */
     protected classifyActionFailure(summary: ActionResultSummary): ActionCircuitBreakerReason | 'warning' {
         if (summary.breakerReason) {
             return summary.breakerReason;
         }
-        if (this.isFatalActionError(summary.message) || this._fatalActionFailures.has(summary.actionName)) {
+        if (this._fatalActionFailures.has(summary.actionName)) {
             return 'fatal';
         }
         const record = this._actionFailureHistory.get(summary.actionName);
@@ -4505,13 +4529,23 @@ export class BaseAgent {
         if (this._turn1InsertionIndex < 0) {
             // Record the message boundary at Turn 1 before any loop messages are added
             this._turn1InsertionIndex = params.conversationMessages.length;
-        } else if (isAppendOnly && this._lastVolatileStateMessage && !params.conversationMessages.some(m => (m as AgentChatMessage).metadata?.volatileState)) {
+        } else if (isAppendOnly && this._lastVolatileStateMessage && !this.runHasVolatileStateMessage(params)) {
             // If append-only was resolved after turn 1 (via _lastModelSelectionInfo),
             // restore turn 1's fragment at the exact position where turn 1 executed it (the turn 1 boundary)
             // to ensure exact prefix match without corrupting pre-existing conversation history.
             const insertIdx = Math.min(this._turn1InsertionIndex, params.conversationMessages.length);
             params.conversationMessages.splice(insertIdx, 0, this._lastVolatileStateMessage);
         }
+    }
+
+    /**
+     * Whether THIS run has already placed a volatile-state fragment in the history, i.e. at or after
+     * the turn-1 boundary. Fragments before the boundary belong to an earlier run whose history the
+     * caller reused; they must not suppress this run's turn-1 restore.
+     */
+    protected runHasVolatileStateMessage(params: ExecuteAgentParams): boolean {
+        const start = Math.max(0, this._turn1InsertionIndex);
+        return params.conversationMessages.slice(start).some(m => (m as AgentChatMessage).metadata?.volatileState === true);
     }
 
     /**

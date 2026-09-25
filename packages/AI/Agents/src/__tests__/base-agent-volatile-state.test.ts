@@ -473,6 +473,36 @@ describe('BaseAgent.restoreTurn1VolatileStateIfNeeded', () => {
         expect(params.conversationMessages).toHaveLength(8);
     });
 
+    it('a fragment left behind by an earlier run (caller reused the array) does not suppress this run\'s turn-1 restore', () => {
+        const a = agentUnderTest();
+        const staleFragment: VolatileMessage = { role: 'user', content: 'Run A volatile state', metadata: { volatileState: true } };
+        const params = {
+            conversationMessages: [
+                { role: 'user', content: 'Run A question' },
+                staleFragment,
+                { role: 'assistant', content: 'Run A answer' },
+                { role: 'user', content: 'Run B question' },
+            ],
+        } as unknown as ExecuteAgentParams;
+
+        // Run B, turn 1: replace mode; boundary recorded after the stale history
+        a.restoreTurn1VolatileStateIfNeeded(params, false);
+        expect(a._turn1InsertionIndex).toBe(4);
+        const turn1Fragment: VolatileMessage = { role: 'user', content: 'Run B turn 1 state', metadata: { volatileState: true } };
+        a._lastVolatileStateMessage = turn1Fragment;
+        params.conversationMessages.push({ role: 'assistant', content: 'Run B turn 1 response' });
+
+        // Run B, turn 2: append-only. The stale fragment sits BEFORE the boundary and must be ignored.
+        a.restoreTurn1VolatileStateIfNeeded(params, true);
+        expect(params.conversationMessages[4]).toBe(turn1Fragment);
+        expect(params.conversationMessages[5].content).toBe('Run B turn 1 response');
+        expect(params.conversationMessages).toHaveLength(6);
+
+        // And once restored, a third turn does not restore again
+        a.restoreTurn1VolatileStateIfNeeded(params, true);
+        expect(params.conversationMessages).toHaveLength(6);
+    });
+
     it('does nothing when isAppendOnly is false', () => {
         const a = agentUnderTest();
         const preExistingHistory: ChatMessage[] = [

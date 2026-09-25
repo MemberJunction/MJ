@@ -408,6 +408,26 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(helper(undefined)).toBe(false);
             expect(helper('')).toBe(false);
         });
+
+        it('a credential failure the model can correct is not fatal: parameter wording or credential-shaped arguments', () => {
+            const agent = new BaseAgent();
+            const helper = (msg: string | null | undefined, params?: Record<string, unknown>) =>
+                (agent as unknown as { isFatalActionError(m: string | null | undefined, p?: Record<string, unknown>): boolean }).isFatalActionError(msg, params);
+
+            // The message names a parameter: argument problem, whatever else it says
+            expect(helper('Authentication failed: invalid password parameter')).toBe(false);
+            expect(helper('API key not found in input')).toBe(false);
+
+            // The call itself supplied the credential: the model can fix it
+            expect(helper('Authentication failed', { host: 'db.example.com', user: 'svc', password: 'wrong' })).toBe(false);
+            expect(helper('Authentication failed for user svc', { accessToken: 'stale' })).toBe(false);
+            expect(helper('Invalid API key provided', { apiKey: 'sk-typo' })).toBe(false);
+
+            // No parameter wording and no credential in the arguments: environment-level, still fatal
+            expect(helper('Authentication failed', { query: 'cities' })).toBe(true);
+            expect(helper('Authentication failed', { maxTokens: 500 })).toBe(true);
+            expect(helper('Perplexity API key not found', { query: 'cities' })).toBe(true);
+        });
     });
 
     describe('ExecuteSingleAction circuit breaker', () => {
@@ -856,6 +876,42 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(guidance).toHaveLength(1);
             expect(guidance[0]).toContain('[WARNING/ACTION_FAILURE]');
             expect(guidance[0]).toContain('(attempt 1 of 5)');
+        });
+
+        it('a wrong password supplied by the model gets a WARNING and a retry, not a run-long lockout', async () => {
+            let attempts = 0;
+            harness.runAction = () => {
+                attempts++;
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = attempts > 1; // first password wrong, corrected one works
+                ar.Message = attempts > 1 ? 'Connected' : 'Authentication failed';
+                ar.Params = [];
+                ar.Result = { ResultCode: attempts > 1 ? 'SUCCESS' : 'ERROR' } as unknown as import('@memberjunction/core-entities').MJActionResultCodeEntity;
+                return ar;
+            };
+
+            const attempt = (password: string): LoopAgentResponse => ({
+                taskComplete: false,
+                reasoning: 'Connect to the database',
+                nextStep: { type: 'Actions', actions: [{ name: ACTION_NAME, params: { host: 'db.example.com', password } }] },
+            });
+            const { agent } = makeAgent([
+                () => llmEnvelope(attempt('wrong')),
+                () => llmEnvelope(attempt('right')),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams();
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+            expect(harness.runActionCallCount).toBe(2); // the corrected call was dispatched, not short-circuited
+
+            const contents = params.conversationMessages.map(m => typeof m.content === 'string' ? m.content : '');
+            const guidance = contents.filter(c => c.includes('Action Execution Failure Guidance'));
+            expect(guidance).toHaveLength(1);
+            expect(guidance[0]).toContain('[WARNING/ACTION_FAILURE]');
+            expect(guidance[0]).not.toContain('[CRITICAL/ACTION_UNAVAILABLE]');
         });
 
         it('does NOT inject failure directives when all actions succeed', async () => {
