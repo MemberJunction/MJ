@@ -135,6 +135,18 @@ export interface SharedByInfo {
     Level: 'View' | 'Edit' | 'Owner';
 }
 
+/** Per-item outcome of a bulk conversation operation. */
+export interface ConversationBulkResult {
+    Successful: string[];
+    Failed: Array<{ ID: string; Name: string; Error: string }>;
+}
+
+/** Fields a bulk conversation update may write. */
+export interface ConversationBulkUpdate {
+    ProjectID?: MJConversationEntity['ProjectID'];
+    IsPinned?: MJConversationEntity['IsPinned'];
+}
+
 // ========================================================================
 // QUERY RESULT TYPES (from GetConversationComplete stored query)
 // ========================================================================
@@ -587,6 +599,31 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     public GetSharedByInfo(conversationId: string): SharedByInfo | null {
         return this._sharedByByConversationId.get(NormalizeUUID(conversationId)) ?? null;
+    }
+
+    /**
+     * True when the user may grant others access to the conversation: they own it,
+     * or hold an Owner-level grant on it. Mirrors the server's share gate in
+     * `MJResourcePermissionEntityExtended`, so the UI never offers a share the save
+     * would refuse.
+     */
+    public CanShareConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        return this.GetSharedByInfo(conversation.ID)?.Level === 'Owner';
+    }
+
+    /**
+     * True when the user may change the conversation's folder and pin: they own
+     * it, or hold an Edit or Owner grant on it. A View grant is read-only.
+     */
+    public CanEditConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        const level = this.GetSharedByInfo(conversation.ID)?.Level;
+        return level === 'Edit' || level === 'Owner';
     }
 
     /**
@@ -1337,6 +1374,122 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this.removeMultipleFromList(successful);
 
         return { Successful: successful, Failed: failed };
+    }
+
+    /**
+     * Moves multiple conversations into a folder (project), or out of every folder
+     * when projectId is null. Emits the updated list once for the whole batch.
+     *
+     * @param ids - Conversation IDs to move
+     * @param projectId - Target folder ID, or null for no folder
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async MoveMultipleConversationsToProject(
+        ids: string[],
+        projectId: string | null,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Pins or unpins multiple conversations. Emits the re-sorted list once for the
+     * whole batch, so pinned conversations move to the top in a single UI update.
+     *
+     * @param ids - Conversation IDs to pin or unpin
+     * @param isPinned - True to pin, false to unpin
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async PinMultipleConversations(
+        ids: string[],
+        isPinned: boolean,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { IsPinned: isPinned }, contextUser);
+    }
+
+    /**
+     * Applies the same field updates to several conversations, one save at a time so
+     * a single rejection cannot fail the batch, then re-emits the list once.
+     * A conversation whose save fails keeps its previous field values in memory.
+     * Conversations the user holds only View access to are refused without a save.
+     */
+    private async saveMultipleConversations(
+        ids: string[],
+        updates: ConversationBulkUpdate,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        const successful: string[] = [];
+        const failed: Array<{ ID: string; Name: string; Error: string }> = [];
+        if (ids.length === 0) {
+            return { Successful: successful, Failed: failed };
+        }
+
+        const md = this.ProviderToUse;
+        this._selfMutating = true;
+        try {
+            for (const id of ids) {
+                let conversation = this.GetConversation(id);
+                try {
+                    if (!conversation) {
+                        const entity = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+                        const loaded = await entity.Load(id);
+                        if (!loaded) {
+                            failed.push({ ID: id, Name: 'Unknown', Error: 'Conversation not found' });
+                            continue;
+                        }
+                        conversation = entity;
+                    }
+
+                    if (!this.CanEditConversation(conversation, contextUser.ID)) {
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: 'You have View access only'
+                        });
+                        continue;
+                    }
+
+                    const previous: ConversationBulkUpdate = {
+                        ProjectID: conversation.ProjectID,
+                        IsPinned: conversation.IsPinned
+                    };
+                    this.applyBulkUpdate(conversation, updates);
+
+                    const saved = await conversation.Save();
+                    if (saved) {
+                        successful.push(conversation.ID);
+                    } else {
+                        this.applyBulkUpdate(conversation, previous);
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: conversation.LatestResult?.Message || 'Failed to update conversation'
+                        });
+                    }
+                } catch (error) {
+                    failed.push({
+                        ID: id,
+                        Name: conversation?.Name || 'Unknown',
+                        Error: error instanceof Error ? error.message : 'Unknown error'
+                    });
+                }
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        if (successful.length > 0) {
+            this._conversations$.next(this.sortConversations(this._conversations$.value));
+        }
+        return { Successful: successful, Failed: failed };
+    }
+
+    private applyBulkUpdate(conversation: MJConversationEntity, updates: ConversationBulkUpdate): void {
+        if (updates.ProjectID !== undefined) conversation.ProjectID = updates.ProjectID;
+        if (updates.IsPinned !== undefined) conversation.IsPinned = updates.IsPinned;
     }
 
     // ========================================================================

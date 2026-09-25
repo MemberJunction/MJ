@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Component, Input } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
@@ -26,6 +26,16 @@ class StubNotificationBadgeComponent {
   @Input() conversationId: string | null = null;
 }
 
+@Component({ standalone: false, selector: 'mj-resource-share-dialog', template: '' })
+class StubShareDialogComponent {
+  @Input() Visible = false;
+  @Input() Contexts: unknown[] = [];
+  @Input() Adapter: unknown = null;
+  @Input() Notice: string | null = null;
+  @Input() ResourceLabel = '';
+  @Output() Result = new EventEmitter<unknown>();
+}
+
 describe('ConversationListComponent (DOM) — chrome toggles', () => {
   const currentUser = { ID: 'u1' } as unknown as UserInfo;
   const conv = (id: string, name: string) =>
@@ -38,7 +48,7 @@ describe('ConversationListComponent (DOM) — chrome toggles', () => {
   const render = (inputs: Record<string, unknown> = {}, setup?: (c: ConversationListComponent) => void) =>
     renderComponentFixture(ConversationListComponent, {
       imports: [CommonModule, FormsModule],
-      declarations: [ConversationListComponent, StubNotificationBadgeComponent],
+      declarations: [ConversationListComponent, StubNotificationBadgeComponent, StubShareDialogComponent],
       providers: [
         { provide: DialogService, useValue: {} },
         { provide: NotificationService, useValue: {} },
@@ -85,14 +95,14 @@ describe('ConversationListComponent (DOM) — chrome toggles', () => {
     expect(query(f, '.list-header')).toBeNull();
   });
 
-  it('removes the header strip in selection mode when only the ⋯ menu would occupy it', () => {
-    // showSearch=false leaves the ⋯ menu as the strip's only occupant — and the
-    // menu hides during selection mode, so the strip must not render as an
-    // empty bordered band.
+  it('swaps the ⋯ menu for the selection bar in selection mode', () => {
+    // showSearch=false leaves the ⋯ menu as the strip's only occupant; while
+    // selecting, the strip holds the selection bar instead.
     const f = render({ showSearch: false }, (c) => {
       c.isSelectionMode = true;
     });
-    expect(query(f, '.list-header')).toBeNull();
+    expect(query(f, '.list-header .selection-bar')).not.toBeNull();
+    expect(query(f, '.list-header .btn-menu')).toBeNull();
   });
 
   it('flipping showSearch off clears an active search filter', () => {
@@ -105,6 +115,15 @@ describe('ConversationListComponent (DOM) — chrome toggles', () => {
     expect(f.componentInstance.searchQuery).toBe('foo');
     f.componentRef.setInput('showSearch', false);
     expect(f.componentInstance.searchQuery).toBe('');
+  });
+
+  it('the ⋯ menu no longer offers Select Conversations — selection starts from the list itself', () => {
+    const f = render();
+    (query(f, '.btn-menu') as HTMLButtonElement).click();
+    f.detectChanges();
+    const labels = queryAll(f, '.header-dropdown-menu .dropdown-item').map(b => b.textContent?.trim() ?? '');
+    expect(labels.length).toBeGreaterThan(0);
+    expect(labels.some(l => l.includes('Select Conversations'))).toBe(false);
   });
 
   it('hides the New Conversation button when showNewConversationButton=false', () => {
