@@ -485,7 +485,7 @@ export class AIPromptParams {
    * When provided, `AIPromptRunner.ExecutePrompt` bypasses re-rendering `childPrompts`
    * and uses these pre-rendered templates directly.
    */
-  preRenderedChildTemplates?: Record<string, string>;
+  PreRenderedChildTemplates?: Record<string, string>;
 
   /**
    * Optional cancellation token to abort the prompt execution

@@ -4730,7 +4730,7 @@ export class BaseAgent {
             return null;
         }
         // Cache pre-rendered child templates so AIPromptRunner.ExecutePrompt does not re-render them
-        promptParams.preRenderedChildTemplates = rendered.renderedTemplates;
+        promptParams.PreRenderedChildTemplates = rendered.renderedTemplates;
         // The same data object the parent template renders against — this switches the `## Specialization`
         // block to its stub and extends the Runtime State pointer.
         if (promptParams.data) {

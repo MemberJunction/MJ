@@ -190,7 +190,7 @@ describe('BaseAgent.buildVolatileStateMessage', () => {
         expect(content.startsWith(`<${AGENT_SPECIALIZATION_TAG}>\n${RENDERED_CHILD}\n</${AGENT_SPECIALIZATION_TAG}>`)).toBe(true);
         expect(content.indexOf(`<${RUNTIME_STATE_TAG}>`)).toBeGreaterThan(content.indexOf(`</${AGENT_SPECIALIZATION_TAG}>`));
         expect(data._SPECIALIZATION_RELOCATED).toBe(true);
-        expect(promptParams.preRenderedChildTemplates).toEqual({ agentSpecificPrompt: RENDERED_CHILD });
+        expect(promptParams.PreRenderedChildTemplates).toEqual({ agentSpecificPrompt: RENDERED_CHILD });
         expect(a._promptRunner.RenderChildPromptTemplates).toHaveBeenCalledTimes(1);
     });
 
