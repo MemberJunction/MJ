@@ -1,5 +1,7 @@
 # Week of 2026-09-19
 
+> **Status (2026-09-25):** All three ideas approved for implementation and now in progress — see individual idea docs for details.
+
 Three framework-level improvement ideas, grounded directly in this week's open GitHub issues,
 active PR backlog, and 2026 industry/regulatory research — continuing the recurring exploration
 started in [`../README.md`](../README.md).

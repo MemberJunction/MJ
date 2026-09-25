@@ -2,6 +2,8 @@
 
 **Week of 2026-09-19 · Creative exploration · Framework-level (core, not a vertical app)**
 
+> **Status (2026-09-25): In progress** — implementation work has begun. Tracking in a follow-up PR.
+
 ## The problem, framed for the world, not the codebase
 
 A small nonprofit's finance volunteer processes online gifts through a payment integration, and
