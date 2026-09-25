@@ -70,7 +70,7 @@ function makeTemplate(id: string = TEMPLATE_ID): MJTemplateEntity {
 
 /** A RunView result the editor can consume; `Success: false` exercises the failure branch. */
 function viewResult(rows: MJTemplateContentEntity[], success = true): RunViewResult {
-    return { Success: success, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ErrorMessage: success ? '' : 'database unavailable' } as RunViewResult;
+    return { Success: success, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 0, ErrorMessage: success ? '' : 'database unavailable' } as RunViewResult;
 }
 
 interface ProviderOptions {
