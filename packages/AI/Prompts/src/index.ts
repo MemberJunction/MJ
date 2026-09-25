@@ -1,3 +1,4 @@
+export { BaseModelRunner } from './BaseModelRunner';
 export * from './AIPromptRunner';
 export * from './AIPromptTimeoutError';
 // The native tool-calling gate. Exported because the agent loop needs to reason
