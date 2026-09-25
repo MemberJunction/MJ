@@ -15,6 +15,24 @@
 }
 
 <!--
+  Standard-form switch: only when a custom form hides the CodeGen form. Placed
+  above the anchor so the dynamically-created form renders below it.
+-->
+@if (!Loading && ShowFormModeSwitch && HasStandardFormAlternative) {
+  <div class="mj-form-host-mode-strip" role="region" aria-label="Form view">
+    <i class="fa-solid" [class.fa-wand-magic-sparkles]="FormMode === 'default'" [class.fa-table-list]="FormMode === 'standard'" aria-hidden="true"></i>
+    <span class="mj-form-host-mode-text">
+      {{ FormMode === 'standard' ? 'Standard form — every field, same permissions.' : 'Custom view. Some fields may only be editable in the standard form.' }}
+    </span>
+    <button mjButton variant="outline" size="sm" type="button"
+      class="mj-form-host-mode-switch"
+      (click)="SwitchFormMode(FormMode === 'standard' ? 'default' : 'standard')">
+      {{ FormMode === 'standard' ? 'Back to custom view' : 'Open standard form' }}
+    </button>
+  </div>
+}
+
+<!--
   Anchor for the dynamically-created form component. Always present (static)
   so the ViewContainerRef resolves at AfterViewInit. The form's own template
   carries the <mj-record-form-container>, so nothing wraps it here.
