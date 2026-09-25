@@ -220,10 +220,14 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
  * Retaining prior fragments and APPENDING the new one makes each request an exact prefix
  * extension of the last (~93% measured).
  *
- * - `'auto'` (default): append-only when the resolved vendor or model is OpenAI (vendor name,
- *   model name or model driver class contains "openai", or the model name contains "gpt"),
- *   otherwise replace-in-place. Detection looks at the runtime override, the previous
- *   iteration's model selection, and the prompt's bound models, in that order.
+ * - `'auto'` (default): append-only when the resolved vendor or model is OpenAI or xAI / Grok
+ *   (vendor name, model name or model driver class mentions "openai", "xai" / "x.ai" or "grok",
+ *   or the model name contains "gpt"), otherwise replace-in-place. Detection looks at the runtime
+ *   override, else the FIRST iteration's model selection, and then freezes that answer for the
+ *   rest of the run so a failover cannot flip the layout mid-run. On turn 1, before any selection
+ *   is known, the layout is replace-in-place; if turn 2 resolves to append-only, turn 1's fragment
+ *   is restored at the turn-1 boundary, so deferring loses nothing. The prompt's bound models are
+ *   deliberately not consulted: prompts commonly bind several vendors for failover.
  * - `'appendOnly'`: always retain prior fragments. Use this when auto-detection cannot see the
  *   vendor — an OpenAI-compatible endpoint or deployment whose vendor and model names do not
  *   mention OpenAI or GPT.

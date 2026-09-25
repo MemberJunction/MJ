@@ -475,6 +475,13 @@ export class BaseAgent {
     private _lastVolatileStateMessage: AgentChatMessage | undefined;
 
     /**
+     * The trailing-state retention mode once it has been decided for this run, frozen at the first
+     * model selection so the layout never flips again mid-run. Undefined until then (turn 1 only).
+     * @private
+     */
+    private _resolvedTrailingStateMode: boolean | undefined;
+
+    /**
      * Index in conversationMessages where this agent run began, used to accurately restore
      * turn 1's trailing state message in append-only mode without corrupting prior chat turns.
      * @private
@@ -1801,6 +1808,7 @@ export class BaseAgent {
             this._agentConfig = undefined;
             this._lastModelSelectionInfo = undefined;
             this._lastVolatileStateMessage = undefined;
+            this._resolvedTrailingStateMode = undefined;
             this._turn1InsertionIndex = -1;
             this._fatalActionFailures.clear();
             this._actionFailureHistory.clear();
@@ -4480,6 +4488,10 @@ export class BaseAgent {
      *
      * Restores the fragment at the exact message boundary where turn 1 executed, ensuring
      * earlier turns in multi-turn conversations are not corrupted.
+     *
+     * This is only correct for a replace → append-only flip between turn 1 and turn 2, when
+     * `_lastVolatileStateMessage` still holds turn 1's fragment. `shouldUseAppendOnlyTrailingState`
+     * freezes the mode at the first model selection precisely so that no later flip can occur.
      */
     protected restoreTurn1VolatileStateIfNeeded(
         params: ExecuteAgentParams,
@@ -4521,6 +4533,16 @@ export class BaseAgent {
      * retained in the message history so each turn is an exact prefix extension of the prior turn,
      * achieving ~93% cache hit rate. Providers with block-level or sliding caching (Gemini, Cerebras)
      * use replace-in-place to keep context compact.
+     *
+     * Decided ONCE per run. An explicit `trailingStateMode` or a runtime vendor/model override answers
+     * immediately. Otherwise the answer is frozen at the first model selection and reused for every
+     * later turn, so a failover to another vendor cannot flip the layout mid-run — a flip after turn 2
+     * would leave stale fragments in the history or, worse, restore the wrong turn's fragment. On turn 1,
+     * before any selection is known, the answer is replace-in-place: turn 1's fragment is kept and, if
+     * turn 2 resolves to append-only, spliced back at the turn-1 boundary, which reproduces exactly the
+     * bytes an append-only turn 1 would have sent. Nothing is lost by deferring, so the prompt's bound
+     * models are deliberately NOT consulted — prompts commonly bind several vendors for failover, and
+     * guessing from them mis-pins runs that end up selecting another vendor.
      */
     protected shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean {
         const data = promptParams.data ?? {};
@@ -4534,52 +4556,45 @@ export class BaseAgent {
             return false;
         }
 
-        const isPrefixCacheTarget = (name?: string | null, vendor?: string | null, driver?: string | null): boolean => {
-            const n = name?.toLowerCase() ?? '';
-            const v = vendor?.toLowerCase() ?? '';
-            const d = driver?.toLowerCase() ?? '';
-
-            // If the vendor/driver is explicitly a provider with block-level or sliding caching
-            // (Cerebras, Anthropic, Google/Gemini), never treat it as an OpenAI/xAI prefix cache target,
-            // even if the model name includes substrings like 'gpt' (e.g. Cerebras GPT-OSS-120B).
-            if (v.includes('cerebras') || v.includes('anthropic') || v.includes('google') || v.includes('gemini') ||
-                d.includes('cerebras') || d.includes('anthropic') || d.includes('gemini')) {
-                return false;
-            }
-
-            return n.includes('gpt') || n.includes('openai') || n.includes('grok') ||
-                   v.includes('openai') || v.includes('x.ai') || v.includes('xai') ||
-                   d.includes('openai') || d.includes('xai');
-        };
-
-        // Check runtime override
         if (promptParams.override?.vendorId || promptParams.override?.modelId) {
             const vendor = promptParams.override?.vendorId ? AIEngine.Instance?.Vendors?.find(v => UUIDsEqual(v.ID, promptParams.override?.vendorId)) : undefined;
             const model = promptParams.override?.modelId ? AIEngine.Instance?.Models?.find(m => UUIDsEqual(m.ID, promptParams.override?.modelId)) : undefined;
-            return isPrefixCacheTarget(model?.Name, vendor?.Name ?? model?.Vendor, model?.DriverClass);
+            return this.isPrefixCacheTarget(model?.Name, vendor?.Name ?? model?.Vendor, model?.DriverClass);
         }
 
-        // Check previous turn's model selection info (definitive once at least one turn has run)
+        if (this._resolvedTrailingStateMode !== undefined) {
+            return this._resolvedTrailingStateMode;
+        }
         if (this._lastModelSelectionInfo) {
             const v = this._lastModelSelectionInfo.vendorSelected;
             const m = this._lastModelSelectionInfo.modelSelected;
-            return isPrefixCacheTarget(m?.Name, v?.Name ?? (m as any)?.Vendor, (v as any)?.DriverClass ?? (m as any)?.DriverClass);
+            this._resolvedTrailingStateMode = this.isPrefixCacheTarget(m?.Name, v?.Name ?? m?.Vendor, m?.DriverClass);
+            return this._resolvedTrailingStateMode;
         }
 
-        // Check prompt models if available (only on turn 1 before model selection is known)
-        const prompt = promptParams.modelSelectionPrompt ?? promptParams.prompt;
-        if (prompt?.ID && AIEngine.Instance?.PromptModels) {
-            const promptModels = AIEngine.Instance.PromptModels.filter(pm => UUIDsEqual(pm.PromptID, prompt.ID));
-            for (const pm of promptModels) {
-                const model = AIEngine.Instance.Models?.find(m => UUIDsEqual(m.ID, pm.ModelID));
-                const vendor = pm.VendorID ? AIEngine.Instance.Vendors?.find(v => UUIDsEqual(v.ID, pm.VendorID)) : undefined;
-                if (isPrefixCacheTarget(model?.Name, vendor?.Name ?? model?.Vendor, model?.DriverClass)) {
-                    return true;
-                }
-            }
-        }
-
+        // Turn 1, nothing known yet: replace-in-place, resolved for good on turn 2 (see above).
         return false;
+    }
+
+    /**
+     * True when the vendor, model name or driver identifies a provider whose prompt cache is an exact
+     * byte-prefix match (OpenAI, xAI / Grok). Providers with block-level or sliding caches (Cerebras,
+     * Anthropic, Google / Gemini) are excluded first, so a model name like Cerebras's GPT-OSS-120B is
+     * never mistaken for an OpenAI target.
+     */
+    protected isPrefixCacheTarget(name?: string | null, vendor?: string | null, driver?: string | null): boolean {
+        const n = name?.toLowerCase() ?? '';
+        const v = vendor?.toLowerCase() ?? '';
+        const d = driver?.toLowerCase() ?? '';
+
+        if (v.includes('cerebras') || v.includes('anthropic') || v.includes('google') || v.includes('gemini') ||
+            d.includes('cerebras') || d.includes('anthropic') || d.includes('gemini')) {
+            return false;
+        }
+
+        return n.includes('gpt') || n.includes('openai') || n.includes('grok') ||
+               v.includes('openai') || v.includes('x.ai') || v.includes('xai') ||
+               d.includes('openai') || d.includes('xai');
     }
 
     /**

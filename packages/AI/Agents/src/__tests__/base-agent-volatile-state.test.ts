@@ -51,6 +51,7 @@ interface Internals {
     _turn1InsertionIndex: number;
     _lastModelSelectionInfo?: any;
     _lastVolatileStateMessage?: any;
+    _resolvedTrailingStateMode?: boolean;
 }
 
 const USER = { ID: 'u1', Name: 'Tester' } as unknown as UserInfo;
@@ -336,6 +337,8 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         a._lastModelSelectionInfo = { vendorSelected: { Name: 'x.ai', DriverClass: 'xAILLM' } };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
 
+        // Fresh decision for the Grok-by-model-name case (the first answer is frozen per run)
+        a._resolvedTrailingStateMode = undefined;
         a._lastModelSelectionInfo = { modelSelected: { Name: 'Grok 4.7' } };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
     });
@@ -346,10 +349,12 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         a._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
 
+        a._resolvedTrailingStateMode = undefined;
         a._lastModelSelectionInfo = { vendorSelected: { Name: 'Cerebras', DriverClass: 'CerebrasLLM' } };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
 
         // Cerebras model with 'GPT' in the name should still return false (not treated as OpenAI)
+        a._resolvedTrailingStateMode = undefined;
         a._lastModelSelectionInfo = {
             vendorSelected: { Name: 'Cerebras', DriverClass: 'CerebrasLLM' },
             modelSelected: { Name: 'GPT-OSS-120B' },
@@ -357,23 +362,44 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
     });
 
-    it('does not fall through to PromptModels when _lastModelSelectionInfo is present', () => {
+    it('turn 1 (no selection yet) is replace-in-place: the prompt\'s bound models are never consulted', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
+        // Even with an OpenAI model bound to the prompt, turn 1 must not guess append-only:
+        // prompts bind several vendors for failover and the run may select any of them.
         (AIEngine.Instance as any).PromptModels = [{ PromptID: 'prompt-1', ModelID: 'model-openai' }];
         (AIEngine.Instance as any).Models = [{ ID: 'model-openai', Name: 'gpt-4o' }];
         promptParams.prompt = { ID: 'prompt-1' } as any;
 
-        // If _lastModelSelectionInfo is Anthropic, it must return false and not check PromptModels
-        a._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
-        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
-
-        // But when _lastModelSelectionInfo is absent, PromptModels fallback detects OpenAI
         a._lastModelSelectionInfo = undefined;
-        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+        // ...and nothing is frozen by that answer: turn 2 still decides from the real selection
+        expect(a._resolvedTrailingStateMode).toBeUndefined();
 
         delete (AIEngine.Instance as any).PromptModels;
         delete (AIEngine.Instance as any).Models;
+    });
+
+    it('freezes the mode at the first model selection: a later vendor change never flips it', () => {
+        const { promptParams } = makeInputs({});
+
+        // OpenAI first → append-only for the rest of the run, even after a failover to Anthropic
+        const a = agentUnderTest();
+        a._lastModelSelectionInfo = { vendorSelected: { Name: 'OpenAI', DriverClass: 'OpenAILLM' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+        a._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+
+        // Anthropic first → replace-in-place for the rest of the run, even after a failover to OpenAI
+        const b = agentUnderTest();
+        b._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
+        expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+        b._lastModelSelectionInfo = { vendorSelected: { Name: 'OpenAI', DriverClass: 'OpenAILLM' } };
+        expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+
+        // An explicit mode is not subject to freezing and still wins
+        const { promptParams: forced } = makeInputs({ trailingStateMode: 'replace' });
+        expect(a.shouldUseAppendOnlyTrailingState(forced)).toBe(false);
     });
 });
 
