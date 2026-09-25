@@ -12,7 +12,15 @@ import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
  * migration execution, npm package management, and config updates).
  */
 export default class AppInstall extends Command {
-  static description = 'Install an MJ Open App from a GitHub repository';
+  // The second paragraph deliberately mirrors CONFIGURE_CREDENTIAL_REMEDY in
+  // github-client.ts (module-private there, phrased as a clause rather than a sentence —
+  // not shared as an import). Kept in sync by hand; update both when either wording changes.
+  //
+  // No hard newlines WITHIN a paragraph below: oclif re-wraps this to the reader's terminal
+  // width, and a hard newline mid-paragraph survives that re-wrap as a stray short line.
+  static description = `Install an MJ Open App from a GitHub repository.
+
+Private repositories need a GitHub credential. GitHub returns 404 (not 403) for a repo it will not show you, so without one an install fails as though the app or its version did not exist. Set GITHUB_TOKEN in the environment, or add the repo to openApps.github.tokens (or set openApps.github.token) in mj.config.cjs.`;
 
   static examples = [
     '<%= config.bin %> app install https://github.com/acme/mj-crm',
@@ -20,6 +28,7 @@ export default class AppInstall extends Command {
     '<%= config.bin %> app install https://github.com/acme/mj-crm --verbose',
     '<%= config.bin %> app install https://github.com/MemberJunction/Integrations/CRM/HubSpot',
     '<%= config.bin %> app install https://github.com/acme/mj-crm --non-interactive',
+    'GITHUB_TOKEN=$(gh auth token) <%= config.bin %> app install https://github.com/acme/private-app',
   ];
 
   static args = {
