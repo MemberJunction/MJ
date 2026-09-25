@@ -807,7 +807,10 @@ ALTER AUTHORIZATION ON SCHEMA::[acme_crm] TO [dbo];
 ```sql
 DECLARE @app sysname = N'acme_crm';
 SELECT
-    CASE p.state WHEN 'W' THEN N'GRANT' ELSE p.state_desc END + N' ' + p.permission_name
+    -- COLLATE: the sys.database_permissions columns use a fixed catalog collation; without it,
+    -- concatenating them with the schema name fails on most databases ("Cannot resolve collation conflict").
+    CASE p.state WHEN 'W' THEN N'GRANT' ELSE p.state_desc COLLATE DATABASE_DEFAULT END
+    + N' ' + p.permission_name COLLATE DATABASE_DEFAULT
     + N' ON ' + CASE p.class
                   WHEN 3 THEN N'SCHEMA::' + QUOTENAME(s.name)
                   ELSE N'OBJECT::' + QUOTENAME(OBJECT_SCHEMA_NAME(p.major_id)) + N'.' + QUOTENAME(OBJECT_NAME(p.major_id))
