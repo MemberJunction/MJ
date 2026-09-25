@@ -1,38 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const cloneMock = vi.fn();
-const planMock = vi.fn();
+const canBatch = { value: true };
 
 import { Metadata } from '@memberjunction/core';
-vi.mock('@memberjunction/record-cloning', () => {
+// The real key formatting and authorization names; only the engine and the authorizer are stubbed.
+vi.mock('@memberjunction/record-cloning', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/record-cloning')>();
     return {
+        ...actual,
         RecordCloneEngine: class {
             Clone = cloneMock;
-            Plan = planMock;
+        },
+        CloneAuthorizer: class {
+            CanBatchClone = () => canBatch.value;
         },
     };
 });
 
+/** A target key in the shape the engine really returns: pairs, not a string. */
+const key = (value: string) => ({ KeyValuePairs: [{ FieldName: 'ID', Value: value }] });
+
 const mockEntityInfo = {
     Name: 'TestEntity',
-    PrimaryKeys: [{ Name: 'ID' }],
-    FirstPrimaryKey: { Name: 'ID' },
+    PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }],
+    FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
 };
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
-    class CompositeKeyMock {
-        public KeyValuePairs: Array<{ FieldName: string; Value: unknown }> = [];
-        public static FromRecordID(_entity: unknown, recordId: string) {
-            const ck = new CompositeKeyMock();
-            ck.KeyValuePairs = [{ FieldName: 'ID', Value: recordId }];
-            return ck;
-        }
-        public ToConcatenatedString() {
-            return this.KeyValuePairs.map((p) => `${p.FieldName}|${p.Value}`).join('||');
-        }
-    }
-
     return {
         ...actual,
         Metadata: {
@@ -45,7 +41,6 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
                 }),
             },
         },
-        CompositeKey: CompositeKeyMock,
     };
 });
 
@@ -59,7 +54,6 @@ describe('CloneRecordAction', () => {
     beforeEach(() => {
         action = new CloneRecordAction();
         cloneMock.mockReset();
-        planMock.mockReset();
     });
 
     it('requires EntityName and RecordID', async () => {
@@ -81,11 +75,7 @@ describe('CloneRecordAction', () => {
     });
 
     it('handles dry run planning successfully', async () => {
-        planMock.mockResolvedValueOnce({
-            Blocked: false,
-            Counts: { Create: 3 },
-            Warnings: [],
-        });
+        cloneMock.mockResolvedValueOnce({ Success: true, ResultCode: 'SUCCESS', Created: [], Counts: { Create: 3 }, Warnings: [] });
 
         const params: RunActionParams = {
             Action: { Name: 'Clone Record' } as never,
@@ -101,8 +91,9 @@ describe('CloneRecordAction', () => {
         const res = await (action as unknown as { InternalRunAction(p: RunActionParams): Promise<{ Success: boolean; ResultCode: string }> }).InternalRunAction(params);
         expect(res.Success).toBe(true);
         expect(res.ResultCode).toBe('SUCCESS');
-        expect(planMock).toHaveBeenCalled();
-        expect(cloneMock).not.toHaveBeenCalled();
+        expect(cloneMock.mock.calls[0][0].Options.DryRun).toBe(true);
+        expect(params.Params.find((p) => p.Name === 'CreatedCount')?.Value).toBe(3);
+        expect(params.Params.find((p) => p.Name === 'NewRecordID')?.Value).toBeNull();
     });
 
     it('clones record and pushes outputs', async () => {
@@ -110,8 +101,8 @@ describe('CloneRecordAction', () => {
             Success: true,
             ResultCode: 'SUCCESS',
             CloneLogID: 'log-uuid',
-            Roots: [{ TargetKey: '456' }],
-            Created: [{ TargetKey: '456' }, { TargetKey: '789' }],
+            Roots: [{ EntityName: 'TestEntity', SourceKey: key('123'), TargetKey: key('456') }],
+            Created: [{ TargetKey: key('456') }, { TargetKey: key('789') }],
             Warnings: [],
         });
 
@@ -145,7 +136,7 @@ describe('CloneRecordsAction', () => {
     beforeEach(() => {
         action = new CloneRecordsAction();
         cloneMock.mockReset();
-        planMock.mockReset();
+        canBatch.value = true;
     });
 
     it('requires EntityName and RecordIDs', async () => {
@@ -161,31 +152,52 @@ describe('CloneRecordsAction', () => {
         expect(res1.ResultCode).toBe('MISSING_PARAMETERS');
     });
 
-    it('clones multiple records and pushes outputs', async () => {
-        cloneMock.mockResolvedValueOnce({
-            Success: true,
-            ResultCode: 'SUCCESS',
-            CloneLogID: 'log-uuid-bulk',
-            Created: [{ TargetKey: '10' }, { TargetKey: '20' }],
-            Warnings: [],
-        });
+    const batchParams = (): RunActionParams => ({
+        Action: { Name: 'Clone Records' } as never,
+        Params: [
+            { Name: 'EntityName', Type: 'Input', Value: 'TestEntity' },
+            { Name: 'RecordIDs', Type: 'Input', Value: JSON.stringify(['1', '2']) },
+        ],
+        ContextUser: { ID: 'user-1' } as never,
+        Provider: Metadata.Provider as never,
+    });
+    const run = (params: RunActionParams) =>
+        (action as unknown as { InternalRunAction(p: RunActionParams): Promise<{ Success: boolean; ResultCode: string; Message: string }> }).InternalRunAction(params);
 
-        const params: RunActionParams = {
-            Action: { Name: 'Clone Records' } as never,
-            Params: [
-                { Name: 'EntityName', Type: 'Input', Value: 'TestEntity' },
-                { Name: 'RecordIDs', Type: 'Input', Value: JSON.stringify(['1', '2']) },
-            ],
-            ContextUser: { ID: 'user-1' } as never,
-            Provider: Metadata.Provider as never,
-        };
+    it('clones every root, not just the first, and reports each one', async () => {
+        cloneMock
+            .mockResolvedValueOnce({ Success: true, ResultCode: 'SUCCESS', CloneLogID: 'log-1', Roots: [{ TargetKey: key('10') }], Created: [{ TargetKey: key('10') }], Warnings: [] })
+            .mockResolvedValueOnce({ Success: true, ResultCode: 'SUCCESS', CloneLogID: 'log-2', Roots: [{ TargetKey: key('20') }], Created: [{ TargetKey: key('20') }, { TargetKey: key('21') }], Warnings: [] });
 
-        const res = await (action as unknown as { InternalRunAction(p: RunActionParams): Promise<{ Success: boolean; ResultCode: string }> }).InternalRunAction(params);
-        expect(res.Success).toBe(true);
-        expect(res.ResultCode).toBe('SUCCESS');
-        expect(cloneMock).toHaveBeenCalled();
+        const params = batchParams();
+        const res = await run(params);
 
-        const count = params.Params.find((p) => p.Name === 'CreatedCount')?.Value;
-        expect(count).toBe(2);
+        expect(res).toMatchObject({ Success: true, ResultCode: 'SUCCESS' });
+        expect(cloneMock).toHaveBeenCalledTimes(2);
+        expect(params.Params.find((p) => p.Name === 'CreatedCount')?.Value).toBe(3);
+        const results = params.Params.find((p) => p.Name === 'Results')?.Value as Array<{ RecordID: string; NewRecordID: string }>;
+        expect(results.map((r) => [r.RecordID, r.NewRecordID])).toEqual([['1', '10'], ['2', '20']]);
+    });
+
+    it('reports a partial batch so the caller retries only the failures', async () => {
+        cloneMock
+            .mockResolvedValueOnce({ Success: true, ResultCode: 'SUCCESS', Roots: [{ TargetKey: key('10') }], Created: [{ TargetKey: key('10') }], Warnings: [] })
+            .mockResolvedValueOnce({ Success: false, ResultCode: 'BLOCKED', ErrorMessage: 'too many', Warnings: [] });
+
+        const params = batchParams();
+        const res = await run(params);
+
+        expect(res).toMatchObject({ Success: false, ResultCode: 'PARTIAL' });
+        expect(res.Message).toContain('2 (too many)');
+        const results = params.Params.find((p) => p.Name === 'Results')?.Value as Array<{ RecordID: string; Success: boolean }>;
+        expect(results.map((r) => r.Success)).toEqual([true, false]);
+    });
+
+    it('refuses without the Clone Records: Batch authorization', async () => {
+        canBatch.value = false;
+        const res = await run(batchParams());
+        expect(res.ResultCode).toBe('FORBIDDEN');
+        expect(res.Message).toContain('Clone Records: Batch');
+        expect(cloneMock).not.toHaveBeenCalled();
     });
 });

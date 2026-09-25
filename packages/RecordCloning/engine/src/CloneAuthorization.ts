@@ -18,6 +18,9 @@ export const FIRE_HOOKS_AUTHORIZATION = 'Clone Records: Fire Hooks';
 /** Name of the authorization that allows widening a clone beyond the entity's configured scope. */
 export const OVERRIDE_SCOPE_AUTHORIZATION = 'Clone Records: Override Scope';
 
+/** Name of the authorization that allows cloning several records in one request (the `Clone Records` action). */
+export const BATCH_AUTHORIZATION = 'Clone Records: Batch';
+
 /** Schema that holds MemberJunction's own entities. */
 const PLATFORM_SCHEMA = '__mj';
 
@@ -65,6 +68,11 @@ export class CloneAuthorizer {
     /** Whether `user` may widen a clone beyond the entity's configured scope. */
     public CanOverrideScope(user: UserInfo): boolean {
         return this.userHolds(OVERRIDE_SCOPE_AUTHORIZATION, user);
+    }
+
+    /** Whether `user` may clone several records in one request. */
+    public CanBatchClone(user: UserInfo): boolean {
+        return this.userHolds(BATCH_AUTHORIZATION, user);
     }
 
     /** An authorization missing from metadata grants nothing: the check fails closed. */

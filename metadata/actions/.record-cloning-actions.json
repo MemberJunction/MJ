@@ -104,7 +104,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Total count of records created during the clone."
+            "Description": "Records created by the clone, or planned on a dry run."
           },
           "primaryKey": {
             "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A17"
@@ -133,7 +133,7 @@
   {
     "fields": {
       "Name": "Clone Records",
-      "Description": "Clone multiple entity records in bulk along with their configured child records and remapped relationships.",
+      "Description": "Clone several records of one entity, each with its configured child records and remapped relationships. Requires the 'Clone Records: Batch' authorization. Each root is cloned in its own transaction; ResultCode is PARTIAL when some succeed, and Results says which.",
       "DriverClass": "Clone Records",
       "Type": "Custom",
       "Status": "Active",
@@ -207,7 +207,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Total count of records created during the clone."
+            "Description": "Records created across all roots, or planned on a dry run."
           },
           "primaryKey": {
             "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A25"
@@ -221,7 +221,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "Primary key of the created MJ: Record Clone Logs header."
+            "Description": "Clone log of the first successful root. Results carries each root's log."
           },
           "primaryKey": {
             "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A26"
@@ -235,7 +235,7 @@
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
-            "Description": "JSON array of created record mappings."
+            "Description": "JSON array with one entry per requested record: RecordID, Success, ResultCode, NewRecordID, CloneLogID, CreatedCount, Warnings and ErrorMessage."
           },
           "primaryKey": {
             "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A27"

@@ -5,6 +5,8 @@
 
 export * from './ClonePlanner';
 export * from './ClonePlanHash';
+export * from './CloneAuthorization';
+export { ToRecordKeyString } from './CloneKeys';
 export * from './CloneMaterializer';
 export * from './CloneExecutor';
 export * from './CloneRecordProcessor';

@@ -8,8 +8,8 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { RecordCloneEngine } from '@memberjunction/record-cloning';
-import { CloneRequestOptions, RecordCloneRequest } from '@memberjunction/record-cloning-base';
+import { RecordCloneEngine, ToRecordKeyString } from '@memberjunction/record-cloning';
+import { CloneRequestOptions } from '@memberjunction/record-cloning-base';
 
 @RegisterClass(BaseAction, 'Clone Record')
 export class CloneRecordAction extends BaseAction {
@@ -61,65 +61,33 @@ export class CloneRecordAction extends BaseAction {
                 }
             }
 
-            const dryRun = this.getBooleanParam(params, 'dryrun', false);
-            if (dryRun) {
+            if (this.getBooleanParam(params, 'dryrun', false)) {
                 options.DryRun = true;
             }
 
             const key = CompositeKey.FromRecordID(entityInfo, recordId);
-            const engine = new RecordCloneEngine();
+            const result = await new RecordCloneEngine(params.Provider).Clone(
+                { EntityName: entityName, SourceRecordKey: key, Options: options },
+                params.ContextUser
+            );
 
-            if (options.DryRun) {
-                const plan = await engine.Plan(
-                    {
-                        EntityName: entityName,
-                        SourceRecordKey: key,
-                        Roots: [{ EntityName: entityName, Key: key }],
-                        Options: options,
-                    },
-                    params.ContextUser
-                );
-
-                this.pushOutput(params, 'NewRecordID', null);
-                this.pushOutput(params, 'CloneLogID', null);
-                this.pushOutput(params, 'CreatedCount', plan.Counts.Create);
-                this.pushOutput(params, 'Warnings', plan.Warnings);
-
-                return {
-                    Success: !plan.Blocked,
-                    ResultCode: plan.Blocked ? 'BLOCKED' : 'SUCCESS',
-                    Message: plan.Blocked
-                        ? `Clone plan blocked: ${plan.Warnings.map((w) => w.Message).join('; ')}`
-                        : `Plan computed: ${plan.Counts.Create} records to create`,
-                };
-            }
-
-            const request: RecordCloneRequest = {
-                EntityName: entityName,
-                SourceRecordKey: key,
-                Roots: [{ EntityName: entityName, Key: key }],
-                Options: options,
-            };
-
-            const result = await engine.Clone(request, params.ContextUser);
-
-            const newRecordId = result.Roots?.[0]?.TargetKey
-                ? typeof result.Roots[0].TargetKey === 'string'
-                    ? result.Roots[0].TargetKey
-                    : (result.Roots[0].TargetKey as CompositeKey).ToConcatenatedString()
-                : null;
-
+            // Nothing below may throw: once Clone returns, a committed clone must be reported as one,
+            // or a retry would create duplicates.
+            const dryRun = options.DryRun === true;
+            const newRecordId = dryRun ? null : ToRecordKeyString(result.Roots?.[0]?.TargetKey) || null;
             this.pushOutput(params, 'NewRecordID', newRecordId);
-            this.pushOutput(params, 'CloneLogID', result.CloneLogID);
-            this.pushOutput(params, 'CreatedCount', result.Created?.length ?? 0);
+            this.pushOutput(params, 'CloneLogID', result.CloneLogID ?? null);
+            this.pushOutput(params, 'CreatedCount', dryRun ? result.Counts?.Create ?? 0 : result.Created?.length ?? 0);
             this.pushOutput(params, 'Warnings', result.Warnings ?? []);
 
             return {
                 Success: result.Success,
-                ResultCode: result.ResultCode,
-                Message: result.Success
-                    ? `Successfully cloned record ${recordId} to ${newRecordId}`
-                    : result.ErrorMessage || `Clone failed with status ${result.ResultCode}`,
+                ResultCode: result.ResultCode ?? (result.Success ? 'SUCCESS' : 'FAILED'),
+                Message: !result.Success
+                    ? result.ErrorMessage || `Clone failed with status ${result.ResultCode}`
+                    : dryRun
+                      ? `Plan computed: ${result.Counts?.Create ?? 0} records to create`
+                      : `Successfully cloned record ${recordId} to ${newRecordId}`,
             };
         } catch (error) {
             return {

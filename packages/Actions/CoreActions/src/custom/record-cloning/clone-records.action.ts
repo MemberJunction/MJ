@@ -8,8 +8,20 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { RecordCloneEngine } from '@memberjunction/record-cloning';
-import { CloneRequestOptions, RecordCloneRequest } from '@memberjunction/record-cloning-base';
+import { BATCH_AUTHORIZATION, CloneAuthorizer, RecordCloneEngine, ToRecordKeyString } from '@memberjunction/record-cloning';
+import { CloneRequestOptions, CloneWarning } from '@memberjunction/record-cloning-base';
+
+/** One root's outcome in the `Results` output. */
+interface CloneRecordsItemResult {
+    RecordID: string;
+    Success: boolean;
+    ResultCode: string;
+    NewRecordID: string | null;
+    CloneLogID: string | null;
+    CreatedCount: number;
+    Warnings: CloneWarning[];
+    ErrorMessage?: string;
+}
 
 @RegisterClass(BaseAction, 'Clone Records')
 export class CloneRecordsAction extends BaseAction {
@@ -85,59 +97,58 @@ export class CloneRecordsAction extends BaseAction {
                 }
             }
 
-            const dryRun = this.getBooleanParam(params, 'dryrun', false);
-            if (dryRun) {
+            if (this.getBooleanParam(params, 'dryrun', false)) {
                 options.DryRun = true;
             }
+            const dryRun = options.DryRun === true;
 
-            const roots = recordIds.map((id) => {
-                const key = CompositeKey.FromRecordID(entityInfo, id);
-                return { EntityName: entityName, Key: key };
-            });
-
-            const engine = new RecordCloneEngine();
-
-            if (options.DryRun) {
-                const plan = await engine.Plan(
-                    {
-                        Roots: roots,
-                        Options: options,
-                    },
-                    params.ContextUser
-                );
-
-                this.pushOutput(params, 'CreatedCount', plan.Counts.Create);
-                this.pushOutput(params, 'CloneLogID', null);
-                this.pushOutput(params, 'Results', []);
-                this.pushOutput(params, 'Warnings', plan.Warnings);
-
+            if (!new CloneAuthorizer(params.Provider ?? Metadata.Provider).CanBatchClone(params.ContextUser)) {
                 return {
-                    Success: !plan.Blocked,
-                    ResultCode: plan.Blocked ? 'BLOCKED' : 'SUCCESS',
-                    Message: plan.Blocked
-                        ? `Clone plan blocked: ${plan.Warnings.map((w) => w.Message).join('; ')}`
-                        : `Plan computed for ${recordIds.length} root records (${plan.Counts.Create} records to create)`,
+                    Success: false,
+                    ResultCode: 'FORBIDDEN',
+                    Message: `Cloning several records at once requires the '${BATCH_AUTHORIZATION}' authorization.`,
                 };
             }
 
-            const request: RecordCloneRequest = {
-                Roots: roots,
-                Options: options,
-            };
+            // Each root is its own clone and its own transaction, so one failure doesn't undo the others.
+            // Results say which records were cloned, so a retry can target only the failures.
+            const engine = new RecordCloneEngine(params.Provider);
+            const results: CloneRecordsItemResult[] = [];
+            for (const id of recordIds) {
+                try {
+                    const result = await engine.Clone(
+                        { EntityName: entityName, SourceRecordKey: CompositeKey.FromRecordID(entityInfo, id), Options: options },
+                        params.ContextUser
+                    );
+                    results.push({
+                        RecordID: id,
+                        Success: result.Success,
+                        ResultCode: result.ResultCode ?? (result.Success ? 'SUCCESS' : 'FAILED'),
+                        NewRecordID: dryRun ? null : ToRecordKeyString(result.Roots?.[0]?.TargetKey) || null,
+                        CloneLogID: result.CloneLogID ?? null,
+                        CreatedCount: dryRun ? result.Counts?.Create ?? 0 : result.Created?.length ?? 0,
+                        Warnings: result.Warnings ?? [],
+                        ErrorMessage: result.ErrorMessage,
+                    });
+                } catch (err) {
+                    results.push({ RecordID: id, Success: false, ResultCode: 'FAILED', NewRecordID: null, CloneLogID: null, CreatedCount: 0, Warnings: [], ErrorMessage: (err as Error).message });
+                }
+            }
 
-            const result = await engine.Clone(request, params.ContextUser);
+            const succeeded = results.filter((r) => r.Success);
+            const createdCount = results.reduce((sum, r) => sum + r.CreatedCount, 0);
+            this.pushOutput(params, 'CreatedCount', createdCount);
+            this.pushOutput(params, 'CloneLogID', succeeded[0]?.CloneLogID ?? null);
+            this.pushOutput(params, 'Results', results);
+            this.pushOutput(params, 'Warnings', results.flatMap((r) => r.Warnings));
 
-            this.pushOutput(params, 'CreatedCount', result.Created?.length ?? 0);
-            this.pushOutput(params, 'CloneLogID', result.CloneLogID);
-            this.pushOutput(params, 'Results', result.Created ?? []);
-            this.pushOutput(params, 'Warnings', result.Warnings ?? []);
-
+            const allOk = succeeded.length === results.length;
+            const verb = dryRun ? 'Planned' : 'Cloned';
             return {
-                Success: result.Success,
-                ResultCode: result.ResultCode,
-                Message: result.Success
-                    ? `Successfully cloned ${recordIds.length} root records (${result.Created?.length ?? 0} total records created)`
-                    : result.ErrorMessage || `Batch clone failed with status ${result.ResultCode}`,
+                Success: allOk,
+                ResultCode: allOk ? 'SUCCESS' : succeeded.length > 0 ? 'PARTIAL' : results[0]?.ResultCode ?? 'FAILED',
+                Message: `${verb} ${succeeded.length} of ${results.length} root records (${createdCount} records ${dryRun ? 'to create' : 'created'}).` +
+                    (allOk ? '' : ` Failed: ${results.filter((r) => !r.Success).map((r) => `${r.RecordID} (${r.ErrorMessage ?? r.ResultCode})`).join('; ')}`),
             };
         } catch (error) {
             return {
