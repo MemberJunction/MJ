@@ -10,7 +10,8 @@
               (click)="selectTemplateContent(i, false)">
               <div style="flex: 1;">
                 <div class="tab-label">
-                  {{ content.Type || 'Version ' + (i + 1) }}
+                  <!-- From TypeID (what the Content Type dropdown edits); the view-joined Type field is only refreshed on reload -->
+                  {{ content.TypeID ? GetContentTypeDisplayText(content.TypeID) : 'Version ' + (i + 1) }}
                 </div>
                 <div class="tab-meta">
                   P:{{ content.Priority }}
