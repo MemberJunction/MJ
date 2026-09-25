@@ -1,0 +1,11 @@
+---
+"@memberjunction/generic-database-provider": patch
+---
+
+Three defects on the shared read path, all in `GenericDatabaseProvider`: a round trip nobody reads, and two SQL statements the database rejects.
+
+**`MaxRows:1` no longer pays a second sequential `COUNT(*)`.** A row-limited read that comes back full may have been truncated, so the provider buys the real total with a follow-up count — that is what makes Explorer's "100 of 299" correct, and it is unchanged for every limit above 1. At a limit of exactly one row it can only ever confirm a number already in hand, and the callers that use that shape (record-map lookups, single-key resolves) never read `TotalRowCount`. Measured on a live tenant over a 120-second census: 1,000 record-map lookups fired 721 of these counts and 800 row lookups fired 600 — 1,321 extra round trips totalling 9,760 ms, 11.4% of all SQL time in the window. Observable change, confined to `MaxRows:1`: a hit now reports `TotalRowCount: 1` rather than the whole view's row count.
+
+**User search on a `FullTextSearchEnabled` entity with no `FullTextSearchFunction` returns results instead of a syntax error.** The branch was entered on the flag alone and the function name was interpolated with `?? ''`, emitting `... FROM "schema".""('term')` — rejected on every user search of such an entity, with no fallback. The two columns are independent (the flag can be set by hand, or by a metadata sync before CodeGen has minted the function), so a null/blank name now falls through to the per-field `LIKE` path, which needs no database object. Composed with the existing field-level-security condition, not substituted for it.
+
+**A PostgreSQL query that carries its own `LIMIT` can be paged.** `QueryPagingEngine.buildDataSQL` stripped a trailing `TOP` for SQL Server and had no PostgreSQL counterpart, so it appended a second cap: `... LIMIT 20 LIMIT 100 OFFSET 0`, a parse error. Agent and Skip queries routinely ship with their own `LIMIT`. A new `stripOuterLimitOffset` removes a statement-closing `LIMIT [OFFSET]` and the tighter of (that limit, the page size) is applied. The match is anchored to end-of-statement, so a `LIMIT` inside a CTE body or a subquery is left exactly where it is.
