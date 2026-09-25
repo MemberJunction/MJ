@@ -44,7 +44,7 @@ import {
     type RecordCloneGetLineageOutput,
     type RecordCloneLineageItem,
 } from '@memberjunction/core-entities';
-import { NormalizeClonePresets } from '@memberjunction/record-cloning-base';
+import { MaskSensitiveFieldChange, NormalizeClonePresets } from '@memberjunction/record-cloning-base';
 import type {
     ClonePlan,
     CloneRequestOptions,
@@ -94,7 +94,8 @@ export function ToPlanDetails(plan: ClonePlan): RecordClonePlanDetails {
             ParentKey: n.ParentKey,
             DisplayName: n.DisplayName,
             IsSubtypeRow: n.IsSubtypeRow,
-            FieldChanges: (n.FieldChanges ?? []).map((fc) => ({
+            // Encrypted values never leave the server; the Plan output is what the browser sees.
+            FieldChanges: (n.FieldChanges ?? []).map(MaskSensitiveFieldChange).map((fc) => ({
                 Field: fc.Field,
                 Kind: fc.Kind,
                 OldValue: toPlanValue(fc.OldValue),

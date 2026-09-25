@@ -4,6 +4,7 @@
  */
 
 export * from './ClonePlanner';
+export * from './ClonePlanHash';
 export * from './CloneMaterializer';
 export * from './CloneExecutor';
 export * from './CloneRecordProcessor';

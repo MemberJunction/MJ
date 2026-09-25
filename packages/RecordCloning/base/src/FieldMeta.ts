@@ -28,5 +28,6 @@ export function FieldMetaFromEntity(entity: EntityInfo): FieldMappingFieldMeta[]
         IsCreatedAtField: f.Name === '__mj_CreatedAt',
         IsUpdatedAtField: f.Name === '__mj_UpdatedAt',
         IsSoftDeleteField: false,
+        Encrypted: f.Encrypt === true,
     }));
 }

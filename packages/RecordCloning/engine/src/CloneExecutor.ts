@@ -20,11 +20,12 @@ import { MJRecordCloneLogEntity, MJRecordLinkEntity } from '@memberjunction/core
 import {
     ClonePlan,
     CompositeKeyLike,
-    ComputeClonePlanHash,
     GenerateUUID,
+    MaskSensitivePlan,
     RecordCloneResult,
 } from '@memberjunction/record-cloning-base';
 import { CloneMaterializer } from './CloneMaterializer';
+import { ComputeClonePlanHash } from './ClonePlanHash';
 import { ToRecordKeyString } from './CloneKeys';
 
 function toCompositeKey(key: CompositeKeyLike | CompositeKey | string | null | undefined, defaultFieldName = 'ID'): CompositeKeyLike {
@@ -309,7 +310,7 @@ export class CloneExecutor {
                 logEntity.RootSourceRecordID = ToRecordKeyString(plan.RootSourceKey) ?? '';
                 logEntity.RootTargetRecordID = ToRecordKeyString(rootEntity.PrimaryKey ?? plan.RootTargetKey) ?? null;
                 logEntity.PlanHash = plan.PlanHash || plan.Hash;
-                logEntity.PlanJSON = JSON.stringify(plan);
+                logEntity.PlanJSON = JSON.stringify(MaskSensitivePlan(plan));
                 logEntity.CreatedCount = stagedEntities.size + sidecarEntities.length;
                 logEntity.ReferencedCount = plan.Nodes.filter((n) => n.Action === 'Reference').length;
                 logEntity.SkippedCount = plan.Nodes.filter((n) => n.Action === 'Skip').length;

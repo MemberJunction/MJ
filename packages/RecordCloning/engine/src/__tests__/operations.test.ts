@@ -7,7 +7,7 @@ import {
     UserInfo,
     RunView,
 } from '@memberjunction/core';
-import { RecordCloneOperationsHandler } from '../operations';
+import { RecordCloneOperationsHandler, ToPlanDetails } from '../operations';
 import { ClonePlanner } from '../ClonePlanner';
 import { CloneExecutor } from '../CloneExecutor';
 import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
@@ -277,5 +277,42 @@ describe('RecordCloneOperationsHandler', () => {
             expect(spy).toHaveBeenCalledTimes(1);
             expect((spy.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter.startsWith('TargetEntityID')).toBe(true);
         });
+    });
+});
+
+describe('ToPlanDetails', () => {
+    it('never puts an encrypted value on the wire', () => {
+        const details = ToPlanDetails({
+            PlanVersion: 1,
+            Hash: 'h',
+            Roots: ['n1'],
+            Nodes: [
+                {
+                    Key: 'n1',
+                    EntityName: 'MJ: Company Integrations',
+                    SourceKey: 'ci-1',
+                    TargetKey: 'ci-2',
+                    Action: 'Create',
+                    Reason: '',
+                    Depth: 0,
+                    ParentKey: null,
+                    Via: null,
+                    DisplayName: 'HubSpot',
+                    FieldChanges: [
+                        { Field: 'APIKey', Kind: 'Copy', OldValue: 'sk-live', NewValue: 'sk-live', Reason: '', Sensitive: true },
+                        { Field: 'Name', Kind: 'Copy', OldValue: 'HubSpot', NewValue: 'HubSpot', Reason: '' },
+                    ],
+                    Warnings: [],
+                    Route: 'RootSave',
+                },
+            ],
+            Edges: [],
+            Counts: { ByEntity: {}, Create: 1, Total: 1 },
+            Warnings: [],
+            Blocked: false,
+            EffectiveOptions: {} as never,
+        });
+        expect(JSON.stringify(details)).not.toContain('sk-live');
+        expect(details.Nodes[0].FieldChanges[1].NewValue).toBe('HubSpot');
     });
 });

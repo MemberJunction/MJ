@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ComputePlanHash } from '../ClonePlanHash';
-import { ClonePlanNode, ClonePlanEdge } from '../types';
+import type { ClonePlanNode, ClonePlanEdge } from '@memberjunction/record-cloning-base';
+import { ComputeClonePlanHash as ComputePlanHash, Sha256Hex } from '../ClonePlanHash';
 
 describe('ClonePlanHash', () => {
     const baseNode1: ClonePlanNode = {
@@ -172,5 +172,29 @@ describe('ClonePlanHash', () => {
         });
 
         expect(hashOrig).not.toBe(hashMod);
+    });
+
+    it('is standard SHA-256', () => {
+        expect(Sha256Hex('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+    });
+
+    it('hashes text outside Latin-1, so PLAN_CHANGED still fires for it', () => {
+        const withText = (text: string) =>
+            ComputePlanHash({
+                Nodes: [{ ...baseNode1, FieldChanges: [{ Field: 'Name', Kind: 'Copy', OldValue: text, NewValue: text, Reason: '' }] }],
+                Edges: [],
+            });
+        const a = withText('Prompt — v1 “draft” 你好 🚀');
+        expect(a).toMatch(/^[0-9a-f]{64}$/);
+        expect(withText('Prompt — v2 “draft” 你好 🚀')).not.toBe(a);
+    });
+
+    it('hashes encrypted values masked, so the hash reveals nothing about them', () => {
+        const withSecret = (secret: string) =>
+            ComputePlanHash({
+                Nodes: [{ ...baseNode1, FieldChanges: [{ Field: 'APIKey', Kind: 'Copy', OldValue: secret, NewValue: secret, Reason: '', Sensitive: true }] }],
+                Edges: [],
+            });
+        expect(withSecret('sk-one')).toBe(withSecret('sk-two'));
     });
 });

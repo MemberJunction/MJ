@@ -8,7 +8,8 @@ import {
     IEntityDataProvider,
 } from '@memberjunction/core';
 import { CloneExecutor } from '../CloneExecutor';
-import { ClonePlan, ComputeClonePlanHash } from '@memberjunction/record-cloning-base';
+import { ClonePlan } from '@memberjunction/record-cloning-base';
+import { ComputeClonePlanHash } from '../ClonePlanHash';
 import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 class MockEntity extends BaseEntity {

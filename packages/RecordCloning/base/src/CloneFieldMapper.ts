@@ -27,6 +27,8 @@ export interface FieldMappingFieldMeta {
     IsCreatedAtField?: boolean;
     IsUpdatedAtField?: boolean;
     IsSoftDeleteField?: boolean;
+    /** Stored encrypted. Its values are masked wherever a plan leaves the server. */
+    Encrypted?: boolean;
 }
 
 export interface CloneFieldMappingContext {
@@ -405,6 +407,12 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
                 });
             }
         }
+    }
+
+    // Values of encrypted fields stay in the server-side plan, but are masked on the wire, in logs and in the hash.
+    const encrypted = new Set(ctx.Fields.filter((f) => f.Encrypted).map((f) => f.Name));
+    for (const change of changes) {
+        if (encrypted.has(change.Field)) change.Sensitive = true;
     }
 
     return {

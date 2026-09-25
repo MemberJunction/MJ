@@ -117,6 +117,11 @@ export interface CloneFieldChange {
     OldValue: unknown;
     NewValue: unknown;
     Reason: string;
+    /**
+     * The field is stored encrypted. The server-side plan keeps the real values so Execute can write them;
+     * `MaskSensitiveFieldChange` replaces them before the plan is returned, logged or hashed.
+     */
+    Sensitive?: boolean;
 }
 
 /**

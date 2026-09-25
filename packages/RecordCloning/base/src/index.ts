@@ -15,3 +15,4 @@ export * from './CloneFieldMapper';
 export * from './CloneConfigValidator';
 export * from './EffectiveOptions';
 export * from './FieldMeta';
+export * from './SensitiveValues';

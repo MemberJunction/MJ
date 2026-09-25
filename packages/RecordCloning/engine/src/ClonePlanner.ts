@@ -21,7 +21,6 @@ import {
     ClonePlanNode,
     CloneRequestOptions,
     CloneWarning,
-    ComputeClonePlanHash,
     DetectIntraPlanCollisions,
     GenerateUUID,
     MapFieldsForClone,
@@ -33,6 +32,7 @@ import {
     FieldMetaFromEntity,
 } from '@memberjunction/record-cloning-base';
 import { CloneAuthorizer } from './CloneAuthorization';
+import { ComputeClonePlanHash } from './ClonePlanHash';
 import { DeriveTargetKey, IsUuidColumn, KeyStrategyFor, ToRecordKeyString } from './CloneKeys';
 
 export interface ClonePlannerOptions {
