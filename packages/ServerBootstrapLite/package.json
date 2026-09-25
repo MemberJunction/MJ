@@ -108,7 +108,8 @@
     "@memberjunction/task-graph": "6.1.0",
     "@memberjunction/templates": "6.1.0",
     "@memberjunction/testing-engine": "6.1.0",
-    "@memberjunction/work-queue-engine": "6.1.0"
+    "@memberjunction/work-queue-engine": "6.1.0",
+    "@memberjunction/work-queue-samples": "6.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

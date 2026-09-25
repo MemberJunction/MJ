@@ -149,6 +149,7 @@
     "@memberjunction/testing-integration": "6.1.0",
     "@memberjunction/web-search-engine": "6.1.0",
     "@memberjunction/work-queue-engine": "6.1.0",
+    "@memberjunction/work-queue-samples": "6.1.0",
     "@memberjunction/work-queue-server": "6.1.0",
     "cosmiconfig": "^9.0.0"
   },
