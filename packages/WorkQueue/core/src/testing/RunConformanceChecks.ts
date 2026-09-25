@@ -11,7 +11,7 @@ export async function RunConformanceChecks(harness: ConformanceHarness): Promise
     const results: ConformanceCheckResult[] = [];
     for (const conformanceCase of CONFORMANCE_CASES) {
         const base = { Id: conformanceCase.Id, Title: conformanceCase.Title };
-        const skipReason = gateSafely(conformanceCase.Gate.bind(conformanceCase), harness);
+        const skipReason = EnvironmentSkipReason(harness, conformanceCase.Id) ?? gateSafely(conformanceCase.Gate.bind(conformanceCase), harness);
         if (skipReason !== null) {
             results.push({ ...base, Status: 'Skipped', Detail: skipReason, DurationMs: 0 });
             continue;
@@ -25,6 +25,12 @@ export async function RunConformanceChecks(harness: ConformanceHarness): Promise
         }
     }
     return results;
+}
+
+/** The harness's environment skip for a case, or null. Exported so the vitest adapter reports it identically. */
+export function EnvironmentSkipReason(harness: ConformanceHarness, caseId: string): string | null {
+    const reason = harness.Traits.EnvironmentSkips?.[caseId];
+    return reason === undefined ? null : `environment: ${reason}`;
 }
 
 function gateSafely(gate: (harness: ConformanceHarness) => string | null, harness: ConformanceHarness): string | null {

@@ -27,7 +27,8 @@
     "watch": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:lambda-bundle": "node scripts/check-lambda-bundle.mjs"
+    "check:lambda-bundle": "node scripts/check-lambda-bundle.mjs",
+    "test:localstack": "vitest run --config vitest.localstack.config.ts"
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",

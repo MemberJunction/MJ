@@ -8,6 +8,13 @@ export interface ConformanceTraits {
     ExpiredLeaseDeadLetters: boolean;
     /** waitSeconds passed to Receive (eventually consistent transports need > 0). */
     ReceiveWaitSeconds: number;
+    /**
+     * Cases the TEST ENVIRONMENT cannot run faithfully, keyed by case Id with the reason. For a transport whose
+     * emulator diverges from the real service (LocalStack does not expire SQS receipt handles, so stale-lease fencing
+     * cannot be observed there). The case is reported Skipped with the reason; it is never a statement about the
+     * transport, whose real behaviour must be confirmed against the service itself.
+     */
+    EnvironmentSkips?: Record<string, string>;
 }
 
 export interface ConformanceHarness {

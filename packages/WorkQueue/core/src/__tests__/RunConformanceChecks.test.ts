@@ -36,6 +36,17 @@ describe('RunConformanceChecks', () => {
         expect(harness.Disposed).toHaveLength(CONFORMANCE_CASES.length);
     });
 
+    it('reports environment skips as Skipped with the reason, before the capability gate', async () => {
+        const harness = inMemoryHarness({
+            Traits: { ReleaseConsumesAttempt: false, ExpiredLeaseDeadLetters: true, ReceiveWaitSeconds: 0, EnvironmentSkips: { C07: 'the emulator does not expire receipt handles' } },
+        });
+        const results = await RunConformanceChecks(harness);
+        const c07 = results.find((result) => result.Id === 'C07');
+        expect(c07).toMatchObject({ Status: 'Skipped', Detail: 'environment: the emulator does not expire receipt handles' });
+        expect(results.filter((result) => result.Status === 'Skipped')).toHaveLength(1);
+        expect(results.filter((result) => result.Status === 'Failed')).toEqual([]);
+    });
+
     it('reports gated cases as Skipped with the reason', async () => {
         const harness = inMemoryHarness({ Capabilities: { ...IN_MEMORY_TRANSPORT_CAPABILITIES, SupportsOrdered: false, CancelPending: false } });
         const results = await RunConformanceChecks(harness);
