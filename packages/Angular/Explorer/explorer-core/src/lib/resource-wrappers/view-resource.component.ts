@@ -1,5 +1,5 @@
 import { Component, ViewChild, ElementRef, ChangeDetectorRef, inject } from '@angular/core';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, LogError } from '@memberjunction/core';
@@ -615,7 +615,9 @@ export class UserViewResource extends BaseResourceComponent {
         }
         if (this.EntityInfo !== entity) return;
         this.ShowNewInStandardForm = show;
-        this.cdr.detectChanges();
+        // Safe variant: this runs after an await in a fire-and-forget promise,
+        // so the view may be destroyed (tab closed) or mid-pass by now.
+        SafeDetectChanges(this.cdr);
     }
 
     /**
