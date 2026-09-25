@@ -105,9 +105,31 @@ export class PGConnectionManager {
             // see MJPostgresTypes. Pools passed to InitializeWithExistingPool must set
             // this themselves; type parsers can't be retrofitted onto an existing pool.
             types: MJPostgresTypes,
+            // TCP keepalive (SO_KEEPALIVE) on every pooled socket. A long CodeGen run leaves
+            // pooled connections idle for minutes at a time; without keepalive probes, a NAT
+            // gateway / load balancer / security-group idle timer anywhere on the path (e.g. a
+            // GitHub-Actions runner talking to a public Aurora endpoint) silently drops the
+            // flow and the next use of that socket surfaces as `read ECONNRESET`. Probing from
+            // 10s keeps the mapping alive well inside every common idle window.
+            keepAlive: true,
+            keepAliveInitialDelayMillis: 10000,
             // Optional libpq startup options (e.g. `-c statement_timeout=30000`) — applied
             // by every backend from connection #1, including the verify-SELECT-1 below.
             ...(config.Options ? { options: config.Options } : {}),
+        });
+
+        // A network reset of an IDLE pooled client makes node-pg re-emit the socket error as an
+        // 'error' event on the Pool. Pool is an EventEmitter, so with NO listener attached Node
+        // treats it as an unhandled 'error' event and terminates the process — which is how a
+        // long CodeGen run died with "Unhandled 'error' event ... on BoundPool" / `read
+        // ECONNRESET` while work was still in flight and nothing was actually wrong with the
+        // schema. Attaching a listener downgrades it to what it is: pg has already removed the
+        // dead client from the pool, and the next acquire opens a fresh connection, so the run
+        // continues. Only attached to pools this manager OWNS — a pool handed in via
+        // InitializeWithExistingPool belongs to its creator (and attaching here would add one
+        // listener per per-request provider, tripping Node's max-listeners warning).
+        this._pool.on('error', (err: Error) => {
+            console.warn(`[pg pool] idle client error (non-fatal, connection discarded): ${err?.message ?? String(err)}`);
         });
 
         // Verify connectivity
