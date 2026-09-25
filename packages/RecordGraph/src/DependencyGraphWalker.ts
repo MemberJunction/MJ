@@ -380,7 +380,7 @@ export class DependencyGraphWalker {
                     (!options.IncludeDeleted && this.entityHasSoftDelete(entity) ? ' AND __mj_DeletedAt IS NULL' : '');
 
                 try {
-                    const rv = new RunView();
+                    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                     const result = await rv.RunView<Record<string, unknown>>({
                         EntityName: entity.Name,
                         ExtraFilter: filter,
@@ -464,14 +464,16 @@ export class DependencyGraphWalker {
                 if (decision === 'Skip') continue;
 
                 // Build query: EntityID discriminator match and RecordID match
+                // Soft links store either the full record-id ("ID|abc") or, commonly for a single
+                // key column, the bare value ("abc"); match both.
                 const recordIDValue = parentNode.RecordKey.ToRecordID();
-                const bareIDValue = parentNode.RecordID;
+                const bareIDValue = parentNode.RecordKey.ToCompactURLSegment();
                 const filter = `([${field.EntityIDFieldName}] = '${escapeSqlString(parentEntity.ID)}' OR [${field.EntityIDFieldName}] = '${escapeSqlString(parentEntity.Name)}') ` +
                     `AND ([${field.Name}] = '${escapeSqlString(recordIDValue)}' OR [${field.Name}] = '${escapeSqlString(bareIDValue)}')` +
                     (!options.IncludeDeleted && this.entityHasSoftDelete(entity) ? ' AND __mj_DeletedAt IS NULL' : '');
 
                 try {
-                    const rv = new RunView();
+                    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                     const result = await rv.RunView<Record<string, unknown>>({
                         EntityName: entity.Name,
                         ExtraFilter: filter,
@@ -532,9 +534,13 @@ export class DependencyGraphWalker {
         if (!md.FindISAChildEntities) return;
 
         try {
+            // IS-A tables share one single-column key, and the provider matches on its bare value
+            // (not the "ID|<guid>" record-id string, which errors on a UUID column).
+            const pkValue = parentNode.RecordKey.KeyValuePairs[0]?.Value;
+            if (pkValue === null || pkValue === undefined) return;
             const subtypes = await md.FindISAChildEntities(
                 parentNode.EntityInfo,
-                parentNode.RecordID,
+                String(pkValue),
                 contextUser
             );
 
@@ -864,7 +870,7 @@ export class DependencyGraphWalker {
         }
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: rel.ChildEntityInfo.Name,
                 ExtraFilter: extraFilter,
@@ -895,7 +901,7 @@ export class DependencyGraphWalker {
         key: CompositeKey,
         contextUser: UserInfo
     ): Promise<Record<string, unknown>> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: entityInfo.Name,
             ExtraFilter: key.ToWhereClause(),

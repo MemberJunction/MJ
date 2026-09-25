@@ -17,6 +17,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class MockRunView {
         RunView = mockRunViewInstance;
+        static FromMetadataProvider = () => new MockRunView();
     }
     return {
         ...actual,
@@ -259,6 +260,55 @@ describe('DependencyGraphWalker', () => {
             expect(subtypeNode).toBeDefined();
             expect(subtypeNode?.EntityName).toBe('ChildEntity');
             expect(subtypeNode?.DiscoveringEdge?.Kind).toBe('IsASubtype');
+            // The provider matches the bare key value, not the "ID|parent-1" record-id string.
+            expect((providerWithISA.FindISAChildEntities as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('parent-1');
+        });
+
+        it('matches soft links stored as the full record-id or the bare value', async () => {
+            const notes = {
+                ID: 'ent-notes', Name: 'Notes', TrackRecordChanges: true,
+                PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
+                Fields: [{ Name: 'ID', IsPrimaryKey: true }, { Name: 'EntityID' }, { Name: 'RecordID', EntityIDFieldName: 'EntityID' }],
+                RelatedEntities: [],
+            } as unknown as EntityInfo;
+            const list = [...entitiesList, notes];
+            const provider = { ...mockProvider, Entities: list, EntityByName: (n: string) => list.find((e) => e.Name === n) ?? null } as IMetadataProvider;
+            const filters: string[] = [];
+            mockRunViewInstance.mockImplementation(async (params: { EntityName: string; ExtraFilter: string }) => {
+                filters.push(params.ExtraFilter);
+                return { Success: true, Results: params.EntityName === 'ParentEntity' ? [{ ID: 'parent-1' }] : [] };
+            });
+            const { CompositeKey } = await import('@memberjunction/core');
+
+            await new DependencyGraphWalker(provider).WalkDependents(
+                'ParentEntity',
+                new CompositeKey([{ FieldName: 'ID', Value: 'parent-1' }]),
+                { RequireTrackRecordChanges: false, IncludeSoftLinks: true, MaxDepth: 1, EdgePolicy: (c) => (c.Kind === 'SoftLink' ? 'Deep' : 'Skip') },
+                mockUser
+            );
+
+            const softLink = filters.find((f) => f.includes('[RecordID]'));
+            expect(softLink).toContain("[RecordID] = 'ID|parent-1'");
+            expect(softLink).toContain("[RecordID] = 'parent-1'");
+            mockRunViewInstance.mockReset();
+        });
+
+        it('builds its RunViews from the walker\'s provider', async () => {
+            const { RunView, CompositeKey } = await import('@memberjunction/core');
+            const from = vi.spyOn(RunView as unknown as { FromMetadataProvider: (p: unknown) => unknown }, 'FromMetadataProvider');
+            mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'parent-1' }] });
+
+            await new DependencyGraphWalker(mockProvider).WalkDependents(
+                'ParentEntity',
+                new CompositeKey([{ FieldName: 'ID', Value: 'parent-1' }]),
+                { RequireTrackRecordChanges: false, MaxDepth: 1 },
+                mockUser
+            );
+
+            expect(from).toHaveBeenCalled();
+            expect(from.mock.calls.every((c) => c[0] === mockProvider)).toBe(true);
+            from.mockRestore();
+            mockRunViewInstance.mockReset();
         });
 
         it('follows hierarchy self-references only when FollowHierarchies is true', async () => {
