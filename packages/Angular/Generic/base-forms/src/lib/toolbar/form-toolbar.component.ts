@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { RecordCloneService, type CloneCompletedEvent, type CloneNavigationEvent } from '@memberjunction/ng-record-clone';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import { FormToolbarItemConfig, FormToolbarItemKey, FormToolbarItemClickEventArgs, ResolvedToolbarItem } from '../types/form-toolbar-item';
 import { IsAccordionFormChrome } from '../chrome/form-chrome';
@@ -18,6 +19,7 @@ import {
   BeforeCancelEventArgs,
   BeforeHistoryViewEventArgs,
   BeforeListManagementEventArgs,
+  BeforeCloneEventArgs,
   CustomToolbarButtonClickEventArgs,
   CustomToolbarButton
 } from '../types/form-events';
@@ -54,6 +56,7 @@ import {
 export class MjFormToolbarComponent extends BaseAngularComponent implements DoCheck, OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+  private cloneService = inject(RecordCloneService);
   private destroy$ = new Subject<void>();
 
   // ---- Deprecated form reference (backward compat) ----
@@ -255,6 +258,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   @Output() ResetSectionOrderRequested = new EventEmitter<void>();
   @Output() ManageSectionsRequested = new EventEmitter<void>();
 
+  /** Emitted before the clone slide-in opens. Set `Cancel` to handle cloning yourself. */
+  @Output() BeforeClone = new EventEmitter<BeforeCloneEventArgs>();
+
+  /** Emitted after the clone slide-in commits a clone of this record. */
+  @Output() CloneCompleted = new EventEmitter<CloneCompletedEvent>();
+
   // ---- Internal state ----
   ShowDeleteDialog = false;
   ShowDiscardDialog = false;
@@ -282,6 +291,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
       this.syncFromFormRef();
     }
     this.checkDescendantChains();
+    this.checkCloneCapability();
   }
 
   /**
@@ -685,6 +695,19 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         IsLoading: this.IsRefreshing,
       },
       {
+        Key: 'clone',
+        Text: '',
+        Description: `Clone this ${this.EntityInfo?.DisplayNameOrName ?? 'record'} and the records it owns`,
+        Icon: 'fa-solid fa-clone',
+        Variant: 'default',
+        Mode: 'read',
+        Placement: 'actions',
+        Order: 15,
+        Visible: this.ShowCloneAction,
+        Disabled: false,
+        CssClass: this.IsClonePanelOpen ? 'active' : '',
+      },
+      {
         Key: 'favorite',
         Text: '',
         Description: this.IsFavorite ? 'Remove Favorite' : 'Make Favorite',
@@ -786,7 +809,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
     // 4. Resolve states, evaluate predicates, apply overrides
     const resolved: ResolvedToolbarItem[] = [];
-    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'favorite', 'history', 'list', 'tags', 'attachments']);
+    const standardKeys: Set<string> = new Set(['edit', 'delete', 'refresh', 'clone', 'favorite', 'history', 'list', 'tags', 'attachments']);
 
     for (const item of rawItems) {
       const overrides = this.ItemOverrides?.get(item.Key);
@@ -938,6 +961,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         case 'attachments':
           this.OnAttachmentsPanel();
           break;
+        case 'clone':
+          this.OnClone();
+          break;
       }
     }
 
@@ -962,6 +988,78 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         console.error(`[FormToolbar] Error executing OnClick for toolbar item '${item.Key}':`, err);
       }
     }
+  }
+
+  // ── Record cloning ──────────────────────────────────────────────
+
+  /** Whether the clone slide-in is open. */
+  public IsClonePanelOpen = false;
+
+  /** Whether the server said this user may clone records of the current entity. */
+  public CanCloneEntity = false;
+
+  /** The entity name the last clone capability check ran for. */
+  private _cloneCheckedEntity: string | null = null;
+
+  /** True when the Clone action should render for the current record. */
+  public get ShowCloneAction(): boolean {
+    return !!this.Config.ShowCloneButton && this.CanCloneEntity && !!this.Record?.IsSaved;
+  }
+
+  /** Opens the clone slide-in, unless a `BeforeClone` handler cancels. */
+  OnClone(): void {
+    const beforeEvent = new BeforeCloneEventArgs();
+    this.BeforeClone.emit(beforeEvent);
+    if (beforeEvent.Cancel) return;
+
+    this.IsClonePanelOpen = true;
+    this.cdr.markForCheck();
+  }
+
+  OnClonePanelVisibleChange(visible: boolean): void {
+    this.IsClonePanelOpen = visible;
+    this.cdr.markForCheck();
+  }
+
+  OnCloneCompleted(event: CloneCompletedEvent): void {
+    this.CloneCompleted.emit(event);
+  }
+
+  /** Turns the clone widget's navigation request into the toolbar's own `Navigate` event. */
+  OnCloneNavigate(event: CloneNavigationEvent): void {
+    const entityInfo = this.ProviderToUse?.EntityByName(event.EntityName);
+    this.Navigate.emit({
+      Kind: 'record',
+      EntityName: event.EntityName,
+      PrimaryKey: CompositeKey.FromURLSegment(entityInfo, event.RecordKey),
+      OpenInNewTab: true,
+    });
+  }
+
+  /**
+   * Asks `RecordClone.Describe` (cached per entity per session) once per entity whether the
+   * user may clone it. Entities whose `Configuration.Clone.Enabled` is not true are skipped
+   * without a server call.
+   */
+  private checkCloneCapability(): void {
+    const entityName = this.Config.ShowCloneButton ? this.Record?.EntityInfo?.Name ?? null : null;
+    if (entityName === this._cloneCheckedEntity) return;
+    this._cloneCheckedEntity = entityName;
+    this.CanCloneEntity = false;
+    this.IsClonePanelOpen = false; // a panel opened for the previous entity must not reopen itself for this one
+
+    if (!entityName || this.Record?.EntityInfo?.CloneConfig?.Enabled !== true) return;
+
+    this.cloneService
+      .DescribeRecord({ EntityName: entityName }, this.ProviderToUse)
+      .then((describe) => {
+        if (this._cloneCheckedEntity !== entityName) return;
+        this.CanCloneEntity = describe.CanClone;
+        this.cdr.markForCheck();
+      })
+      .catch(() => {
+        // A failed capability check hides the action; the server re-checks on every clone.
+      });
   }
 
   OnShowChanges(): void {

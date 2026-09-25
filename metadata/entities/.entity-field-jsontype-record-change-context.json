@@ -1,0 +1,36 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on RecordChange.ChangeContext so CodeGen emits a",
+      "strongly-typed ChangeContextObject accessor returning",
+      "MJRecordChangeEntity_IRecordChangeContext. The column carries structured provenance",
+      "for operations like cloning, merging, and future replays.",
+      "Added by migration V202609241200__v6.2.x__RecordChange_ChangeContext_And_Clone_Source.sql.",
+      "The EntityField row must exist (created by a CodeGen pass over the new column) before",
+      "this @lookup resolves on push."
+    ],
+    "fields": {
+      "Name": "MJ: Record Changes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IRecordChangeContext",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IRecordChangeContext.ts"
+          },
+          "_comments": [
+            "ChangeContext — structured JSON context (Kind, Clone, Tags)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Changes&Name=ChangeContext"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
+    }
+  }
+]

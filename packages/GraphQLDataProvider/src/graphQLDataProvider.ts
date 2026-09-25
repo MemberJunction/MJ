@@ -1511,12 +1511,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     EntityName
                     RelatedEntityName
                     FieldName
-                    CompositeKey {
+                    PrimaryKey {
                         KeyValuePairs {
                             FieldName
                             Value
                         }
                     }
+                    IsSoftLink
+                    EntityIDFieldName
                 }
             }`
 
@@ -1527,7 +1529,31 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             };
             const data = await this.ExecuteGQL(query, vars);
 
-            return data?.GetRecordDependencies; // shape of the result should exactly match the RecordDependency type
+            if (data?.GetRecordDependencies && Array.isArray(data.GetRecordDependencies)) {
+                return data.GetRecordDependencies.map((raw: {
+                    EntityName: string;
+                    RelatedEntityName: string;
+                    FieldName: string;
+                    PrimaryKey?: { KeyValuePairs?: KeyValuePair[] };
+                    IsSoftLink?: boolean | null;
+                    EntityIDFieldName?: string | null;
+                }): RecordDependency => {
+                    const dep = new RecordDependency();
+                    dep.EntityName = raw.EntityName;
+                    dep.RelatedEntityName = raw.RelatedEntityName;
+                    dep.FieldName = raw.FieldName;
+                    const kvps = (raw.PrimaryKey?.KeyValuePairs ?? []).map(kv => new KeyValuePair(kv.FieldName, kv.Value));
+                    const pk = new CompositeKey(kvps);
+                    if (pk.KeyValuePairs.length === 0 && kvps.length > 0) {
+                        pk.KeyValuePairs = kvps;
+                    }
+                    dep.PrimaryKey = pk;
+                    dep.IsSoftLink = raw.IsSoftLink ?? undefined;
+                    dep.EntityIDFieldName = raw.EntityIDFieldName ?? undefined;
+                    return dep;
+                });
+            }
+            return [];
         }
         catch (e) {
             LogError(e);

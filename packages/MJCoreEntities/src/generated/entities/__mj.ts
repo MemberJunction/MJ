@@ -27255,13 +27255,14 @@ export const MJRecordChangeSchema = z.object({
     *   * Snapshot
     *   * Update
         * * Description: Create, Update, or Delete`),
-    Source: z.union([z.literal('External'), z.literal('Internal'), z.literal('Restore')]).describe(`
+    Source: z.union([z.literal('Clone'), z.literal('External'), z.literal('Internal'), z.literal('Restore')]).describe(`
         * * Field Name: Source
         * * Display Name: Source
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Internal
     * * Value List Type: List
     * * Possible Values 
+    *   * Clone
     *   * External
     *   * Internal
     *   * Restore
@@ -27340,6 +27341,12 @@ export const MJRecordChangeSchema = z.object({
         * * Display Name: Restore Reason
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional user-entered explanation captured at restore time. Persisted for audit purposes (regulated industries often require a reason for every reversal). NULL when the user did not enter one or when the change was not a restore.`),
+    ChangeContext: z.any().nullable().describe(`
+        * * Field Name: ChangeContext
+        * * Display Name: Change Context
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
+        * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
         * * Display Name: Entity Name
@@ -27363,6 +27370,234 @@ export const MJRecordChangeSchema = z.object({
 });
 
 export type MJRecordChangeEntityType = z.infer<typeof MJRecordChangeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Clone Log Items
+ */
+export const MJRecordCloneLogItemSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the record clone log item record.`),
+    RecordCloneLogID: z.string().describe(`
+        * * Field Name: RecordCloneLogID
+        * * Display Name: Record Clone Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Clone Logs (vwRecordCloneLogs.ID)
+        * * Description: Foreign key to the parent RecordCloneLog header record coordinating this clone execution.`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the Entity type of this individual cloned record.`),
+    SourceRecordID: z.string().describe(`
+        * * Field Name: SourceRecordID
+        * * Display Name: Source Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Source record key identifier, encoded as a compact URL segment.`),
+    TargetRecordID: z.string().nullable().describe(`
+        * * Field Name: TargetRecordID
+        * * Display Name: Target Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Target record key identifier resulting from the clone, encoded as a compact URL segment. Null if skipped or failed.`),
+    Depth: z.number().describe(`
+        * * Field Name: Depth
+        * * Display Name: Depth
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Distance from the root node in the clone record graph (0 for root).`),
+    Route: z.union([z.literal('Collection'), z.literal('Embedded'), z.literal('IsAChain'), z.literal('RootSave'), z.literal('Sidecar')]).describe(`
+        * * Field Name: Route
+        * * Display Name: Route
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Collection
+    *   * Embedded
+    *   * IsAChain
+    *   * RootSave
+    *   * Sidecar
+        * * Description: Relationship route traversed to reach this record (RootSave, Collection, Embedded, IsAChain, Sidecar).`),
+    Status: z.union([z.literal('Created'), z.literal('Failed'), z.literal('Referenced'), z.literal('Skipped')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Created
+    *   * Failed
+    *   * Referenced
+    *   * Skipped
+        * * Description: Execution outcome status for this node (Created, Referenced, Skipped, Failed).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Execution sequence order within the clone transaction.`),
+    Reason: z.string().nullable().describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Diagnostic explanation or reason for the action taken (e.g., skip reason or failure details).`),
+    FieldChangesJSON: z.string().nullable().describe(`
+        * * Field Name: FieldChangesJSON
+        * * Display Name: Field Changes JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Serialized JSON array of field-level modifications, copies, transforms, resets, and remaps applied to this record.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRecordCloneLogItemEntityType = z.infer<typeof MJRecordCloneLogItemSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Clone Logs
+ */
+export const MJRecordCloneLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Unique identifier for the record clone log header record.`),
+    RootEntityID: z.string().describe(`
+        * * Field Name: RootEntityID
+        * * Display Name: Root Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the Entity being cloned as the root of the clone record graph.`),
+    RootSourceRecordID: z.string().describe(`
+        * * Field Name: RootSourceRecordID
+        * * Display Name: Root Source Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Source root record identifier, encoded as a compact URL segment.`),
+    RootTargetRecordID: z.string().nullable().describe(`
+        * * Field Name: RootTargetRecordID
+        * * Display Name: Root Target Record ID
+        * * SQL Data Type: nvarchar(750)
+        * * Description: Target root record identifier resulting from the clone, encoded as a compact URL segment. Null while in progress or if failed.`),
+    InitiatedByUserID: z.string().describe(`
+        * * Field Name: InitiatedByUserID
+        * * Display Name: Initiated By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the User who initiated this clone operation.`),
+    Status: z.union([z.literal('Cancelled'), z.literal('Complete'), z.literal('Error'), z.literal('Planned'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Planned
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Complete
+    *   * Error
+    *   * Planned
+    *   * Running
+        * * Description: Current operational status of the clone execution (Planned, Running, Complete, Error, Cancelled).`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Timestamp (UTC with offset) when the clone operation started.`),
+    EndedAt: z.date().nullable().describe(`
+        * * Field Name: EndedAt
+        * * Display Name: Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp (UTC with offset) when the clone operation concluded.`),
+    PlanHash: z.string().describe(`
+        * * Field Name: PlanHash
+        * * Display Name: Plan Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: SHA-256 hash of the execution plan used for concurrency validation and provenance.`),
+    PlanJSON: z.any().describe(`
+        * * Field Name: PlanJSON
+        * * Display Name: Plan JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJRecordCloneLogEntity_IClonePlan
+        * * Description: Serialized JSON execution plan detailing all graph nodes, edges, actions, and options.`),
+    OptionsJSON: z.string().nullable().describe(`
+        * * Field Name: OptionsJSON
+        * * Display Name: Options JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON request options supplied by the user or client for this clone execution.`),
+    ResultJSON: z.string().nullable().describe(`
+        * * Field Name: ResultJSON
+        * * Display Name: Result JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Summary result JSON payload containing counts, timings, and created record mappings.`),
+    Reason: z.string().nullable().describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional business justification or user-provided explanation for this clone operation.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error message and diagnostic details if the clone operation failed.`),
+    ProcessRunID: z.string().nullable().describe(`
+        * * Field Name: ProcessRunID
+        * * Display Name: Process Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+        * * Description: Foreign key to the parent ProcessRun when this clone was executed via a batch RecordProcess.`),
+    CreatedCount: z.number().describe(`
+        * * Field Name: CreatedCount
+        * * Display Name: Created Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total count of new records successfully created during this clone operation.`),
+    ReferencedCount: z.number().describe(`
+        * * Field Name: ReferencedCount
+        * * Display Name: Referenced Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total count of existing records linked or referenced by foreign key rather than copied.`),
+    SkippedCount: z.number().describe(`
+        * * Field Name: SkippedCount
+        * * Display Name: Skipped Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total count of records intentionally skipped based on relationship or entity clone policies.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RootEntity_: z.string().describe(`
+        * * Field Name: RootEntity
+        * * Display Name: Root Entity
+        * * SQL Data Type: nvarchar(255)`),
+    InitiatedByUser: z.string().describe(`
+        * * Field Name: InitiatedByUser
+        * * Display Name: Initiated By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRecordCloneLogEntityType = z.infer<typeof MJRecordCloneLogSchema>;
 
 /**
  * zod schema definition for the entity MJ: Record Geo Codes
@@ -27876,7 +28111,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Clone'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -27884,6 +28119,7 @@ export const MJRecordProcessSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Clone
     *   * FieldRules
     *   * Infer
     *   * ML Model
@@ -83015,6 +83251,14 @@ export interface MJEntityEntity_IEntityConfiguration {
      * Controls whether attachments are permitted and sets entity-level upload policies.
      */
     Attachments?: MJEntityEntity_IEntityAttachmentsConfiguration;
+
+    /**
+     * Record cloning configuration.
+     * Omitted or Enabled=false means the entity cannot be a clone ROOT.
+     * It may still be cloned as a child of another root when that root's relationship
+     * policy says Deep, unless NotCloneable is true.
+     */
+    Clone?: MJEntityEntity_IEntityCloneConfiguration;
 }
 
 /**
@@ -83110,6 +83354,169 @@ export interface MJEntityEntity_IEntityFormConfiguration {
      * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
+}
+
+/**
+ * Configuration for record cloning at the entity level.
+ * @see plans/record-cloning/README.md §4.1
+ */
+export interface MJEntityEntity_IEntityCloneConfiguration {
+    /** Schema version of this section. Default 1. */
+    Version?: 1;
+    /** Master switch for cloning this entity as a ROOT. Default false. */
+    Enabled?: boolean;
+    /** Hard refusal: this entity's rows are never created by the clone engine, as root or as child. Overrides every relationship policy. Use for audit, run, credential and metadata entities. */
+    NotCloneable?: boolean;
+    /** Shown to users and returned in warnings when NotCloneable or Enabled=false. */
+    NotCloneableReason?: string;
+    /** Authorization name checked with ancestors. Default 'Clone Records'; resolved per §9.1. */
+    RequiredAuthorization?: string;
+    /** Caps. Defaults 3 and 500. A plan that exceeds either is Blocked. */
+    MaxDepth?: number;
+    MaxRecords?: number;
+    /** IS-A subtype rows. Default 'include'. */
+    Subtypes?: 'include' | 'exclude';
+    /** Self-referencing IsHierarchy fields. Default 'subtree'. */
+    Hierarchy?: 'subtree' | 'node';
+    /** Inbound polymorphic EntityID/RecordID rows (tags, attachments, notes...). Default 'skip'. */
+    SoftLinks?: 'skip' | 'include';
+    Naming?: MJEntityEntity_ICloneNamingConfig;
+    Fields?: MJEntityEntity_ICloneFieldRules;
+    /** Per-relationship policy, keyed by "<RelatedEntityName>" or "<RelatedEntityName>.<JoinField>" when an entity has two FKs to the same target. Overrides the relationship's own bag when Locked is false there. */
+    Relationships?: Record<string, MJEntityEntity_ICloneRelationshipPolicy>;
+    /** Rules applied to descendant rows cloned under THIS root, keyed by descendant entity name. Lets a root shape its children without editing the child entity's bag. */
+    Descendants?: Record<string, MJEntityEntity_ICloneDescendantConfig>;
+    Hooks?: MJEntityEntity_ICloneHookConfig;
+    /** Route the ROOT through an existing creation path instead of a raw Save. Children still clone through the engine against the created root. */
+    CreationPath?: MJEntityEntity_ICloneCreationPath;
+    /** Offer "create derived record" (BasedOnID-style inheritance) as an alternative to copying. */
+    Derivation?: { Field: string; Label?: string; Description?: string };
+    /** Persisted embedding columns. Default 'copy' when EmbeddingModelID matches the configured model, else regenerate. */
+    Embeddings?: 'copy' | 'regenerate';
+    /** The entity's own server class refuses creates by other user types (Users, Roles). The planner blocks early with the entity's reason. */
+    RequiredUserType?: 'Owner';
+    /** How much the UI may change. Default 'all'. 'none' = confirm only. */
+    UserEditable?: 'none' | 'fields' | 'scope' | 'all';
+    Presets?: MJEntityEntity_IClonePreset[];
+    UI?: {
+        Label?: string;
+        Icon?: string;
+        ConfirmationMessage?: string;
+        DefaultPreset?: string;
+        /** FK fields the panel offers as retarget pickers (CompanyID → another company). */
+        RetargetFields?: string[];
+    };
+}
+
+export interface MJEntityEntity_ICloneNamingConfig {
+    /** Template for the name field and any string unique field with no other rule. '{Name}' interpolates the source value; '{n}' the collision counter. Default 'Copy of {Name}'. */
+    Template?: string;
+    /** Fields the template applies to. Default: the entity's NameField plus every IsUnique string field not otherwise handled. */
+    Fields?: string[];
+    /** suffix = apply Template and probe for collisions appending ' {n}'; increment = numeric/versioned bump; prompt = user must supply; none = leave untouched. Default 'suffix'. */
+    Strategy?: 'suffix' | 'increment' | 'prompt' | 'none';
+}
+
+export interface MJEntityEntity_ICloneFieldRules {
+    /** Never copied; take the column default. Beyond the always-excluded set (PK, __mj_*, identity, computed, virtual, denied-create). */
+    Exclude?: string[];
+    /** Literal stamps applied after the copy. Values pass through BaseEntity.Set and validation. */
+    Reset?: Record<string, unknown>;
+    /** Set to the cloning user's ID. */
+    Ownership?: string[];
+    /** The user must supply a value; un-suffixable uniques such as Email. Missing → plan Blocked. */
+    PromptFor?: string[];
+    /** Server-minted values (numbers, slugs): blanked so the entity's Save hook allocates. */
+    ServerAllocated?: string[];
+    /** Rich rewrites. Evaluated per row with the source row as fields, plus clone context (user, now, root, keyMap) — see §7.5. */
+    Rules?: Record<string, unknown>;
+    /** JSON columns that embed record IDs. */
+    JsonRemap?: Record<string, MJEntityEntity_IJsonRemapSpec[]>;
+    /** Columns that must be cleared together (all-or-nothing CHECK pairs). Each group is cleared as a unit when any member is reset. */
+    ClearTogether?: string[][];
+    /** Unique keys the metadata cannot see: composite and filtered indexes. See §7.3. */
+    UniqueKeys?: Array<{ Fields: string[]; Scope: 'Global' | 'Parent' | 'LiveState'; ScopeField?: string }>;
+    /** Drift guard (§13.3): every field must appear in Copy, Exclude, Reset, Ownership, PromptFor, ServerAllocated or JsonRemap, or validation fails. Default false. */
+    Strict?: boolean;
+    /** Explicit copy allow-list, used with Strict. */
+    Copy?: string[];
+}
+
+export interface MJEntityEntity_IJsonRemapSpec {
+    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
+    Path: string;
+    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
+    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
+    /** Entity the ID refers to, for remap. */
+    Entity?: string;
+    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
+    OnMissing?: 'reuse' | 'drop';
+}
+
+export interface MJEntityEntity_ICloneRelationshipPolicy {
+    Policy?: 'Deep' | 'Reference' | 'Skip';
+    /** UI may not change it. */
+    Locked?: boolean;
+    MaxRecords?: number;
+    /** Write the source's positional values after the last Add instead of letting the collection renumber. Default false. */
+    PreserveSequence?: boolean;
+    /** Formula over the child row (fields.X); only rows evaluating true are cloned. */
+    IncludeWhen?: string;
+    /** Rows left out even when the edge is Deep, e.g. per-device or per-person settings. A row matching any entry is not cloned, nor are its descendants. */
+    ExcludeRows?: MJEntityEntity_ICloneRowExclusion[];
+    Fields?: MJEntityEntity_ICloneFieldRules;
+}
+
+/** Matches a child row by one field: equal to one of `Equals`, or a string starting with one of `StartsWith` (case-sensitive). */
+export interface MJEntityEntity_ICloneRowExclusion {
+    Field: string;
+    Equals?: Array<string | number | boolean>;
+    StartsWith?: string[];
+}
+
+export interface MJEntityEntity_ICloneDescendantConfig {
+    Fields?: MJEntityEntity_ICloneFieldRules;
+    Naming?: MJEntityEntity_ICloneNamingConfig;
+}
+
+export interface MJEntityEntity_ICloneHookConfig {
+    /** Entity Actions (Create/Update invocations) during the clone save. Default 'fire', as for any create. */
+    EntityActions?: 'suppress' | 'fire';
+    /** Entity AI Actions. Default 'suppress': each can be a paid model call per cloned row. */
+    AIActions?: 'suppress' | 'fire';
+    /** Children the entity's own server Save() creates. The engine never clones these, and warns if a relationship policy tries. */
+    ServerGeneratedChildren?: string[];
+    /** Values set before the save to keep expensive hooks quiet, restored on the row after the clone when RestoreAfterSave is true. */
+    PreSaveOverrides?: Record<string, unknown>;
+    RestoreAfterSave?: string[];
+    /** Action run once per created ROOT after commit, with the new key. */
+    PostCloneAction?: string;
+}
+
+export interface MJEntityEntity_ICloneCreationPath {
+    Kind: 'Action' | 'RemoteOperation';
+    Name: string;
+    /** Source field or formula → input param. */
+    InputMapping: Record<string, string>;
+    /** Output param holding the created key. */
+    OutputKeyParam: string;
+}
+
+/**
+ * A named clone scope a user can pick instead of adjusting options one by one.
+ * `Options` apply as if the request had sent them (so `UserEditable` still limits them);
+ * `Relationships` override edge policies by related entity name, like `Clone.Relationships`.
+ */
+export interface MJEntityEntity_IClonePreset {
+    /** Stable identifier sent by clients in `Options.Preset`. */
+    Key: string;
+    /** Name shown in the preset picker. */
+    Label: string;
+    Description?: string;
+    /** Plan options this preset sets, e.g. `{ "MaxDepth": 2 }`. */
+    Options?: Record<string, unknown>;
+    /** Edge policy overrides, keyed by related entity name. */
+    Relationships?: Record<string, { Policy: 'Deep' | 'Reference' | 'Skip' }>;
 }
 
 /**
@@ -86893,6 +87300,12 @@ export interface MJEntityFieldEntity_IEntityFieldConfiguration {
      * Hierarchy and tree structure configuration for self-referencing foreign keys.
      */
     Hierarchy?: MJEntityFieldEntity_IEntityFieldHierarchyConfig;
+
+    /**
+     * Record cloning configuration for this field.
+     * @see plans/record-cloning/README.md §4.3
+     */
+    Clone?: MJEntityFieldEntity_IEntityFieldCloneConfiguration;
 }
 
 /**
@@ -86908,6 +87321,29 @@ export interface MJEntityFieldEntity_IEntityFieldHierarchyConfig {
      * Optional custom maximum recursion depth guard (defaults to 100).
      */
     MaxDepth?: number;
+}
+
+/**
+ * Record cloning configuration for an entity field.
+ * @see plans/record-cloning/README.md §4.3
+ */
+export interface MJEntityFieldEntity_IEntityFieldCloneConfiguration {
+    /** Copy (default) | Reset (column default, or Value) | Suffix (naming template) | Prompt | Ownership | ServerAllocated | Remap (FK inside the set → new key) | RemapJSON | Transform */
+    Policy?: 'Copy' | 'Reset' | 'Suffix' | 'Prompt' | 'Ownership' | 'ServerAllocated' | 'Remap' | 'RemapJSON' | 'Transform';
+    Value?: unknown;
+    JsonRemap?: MJEntityFieldEntity_IJsonRemapSpec[];
+    Transform?: unknown;
+}
+
+export interface MJEntityFieldEntity_IJsonRemapSpec {
+    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
+    Path: string;
+    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
+    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
+    /** Entity the ID refers to, for remap. */
+    Entity?: string;
+    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
+    OnMissing?: 'reuse' | 'drop';
 }
 
 /**
@@ -89592,6 +90028,12 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipConfiguration {
      * Null = the parent entity's related-role ranker decides.
      */
     UI?: MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration;
+
+    /**
+     * Clone policy for rows of RelatedEntity that point at this entity through RelatedEntityJoinField.
+     * @see plans/record-cloning/README.md §4.2
+     */
+    Clone?: MJEntityRelationshipEntity_ICloneRelationshipPolicy;
 }
 
 /**
@@ -89635,6 +90077,67 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
      * after lead contributions such as Overview). Omit = 0.
      */
     sortKey?: number;
+}
+
+/**
+ * Clone policy for rows of RelatedEntity that point at this entity through RelatedEntityJoinField.
+ * @see plans/record-cloning/README.md §4.2
+ */
+export interface MJEntityRelationshipEntity_ICloneRelationshipPolicy {
+    Policy?: 'Deep' | 'Reference' | 'Skip';
+    /** UI may not change it. */
+    Locked?: boolean;
+    MaxRecords?: number;
+    /** Write the source's positional values after the last Add instead of letting the collection renumber. Default false. */
+    PreserveSequence?: boolean;
+    /** Formula over the child row (fields.X); only rows evaluating true are cloned. */
+    IncludeWhen?: string;
+    /** Rows left out even when the edge is Deep, e.g. per-device or per-person settings. A row matching any entry is not cloned, nor are its descendants. */
+    ExcludeRows?: MJEntityRelationshipEntity_ICloneRowExclusion[];
+    Fields?: MJEntityRelationshipEntity_ICloneFieldRules;
+}
+
+/** Matches a child row by one field: equal to one of `Equals`, or a string starting with one of `StartsWith` (case-sensitive). */
+export interface MJEntityRelationshipEntity_ICloneRowExclusion {
+    Field: string;
+    Equals?: Array<string | number | boolean>;
+    StartsWith?: string[];
+}
+
+export interface MJEntityRelationshipEntity_ICloneFieldRules {
+    /** Never copied; take the column default. Beyond the always-excluded set (PK, __mj_*, identity, computed, virtual, denied-create). */
+    Exclude?: string[];
+    /** Literal stamps applied after the copy. Values pass through BaseEntity.Set and validation. */
+    Reset?: Record<string, unknown>;
+    /** Set to the cloning user's ID. */
+    Ownership?: string[];
+    /** The user must supply a value; un-suffixable uniques such as Email. Missing → plan Blocked. */
+    PromptFor?: string[];
+    /** Server-minted values (numbers, slugs): blanked so the entity's Save hook allocates. */
+    ServerAllocated?: string[];
+    /** Rich rewrites. Evaluated per row with the source row as fields, plus clone context (user, now, root, keyMap) — see §7.5. */
+    Rules?: Record<string, unknown>;
+    /** JSON columns that embed record IDs. */
+    JsonRemap?: Record<string, MJEntityRelationshipEntity_IJsonRemapSpec[]>;
+    /** Columns that must be cleared together (all-or-nothing CHECK pairs). Each group is cleared as a unit when any member is reset. */
+    ClearTogether?: string[][];
+    /** Unique keys the metadata cannot see: composite and filtered indexes. See §7.3. */
+    UniqueKeys?: Array<{ Fields: string[]; Scope: 'Global' | 'Parent' | 'LiveState'; ScopeField?: string }>;
+    /** Drift guard (§13.3): every field must appear in Copy, Exclude, Reset, Ownership, PromptFor, ServerAllocated or JsonRemap, or validation fails. Default false. */
+    Strict?: boolean;
+    /** Explicit copy allow-list, used with Strict. */
+    Copy?: string[];
+}
+
+export interface MJEntityRelationshipEntity_IJsonRemapSpec {
+    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
+    Path: string;
+    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
+    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
+    /** Entity the ID refers to, for remap. */
+    Entity?: string;
+    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
+    OnMissing?: 'reuse' | 'drop';
 }
 
 /**
@@ -108807,6 +109310,50 @@ export class MJRecordChangeReplayRunEntity extends BaseEntity<MJRecordChangeRepl
 
 
 /**
+ * Structured provenance context for RecordChange rows.
+ *
+ * Stored as JSON in `MJ: Record Changes.ChangeContext`. CodeGen emits a
+ * typed `ChangeContextObject` accessor on `MJRecordChangeEntity` that
+ * returns `MJRecordChangeEntity_IRecordChangeContext | null`.
+ *
+ * @see plans/record-cloning/README.md §10.2
+ */
+
+export interface MJRecordChangeEntity_IRecordChangeCloneContext {
+    /** ID of the RecordCloneLog row coordinating this clone operation. */
+    CloneLogID: string;
+    /** Entity name of the record being cloned. */
+    SourceEntityName: string;
+    /** Compact URL segment of the source key (bare value for single-column keys). */
+    SourceRecordID: string;
+    /** Entity name of the root record of the clone graph. */
+    RootEntityName: string;
+    /** Source key of the root record. */
+    RootSourceRecordID: string;
+    /** Target key of the root record after insertion. */
+    RootTargetRecordID: string;
+    /** Depth within the record graph (0 for root). */
+    Depth: number;
+    /** Relationship route traversed to reach this record. */
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+    /** Kinds and field names only. Values are already in FullRecordJSON and are subject to FLS projection there. */
+    FieldChangeSummary: Array<{ Kind: string; Fields: string[] }>;
+    /** Optional explanation entered at clone time. */
+    Reason?: string;
+}
+
+export interface MJRecordChangeEntity_IRecordChangeContext {
+    /** Shape version. */
+    Version: 1;
+    /** The process that produced the change. Restore keeps its dedicated columns; it is listed so future writers can carry both. */
+    Kind: 'Clone' | 'Merge' | 'Import' | 'Process' | 'Replay' | 'Other';
+    /** Populated when Kind === 'Clone'. */
+    Clone?: MJRecordChangeEntity_IRecordChangeCloneContext;
+    /** Free-form tags for future kinds; never values. */
+    Tags?: string[];
+}
+
+/**
  * MJ: Record Changes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RecordChange
@@ -108915,15 +109462,16 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     * * Default Value: Internal
     * * Value List Type: List
     * * Possible Values 
+    *   * Clone
     *   * External
     *   * Internal
     *   * Restore
     * * Description: Internal or External
     */
-    get Source(): 'External' | 'Internal' | 'Restore' {
+    get Source(): 'Clone' | 'External' | 'Internal' | 'Restore' {
         return this.Get('Source');
     }
-    set Source(value: 'External' | 'Internal' | 'Restore') {
+    set Source(value: 'Clone' | 'External' | 'Internal' | 'Restore') {
         this.Set('Source', value);
     }
 
@@ -109100,6 +109648,41 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     }
 
     /**
+    * * Field Name: ChangeContext
+    * * Display Name: Change Context
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRecordChangeEntity_IRecordChangeContext
+    * * Description: Optional JSON configuration bag carrying structured provenance context (shape = IRecordChangeContext). Used by clone, merge, and other multi-record or automated operations to record lineage, root records, and field change summaries.
+    */
+    get ChangeContext(): string | null {
+        return this.Get('ChangeContext');
+    }
+    set ChangeContext(value: string | null) {
+        this.Set('ChangeContext', value);
+    }
+
+    private _ChangeContextObject_cached: MJRecordChangeEntity_IRecordChangeContext | null | undefined = undefined;
+    private _ChangeContextObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for ChangeContext — returns parsed JSON as MJRecordChangeEntity_IRecordChangeContext.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ChangeContextObject(): MJRecordChangeEntity_IRecordChangeContext | null {
+        const raw = this.ChangeContext;
+        if (raw !== this._ChangeContextObject_lastRaw) {
+            this._ChangeContextObject_cached = raw ? JSON.parse(raw) : null;
+            this._ChangeContextObject_lastRaw = raw;
+        }
+        return this._ChangeContextObject_cached!;
+    }
+    set ChangeContextObject(value: MJRecordChangeEntity_IRecordChangeContext | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.ChangeContext = raw;
+        this._ChangeContextObject_cached = value;
+        this._ChangeContextObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Entity
     * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
@@ -109142,6 +109725,677 @@ export class MJRecordChangeEntity extends BaseEntity<MJRecordChangeEntityType> {
     */
     get RestoredFrom(): string | null {
         return this.Get('RestoredFrom');
+    }
+}
+
+
+/**
+ * MJ: Record Clone Log Items - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordCloneLogItem
+ * * Base View: vwRecordCloneLogItems
+ * * @description Item-level detail for each node in a record clone operation, capturing traversal route, action, status, and field changes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Clone Log Items')
+export class MJRecordCloneLogItemEntity extends BaseEntity<MJRecordCloneLogItemEntityType> {
+    /**
+    * Loads the MJ: Record Clone Log Items record from the database
+    * @param ID: string - primary key value to load the MJ: Record Clone Log Items record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordCloneLogItemEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the record clone log item record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordCloneLogID
+    * * Display Name: Record Clone Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Clone Logs (vwRecordCloneLogs.ID)
+    * * Description: Foreign key to the parent RecordCloneLog header record coordinating this clone execution.
+    */
+    get RecordCloneLogID(): string {
+        return this.Get('RecordCloneLogID');
+    }
+    set RecordCloneLogID(value: string) {
+        this.Set('RecordCloneLogID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the Entity type of this individual cloned record.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: SourceRecordID
+    * * Display Name: Source Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Source record key identifier, encoded as a compact URL segment.
+    */
+    get SourceRecordID(): string {
+        return this.Get('SourceRecordID');
+    }
+    set SourceRecordID(value: string) {
+        this.Set('SourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: TargetRecordID
+    * * Display Name: Target Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Target record key identifier resulting from the clone, encoded as a compact URL segment. Null if skipped or failed.
+    */
+    get TargetRecordID(): string | null {
+        return this.Get('TargetRecordID');
+    }
+    set TargetRecordID(value: string | null) {
+        this.Set('TargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: Depth
+    * * Display Name: Depth
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Distance from the root node in the clone record graph (0 for root).
+    */
+    get Depth(): number {
+        return this.Get('Depth');
+    }
+    set Depth(value: number) {
+        this.Set('Depth', value);
+    }
+
+    /**
+    * * Field Name: Route
+    * * Display Name: Route
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Collection
+    *   * Embedded
+    *   * IsAChain
+    *   * RootSave
+    *   * Sidecar
+    * * Description: Relationship route traversed to reach this record (RootSave, Collection, Embedded, IsAChain, Sidecar).
+    */
+    get Route(): 'Collection' | 'Embedded' | 'IsAChain' | 'RootSave' | 'Sidecar' {
+        return this.Get('Route');
+    }
+    set Route(value: 'Collection' | 'Embedded' | 'IsAChain' | 'RootSave' | 'Sidecar') {
+        this.Set('Route', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Created
+    *   * Failed
+    *   * Referenced
+    *   * Skipped
+    * * Description: Execution outcome status for this node (Created, Referenced, Skipped, Failed).
+    */
+    get Status(): 'Created' | 'Failed' | 'Referenced' | 'Skipped' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Created' | 'Failed' | 'Referenced' | 'Skipped') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution sequence order within the clone transaction.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Diagnostic explanation or reason for the action taken (e.g., skip reason or failure details).
+    */
+    get Reason(): string | null {
+        return this.Get('Reason');
+    }
+    set Reason(value: string | null) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: FieldChangesJSON
+    * * Display Name: Field Changes JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Serialized JSON array of field-level modifications, copies, transforms, resets, and remaps applied to this record.
+    */
+    get FieldChangesJSON(): string | null {
+        return this.Get('FieldChangesJSON');
+    }
+    set FieldChangesJSON(value: string | null) {
+        this.Set('FieldChangesJSON', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * Serialized execution plan for record cloning.
+ *
+ * Stored as JSON in `MJ: Record Clone Logs.PlanJSON`. CodeGen emits a typed
+ * `PlanJSONObject` accessor on `MJRecordCloneLogEntity` that returns
+ * `MJRecordCloneLogEntity_IClonePlan | null`.
+ *
+ * @see plans/record-cloning/README.md §3.4
+ */
+
+export interface MJRecordCloneLogEntity_ICloneCompositeKeyKVP {
+    FieldName: string;
+    Value: unknown;
+}
+
+export interface MJRecordCloneLogEntity_ICloneCompositeKeyLike {
+    KeyValuePairs: MJRecordCloneLogEntity_ICloneCompositeKeyKVP[];
+}
+
+export type MJRecordCloneLogEntity_CloneEdgePolicy = 'Deep' | 'Reference' | 'Skip';
+export type MJRecordCloneLogEntity_CloneNodeAction = 'Create' | 'Reference' | 'Skip' | 'Blocked';
+export type MJRecordCloneLogEntity_CloneEdgeKind =
+    | 'IsASubtype' | 'Collection' | 'Embedded' | 'Relationship' | 'InboundFK'
+    | 'ForwardFK' | 'SoftLink' | 'Hierarchy' | 'SelfPointer';
+
+export type MJRecordCloneLogEntity_CloneWarningCode =
+    | 'UNMAPPABLE_REFERENCE_DROPPED' | 'PAYLOAD_DROPPED' | 'ROW_DISABLED' | 'UNIQUE_RENAMED' | 'UNIQUE_PROMPT_REQUIRED'
+    | 'CAP_EXCEEDED' | 'NO_CREATE_PERMISSION' | 'NOT_CLONEABLE' | 'WRITE_ONCE_ENTITY' | 'SERVER_HOOK_SIDE_EFFECT'
+    | 'CONSTRAINT_FORCED_DEEP' | 'LOCKED_EDGE_OVERRIDE_IGNORED' | 'EMBEDDING_REGENERATED' | 'SOURCE_ROW_INVISIBLE';
+
+export interface MJRecordCloneLogEntity_ICloneWarning {
+    Code: MJRecordCloneLogEntity_CloneWarningCode;
+    Severity: 'Info' | 'Warning' | 'Error';
+    NodeKey?: string;
+    Field?: string;
+    Message: string;
+}
+
+export interface MJRecordCloneLogEntity_ICloneFieldChange {
+    Field: string;
+    Kind: 'Copy' | 'Reset' | 'Ownership' | 'Rename' | 'Remap' | 'RemapJSON' | 'Rule' | 'Override' | 'Prompt' | 'Excluded' | 'DeniedRead' | 'DeniedCreate' | 'NotWritable';
+    OldValue: unknown;
+    NewValue: unknown;
+    Reason: string;
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanEdge {
+    FromKey: string;
+    ToKey: string;
+    Kind: MJRecordCloneLogEntity_CloneEdgeKind;
+    RelatedEntityName: string;
+    JoinField: string;
+    RelationshipID?: string;
+    CollectionName?: string;
+    IsSoftLink?: boolean;
+    Policy: MJRecordCloneLogEntity_CloneEdgePolicy;
+    Locked: boolean;
+    PolicySource: 'BuiltIn' | 'Constraint' | 'Entity' | 'Relationship' | 'Descendant' | 'Request';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanNode {
+    Key: string;
+    EntityName: string;
+    SourceKey: MJRecordCloneLogEntity_ICloneCompositeKeyLike;
+    TargetKey: MJRecordCloneLogEntity_ICloneCompositeKeyLike | null;
+    Action: MJRecordCloneLogEntity_CloneNodeAction;
+    Reason: string;
+    Depth: number;
+    ParentKey: string | null;
+    Via: MJRecordCloneLogEntity_IClonePlanEdge | null;
+    DisplayName: string;
+    IsSubtypeRow?: boolean;
+    FieldChanges: MJRecordCloneLogEntity_ICloneFieldChange[];
+    Warnings: MJRecordCloneLogEntity_ICloneWarning[];
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlanCounts {
+    ByEntity: Record<string, { Create: number; Reference: number; Skip: number }>;
+    Create: number;
+    Total: number;
+}
+
+export interface MJRecordCloneLogEntity_ICloneEffectiveOptions {
+    MaxDepth: number;
+    MaxRecords: number;
+    Subtypes: 'include' | 'exclude';
+    Hierarchy: 'subtree' | 'node';
+    SoftLinks: 'skip' | 'include';
+    EntityActions: 'suppress' | 'fire';
+    AIActions: 'suppress' | 'fire';
+    Embeddings: 'copy' | 'regenerate';
+}
+
+export interface MJRecordCloneLogEntity_IClonePlan {
+    PlanVersion: 1;
+    Hash: string;
+    Roots: string[];
+    Nodes: MJRecordCloneLogEntity_IClonePlanNode[];
+    Edges: MJRecordCloneLogEntity_IClonePlanEdge[];
+    Counts: MJRecordCloneLogEntity_IClonePlanCounts;
+    Warnings: MJRecordCloneLogEntity_ICloneWarning[];
+    Blocked: boolean;
+    EffectiveOptions: MJRecordCloneLogEntity_ICloneEffectiveOptions;
+}
+
+/**
+ * MJ: Record Clone Logs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordCloneLog
+ * * Base View: vwRecordCloneLogs
+ * * @description Audit and coordination header entity for record cloning operations. Captures plan, execution status, counts, and outcome.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Clone Logs')
+export class MJRecordCloneLogEntity extends BaseEntity<MJRecordCloneLogEntityType> {
+    /**
+    * Loads the MJ: Record Clone Logs record from the database
+    * @param ID: string - primary key value to load the MJ: Record Clone Logs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordCloneLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier for the record clone log header record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RootEntityID
+    * * Display Name: Root Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the Entity being cloned as the root of the clone record graph.
+    */
+    get RootEntityID(): string {
+        return this.Get('RootEntityID');
+    }
+    set RootEntityID(value: string) {
+        this.Set('RootEntityID', value);
+    }
+
+    /**
+    * * Field Name: RootSourceRecordID
+    * * Display Name: Root Source Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Source root record identifier, encoded as a compact URL segment.
+    */
+    get RootSourceRecordID(): string {
+        return this.Get('RootSourceRecordID');
+    }
+    set RootSourceRecordID(value: string) {
+        this.Set('RootSourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: RootTargetRecordID
+    * * Display Name: Root Target Record ID
+    * * SQL Data Type: nvarchar(750)
+    * * Description: Target root record identifier resulting from the clone, encoded as a compact URL segment. Null while in progress or if failed.
+    */
+    get RootTargetRecordID(): string | null {
+        return this.Get('RootTargetRecordID');
+    }
+    set RootTargetRecordID(value: string | null) {
+        this.Set('RootTargetRecordID', value);
+    }
+
+    /**
+    * * Field Name: InitiatedByUserID
+    * * Display Name: Initiated By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the User who initiated this clone operation.
+    */
+    get InitiatedByUserID(): string {
+        return this.Get('InitiatedByUserID');
+    }
+    set InitiatedByUserID(value: string) {
+        this.Set('InitiatedByUserID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Planned
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Complete
+    *   * Error
+    *   * Planned
+    *   * Running
+    * * Description: Current operational status of the clone execution (Planned, Running, Complete, Error, Cancelled).
+    */
+    get Status(): 'Cancelled' | 'Complete' | 'Error' | 'Planned' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Cancelled' | 'Complete' | 'Error' | 'Planned' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp (UTC with offset) when the clone operation started.
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: EndedAt
+    * * Display Name: Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp (UTC with offset) when the clone operation concluded.
+    */
+    get EndedAt(): Date | null {
+        return this.Get('EndedAt');
+    }
+    set EndedAt(value: Date | null) {
+        this.Set('EndedAt', value);
+    }
+
+    /**
+    * * Field Name: PlanHash
+    * * Display Name: Plan Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the execution plan used for concurrency validation and provenance.
+    */
+    get PlanHash(): string {
+        return this.Get('PlanHash');
+    }
+    set PlanHash(value: string) {
+        this.Set('PlanHash', value);
+    }
+
+    /**
+    * * Field Name: PlanJSON
+    * * Display Name: Plan JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJRecordCloneLogEntity_IClonePlan
+    * * Description: Serialized JSON execution plan detailing all graph nodes, edges, actions, and options.
+    */
+    get PlanJSON(): string {
+        return this.Get('PlanJSON');
+    }
+    set PlanJSON(value: string) {
+        this.Set('PlanJSON', value);
+    }
+
+    private _PlanJSONObject_cached: MJRecordCloneLogEntity_IClonePlan | undefined = undefined;
+    private _PlanJSONObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for PlanJSON — returns parsed JSON as MJRecordCloneLogEntity_IClonePlan.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get PlanJSONObject(): MJRecordCloneLogEntity_IClonePlan {
+        const raw = this.PlanJSON;
+        if (raw !== this._PlanJSONObject_lastRaw) {
+            this._PlanJSONObject_cached = raw ? JSON.parse(raw) : null;
+            this._PlanJSONObject_lastRaw = raw;
+        }
+        return this._PlanJSONObject_cached!;
+    }
+    set PlanJSONObject(value: MJRecordCloneLogEntity_IClonePlan) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.PlanJSON = raw;
+        this._PlanJSONObject_cached = value;
+        this._PlanJSONObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: OptionsJSON
+    * * Display Name: Options JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON request options supplied by the user or client for this clone execution.
+    */
+    get OptionsJSON(): string | null {
+        return this.Get('OptionsJSON');
+    }
+    set OptionsJSON(value: string | null) {
+        this.Set('OptionsJSON', value);
+    }
+
+    /**
+    * * Field Name: ResultJSON
+    * * Display Name: Result JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Summary result JSON payload containing counts, timings, and created record mappings.
+    */
+    get ResultJSON(): string | null {
+        return this.Get('ResultJSON');
+    }
+    set ResultJSON(value: string | null) {
+        this.Set('ResultJSON', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional business justification or user-provided explanation for this clone operation.
+    */
+    get Reason(): string | null {
+        return this.Get('Reason');
+    }
+    set Reason(value: string | null) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message and diagnostic details if the clone operation failed.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: Foreign key to the parent ProcessRun when this clone was executed via a batch RecordProcess.
+    */
+    get ProcessRunID(): string | null {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string | null) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: CreatedCount
+    * * Display Name: Created Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total count of new records successfully created during this clone operation.
+    */
+    get CreatedCount(): number {
+        return this.Get('CreatedCount');
+    }
+    set CreatedCount(value: number) {
+        this.Set('CreatedCount', value);
+    }
+
+    /**
+    * * Field Name: ReferencedCount
+    * * Display Name: Referenced Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total count of existing records linked or referenced by foreign key rather than copied.
+    */
+    get ReferencedCount(): number {
+        return this.Get('ReferencedCount');
+    }
+    set ReferencedCount(value: number) {
+        this.Set('ReferencedCount', value);
+    }
+
+    /**
+    * * Field Name: SkippedCount
+    * * Display Name: Skipped Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total count of records intentionally skipped based on relationship or entity clone policies.
+    */
+    get SkippedCount(): number {
+        return this.Get('SkippedCount');
+    }
+    set SkippedCount(value: number) {
+        this.Set('SkippedCount', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RootEntity
+    * * Display Name: Root Entity
+    * * SQL Data Type: nvarchar(255)
+    * * NOTE: Property renamed to `RootEntity_` to avoid conflict with BaseEntity.RootEntity
+    */
+    get RootEntity_(): string {
+        return this.Get('RootEntity');
+    }
+
+    /**
+    * * Field Name: InitiatedByUser
+    * * Display Name: Initiated By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get InitiatedByUser(): string {
+        return this.Get('InitiatedByUser');
     }
 }
 
@@ -110421,15 +111675,16 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * Clone
     *   * FieldRules
     *   * Infer
     *   * ML Model
     * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model' {
+    get WorkType(): 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model') {
+    set WorkType(value: 'Action' | 'Agent' | 'Clone' | 'FieldRules' | 'Infer' | 'ML Model') {
         this.Set('WorkType', value);
     }
 

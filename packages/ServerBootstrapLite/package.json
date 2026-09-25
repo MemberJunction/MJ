@@ -97,6 +97,7 @@
     "@memberjunction/predictive-studio": "6.2.0-edge.0",
     "@memberjunction/queue": "6.2.0-edge.0",
     "@memberjunction/react-linter": "6.2.0-edge.0",
+    "@memberjunction/record-cloning": "6.2.0-edge.0",
     "@memberjunction/record-comparison": "6.2.0-edge.0",
     "@memberjunction/record-set-processor": "6.2.0-edge.0",
     "@memberjunction/scheduling-actions": "6.2.0-edge.0",

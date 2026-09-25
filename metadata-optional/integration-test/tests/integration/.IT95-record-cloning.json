@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT95 - Record Cloning",
+    "Description": "Entity record graph cloning exercised CLIENT-FIRST over the real GraphQL wire (plan: plans/record-cloning/README.md section 13.2). Every call goes through the RecordClone.Plan / RecordClone.Execute / RecordClone.Describe remote operations exactly as a browser makes them, so the wire leg proves the resolver dispatched to the server operation classes, the engine re-planned server-side, and its provenance landed where a client can read it back. The acting identity is the system API key user (Owner, Developer role, every Clone Records authorization and Record Changes: Annotate); the denied identity is a throwaway subject user with only the UI role, reached through a user API key on a secondary GraphQL connection (the per-user API-key provider pattern from IT92). RC1 cloning a user carries roles, application entries and, with the with-settings preset, settings other than device tokens and chat drafts; the source keeps its rows; the clone is inactive and not an Owner (also planned for an Owner source). RC2 cloning an AI prompt deep-clones its template and template contents instead of aliasing them. RC3 (ungated) a dry run computes a non-empty plan and writes nothing in any entity of the graph, the clone logs, the links or the record changes. RC4 an unauthorized caller is refused FORBIDDEN with a message naming the missing authorization and nothing is written; the identical call as an authorized caller succeeds. RC5 a child failure (a query category copy forced to collide on UX_QueryCategory_Name_NullParent) rolls the whole clone back: no parent row, no partial children, source untouched, a clone log with Status Error. RC6 a successful clone writes Record Changes with Source='Clone' and a ChangeContext naming the source and the clone log, one ClonedFrom Record Link per created row, and a Complete clone log whose counts match. RC7 executing with a stale plan hash after the source changed returns PLAN_CHANGED with a fresh plan and writes nothing but a Cancelled log; the fresh hash is then accepted; an unchanged graph with children re-plans to the same hash. RC8 cloning a Generated action with code keeps the code and copies each param, result code and library exactly once. RC9 a Comments-only update on a Record Change succeeds for an Annotate holder, an update touching another column is refused, and the denied identity is refused (the refusals are proven server-side by saving through the generated base class). RC10 (ungated) a plan of an AI prompt used by an agent contains no AI Agent Prompts or AI Agents nodes. RC11 (ungated) a Scheduled Job plan never includes Company Integrations and no FieldChange carries an unmasked encrypted value; with RUN_MUTATION_TESTS=1 and no existing pairing it creates a throwaway company integration with a marker secret and asserts the marker never appears. RC12 (ungated) a user plan includes the user's roles and application entries, no settings by default, and with-settings leaves out settings starting with mobile., mj.chat.drafts and mj.realtimeVoice.recordingConsent. RC1, RC2 and RC4 to RC9 mutate and are gated behind RUN_MUTATION_TESTS; every row they (or a clone they ran) create is prefixed mj-it95-<timestamp>, tagged (mj-integration-test — safe to delete) and swept FK-safe in teardown.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Over GraphQL, clones copy exactly the configured graph with provenance, refuse unauthorized callers and stale plans, roll back atomically on a child failure, never write on a dry run, and never expose encrypted values."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "record-cloning"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C7A60761-FC4D-48FA-B926-6050433C206C"
+  }
+}

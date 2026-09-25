@@ -1,0 +1,264 @@
+[
+  {
+    "fields": {
+      "Name": "Clone Record",
+      "Description": "Clone a single entity record along with its configured child records and remapped relationships. Thin wrapper over RecordCloneEngine.",
+      "DriverClass": "Clone Record",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-copy",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Name of the entity to clone."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A11"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Primary key of the record to clone."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A12"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Options",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional JSON CloneRequestOptions overriding clone behavior."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A13"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DryRun",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "Description": "When true, plans the clone without writing records."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A14"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NewRecordID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Primary key of the newly cloned root record."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A15"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CloneLogID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Primary key of the created MJ: Record Clone Logs header."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A16"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Records created by the clone, or planned on a dry run."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A17"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Warnings",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Warnings emitted during planning or execution."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A18"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A01"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clone Records",
+      "Description": "Clone several records of one entity, each with its configured child records and remapped relationships. Requires the 'Clone Records: Batch' authorization. Each root is cloned in its own transaction; ResultCode is PARTIAL when some succeed, and Results says which.",
+      "DriverClass": "Clone Records",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-copy",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Name of the entity to clone."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A21"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordIDs",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "JSON array or comma-separated list of record IDs to clone."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A22"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Options",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional JSON CloneRequestOptions overriding clone behavior."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A23"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DryRun",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "Description": "When true, plans the clone without writing records."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A24"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Records created across all roots, or planned on a dry run."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A25"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CloneLogID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Clone log of the first successful root. Results carries each root's log."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A26"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON array with one entry per requested record: RecordID, Success, ResultCode, NewRecordID, CloneLogID, CreatedCount, Warnings and ErrorMessage."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A27"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Warnings",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Warnings emitted during planning or execution."
+          },
+          "primaryKey": {
+            "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A28"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A77C57E1-8899-4A9B-98F1-2C67B6E41A02"
+    }
+  }
+]

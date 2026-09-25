@@ -260,6 +260,7 @@
     "@memberjunction/react-test-harness": 39.4,
     "@memberjunction/realtime-widget": 4.9,
     "@memberjunction/record-comparison": 0.6,
+    "@memberjunction/record-graph": 0.6,
     "@memberjunction/record-set-processor": 29.2,
     "@memberjunction/record-set-processor-base": 5.0,
     "@memberjunction/redis-provider": 1.7,

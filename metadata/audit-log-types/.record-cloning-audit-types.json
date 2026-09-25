@@ -1,0 +1,13 @@
+[
+  {
+    "fields": {
+      "Name": "Record Cloned",
+      "Description": "A record cloning operation was executed or evaluated. Emitted when the record clone authorization has UseAuditLog=1.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "677DBD60-153D-492D-AAD9-A8C70B91A22B"
+    }
+  }
+]

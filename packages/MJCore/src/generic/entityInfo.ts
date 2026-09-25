@@ -17,6 +17,9 @@ import {
     type IEntityConfiguration,
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
+    type IEntityCloneConfiguration,
+    type ICloneRelationshipPolicy,
+    type IEntityFieldCloneConfiguration,
 } from "./entityConfiguration"
 import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
@@ -198,6 +201,15 @@ export class EntityRelationshipInfo extends BaseInfo  {
      */
     get ConfigurationObject(): IEntityRelationshipConfiguration | null {
         return this.Configuration;
+    }
+
+    /**
+     * Parsed clone configuration for this relationship.
+     * Specifies the policy (Deep, Reference, Skip), locked status, field rules, etc.
+     * @see plans/record-cloning/README.md §4.2
+     */
+    get CloneConfig(): ICloneRelationshipPolicy | null {
+        return this.ConfigurationObject?.Clone ?? null;
     }
 
     // virtual fields - returned by the database VIEW
@@ -1001,6 +1013,15 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get ConfigurationObject(): IEntityFieldConfiguration | null {
         return this.Configuration;
+    }
+
+    /**
+     * Parsed clone configuration for this field.
+     * Specifies copy/reset/remap/suffix policy, value transformations, JSON remaps, etc.
+     * @see plans/record-cloning/README.md §4.3
+     */
+    get CloneConfig(): IEntityFieldCloneConfiguration | null {
+        return this.ConfigurationObject?.Clone ?? null;
     }
 
     /**
@@ -2942,6 +2963,29 @@ export class EntityInfo extends BaseInfo {
      */
     get ConfigurationObject(): IEntityConfiguration | null {
         return this.Configuration;
+    }
+
+    /**
+     * Parsed clone configuration for this entity.
+     * Controls clone enablement, not-cloneable status, caps, naming, field rules, etc.
+     * @see plans/record-cloning/README.md §4.1
+     */
+    get CloneConfig(): IEntityCloneConfiguration | null {
+        return this.ConfigurationObject?.Clone ?? null;
+    }
+
+    /**
+     * Returns true if cloning is explicitly enabled for this entity as a ROOT record.
+     */
+    get CloneEnabled(): boolean {
+        return this.CloneConfig?.Enabled === true;
+    }
+
+    /**
+     * Returns true if this entity is strictly not cloneable (neither as root nor child).
+     */
+    get NotCloneable(): boolean {
+        return this.CloneConfig?.NotCloneable === true;
     }
     /**
      * Date and time when this entity was created

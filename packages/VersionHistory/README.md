@@ -6,6 +6,9 @@ Version labeling, snapshot capture, diff, and restore for MemberJunction records
 
 The `@memberjunction/version-history` package enables developers to create named version labels that capture record state at specific points in time, compare changes between labels, and restore records to previous states while respecting entity dependency ordering.
 
+> [!NOTE]
+> The core record dependency traversal, topological sorting, and link resolution engine (`DependencyGraphWalker`, `SortByEntityDependencyOrder`, `SortNodesTopologically`) has been extracted into [`@memberjunction/record-graph`](../RecordGraph/README.md) so it can be shared across Version History, Record Cloning, and Metadata Sync. Version History re-exports these symbols for backward compatibility.
+
 ```mermaid
 graph TD
     A["VersionHistoryEngine<br/>(Facade)"] --> B["LabelManager"]

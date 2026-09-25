@@ -64,6 +64,7 @@ import {
 export * from './JSONType-interfaces/IEntityConfiguration';
 export * from './JSONType-interfaces/IEntityFieldConfiguration';
 export * from './JSONType-interfaces/IEntityRelationshipConfiguration';
+export type { IJsonRemapSpec, ICloneFieldRules, ICloneRelationshipPolicy, ICloneRowExclusion } from './JSONType-interfaces/IEntityConfiguration';
 
 export interface IEntityRelationshipJoin {
     mode: 'any';

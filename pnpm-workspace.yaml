@@ -84,5 +84,6 @@ packages:
   - 'packages/geo/*'
   - 'packages/Lists/*'
   - 'packages/RecordSetProcessor/*'
+  - 'packages/RecordCloning/*'
   - 'packages/eSignature/*'
   - 'packages/eSignature/Providers/*'

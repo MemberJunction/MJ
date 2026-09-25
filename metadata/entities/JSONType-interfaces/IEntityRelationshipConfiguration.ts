@@ -28,6 +28,12 @@ export interface IEntityRelationshipConfiguration {
      * Null = the parent entity's related-role ranker decides.
      */
     UI?: IEntityRelationshipUIConfiguration;
+
+    /**
+     * Clone policy for rows of RelatedEntity that point at this entity through RelatedEntityJoinField.
+     * @see plans/record-cloning/README.md §4.2
+     */
+    Clone?: ICloneRelationshipPolicy;
 }
 
 /**
@@ -72,3 +78,65 @@ export interface IEntityRelationshipUIConfiguration {
      */
     sortKey?: number;
 }
+
+/**
+ * Clone policy for rows of RelatedEntity that point at this entity through RelatedEntityJoinField.
+ * @see plans/record-cloning/README.md §4.2
+ */
+export interface ICloneRelationshipPolicy {
+    Policy?: 'Deep' | 'Reference' | 'Skip';
+    /** UI may not change it. */
+    Locked?: boolean;
+    MaxRecords?: number;
+    /** Write the source's positional values after the last Add instead of letting the collection renumber. Default false. */
+    PreserveSequence?: boolean;
+    /** Formula over the child row (fields.X); only rows evaluating true are cloned. */
+    IncludeWhen?: string;
+    /** Rows left out even when the edge is Deep, e.g. per-device or per-person settings. A row matching any entry is not cloned, nor are its descendants. */
+    ExcludeRows?: ICloneRowExclusion[];
+    Fields?: ICloneFieldRules;
+}
+
+/** Matches a child row by one field: equal to one of `Equals`, or a string starting with one of `StartsWith` (case-sensitive). */
+export interface ICloneRowExclusion {
+    Field: string;
+    Equals?: Array<string | number | boolean>;
+    StartsWith?: string[];
+}
+
+export interface ICloneFieldRules {
+    /** Never copied; take the column default. Beyond the always-excluded set (PK, __mj_*, identity, computed, virtual, denied-create). */
+    Exclude?: string[];
+    /** Literal stamps applied after the copy. Values pass through BaseEntity.Set and validation. */
+    Reset?: Record<string, unknown>;
+    /** Set to the cloning user's ID. */
+    Ownership?: string[];
+    /** The user must supply a value; un-suffixable uniques such as Email. Missing → plan Blocked. */
+    PromptFor?: string[];
+    /** Server-minted values (numbers, slugs): blanked so the entity's Save hook allocates. */
+    ServerAllocated?: string[];
+    /** Rich rewrites. Evaluated per row with the source row as fields, plus clone context (user, now, root, keyMap) — see §7.5. */
+    Rules?: Record<string, unknown>;
+    /** JSON columns that embed record IDs. */
+    JsonRemap?: Record<string, IJsonRemapSpec[]>;
+    /** Columns that must be cleared together (all-or-nothing CHECK pairs). Each group is cleared as a unit when any member is reset. */
+    ClearTogether?: string[][];
+    /** Unique keys the metadata cannot see: composite and filtered indexes. See §7.3. */
+    UniqueKeys?: Array<{ Fields: string[]; Scope: 'Global' | 'Parent' | 'LiveState'; ScopeField?: string }>;
+    /** Drift guard (§13.3): every field must appear in Copy, Exclude, Reset, Ownership, PromptFor, ServerAllocated or JsonRemap, or validation fails. Default false. */
+    Strict?: boolean;
+    /** Explicit copy allow-list, used with Strict. */
+    Copy?: string[];
+}
+
+export interface IJsonRemapSpec {
+    /** Path selector: dot segments and [*] for arrays, e.g. 'layout.content[*].componentState.config.viewId'. */
+    Path: string;
+    /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
+    Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
+    /** Entity the ID refers to, for remap. */
+    Entity?: string;
+    /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
+    OnMissing?: 'reuse' | 'drop';
+}
+

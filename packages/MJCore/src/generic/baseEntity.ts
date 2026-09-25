@@ -637,6 +637,39 @@ export interface RestoreContext {
 }
 
 /**
+ * Context describing an in-progress clone operation on a BaseEntity.
+ *
+ * When set on an entity instance via {@link BaseEntity.SetCloneContext}
+ * prior to calling Save(), the data provider will write the resulting
+ * RecordChange row with `Source='Clone'` and the structured JSON
+ * `ChangeContext` column populated.
+ *
+ * @see plans/record-cloning/README.md §10.3
+ */
+export interface CloneContext {
+    /** ID of the RecordCloneLog row coordinating this clone operation. */
+    CloneLogID: string;
+    /** Entity name of the record being cloned. */
+    SourceEntityName: string;
+    /** Compact URL segment of the source key (bare value for single-column keys). */
+    SourceRecordID: string;
+    /** Entity name of the root record of the clone graph. */
+    RootEntityName: string;
+    /** Source key of the root record. */
+    RootSourceRecordID: string;
+    /** Target key of the root record after insertion. */
+    RootTargetRecordID: string;
+    /** Depth within the record graph (0 for root). */
+    Depth: number;
+    /** Relationship route traversed to reach this record. */
+    Route: 'RootSave' | 'Collection' | 'Embedded' | 'IsAChain' | 'Sidecar';
+    /** Kinds and field names only. Values are already in FullRecordJSON. */
+    FieldChangeSummary: Array<{ Kind: string; Fields: string[] }>;
+    /** Optional explanation entered at clone time. */
+    Reason?: string | null;
+}
+
+/**
  * Discriminator for the `Source` column of a RecordChange row.
  *
  * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call
@@ -644,8 +677,10 @@ export interface RestoreContext {
  *   (records the platform discovers via direct SQL changes)
  * - `Restore`: produced by a user-initiated restore — paired with
  *   `RestoredFromID` and optional `RestoreReason` lineage columns
+ * - `Clone`: produced by a record clone operation — paired with
+ *   structured `ChangeContext` JSON provenance
  */
-export type RecordChangeSource = 'Internal' | 'External' | 'Restore';
+export type RecordChangeSource = 'Internal' | 'External' | 'Restore' | 'Clone';
 
 /**
  * Dialect-agnostic payload for a RecordChange row.
@@ -703,6 +738,11 @@ export interface RecordChangePayload {
      * not enter one.
      */
     restoreReason: string | null;
+    /**
+     * When `source === 'Clone'`, serialized JSON bag carrying structured provenance
+     * (shape = `IRecordChangeContext`). Null otherwise.
+     */
+    changeContext: string | null;
 }
 
 export class DataObjectRelatedEntityParam {
@@ -2131,6 +2171,23 @@ export abstract class BaseEntity<T = unknown> {
         options: RelatedRecordCollectionOptions,
     ): RelatedRecordCollection<TChild> {
         return this.RegisterCompanion(new RelatedRecordCollection<TChild>(this, options));
+    }
+
+    /**
+     * Dynamically registers a database-sourced child collection companion on this entity instance.
+     * Used by generic composite persistence engines (Record Cloning, Metadata Sync) when a relationship
+     * has no static collection companion declared on the generated entity class.
+     *
+     * Refuses duplicate names or re-registering an already existing companion.
+     *
+     * @typeParam TChild - The child entity type.
+     * @param options - The collection declaration options.
+     * @returns The registered collection companion.
+     */
+    public DeclareRelatedRecordsDynamic<TChild extends BaseEntity = BaseEntity>(
+        options: RelatedRecordCollectionOptions,
+    ): RelatedRecordCollection<TChild> {
+        return this.DeclareRelatedRecords<TChild>(options);
     }
 
     /**
@@ -4074,6 +4131,47 @@ export abstract class BaseEntity<T = unknown> {
      */
     public ClearRestoreContext(): void {
         this._restoreContext = null;
+    }
+
+    private _cloneContext: CloneContext | null = null;
+
+    /**
+     * Returns the active clone context for the next save, if any.
+     *
+     * Read by the data provider when generating the RecordChange SQL: when
+     * non-null, the resulting RecordChange row is written with
+     * `Source='Clone'` and `ChangeContext` populated with structured JSON provenance.
+     * Returns null for ordinary saves.
+     */
+    public get CloneContext(): CloneContext | null {
+        return this._cloneContext;
+    }
+
+    /**
+     * Marks the next Save() as part of a record clone operation.
+     *
+     * The provider will write a new RecordChange entry with `Source='Clone'`
+     * and `ChangeContext` populated with structured JSON provenance.
+     *
+     * The context persists on the entity until either (a) overwritten by a
+     * subsequent SetCloneContext() call or (b) explicitly cleared via
+     * ClearCloneContext(). It is NOT auto-cleared inside Save() because
+     * TransactionGroup execution is deferred.
+     *
+     * @param context Structured clone context. Throws if missing required fields.
+     */
+    public SetCloneContext(context: CloneContext): void {
+        if (!context || !context.CloneLogID || !context.SourceRecordID || !context.RootEntityName) {
+            throw new Error('BaseEntity.SetCloneContext: context is required with CloneLogID, SourceRecordID, and RootEntityName');
+        }
+        this._cloneContext = context;
+    }
+
+    /**
+     * Clears any pending clone context. Safe to call when no context is set.
+     */
+    public ClearCloneContext(): void {
+        this._cloneContext = null;
     }
 
 

@@ -50,6 +50,7 @@ import { ScopedAnonElevationChecks } from '../checks/scoped-anon-elevation.check
 import { EntityGraphChecks } from '../checks/entity-graph.checks';
 import { EntityEmbeddedChecks } from '../checks/entity-embedded.checks';
 import { EntityGraphClientChecks } from '../checks/entity-graph-client.checks';
+import { RecordCloningChecks } from '../checks/record-cloning.checks';
 import { TaskGraphOrchestrationChecks } from '../checks/task-graph-orchestration.checks';
 import { EntityActionChecks } from '../checks/entity-actions.checks';
 import { FlsEnforcementChecks } from '../checks/fls-enforcement.checks';
@@ -164,6 +165,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 8], // MSP1-MSP8 sync push atomicity, incl. server-derived child rows, mutation tier (IT94)
+        ['record-cloning', RecordCloningChecks, 12], // RC1-RC9 plan §13.2 + RC10-RC12 real-database dry runs, client transport (IT95)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -271,6 +273,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'prompt-runner': 1,
         'queue': 7,
         'realtime-deterministic': 9,
+        'record-cloning': 12,
         'record-process': 12,
         'record-process-facade': 2,
         'remote-op-ai-authoring': 3,
@@ -328,7 +331,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(94);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(95);
     });
 });
 
@@ -458,6 +461,14 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'record-cloning.RC1',
+        'record-cloning.RC2',
+        'record-cloning.RC4',
+        'record-cloning.RC5',
+        'record-cloning.RC6',
+        'record-cloning.RC7',
+        'record-cloning.RC8',
+        'record-cloning.RC9',
         'role-elevation.RE6',
         'server-cache.S17',
         'server-cache.S23',
