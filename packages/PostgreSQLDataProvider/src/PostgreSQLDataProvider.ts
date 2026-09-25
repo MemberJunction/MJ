@@ -73,6 +73,16 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Boolean columns use true/false instead of 1/0
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
+/**
+ * The `ChangeContext` column and its `$n` placeholder for a Record Change insert, or nothing when
+ * there is no context. Only clones set it, so every other tracked write keeps working on a database
+ * whose RecordChange table doesn't have the column yet (the PostgreSQL migration ships at release).
+ */
+function changeContextSQL(changeContext: string | null | undefined, placeholder: number): { column: string; value: string; parameters: string[] } {
+    if (!changeContext) return { column: '', value: '', parameters: [] };
+    return { column: ', "ChangeContext"', value: `, $${placeholder}::text`, parameters: [changeContext] };
+}
+
 export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
     private _connectionManager: PGConnectionManager = new PGConnectionManager();
     private _configData: PostgreSQLProviderConfigData | null = null;
@@ -881,13 +891,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const baseValues = saveSQL.parameters ?? [];
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
         const s = baseValues.length + 1;
+        const cc = changeContextSQL(payload.changeContext, s + 9);
         const fullSQL = `WITH save_result AS (
     ${saveSQL.sql}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason", "ChangeContext")
-    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text, $${s + 9}::text
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text${cc.value}
     FROM save_result
     RETURNING "ID"
 )
@@ -903,7 +914,7 @@ SELECT * FROM save_result`;
             payload.fullRecordJSON,
             payload.restoredFromID,
             payload.restoreReason,
-            payload.changeContext,
+            ...cc.parameters,
         ];
         return { sql: fullSQL, parameters };
     }
@@ -941,6 +952,7 @@ SELECT * FROM save_result`;
             );
             if (payload) {
                 const s = paramValues.length + 1;
+                const cc = changeContextSQL(payload.changeContext, s + 7);
                 paramValues.push(
                     payload.entityID,
                     payload.recordID,
@@ -949,15 +961,15 @@ SELECT * FROM save_result`;
                     payload.fullRecordJSON,
                     payload.restoredFromID,
                     payload.restoreReason,
-                    payload.changeContext,
+                    ...cc.parameters,
                 );
                 const fullSQL = `WITH delete_result AS (
     ${simpleSQL}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
-        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason", "ChangeContext")
-    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text, $${s+7}::text
+        ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+    SELECT $${s}::uuid, $${s+1}::varchar, $${s+2}::uuid, 'Delete', $${s+3}::varchar, '', 'Record Deleted', $${s+4}::text, 'Complete', $${s+5}::uuid, $${s+6}::text${cc.value}
     FROM delete_result
     WHERE EXISTS (SELECT 1 FROM delete_result)
     RETURNING "ID"
@@ -1281,9 +1293,10 @@ SELECT * FROM delete_result`;
         );
         if (!payload) return null;
 
+        const cc = changeContextSQL(payload.changeContext, 11);
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
-            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason", "ChangeContext")
-            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text, $11::text)
+            ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
+            VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text${cc.value})
             RETURNING "ID"`;
 
         const parameters: unknown[] = [
@@ -1297,7 +1310,7 @@ SELECT * FROM delete_result`;
             payload.fullRecordJSON,
             payload.restoredFromID,
             payload.restoreReason,
-            payload.changeContext,
+            ...cc.parameters,
         ];
 
         return { sql, parameters };
@@ -1327,11 +1340,13 @@ SELECT * FROM delete_result`;
             .join('||');
 
         const sourceVal = source ?? 'Internal';
-        const safeChangeContext = changeContext ? `'${changeContext.replace(/'/g, "''")}'::text` : 'NULL';
+        // Named only when set, like the other sites: see changeContextSQL.
+        const changeContextColumn = changeContext ? ', "ChangeContext"' : '';
+        const changeContextValue = changeContext ? `,\n    '${changeContext.replace(/'/g, "''")}'::text` : '';
 
         return `
 INSERT INTO ${this._schemaName}."RecordChange"
-    ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "ChangeContext")
+    ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status"${changeContextColumn})
 SELECT
     '${entityInfo.ID}'::uuid,
     '${recordID}',
@@ -1341,8 +1356,7 @@ SELECT
     '${safeChangesJSON}',
     '${safeChangesDesc}',
     row_to_json(r)::text,
-    'Complete',
-    ${safeChangeContext}
+    'Complete'${changeContextValue}
 FROM ${pgDialect.QuoteSchema(schema, view)} r
 WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
     }
