@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Component, EventEmitter, Input, NO_ERRORS_SCHEMA, Output } from '@angular/core';
+import { Component, EventEmitter, Input, Output, forwardRef } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { FormsModule } from '@angular/forms';
+import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { IMetadataProvider, RunViewParams, RunViewResult } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -112,19 +112,51 @@ class CodeEditorStubComponent {
     public setValue(_value: string): void { /* no-op */ }
 }
 
+/** Minimal ControlValueAccessor so `[(ngModel)]` on the stubbed form controls binds without the real widgets. */
+abstract class ValueAccessorStub implements ControlValueAccessor {
+    writeValue(_value: unknown): void { /* no-op */ }
+    registerOnChange(_fn: (value: unknown) => void): void { /* no-op */ }
+    registerOnTouched(_fn: () => void): void { /* no-op */ }
+}
+
+/** Stand-in for <mj-dropdown> (the Content Type picker, rendered only in allowEdit mode). */
+@Component({
+    standalone: true,
+    selector: 'mj-dropdown',
+    template: '',
+    providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => DropdownStubComponent), multi: true }],
+})
+class DropdownStubComponent extends ValueAccessorStub {
+    @Input() Data: unknown[] = [];
+    @Input() TextField = '';
+    @Input() ValueField = '';
+    @Input() ValuePrimitive = false;
+    @Output() ValueChange = new EventEmitter<unknown>();
+}
+
+/** Stand-in for <mj-numeric-input> (the Priority field, rendered only in allowEdit mode). */
+@Component({
+    standalone: true,
+    selector: 'mj-numeric-input',
+    template: '',
+    providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => NumericInputStubComponent), multi: true }],
+})
+class NumericInputStubComponent extends ValueAccessorStub {
+    @Input() Min: number | null = null;
+    @Input() Step = 1;
+    @Input() Format = '';
+}
+
 const notify = { CreateSimpleNotification: vi.fn() };
 
 function createEditor(provider: IMetadataProvider): ComponentFixture<TemplateEditorComponent> {
     TestBed.configureTestingModule({
-        imports: [FormsModule, CodeEditorStubComponent],
+        imports: [FormsModule, CodeEditorStubComponent, DropdownStubComponent, NumericInputStubComponent],
         declarations: [TemplateEditorComponent],
         providers: [
             { provide: MJNotificationService, useValue: notify },
             { provide: MJConfirmService, useValue: { Confirm: async () => true } },
         ],
-        // The editor's other children (mj-dropdown, mj-numeric-input) are irrelevant here and are
-        // only rendered in allowEdit mode, which the render specs below turn off.
-        schemas: [NO_ERRORS_SCHEMA],
     });
     const fixture = TestBed.createComponent(TemplateEditorComponent);
     fixture.componentInstance.Provider = provider;
