@@ -95,4 +95,19 @@ describe('shipped clone configurations', () => {
         const clash = [...owners].filter(([, files]) => files.length > 1);
         expect(clash).toEqual([]);
     });
+
+    it('never lists a NotCloneable entity as a Deep child (NotCloneable wins, so that edge could never copy)', () => {
+        const notCloneable = new Set([...byName].filter(([, c]) => c.NotCloneable).map(([n]) => n));
+        const contradictions: string[] = [];
+        for (const [name, config] of byName) {
+            const edges = [
+                ...Object.entries(config.Relationships ?? {}),
+                ...(config.Presets ?? []).flatMap((p) => Object.entries(p.Relationships ?? {})),
+            ];
+            for (const [key, rel] of edges) {
+                if (rel?.Policy === 'Deep' && notCloneable.has(key.split('.')[0])) contradictions.push(`${name} -> ${key}`);
+            }
+        }
+        expect(contradictions).toEqual([]);
+    });
 });

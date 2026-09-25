@@ -1697,15 +1697,14 @@
   },
   {
     "_comments": [
-      "Negative catalog: MJ: User Applications is user-specific app enrollment — not cloneable."
+      "MJ: User Applications is not a clone root (per-user membership), but a user clone copies it: Enabled=false, not NotCloneable."
     ],
     "fields": {
       "Name": "MJ: User Applications",
       "Configuration": {
         "Clone": {
           "Enabled": false,
-          "NotCloneable": true,
-          "NotCloneableReason": "Per-user application enrollment"
+          "NotCloneableReason": "Per-user application enrollment is copied with its user, not cloned on its own"
         }
       }
     },
@@ -1715,15 +1714,14 @@
   },
   {
     "_comments": [
-      "Negative catalog: MJ: User Roles is user membership — not cloneable."
+      "MJ: User Roles is not a clone root (per-user membership), but a user clone copies it: Enabled=false, not NotCloneable."
     ],
     "fields": {
       "Name": "MJ: User Roles",
       "Configuration": {
         "Clone": {
           "Enabled": false,
-          "NotCloneable": true,
-          "NotCloneableReason": "User role membership"
+          "NotCloneableReason": "User role membership is copied with its user, not cloned on its own"
         }
       }
     },
