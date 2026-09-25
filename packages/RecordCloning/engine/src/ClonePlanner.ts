@@ -267,10 +267,13 @@ export class ClonePlanner {
                         JoinField: candidate.JoinField,
                         RelationshipID: candidate.Relationship?.ID,
                         RelationshipConfig: relPolicy,
-                        ChildEntityConfig: targetConfig ? {
-                            NotCloneable: targetConfig.Enabled === false || targetConfig.NotCloneable === true,
-                            AllowCreateAPI: targetEntity.AllowCreateAPI,
-                        } : undefined,
+                        // Enabled=false only means "not a clone root"; NotCloneable is what keeps a child out.
+                        ChildEntityConfig: {
+                            NotCloneable: targetConfig?.NotCloneable === true,
+                            NotCloneableReason: targetConfig?.NotCloneableReason,
+                            AllowCreateAPI: targetEntity?.AllowCreateAPI,
+                        },
+                        IsHierarchyField: joinFieldInfo?.IsHierarchy === true,
                         RootEntityConfig: rootConfig ? {
                             Relationships: rootConfig.Relationships,
                         } : undefined,

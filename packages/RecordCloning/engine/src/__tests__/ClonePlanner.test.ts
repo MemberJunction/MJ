@@ -461,6 +461,7 @@ describe('ClonePlanner', () => {
                     Type: 'One To Many',
                 } as EntityRelationshipInfo,
             ],
+            CloneConfiguration: { Enabled: true, Relationships: { ParentTags: { Policy: 'Deep' } } },
         } as EntityInfo;
         const list = [parentWithTags, junction as EntityInfo];
         const provider = {

@@ -37,16 +37,14 @@ describe('ClonePolicyResolver', () => {
         expect(resSoftLink.PolicySource).toBe('BuiltIn');
     });
 
-    it('forces Deep when FK is unique (constraint-derived)', () => {
-        const res = ResolveEdgePolicy({
-            ...baseContext,
-            IsUniqueFK: true,
-            RelationshipConfig: { Policy: 'Skip' }, // Relationship wants to skip
-        });
+    it('lets a unique FK turn Reference into Deep but never override Skip', () => {
+        const skip = ResolveEdgePolicy({ ...baseContext, IsUniqueFK: true, RelationshipConfig: { Policy: 'Skip' } });
+        expect(skip.Policy).toBe('Skip');
 
-        expect(res.Policy).toBe('Deep');
-        expect(res.PolicySource).toBe('Constraint');
-        expect(res.Locked).toBe(true);
+        const ref = ResolveEdgePolicy({ ...baseContext, IsUniqueFK: true, RelationshipConfig: { Policy: 'Reference' } });
+        expect(ref.Policy).toBe('Deep');
+        expect(ref.PolicySource).toBe('Constraint');
+        expect(ref.Warnings.map((w) => w.Code)).toContain('CONSTRAINT_FORCED_DEEP');
     });
 
     it('NotCloneable on child entity wins unconditionally over all tiers', () => {
@@ -139,16 +137,57 @@ describe('ClonePolicyResolver', () => {
         expect(res.Warnings[0].Code).toBe('LOCKED_EDGE_OVERRIDE_IGNORED');
     });
 
-    it('defaults unconfigured relationships on MJ: Users to Skip', () => {
+    it('defaults unconfigured relationships to Skip for every parent (no entity-specific branch)', () => {
+        for (const parent of ['MJ: Users', 'MJ: AI Prompts', 'Orders']) {
+            const res = ResolveEdgePolicy({ ...baseContext, ParentEntityName: parent, CurrentDepth: 0, MaxDepth: 3 });
+            expect(res.Policy).toBe('Skip');
+            expect(res.PolicySource).toBe('BuiltIn');
+        }
+    });
+
+    it('follows a configured relationship, including by "Entity.JoinField" key', () => {
+        const plain = ResolveEdgePolicy({ ...baseContext, RootEntityConfig: { Relationships: { OrderDetails: { Policy: 'Deep' } } } });
+        expect(plain.Policy).toBe('Deep');
+        const qualified = ResolveEdgePolicy({ ...baseContext, RootEntityConfig: { Relationships: { 'OrderDetails.OrderID': { Policy: 'Deep' } } } });
+        expect(qualified.Policy).toBe('Deep');
+    });
+
+    it('copies a self-relationship subtree only when the join column is a hierarchy field', () => {
+        const tree = ResolveEdgePolicy({ ...baseContext, Kind: 'Hierarchy', IsHierarchyField: true });
+        expect(tree.Policy).toBe('Deep');
+        const pointer = ResolveEdgePolicy({ ...baseContext, Kind: 'Hierarchy', IsHierarchyField: false });
+        expect(pointer.Policy).toBe('Skip');
+    });
+
+    it('ignores a preset override on a locked edge', () => {
         const res = ResolveEdgePolicy({
             ...baseContext,
-            ParentEntityName: 'MJ: Users',
-            ChildEntityName: 'MJ: Conversations',
-            CurrentDepth: 1,
-            MaxDepth: 3,
+            RelationshipConfig: { Policy: 'Skip', Locked: true },
+            PresetConfig: { EdgeOverrides: [{ ChildEntityName: 'OrderDetails', Policy: 'Deep' }] },
         });
-
         expect(res.Policy).toBe('Skip');
-        expect(res.PolicySource).toBe('BuiltIn');
+        expect(res.Warnings.map((w) => w.Code)).toContain('LOCKED_EDGE_OVERRIDE_IGNORED');
+    });
+
+    it('applies name heuristics only when no configuration names the edge', () => {
+        const heuristic = ResolveEdgePolicy({ ...baseContext, ChildEntityName: 'MJ: User Notification Preferences' });
+        expect(heuristic.Policy).toBe('Skip');
+        expect(heuristic.Warnings[0].Code).toBe('NOT_CLONEABLE');
+
+        const configured = ResolveEdgePolicy({
+            ...baseContext,
+            ChildEntityName: 'MJ: User Notification Preferences',
+            RootEntityConfig: { Relationships: { 'MJ: User Notification Preferences': { Policy: 'Deep' } } },
+        });
+        expect(configured.Policy).toBe('Deep');
+    });
+
+    it('keeps explicit NotCloneable absolute even when the root lists the relationship', () => {
+        const res = ResolveEdgePolicy({
+            ...baseContext,
+            ChildEntityConfig: { NotCloneable: true },
+            RootEntityConfig: { Relationships: { OrderDetails: { Policy: 'Deep' } } },
+        });
+        expect(res.Policy).toBe('Skip');
     });
 });

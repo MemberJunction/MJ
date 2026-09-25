@@ -56,20 +56,18 @@ export function EvaluateExclusionClass(params: {
     NotCloneable?: boolean;
     NotCloneableReason?: string;
     AllowCreateAPI?: boolean;
-    RootEntityName?: string;
-    IsRoot?: boolean;
+    /**
+     * true: evaluate only the name heuristics; false: only the explicit NotCloneable / AllowCreateAPI
+     * rules; omitted: both. Callers skip the heuristics when a configuration names the edge.
+     */
+    HeuristicsOnly?: boolean;
 }): ExclusionEvaluation {
-    const {
-        EntityName,
-        NotCloneable,
-        NotCloneableReason,
-        AllowCreateAPI,
-        RootEntityName,
-        IsRoot,
-    } = params;
+    const { EntityName, NotCloneable, NotCloneableReason, AllowCreateAPI, HeuristicsOnly } = params;
+    const explicit = HeuristicsOnly !== true;
+    const heuristics = HeuristicsOnly !== false;
 
     // 1. Explicit NotCloneable configuration
-    if (NotCloneable) {
+    if (explicit && NotCloneable) {
         return {
             Excluded: true,
             Category: 'RunLogAudit',
@@ -80,13 +78,15 @@ export function EvaluateExclusionClass(params: {
     }
 
     // 2. AllowCreateAPI false: can never be created
-    if (AllowCreateAPI === false) {
+    if (explicit && AllowCreateAPI === false) {
         return {
             Excluded: true,
             Category: 'CreateDisallowed',
             Reason: `Entity '${EntityName}' has AllowCreateAPI=false in metadata and cannot be created.`,
         };
     }
+
+    if (!heuristics) return { Excluded: false };
 
     // 3. Heuristic: Run / Log / Audit / History patterns
     for (const pattern of RUN_LOG_AUDIT_PATTERNS) {
@@ -99,17 +99,15 @@ export function EvaluateExclusionClass(params: {
         }
     }
 
-    // 4. Heuristic: Per-user state (Skip unless root is User and explicitly allowed)
+    // 4. Heuristic: per-user runtime state. A configuration that names the edge (checked by the
+    //    caller) is the only way to copy it; there is no entity-specific exception.
     for (const pattern of PER_USER_STATE_PATTERNS) {
         if (pattern.test(EntityName)) {
-            const isUserRoot = RootEntityName?.toLowerCase() === 'users' || RootEntityName?.toLowerCase() === 'user' || RootEntityName?.toLowerCase() === 'mj: users';
-            if (!isUserRoot || IsRoot) {
-                return {
-                    Excluded: true,
-                    Category: 'PerUserState',
-                    Reason: `Entity '${EntityName}' represents transient per-user state.`,
-                };
-            }
+            return {
+                Excluded: true,
+                Category: 'PerUserState',
+                Reason: `Entity '${EntityName}' represents transient per-user state.`,
+            };
         }
     }
 

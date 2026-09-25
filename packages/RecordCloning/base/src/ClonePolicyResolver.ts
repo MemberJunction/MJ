@@ -3,9 +3,13 @@
  * 8-tier precedence hierarchy for clone edge policy resolution.
  * Evaluates Built-in -> Constraint -> Child Entity -> Relationship -> Root Entity -> Preset -> Request.
  * Enforces:
- * - Child Entity NotCloneable wins everywhere unconditionally.
- * - Database constraints (e.g. unique FK) force Deep with CONSTRAINT_FORCED_DEEP.
- * - Locked edges ignore user overrides with LOCKED_EDGE_OVERRIDE_IGNORED.
+ * - A child entity marked NotCloneable (or AllowCreateAPI=false) is skipped everywhere, unconditionally.
+ * - Name heuristics (runs, logs, per-user state) skip a child only when no configuration names that edge.
+ * - Unlisted relationships are Skip: each configuration opts in to what it copies. There are no
+ *   entity-specific defaults.
+ * - A self-relationship is Deep only when its join column is a hierarchy (IsHierarchy) field.
+ * - A unique FK makes Reference impossible, so it turns Reference into Deep; it never overrides Skip.
+ * - Locked edges ignore preset and request overrides (LOCKED_EDGE_OVERRIDE_IGNORED).
  * @see plans/record-cloning/README.md §4.4, §5.3–§5.5, §13.1
  */
 
@@ -31,6 +35,8 @@ export interface EdgePolicyResolutionContext {
 
     // Database / Physical constraints
     IsUniqueFK?: boolean;
+    /** The child's join column is flagged IsHierarchy (a parent/child tree within one entity). */
+    IsHierarchyField?: boolean;
     IsWriteOnce?: boolean;
 
     // Configurations
@@ -76,15 +82,28 @@ export interface EdgePolicyResolutionResult {
 export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyResolutionResult {
     const warnings: CloneWarning[] = [];
 
-    // TIER 0 / EXCLUSION: NotCloneable on child entity wins unconditionally everywhere!
+    const configuredPolicy =
+        ctx.RelationshipConfig?.Policy ??
+        (ctx.RelationshipID ? ctx.RootEntityConfig?.Relationships?.[ctx.RelationshipID]?.Policy : undefined) ??
+        ctx.RootEntityConfig?.Relationships?.[`${ctx.ChildEntityName}.${ctx.JoinField}`]?.Policy ??
+        ctx.RootEntityConfig?.Relationships?.[ctx.ChildEntityName]?.Policy ??
+        ctx.RootEntityConfig?.Descendants?.[ctx.ChildEntityName]?.Policy;
+
+    // TIER 0 / EXCLUSION. Explicit NotCloneable and AllowCreateAPI=false win unconditionally.
+    // The name heuristics only apply when no configuration says what to do with this edge.
     const exclusion = EvaluateExclusionClass({
         EntityName: ctx.ChildEntityName,
         NotCloneable: ctx.ChildEntityConfig?.NotCloneable,
         NotCloneableReason: ctx.ChildEntityConfig?.NotCloneableReason,
         AllowCreateAPI: ctx.ChildEntityConfig?.AllowCreateAPI,
+        HeuristicsOnly: false,
     });
+    const heuristic = configuredPolicy
+        ? { Excluded: false as const }
+        : EvaluateExclusionClass({ EntityName: ctx.ChildEntityName, HeuristicsOnly: true });
 
-    if (exclusion.Excluded) {
+    for (const result of [exclusion, heuristic]) {
+        if (!result.Excluded) continue;
         return {
             Policy: 'Skip',
             PolicySource: 'Entity',
@@ -94,7 +113,7 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
                     Code: 'NOT_CLONEABLE',
                     Severity: 'Warning',
                     NodeKey: ctx.ToKey,
-                    Message: exclusion.Reason || `Child entity '${ctx.ChildEntityName}' is excluded or NotCloneable.`,
+                    Message: result.Reason || `Child entity '${ctx.ChildEntityName}' is excluded or NotCloneable.`,
                 },
             ],
         };
@@ -112,13 +131,9 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
             policy = 'Deep';
             break;
         case 'Relationship':
-            // Users has over 110 reverse relationships; auto-discovery is never the default for Users (§5.3).
-            // Only relationships explicitly configured in CloneConfig.Relationships can be followed.
-            if (ctx.ParentEntityName === 'MJ: Users') {
-                policy = 'Skip';
-            } else {
-                policy = ctx.CurrentDepth < ctx.MaxDepth ? 'Deep' : 'Skip';
-            }
+            // Unlisted one-to-many relationships are not followed: CodeGen creates one for every FK,
+            // so following them by default copies (and grafts rows onto) records the clone doesn't own.
+            policy = 'Skip';
             break;
         case 'ForwardFK':
         case 'SelfPointer':
@@ -129,22 +144,15 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
             policy = 'Skip';
             break;
         case 'Hierarchy':
-            policy = 'Deep';
+            // A self-relationship is a tree only when its join column is flagged IsHierarchy.
+            policy = ctx.IsHierarchyField ? 'Deep' : 'Skip';
             break;
         default:
             policy = 'Skip';
             break;
     }
 
-    // 2. Constraint-Derived Decisions
-    let isConstraintForcedDeep = false;
-    if (ctx.IsUniqueFK) {
-        // A unique constraint on FK column forces Deep because two records cannot point to same FK
-        policy = 'Deep';
-        policySource = 'Constraint';
-        locked = true;
-        isConstraintForcedDeep = true;
-    }
+    // 2. Constraint-derived decisions are applied at the end: a unique FK only rules out Reference.
 
     // 3. Child Entity Bag (already handled NotCloneable above)
 
@@ -153,7 +161,7 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
         if (ctx.RelationshipConfig.Locked) {
             locked = true;
         }
-        if (!isConstraintForcedDeep && ctx.RelationshipConfig.Policy) {
+        if (ctx.RelationshipConfig.Policy) {
             policy = ctx.RelationshipConfig.Policy;
             policySource = 'Relationship';
         }
@@ -163,10 +171,11 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
     if (ctx.RootEntityConfig) {
         const relMatch =
             (ctx.RelationshipID && ctx.RootEntityConfig.Relationships?.[ctx.RelationshipID]) ||
+            ctx.RootEntityConfig.Relationships?.[`${ctx.ChildEntityName}.${ctx.JoinField}`] ||
             ctx.RootEntityConfig.Relationships?.[ctx.ChildEntityName];
         if (relMatch) {
             if (relMatch.Locked) locked = true;
-            if (!isConstraintForcedDeep && relMatch.Policy) {
+            if (relMatch.Policy) {
                 policy = relMatch.Policy;
                 policySource = 'Descendant';
             }
@@ -175,21 +184,28 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
         const descMatch = ctx.RootEntityConfig.Descendants?.[ctx.ChildEntityName];
         if (descMatch) {
             if (descMatch.Locked) locked = true;
-            if (!isConstraintForcedDeep && descMatch.Policy) {
+            if (descMatch.Policy) {
                 policy = descMatch.Policy;
                 policySource = 'Descendant';
             }
         }
     }
 
-    // 6. Preset
-    if (ctx.PresetConfig?.EdgeOverrides && !isConstraintForcedDeep) {
+    // 6. Preset (a Locked edge keeps its configured policy)
+    if (ctx.PresetConfig?.EdgeOverrides) {
         const presetOverride = ctx.PresetConfig.EdgeOverrides.find(
             (o) =>
                 (ctx.RelationshipID && o.RelationshipID === ctx.RelationshipID) ||
                 (o.ChildEntityName && o.ChildEntityName === ctx.ChildEntityName)
         );
-        if (presetOverride) {
+        if (presetOverride && locked) {
+            warnings.push({
+                Code: 'LOCKED_EDGE_OVERRIDE_IGNORED',
+                Severity: 'Warning',
+                NodeKey: ctx.ToKey,
+                Message: `Preset policy '${presetOverride.Policy}' for edge to '${ctx.ChildEntityName}' was ignored because the edge is locked.`,
+            });
+        } else if (presetOverride) {
             policy = presetOverride.Policy;
             policySource = 'Descendant';
         }
@@ -216,13 +232,6 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
                     NodeKey: ctx.ToKey,
                     Message: `Override to '${reqOverride.Policy}' for edge to '${ctx.ChildEntityName}' was ignored because the edge is locked.`,
                 });
-            } else if (isConstraintForcedDeep && reqOverride.Policy !== 'Deep') {
-                warnings.push({
-                    Code: 'CONSTRAINT_FORCED_DEEP',
-                    Severity: 'Warning',
-                    NodeKey: ctx.ToKey,
-                    Message: `Unique FK constraint on '${ctx.JoinField}' requires Deep clone and cannot be overridden.`,
-                });
             } else {
                 policy = reqOverride.Policy;
                 policySource = 'Request';
@@ -230,15 +239,16 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
         }
     }
 
-    // Re-verify constraint forced deep
-    if (isConstraintForcedDeep && policy !== 'Deep') {
+    // Unique FK: the child row can belong to one parent only, so pointing the copy at the same
+    // child (Reference) is impossible. Deep is the only way to follow it; Skip is always safe.
+    if (ctx.IsUniqueFK && policy === 'Reference') {
         policy = 'Deep';
         policySource = 'Constraint';
         warnings.push({
             Code: 'CONSTRAINT_FORCED_DEEP',
             Severity: 'Warning',
             NodeKey: ctx.ToKey,
-            Message: `Unique FK constraint on '${ctx.JoinField}' forced policy to Deep.`,
+            Message: `Unique FK constraint on '${ctx.JoinField}' makes Reference impossible; the child is copied instead.`,
         });
     }
 

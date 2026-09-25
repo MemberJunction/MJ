@@ -1292,7 +1292,8 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
             );
 
             expect(plan.Blocked).toBe(false);
-            expect(plan.Warnings.some((w) => w.Message.includes('Action Execution Logs') || w.Code === 'RELATIONSHIP_POLICY_SKIP')).toBe(true);
+            // Execution logs are configured Skip + Locked: never planned.
+            expect(plan.Nodes.some((n) => n.SourceKey.includes('log-1'))).toBe(false);
 
             // Sub-action should be planned as a cloned node
             const subActionNode = plan.Nodes.find((n) => n.SourceKey.includes(subActionId));
@@ -1545,9 +1546,8 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
 
             expect(plan.Blocked).toBe(false);
 
-            // Scheduled Job Runs must be skipped (Locked)
-            const runsWarning = plan.Warnings.find((w) => w.Message.includes('Scheduled Job Runs'));
-            expect(runsWarning).toBeDefined();
+            // Scheduled Job Runs are configured Skip + Locked: never planned.
+            expect(plan.Nodes.some((n) => n.SourceKey.includes('run-1'))).toBe(false);
 
             // Execute Clone
             const executor = new CloneExecutor({ Provider: mockMetadata });
