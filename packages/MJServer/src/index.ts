@@ -61,7 +61,7 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
-import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
+import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
@@ -1563,6 +1563,16 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
   }
   startupLog.PrintSummary();
+
+  // Close out run artifacts a dead process left open, BEFORE anything below starts a new run.
+  //
+  // A killed process (OOM killer, SIGKILL, host reboot) never writes its run's terminal result, so
+  // the run reads as in-flight forever: the wizard spins, the active-operations panel shows a step
+  // that will never advance, and no failure is reported anywhere. Sound only here, and only before
+  // the first new run: artifacts are process-local, so anything still in flight as THIS process
+  // starts belongs to a process that no longer exists. Awaited for exactly that reason —
+  // processRSUPendingWork() below starts syncs, and those are runs this sweep must not see.
+  await SweepInterruptedRuns(undefined, msg => console.warn(msg));
 
   // Process pending RSU work from pre-restart (entity maps, field maps, sync)
   processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
