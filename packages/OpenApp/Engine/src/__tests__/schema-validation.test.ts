@@ -252,7 +252,7 @@ describe('CreateAppSchema with allowDoubleUnderscore override', () => {
     it('proceeds past validation for __-prefixed schema when allowDoubleUnderscore is true', async () => {
         // SQL Server sequence: SchemaExists probe (empty = does not exist), core-schema owner
         // probe (assignable dbo), then the CREATE SCHEMA itself.
-        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanAssign: 1 }]]);
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 1 }]]);
         const result = await CreateAppSchema('__bcsaas', provider, { allowDoubleUnderscore: true });
         expect(result.Success).toBe(true);
         // Exactly three SQL calls: existence check + owner probe + CREATE SCHEMA.
@@ -298,7 +298,7 @@ describe('SchemaExists — ANSI information_schema (dialect-neutral)', () => {
 
 describe('CreateAppSchema — dialect-aware identifier quoting', () => {
     it('SQL Server quotes with [brackets]', async () => {
-        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanAssign: 1 }]], 'sqlserver');
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 1 }]], 'sqlserver');
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
         expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA [bcsaas] AUTHORIZATION [dbo]');
@@ -318,7 +318,7 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
     // against the CALLER. Creating the schema with the core schema's owner keeps the chain intact.
 
     it('assigns the core schema owner when the installer may impersonate it', async () => {
-        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanAssign: 1 }]]);
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 1 }]]);
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
         expect(result.Warning).toBeUndefined();
@@ -331,7 +331,7 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
     });
 
     it('probes the configured core schema, not a hard-coded __mj', async () => {
-        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanAssign: 1 }]]);
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 1 }]]);
         const result = await CreateAppSchema('bcsaas', provider, { CoreSchema: 'mjcore' });
         expect(result.Success).toBe(true);
         const probe = executeSql.mock.calls[1][0] as string;
@@ -340,23 +340,40 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
     });
 
     it('escapes the core schema name as a string literal in the probe', async () => {
-        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanAssign: 1 }]]);
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 1 }]]);
         await CreateAppSchema('bcsaas', provider, { CoreSchema: "o'core" });
         expect(executeSql.mock.calls[1][0] as string).toContain("'o''core'");
     });
 
     it('falls back to a plain CREATE SCHEMA with a warning when the owner cannot be assigned', async () => {
-        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanAssign: 0 }]]);
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 0, CanControlDatabase: 1 }]]);
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
         expect(executeSql).toHaveBeenCalledTimes(3);
         expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA [bcsaas]');
         expect(result.Warning).toBeDefined();
         expect(result.Warning).toMatch(/ownership chaining/);
-        expect(result.Warning).toMatch(/IMPERSONATE/);
+        expect(result.Warning).toMatch(/db_owner/);
+        expect(result.Warning).not.toMatch(/GRANT IMPERSONATE/);
         expect(result.Warning).toContain('bcsaas');
         expect(result.Warning).toContain('dbo');
         expect(result.Warning).toContain('__mj');
+    });
+
+    it('falls back when the installer may impersonate the owner but lacks CONTROL on the database', async () => {
+        // Verified on SQL Server 2022 (MJ#4756 smoke): a db_ddladmin login granted IMPERSONATE on
+        // dbo can CREATE SCHEMA ... AUTHORIZATION [dbo] and create views in it, but its migration's
+        // `GRANT SELECT ON <view>` then fails — granting on an object needs CONTROL, which only the
+        // owner (or CONTROL on the database, i.e. db_owner) has. Keeping the installer as owner is
+        // the only shape in which that install can finish.
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 0 }]]);
+        const result = await CreateAppSchema('bcsaas', provider);
+        expect(result.Success).toBe(true);
+        expect(executeSql.mock.calls[1][0] as string).toMatch(/'DATABASE',\s*'CONTROL'/);
+        expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA [bcsaas]');
+        expect(result.Warning).toMatch(/ownership chaining/);
+        expect(result.Warning).toMatch(/db_owner/);
+        expect(result.Warning).not.toMatch(/GRANT IMPERSONATE/);
     });
 
     it('falls back with a warning when the core schema is not visible (probe returns no row)', async () => {
@@ -370,7 +387,7 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
     });
 
     it('falls back with a warning when the owner name comes back NULL', async () => {
-        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: null, CanAssign: null }]]);
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: null, CanImpersonateOwner: null, CanControlDatabase: null }]]);
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
         expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA [bcsaas]');
@@ -378,14 +395,14 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
     });
 
     it('quotes an owner name that needs escaping', async () => {
-        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'odd]owner', CanAssign: 1 }]]);
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'odd]owner', CanImpersonateOwner: 1, CanControlDatabase: 1 }]]);
         const result = await CreateAppSchema('bcsaas', provider);
         expect(result.Success).toBe(true);
         expect(executeSql.mock.calls[2][0] as string).toBe('CREATE SCHEMA [bcsaas] AUTHORIZATION [odd]]owner]');
     });
 
     it('returns a failure with context when the CREATE itself fails', async () => {
-        const queue: Array<Array<Record<string, unknown>>> = [[], [{ OwnerName: 'dbo', CanAssign: 1 }]];
+        const queue: Array<Array<Record<string, unknown>>> = [[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 1 }]];
         const executeSql = vi.fn(async (sql: string) => {
             if (sql.startsWith('CREATE SCHEMA')) {
                 throw new Error('boom');

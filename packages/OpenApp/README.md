@@ -785,11 +785,14 @@ After install/upgrade/remove, you must:
 
 **What install does.** On SQL Server the engine reads the owner of the MJ core schema (`MJCoreSchema`, default `__mj`) and creates the app schema with `CREATE SCHEMA [acme_crm] AUTHORIZATION [<that owner>]` (usually `dbo`). Granting the API role `SELECT` on the app's views is then enough.
 
-**Fallback.** Assigning another user as a schema's owner requires `IMPERSONATE` on that user (members of `db_owner` have it). The engine checks this first (`HAS_PERMS_BY_NAME(<owner>, 'USER', 'IMPERSONATE')`). When the installer cannot assign the owner — or cannot see the core schema — the install still succeeds with a plain `CREATE SCHEMA`, and a `Schema` warning is printed naming the consequence. To fix it, either install as a member of `db_owner`, or grant the installing login the permission and reinstall:
+**Fallback.** Two permissions are needed, and the engine checks both before it creates anything:
 
-```sql
-GRANT IMPERSONATE ON USER::[dbo] TO [<installer user>];
-```
+- `IMPERSONATE` on the owner — required to name another user in `CREATE SCHEMA … AUTHORIZATION` (`HAS_PERMS_BY_NAME(<owner>, 'USER', 'IMPERSONATE')`).
+- `CONTROL` on the database — once the schema belongs to `dbo`, the installer no longer owns the objects its migrations create, and the migrations' own `GRANT … ON <app view>` statements need `CONTROL` on those objects (`HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONTROL')`).
+
+Members of `db_owner` have both. When the installer lacks either one — or cannot see the core schema — the install still succeeds with a plain `CREATE SCHEMA` (owned by the installer, so its migrations can still grant), and a `Schema` warning is printed naming the consequence. To fix it, run the install as a member of `db_owner` and reinstall, or retrofit the schema as below.
+
+> Granting `IMPERSONATE ON USER::[dbo]` alone is **not** enough. Verified on SQL Server 2022: a `db_ddladmin` login with that grant creates the `dbo`-owned schema and its views, then fails the migration's `GRANT SELECT` with *Cannot find the object '…', because it does not exist or you do not have permission* — which is why the engine requires `CONTROL` on the database as well.
 
 **PostgreSQL is not affected.** PostgreSQL has no ownership chaining through schemas: a view checks its base tables' privileges as the *view's* owner, not the schema's, so install creates the schema exactly as before.
 
