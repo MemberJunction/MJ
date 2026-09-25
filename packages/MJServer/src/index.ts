@@ -736,6 +736,9 @@ const setupComplete$ = new ReplaySubject(1);
     const cacheConfig = {
       maxSizeBytes: (cs.maxMemoryMB ?? 150) * 1024 * 1024,
       maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
+      // Passed through so the per-entry ceiling is reachable from mj.config.cjs at all. It was
+      // not, which is what made it a hardcoded fraction in every deployment.
+      maxEntryPercentOfCache: cs.maxEntryPercentOfCache ?? 'auto',
       defaultTTLMs: (cs.defaultTTLSeconds ?? 0) * 1000,
       evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
       verboseLogging: cs.verboseLogging ?? false,
@@ -746,6 +749,9 @@ const setupComplete$ = new ReplaySubject(1);
       console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
         maxMemoryMB: cs.maxMemoryMB ?? 150,
         maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
+        maxEntryPercentOfCache: cs.maxEntryPercentOfCache ?? 'auto',
+        // The derived ceiling, so the boot log says what the largest cacheable entry actually is
+        maxEntrySizeMB: Math.floor(LocalCacheManager.Instance.MaxEntrySizeBytes / 1024 / 1024),
         evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
       }));
     }
