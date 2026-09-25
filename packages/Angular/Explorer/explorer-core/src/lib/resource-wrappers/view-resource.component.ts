@@ -8,7 +8,7 @@ import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
-import { filter, takeUntil } from 'rxjs/operators';
+import { debounceTime, filter, takeUntil } from 'rxjs/operators';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -260,23 +260,23 @@ export class UserViewResource extends BaseResourceComponent {
     public override ngOnInit(): void {
         super.ngOnInit();
 
+        // Refresh when rows of this view's entity change: a local save/delete, or a server-side
+        // write announced as remote-invalidate (a clone, or another server). Debounced, so a burst
+        // of writes (a clone creating many rows) reloads the view once.
         MJGlobal.Instance.GetEventListener()
             .pipe(
-                filter(
-                    (event) =>
-                        event.event === MJEventType.ComponentEvent &&
-                        event.eventCode === BaseEntity.BaseEventCode &&
-                        ((event.args as BaseEntityEvent)?.type === 'save' || (event.args as BaseEntityEvent)?.type === 'delete')
-                ),
+                filter((event) => {
+                    if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) return false;
+                    const entityEvent = event.args as BaseEntityEvent;
+                    const type = entityEvent?.type;
+                    if (type !== 'save' && type !== 'delete' && type !== 'remote-invalidate') return false;
+                    const affectedName = (entityEvent.baseEntity?.EntityInfo?.Name ?? entityEvent.entityName)?.trim().toLowerCase();
+                    return !!affectedName && affectedName === this.entityInfo?.Name?.trim().toLowerCase();
+                }),
+                debounceTime(300),
                 takeUntil(this.destroy$)
             )
-            .subscribe((event) => {
-                const entityEvent = event.args as BaseEntityEvent;
-                const affectedName = (entityEvent?.baseEntity?.EntityInfo?.Name ?? entityEvent?.entityName)?.trim().toLowerCase();
-                if (affectedName && affectedName === this.entityInfo?.Name?.trim().toLowerCase()) {
-                    this.entityViewerRef?.Refresh();
-                }
-            });
+            .subscribe(() => this.entityViewerRef?.Refresh());
     }
 
     override set Data(value: ResourceData) {

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MJGlobal } from '@memberjunction/global';
+import { BaseEntity, type BaseEntityEvent } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
 import { RecordClonePanelComponent } from './record-clone-panel.component';
 import { RecordCloneService } from './record-clone.service';
@@ -165,6 +167,31 @@ describe('RecordClonePanelComponent (DOM)', () => {
         });
 
         expect(query(fixture, 'mj-clone-result')).not.toBeNull();
+    });
+
+    it('announces every entity the clone wrote as remote-invalidate, not a malformed save', async () => {
+        vi.spyOn(mockService, 'ExecuteClone').mockResolvedValue({
+            ...MOCK_EXECUTE,
+            Created: [
+                { EntityName: 'Users', SourceKey: 'u-1', TargetKey: 'u-copy-1' },
+                { EntityName: 'MJ: User Roles', SourceKey: 'r-1', TargetKey: 'r-copy-1' },
+                { EntityName: 'MJ: User Roles', SourceKey: 'r-2', TargetKey: 'r-copy-2' },
+            ],
+        });
+        const raised = vi.spyOn(MJGlobal.Instance, 'RaiseEvent');
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        await fixture.componentInstance.Start();
+        await fixture.componentInstance.ExecuteClone();
+
+        const events = raised.mock.calls.map((c) => c[0]).filter((e) => e.eventCode === BaseEntity.BaseEventCode).map((e) => e.args as BaseEntityEvent);
+        expect(events.map((e) => [e.type, e.entityName])).toEqual([
+            ['remote-invalidate', 'Users'],
+            ['remote-invalidate', 'MJ: User Roles'],
+        ]);
+        expect(events.every((e) => e.baseEntity === null && (e.payload as { action: string }).action === 'save')).toBe(true);
     });
 
     it('emits CloseRequested when panel close is triggered', () => {

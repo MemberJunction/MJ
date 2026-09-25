@@ -20,7 +20,7 @@ import {
     inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { BaseEntity, CompositeKey } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey } from '@memberjunction/core';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type {
@@ -1106,22 +1106,21 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     /**
      * The clone's rows were saved on the server, so no client-side BaseEntity raised a save.
-     * Raise the standard event once for the root so open grids and lists of this entity refresh.
+     * Announce each written entity the way the provider announces a server-side write
+     * (`remote-invalidate`, no `baseEntity`), so cached engines and open views reload it.
      */
     private raiseRecordCreatedEvent(completed: CloneCompletedEvent): void {
-        MJGlobal.Instance.RaiseEvent({
-            component: this,
-            event: MJEventType.ComponentEvent,
-            eventCode: BaseEntity.BaseEventCode,
-            args: {
-                type: 'save',
-                saveSubType: 'create',
-                entityName: completed.EntityName,
-                payload: {
-                    RecordKey: completed.TargetKey,
-                    CloneLogID: completed.CloneLogID,
-                },
-            },
-        });
+        const written = new Set<string>([completed.EntityName, ...(completed.Result?.Created ?? []).map((c) => c.EntityName)]);
+        const timestamp = new Date().toISOString();
+        for (const entityName of written) {
+            const args: BaseEntityEvent = {
+                type: 'remote-invalidate',
+                entityName,
+                baseEntity: null,
+                provider: this.ProviderToUse,
+                payload: { primaryKeyValues: null, action: 'save', sourceServerId: '', timestamp },
+            };
+            MJGlobal.Instance.RaiseEvent({ component: this, event: MJEventType.ComponentEvent, eventCode: BaseEntity.BaseEventCode, args });
+        }
     }
 }
