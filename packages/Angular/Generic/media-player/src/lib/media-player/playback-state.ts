@@ -63,7 +63,7 @@ const HAVE_FUTURE_DATA = 3;
  * @param ctx     element-derived context (play intent, readyState, ended)
  * @returns the next playback state
  */
-export function nextPlaybackState(
+export function NextPlaybackState(
   event: MediaStateEvent,
   current: MediaPlaybackState,
   ctx: MediaStateContext,
@@ -140,4 +140,13 @@ export function nextPlaybackState(
     default:
       return current;
   }
+}
+
+/** @deprecated Use {@link NextPlaybackState}. */
+export function nextPlaybackState(
+  event: MediaStateEvent,
+  current: MediaPlaybackState,
+  ctx: MediaStateContext,
+): MediaPlaybackState {
+  return NextPlaybackState(event, current, ctx);
 }

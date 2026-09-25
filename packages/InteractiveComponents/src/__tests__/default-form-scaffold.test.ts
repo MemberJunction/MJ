@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildDefaultFormScaffold, sanitizeComponentName } from '../forms/default-form-scaffold';
+import { BuildDefaultFormScaffold, SanitizeComponentName } from '../forms/default-form-scaffold';
 import type { EntityInfo, EntityFieldInfo, IMetadataProvider } from '@memberjunction/core';
 
 /**
@@ -62,7 +62,7 @@ describe('buildDefaultFormScaffold', () => {
 
     it('returns null for an unknown entity', () => {
         const provider = mkProvider([]);
-        expect(buildDefaultFormScaffold('Missing', provider)).toBeNull();
+        expect(BuildDefaultFormScaffold('Missing', provider)).toBeNull();
     });
 
     it('emits a form-role spec with embedded location', () => {
@@ -70,7 +70,7 @@ describe('buildDefaultFormScaffold', () => {
             mkField({ Name: 'Name', Sequence: 1, Category: 'Identity' }),
         ]);
         const provider = mkProvider([entity]);
-        const spec = buildDefaultFormScaffold('Apps', provider);
+        const spec = BuildDefaultFormScaffold('Apps', provider);
         expect(spec).not.toBeNull();
         expect(spec!.componentRole).toBe('form');
         expect(spec!.location).toBe('embedded');
@@ -84,7 +84,7 @@ describe('buildDefaultFormScaffold', () => {
             mkField({ Name: 'Status', Sequence: 2, Category: 'Configuration' }),
             mkField({ Name: 'Description', Sequence: 3, Category: 'Identity' }),
         ]);
-        const spec = buildDefaultFormScaffold('Apps', mkProvider([entity]));
+        const spec = BuildDefaultFormScaffold('Apps', mkProvider([entity]));
         expect(spec!.code).toMatch(/title="Identity"/);
         expect(spec!.code).toMatch(/title="Configuration"/);
     });
@@ -93,7 +93,7 @@ describe('buildDefaultFormScaffold', () => {
         const entity = mkEntity('Apps', [
             mkField({ Name: 'Description', Sequence: 1, Category: 'Identity', MaxLength: 4000 }),
         ]);
-        const spec = buildDefaultFormScaffold('Apps', mkProvider([entity]));
+        const spec = BuildDefaultFormScaffold('Apps', mkProvider([entity]));
         // Long-string fields render with span={2} to fill the row
         expect(spec!.code).toMatch(/<Field name="Description"[^/]*span=\{2\}/);
     });
@@ -105,7 +105,7 @@ describe('buildDefaultFormScaffold', () => {
             mkField({ Name: '__mj_CreatedAt', Sequence: 99 }),
             mkField({ Name: 'Computed', Sequence: 100, IsVirtual: true, IsComputed: true }),
         ]);
-        const spec = buildDefaultFormScaffold('Apps', mkProvider([entity]));
+        const spec = BuildDefaultFormScaffold('Apps', mkProvider([entity]));
         expect(spec!.code).not.toMatch(/<Field name="ID"/);
         expect(spec!.code).not.toMatch(/<Field name="Computed"/);
     });
@@ -116,7 +116,7 @@ describe('buildDefaultFormScaffold', () => {
             mkField({ Name: '__mj_CreatedAt', Sequence: 99, TSType: 'Date' as never }),
             mkField({ Name: '__mj_UpdatedAt', Sequence: 100, TSType: 'Date' as never }),
         ]);
-        const spec = buildDefaultFormScaffold('Apps', mkProvider([entity]));
+        const spec = BuildDefaultFormScaffold('Apps', mkProvider([entity]));
         // System Metadata section should appear in the code AFTER any user section
         const identityIdx = spec!.code.indexOf('title="Identity"');
         const sysmetaIdx = spec!.code.indexOf('title="System Metadata"');
@@ -130,7 +130,7 @@ describe('buildDefaultFormScaffold', () => {
             mkField({ Name: 'Name', Sequence: 1, Category: 'Identity' }),
             mkField({ Name: 'Internal', Sequence: 2, Category: 'Identity', IncludeInGeneratedForm: false }),
         ]);
-        const spec = buildDefaultFormScaffold('Apps', mkProvider([entity]));
+        const spec = BuildDefaultFormScaffold('Apps', mkProvider([entity]));
         expect(spec!.code).toMatch(/<Field name="Name"/);
         expect(spec!.code).not.toMatch(/<Field name="Internal"/);
     });
@@ -140,7 +140,7 @@ describe('buildDefaultFormScaffold', () => {
             mkField({ Name: 'Title', Sequence: 1, GeneratedFormSectionType: 'Top' as never }),
             mkField({ Name: 'Name', Sequence: 2, Category: 'Identity' }),
         ]);
-        const spec = buildDefaultFormScaffold('Apps', mkProvider([entity]));
+        const spec = BuildDefaultFormScaffold('Apps', mkProvider([entity]));
         const titleIdx = spec!.code.indexOf('<Field name="Title"');
         const sectionIdx = spec!.code.indexOf('<Section');
         expect(titleIdx).toBeGreaterThanOrEqual(0);
@@ -152,7 +152,7 @@ describe('buildDefaultFormScaffold', () => {
         const entity = mkEntity('Apps', [
             mkField({ Name: 'Name', Sequence: 1, Category: '' as never, GeneratedFormSectionType: 'Details' as never }),
         ]);
-        const spec = buildDefaultFormScaffold('Apps', mkProvider([entity]));
+        const spec = BuildDefaultFormScaffold('Apps', mkProvider([entity]));
         expect(spec!.code).toMatch(/title="Details"/);
     });
 
@@ -160,20 +160,20 @@ describe('buildDefaultFormScaffold', () => {
         const entity = mkEntity('MJ: Applications', [
             mkField({ Name: 'Name', Sequence: 1, Category: 'Identity' }),
         ], { ClassName: 'MJApplications' as never });
-        const spec = buildDefaultFormScaffold('MJ: Applications', mkProvider([entity]));
+        const spec = BuildDefaultFormScaffold('MJ: Applications', mkProvider([entity]));
         expect(spec!.name).toBe('MJApplicationsForm');
     });
 });
 
 describe('sanitizeComponentName', () => {
     it('strips non-identifier characters', () => {
-        expect(sanitizeComponentName('MJ: Applications Form')).toBe('MJApplicationsForm');
+        expect(SanitizeComponentName('MJ: Applications Form')).toBe('MJApplicationsForm');
     });
     it('uppercases the first letter', () => {
-        expect(sanitizeComponentName('myForm')).toBe('MyForm');
+        expect(SanitizeComponentName('myForm')).toBe('MyForm');
     });
     it('falls back when the result is empty or starts with a digit', () => {
-        expect(sanitizeComponentName('')).toBe('Form_Component');
-        expect(sanitizeComponentName('123Form')).toBe('Form_123Form');
+        expect(SanitizeComponentName('')).toBe('Form_Component');
+        expect(SanitizeComponentName('123Form')).toBe('Form_123Form');
     });
 });

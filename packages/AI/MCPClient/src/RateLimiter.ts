@@ -78,7 +78,7 @@ export class RateLimiter {
      * @returns Promise that resolves when the request can proceed
      * @throws Error if request times out in queue
      */
-    async acquire(maxWaitMs: number = RateLimiter.DEFAULT_MAX_WAIT_MS): Promise<void> {
+    async Acquire(maxWaitMs: number = RateLimiter.DEFAULT_MAX_WAIT_MS): Promise<void> {
         // Clean up old timestamps
         this.cleanupOldTimestamps();
 
@@ -86,7 +86,7 @@ export class RateLimiter {
         LogStatus(`[RateLimiter] acquire() - config: perMinute=${perMinute}, perHour=${perHour}, minuteRequests=${this.state.minuteRequests.length}, hourRequests=${this.state.hourRequests.length}`);
 
         // Check if we can proceed immediately
-        if (this.canProceed()) {
+        if (this.CanProceed()) {
             LogStatus(`[RateLimiter] acquire() - proceeding immediately`);
             this.recordRequest();
             return;
@@ -97,12 +97,17 @@ export class RateLimiter {
         return this.enqueueRequest(maxWaitMs);
     }
 
+    /** @deprecated Use {@link Acquire}. */
+    async acquire(maxWaitMs: number = RateLimiter.DEFAULT_MAX_WAIT_MS): Promise<void> {
+        return this.Acquire(maxWaitMs);
+    }
+
     /**
      * Checks if a request can proceed without hitting rate limits
      *
      * @returns true if request can proceed
      */
-    canProceed(): boolean {
+    CanProceed(): boolean {
         this.cleanupOldTimestamps();
 
         const { perMinute, perHour } = this.config;
@@ -120,12 +125,17 @@ export class RateLimiter {
         return true;
     }
 
+    /** @deprecated Use {@link CanProceed}. */
+    canProceed(): boolean {
+        return this.CanProceed();
+    }
+
     /**
      * Gets the current rate limit status
      *
      * @returns Current usage and limits
      */
-    getStatus(): {
+    GetStatus(): {
         minuteUsage: number;
         minuteLimit: number | undefined;
         hourUsage: number;
@@ -143,15 +153,26 @@ export class RateLimiter {
         };
     }
 
+    /** @deprecated Use {@link GetStatus}. */
+    getStatus(): {
+        minuteUsage: number;
+        minuteLimit: number | undefined;
+        hourUsage: number;
+        hourLimit: number | undefined;
+        queueLength: number;
+    } {
+        return this.GetStatus();
+    }
+
     /**
      * Gets the estimated wait time in milliseconds
      *
      * @returns Estimated wait time, or 0 if no wait needed
      */
-    getEstimatedWaitMs(): number {
+    GetEstimatedWaitMs(): number {
         this.cleanupOldTimestamps();
 
-        if (this.canProceed()) {
+        if (this.CanProceed()) {
             return 0;
         }
 
@@ -187,10 +208,15 @@ export class RateLimiter {
         return Math.max(0, waitMs);
     }
 
+    /** @deprecated Use {@link GetEstimatedWaitMs}. */
+    getEstimatedWaitMs(): number {
+        return this.GetEstimatedWaitMs();
+    }
+
     /**
      * Clears all rate limit state and queue
      */
-    reset(): void {
+    Reset(): void {
         this.state.minuteRequests = [];
         this.state.hourRequests = [];
 
@@ -205,11 +231,21 @@ export class RateLimiter {
         this.stopQueueProcessor();
     }
 
+    /** @deprecated Use {@link Reset}. */
+    reset(): void {
+        return this.Reset();
+    }
+
     /**
      * Destroys the rate limiter and cleans up resources
      */
+    Destroy(): void {
+        this.Reset();
+    }
+
+    /** @deprecated Use {@link Destroy}. */
     destroy(): void {
-        this.reset();
+        return this.Destroy();
     }
 
     /**
@@ -217,13 +253,18 @@ export class RateLimiter {
      *
      * @param config - New configuration
      */
-    updateConfig(config: Partial<RateLimitConfig>): void {
+    UpdateConfig(config: Partial<RateLimitConfig>): void {
         if (config.perMinute !== undefined) {
             this.config.perMinute = config.perMinute;
         }
         if (config.perHour !== undefined) {
             this.config.perHour = config.perHour;
         }
+    }
+
+    /** @deprecated Use {@link UpdateConfig}. */
+    updateConfig(config: Partial<RateLimitConfig>): void {
+        return this.UpdateConfig(config);
     }
 
     /**
@@ -332,7 +373,7 @@ export class RateLimiter {
             }
 
             // Check if we can process the request
-            if (this.canProceed()) {
+            if (this.CanProceed()) {
                 this.queue.shift();
                 request.resolve();
             }
@@ -362,7 +403,7 @@ export class RateLimiterRegistry {
      * @param config - Rate limit configuration (used when creating new limiter)
      * @returns Rate limiter for the connection
      */
-    getOrCreate(connectionId: string, config: RateLimitConfig): RateLimiter {
+    GetOrCreate(connectionId: string, config: RateLimitConfig): RateLimiter {
         let limiter = this.limiters.get(connectionId);
 
         if (!limiter) {
@@ -373,14 +414,24 @@ export class RateLimiterRegistry {
         return limiter;
     }
 
+    /** @deprecated Use {@link GetOrCreate}. */
+    getOrCreate(connectionId: string, config: RateLimitConfig): RateLimiter {
+        return this.GetOrCreate(connectionId, config);
+    }
+
     /**
      * Gets an existing rate limiter for a connection
      *
      * @param connectionId - Connection identifier
      * @returns Rate limiter or undefined if not found
      */
-    get(connectionId: string): RateLimiter | undefined {
+    Get(connectionId: string): RateLimiter | undefined {
         return this.limiters.get(connectionId);
+    }
+
+    /** @deprecated Use {@link Get}. */
+    get(connectionId: string): RateLimiter | undefined {
+        return this.Get(connectionId);
     }
 
     /**
@@ -389,11 +440,16 @@ export class RateLimiterRegistry {
      * @param connectionId - Connection identifier
      * @param config - New configuration
      */
-    updateConfig(connectionId: string, config: Partial<RateLimitConfig>): void {
+    UpdateConfig(connectionId: string, config: Partial<RateLimitConfig>): void {
         const limiter = this.limiters.get(connectionId);
         if (limiter) {
             limiter.updateConfig(config);
         }
+    }
+
+    /** @deprecated Use {@link UpdateConfig}. */
+    updateConfig(connectionId: string, config: Partial<RateLimitConfig>): void {
+        return this.UpdateConfig(connectionId, config);
     }
 
     /**
@@ -401,7 +457,7 @@ export class RateLimiterRegistry {
      *
      * @param connectionId - Connection identifier
      */
-    remove(connectionId: string): void {
+    Remove(connectionId: string): void {
         const limiter = this.limiters.get(connectionId);
         if (limiter) {
             limiter.destroy();
@@ -409,20 +465,35 @@ export class RateLimiterRegistry {
         }
     }
 
+    /** @deprecated Use {@link Remove}. */
+    remove(connectionId: string): void {
+        return this.Remove(connectionId);
+    }
+
     /**
      * Clears all rate limiters
      */
-    clear(): void {
+    Clear(): void {
         for (const limiter of this.limiters.values()) {
             limiter.destroy();
         }
         this.limiters.clear();
     }
 
+    /** @deprecated Use {@link Clear}. */
+    clear(): void {
+        return this.Clear();
+    }
+
     /**
      * Gets the number of active rate limiters
      */
-    get size(): number {
+    get Size(): number {
         return this.limiters.size;
+    }
+
+    /** @deprecated Use {@link Size}. */
+    get size(): number {
+        return this.Size;
     }
 }

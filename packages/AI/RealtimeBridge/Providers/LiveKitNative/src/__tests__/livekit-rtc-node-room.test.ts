@@ -9,10 +9,10 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     CreateLiveKitRtcNodeModule,
     LiveKitRtcNodeRoomClient,
-    defaultRtcNodeLoader,
-    pcmToInt16,
-    int16ToArrayBuffer,
-    participantsToArray,
+    DefaultRtcNodeLoader,
+    PcmToInt16,
+    Int16ToArrayBuffer,
+    ParticipantsToArray,
     DEFAULT_SAMPLE_RATE,
     RtcNodeModule,
     RtcAudioFrame,
@@ -159,14 +159,14 @@ const frame = (samples: number[]): RtcAudioFrame => ({
 describe('LiveKit native wrapper — pure helpers', () => {
     it('pcmToInt16 views whole samples and truncates a trailing odd byte', () => {
         const buf = new Int16Array([1, -2, 3]).buffer;
-        expect(Array.from(pcmToInt16(buf))).toEqual([1, -2, 3]);
+        expect(Array.from(PcmToInt16(buf))).toEqual([1, -2, 3]);
         // 5 bytes → 2 whole samples
-        expect(pcmToInt16(new ArrayBuffer(5)).length).toBe(2);
+        expect(PcmToInt16(new ArrayBuffer(5)).length).toBe(2);
     });
 
     it('int16ToArrayBuffer copies (does not alias) and round-trips', () => {
         const src = Int16Array.from([7, -7, 700]);
-        const out = int16ToArrayBuffer(src);
+        const out = Int16ToArrayBuffer(src);
         expect(Array.from(new Int16Array(out))).toEqual([7, -7, 700]);
         src[0] = 0; // mutate source after copy
         expect(new Int16Array(out)[0]).toBe(7); // copy unaffected
@@ -174,8 +174,8 @@ describe('LiveKit native wrapper — pure helpers', () => {
 
     it('participantsToArray handles Map and array forms', () => {
         const p = { identity: 'a' };
-        expect(participantsToArray([p])).toEqual([p]);
-        expect(participantsToArray(new Map([['a', p]]))).toEqual([p]);
+        expect(ParticipantsToArray([p])).toEqual([p]);
+        expect(ParticipantsToArray(new Map([['a', p]]))).toEqual([p]);
     });
 });
 
@@ -335,7 +335,7 @@ describe('CreateLiveKitRtcNodeModule + loader', () => {
         // Deterministic across environments: the native addon is an optionalDependency — present here,
         // possibly absent in CI (a native-build failure is non-fatal). Accept either branch.
         try {
-            const mod = await defaultRtcNodeLoader();
+            const mod = await DefaultRtcNodeLoader();
             expect(typeof mod.Room).toBe('function');
         } catch (err) {
             expect((err as Error).message).toMatch(/could not load '@livekit\/rtc-node'/);

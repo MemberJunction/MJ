@@ -34,5 +34,14 @@ export class EntityDetailDemoComponent {
    * on the element in JavaScript:
    * document.querySelector('mj-entity-detail-demo').entity = myEntityData;
    */
-  @Input() entity: EntityInfo;
+  @Input() Entity: EntityInfo;
+
+  /** @deprecated Use {@link Entity}. */
+  @Input() set entity(value: EntityInfo) {
+    this.Entity = value;
+  }
+  /** @deprecated Use {@link Entity}. */
+  get entity(): EntityInfo {
+    return this.Entity;
+  }
 }

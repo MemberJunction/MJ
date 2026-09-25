@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RingCentralSoftphoneCallSdk, bufferToArrayBuffer, type SoftphoneCallSource } from '../ringcentral-softphone-call-sdk';
+import { RingCentralSoftphoneCallSdk, BufferToArrayBuffer, type SoftphoneCallSource } from '../ringcentral-softphone-call-sdk';
 import type { RtpConstructors, RtpHeaderInit, RtpPacketInstance, SoftphoneCallSession } from '../softphone-types';
 
 const CODEC = { id: 109, packetSize: 640, timestampInterval: 320, name: 'OPUS/16000' as const };
@@ -203,7 +203,7 @@ describe('RingCentralSoftphoneCallSdk', () => {
 
     it('bufferToArrayBuffer copies into a standalone ArrayBuffer (no aliasing of a pooled view)', () => {
         const buf = Buffer.from([9, 8, 7]);
-        const ab = bufferToArrayBuffer(buf);
+        const ab = BufferToArrayBuffer(buf);
         expect(new Uint8Array(ab)).toEqual(new Uint8Array([9, 8, 7]));
         expect(ab.byteLength).toBe(3);
     });

@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { RuntimeUtilities, createRuntimeUtilities } from '../utilities/runtime-utilities';
+import { RuntimeUtilities, CreateRuntimeUtilities } from '../utilities/runtime-utilities';
 
 /** A host's substitute implementation, registered above the base. */
 @RegisterClass(RuntimeUtilities, 'RuntimeUtilities', 10)
@@ -29,13 +29,13 @@ describe('createRuntimeUtilities', () => {
     });
 
     it('resolves a registered subclass in a browser environment', () => {
-        const utilities = createRuntimeUtilities();
+        const utilities = CreateRuntimeUtilities();
         expect(utilities).toBeInstanceOf(HostRuntimeUtilities);
     });
 
     it('returns something that is still a RuntimeUtilities', () => {
         // The contract callers rely on: whatever comes back exposes `buildUtilities`.
-        const utilities = createRuntimeUtilities();
+        const utilities = CreateRuntimeUtilities();
         expect(utilities).toBeInstanceOf(RuntimeUtilities);
         expect(typeof utilities.buildUtilities).toBe('function');
     });
@@ -51,7 +51,7 @@ describe('createRuntimeUtilities', () => {
             throw new Error('simulated resolution failure');
         };
         try {
-            expect(createRuntimeUtilities()).toBeInstanceOf(RuntimeUtilities);
+            expect(CreateRuntimeUtilities()).toBeInstanceOf(RuntimeUtilities);
         } finally {
             factory.CreateInstance = original;
         }

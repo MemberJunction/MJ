@@ -26,43 +26,43 @@ export type PGQueryable = Pick<Client | PoolClient, 'query'>;
 /** A dependent view or materialized view found via pg_depend / pg_rewrite. */
 export interface DependentView {
     /** Schema name (preserves case). */
-    schema: string;
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** View name (preserves case). */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Distance in the dependency graph. 1 = direct dependent, 2 = transitive, ... */
-    depth: number;
+    depth: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** PG relkind: 'v' = regular view, 'm' = materialized view. */
-    relkind: 'v' | 'm';
+    relkind: 'v' | 'm';  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** SELECT clause of the view definition as returned by `pg_get_viewdef`. */
-    definition: string;
+    definition: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** A dependent function (e.g. one that RETURNS SETOF the target view). */
 export interface DependentFunction {
-    schema: string;
-    name: string;
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Result of `pg_get_function_identity_arguments` — stable signature string. */
-    argTypes: string;
+    argTypes: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Full `CREATE OR REPLACE FUNCTION ...` text from `pg_get_functiondef`. */
-    definition: string;
+    definition: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** A single GRANT on the target view. */
 export interface ViewGrant {
     /** Role receiving the privilege. */
-    grantee: string;
+    grantee: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** SELECT / INSERT / UPDATE / DELETE / etc. */
-    privilege: string;
+    privilege: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Whether WITH GRANT OPTION is set. */
-    withGrantOption: boolean;
+    withGrantOption: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Ownership + comment metadata on the target view. */
 export interface ViewMetadata {
     /** Role name returned by `pg_get_userbyid`. */
-    owner: string;
+    owner: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Free-form description set via `COMMENT ON VIEW ...` — null if unset. */
-    comment: string | null;
+    comment: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ export interface ViewMetadata {
  * Resolves `(schema, name)` to a `pg_class.oid`. Returns null if the target
  * doesn't exist — callers can treat that as "nothing to capture".
  */
-export async function resolveViewOid(
+export async function ResolveViewOid(
     db: PGQueryable,
     schema: string,
     name: string
@@ -90,6 +90,15 @@ export async function resolveViewOid(
     return res.rows[0].oid as number;
 }
 
+/** @deprecated Use {@link ResolveViewOid}. */
+export async function resolveViewOid(
+    db: PGQueryable,
+    schema: string,
+    name: string
+): Promise<number | null> {
+    return ResolveViewOid(db, schema, name);
+}
+
 // ─── Dependent views ─────────────────────────────────────────────────────
 
 /**
@@ -101,7 +110,7 @@ export async function resolveViewOid(
  * Ordered shallowest-first so a caller restoring dependents can replay the
  * array in order without needing a separate topological sort.
  */
-export async function captureDependentViews(
+export async function CaptureDependentViews(
     db: PGQueryable,
     targetOid: number
 ): Promise<DependentView[]> {
@@ -144,6 +153,14 @@ export async function captureDependentViews(
     }));
 }
 
+/** @deprecated Use {@link CaptureDependentViews}. */
+export async function captureDependentViews(
+    db: PGQueryable,
+    targetOid: number
+): Promise<DependentView[]> {
+    return CaptureDependentViews(db, targetOid);
+}
+
 // ─── Dependent functions ─────────────────────────────────────────────────
 
 /**
@@ -156,7 +173,7 @@ export async function captureDependentViews(
  * (pg_class.reltype), rather than to the view itself — function -> type is the
  * actual dependency PG records.
  */
-export async function captureDependentFunctions(
+export async function CaptureDependentFunctions(
     db: PGQueryable,
     targetOid: number
 ): Promise<DependentFunction[]> {
@@ -183,6 +200,14 @@ export async function captureDependentFunctions(
     }));
 }
 
+/** @deprecated Use {@link CaptureDependentFunctions}. */
+export async function captureDependentFunctions(
+    db: PGQueryable,
+    targetOid: number
+): Promise<DependentFunction[]> {
+    return CaptureDependentFunctions(db, targetOid);
+}
+
 // ─── Permissions ─────────────────────────────────────────────────────────
 
 /**
@@ -190,7 +215,7 @@ export async function captureDependentFunctions(
  * privileges implicitly and those show up in `relacl` too — we filter them out
  * since `ALTER VIEW ... OWNER TO` already conveys them after the recreate.
  */
-export async function captureGrants(
+export async function CaptureGrants(
     db: PGQueryable,
     schema: string,
     name: string
@@ -228,6 +253,15 @@ export async function captureGrants(
         }));
 }
 
+/** @deprecated Use {@link CaptureGrants}. */
+export async function captureGrants(
+    db: PGQueryable,
+    schema: string,
+    name: string
+): Promise<ViewGrant[]> {
+    return CaptureGrants(db, schema, name);
+}
+
 // ─── Comment + owner ─────────────────────────────────────────────────────
 
 /**
@@ -235,7 +269,7 @@ export async function captureGrants(
  * need replay after a DROP + CREATE, since CREATE VIEW sets the owner to
  * the connected role and doesn't inherit comments.
  */
-export async function captureMetadata(
+export async function CaptureMetadata(
     db: PGQueryable,
     targetOid: number
 ): Promise<ViewMetadata> {
@@ -258,4 +292,12 @@ export async function captureMetadata(
         owner: res.rows[0].owner as string,
         comment: (res.rows[0].comment as string | null) ?? null,
     };
+}
+
+/** @deprecated Use {@link CaptureMetadata}. */
+export async function captureMetadata(
+    db: PGQueryable,
+    targetOid: number
+): Promise<ViewMetadata> {
+    return CaptureMetadata(db, targetOid);
 }

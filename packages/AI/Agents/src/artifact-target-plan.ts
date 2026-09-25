@@ -77,7 +77,7 @@ export function IsKnownArtifactBehavior(behavior: unknown): behavior is Artifact
  * @param sourceArtifactId - The artifact the run was launched against, if any.
  * @returns The plan to execute: suppress, create-new, version a specific artifact, or legacy chain.
  */
-export function planArtifactTarget(
+export function PlanArtifactTarget(
     directive: ArtifactDirective | undefined,
     sourceArtifactId: string | undefined
 ): ArtifactTargetPlan {
@@ -107,4 +107,12 @@ export function planArtifactTarget(
             // behavior to the type without handling it here degrades instead of returning undefined.
             return withoutDirective();
     }
+}
+
+/** @deprecated Use {@link PlanArtifactTarget}. */
+export function planArtifactTarget(
+    directive: ArtifactDirective | undefined,
+    sourceArtifactId: string | undefined
+): ArtifactTargetPlan {
+    return PlanArtifactTarget(directive, sourceArtifactId);
 }

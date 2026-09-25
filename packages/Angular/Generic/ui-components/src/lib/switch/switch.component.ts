@@ -1,15 +1,48 @@
-import { Component, Input, forwardRef, HostBinding, ChangeDetectorRef, inject } from '@angular/core';
+import {
+  AfterViewInit,
+  ChangeDetectorRef,
+  Component,
+  ElementRef,
+  HostBinding,
+  Input,
+  ViewChild,
+  forwardRef,
+  inject
+} from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
+import { MJNamedControlBase } from '../a11y/named-control.base';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-switch — Toggle switch. Replaces `<kendo-switch>`.
+ *
+ * Every switch needs an ACCESSIBLE NAME. Without one it announces as "switch, on" — or, worse, as
+ * its own STATE, because `OnLabel`/`OffLabel` render inside the button and a `role=switch` takes
+ * its name from its contents when nothing else names it: a toggle labelled "On" that announces
+ * "On, switch, on" says nothing about what it toggles (WCAG 2.1 4.1.2). Use
+ * {@link MJNamedControlBase.AriaLabelledBy} when a visible label exists,
+ * {@link MJNamedControlBase.AriaLabel} when none does; either one overrides that state text.
+ *
+ * The switch is a `<button>`, which IS a labelable element, so
+ * {@link MJNamedControlBase.InputId} doubles as a `<label for>` target: the label names the switch
+ * — overriding the On/Off text, since an associated label outranks an element's own contents — and
+ * clicking it focuses and toggles the switch, which `AriaLabelledBy` alone does not give you.
+ *
+ * @example
+ * ```html
+ * <mj-switch AriaLabel="Email notifications" [(ngModel)]="isEnabled" OnLabel="On" OffLabel="Off" />
+ * ```
  */
 @Component({
   selector: 'mj-switch',
   standalone: true,
   template: `
-    <button type="button" role="switch" class="mj-switch"
+    <button #switchButton type="button" role="switch" class="mj-switch"
       [class.mj-switch--on]="Value" [class.mj-switch--disabled]="IsDisabled"
+      [attr.id]="InputId || null"
+      [attr.aria-label]="AriaLabel || null"
+      [attr.aria-labelledby]="AriaLabelledBy || null"
+      [attr.aria-describedby]="AriaDescribedBy || null"
       [attr.aria-checked]="Value" [disabled]="IsDisabled"
       (click)="Toggle()" (blur)="OnTouched()">
       <span class="mj-switch-track"><span class="mj-switch-thumb"></span></span>
@@ -20,7 +53,7 @@ import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
   `,
   providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MJSwitchComponent), multi: true }]
 })
-export class MJSwitchComponent implements ControlValueAccessor {
+export class MJSwitchComponent extends MJNamedControlBase implements ControlValueAccessor, AfterViewInit {
   @Input() OnLabel = '';
   @Input() OffLabel = '';
   /**
@@ -33,6 +66,7 @@ export class MJSwitchComponent implements ControlValueAccessor {
   set Disabled(value: boolean) { this.disabledInput = value; this.syncDisabled(); }
   get Disabled(): boolean { return this.disabledInput; }
   @HostBinding('class.mj-switch-host') readonly hostClass = true;
+  @ViewChild('switchButton') private switchButtonEl: ElementRef<HTMLButtonElement> | undefined;
 
   Value = false;
   /** The gate on `Toggle()` — true when EITHER source says so. Assign only via `syncDisabled()`. */
@@ -58,6 +92,8 @@ export class MJSwitchComponent implements ControlValueAccessor {
     this.IsDisabled = disabled;
     this.cdr.markForCheck();
   }
+
+  ngAfterViewInit(): void { WarnIfUnnamed(this.switchButtonEl?.nativeElement, 'mj-switch'); }
 
   Toggle(): void { if (!this.IsDisabled) { this.Value = !this.Value; this.onChange(this.Value); } }
   OnTouched(): void { this.onTouched(); }

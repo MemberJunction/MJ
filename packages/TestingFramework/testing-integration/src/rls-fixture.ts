@@ -30,18 +30,28 @@ export const SEEDED_RLS_ENTITY = 'MJ: AI Agent Runs';
 export const SEED_FIXTURES_COMMAND = 'npx mj sync push --dir=metadata-optional/integration-test';
 
 /** Case-insensitive user-by-email lookup for the seeded fixtures. */
-export function findUserByEmail(users: UserInfo[], email: string): UserInfo | undefined {
+export function FindUserByEmail(users: UserInfo[], email: string): UserInfo | undefined {
     return users.find(u => u.Email?.toLowerCase() === email.toLowerCase());
 }
 
+/** @deprecated Use {@link FindUserByEmail}. */
+export function findUserByEmail(users: UserInfo[], email: string): UserInfo | undefined {
+    return FindUserByEmail(users, email);
+}
+
 /** Discover a `{{UserID}}`-scoped RLS filter from the provider (for the token-based checks). */
-export function discoverTokenFilter(provider: IMetadataProvider): RowLevelSecurityFilterInfo | undefined {
+export function DiscoverTokenFilter(provider: IMetadataProvider): RowLevelSecurityFilterInfo | undefined {
     const filters = provider.RowLevelSecurityFilters ?? [];
     return filters.find(f => f.FilterText?.includes('{{UserID}}'));
 }
 
+/** @deprecated Use {@link DiscoverTokenFilter}. */
+export function discoverTokenFilter(provider: IMetadataProvider): RowLevelSecurityFilterInfo | undefined {
+    return DiscoverTokenFilter(provider);
+}
+
 /** Discover the first non-exempt (user, entity) pair — a user with a non-empty Read clause. */
-export function discoverLivePair(provider: IMetadataProvider, users: UserInfo[]): { User: UserInfo; EntityName: string } | undefined {
+export function DiscoverLivePair(provider: IMetadataProvider, users: UserInfo[]): { User: UserInfo; EntityName: string } | undefined {
     for (const u of users) {
         for (const e of provider.Entities) {
             const clause = e.GetUserRowLevelSecurityWhereClause(u, EntityPermissionType.Read, '');
@@ -53,6 +63,11 @@ export function discoverLivePair(provider: IMetadataProvider, users: UserInfo[])
     return undefined;
 }
 
+/** @deprecated Use {@link DiscoverLivePair}. */
+export function discoverLivePair(provider: IMetadataProvider, users: UserInfo[]): { User: UserInfo; EntityName: string } | undefined {
+    return DiscoverLivePair(provider, users);
+}
+
 /**
  * Discover the RLS fixture: a two-user divergent-clause pair PLUS the two independent
  * single-user pieces (TokenFilter, LivePair). Pure (no singletons) so it is unit-testable
@@ -62,13 +77,13 @@ export function discoverLivePair(provider: IMetadataProvider, users: UserInfo[])
  * attached to every returned fixture regardless of two-user usability, so the single-user
  * checks (RLS1/RLS5) run even when the DB lacks two divergent users.
  */
-export function discoverRlsFixture(provider: IMetadataProvider, users: UserInfo[]): RlsFixture {
+export function DiscoverRlsFixture(provider: IMetadataProvider, users: UserInfo[]): RlsFixture {
     const distinct = users.filter((u, i) => users.findIndex(o => UUIDsEqual(o.ID, u.ID)) === i);
-    const tokenFilter = discoverTokenFilter(provider);
-    const livePair = discoverLivePair(provider, distinct);
-    const seededScopedA = findUserByEmail(users, SEEDED_SCOPED_A_EMAIL);
-    const seededScopedB = findUserByEmail(users, SEEDED_SCOPED_B_EMAIL);
-    const seededNoGrant = findUserByEmail(users, SEEDED_NOGRANT_EMAIL);
+    const tokenFilter = DiscoverTokenFilter(provider);
+    const livePair = DiscoverLivePair(provider, distinct);
+    const seededScopedA = FindUserByEmail(users, SEEDED_SCOPED_A_EMAIL);
+    const seededScopedB = FindUserByEmail(users, SEEDED_SCOPED_B_EMAIL);
+    const seededNoGrant = FindUserByEmail(users, SEEDED_NOGRANT_EMAIL);
     const attach = (fx: Omit<RlsFixture, 'TokenFilter' | 'LivePair' | 'SeededScopedA' | 'SeededScopedB' | 'SeededNoGrant'>): RlsFixture =>
         ({ ...fx, TokenFilter: tokenFilter, LivePair: livePair, SeededScopedA: seededScopedA, SeededScopedB: seededScopedB, SeededNoGrant: seededNoGrant });
 
@@ -102,4 +117,9 @@ export function discoverRlsFixture(provider: IMetadataProvider, users: UserInfo[
         }
     }
     return attach({ UserA: distinct[0], UserB: distinct[1], EntityName: '', Usable: false, ClauseA: '', ClauseB: '', Reason: 'only RLS-exempt users (no entity yields two distinct non-empty clauses)' });
+}
+
+/** @deprecated Use {@link DiscoverRlsFixture}. */
+export function discoverRlsFixture(provider: IMetadataProvider, users: UserInfo[]): RlsFixture {
+    return DiscoverRlsFixture(provider, users);
 }

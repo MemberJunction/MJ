@@ -3,26 +3,26 @@ import { RegisterClass, UUIDsEqual, ordinalCompare } from '@memberjunction/globa
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
-import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
-import { logError, logStatus, logWarning } from './status_logging';
+import { MakeDir, SortBySequenceAndCreatedAt } from '../Misc/util';
+import { logError, logStatus, LogWarning } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
-import { configInfo, dbPlatform, mj_core_schema, resolveEntityImportPackage, type ConfigInfo } from '../Config/config';
+import { configInfo, DbPlatform, MjCoreSchema, ResolveEntityImportPackage, type ConfigInfo } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import { CodeGenConnection, resolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
+import { CodeGenConnection, ResolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
 import { CodeGenReporter } from './codegen-reporter';
 import { v4 as uuidv4 } from 'uuid';
-import { writeFileIfChanged } from './file-write';
+import { WriteFileIfChanged } from './file-write';
 import { EmitStats } from './emit-stats';
 import {
   SchemaEmitOptions,
-  buildSchemaBarrel,
-  groupEntitiesBySchema,
-  mapLimit,
-  emitSchemaFile,
-  pruneOrphanedSchemaFiles,
-  resolveSchemaEmitOptions,
-  sanitizeSchemaFileName,
-  schemasToEmit,
+  BuildSchemaBarrel,
+  GroupEntitiesBySchema,
+  MapLimit,
+  EmitSchemaFile,
+  PruneOrphanedSchemaFiles,
+  ResolveSchemaEmitOptions,
+  SanitizeSchemaFileName,
+  SchemasToEmit,
 } from './schema-emit';
 
 /**
@@ -202,7 +202,7 @@ export class EntitySubClassGeneratorBase {
    * @param options - per-schema emit / dirty-schema / parallelism. Defaults come from `configInfo.fileEmit`.
    * @returns
    */
-  public async generateAllEntitySubClasses(
+  public async GenerateAllEntitySubClasses(
     pool: CodeGenConnection,
     entities: EntityInfo[],
     directory: string,
@@ -211,21 +211,21 @@ export class EntitySubClassGeneratorBase {
   ): Promise<boolean> {
     try {
       const emit = this.resolveEmitOptions(options);
-      makeDir(directory);
+      MakeDir(directory);
 
       if (!emit.perSchema) {
-        const allContent = await this.assembleEntitySubclassFile(pool, entities, skipDBUpdate, true);
+        const allContent = await this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, true);
         this.emitFile(path.join(directory, 'entity_subclasses.ts'), allContent, emit.writeIfChanged);
         return true;
       }
 
-      const grouped = groupEntitiesBySchema(entities);
+      const grouped = GroupEntitiesBySchema(entities);
       const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(directory, 'entities');
-      makeDir(schemasDir);
+      MakeDir(schemasDir);
 
-      const toEmit = schemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
-        fs.existsSync(path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`)),
+      const toEmit = SchemasToEmit(schemas, emit.dirtySchemas, (schemaName) =>
+        fs.existsSync(path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`)),
       );
       const emitSet = new Set(toEmit);
       for (const schemaName of schemas) {
@@ -234,21 +234,21 @@ export class EntitySubClassGeneratorBase {
 
       const concurrency = emit.parallel ? emit.concurrency : 1;
       const assembleStarted = Date.now();
-      await mapLimit(toEmit, concurrency, async (schemaName) => {
+      await MapLimit(toEmit, concurrency, async (schemaName) => {
         const schemaEntities = grouped.get(schemaName) ?? [];
-        const content = await this.assembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
-        const filePath = path.join(schemasDir, `${sanitizeSchemaFileName(schemaName)}.ts`);
+        const content = await this.AssembleEntitySubclassFile(pool, schemaEntities, skipDBUpdate, false);
+        const filePath = path.join(schemasDir, `${SanitizeSchemaFileName(schemaName)}.ts`);
         this.emitFile(filePath, content, emit.writeIfChanged);
       });
       EmitStats.AddAssembleMs(Date.now() - assembleStarted);
 
       // Before the barrel, so the directory and the barrel always agree.
-      const pruned = pruneOrphanedSchemaFiles(schemasDir, schemas);
+      const pruned = PruneOrphanedSchemaFiles(schemasDir, schemas);
       if (pruned.length > 0) {
         logStatus(`   Removed ${pruned.length} orphaned entity schema file(s): ${pruned.join(', ')}`);
       }
 
-      const barrel = buildSchemaBarrel(
+      const barrel = BuildSchemaBarrel(
         schemas,
         'entities',
         `export const loadModule = () => {
@@ -267,6 +267,17 @@ export class EntitySubClassGeneratorBase {
     }
   }
 
+  /** @deprecated Use {@link GenerateAllEntitySubClasses}. */
+  public async generateAllEntitySubClasses(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    directory: string,
+    skipDBUpdate: boolean,
+    options?: SchemaEmitOptions,
+  ): Promise<boolean> {
+    return this.GenerateAllEntitySubClasses(pool, entities, directory, skipDBUpdate, options);
+  }
+
   /**
    * Build the TypeScript source for one emit file (one schema, or the legacy monolith).
    * Hoists and de-duplicates two kinds of import into the file header: the generated
@@ -278,7 +289,7 @@ export class EntitySubClassGeneratorBase {
    * emits nothing for them; hoisting their imports would leave an unused import that
    * fails a downstream consumer's `noUnusedLocals`.
    */
-  public async assembleEntitySubclassFile(
+  public async AssembleEntitySubclassFile(
     pool: CodeGenConnection,
     entities: EntityInfo[],
     skipDBUpdate: boolean,
@@ -287,7 +298,7 @@ export class EntitySubClassGeneratorBase {
     const zodContent: string = entities.map((entity: EntityInfo) => this.GenerateSchemaAndType(entity)).join('');
     let sContent = '';
     for (const e of entities) {
-      sContent += await this.generateEntitySubClass(pool, e, false, skipDBUpdate);
+      sContent += await this.GenerateEntitySubClass(pool, e, false, skipDBUpdate);
     }
     // Only entities that actually emit a class: generateEntitySubClass skips PK-less entities
     // (returns ''), so hoisting their imports would leave a dangling/unused import that fails a
@@ -309,20 +320,30 @@ export class EntitySubClassGeneratorBase {
     );
     const peerImportStatements = EntitySubClassGeneratorBase.FormatPeerImportStatements(peerImports).join('');
     const subclassImports = `${baseClassImports}${peerImportStatements}`;
-    return `${this.generateEntitySubClassFileHeader(includeLoadModule)} \n ${subclassImports}${zodContent} \n ${sContent}`;
+    return `${this.GenerateEntitySubClassFileHeader(includeLoadModule)} \n ${subclassImports}${zodContent} \n ${sContent}`;
+  }
+
+  /** @deprecated Use {@link AssembleEntitySubclassFile}. */
+  public async assembleEntitySubclassFile(
+    pool: CodeGenConnection,
+    entities: EntityInfo[],
+    skipDBUpdate: boolean,
+    includeLoadModule: boolean,
+  ): Promise<string> {
+    return this.AssembleEntitySubclassFile(pool, entities, skipDBUpdate, includeLoadModule);
   }
 
   /** Delegates so both generators share one set of defaults; override to change them. */
   protected resolveEmitOptions(options?: SchemaEmitOptions): Required<SchemaEmitOptions> {
-    return resolveSchemaEmitOptions(options, configInfo?.fileEmit);
+    return ResolveSchemaEmitOptions(options, configInfo?.fileEmit);
   }
 
   /** Delegates so both generators write identically; override to change that. */
   protected emitFile(filePath: string, content: string, useWriteIfChanged: boolean): void {
-    emitSchemaFile(filePath, content, useWriteIfChanged);
+    EmitSchemaFile(filePath, content, useWriteIfChanged);
   }
 
-  public generateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
+  public GenerateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
     const loadModule = includeLoadModule
       ? `
 export const loadModule = () => {
@@ -335,6 +356,11 @@ import { RegisterClass } from "@memberjunction/global";
 import { z } from "zod";
 ${loadModule}
     `;
+  }
+
+  /** @deprecated Use {@link GenerateEntitySubClassFileHeader}. */
+  public generateEntitySubClassFileHeader(includeLoadModule: boolean = true): string {
+    return this.GenerateEntitySubClassFileHeader(includeLoadModule);
   }
 
   /**
@@ -356,7 +382,7 @@ ${loadModule}
     return { baseClass: 'BaseEntity', importStatement: '' };
   }
 
-  public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+  public async GenerateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
       return '';
@@ -364,13 +390,13 @@ ${loadModule}
 
     const sClassName: string = `${entity.ClassName}Entity`;
     // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
-    const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+    const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
     const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
           // Sort by Sequence to ensure consistent ordering in comments
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
           ).join('');
@@ -395,7 +421,7 @@ ${loadModule}
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           typeString = sortedValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
@@ -650,9 +676,14 @@ export class ${sClassName} extends ${sBaseClass}<${sClassName}Type> {${relatedRe
 ${fields}
 }
 `;
-      if (includeFileHeader) sRet = this.generateEntitySubClassFileHeader() + sRet;
+      if (includeFileHeader) sRet = this.GenerateEntitySubClassFileHeader() + sRet;
 
       return sRet;
+  }
+
+  /** @deprecated Use {@link GenerateEntitySubClass}. */
+  public async generateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
+    return this.GenerateEntitySubClass(pool, entity, includeFileHeader, skipDBUpdate);
   }
 
   /**
@@ -1012,7 +1043,7 @@ ${fields}
     }
 
     if (entity.PrimaryKeys.length !== 1) {
-      logWarning(
+      LogWarning(
         `[Hierarchy] Entity '${entity.Name}' has ${recursiveFKs.length} hierarchy foreign key(s) ` +
         `(${recursiveFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
         `MemberJunction hierarchy traversal requires a single-column primary key; skipping subclass hierarchy methods.`
@@ -1100,7 +1131,7 @@ ${fields}
           `CodeGen cannot pick an npm package to import it from.`,
         );
       }
-      const packageName = resolveEntityImportPackage(schema, owningSchema, config);
+      const packageName = ResolveEntityImportPackage(schema, owningSchema, config);
       const existing = byClass.get(className);
       if (existing && existing !== packageName) {
         throw new Error(
@@ -1316,8 +1347,8 @@ ${fields}
         const qi = (n: string) => dialect.QuoteIdentifier(n);
         const lit = (v: string) => dialect.QuoteStringLiteral(v);
         const utcNow = dialect.CurrentTimestampUTC();
-        const generatedCodeTbl = dialect.QuoteSchema(mj_core_schema(), 'GeneratedCode');
-        const generatedCodeCatsView = dialect.QuoteSchema(mj_core_schema(), 'vwGeneratedCodeCategories');
+        const generatedCodeTbl = dialect.QuoteSchema(MjCoreSchema(), 'GeneratedCode');
+        const generatedCodeCatsView = dialect.QuoteSchema(MjCoreSchema(), 'vwGeneratedCodeCategories');
         const validatorCodeCategoryID = `(SELECT ${qi('ID')} FROM ${generatedCodeCatsView} WHERE ${qi('Name')}=${lit('CodeGen: Validators')})`;
 
         let sSQL: string  = '';
@@ -1325,7 +1356,7 @@ ${fields}
         if (justGenerated.length > 0) {
           CodeGenReporter.Instance.counter('ai.validatorCalls', justGenerated.length);
         }
-        const provider = resolveCodeGenDatabaseProvider(dbPlatform());
+        const provider = ResolveCodeGenDatabaseProvider(DbPlatform());
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
           const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());
@@ -1451,14 +1482,14 @@ ${validationFunctions}`
       logStatus(`SKIPPING SCHEMA GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
-      const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+      const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
       
       const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
           // Sort by Sequence to ensure consistent ordering in comments
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
           ).join('');
@@ -1474,7 +1505,7 @@ ${validationFunctions}`
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
-          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          const sortedValues = SortBySequenceAndCreatedAt([...e.EntityFieldValues]);
           // z.union() requires at least 2 members. When there's only one allowed
           // value (single-value CHECK constraint), emit z.literal() directly.
           const literals = sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`);
@@ -1524,7 +1555,7 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     let valueList: string = '';
     if (entityField.ValueListType && entityField.ValueListType.length > 0 && entityField.ValueListType.trim().toLowerCase() !== 'none') {
       // Sort by Sequence to ensure consistent ordering in comments
-      const sortedValues = sortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
+      const sortedValues = SortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
       let values = sortedValues.map(
         (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + EntitySubClassGeneratorBase.SanitizeDescription(v.Description) : ''}`
       ).join('');

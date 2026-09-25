@@ -81,7 +81,7 @@ export class AngularComponentMigrationExample {
   /**
    * NEW METHOD - using react-runtime's hierarchy registration
    */
-  async registerComponentHierarchy(component: any, styles?: ComponentStyles) {
+  async RegisterComponentHierarchy(component: any, styles?: ComponentStyles) {
     // Create the hierarchy registrar
     const registrar = new ComponentHierarchyRegistrar(
       this.compiler,
@@ -108,14 +108,19 @@ export class AngularComponentMigrationExample {
     
     return result;
   }
+
+  /** @deprecated Use {@link RegisterComponentHierarchy}. */
+  async registerComponentHierarchy(component: any, styles?: ComponentStyles) {
+    return this.RegisterComponentHierarchy(component, styles);
+  }
   
   /**
    * Example of how the Angular component would use this
    */
-  async initializeComponent(rootSpec: any, styles?: any) {
+  async InitializeComponent(rootSpec: any, styles?: any) {
     try {
       // Use the new hierarchy registration
-      const result = await this.registerComponentHierarchy(rootSpec, styles);
+      const result = await this.RegisterComponentHierarchy(rootSpec, styles);
       
       console.log('Successfully registered components:', result.registeredComponents);
       
@@ -126,6 +131,11 @@ export class AngularComponentMigrationExample {
       console.error('Failed to initialize React component:', error);
       // Handle error...
     }
+  }
+
+  /** @deprecated Use {@link InitializeComponent}. */
+  async initializeComponent(rootSpec: any, styles?: any) {
+    return this.InitializeComponent(rootSpec, styles);
   }
 }
 

@@ -163,15 +163,51 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * The neutral greeting shown when there is no auth status to report. Kept as a constant so
    * {@link ProviderPickerLede} can tell "nothing happened yet" apart from a real status message.
    */
-  private static readonly DefaultSubHeaderText = 'Welcome back! Please log in to your account.';
-  public subHeaderText: string = MJExplorerAppComponent.DefaultSubHeaderText;
-  public showValidationOnly = false;
+  private static readonly defaultSubHeaderText = 'Welcome back! Please log in to your account.';
+  public SubHeaderText: string = MJExplorerAppComponent.defaultSubHeaderText;
+
+  /** @deprecated Use {@link SubHeaderText}. */
+  public get subHeaderText(): string {
+    return this.SubHeaderText;
+  }
+  /** @deprecated Use {@link SubHeaderText}. */
+  public set subHeaderText(value: string) {
+    this.SubHeaderText = value;
+  }
+  public ShowValidationOnly = false;
+
+  /** @deprecated Use {@link ShowValidationOnly}. */
+  public get showValidationOnly() {
+    return this.ShowValidationOnly;
+  }
+  /** @deprecated Use {@link ShowValidationOnly}. */
+  public set showValidationOnly(value) {
+    this.ShowValidationOnly = value;
+  }
   /** True when the current URL is the OAuth callback route - used for conditional rendering */
-  public isOAuthCallback = false;
+  public IsOAuthCallback = false;
+
+  /** @deprecated Use {@link IsOAuthCallback}. */
+  public get isOAuthCallback() {
+    return this.IsOAuthCallback;
+  }
+  /** @deprecated Use {@link IsOAuthCallback}. */
+  public set isOAuthCallback(value) {
+    this.IsOAuthCallback = value;
+  }
   /** Tracks whether the login page is in dark mode */
   public IsDarkMode = false;
   /** True when the current route is the full Conversations/Chat workspace — hides the chat overlay */
-  public isChatRoute = false;
+  public IsChatRoute = false;
+
+  /** @deprecated Use {@link IsChatRoute}. */
+  public get isChatRoute() {
+    return this.IsChatRoute;
+  }
+  /** @deprecated Use {@link IsChatRoute}. */
+  public set isChatRoute(value) {
+    this.IsChatRoute = value;
+  }
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
 
@@ -214,7 +250,16 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /** Component rendered by PreShellGuard (blocks the shell until dismissed) */
   private _preShellOverlayRef: ComponentRef<unknown> | null = null;
   /** Whether a pre-shell guard overlay is blocking the shell */
-  preShellBlocked = false;
+  PreShellBlocked = false;
+
+  /** @deprecated Use {@link PreShellBlocked}. */
+  get preShellBlocked() {
+    return this.PreShellBlocked;
+  }
+  /** @deprecated Use {@link PreShellBlocked}. */
+  set preShellBlocked(value) {
+    this.PreShellBlocked = value;
+  }
 
   /** Application context snapshot for AI agent awareness — updated on every app/tab transition */
   public AppContextSnapshot: AppContextSnapshot | null = null;
@@ -241,9 +286,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   constructor(
     private router: Router,
-    @Inject(DOCUMENT) public document: Document,
+    @Inject(DOCUMENT) public Document: Document,
     @Inject(MJ_ENVIRONMENT) private environment: MJEnvironmentConfig,
-    public authBase: MJAuthBase,
+    public AuthBase: MJAuthBase,
     private workspaceInit: WorkspaceInitializerService,
     private validationService: SystemValidationService,
     private connectivityService: ServerConnectivityService,
@@ -267,6 +312,20 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   ) {
     super();
     this.registerClientTools();
+  }
+
+  /** @deprecated Use {@link Document} instead. */
+  get document(): Document {
+    return this.Document;
+  }
+
+  /** @deprecated Use {@link AuthBase}. */
+  public get authBase(): MJAuthBase {
+    return this.AuthBase;
+  }
+  /** @deprecated Use {@link AuthBase}. */
+  public set authBase(value: MJAuthBase) {
+    this.AuthBase = value;
   }
 
   // ── Multi-provider login ──────────────────────────────────────────────────
@@ -300,8 +359,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * choice to make, so it is suppressed when there is exactly one provider and nothing to choose.
    */
   public get ProviderPickerLede(): string | null {
-    if (this.subHeaderText !== MJExplorerAppComponent.DefaultSubHeaderText) {
-      return this.subHeaderText;
+    if (this.SubHeaderText !== MJExplorerAppComponent.defaultSubHeaderText) {
+      return this.SubHeaderText;
     }
     return this.ShowProviderPicker ? "Continue with one of your organization's sign-in options." : null;
   }
@@ -323,11 +382,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
     const { requiresReload } = AuthProviderCatalog.Select(provider, this.authResolution?.active?.name ?? null);
     if (requiresReload) {
-      this.document.defaultView?.location.reload();
+      this.Document.defaultView?.location.reload();
       return;
     }
 
-    this.authBase.login().subscribe({
+    this.AuthBase.login().subscribe({
       error: (error: unknown) => {
         this.SigningIn = false;
         LogError(`[Auth] Sign-in with provider '${provider.name}' failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -343,7 +402,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   private startAutoLoginIfPending(): void {
     if (this.authResolution?.autoLogin) {
       this.SigningIn = true;
-      this.authBase.login().subscribe({
+      this.AuthBase.login().subscribe({
         error: (error: unknown) => {
           this.SigningIn = false;
           LogError(`[Auth] Automatic sign-in after provider switch failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -356,7 +415,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   /**
    * Handle successful login and initialize the application
    */
-  async handleLogin(token: string, userInfo: StandardUserInfo) {
+  async HandleLogin(token: string, userInfo: StandardUserInfo) {
     if (!token) return;
 
     try {
@@ -380,7 +439,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           const convoId = statusObj['conversationId'] as string;
           if (!convoId) return false;
           const isViewingConvo = this.bridge.ActiveConversationID$.value === convoId
-            && (this.bridge.OverlayActive$.value || this.isChatRoute);
+            && (this.bridge.OverlayActive$.value || this.IsChatRoute);
           return isViewingConvo;
         };
 
@@ -395,7 +454,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         if (this.preShellGuard) {
           const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
           if (blockComponent) {
-            this.preShellBlocked = true;
+            this.PreShellBlocked = true;
             this.cdr.detectChanges();
             this.renderPreShellOverlay(blockComponent);
             return;
@@ -407,7 +466,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           // use first nav item url instead
           setTimeout(() => {
             // Find the KendoDrawer element, and simulate a click for the first item
-            const drawerElement = this.document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
+            const drawerElement = this.Document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
             if (drawerElement) drawerElement.click();
           }, 10); // wait for the drawer to finish rerender and then do this
         } else {
@@ -420,13 +479,13 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           if (this.preShellGuard) {
             const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
             if (blockComponent) {
-              this.preShellBlocked = true;
+              this.PreShellBlocked = true;
               this.renderPreShellOverlay(blockComponent);
               return;
             }
           }
           // Show validation banner instead of generic error
-          this.showValidationOnly = true;
+          this.ShowValidationOnly = true;
           this.HasError = true;
           return; // Don't throw, just return to show validation banner
         }
@@ -450,33 +509,38 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     }
   }
 
-  async setupAuth() {
+  /** @deprecated Use {@link HandleLogin}. */
+  async handleLogin(token: string, userInfo: StandardUserInfo) {
+    return this.HandleLogin(token, userInfo);
+  }
+
+  async SetupAuth() {
     // Auth provider already initialized by APP_INITIALIZER
 
     // v3.0 API - Clean abstraction using observables
-    this.authBase.getUserInfo()
+    this.AuthBase.getUserInfo()
       .pipe(take(1))
       .subscribe({
         next: async (userInfo) => {
           if (userInfo) {
             // v3.0 API - No more provider-specific logic!
-            const token = await this.authBase.getIdToken();
+            const token = await this.AuthBase.getIdToken();
 
             if (token) {
-              await this.handleLogin(token, userInfo);
+              await this.HandleLogin(token, userInfo);
             } else {
               // Token expired or missing — attempt a full refresh which will
               // redirect to the identity provider if interaction is required.
               console.warn('User info available but no token found, attempting refresh...');
               try {
-                const refreshedToken = await this.authBase.refreshToken();
-                await this.handleLogin(refreshedToken.idToken, userInfo);
+                const refreshedToken = await this.AuthBase.refreshToken();
+                await this.HandleLogin(refreshedToken.idToken, userInfo);
               } catch (e) {
                 console.error('Token refresh failed, redirecting to login:', e);
                 // refreshToken() normally redirects (and never returns) when
                 // interaction is required.  If we reach here, force login as
                 // a last-resort safety net.
-                this.authBase.login().subscribe();
+                this.AuthBase.login().subscribe();
               }
             }
           }
@@ -485,18 +549,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           LogError('Error Logging In: ' + err);
 
           // v3.0 API - Use semantic error classification
-          const authError = this.authBase.classifyError(err);
+          const authError = this.AuthBase.classifyError(err);
 
           switch (authError.type) {
             case AuthErrorType.NO_ACTIVE_SESSION:
-              this.subHeaderText = MJExplorerAppComponent.DefaultSubHeaderText;
+              this.SubHeaderText = MJExplorerAppComponent.defaultSubHeaderText;
               break;
             case AuthErrorType.INTERACTION_REQUIRED:
             case AuthErrorType.TOKEN_EXPIRED:
-              this.subHeaderText = "Your session has expired. Please log in to your account.";
+              this.SubHeaderText = "Your session has expired. Please log in to your account.";
               break;
             default:
-              this.subHeaderText = authError.userMessage || MJExplorerAppComponent.DefaultSubHeaderText;
+              this.SubHeaderText = authError.userMessage || MJExplorerAppComponent.defaultSubHeaderText;
           }
 
           // Auth state is managed by the provider itself via observables
@@ -504,7 +568,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       });
 
     // Check auth state - the provider manages this internally now
-    this.authBase.isAuthenticated()
+    this.AuthBase.isAuthenticated()
       .pipe(take(1))
       .subscribe((loggedIn: boolean) => {
         if (!loggedIn) {
@@ -517,12 +581,17 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.initialPath = window.location.pathname + (window.location.search ? window.location.search : '');
   }
 
+  /** @deprecated Use {@link SetupAuth}. */
+  async setupAuth() {
+    return this.SetupAuth();
+  }
+
   ngOnInit() {
     SetProductionStatus(this.environment.production);
 
     // Check if this is the OAuth callback route - used for conditional rendering in template
     // Note: We still run setupAuth() to restore the user's session
-    this.isOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+    this.IsOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
 
     // Resume sign-in when a picker choice required a provider switch (and therefore a reload),
     // so switching providers stays a single user action.
@@ -541,17 +610,17 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         // Symmetric conversation handoff across the chat-route boundary, so a live call / chat
         // never dies on navigation — it just moves to whichever surface is visible. Fired for ANY
         // navigation (nav click, deep link, back/forward), not only the agent's NavigateToApp tool.
-        if (this.isChatRoute && !nowChatRoute && activeConvoId) {
+        if (this.IsChatRoute && !nowChatRoute && activeConvoId) {
           // Leaving the full chat workspace → hand the conversation to the floating overlay so it
           // pops up there and persists.
           this.bridge.SwitchToOverlay(activeConvoId);
-        } else if (!this.isChatRoute && nowChatRoute && activeConvoId) {
+        } else if (!this.IsChatRoute && nowChatRoute && activeConvoId) {
           // Entering the full chat workspace while the overlay holds a live conversation → hand it
           // to the workspace (BEFORE the overlay collapses) so the session continues there instead
           // of being stranded in a collapsed bubble.
           this.bridge.SwitchToWorkspace(activeConvoId);
         }
-        this.isChatRoute = nowChatRoute;
+        this.IsChatRoute = nowChatRoute;
       });
 
     // Track active app changes for AI agent context awareness
@@ -573,7 +642,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.applyLoginTheme();
 
     // Re-apply login theme when the user logs out (ThemeService.Reset() clears data-theme)
-    this.authBase.isAuthenticated()
+    this.AuthBase.isAuthenticated()
       .pipe(takeUntil(this.destroy$))
       .subscribe((authenticated: boolean) => {
         if (!authenticated) {
@@ -591,7 +660,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
     // Always run auth setup - this restores the user's session
     // For OAuth callback, once authenticated, the OAuthCallbackComponent handles the code exchange
-    this.setupAuth();
+    this.SetupAuth();
   }
 
   ngOnDestroy() {
@@ -943,7 +1012,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         const navItemName = this.readToolParam(params, 'NavItemName', 'navItem', 'tab', 'section');
 
         // If currently in full chat workspace, hand conversation to overlay for continuity
-        if (this.isChatRoute) {
+        if (this.IsChatRoute) {
           const activeConvoId = this.bridge.ActiveConversationID$.value;
           if (activeConvoId) {
             this.bridge.SwitchToOverlay(activeConvoId);
@@ -1194,9 +1263,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   private applyThemeToDOM(): void {
     if (this.IsDarkMode) {
-      this.document.documentElement.setAttribute('data-theme', 'dark');
+      this.Document.documentElement.setAttribute('data-theme', 'dark');
     } else {
-      this.document.documentElement.removeAttribute('data-theme');
+      this.Document.documentElement.removeAttribute('data-theme');
     }
   }
 

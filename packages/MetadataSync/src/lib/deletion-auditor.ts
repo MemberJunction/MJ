@@ -65,7 +65,7 @@ export class DeletionAuditor {
      * @param deleteDbOnly If true, includes database-only references in the deletion levels
      * @returns Complete deletion audit
      */
-    async auditDeletions(allRecords: FlattenedRecord[], deleteDbOnly: boolean = false): Promise<DeletionAudit> {
+    async AuditDeletions(allRecords: FlattenedRecord[], deleteDbOnly: boolean = false): Promise<DeletionAudit> {
         // Step 1: Identify records explicitly marked for deletion
         const explicitDeletes = this.findExplicitDeletes(allRecords);
 
@@ -157,6 +157,11 @@ export class DeletionAuditor {
             circularDependencies,
             orphanedReferences
         };
+    }
+
+    /** @deprecated Use {@link AuditDeletions}. */
+    async auditDeletions(allRecords: FlattenedRecord[], deleteDbOnly: boolean = false): Promise<DeletionAudit> {
+        return this.AuditDeletions(allRecords, deleteDbOnly);
     }
 
     /**
@@ -509,16 +514,26 @@ export class DeletionAuditor {
     /**
      * Check if deletion audit has blocking issues
      */
-    isValid(audit: DeletionAudit): boolean {
+    IsValid(audit: DeletionAudit): boolean {
         return audit.orphanedReferences.length === 0 &&
                audit.circularDependencies.length === 0;
+    }
+
+    /** @deprecated Use {@link IsValid}. */
+    isValid(audit: DeletionAudit): boolean {
+        return this.IsValid(audit);
     }
 
     /**
      * Check if deletion audit requires user confirmation
      * (due to implicit deletes)
      */
-    requiresConfirmation(audit: DeletionAudit): boolean {
+    RequiresConfirmation(audit: DeletionAudit): boolean {
         return audit.implicitDeletes.size > 0;
+    }
+
+    /** @deprecated Use {@link RequiresConfirmation}. */
+    requiresConfirmation(audit: DeletionAudit): boolean {
+        return this.RequiresConfirmation(audit);
     }
 }

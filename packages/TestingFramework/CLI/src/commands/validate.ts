@@ -10,7 +10,7 @@ import { ValidateFlags } from '../types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { OutputFormatter } from '../utils/output-formatter';
 import { SpinnerManager } from '../utils/spinner-manager';
-import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
+import { InitializeMJProvider, CloseMJProvider, GetContextUser } from '../lib/mj-provider';
 import chalk from 'chalk';
 import * as fs from 'fs';
 
@@ -38,14 +38,14 @@ export class ValidateCommand {
      * @param flags - Command flags
      * @param contextUser - Optional user context (will be fetched if not provided)
      */
-    async execute(testId: string | undefined, flags: ValidateFlags, contextUser?: UserInfo): Promise<void> {
+    async Execute(testId: string | undefined, flags: ValidateFlags, contextUser?: UserInfo): Promise<void> {
         try {
             // Initialize MJ provider (database connection and metadata)
-            await initializeMJProvider();
+            await InitializeMJProvider();
 
             // Get context user after initialization if not provided
             if (!contextUser) {
-                contextUser = await getContextUser();
+                contextUser = await GetContextUser();
             }
 
             const engine = TestEngine.Instance;
@@ -94,7 +94,7 @@ export class ValidateCommand {
             }
 
             // Clean up resources
-            await closeMJProvider();
+            await CloseMJProvider();
 
             // Exit with appropriate code
             const hasErrors = results.some(r => !r.valid);
@@ -106,13 +106,18 @@ export class ValidateCommand {
 
             // Clean up resources before exit
             try {
-                await closeMJProvider();
+                await CloseMJProvider();
             } catch {
                 // Ignore cleanup errors
             }
 
             process.exit(1);
         }
+    }
+
+    /** @deprecated Use {@link Execute}. */
+    async execute(testId: string | undefined, flags: ValidateFlags, contextUser?: UserInfo): Promise<void> {
+        return this.Execute(testId, flags, contextUser);
     }
 
     /**

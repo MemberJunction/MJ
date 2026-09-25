@@ -15,8 +15,8 @@ import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import type { IApolloRESTClient } from '../generic/apollo-lists.types.js';
 import { ApolloRESTClient } from './ApolloRESTClient.js';
-import { NO_APOLLO_KEY_MESSAGE, resolveApolloAPIKey, type ResolvedApolloKey } from './credentials.js';
-import { getParam } from './params.js';
+import { NO_APOLLO_KEY_MESSAGE, ResolveApolloAPIKey, type ResolvedApolloKey } from './credentials.js';
+import { GetParam } from './params.js';
 
 /** A resolved client plus how its key was found. */
 export interface ResolvedApolloClient {
@@ -44,10 +44,10 @@ export abstract class ApolloRESTBaseAction extends BaseAction {
     protected async ResolveClient(
         params: RunActionParams,
     ): Promise<{ resolved: ResolvedApolloClient; error: null } | { resolved: null; error: ActionResultSimple }> {
-        const companyID = getParam(params, 'CompanyID');
+        const companyID = GetParam(params, 'CompanyID');
         let key: ResolvedApolloKey | null;
         try {
-            key = await resolveApolloAPIKey(companyID, params.ContextUser);
+            key = await ResolveApolloAPIKey(companyID, params.ContextUser);
         } catch (error) {
             // A credential that exists but is malformed — say so, rather than
             // falling back to a different workspace's key from the environment.

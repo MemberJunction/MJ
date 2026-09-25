@@ -45,7 +45,16 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
     @Input() SelectedResources: ResourceData[] = [];
     @Output() SelectionChanged = new EventEmitter<ResourceData[]>();
 
-    public gridExtraColumns: EntityFieldInfo[] = [];
+    public GridExtraColumns: EntityFieldInfo[] = [];
+
+    /** @deprecated Use {@link GridExtraColumns}. */
+    public get gridExtraColumns(): EntityFieldInfo[] {
+      return this.GridExtraColumns;
+    }
+    /** @deprecated Use {@link GridExtraColumns}. */
+    public set gridExtraColumns(value: EntityFieldInfo[]) {
+      this.GridExtraColumns = value;
+    }
 
     // AG Grid configuration
     public ColumnDefs: ColDef[] = [];
@@ -64,16 +73,30 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
     public GridTheme: Theme = themeAlpine.withParams(MJ_AG_GRID_THEME_PARAMS);
     private gridApi: GridApi | null = null;
 
-    public getRowId = (params: GetRowIdParams<ResourceData>): string => {
+    public GetRowId = (params: GetRowIdParams<ResourceData>): string => {
         return params.data.ResourceRecordID;
     };
 
-    public onGridReady(event: GridReadyEvent): void {
+    /** @deprecated Use {@link GetRowId}. */
+    public get getRowId() {
+      return this.GetRowId;
+    }
+    /** @deprecated Use {@link GetRowId}. */
+    public set getRowId(value) {
+      this.GetRowId = value;
+    }
+
+    public OnGridReady(event: GridReadyEvent): void {
         this.gridApi = event.api;
         this.applyPreselection();
     }
 
-    public onSelectionChange(event: SelectionChangedEvent): void {
+    /** @deprecated Use {@link OnGridReady}. */
+    public onGridReady(event: GridReadyEvent): void {
+      return this.OnGridReady(event);
+    }
+
+    public OnSelectionChange(event: SelectionChangedEvent): void {
         const selectedRows = event.api.getSelectedRows() as ResourceData[];
         this.SelectedResources.splice(0, this.SelectedResources.length); // empty the array
         selectedRows.forEach((item) => {
@@ -84,8 +107,31 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
         this.SelectionChanged.emit(this.SelectedResources);
     }
 
-    public resourcePermissions: MJResourcePermissionEntity[] = [];
-    public resources: ResourceData[] = [];
+    /** @deprecated Use {@link OnSelectionChange}. */
+    public onSelectionChange(event: SelectionChangedEvent): void {
+      return this.OnSelectionChange(event);
+    }
+
+    public ResourcePermissions: MJResourcePermissionEntity[] = [];
+
+    /** @deprecated Use {@link ResourcePermissions}. */
+    public get resourcePermissions(): MJResourcePermissionEntity[] {
+      return this.ResourcePermissions;
+    }
+    /** @deprecated Use {@link ResourcePermissions}. */
+    public set resourcePermissions(value: MJResourcePermissionEntity[]) {
+      this.ResourcePermissions = value;
+    }
+    public Resources: ResourceData[] = [];
+
+    /** @deprecated Use {@link Resources}. */
+    public get resources(): ResourceData[] {
+      return this.Resources;
+    }
+    /** @deprecated Use {@link Resources}. */
+    public set resources(value: ResourceData[]) {
+      this.Resources = value;
+    }
     async ngAfterViewInit() {
         await this.Refresh();
     }
@@ -99,9 +145,9 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
         }
 
         // now we can get the permissions for the specified resource
-        this.resourcePermissions = ResourcePermissionEngine.Instance.GetUserAvailableResources(this.User, this.ResourceTypeID);
-        if (this.resourcePermissions.length === 0) {
-            this.resources = [];
+        this.ResourcePermissions = ResourcePermissionEngine.Instance.GetUserAvailableResources(this.User, this.ResourceTypeID);
+        if (this.ResourcePermissions.length === 0) {
+            this.Resources = [];
         }
         else {
             const rt = ResourcePermissionEngine.Instance.ResourceTypes.find(rt => UUIDsEqual(rt.ID, this.ResourceTypeID));
@@ -117,11 +163,11 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
             if (this.ExtraColumns && this.ExtraColumns.length > 0) {
                 /// split the comma delim string and for each item find it in the EntityFields collection
                 const extraColumns = this.ExtraColumns.split(',');
-                this.gridExtraColumns = [];
+                this.GridExtraColumns = [];
                 extraColumns.forEach((ec) => {
                     const field = entity.Fields.find((f) => f.Name.trim().toLowerCase() === ec.trim().toLowerCase());
                     if (field)
-                        this.gridExtraColumns.push(field);
+                        this.GridExtraColumns.push(field);
                 });
             }
 
@@ -131,14 +177,14 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
             const extraFilter = this.ResourceExtraFilter ? ` AND (${this.ResourceExtraFilter})` : '';
             const result = await rv.RunView({
                 EntityName: entity.Name,
-                ExtraFilter: `(ID in (${this.resourcePermissions.map((r) => `'${r.ResourceRecordID}'`).join(',')})${extraFilter})`,
+                ExtraFilter: `(ID in (${this.ResourcePermissions.map((r) => `'${r.ResourceRecordID}'`).join(',')})${extraFilter})`,
                 OrderBy: nameField.Name
             })
             if (!result || !result.Success)
                 throw new Error(`Error running view for entity ${entity.Name}`);
 
             // only return rows where we have a record in result.Results
-            this.resources = result.Results.map((r) => {
+            this.Resources = result.Results.map((r) => {
                 return new ResourceData({
                     ResourceRecordID: r.ID,
                     Name: r[nameField.Name],
@@ -165,7 +211,7 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
             { field: 'Name', headerName: 'Name', width: 225 }
         ];
 
-        for (const col of this.gridExtraColumns) {
+        for (const col of this.GridExtraColumns) {
             cols.push({
                 headerName: col.DisplayNameOrName,
                 valueGetter: (params) => {

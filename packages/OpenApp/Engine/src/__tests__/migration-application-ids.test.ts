@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { extractApplicationIds } from '../install/migration-application-ids.js';
+import { ExtractApplicationIds } from '../install/migration-application-ids.js';
 
 let dir: string;
 
@@ -31,7 +31,7 @@ GO`;
 
   it('extracts the Application GUID from a variable-based spCreateApplication (the real pattern)', async () => {
     await fs.writeFile(path.join(dir, 'V202607012105__Metadata_Sync.sql'), accountingStyle);
-    expect(await extractApplicationIds(dir)).toEqual(['08b5d905-6fb3-438b-94e5-2c5ff021b794']);
+    expect(await ExtractApplicationIds(dir)).toEqual(['08b5d905-6fb3-438b-94e5-2c5ff021b794']);
   });
 
   it('extracts a literal @ID and dedupes across files, ignores non-migration files', async () => {
@@ -44,7 +44,7 @@ GO`;
       "EXEC [__mj].spUpdateApplication @ID = 'AAAAAAAA-1111-2222-3333-444444444444', @Name = N'X';\nGO",
     );
     await fs.writeFile(path.join(dir, 'notes.md'), 'spCreateApplication AAAAAAAA-... (not sql)');
-    expect(await extractApplicationIds(dir)).toEqual(['aaaaaaaa-1111-2222-3333-444444444444']);
+    expect(await ExtractApplicationIds(dir)).toEqual(['aaaaaaaa-1111-2222-3333-444444444444']);
   });
 
   it('catches a direct INSERT INTO [..].[Application]', async () => {
@@ -52,18 +52,18 @@ GO`;
       path.join(dir, 'B1__base.sql'),
       "INSERT INTO [__mj].[Application] (ID, Name) VALUES ('BBBBBBBB-1111-2222-3333-444444444444', 'Y');",
     );
-    expect(await extractApplicationIds(dir)).toEqual(['bbbbbbbb-1111-2222-3333-444444444444']);
+    expect(await ExtractApplicationIds(dir)).toEqual(['bbbbbbbb-1111-2222-3333-444444444444']);
   });
 
   it('returns [] for a dir with no Application-creating migrations, or a missing dir', async () => {
     await fs.writeFile(path.join(dir, 'V1__x.sql'), 'CREATE TABLE Foo (Id INT);\nGO');
-    expect(await extractApplicationIds(dir)).toEqual([]);
-    expect(await extractApplicationIds(path.join(dir, 'nope'))).toEqual([]);
+    expect(await ExtractApplicationIds(dir)).toEqual([]);
+    expect(await ExtractApplicationIds(path.join(dir, 'nope'))).toEqual([]);
   });
 
   it('does NOT mistake the DECLARE line for the ID assignment', async () => {
     await fs.writeFile(path.join(dir, 'V9__d.sql'), accountingStyle);
-    const ids = await extractApplicationIds(dir);
+    const ids = await ExtractApplicationIds(dir);
     expect(ids).toHaveLength(1);
     expect(ids[0]).toBe('08b5d905-6fb3-438b-94e5-2c5ff021b794');
   });

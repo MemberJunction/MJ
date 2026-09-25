@@ -4,8 +4,8 @@ import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 import {
-    addOutput, failure, getStringParam, insertComponent, insertOverride,
-    lintFormSpec, parseSpecParam,
+    AddOutput, Failure, GetStringParam, InsertComponent, InsertOverride,
+    LintFormSpec, ParseSpecParam,
 } from "./_shared";
 
 /**
@@ -40,13 +40,13 @@ export class CreateInteractiveFormAction extends BaseAction {
             if ('error' in inputs) return inputs.error;
 
             const provider = params.Provider ?? Metadata.Provider;
-            if (!provider) return failure("NO_PROVIDER", "No metadata provider available.");
+            if (!provider) return Failure("NO_PROVIDER", "No metadata provider available.");
             const user = params.ContextUser;
-            if (!user) return failure("NO_USER", "Action requires a ContextUser to clamp override scope.");
+            if (!user) return Failure("NO_USER", "Action requires a ContextUser to clamp override scope.");
 
             const entityInfo = provider.EntityByName(inputs.EntityName);
             if (!entityInfo) {
-                return failure("ENTITY_NOT_FOUND",
+                return Failure("ENTITY_NOT_FOUND",
                     `Entity '${inputs.EntityName}' is not registered with the active metadata provider.`);
             }
 
@@ -65,12 +65,12 @@ export class CreateInteractiveFormAction extends BaseAction {
             }, user);
             if (dupResult.Success && (dupResult.Results ?? []).length > 0) {
                 const existing = dupResult.Results![0];
-                return failure("ALREADY_EXISTS",
+                return Failure("ALREADY_EXISTS",
                     `A ${existing.Status} User-scope override already exists for entity '${inputs.EntityName}' (OverrideID=${existing.ID}). Use 'Modify Interactive Form' on this OverrideID to refine it (with a VersionBumpKind of 'patch' / 'minor' / 'major' to snapshot a new version, or 'in-place' against a Pending row to keep iterating on the same version). Use 'Revert Interactive Form' to switch to a different historical version.`);
             }
 
             // Lint before any persistence — fail-hard.
-            const lintFail = await lintFormSpec(inputs.Spec, user);
+            const lintFail = await LintFormSpec(inputs.Spec, user);
             if (lintFail) return lintFail;
 
             // Create v1.0.0 as Pending (NOT Active). The cockpit / agent
@@ -84,7 +84,7 @@ export class CreateInteractiveFormAction extends BaseAction {
             // wasted version, no premature publication. The user
             // explicitly Activates from the Form Builder dashboard when
             // they're happy with the result.
-            const componentInsert = await insertComponent({
+            const componentInsert = await InsertComponent({
                 provider, user,
                 spec: inputs.Spec,
                 fallbackName: inputs.Name,
@@ -96,7 +96,7 @@ export class CreateInteractiveFormAction extends BaseAction {
             if ('error' in componentInsert) return componentInsert.error;
             const componentID = componentInsert.id;
 
-            const overrideInsert = await insertOverride({
+            const overrideInsert = await InsertOverride({
                 provider, user,
                 entityID: entityInfo.ID,
                 componentID,
@@ -107,13 +107,13 @@ export class CreateInteractiveFormAction extends BaseAction {
                 priority: 0,
             });
             if ('error' in overrideInsert) {
-                return failure("PERSIST_FAILED",
+                return Failure("PERSIST_FAILED",
                     `${overrideInsert.error.Message} (Component ${componentID} was persisted but has no override yet.)`);
             }
 
-            addOutput(params, "ComponentID", componentID);
-            addOutput(params, "OverrideID", overrideInsert.id);
-            addOutput(params, "Version", "1.0.0");
+            AddOutput(params, "ComponentID", componentID);
+            AddOutput(params, "OverrideID", overrideInsert.id);
+            AddOutput(params, "Version", "1.0.0");
 
             return {
                 Success: true,
@@ -130,7 +130,7 @@ export class CreateInteractiveFormAction extends BaseAction {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             LogError(`CreateInteractiveFormAction: ${message}`);
-            return failure("UNEXPECTED_ERROR", message);
+            return Failure("UNEXPECTED_ERROR", message);
         }
     }
 
@@ -138,25 +138,25 @@ export class CreateInteractiveFormAction extends BaseAction {
         | { EntityName: string; Spec: ComponentSpec; Name: string; Description: string | null; Notes: string | null }
         | { error: ActionResultSimple }
     {
-        const entityName = getStringParam(params, "EntityName");
-        if (!entityName) return { error: failure("MISSING_PARAMETER", "Parameter 'EntityName' is required.") };
-        const name = getStringParam(params, "Name");
-        if (!name) return { error: failure("MISSING_PARAMETER", "Parameter 'Name' is required.") };
+        const entityName = GetStringParam(params, "EntityName");
+        if (!entityName) return { error: Failure("MISSING_PARAMETER", "Parameter 'EntityName' is required.") };
+        const name = GetStringParam(params, "Name");
+        if (!name) return { error: Failure("MISSING_PARAMETER", "Parameter 'Name' is required.") };
 
         const specRaw = params.Params.find(x =>
             x.Name?.trim().toLowerCase() === "spec")?.Value;
-        if (specRaw == null) return { error: failure("MISSING_PARAMETER", "Parameter 'Spec' is required.") };
-        const parsed = parseSpecParam(specRaw);
+        if (specRaw == null) return { error: Failure("MISSING_PARAMETER", "Parameter 'Spec' is required.") };
+        const parsed = ParseSpecParam(specRaw);
         if ('error' in parsed) {
-            return { error: failure("LINT_FAILED", `Spec is not valid JSON: ${parsed.error}`) };
+            return { error: Failure("LINT_FAILED", `Spec is not valid JSON: ${parsed.error}`) };
         }
 
         return {
             EntityName: entityName,
             Spec: parsed,
             Name: name,
-            Description: getStringParam(params, "Description"),
-            Notes: getStringParam(params, "Notes"),
+            Description: GetStringParam(params, "Description"),
+            Notes: GetStringParam(params, "Notes"),
         };
     }
 }

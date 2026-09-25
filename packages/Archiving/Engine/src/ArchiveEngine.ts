@@ -72,33 +72,33 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
      */
     public async RunArchive(configId: string, contextUser: UserInfo): Promise<ArchiveRunResult> {
         try {
-            const config = await this.LoadConfiguration(configId, contextUser);
+            const config = await this.loadConfiguration(configId, contextUser);
             if (!config) {
-                return this.BuildFailureResult('', `ArchiveConfiguration not found: ${configId}`);
+                return this.buildFailureResult('', `ArchiveConfiguration not found: ${configId}`);
             }
 
             const isActive = config.Get('IsActive') as boolean;
             if (!isActive) {
-                return this.BuildFailureResult('', `ArchiveConfiguration "${config.Get('Name')}" is not active. Set IsActive to true before running.`);
+                return this.buildFailureResult('', `ArchiveConfiguration "${config.Get('Name')}" is not active. Set IsActive to true before running.`);
             }
 
             const status = config.Get('Status') as string;
             if (status === 'Running') {
-                return this.BuildFailureResult('', `ArchiveConfiguration "${config.Get('Name')}" is already running. Wait for the current run to complete.`);
+                return this.buildFailureResult('', `ArchiveConfiguration "${config.Get('Name')}" is already running. Wait for the current run to complete.`);
             }
 
-            const configEntities = await this.LoadConfigurationEntities(configId, contextUser);
+            const configEntities = await this.loadConfigurationEntities(configId, contextUser);
             if (configEntities.length === 0) {
-                return this.BuildFailureResult('', 'No entity configurations found for this archive configuration');
+                return this.buildFailureResult('', 'No entity configurations found for this archive configuration');
             }
 
-            const archiveRun = await this.CreateArchiveRun(config, contextUser);
-            const storageManager = await this.InitializeStorage(config, contextUser);
+            const archiveRun = await this.createArchiveRun(config, contextUser);
+            const storageManager = await this.initializeStorage(config, contextUser);
 
             LogStatus(`ArchiveEngine: Starting run ${archiveRun.Get('ID')} with ${configEntities.length} entities`);
 
-            const totals = await this.ProcessAllEntities(configEntities, config, archiveRun, storageManager, contextUser);
-            await this.FinalizeArchiveRun(archiveRun, totals, contextUser);
+            const totals = await this.processAllEntities(configEntities, config, archiveRun, storageManager, contextUser);
+            await this.finalizeArchiveRun(archiveRun, totals, contextUser);
 
             return {
                 Success: totals.Failed === 0,
@@ -112,7 +112,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`ArchiveEngine.RunArchive failed: ${message}`);
-            return this.BuildFailureResult('', message);
+            return this.buildFailureResult('', message);
         }
     }
 
@@ -123,7 +123,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     /**
      * Loads the ArchiveConfiguration record by ID.
      */
-    private async LoadConfiguration(configId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
+    private async loadConfiguration(configId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
         const md = this.Provider;
         const config = await md.GetEntityObject('MJ: Archive Configurations', contextUser);
         const loaded = await config.InnerLoad(CompositeKey.FromID(configId));
@@ -134,7 +134,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
      * Loads all ArchiveConfigurationEntity records for the given configuration,
      * ordered by Priority for controlled execution sequence.
      */
-    private async LoadConfigurationEntities(configId: string, contextUser: UserInfo): Promise<BaseEntity[]> {
+    private async loadConfigurationEntities(configId: string, contextUser: UserInfo): Promise<BaseEntity[]> {
         const rv = new RunView();
         const result = await rv.RunView<BaseEntity>({
             EntityName: 'MJ: Archive Configuration Entities',
@@ -157,7 +157,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     /**
      * Creates a new ArchiveRun record to track this execution.
      */
-    private async CreateArchiveRun(config: BaseEntity, contextUser: UserInfo): Promise<BaseEntity> {
+    private async createArchiveRun(config: BaseEntity, contextUser: UserInfo): Promise<BaseEntity> {
         const md = this.Provider;
         const run = await md.GetEntityObject('MJ: Archive Runs', contextUser);
 
@@ -178,7 +178,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     /**
      * Updates the ArchiveRun record with final totals and completion status.
      */
-    private async FinalizeArchiveRun(
+    private async finalizeArchiveRun(
         archiveRun: BaseEntity,
         totals: AggregatedTotals,
         contextUser: UserInfo
@@ -204,7 +204,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     /**
      * Initializes the ArchiveStorageManager from the configuration's storage account.
      */
-    private async InitializeStorage(config: BaseEntity, contextUser: UserInfo): Promise<ArchiveStorageManager> {
+    private async initializeStorage(config: BaseEntity, contextUser: UserInfo): Promise<ArchiveStorageManager> {
         const storageAccountId = config.Get('StorageAccountID') as string;
         if (!storageAccountId) {
             throw new Error('ArchiveConfiguration has no StorageAccountID configured');
@@ -222,7 +222,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     /**
      * Processes all configured entities sequentially (order matters for dependency safety).
      */
-    private async ProcessAllEntities(
+    private async processAllEntities(
         configEntities: BaseEntity[],
         config: BaseEntity,
         archiveRun: BaseEntity,
@@ -260,7 +260,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     /**
      * Builds a failure ArchiveRunResult with zero counts.
      */
-    private BuildFailureResult(archiveRunId: string, errorMessage: string): ArchiveRunResult {
+    private buildFailureResult(archiveRunId: string, errorMessage: string): ArchiveRunResult {
         return {
             Success: false,
             ArchiveRunId: archiveRunId,

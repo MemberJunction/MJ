@@ -81,15 +81,15 @@ export interface SqlLoggingOptions {
  */
 export interface SqlLoggingSession {
   /** Unique session ID */
-  readonly id: string;
+  readonly id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** File path where SQL is being logged */
-  readonly filePath: string;
+  readonly filePath: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Session start time */
-  readonly startTime: Date;
+  readonly startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Number of statements logged so far */
-  readonly statementCount: number;
+  readonly statementCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Configuration options for this session */
-  readonly options: SqlLoggingOptions;
+  readonly options: SqlLoggingOptions;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Dispose method to stop logging and clean up resources */
   dispose(): Promise<void>;
 }

@@ -4,11 +4,11 @@ import { MJPermissionDomainEntity, PermissionEngine, ResourceData } from '@membe
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
-import { validateStringParam } from '../shared/agent-tool-validation';
+import { ValidateStringParam } from '../shared/agent-tool-validation';
 import {
-    buildPermissionsNotFoundError,
-    buildResourceAccessAgentContext,
-    resolvePermissionsCandidate,
+    BuildPermissionsNotFoundError,
+    BuildResourceAccessAgentContext,
+    ResolvePermissionsCandidate,
 } from './permissions-agent-context';
 
 /**
@@ -102,7 +102,7 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
      * unit-testable and decoupled from change-detection timing.
      */
     private publishAgentContext(): void {
-        const context = buildResourceAccessAgentContext({
+        const context = BuildResourceAccessAgentContext({
             SelectedDomainName: this.SelectedDomainName,
             AvailableDomainNames: this.Domains.map((d) => d.Name),
             ResourceTypes: this.ResourceTypes,
@@ -181,20 +181,20 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
     private async handleLookupResourceTool(
         params: Record<string, unknown>
     ): Promise<{ Success: boolean; Data?: unknown; ErrorMessage?: string }> {
-        const domain = validateStringParam(params?.['domainName'], 'domainName');
+        const domain = ValidateStringParam(params?.['domainName'], 'domainName');
         if (!domain.ok) return domain.result;
-        const type = validateStringParam(params?.['resourceType'], 'resourceType');
+        const type = ValidateStringParam(params?.['resourceType'], 'resourceType');
         if (!type.ok) return type.result;
-        const id = validateStringParam(params?.['resourceId'], 'resourceId');
+        const id = ValidateStringParam(params?.['resourceId'], 'resourceId');
         if (!id.ok) return id.result;
 
         if (!domain.value.trim() || !type.value.trim() || !id.value.trim()) {
             return { Success: false, ErrorMessage: 'domainName, resourceType, and resourceId are all required.' };
         }
 
-        const match = resolvePermissionsCandidate(domain.value, this.domainCandidates());
+        const match = ResolvePermissionsCandidate(domain.value, this.domainCandidates());
         if (!match) {
-            return { Success: false, ErrorMessage: buildPermissionsNotFoundError(domain.value, 'permission domain', this.domainCandidates()) };
+            return { Success: false, ErrorMessage: BuildPermissionsNotFoundError(domain.value, 'permission domain', this.domainCandidates()) };
         }
 
         this.SelectedDomainName = match.Name;
@@ -219,12 +219,12 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
     }
 
     private handleChangeDomainTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
-        const domain = validateStringParam(params?.['domainName'], 'domainName');
+        const domain = ValidateStringParam(params?.['domainName'], 'domainName');
         if (!domain.ok) return domain.result;
 
-        const match = resolvePermissionsCandidate(domain.value, this.domainCandidates());
+        const match = ResolvePermissionsCandidate(domain.value, this.domainCandidates());
         if (!match) {
-            return { Success: false, ErrorMessage: buildPermissionsNotFoundError(domain.value, 'permission domain', this.domainCandidates()) };
+            return { Success: false, ErrorMessage: BuildPermissionsNotFoundError(domain.value, 'permission domain', this.domainCandidates()) };
         }
 
         this.OnDomainChanged(match.Name);
@@ -233,13 +233,13 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
     }
 
     private handleListResourceTypesTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
-        const raw = validateStringParam(params?.['domainName'] ?? '', 'domainName');
+        const raw = ValidateStringParam(params?.['domainName'] ?? '', 'domainName');
         if (!raw.ok) return raw.result;
         let domainName = this.SelectedDomainName;
         if (raw.value.trim()) {
-            const match = resolvePermissionsCandidate(raw.value, this.domainCandidates());
+            const match = ResolvePermissionsCandidate(raw.value, this.domainCandidates());
             if (!match) {
-                return { Success: false, ErrorMessage: buildPermissionsNotFoundError(raw.value, 'permission domain', this.domainCandidates()) };
+                return { Success: false, ErrorMessage: BuildPermissionsNotFoundError(raw.value, 'permission domain', this.domainCandidates()) };
             }
             domainName = match.Name;
         }
@@ -251,7 +251,7 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
     }
 
     private handleSearchGranteesTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
-        const q = validateStringParam(params?.['query'], 'query');
+        const q = ValidateStringParam(params?.['query'], 'query');
         if (!q.ok) return q.result;
         const needle = q.value.trim().toLowerCase();
         if (!needle) {

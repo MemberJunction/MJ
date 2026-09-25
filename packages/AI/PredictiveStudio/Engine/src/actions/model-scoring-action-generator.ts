@@ -67,7 +67,7 @@ export class ModelScoringActionGenerator {
    * failure (the parent action is missing, a save fails) rather than throwing —
    * callers must never let scoring-action generation break the promotion path.
    */
-  public async generateForModel(
+  public async GenerateForModel(
     model: MJMLModelEntity,
     contextUser: UserInfo,
     provider: IMetadataProvider,
@@ -92,12 +92,21 @@ export class ModelScoringActionGenerator {
     LogStatus(`ModelScoringActionGenerator: ensured scoring action '${action.Name}' for model '${model.ID}'.`);
   }
 
+  /** @deprecated Use {@link GenerateForModel}. */
+  public async generateForModel(
+    model: MJMLModelEntity,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
+  ): Promise<void> {
+    return this.GenerateForModel(model, contextUser, provider);
+  }
+
   /**
    * Disable the generated scoring Action for `model` (e.g. when the model is
    * Archived) by flipping its Status to `Disabled`. A no-op when no generated
    * action exists. Never throws.
    */
-  public async disableForModel(
+  public async DisableForModel(
     model: MJMLModelEntity,
     contextUser: UserInfo,
     provider: IMetadataProvider,
@@ -119,6 +128,15 @@ export class ModelScoringActionGenerator {
       return;
     }
     LogStatus(`ModelScoringActionGenerator: disabled scoring action '${name}' for archived model '${model.ID}'.`);
+  }
+
+  /** @deprecated Use {@link DisableForModel}. */
+  public async disableForModel(
+    model: MJMLModelEntity,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
+  ): Promise<void> {
+    return this.DisableForModel(model, contextUser, provider);
   }
 
   // ----- category ------------------------------------------------------------

@@ -45,7 +45,7 @@ export interface AgentMediaManifestItem {
  * Maps an artifact version's MIME type to a Media-channel kind. Returns `null` for types the Media
  * surface can't render as media (so the caller drops the item from the kit).
  */
-export function mediaTypeFromMimeType(mimeType: string | null | undefined): AgentMediaKind | null {
+export function MediaTypeFromMimeType(mimeType: string | null | undefined): AgentMediaKind | null {
     const mime = (mimeType ?? '').trim().toLowerCase();
     if (mime.startsWith('image/')) return 'image';
     if (mime.startsWith('video/')) return 'video';
@@ -55,11 +55,16 @@ export function mediaTypeFromMimeType(mimeType: string | null | undefined): Agen
     return null;
 }
 
+/** @deprecated Use {@link MediaTypeFromMimeType}. */
+export function mediaTypeFromMimeType(mimeType: string | null | undefined): AgentMediaKind | null {
+    return MediaTypeFromMimeType(mimeType);
+}
+
 /**
  * Resolves the Collection id that is the agent's media kit for this session:
  * `override > AIAgent.DefaultMediaCollectionID > null`.
  */
-export async function resolveAgentMediaCollectionID(
+export async function ResolveAgentMediaCollectionID(
     provider: IMetadataProvider,
     contextUser: UserInfo,
     agentID: string,
@@ -89,11 +94,21 @@ export async function resolveAgentMediaCollectionID(
     return result.Results[0].DefaultMediaCollectionID ?? null;
 }
 
+/** @deprecated Use {@link ResolveAgentMediaCollectionID}. */
+export async function resolveAgentMediaCollectionID(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    agentID: string,
+    overrideCollectionID?: string | null,
+): Promise<string | null> {
+    return ResolveAgentMediaCollectionID(provider, contextUser, agentID, overrideCollectionID);
+}
+
 /**
  * Loads a Collection's artifacts (ordered by membership `Sequence`) and resolves each to a media
  * manifest item, dropping memberships whose current version has no `FileID` or a non-media MIME type.
  */
-export async function resolveAgentMediaManifest(
+export async function ResolveAgentMediaManifest(
     provider: IMetadataProvider,
     contextUser: UserInfo,
     collectionID: string,
@@ -121,6 +136,15 @@ export async function resolveAgentMediaManifest(
         }
     }
     return items;
+}
+
+/** @deprecated Use {@link ResolveAgentMediaManifest}. */
+export async function resolveAgentMediaManifest(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    collectionID: string,
+): Promise<AgentMediaManifestItem[]> {
+    return ResolveAgentMediaManifest(provider, contextUser, collectionID);
 }
 
 /** Loads the artifact versions referenced by a kit's memberships, keyed by id. */
@@ -155,7 +179,7 @@ function toManifestItem(
     if (!version || !version.FileID) {
         return null; // text-only / unresolved versions can't be shown as media
     }
-    const mediaType = mediaTypeFromMimeType(version.MimeType);
+    const mediaType = MediaTypeFromMimeType(version.MimeType);
     if (!mediaType) {
         return null; // non-media MIME type — drop from the kit
     }
@@ -174,7 +198,7 @@ function toManifestItem(
  * item with its `fileId`, media type, display name and when-to-show guidance, and instructs the agent
  * to surface items with the existing `Media_ShowMedia` tool. Returns `null` for an empty manifest.
  */
-export function formatAgentMediaManifest(items: AgentMediaManifestItem[]): string | null {
+export function FormatAgentMediaManifest(items: AgentMediaManifestItem[]): string | null {
     if (items.length === 0) {
         return null;
     }
@@ -191,26 +215,41 @@ export function formatAgentMediaManifest(items: AgentMediaManifestItem[]): strin
     );
 }
 
+/** @deprecated Use {@link FormatAgentMediaManifest}. */
+export function formatAgentMediaManifest(items: AgentMediaManifestItem[]): string | null {
+    return FormatAgentMediaManifest(items);
+}
+
 /**
  * End-to-end: resolves the agent's media kit (override > agent default) and returns the formatted
  * agent context note, or `null` when there is no kit / no showable items. Best-effort: logs and
  * returns `null` on any failure so it can never break session start.
  */
-export async function buildAgentMediaContextNote(
+export async function BuildAgentMediaContextNote(
     provider: IMetadataProvider,
     contextUser: UserInfo,
     agentID: string,
     overrideCollectionID?: string | null,
 ): Promise<string | null> {
     try {
-        const collectionID = await resolveAgentMediaCollectionID(provider, contextUser, agentID, overrideCollectionID);
+        const collectionID = await ResolveAgentMediaCollectionID(provider, contextUser, agentID, overrideCollectionID);
         if (!collectionID) {
             return null;
         }
-        const items = await resolveAgentMediaManifest(provider, contextUser, collectionID);
-        return formatAgentMediaManifest(items);
+        const items = await ResolveAgentMediaManifest(provider, contextUser, collectionID);
+        return FormatAgentMediaManifest(items);
     } catch (error) {
         LogError(`[agent-media-library] Failed to build media manifest for agent ${agentID}: ${error instanceof Error ? error.message : String(error)}`);
         return null;
     }
+}
+
+/** @deprecated Use {@link BuildAgentMediaContextNote}. */
+export async function buildAgentMediaContextNote(
+    provider: IMetadataProvider,
+    contextUser: UserInfo,
+    agentID: string,
+    overrideCollectionID?: string | null,
+): Promise<string | null> {
+    return BuildAgentMediaContextNote(provider, contextUser, agentID, overrideCollectionID);
 }

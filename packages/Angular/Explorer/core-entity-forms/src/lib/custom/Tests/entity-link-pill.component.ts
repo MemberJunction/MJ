@@ -86,30 +86,57 @@ export class EntityLinkPillComponent extends BaseAngularComponent implements OnC
   /**
    * The record ID to link to
    */
-  @Input() recordId: string | null = null;
+  @Input() RecordId: string | null = null;
+
+  /** @deprecated Use {@link RecordId}. */
+  @Input() set recordId(value: string | null) {
+    this.RecordId = value;
+  }
+  /** @deprecated Use {@link RecordId}. */
+  get recordId(): string | null {
+    return this.RecordId;
+  }
 
   /**
    * Optional display name for the record. If not provided, uses entity name.
    */
-  @Input() recordName: string | null = null;
+  @Input() RecordName: string | null = null;
 
-  entityInfo: EntityInfo | null = null;
+  /** @deprecated Use {@link RecordName}. */
+  @Input() set recordName(value: string | null) {
+    this.RecordName = value;
+  }
+  /** @deprecated Use {@link RecordName}. */
+  get recordName(): string | null {
+    return this.RecordName;
+  }
+
+  EntityInfo: EntityInfo | null = null;
+
+  /** @deprecated Use {@link EntityInfo}. */
+  get entityInfo(): EntityInfo | null {
+    return this.EntityInfo;
+  }
+  /** @deprecated Use {@link EntityInfo}. */
+  set entityInfo(value: EntityInfo | null) {
+    this.EntityInfo = value;
+  }
   private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef) {
     super();}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['entityName'] && this.entityName) {
-      this.entityInfo = this.metadata.EntityByName(this.entityName) ?? null;
+      this.EntityInfo = this.metadata.EntityByName(this.entityName) ?? null;
       this.cdr.markForCheck();
     }
   }
 
-  get iconClass(): string {
-    if (this.entityInfo?.Icon) {
+  get IconClass(): string {
+    if (this.EntityInfo?.Icon) {
       // Entity icon is typically a Font Awesome class like 'fa-robot'
       // Ensure it has the proper prefix
-      const icon = this.entityInfo.Icon;
+      const icon = this.EntityInfo.Icon;
       if (icon.startsWith('fa-')) {
         return `fas ${icon}`;
       }
@@ -119,29 +146,49 @@ export class EntityLinkPillComponent extends BaseAngularComponent implements OnC
     return 'fas fa-link';
   }
 
-  get displayLabel(): string {
-    if (this.recordName) {
-      return this.recordName;
+  /** @deprecated Use {@link IconClass}. */
+  get iconClass(): string {
+    return this.IconClass;
+  }
+
+  get DisplayLabel(): string {
+    if (this.RecordName) {
+      return this.RecordName;
     }
-    if (this.entityInfo) {
-      return this.entityInfo.Name;
+    if (this.EntityInfo) {
+      return this.EntityInfo.Name;
     }
     return 'View Record';
   }
 
-  get tooltipText(): string {
-    const entityLabel = this.entityInfo?.Name || 'Record';
-    if (this.recordName) {
-      return `Open ${entityLabel}: ${this.recordName}`;
+  /** @deprecated Use {@link DisplayLabel}. */
+  get displayLabel(): string {
+    return this.DisplayLabel;
+  }
+
+  get TooltipText(): string {
+    const entityLabel = this.EntityInfo?.Name || 'Record';
+    if (this.RecordName) {
+      return `Open ${entityLabel}: ${this.RecordName}`;
     }
     return `Open ${entityLabel}`;
   }
 
-  openRecord(): void {
-    if (this.entityName && this.recordId) {
+  /** @deprecated Use {@link TooltipText}. */
+  get tooltipText(): string {
+    return this.TooltipText;
+  }
+
+  OpenRecord(): void {
+    if (this.entityName && this.RecordId) {
       // `entityName` is an input — any entity, any key column name — so resolve the key against
       // the metadata already loaded in ngOnChanges instead of assuming `ID`.
-      SharedService.Instance.OpenEntityRecord(this.entityName, CompositeKey.FromURLSegment(this.entityInfo, this.recordId));
+      SharedService.Instance.OpenEntityRecord(this.entityName, CompositeKey.FromURLSegment(this.EntityInfo, this.RecordId));
     }
+  }
+
+  /** @deprecated Use {@link OpenRecord}. */
+  openRecord(): void {
+    return this.OpenRecord();
   }
 }

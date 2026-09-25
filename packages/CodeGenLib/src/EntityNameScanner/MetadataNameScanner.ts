@@ -21,7 +21,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
-import { resolveEntityNameMap } from './EntityNameScanner';
+import { ResolveEntityNameMap } from './EntityNameScanner';
 
 // ============================================================================
 // Public Types
@@ -165,7 +165,7 @@ function getLineNumber(sourceText: string, position: number): number {
  * @param isEntitiesFolder - If true, the folder's .mj-sync.json entity is
  *   "Entities" or "MJ: Entities", so `fields.Name` values are entity names.
  */
-export function scanMetadataFile(
+export function ScanMetadataFile(
     filePath: string,
     sourceText: string,
     renameMap: Map<string, string>,
@@ -209,6 +209,16 @@ export function scanMetadataFile(
     }
 
     return findings;
+}
+
+/** @deprecated Use {@link ScanMetadataFile}. */
+export function scanMetadataFile(
+    filePath: string,
+    sourceText: string,
+    renameMap: Map<string, string>,
+    isEntitiesFolder?: boolean,
+): MetadataFinding[] {
+    return ScanMetadataFile(filePath, sourceText, renameMap, isEntitiesFolder);
 }
 
 /**
@@ -431,7 +441,7 @@ function scanEntityNameFields(
  * Applies entity name fixes to a metadata file using targeted string
  * replacements that preserve original formatting.
  */
-export function fixMetadataFile(sourceText: string, findings: MetadataFinding[]): string {
+export function FixMetadataFile(sourceText: string, findings: MetadataFinding[]): string {
     if (findings.length === 0) return sourceText;
 
     let result = sourceText;
@@ -483,6 +493,11 @@ export function fixMetadataFile(sourceText: string, findings: MetadataFinding[])
     return result;
 }
 
+/** @deprecated Use {@link FixMetadataFile}. */
+export function fixMetadataFile(sourceText: string, findings: MetadataFinding[]): string {
+    return FixMetadataFile(sourceText, findings);
+}
+
 /** Simple replaceAll using split/join for broad compatibility. */
 function replaceAll(text: string, search: string, replacement: string): string {
     return text.split(search).join(replacement);
@@ -506,7 +521,7 @@ const DEFAULT_METADATA_EXCLUDE: string[] = [
  * Scans metadata JSON files for entity name references that need the "MJ: "
  * prefix, and optionally fixes them in place.
  */
-export async function scanMetadataNames(options: MetadataNameScanOptions): Promise<MetadataNameScanResult> {
+export async function ScanMetadataNames(options: MetadataNameScanOptions): Promise<MetadataNameScanResult> {
     const errors: string[] = [];
     const verbose = options.Verbose !== false;
 
@@ -523,7 +538,7 @@ export async function scanMetadataNames(options: MetadataNameScanOptions): Promi
     // Build rename map (tries .ts file first, falls back to embedded rename map)
     let renameMap: Map<string, string>;
     try {
-        renameMap = resolveEntityNameMap(targetPath, options.EntitySubclassesPath, verbose);
+        renameMap = ResolveEntityNameMap(targetPath, options.EntitySubclassesPath, verbose);
     } catch (err) {
         return {
             Success: false, Findings: [], FixedFiles: [],
@@ -574,13 +589,13 @@ export async function scanMetadataNames(options: MetadataNameScanOptions): Promi
         try {
             const sourceText = fs.readFileSync(filePath, 'utf-8');
             const isEntitiesFolder = entityFolders.has(path.dirname(filePath));
-            const findings = scanMetadataFile(filePath, sourceText, renameMap, isEntitiesFolder);
+            const findings = ScanMetadataFile(filePath, sourceText, renameMap, isEntitiesFolder);
 
             if (findings.length > 0) {
                 allFindings.push(...findings);
 
                 if (options.Fix) {
-                    const fixedText = fixMetadataFile(sourceText, findings);
+                    const fixedText = FixMetadataFile(sourceText, findings);
                     fs.writeFileSync(filePath, fixedText, 'utf-8');
                     fixedFiles.push(filePath);
                     if (verbose) {
@@ -605,4 +620,9 @@ export async function scanMetadataNames(options: MetadataNameScanOptions): Promi
         RenameMapSize: renameMap.size,
         Errors: errors,
     };
+}
+
+/** @deprecated Use {@link ScanMetadataNames}. */
+export async function scanMetadataNames(options: MetadataNameScanOptions): Promise<MetadataNameScanResult> {
+    return ScanMetadataNames(options);
 }

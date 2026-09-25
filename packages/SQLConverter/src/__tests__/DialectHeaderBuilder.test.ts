@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   PostgreSQLHeaderBuilder,
-  getHeaderBuilder,
-  registerHeaderBuilder,
+  GetHeaderBuilder,
+  RegisterHeaderBuilder,
 } from '../rules/DialectHeaderBuilder.js';
 import type { DialectHeaderBuilder } from '../rules/DialectHeaderBuilder.js';
 
@@ -56,18 +56,18 @@ describe('PostgreSQLHeaderBuilder', () => {
 
 describe('getHeaderBuilder', () => {
   it('should return the PostgreSQL builder for "postgres"', () => {
-    const builder = getHeaderBuilder('postgres');
+    const builder = GetHeaderBuilder('postgres');
     expect(builder).toBeDefined();
     expect(builder!.TargetDialect).toBe('postgres');
   });
 
   it('should be case-insensitive', () => {
-    const builder = getHeaderBuilder('POSTGRES');
+    const builder = GetHeaderBuilder('POSTGRES');
     expect(builder).toBeDefined();
   });
 
   it('should return undefined for unknown dialects', () => {
-    expect(getHeaderBuilder('oracle')).toBeUndefined();
+    expect(GetHeaderBuilder('oracle')).toBeUndefined();
   });
 });
 
@@ -79,9 +79,9 @@ describe('registerHeaderBuilder', () => {
         return `-- MySQL header for ${schema}\n`;
       },
     };
-    registerHeaderBuilder(customBuilder);
+    RegisterHeaderBuilder(customBuilder);
 
-    const builder = getHeaderBuilder('mysql');
+    const builder = GetHeaderBuilder('mysql');
     expect(builder).toBeDefined();
     expect(builder!.BuildHeader('test')).toBe('-- MySQL header for test\n');
   });

@@ -60,7 +60,7 @@ describe.skipIf(!hasToken())('integration: conversations', () => {
 
         for (const c of mine) {
             expect(c.entity.ID).toBeTruthy();
-            expect(c.latestAt instanceof Date).toBe(true);
+            expect(c.LatestAt instanceof Date).toBe(true);
             expect(typeof c.messageCount).toBe('number');
         }
     }, 60000);
@@ -70,19 +70,19 @@ describe.skipIf(!hasToken())('integration: conversations', () => {
         // behaviour rather than about what some earlier session happened to leave behind.
         const load = await LoadConversation(conversationId);
         expect(load).not.toBeNull();
-        expect(load!.conversation.ID).toBe(conversationId);
-        expect(load!.messages.length).toBeGreaterThan(0);
+        expect(load!.Conversation.ID).toBe(conversationId);
+        expect(load!.Messages.length).toBeGreaterThan(0);
 
-        const roles = new Set(load!.messages.map((m) => m.detail.Role));
+        const roles = new Set(load!.Messages.map((m) => m.detail.Role));
         // The fixture seeds one of each, so both roles must come back.
         expect(roles.has('User')).toBe(true);
         expect(roles.has('AI')).toBe(true);
 
         // Artifacts array is always present (may be empty).
-        expect(Array.isArray(load!.artifacts)).toBe(true);
+        expect(Array.isArray(load!.Artifacts)).toBe(true);
 
         // AI messages resolve an agent name when an AgentID is present.
-        for (const m of load!.messages) {
+        for (const m of load!.Messages) {
             if (m.detail.Role === 'AI' && m.detail.AgentID) {
                 expect(m.agentName === null || typeof m.agentName === 'string').toBe(true);
             }

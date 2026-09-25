@@ -14,8 +14,8 @@ import { DependencyGraphWalker } from './DependencyGraphWalker';
 import {
     ENTITY_VERSION_LABEL_ITEMS,
     ENTITY_RECORD_CHANGES,
-    buildCompositeKeyFromRecord,
-    sqlEquals,
+    BuildCompositeKeyFromRecord,
+    SqlEquals,
     escapeSqlString,
 } from './constants';
 
@@ -57,7 +57,7 @@ interface RecordChangeLookup {
  * a handful of batched queries (one per unique entity type).
  */
 export class SnapshotBuilder {
-    private Walker = new DependencyGraphWalker();
+    private walker = new DependencyGraphWalker();
 
     /** Optional provider override; falls back to Metadata.Provider when not set. */
     private _provider?: IMetadataProvider;
@@ -119,7 +119,7 @@ export class SnapshotBuilder {
         let syntheticCount = 0;
 
         for (const record of result.Results) {
-            const key = buildCompositeKeyFromRecord(entityInfo, record);
+            const key = BuildCompositeKeyFromRecord(entityInfo, record);
             const captureItemResult = await this.captureSingleRecord(labelId, entityName, key, contextUser, record);
             if (captureItemResult.Success) {
                 itemsCaptured++;
@@ -203,8 +203,8 @@ export class SnapshotBuilder {
             Percentage: 10,
         });
 
-        const root = await this.Walker.WalkDependents(entityName, recordKey, walkOptions, contextUser);
-        const flatNodes = this.Walker.FlattenTopological(root);
+        const root = await this.walker.WalkDependents(entityName, recordKey, walkOptions, contextUser);
+        const flatNodes = this.walker.FlattenTopological(root);
 
         // Step 2: Batch-lookup RecordChanges for all nodes
         this.emitProgress(onProgress, {
@@ -385,7 +385,7 @@ export class SnapshotBuilder {
         const results = new Map<string, RecordChangeLookup>();
 
         const escapedIds = recordIds.map(id => `'${escapeSqlString(id)}'`).join(', ');
-        const filter = `${sqlEquals('EntityID', entityId)} AND RecordID IN (${escapedIds})`;
+        const filter = `${SqlEquals('EntityID', entityId)} AND RecordID IN (${escapedIds})`;
 
         try {
             const rv = new RunView();
@@ -561,7 +561,7 @@ export class SnapshotBuilder {
         contextUser: UserInfo
     ): Promise<Record<string, unknown> | null> {
         const rv = new RunView();
-        const filter = `${sqlEquals('EntityID', entityId)} AND ${sqlEquals('RecordID', recordId)}`;
+        const filter = `${SqlEquals('EntityID', entityId)} AND ${SqlEquals('RecordID', recordId)}`;
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: ENTITY_RECORD_CHANGES,
             ExtraFilter: filter,

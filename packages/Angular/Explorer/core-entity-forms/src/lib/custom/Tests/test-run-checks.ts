@@ -12,10 +12,10 @@
 
 /** The per-check shape the Test Run form template binds to. */
 export interface CheckResult {
-  name: string;
-  passed: boolean;
-  message?: string;
-  weight?: number;
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  passed: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  message?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  weight?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -26,7 +26,7 @@ export interface CheckResult {
  * object, a malformed value) yields an empty list so the form renders nothing
  * rather than throwing.
  */
-export function parseCheckResults(resultDetails: unknown): CheckResult[] {
+export function ParseCheckResults(resultDetails: unknown): CheckResult[] {
   if (!Array.isArray(resultDetails)) {
     return [];
   }
@@ -36,4 +36,9 @@ export function parseCheckResults(resultDetails: unknown): CheckResult[] {
     message: r?.['message'] as string | undefined
     // OracleResult has no `weight`; CheckResult.weight stays undefined.
   }));
+}
+
+/** @deprecated Use {@link ParseCheckResults}. */
+export function parseCheckResults(resultDetails: unknown): CheckResult[] {
+  return ParseCheckResults(resultDetails);
 }
