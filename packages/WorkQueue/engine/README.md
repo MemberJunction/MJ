@@ -105,6 +105,10 @@ reports each subscription's state:
 
 ## Writing a handler
 
+To see a handler run before writing one, seed `metadata-optional/work-queue-samples` and use
+`@memberjunction/work-queue-samples` (`HelloWorldHandler`, key `samples.hello`); its README is a ten-minute walkthrough of
+publish, retry, dead-letter, replay, cancel and the three partition modes.
+
 ```typescript
 import { RegisterClass } from '@memberjunction/global';
 import { Outcome, FatalWorkError, type WorkContext, type WorkMessage, type WorkOutcome } from '@memberjunction/work-queue-core';
@@ -139,6 +143,7 @@ imported by the application. A key that resolves to nothing plans as `HandlerNot
 
 | Task | CLI | Remote Operation |
 | --- | --- | --- |
+| Publish a test message | `mj queue publish --topic t --payload '{…}' [--partition-key k] [--count n]` | `WorkQueueEngine.Instance.Publish(...)` from MJ code; REST for external producers |
 | Counts | `mj queue stats [--subscription s]` | `WorkQueue.GetSubscriptionStats` |
 | Dead letters | `mj queue dead-letters --subscription s` | `WorkQueue.ListDeadLetters` |
 | Blocked keys | `mj queue partitions --subscription s --condition Blocked` | `WorkQueue.ListPartitions` |

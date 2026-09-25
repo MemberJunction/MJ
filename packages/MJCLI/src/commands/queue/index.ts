@@ -4,12 +4,14 @@ export default class Queue extends Command {
   static description = 'Operate the durable work queue';
 
   static examples = [
+    '<%= config.bin %> <%= command.id %> publish --topic samples.hello --payload \'{"name":"Paul"}\'',
     '<%= config.bin %> <%= command.id %> stats',
     '<%= config.bin %> <%= command.id %> dead-letters --subscription email.unsubscribe',
   ];
 
   async run(): Promise<void> {
     this.log('MemberJunction Work Queue\n');
+    this.log('  mj queue publish               - Publish test messages to a topic from this machine');
     this.log('  mj queue stats                 - Counts per subscription');
     this.log("  mj queue dead-letters          - List a subscription's dead letters");
     this.log('  mj queue partitions            - List in-flight / blocked partition keys');

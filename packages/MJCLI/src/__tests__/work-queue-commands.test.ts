@@ -5,6 +5,7 @@ import QueueDiscard from '../commands/queue/discard.js';
 import QueueExportTopology from '../commands/queue/export-topology.js';
 import QueueImportBindings from '../commands/queue/import-bindings.js';
 import QueuePartitions from '../commands/queue/partitions.js';
+import QueuePublish from '../commands/queue/publish.js';
 import QueueReplay from '../commands/queue/replay.js';
 import QueueStats from '../commands/queue/stats.js';
 import QueueValidateBindings from '../commands/queue/validate-bindings.js';
@@ -18,6 +19,7 @@ interface FlagSurface {
 type CommandSurface = { flags: Record<string, FlagSurface> };
 
 const COMMANDS: Array<[string, CommandSurface, string[], string[]]> = [
+    ['publish', QueuePublish, ['attribute', 'count', 'dedup-key', 'json', 'partition-key', 'payload', 'topic'], ['topic']],
     ['stats', QueueStats, ['json', 'subscription'], []],
     ['dead-letters', QueueDeadLetters, ['cursor', 'json', 'page-size', 'subscription'], ['subscription']],
     ['partitions', QueuePartitions, ['condition', 'cursor', 'json', 'page-size', 'subscription'], ['subscription']],
