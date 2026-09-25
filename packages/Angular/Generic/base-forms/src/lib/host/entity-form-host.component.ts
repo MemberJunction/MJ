@@ -301,9 +301,17 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
    * returning false and emitting a `warning` Notification — when remounting
    * would silently discard unsaved work (see {@link hasUnsavedWorkToLose}).
    * A brand-new record is carried across instead (see {@link _carryNewRecord}).
+   * With no standard alternative (the generated form is the only one), both
+   * modes mount the same form: the mode is recorded and emitted, with no
+   * reload and so nothing for the unsaved-work guard to protect.
    */
   public SwitchFormMode(mode: EntityFormMode): boolean {
     if (mode === this._formMode) return true;
+    if (!this.HasStandardFormAlternative && !this.Loading) {
+      this._formMode = mode;
+      this.FormModeChange.emit(mode);
+      return true;
+    }
     if (this.hasUnsavedWorkToLose()) {
       this.Notification.emit({ Message: 'Save or discard your changes before switching forms.', Type: 'warning', Duration: 4000 });
       return false;
@@ -449,10 +457,25 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   private standardFormToMount(resolution: FormResolution, entityName: string): Type<BaseFormComponent> | null {
     if (this._formMode !== 'standard') return null;
     if (!resolution.standard) {
-      LogError(`MjEntityFormHost: standard form requested for "${entityName}" but none is registered; showing the default form`);
+      this.logMissingStandardFormOnce(entityName);
       return null;
     }
     return hasStandardFormAlternative(resolution) ? resolution.standard : null;
+  }
+
+  /** Entities this host has already logged a missing standard form for (lowercased names). */
+  private readonly _missingStandardLogged = new Set<string>();
+
+  /**
+   * Log the "standard requested, none registered" fallback once per entity per
+   * host. A stale `?form=standard` would otherwise log on every reload (each
+   * variant pick, switch or input change).
+   */
+  private logMissingStandardFormOnce(entityName: string): void {
+    const key = entityName.trim().toLowerCase();
+    if (this._missingStandardLogged.has(key)) return;
+    this._missingStandardLogged.add(key);
+    LogError(`MjEntityFormHost: standard form requested for "${entityName}" but none is registered; showing the default form`);
   }
 
   /**

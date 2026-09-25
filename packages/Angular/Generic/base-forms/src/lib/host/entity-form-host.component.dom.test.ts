@@ -124,9 +124,9 @@ function makeRecord(entityInfo: EntityInfo): SwitchRecord {
 const classResolution = (standard: typeof GenForm | null, subClass: typeof GenForm | typeof CustomForm | typeof BusyCustomForm = CustomForm): FormResolution =>
   ({ kind: 'class', subClass, variants: [], standard });
 
-function stubResolver(resolution: FormResolution): Pick<FormResolverService, 'ResolveFormForEntity' | 'SetExplicitDefault' | 'SetSelectedVariant'> {
+function stubResolver(resolution: FormResolution, onResolve?: () => void): Pick<FormResolverService, 'ResolveFormForEntity' | 'SetExplicitDefault' | 'SetSelectedVariant'> {
   return {
-    ResolveFormForEntity: async () => resolution,
+    ResolveFormForEntity: async () => { onResolve?.(); return resolution; },
     SetExplicitDefault: () => undefined,
     SetSelectedVariant: () => undefined,
   };
@@ -148,6 +148,8 @@ async function mountSwitchHost(opts: {
   record?: BaseEntity;
   provider?: IMetadataProvider;
   inputs?: Record<string, unknown>;
+  /** Called on every resolve — i.e. once per (re)load. */
+  onResolve?: () => void;
 }): Promise<SwitchHarness> {
   const entityInfo = makeEntityInfo();
   const modeChanges: EntityFormMode[] = [];
@@ -157,7 +159,7 @@ async function mountSwitchHost(opts: {
   const f = renderComponentFixture(MjEntityFormHostComponent, {
     imports: [StubLoadingComponent, MJButtonDirective],
     declarations: [MjEntityFormHostComponent],
-    providers: [{ provide: FormResolverService, useValue: stubResolver(opts.resolution) }],
+    providers: [{ provide: FormResolverService, useValue: stubResolver(opts.resolution, opts.onResolve) }],
     inputs: { Provider: provider, ...recordInput, ...(opts.inputs ?? {}) },
     setup: (c) => {
       c.FormModeChange.subscribe((m) => modeChanges.push(m));
@@ -336,5 +338,42 @@ describe('MjEntityFormHostComponent — standard-form switch (DOM)', () => {
     expect(modeChanges).toEqual(['standard', 'default']);
     expect(f.componentInstance.FormMode).toBe('default');
     expect(query(f, '.custom')).not.toBeNull();
+  });
+  it('with no standard alternative, a switch is recorded without a reload — and without warning on a dirty record', async () => {
+    // The common generated-only entity: 'standard' IS what is mounted, so there
+    // is nothing to tear down (and nothing the unsaved-work guard protects).
+    let loads = 0;
+    const record = makeRecord(makeEntityInfo());
+    const { f, modeChanges, notifications } = await mountSwitchHost({
+      resolution: classResolution(GenForm, GenForm), record, onResolve: () => { loads++; },
+    });
+    const mounted = f.componentInstance.Form;
+    record.SetMany({ Name: 'Edited' });
+    expect(record.Dirty).toBe(true);
+
+    expect(f.componentInstance.SwitchFormMode('standard')).toBe(true);
+    await settle(f);
+
+    expect(loads).toBe(1);
+    expect(f.componentInstance.Form).toBe(mounted);
+    expect(notifications).toEqual([]);
+    expect(modeChanges).toEqual(['standard']);
+    expect(f.componentInstance.FormMode).toBe('standard');
+  });
+
+  it('logs the missing-standard-form fallback once per entity, not on every reload', async () => {
+    vi.mocked(LogError).mockClear();
+    let loads = 0;
+    const { f } = await mountSwitchHost({
+      resolution: classResolution(null), inputs: { FormMode: 'standard' }, onResolve: () => { loads++; },
+    });
+    f.componentRef.setInput('FormMode', 'default');
+    await settle(f);
+    f.componentRef.setInput('FormMode', 'standard');
+    await settle(f);
+
+    expect(loads).toBe(3); // the standard-mode fallback path ran twice
+    const fallbackLogs = vi.mocked(LogError).mock.calls.filter(([msg]) => String(msg).includes('standard form requested'));
+    expect(fallbackLogs.length).toBe(1);
   });
 });
