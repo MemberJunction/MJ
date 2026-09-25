@@ -1,5 +1,12 @@
 import { Injectable, EventEmitter } from '@angular/core';
-import { ActionableCommand, AutomaticCommand, RefreshDataCommand, OpenURLCommand } from '@memberjunction/ai-core-plus';
+import {
+  ActionableCommand,
+  AutomaticCommand,
+  RefreshDataCommand,
+  OpenURLCommand,
+  ComposeEmailCommand,
+  BuildMailtoURL
+} from '@memberjunction/ai-core-plus';
 import { DataCacheService } from './data-cache.service';
 
 export interface ActionableCommandRequest {
@@ -11,8 +18,9 @@ export interface ActionableCommandRequest {
 /**
  * Service for handling UI commands from agents.
  *
- * Generic commands (open:url) are handled directly by this service.
- * App-specific commands (open:resource) are emitted for the host application to handle.
+ * Generic commands (open:url, and compose:email while it fits in a mailto: URL) are handled
+ * directly by this service. App-specific commands (open:resource, and the compose:email
+ * over-length fallback) are emitted for the host application to handle.
  */
 @Injectable({
   providedIn: 'root'
@@ -20,7 +28,10 @@ export interface ActionableCommandRequest {
 export class UICommandHandlerService {
   /**
    * Event emitted when an actionable command requires host-app handling.
-   * Currently only open:resource commands are emitted — open:url is handled directly.
+   *
+   * open:resource is always emitted. compose:email is emitted ONLY as a fallback, when the draft
+   * is too long for a mailto: URL and the host must open the draft artifact instead; a draft
+   * within the limit is handled here and never reaches the host. open:url is always handled here.
    */
   public ActionableCommandRequested = new EventEmitter<ActionableCommandRequest>();
 
@@ -59,15 +70,32 @@ export class UICommandHandlerService {
   public async ExecuteActionableCommand(command: ActionableCommand, origin?: Omit<ActionableCommandRequest, 'command'>): Promise<void> {
     if (command.type === 'open:url') {
       this.handleOpenUrl(command);
-    } else {
-      // open:resource requires app-specific navigation — emit for host to handle
-      console.log('📤 Emitting actionable command for host app:', command);
-      this.ActionableCommandRequested.emit({
-        command,
-        conversationId: origin?.conversationId ?? null,
-        conversationDetailId: origin?.conversationDetailId ?? null
-      });
+      return;
     }
+
+    if (command.type === 'compose:email') {
+      const openedMailClient = this.handleComposeEmail(command);
+      if (openedMailClient) {
+        return;
+      }
+      // Too long for a mailto: URL. Deliberately falls through to the host, which opens the full
+      // Email Draft artifact instead of opening a truncated compose window.
+    }
+
+    // open:resource (and the compose:email fallback above) require app-specific navigation.
+    // compose:email is logged by TYPE ONLY: its body is free-text member correspondence, and the
+    // whole command object would otherwise land in the browser console and any console-forwarding
+    // telemetry.
+    if (command.type === 'compose:email') {
+      console.log('📤 Emitting actionable command for host app:', command.type);
+    } else {
+      console.log('📤 Emitting actionable command for host app:', command);
+    }
+    this.ActionableCommandRequested.emit({
+      command,
+      conversationId: origin?.conversationId ?? null,
+      conversationDetailId: origin?.conversationDetailId ?? null
+    });
   }
 
   /** @deprecated Use {@link ExecuteActionableCommand}. */
@@ -89,6 +117,48 @@ export class UICommandHandlerService {
       const target = newTab ? '_blank' : '_self';
       window.open(url, target, target === '_blank' ? 'noopener,noreferrer' : undefined);
     }
+  }
+
+  /**
+   * Handle compose:email by opening the user's own mail client with the fields pre-filled.
+   *
+   * NOTHING IS SENT HERE. The agent drafted; the user sends. This only opens a compose window.
+   *
+   * @returns true when the mail client was opened; false when the draft is too long for a
+   *          mailto: URL, in which case the caller must fall back to the host (which opens the
+   *          artifact). We do NOT open an over-long URL: a mail client past its limit does not
+   *          refuse it, it opens a draft with the body SILENTLY TRUNCATED and the user sends half
+   *          a message without noticing.
+   */
+  private handleComposeEmail(command: ComposeEmailCommand): boolean {
+    const { url, withinLimit } = BuildMailtoURL(command);
+    if (!withinLimit) {
+      // Best-effort convenience so the text is not lost. Unavailable over plain HTTP and deniable
+      // by permissions policy, so it must never gate the fallback.
+      if (command.body) {
+        navigator.clipboard?.writeText(command.body).catch(() => {
+          /* clipboard unavailable — the artifact still carries the full draft */
+        });
+      }
+      return false;
+    }
+    this.openMailto(url);
+    return true;
+  }
+
+  /**
+   * Open a mailto: URL via a synthesized anchor click.
+   *
+   * Deliberately not window.open: Chrome treats window.open with a non-http scheme as a popup and
+   * strands an about:blank tab behind the compose window.
+   */
+  private openMailto(url: string): void {
+    const a = document.createElement('a');
+    a.href = url;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   /**

@@ -1521,7 +1521,38 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         // Find the most recent artifact in the active conversation and open it.
         this.openMostRecentArtifact();
       }
+    } else if (command.type === 'compose:email') {
+      // The service handles compose:email directly whenever the draft fits in a mailto: URL, so
+      // reaching here means it did NOT fit. Opening the mail client would hand the user a draft
+      // with the body silently truncated, so the service declined and handed it to us instead —
+      // our job is to show the full draft, which lives in the artifact.
+      this.openArtifactById(command.artifactId);
     }
+  }
+
+  /**
+   * Open a specific artifact by ID, falling back to the conversation's most recent one.
+   *
+   * The fallback matters: an agent may emit compose:email without an artifactId (it is optional),
+   * and for a single-artifact turn the most recent artifact IS the draft. Without it the
+   * over-length path would dead-end on a button that does nothing.
+   */
+  private openArtifactById(artifactId?: string): void {
+    if (!this.chatArea) return;
+
+    if (artifactId) {
+      // UUIDsEqual, not ===: SQL Server returns UUIDs upper-case and PostgreSQL lower-case, so a
+      // string comparison silently misses across providers.
+      for (const artifacts of this.chatArea.artifactsByDetailId.values()) {
+        const match = artifacts.find(a => UUIDsEqual(a.artifactId, artifactId));
+        if (match) {
+          this.chatArea.onArtifactClicked({ artifactId: match.artifactId, versionId: match.artifactVersionId });
+          return;
+        }
+      }
+    }
+
+    this.openMostRecentArtifact();
   }
 
   /**

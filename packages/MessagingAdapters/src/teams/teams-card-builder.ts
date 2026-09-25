@@ -13,7 +13,7 @@
  * @see https://learn.microsoft.com/en-us/adaptive-cards/
  */
 
-import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, MJAIAgentEntityExtended, ActionableCommand, OpenResourceCommand, ComposeEmailCommand, AutomaticCommand, MediaOutput, AgentResponseForm, FormQuestion } from '@memberjunction/ai-core-plus';
 import { BuildExplorerDeepLink, IsOpenableURI, SplitMarkdownIntoSections } from '../base/message-formatter.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -292,16 +292,24 @@ export function buildArtifactCard(
  * (unlike Slack, there is no file-upload path here).
  */
 export function BuildUnopenableResourceNotes(commands: ActionableCommand[]): Record<string, unknown>[] {
-    const labels = commands
-        .slice(0, 5)
-        .filter(cmd => cmd.type === 'open:url' && 'url' in cmd && !IsOpenableURI(cmd.url))
-        .map(cmd => cmd.label ?? 'File');
+    const notes: string[] = [];
 
-    if (labels.length === 0) return [];
+    for (const cmd of commands.slice(0, 5)) {
+        if (cmd.type === 'open:url' && 'url' in cmd && !IsOpenableURI(cmd.url)) {
+            notes.push(`📄 _${cmd.label ?? 'File'} — open it with "View in MJ Explorer" below._`);
+        } else if (cmd.type === 'compose:email') {
+            // A mailto: URL fails isOpenableURI, so buildActionButtons drops it. Without this note
+            // the command would render as nothing at all and the user would never learn a draft
+            // exists. Name the draft by its label only — no recipient or subject on a shared surface.
+            notes.push(formatComposeEmailNote(cmd));
+        }
+    }
 
-    return labels.map(label => ({
+    if (notes.length === 0) return [];
+
+    return notes.map(text => ({
         type: 'TextBlock',
-        text: `📄 _${label} — open it with "View in MJ Explorer" below._`,
+        text,
         wrap: true,
         isSubtle: true,
         spacing: 'Small',
@@ -314,8 +322,36 @@ export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Rec
 }
 
 /**
+ * Describe a `compose:email` command for a Teams body note.
+ *
+ * Teams cannot open a `mailto:` from an Action.OpenUrl (its URI check accepts http/https only), so
+ * the draft is described and the user is pointed at Explorer, where the Email Draft artifact holds
+ * the full text. DELIBERATELY WITHOUT the recipient or subject: a Teams channel or group chat is a
+ * shared, retained surface, and correspondence metadata safe for the person who will send the mail
+ * is not safe for every participant. Only the label and the route back are shown; recipient and
+ * subject would need an explicit private-context signal from the adapter, which does not exist yet.
+ */
+function formatComposeEmailNote(cmd: ComposeEmailCommand): string {
+    return `✉️ _${escapeCardMarkdown(cmd.label ?? 'Email draft')} — email draft available; open it with "View in MJ Explorer" below to review and send._`;
+}
+
+/**
+ * Escape the markdown subset an Adaptive Card TextBlock renders.
+ *
+ * Every field here is AGENT-AUTHORED, and TextBlock renders links. Without this a subject of
+ * `Renewal [click here](https://evil.example)` becomes a live hyperlink inside an official MJ
+ * card — the same "never hand the user a hostile link" case the adapter guards elsewhere through
+ * isOpenableURI. Brackets and parens defuse links; underscores and asterisks stop agent text from
+ * breaking out of the surrounding italics.
+ */
+function escapeCardMarkdown(text: string): string {
+    return text.replace(/([\[\]()_*`\\])/g, '\\$1');
+}
+
+/**
  * Build Action.OpenUrl buttons from actionable commands.
- * Handles `open:url` and `open:resource` command types.
+ * Handles `open:url` and `open:resource` command types. `compose:email` carries a mailto: URL,
+ * which Teams will not open from a button — it is surfaced by buildUnopenableResourceNotes instead.
  * Returns at most 5 action buttons.
  */
 export function BuildActionButtons(

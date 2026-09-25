@@ -3,17 +3,25 @@
     <div class="commands-label">Actions:</div>
     <div class="commands-buttons">
       @for (command of commands; track trackByCommand($index, command)) {
-        <button mjButton
-          [variant]="getButtonVariant(command)"
-          [disabled]="disabled"
-          (click)="onCommandClick(command)"
-          class="command-button"
-          >
-          @if (command.icon) {
-            <i class="fa {{ command.icon }}" aria-hidden="true"></i>
+        @let recipients = composeEmailRecipients(command);
+        <div class="command-item">
+          <button mjButton
+            [variant]="getButtonVariant(command)"
+            [disabled]="disabled"
+            (click)="onCommandClick(command)"
+            class="command-button"
+            >
+            @if (command.icon) {
+              <i class="fa {{ command.icon }}" aria-hidden="true"></i>
+            }
+            {{ command.label }}
+          </button>
+          @if (recipients) {
+            <!-- Shown so the user can see WHO a draft is addressed to before their mail client
+                 opens already populated — see composeEmailRecipients(). -->
+            <div class="command-recipients">{{ recipients }}</div>
           }
-          {{ command.label }}
-        </button>
+        </div>
       }
     </div>
   </div>
