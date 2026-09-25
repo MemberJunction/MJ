@@ -13,3 +13,8 @@ export * from './margins';
 export * from './driver/capabilities';
 export * from './driver/publish';
 export * from './driver/bindingValidation';
+export * from './consumer/deadLetter';
+export * from './consumer/SqsTransportConsumer';
+export * from './operator/deadLetterScan';
+export * from './operator/AwsTransportOperator';
+export * from './driver/AwsTransportDriver';
