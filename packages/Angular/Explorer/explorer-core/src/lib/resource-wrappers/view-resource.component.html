@@ -27,6 +27,16 @@
                     <span>New Record</span>
                 </button>
 
+                <!-- A custom form hides the CodeGen form for this entity (MJ#4755). -->
+                @if (ShowNewInStandardForm) {
+                    <button mjButton variant="outline" type="button" class="action-button"
+                        (click)="OnCreateNewRecordInStandardForm()"
+                        title="Create a new {{ entityInfo.Name }} record in the standard form (every field)">
+                        <i class="fa-solid fa-table-list" aria-hidden="true"></i>
+                        <span>New in standard form</span>
+                    </button>
+                }
+
                 <!-- Save as List Button — only meaningful for saved (non-dynamic) views. -->
                 @if (viewEntity?.ID) {
                     <button
