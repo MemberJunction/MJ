@@ -8,7 +8,7 @@ import {
     IEntityDataProvider,
 } from '@memberjunction/core';
 import { CloneMaterializer } from '../CloneMaterializer';
-import { ClonePlan } from '@memberjunction/record-cloning-base';
+import { ClonePlan, MapFieldsForClone } from '@memberjunction/record-cloning-base';
 import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 class MockEntity extends BaseEntity {
@@ -85,22 +85,7 @@ describe('CloneMaterializer', () => {
     it('materializes root and children using dynamic collections and re-stamps join field (§6.7)', async () => {
         const materializer = new CloneMaterializer(mockMetadataProvider);
 
-        // Source records
-        const sourceRoot = new MockEntity(parentEntityInfo as EntityInfo, mockDataProvider);
-        sourceRoot.NewRecord();
-        sourceRoot.Set('ID', 'source-parent-uuid');
-        sourceRoot.Set('Name', 'Original Source Parent');
 
-        const sourceChild = new MockEntity(childEntityInfo as EntityInfo, mockDataProvider);
-        sourceChild.NewRecord();
-        sourceChild.Set('ID', 'source-child-uuid');
-        sourceChild.Set('ParentID', 'source-parent-uuid'); // Points to old parent
-        sourceChild.Set('Name', 'Original Child');
-        sourceChild.Set('Sequence', 42);
-
-        const loadedSources = new Map<string, BaseEntity>();
-        loadedSources.set('source-parent-uuid', sourceRoot);
-        loadedSources.set('source-child-uuid', sourceChild);
 
         const plan: ClonePlan = {
             RootEntityName: 'ParentEntity',
@@ -149,7 +134,7 @@ describe('CloneMaterializer', () => {
             Excluded: [],
         };
 
-        const result = await materializer.Materialize(plan, mockUser, loadedSources);
+        const result = await materializer.Materialize(plan, mockUser);
 
         // 1. Root verification
         expect(result.RootEntity).toBeDefined();
@@ -196,27 +181,17 @@ describe('CloneMaterializer', () => {
             GetEntityObject: async <T extends BaseEntity>(n: string): Promise<T> => dataProvider.GetEntityObject<T>(n),
         } as unknown as IMetadataProvider;
 
-        const sourceRoot = new MockEntity(parentEntityInfo as EntityInfo, dataProvider);
-        sourceRoot.NewRecord();
-        sourceRoot.Set('ID', 'p-1');
-        const sourceTag = new MockEntity(junctionInfo, dataProvider);
-        sourceTag.NewRecord();
-        sourceTag.Set('ParentID', 'p-1');
-        sourceTag.Set('TagID', 't-9');
-        sourceTag.Set('Note', 'keep me');
-        const loaded = new Map<string, BaseEntity>([['p-1', sourceRoot], ['ParentID|p-1||TagID|t-9', sourceTag]]);
-
         const plan = {
             RootEntityName: 'ParentEntity', RootSourceKey: 'p-1', RootTargetKey: 'p-new', PlanHash: 'h', Blocked: false, Warnings: [],
             Nodes: [
                 { NodeKey: 'root', EntityName: 'ParentEntity', SourceKey: 'ID|p-1', TargetKey: 'p-new', Action: 'Create', Depth: 0, Route: 'RootSave', FieldChanges: [] },
-                { NodeKey: 'tag', EntityName: 'ParentTags', SourceKey: 'ParentID|p-1||TagID|t-9', TargetKey: 'ParentID|p-new||TagID|t-9', Action: 'Create', Depth: 1, Route: 'Collection', FieldChanges: [] },
+                { NodeKey: 'tag', EntityName: 'ParentTags', SourceKey: 'ParentID|p-1||TagID|t-9', TargetKey: 'ParentID|p-new||TagID|t-9', Action: 'Create', Depth: 1, Route: 'Collection', FieldChanges: [{ Field: 'Note', Kind: 'Copy', OldValue: 'keep me', NewValue: 'keep me', Reason: '' }] },
             ],
             Edges: [{ FromKey: 'root', ToKey: 'tag', JoinField: 'ParentID', Policy: 'Deep' }],
             Excluded: [],
         } as unknown as ClonePlan;
 
-        const result = await new CloneMaterializer(provider).Materialize(plan, mockUser, loaded);
+        const result = await new CloneMaterializer(provider).Materialize(plan, mockUser);
         const tag = result.StagedEntities.get('tag')!;
 
         expect(result.RootEntity.Get('ID')).toBe('p-new');
@@ -247,13 +222,6 @@ describe('CloneMaterializer', () => {
             EntityByName: (n: string) => (n === 'Notes' ? noteInfo : n === 'ParentEntity' ? (parentEntityInfo as EntityInfo) : null),
             GetEntityObject: async <T extends BaseEntity>(n: string): Promise<T> => dataProvider.GetEntityObject<T>(n),
         } as unknown as IMetadataProvider;
-        const sourceRoot = new MockEntity(parentEntityInfo as EntityInfo, dataProvider);
-        sourceRoot.NewRecord();
-        sourceRoot.Set('ID', 'p-1');
-        const sourceNote = new MockEntity(noteInfo, dataProvider);
-        sourceNote.NewRecord();
-        sourceNote.Set('ID', 'n-1');
-        sourceNote.Set('RecordID', 'p-1');
         const plan = {
             RootEntityName: 'ParentEntity', RootSourceKey: 'p-1', RootTargetKey: 'p-new', PlanHash: 'h', Blocked: false, Warnings: [],
             Nodes: [
@@ -264,32 +232,14 @@ describe('CloneMaterializer', () => {
             Excluded: [],
         } as unknown as ClonePlan;
 
-        const result = await new CloneMaterializer(provider).Materialize(plan, mockUser, new Map([['p-1', sourceRoot], ['n-1', sourceNote]]));
+        const result = await new CloneMaterializer(provider).Materialize(plan, mockUser);
         expect(result.StagedEntities.get('note')!.Get('RecordID')).toBe('p-new');
     });
 
     it('falls back to sidecar entities when collection dynamic declaration fails', async () => {
         const materializer = new CloneMaterializer(mockMetadataProvider);
 
-        const sourceRoot = new MockEntity(parentEntityInfo as EntityInfo, mockDataProvider);
-        sourceRoot.NewRecord();
-        sourceRoot.Set('ID', 'source-p');
-
-        const sourceChild = new MockEntity(childEntityInfo as EntityInfo, mockDataProvider);
-        sourceChild.NewRecord();
-        sourceChild.Set('ID', 'source-c');
-        sourceChild.Set('ParentID', 'source-p');
-
-        const loadedSources = new Map<string, BaseEntity>();
-        loadedSources.set('source-p', sourceRoot);
-        loadedSources.set('source-c', sourceChild);
-
-        // Spy on DeclareRelatedRecordsDynamic to throw
-        vi.spyOn(sourceRoot, 'DeclareRelatedRecordsDynamic').mockImplementation(() => {
-            throw new Error('Dynamic collections unsupported');
-        });
-
-        // Also mock new root instance's DeclareRelatedRecordsDynamic
+        // The new root refuses dynamic collections
         const origGetEntityObject = mockMetadataProvider.GetEntityObject;
         vi.spyOn(mockMetadataProvider, 'GetEntityObject').mockImplementation(async (entityName: string) => {
             const ent = await origGetEntityObject(entityName);
@@ -343,10 +293,32 @@ describe('CloneMaterializer', () => {
             Excluded: [],
         };
 
-        const result = await materializer.Materialize(plan, mockUser, loadedSources);
+        const result = await materializer.Materialize(plan, mockUser);
 
         expect(result.SidecarEntities.length).toBe(1);
         expect(result.SidecarEntities[0].Get('ID')).toBe('target-c');
         expect(result.SidecarEntities[0].Get('ParentID')).toBe('target-p');
+    });
+
+    it('leaves a Fields.Exclude column at its default instead of copying it', async () => {
+        const mapped = MapFieldsForClone({
+            EntityName: 'ParentEntity',
+            Fields: [
+                { Name: 'ID', IsPrimaryKey: true },
+                { Name: 'Name', IsPrimaryKey: false },
+            ],
+            SourceRecord: { ID: 'src-1', Name: 'Secret name' },
+            FieldRules: { Exclude: ['Name'] },
+        });
+        const plan = {
+            RootEntityName: 'ParentEntity', RootSourceKey: 'src-1', RootTargetKey: 'new-1', PlanHash: 'h', Blocked: false, Warnings: [],
+            Nodes: [{ NodeKey: 'root', EntityName: 'ParentEntity', SourceKey: 'src-1', TargetKey: 'new-1', Action: 'Create', Depth: 0, Route: 'RootSave', FieldChanges: mapped.FieldChanges }],
+            Edges: [],
+            Excluded: [],
+        } as unknown as ClonePlan;
+
+        const result = await new CloneMaterializer(mockMetadataProvider).Materialize(plan, mockUser);
+        expect(result.RootEntity.Get('ID')).toBe('new-1');
+        expect(result.RootEntity.Get('Name')).toBeNull();
     });
 });

@@ -63,11 +63,7 @@ export class CloneExecutor {
     /**
      * Executes a ClonePlan atomically.
      */
-    public async Execute(
-        plan: ClonePlan,
-        contextUser: UserInfo,
-        loadedSources?: Map<string, BaseEntity>
-    ): Promise<RecordCloneResult> {
+    public async Execute(plan: ClonePlan, contextUser: UserInfo): Promise<RecordCloneResult> {
         const md = this.Provider;
 
         // 1. Refuse blocked plan
@@ -124,7 +120,7 @@ export class CloneExecutor {
                     StagedEntities: stagedEntities,
                     SidecarEntities: sidecarEntities,
                     PrerequisiteEntities: prerequisiteEntities,
-                } = await materializer.Materialize(plan, contextUser, loadedSources);
+                } = await materializer.Materialize(plan, contextUser);
 
                 // 4. Attach CloneContext to all staged entities (§10)
                 for (const [nodeKey, entity] of stagedEntities.entries()) {

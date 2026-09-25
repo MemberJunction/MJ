@@ -2,14 +2,13 @@
  * @file CloneMaterializer.ts
  * Builds the in-memory entity graph for record cloning.
  * Orchestrates collection routing (declared vs dynamic via DeclareRelatedRecordsDynamic),
- * CopyFrom with includePrimaryKeys=false, immediate join-field re-stamping,
- * polymorphic IS-A child additions, and sequence preservation.
+ * builds each row from NewRecord() plus the plan's field values, re-stamps join fields,
+ * and handles polymorphic IS-A child additions.
  * @see plans/record-cloning/README.md §6, §13.1
  */
 
 import {
     BaseEntity,
-    CompositeKey,
     IMetadataProvider,
     Metadata,
     RelatedRecordCollection,
@@ -17,21 +16,6 @@ import {
 } from '@memberjunction/core';
 import { ClonePlan, ClonePlanNode, CompositeKeyLike } from '@memberjunction/record-cloning-base';
 import { SingleKeyField, ToCompositeKey, ToRecordKeyString } from './CloneKeys';
-
-/** A loaded source row keyed by any of the forms callers use: full record-id string, or first value. */
-function findLoadedSource(loaded: Map<string, BaseEntity> | undefined, key: CompositeKey, raw: unknown): BaseEntity | undefined {
-    if (!loaded) return undefined;
-    const candidates = [
-        ToRecordKeyString(key),
-        key.ToConcatenatedString(),
-        typeof raw === 'string' ? raw : '',
-        key.KeyValuePairs.length === 1 ? String(key.KeyValuePairs[0].Value ?? '') : '',
-    ];
-    for (const c of candidates) {
-        if (c && loaded.has(c)) return loaded.get(c);
-    }
-    return undefined;
-}
 
 /** Writes every column of a planned target key (single or composite) onto the new row. */
 function applyTargetKey(entity: BaseEntity, targetKey: CompositeKeyLike | string | null | undefined): void {
@@ -65,11 +49,7 @@ export class CloneMaterializer {
     /**
      * Materializes a ClonePlan into memory.
      */
-    public async Materialize(
-        plan: ClonePlan,
-        contextUser: UserInfo,
-        loadedSources?: Map<string, BaseEntity>
-    ): Promise<MaterializedGraph> {
+    public async Materialize(plan: ClonePlan, contextUser: UserInfo): Promise<MaterializedGraph> {
         const md = this.Provider;
         const stagedEntities = new Map<string, BaseEntity>();
         const sidecarEntities: BaseEntity[] = [];
@@ -88,22 +68,11 @@ export class CloneMaterializer {
 
         rootEntity.NewRecord();
 
-        // Load root source if not provided (every key column, single or composite)
-        const rootCompKey = ToCompositeKey(rootEntity.EntityInfo, rootPlanNode.SourceKey);
-        let sourceRoot = findLoadedSource(loadedSources, rootCompKey, rootPlanNode.SourceKey);
-        if (!sourceRoot) {
-            sourceRoot = await md.GetEntityObject<BaseEntity>(rootPlanNode.EntityName, contextUser);
-            await sourceRoot.InnerLoad(rootCompKey);
-        }
-
-        // Copy data from root source
-        rootEntity.CopyFrom(sourceRoot, false);
+        // The plan's field values are the whole row: excluded and denied fields keep the column default.
+        this.applyFieldChanges(rootEntity, rootPlanNode);
 
         // Assign the planned target key (minted UUID or derived composite; none when server-assigned)
         applyTargetKey(rootEntity, rootPlanNode.TargetKey);
-
-        // Apply mapped field values to root
-        this.applyFieldChanges(rootEntity, rootPlanNode);
 
         const rootNodeKey = rootPlanNode.NodeKey ?? rootPlanNode.Key;
         stagedEntities.set(rootNodeKey, rootEntity);
@@ -147,21 +116,13 @@ export class CloneMaterializer {
                     }
                 }
 
-                // Load source child record (every key column, single or composite)
-                const childCompKey = ToCompositeKey(childEntity.EntityInfo, childNode.SourceKey);
-                let sourceChild = findLoadedSource(loadedSources, childCompKey, childNode.SourceKey);
-                if (!sourceChild) {
-                    sourceChild = await md.GetEntityObject<BaseEntity>(childNode.EntityName, contextUser);
-                    await sourceChild.InnerLoad(childCompKey);
-                }
-
-                // Copy data from source child
-                childEntity.CopyFrom(sourceChild, false);
+                // The plan's field values are the whole row: excluded and denied fields keep the column default.
+                this.applyFieldChanges(childEntity, childNode);
 
                 // Assign the planned target key (minted UUID or derived composite; none when server-assigned)
                 applyTargetKey(childEntity, childNode.TargetKey);
 
-                // CRITICAL RULE (§6.7): Re-set the join field immediately after CopyFrom.
+                // CRITICAL RULE (§6.7): Re-set the join field after the planned values.
                 // Foreign keys reference a single-column key, so both sides of the join use that column.
                 if (edge.Kind === 'ForwardFK') {
                     // In a ForwardFK, parentEntity owns the FK pointing to childEntity
@@ -175,9 +136,6 @@ export class CloneMaterializer {
                     const parentKeyField = SingleKeyField(parentEntity.EntityInfo, 'Joining a cloned child to its parent');
                     childEntity.Set(edge.JoinField, parentEntity.Get(parentKeyField));
                 }
-
-                // Apply mapped field values
-                this.applyFieldChanges(childEntity, childNode);
 
                 stagedEntities.set(childNodeKey, childEntity);
             }
@@ -232,7 +190,8 @@ export class CloneMaterializer {
     }
 
     /**
-     * Applies planned field transformations to an entity instance.
+     * Writes the plan's field values in pipeline order, so later stages (reset, rename, remap,
+     * prompt) win over the copied value. Fields the plan excludes are never set.
      */
     private applyFieldChanges(entity: BaseEntity, planNode: ClonePlanNode): void {
         for (const change of planNode.FieldChanges) {

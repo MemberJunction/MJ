@@ -808,7 +808,6 @@ describe('Phase 4.5: MJ: Dashboards, MJ: User Views, MJ: Lists, MJ: Themes, MJ: 
             return { Success: true, Results: [] };
         });
 
-        const loadedSources = new Map<string, BaseEntity>([[sourceDashboardID, originalDash]]);
 
         const planner = new ClonePlanner({ Provider: mockMetadata });
         const plan = await planner.Plan(
@@ -835,7 +834,7 @@ describe('Phase 4.5: MJ: Dashboards, MJ: User Views, MJ: Lists, MJ: Themes, MJ: 
         expect(thumbChange?.NewValue).toBeNull();
 
         const executor = new CloneExecutor({ Provider: mockMetadata });
-        const result = await executor.Execute(plan, contextUser, loadedSources);
+        const result = await executor.Execute(plan, contextUser);
         expect(result.Success).toBe(true);
 
         const clonedDash = savedEntities.find((e) => e.EntityInfo.Name === 'MJ: Dashboards');
@@ -912,7 +911,6 @@ describe('Phase 4.5: MJ: Dashboards, MJ: User Views, MJ: Lists, MJ: Themes, MJ: 
             return { Success: true, Results: [] };
         });
 
-        const loadedSources = new Map<string, BaseEntity>([[sourceViewID, originalView]]);
 
         const planner = new ClonePlanner({ Provider: mockMetadata });
         const plan = await planner.Plan(
@@ -941,7 +939,7 @@ describe('Phase 4.5: MJ: Dashboards, MJ: User Views, MJ: Lists, MJ: Themes, MJ: 
         expect(smartExplChange?.NewValue).toBeNull();
 
         const executor = new CloneExecutor({ Provider: mockMetadata });
-        const result = await executor.Execute(plan, contextUser, loadedSources);
+        const result = await executor.Execute(plan, contextUser);
         expect(result.Success).toBe(true);
 
         const clonedView = savedEntities.find((e) => e.EntityInfo.Name === 'MJ: User Views');
@@ -1018,11 +1016,6 @@ describe('Phase 4.5: MJ: Dashboards, MJ: User Views, MJ: Lists, MJ: Themes, MJ: 
             return { Success: true, Results: [] };
         });
 
-        const loadedSources = new Map<string, BaseEntity>([
-            [sourceListID, originalList],
-            [detail1Id, originalDetail1],
-            [detail2Id, originalDetail2],
-        ]);
 
         const planner = new ClonePlanner({ Provider: mockMetadata });
         const plan = await planner.Plan(
@@ -1049,7 +1042,7 @@ describe('Phase 4.5: MJ: Dashboards, MJ: User Views, MJ: Lists, MJ: Themes, MJ: 
         }
 
         const executor = new CloneExecutor({ Provider: mockMetadata });
-        const result = await executor.Execute(plan, contextUser, loadedSources);
+        const result = await executor.Execute(plan, contextUser);
         expect(result.Success).toBe(true);
 
         const clonedList = savedEntities.find((e) => e.EntityInfo.Name === 'MJ: Lists');

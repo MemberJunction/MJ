@@ -46,6 +46,18 @@ interface CompositeKeyLike {
     KeyValuePairs: Array<CompositeKey['KeyValuePairs'][number]>;
 }
 
+/**
+ * Fields the user may not read or may not supply on create, for entities with field-level security.
+ * The mapper leaves them out, so a clone never copies a value its user couldn't see or set.
+ */
+function fieldLevelDenials(entity: EntityInfo, user: UserInfo): { DeniedReadFields: string[]; DeniedCreateFields: string[] } | undefined {
+    if (!entity.EnableFieldLevelSecurity) return undefined;
+    const deniedRead = entity.GetDeniedReadFields(user);
+    const deniedCreate = entity.GetDeniedCreateFields(user);
+    const names = (denied: Set<string>) => entity.Fields.filter((f) => denied.has(f.Name.toLowerCase())).map((f) => f.Name);
+    return { DeniedReadFields: names(deniedRead), DeniedCreateFields: names(deniedCreate) };
+}
+
 export class ClonePlanner {
     private _provider?: IMetadataProvider;
 
@@ -598,6 +610,7 @@ export class ClonePlanner {
                 })(),
                 RequestOverrides: isRoot ? (request.FieldOverrides ?? request.Options?.FieldOverrides) : undefined,
                 PromptedValues: isRoot ? (request.PromptedValues ?? request.Options?.PromptedValues) : undefined,
+                FLS: fieldLevelDenials(entInfo, contextUser),
                 IsRoot: isRoot,
                 HierarchyParentField: entInfo.Fields.find((f) => f.IsHierarchy)?.Name,
                 NewParentKey: isRoot ? (request.Options?.NewParentKey ?? null) : undefined,

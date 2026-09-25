@@ -758,11 +758,6 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
             return { Success: true, Results: [] };
         });
 
-        const loadedSources = new Map<string, BaseEntity>([
-            [sourceAppID, originalApp],
-            [childAppEntityID, originalAppEntity],
-            [childAppSettingID, originalAppSetting],
-        ]);
 
         const planner = new ClonePlanner({ Provider: mockMetadata });
         const plan = await planner.Plan(
@@ -802,7 +797,7 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
 
         // Execute Clone
         const executor = new CloneExecutor({ Provider: mockMetadata });
-        const result = await executor.Execute(plan, contextUser, loadedSources);
+        const result = await executor.Execute(plan, contextUser);
         expect(result.ErrorMessage).toBeUndefined();
         expect(result.Success).toBe(true);
 
@@ -880,10 +875,6 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
             return { Success: true, Results: [] };
         });
 
-        const loadedSources = new Map<string, BaseEntity>([
-            [sourceRoleID, originalRole],
-            [sourcePermID, originalPerm],
-        ]);
 
         const planner = new ClonePlanner({ Provider: mockMetadata });
         const plan = await planner.Plan(
@@ -913,7 +904,7 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
 
         // Execute Clone
         const executor = new CloneExecutor({ Provider: mockMetadata });
-        const result = await executor.Execute(plan, contextUser, loadedSources);
+        const result = await executor.Execute(plan, contextUser);
         expect(result.Success).toBe(true);
 
         const clonedRole = savedEntities.find((e) => e.EntityInfo.Name === 'MJ: Roles');
@@ -992,10 +983,6 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
             return { Success: true, Results: [] };
         });
 
-        const loadedSources = new Map<string, BaseEntity>([
-            [sourceCompID, originalComp],
-            [sourceDepID, originalDep],
-        ]);
 
         const planner = new ClonePlanner({ Provider: mockMetadata });
         const plan = await planner.Plan(
@@ -1029,7 +1016,7 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
 
         // Execute Clone
         const executor = new CloneExecutor({ Provider: mockMetadata });
-        const result = await executor.Execute(plan, contextUser, loadedSources);
+        const result = await executor.Execute(plan, contextUser);
         expect(result.Success).toBe(true);
 
         const clonedComp = savedEntities.find((e) => e.EntityInfo.Name === 'MJ: Components');
@@ -1099,10 +1086,6 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
             return { Success: true, Results: [] };
         });
 
-        const loadedSources = new Map<string, BaseEntity>([
-            [sourceProcID, originalProc],
-            [sourceRunID, originalRun],
-        ]);
 
         const planner = new ClonePlanner({ Provider: mockMetadata });
         const plan = await planner.Plan(
@@ -1132,7 +1115,7 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
 
         // Execute Clone
         const executor = new CloneExecutor({ Provider: mockMetadata });
-        const result = await executor.Execute(plan, contextUser, loadedSources);
+        const result = await executor.Execute(plan, contextUser);
         expect(result.Success).toBe(true);
 
         const clonedProc = savedEntities.find((e) => e.EntityInfo.Name === 'MJ: Record Processes');

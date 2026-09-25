@@ -1274,12 +1274,6 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
             originalResultCode.Set('Code', 'Success');
             originalResultCode.Set('Description', 'All good');
 
-            const loadedSources = new Map<string, BaseEntity>([
-                [rootActionId, originalRootAction],
-                [subActionId, originalSubAction],
-                [paramId, originalParam],
-                [resultCodeId, originalResultCode],
-            ]);
 
             const planner = new ClonePlanner({ Provider: mockMetadata });
             const plan = await planner.Plan(
@@ -1308,7 +1302,7 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
 
             // Execute Clone
             const executor = new CloneExecutor({ Provider: mockMetadata });
-            const execResult = await executor.Execute(plan, contextUser, loadedSources);
+            const execResult = await executor.Execute(plan, contextUser);
             expect(execResult.Success).toBe(true);
 
             // Verify Root Action resets
@@ -1419,11 +1413,6 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
             originalPerm.Set('QueryID', queryId);
             originalPerm.Set('RoleID', 'role-admin');
 
-            const loadedSources = new Map<string, BaseEntity>([
-                [queryId, originalQuery],
-                [sqlVariantId, originalSQL],
-                [permId, originalPerm],
-            ]);
 
             const planner = new ClonePlanner({ Provider: mockMetadata });
             const plan = await planner.Plan(
@@ -1449,7 +1438,7 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
 
             // Execute Clone
             const executor = new CloneExecutor({ Provider: mockMetadata });
-            const execResult = await executor.Execute(plan, contextUser, loadedSources);
+            const execResult = await executor.Execute(plan, contextUser);
             expect(execResult.Success).toBe(true);
 
             // Verify Query field resets
@@ -1531,9 +1520,6 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
             originalJob.Set('StartAt', new Date());
             originalJob.Set('EndAt', new Date(Date.now() + 1000000));
 
-            const loadedSources = new Map<string, BaseEntity>([
-                [jobId, originalJob],
-            ]);
 
             const planner = new ClonePlanner({ Provider: mockMetadata });
             const plan = await planner.Plan(
@@ -1551,7 +1537,7 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
 
             // Execute Clone
             const executor = new CloneExecutor({ Provider: mockMetadata });
-            const execResult = await executor.Execute(plan, contextUser, loadedSources);
+            const execResult = await executor.Execute(plan, contextUser);
             expect(execResult.Success).toBe(true);
 
             const clonedJob = savedEntities.find((e) => e.EntityInfo.Name === 'MJ: Scheduled Jobs');

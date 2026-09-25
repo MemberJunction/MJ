@@ -154,8 +154,6 @@ describe('CloneExecutor', () => {
         sourceRoot.Set('ID', 'src-1');
         sourceRoot.Set('Name', 'Source Parent');
 
-        const loadedSources = new Map<string, BaseEntity>();
-        loadedSources.set('src-1', sourceRoot);
 
         const nodes = [
             {
@@ -185,7 +183,7 @@ describe('CloneExecutor', () => {
             Excluded: [],
         };
 
-        const result = await executor.Execute(plan, mockUser, loadedSources);
+        const result = await executor.Execute(plan, mockUser);
         expect(result.Success).toBe(true);
         expect(result.RecordsCloned).toBe(1);
         expect(result.CloneLogID).toBeDefined();
@@ -228,7 +226,7 @@ describe('CloneExecutor', () => {
             Blocked: false, Warnings: [], Nodes: nodes, Edges: [], Excluded: [],
         };
 
-        const result = await executor.Execute(plan, mockUser, new Map([['src-1', sourceRoot]]));
+        const result = await executor.Execute(plan, mockUser);
 
         expect(result.Success).toBe(true);
         expect(requested).toContain('MJ: Record Links');
@@ -252,7 +250,7 @@ describe('CloneExecutor', () => {
                 Blocked: false, Warnings: [], Nodes: nodes, Edges: [], Excluded: [],
                 EffectiveOptions: effective,
             } as unknown as ClonePlan;
-            await new CloneExecutor({ Provider: mockMetadataProvider }).Execute(plan, mockUser, new Map([['src-1', sourceRoot]]));
+            await new CloneExecutor({ Provider: mockMetadataProvider }).Execute(plan, mockUser);
             const save = vi.mocked(savedEntities[0].Save);
             return save.mock.calls[0][0];
         };
@@ -269,8 +267,6 @@ describe('CloneExecutor', () => {
         sourceRoot.NewRecord();
         sourceRoot.Set('ID', 'src-1');
 
-        const loadedSources = new Map<string, BaseEntity>();
-        loadedSources.set('src-1', sourceRoot);
 
         const nodes = [
             {
@@ -300,7 +296,7 @@ describe('CloneExecutor', () => {
             Excluded: [],
         };
 
-        const result = await executor.Execute(plan, mockUser, loadedSources);
+        const result = await executor.Execute(plan, mockUser);
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('DB Constraint Violation');
     });

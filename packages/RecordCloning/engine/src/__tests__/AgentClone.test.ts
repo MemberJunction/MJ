@@ -826,13 +826,6 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
         originalPath.Set('OriginStepID', step1Id);
         originalPath.Set('DestinationStepID', step2Id);
 
-        const loadedSources = new Map<string, BaseEntity>([
-            [parentAgentId, originalParentAgent],
-            [subAgentId, originalSubAgent],
-            [step1Id, originalStep1],
-            [step2Id, originalStep2],
-            [path1Id, originalPath],
-        ]);
 
         const planner = new ClonePlanner({ Provider: mockMetadata });
         const parentKey = new CompositeKey([{ FieldName: 'ID', Value: parentAgentId }]);
@@ -849,7 +842,7 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
         expect(plan.Blocked).toBe(false);
 
         const executor = new CloneExecutor({ Provider: mockMetadata });
-        const result = await executor.Execute(plan, contextUser, loadedSources);
+        const result = await executor.Execute(plan, contextUser);
 
         expect(result.ErrorMessage).toBeUndefined();
         expect(result.Success).toBe(true);

@@ -117,6 +117,26 @@ describe('ClonePlanner', () => {
         vi.clearAllMocks();
     });
 
+    it('leaves out fields the user may not read or create under field-level security', async () => {
+        const secured = {
+            ...parentEntity,
+            Name: 'SecuredEntity',
+            RelatedEntities: [],
+            Fields: [...(parentEntity.Fields ?? []), { Name: 'Salary', IsPrimaryKey: false, Type: 'int', IsSPParameter: () => true } as EntityFieldInfo],
+            EnableFieldLevelSecurity: true,
+            GetDeniedReadFields: () => new Set(['salary']),
+            GetDeniedCreateFields: () => new Set<string>(),
+        } as unknown as EntityInfo;
+        const provider = { ...mockProvider, Entities: [secured], EntityByName: (n: string) => (n === 'SecuredEntity' ? secured : null) } as IMetadataProvider;
+        mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'sec-1', Name: 'Row', Salary: 90000 }] });
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'SecuredEntity', SourceRecordKey: { ID: 'sec-1' } }, standardUser);
+
+        const salary = plan.Nodes[0].FieldChanges.filter((c) => c.Field === 'Salary');
+        expect(salary.map((c) => c.Kind)).toEqual(['DeniedRead']);
+        expect(JSON.stringify(salary)).not.toContain('90000');
+    });
+
     it('computes valid clone plan with pre-minted target keys and stable hash', async () => {
         const planner = new ClonePlanner({ Provider: mockProvider });
 
