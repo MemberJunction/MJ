@@ -12,6 +12,7 @@ export * from './ClassUtils'
 export * from './util/PatternUtils';
 export * from './util/ResourcePatternUtils';
 export * from './util/UUIDUtils';
+export * from './util/UUIDCollections';
 export * from './util/CronUtils';
 export * from './util/SerializationUtils';
 export * from './ValidationTypes'
