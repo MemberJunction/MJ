@@ -214,3 +214,119 @@ describe('FireAndForgetHelper.Execute', () => {
         expect(String((result as OpResult).via)).toContain('PushStatusUpdates');
     });
 });
+
+describe('FireAndForgetHelper — per-operation idle attribution (MJ #4222)', () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("another operation's traffic does not hold this operation's idle timer open", async () => {
+        const stream = new Subject<string>();
+        const dp = makeDataProvider(stream);
+        const stalls: number[] = [];
+
+        const promise = FireAndForgetHelper.Execute<OpResult>(
+            baseConfig(dp, {
+                // This operation is watching detail A only.
+                isRelevantMessage: (parsed) => parsed.detailId === 'A',
+                onStall: async (): Promise<StallDecision<OpResult>> => {
+                    stalls.push(Date.now());
+                    return { resolve: { ok: true, via: 'stall' } };
+                },
+            })
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        // A different concurrent run chatters away on the SAME session stream. The push topic is
+        // per-session, not per-operation, so before this change every one of these reset our
+        // timer — meaning a dead operation stayed "live" for as long as any sibling was noisy.
+        for (let i = 0; i < 20; i++) {
+            stream.next(JSON.stringify({ detailId: 'B', type: 'progress' }));
+            await vi.advanceTimersByTimeAsync(100);
+        }
+        await vi.advanceTimersByTimeAsync(1000);
+
+        expect(stalls).toHaveLength(1);
+        await expect(promise).resolves.toEqual({ ok: true, via: 'stall' });
+    });
+
+    it("this operation's own traffic does keep it alive", async () => {
+        const stream = new Subject<string>();
+        const dp = makeDataProvider(stream);
+        let stalled = false;
+
+        const promise = FireAndForgetHelper.Execute<OpResult>(
+            baseConfig(dp, {
+                isRelevantMessage: (parsed) => parsed.detailId === 'A',
+                onStall: async (): Promise<StallDecision<OpResult>> => {
+                    stalled = true;
+                    return { resolve: { ok: false, via: 'stall' } };
+                },
+            })
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        for (let i = 0; i < 5; i++) {
+            stream.next(JSON.stringify({ detailId: 'A', type: 'progress' }));
+            await vi.advanceTimersByTimeAsync(600);
+        }
+
+        expect(stalled).toBe(false);
+        stream.next(JSON.stringify({ detailId: 'A', type: 'complete' }));
+        await expect(promise).resolves.toEqual({ ok: true, via: 'completion' });
+    });
+
+    it('treats an unattributable message as activity, never as someone else\'s', async () => {
+        const stream = new Subject<string>();
+        const dp = makeDataProvider(stream);
+        let stalled = false;
+
+        const promise = FireAndForgetHelper.Execute<OpResult>(
+            baseConfig(dp, {
+                // Mirrors the real predicates: anything without an operation id fails OPEN.
+                isRelevantMessage: (parsed) => parsed.detailId === undefined || parsed.detailId === 'A',
+                onStall: async (): Promise<StallDecision<OpResult>> => {
+                    stalled = true;
+                    return { resolve: { ok: false, via: 'stall' } };
+                },
+            })
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        // A liveness pulse carries a runId but no conversationDetailId. Misreading it as another
+        // operation's traffic would time out a perfectly healthy long-running agent.
+        for (let i = 0; i < 5; i++) {
+            stream.next(JSON.stringify({ type: 'Heartbeat' }));
+            await vi.advanceTimersByTimeAsync(600);
+        }
+
+        expect(stalled).toBe(false);
+        stream.next(JSON.stringify({ detailId: 'A', type: 'complete' }));
+        await expect(promise).resolves.toEqual({ ok: true, via: 'completion' });
+    });
+
+    it('still treats every message as activity when no predicate is supplied', async () => {
+        const stream = new Subject<string>();
+        const dp = makeDataProvider(stream);
+        let stalled = false;
+
+        const promise = FireAndForgetHelper.Execute<OpResult>(
+            baseConfig(dp, {
+                onStall: async (): Promise<StallDecision<OpResult>> => {
+                    stalled = true;
+                    return { resolve: { ok: false, via: 'stall' } };
+                },
+            })
+        );
+        await vi.advanceTimersByTimeAsync(0);
+
+        // Backwards compatibility: callers that never opt in keep the pre-#4222 semantics.
+        for (let i = 0; i < 5; i++) {
+            stream.next(JSON.stringify({ detailId: 'B', type: 'progress' }));
+            await vi.advanceTimersByTimeAsync(600);
+        }
+
+        expect(stalled).toBe(false);
+        stream.next(JSON.stringify({ type: 'complete' }));
+        await expect(promise).resolves.toEqual({ ok: true, via: 'completion' });
+    });
+});

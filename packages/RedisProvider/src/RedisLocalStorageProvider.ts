@@ -186,6 +186,10 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     private _pubSubChannel: string;
     private _eventEmitter: EventEmitter = new EventEmitter();
     private _subscriberConnected: boolean = false;
+    /** Fully-qualified channel name -> handlers registered via {@link SubscribeToChannel}. */
+    private _channelHandlers: Map<string, Set<(message: string) => void>> = new Map();
+    /** Fully-qualified channel name -> the subscribe still in flight, shared by concurrent callers. */
+    private _pendingChannelSubscribes: Map<string, Promise<Set<(message: string) => void>>> = new Map();
     private _config: RedisProviderConfig;
 
     /**
@@ -679,6 +683,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
 
         // Remove all event listeners
         this._eventEmitter.removeAllListeners();
+        this._channelHandlers.clear();
 
         try {
             await this._client.quit();
@@ -827,10 +832,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         }
 
         this._subscriber.on('message', (channel: string, message: string) => {
-            if (channel !== this._pubSubChannel) {
+            if (channel === this._pubSubChannel) {
+                this.handlePubSubMessage(message);
                 return;
             }
-            this.handlePubSubMessage(message);
+            this.dispatchChannelMessage(channel, message);
         });
     }
 
@@ -952,6 +958,116 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 LogError(`Redis pub/sub publish failed: ${(err as Error).message}`);
             }
         });
+    }
+
+    /**
+     * Publishes an arbitrary message on a named channel. Fire-and-forget: the promise is not
+     * awaited and a failure is logged rather than raised, so a caller on a hot path is never
+     * blocked or broken by the message bus.
+     *
+     * The channel is namespaced with the provider's key prefix, so several applications can share
+     * one Redis without hearing each other.
+     *
+     * @param channel Logical channel name (unprefixed).
+     * @param payload Message body. Serialize before calling — this layer is shape-agnostic.
+     */
+    public PublishMessage(channel: string, payload: string): void {
+        if (!this._enablePubSub) {
+            return;
+        }
+        const fullChannel = this.qualifyChannel(channel);
+        this._client.publish(fullChannel, payload).catch((err) => {
+            if (this._enableLogging) {
+                LogError(`Redis pub/sub publish failed on "${fullChannel}": ${(err as Error).message}`);
+            }
+        });
+    }
+
+    /**
+     * Registers a handler for messages on a named channel, starting the subscriber if needed.
+     *
+     * No echo suppression happens here — this layer does not know the payload shape. A publisher
+     * that needs it must stamp its own origin on the message and check it in the handler.
+     *
+     * @returns A function that removes this handler.
+     */
+    public async SubscribeToChannel(channel: string, handler: (message: string) => void): Promise<() => void> {
+        if (!this._enablePubSub) {
+            return () => undefined;
+        }
+
+        await this.StartListening();
+        const fullChannel = this.qualifyChannel(channel);
+
+        const handlers = await this.channelHandlersFor(fullChannel);
+        handlers.add(handler);
+
+        return () => {
+            handlers.delete(handler);
+        };
+    }
+
+    /**
+     * The handler set for a channel, subscribing first when no caller has yet.
+     *
+     * Callers that arrive while a subscribe is in flight wait on that same subscribe. Each one
+     * starting its own would publish its own handler set, and the last to finish would replace
+     * the others' sets, so their handlers would never receive a message.
+     */
+    private channelHandlersFor(fullChannel: string): Promise<Set<(message: string) => void>> {
+        const existing = this._channelHandlers.get(fullChannel);
+        if (existing) {
+            return Promise.resolve(existing);
+        }
+        const pending = this._pendingChannelSubscribes.get(fullChannel);
+        if (pending) {
+            return pending;
+        }
+        const subscribing = this.subscribeChannel(fullChannel).finally(() => {
+            this._pendingChannelSubscribes.delete(fullChannel);
+        });
+        this._pendingChannelSubscribes.set(fullChannel, subscribing);
+        return subscribing;
+    }
+
+    /**
+     * Subscribes to a channel and publishes its handler set.
+     *
+     * The set is registered only once the subscribe has succeeded. A map entry published ahead of
+     * the await would survive a rejection, and every later caller reads that entry as proof the
+     * channel is subscribed — registering handlers against a channel Redis is not listening on,
+     * with nothing surfaced.
+     */
+    private async subscribeChannel(fullChannel: string): Promise<Set<(message: string) => void>> {
+        await this._subscriber?.subscribe(fullChannel);
+        const handlers = new Set<(message: string) => void>();
+        this._channelHandlers.set(fullChannel, handlers);
+        if (this._enableLogging) {
+            LogStatus(`Redis pub/sub: subscribed to channel "${fullChannel}"`);
+        }
+        return handlers;
+    }
+
+    /** Routes an inbound message to the handlers registered for its channel. @internal */
+    private dispatchChannelMessage(channel: string, message: string): void {
+        const handlers = this._channelHandlers.get(channel);
+        if (!handlers) {
+            return;
+        }
+        for (const handler of handlers) {
+            try {
+                handler(message);
+            } catch (err) {
+                if (this._enableLogging) {
+                    LogError(`Redis pub/sub handler for "${channel}" threw: ${(err as Error).message}`);
+                }
+            }
+        }
+    }
+
+    /** Namespaces a channel with the provider's key prefix. @internal */
+    private qualifyChannel(channel: string): string {
+        return `${this._keyPrefix}:${channel}`;
     }
 
     /**

@@ -61,6 +61,12 @@ import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
+import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
+import {
+  PUSH_STATUS_UPDATES_TOPIC,
+  SetPushStatusPublishHook,
+  type PushStatusNotificationPayload,
+} from './generic/PushStatusResolver.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
@@ -288,6 +294,64 @@ function resolveServerVersion(): string | undefined {
     return pkg.version;
   } catch {
     return undefined;
+  }
+}
+
+/** How often to re-check for conversation details left behind by finished runs. */
+const ORPHAN_DETAIL_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+/** Redis channel carrying replicated push-status updates between server instances. */
+const PUSH_STATUS_FANOUT_CHANNEL = 'push-status-updates';
+
+/**
+ * Replicate push-status updates across server instances over Redis (MJ #4222).
+ *
+ * Outbound: every locally-published update is forwarded on a shared channel. Inbound: a message
+ * from another instance is republished onto THIS instance's local topic, where the normal
+ * subscription filter decides who receives it — so the identity gate (`ownerUserId` vs. the
+ * connection's authenticated user) still applies to a replicated message exactly as it does to a
+ * local one. The replica has no say in who sees what.
+ *
+ * Republishing goes straight to `PubSubManager`, never back through `publishStatusUpdate`, so an
+ * inbound message cannot be re-broadcast and loop. `SourceServerId` guards the remaining case: a
+ * publisher also receives its own message from Redis.
+ */
+async function wirePushStatusFanOut(redisProvider: RedisLocalStorageProvider, startupLog: StartupLogger): Promise<void> {
+  try {
+    await redisProvider.SubscribeToChannel(PUSH_STATUS_FANOUT_CHANNEL, (raw: string) => {
+      try {
+        const payload = JSON.parse(raw) as PushStatusNotificationPayload;
+        if (payload.SourceServerId === MJGlobal.Instance.ProcessUUID) {
+          return; // our own message, echoed back
+        }
+        if (!payload.sessionId || !payload.ownerUserId) {
+          return; // fail closed — an update with no identity can never be routed safely
+        }
+        // Rebuilt as a plain record: the topic's publish signature takes an index-signature type,
+        // and listing the fields keeps the wire shape explicit at the one place it crosses hosts.
+        PubSubManager.Instance.Publish(PUSH_STATUS_UPDATES_TOPIC, {
+          sessionId: payload.sessionId,
+          ownerUserId: payload.ownerUserId,
+          message: payload.message,
+          SourceServerId: payload.SourceServerId,
+        });
+      } catch {
+        // A malformed message on a shared channel must not take down the subscriber.
+      }
+    });
+
+    SetPushStatusPublishHook((payload) => {
+      redisProvider.PublishMessage(PUSH_STATUS_FANOUT_CHANNEL, JSON.stringify(payload));
+    });
+
+    // Printed unconditionally, not verbose-gated. "Is fan-out actually on?" is the first question
+    // anyone debugging a hung conversation behind a load balancer asks, and a silent default left
+    // no way to answer it.
+    console.log('[MJAPI] Push-status updates: cross-instance fan-out enabled via Redis');
+  } catch (err) {
+    // Single-instance delivery still works, and the durable tail query covers the rest. Degraded,
+    // not broken — so this must not stop the server from starting.
+    console.warn(`Push-status fan-out unavailable: ${(err as Error).message}`);
   }
 }
 
@@ -719,6 +783,15 @@ const setupComplete$ = new ReplaySubject(1);
         }
     });
 
+    // Fan push-status updates across server instances (MJ #4222).
+    //
+    // Behind a load balancer the browser's WebSocket lives on one replica while the mutation that
+    // drives the agent can be handled by another. The push topic is an in-process PubSub, so a
+    // completion published on replica B never reaches a subscriber on replica A — the browser waits
+    // forever for an event that was delivered to nobody. Replicating progress and completion over
+    // Redis closes that, and the durable tail query remains the backstop if Redis is down.
+    await wirePushStatusFanOut(redisProvider, startupLog);
+
     startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
   }
 
@@ -1074,6 +1147,15 @@ const setupComplete$ = new ReplaySubject(1);
     }
   });
 
+  // graphql-ws's ws integration takes its keepalive as a THIRD POSITIONAL argument to useServer,
+  // defaulting to 12_000 when omitted. That default was doing real work here while being invisible
+  // at the call site: the server pings every 12s and terminates the socket after an unanswered
+  // pong, which is why MJAPI notices a half-open link in ~12-24s while the browser — whose
+  // graphql-ws client does nothing on an unanswered pong — noticed nothing at all (MJ #4222).
+  // Stated explicitly so the behaviour is visible and tunable, and so the next reader does not
+  // conclude from the call site that no server-side heartbeat exists. Value unchanged.
+  const WS_SERVER_KEEPALIVE_MS = 12_000;
+
   // Track per-connection expiry timers so we can clean them up on close
   const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
 
@@ -1148,7 +1230,8 @@ const setupComplete$ = new ReplaySubject(1);
         console.error('WebSocket error:', errors);
       },
     },
-    webSocketServer
+    webSocketServer,
+    WS_SERVER_KEEPALIVE_MS
   );
 
   const apolloServer = buildApolloServer(
@@ -1579,8 +1662,25 @@ const setupComplete$ = new ReplaySubject(1);
   // instance is still heart-beating. The watchdog also self-registers for graceful-shutdown
   // cancellation (via ShutdownRegistry) once it begins tracking this process's first live run.
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
-    AgentRunWatchdog.SweepOrphanedRuns(Metadata.Provider, resumeUser) // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+    const sweepUser = resumeUser;
+    const sweepProvider = Metadata.Provider; // global-provider-ok: server startup recovery — one-shot orphaned-run sweep at boot
+    AgentRunWatchdog.SweepOrphanedRuns(sweepProvider, sweepUser)
       .catch(err => console.warn(`[AgentRunWatchdog] Startup sweep failed: ${err}`));
+
+    // The watchdog repairs the RUN; nothing repaired the conversation detail, which is the row the
+    // chat actually renders from (MJ #4222). A process that dies mid-run leaves a terminal run
+    // beside a message that still claims to be generating, and it spins forever for anyone who
+    // opens it. Runs at boot (closes restart orphans) and on a timer (closes mid-life orphans),
+    // mirroring the watchdog's own two-phase shape.
+    const reconcileOrphans = () =>
+      ReconcileOrphanedConversationDetails(sweepProvider, sweepUser)
+        .catch(err => console.warn(`[OrphanDetailReconciler] Pass failed: ${err}`));
+    void reconcileOrphans();
+    const orphanDetailTimer = setInterval(() => void reconcileOrphans(), ORPHAN_DETAIL_SWEEP_INTERVAL_MS);
+    ShutdownRegistry.Instance.Register({
+      ShutdownName: 'OrphanDetailReconciler',
+      Shutdown: () => { clearInterval(orphanDetailTimer); },
+    });
   }
 
   // Launch the AI Agent Session janitor: run own-host orphan recovery once at boot, then keep a

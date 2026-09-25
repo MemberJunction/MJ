@@ -2,7 +2,7 @@ import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
+import { SafeJSONParse, CleanAndParseJSON, UUIDsEqual } from "@memberjunction/global";
 import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
 
 /** Mutable holder for the most recent run id observed on the PubSub stream. */
@@ -338,6 +338,7 @@ export class GraphQLAIClient {
                     this.captureAgentRunId(parsed, runIdRef);
                     if (params.onProgress) this.forwardAgentProgress(parsed, params.onProgress);
                 },
+                isRelevantMessage: (parsed) => this.isMessageForAgentRun(parsed, runIdRef),
                 onStall: () => this.reconcileAgentRun(runIdRef.id ? `ID='${runIdRef.id}'` : undefined),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
@@ -556,6 +557,8 @@ export class GraphQLAIClient {
                 // Reconcile by the caller-known ConversationDetailID rather than a run id scraped off
                 // the shared session stream: that key is operation-specific, so concurrent
                 // conversation-detail runs on one session can never cross-resolve to each other.
+                isRelevantMessage: (parsed) =>
+                    this.isMessageForConversationDetail(parsed, params.conversationDetailId),
                 onStall: () => this.reconcileAgentRun(`ConversationDetailID='${params.conversationDetailId}'`),
                 createErrorResult: (msg) => this.createAgentErrorResult(msg, requestAcknowledged),
             });
@@ -673,6 +676,53 @@ export class GraphQLAIClient {
             parsed.type === 'StreamingContent' &&
             data?.type === 'complete' &&
             data?.conversationDetailId === conversationDetailId;
+    }
+
+    /**
+     * Does this PubSub message belong to the operation watching `conversationDetailId`?
+     *
+     * FAILS OPEN by design (see `FireAndForgetConfig.isRelevantMessage`): a message carrying no
+     * operation identifier at all — a server-wide notice, a shape we do not recognise — counts as
+     * activity, preserving the pre-#4222 behaviour. Only a message that positively identifies a
+     * DIFFERENT conversation detail or a different agent run is ignored.
+     */
+    private isMessageForConversationDetail(
+        parsed: Record<string, unknown>,
+        conversationDetailId: string
+    ): boolean {
+        const data = parsed.data as Record<string, unknown> | undefined;
+        if (!data) {
+            return true;
+        }
+        const detailId = data.conversationDetailId as string | undefined;
+        if (detailId) {
+            return UUIDsEqual(detailId, conversationDetailId);
+        }
+        // Liveness pulses carry a runId but no conversationDetailId, so they cannot be attributed
+        // to a specific conversation detail from the payload alone. Fail open — treating a
+        // heartbeat as someone else's traffic would let a healthy long run time out.
+        return true;
+    }
+
+    /**
+     * Does this PubSub message belong to the agent run tracked by `ref`?
+     *
+     * Before any run id has been observed the operation has no identity to compare against, so
+     * everything counts (fail open). Once known, a message naming a different run is ignored.
+     */
+    private isMessageForAgentRun(parsed: Record<string, unknown>, ref: RunIdRef): boolean {
+        if (!ref.id) {
+            return true;
+        }
+        const data = parsed.data as Record<string, unknown> | undefined;
+        if (!data) {
+            return true;
+        }
+        const messageRunId = (data.agentRunId ?? data.runId) as string | undefined;
+        if (!messageRunId || messageRunId === 'unknown') {
+            return true;
+        }
+        return UUIDsEqual(messageRunId, ref.id);
     }
 
     // ===== Agent Run Reconciliation (idle-stall recovery) =====
