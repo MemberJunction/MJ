@@ -6,6 +6,8 @@ import { RecordCloneService, CompositeKeyToRecordCloneKey } from '@memberjunctio
 import {
     CloneConfigMetaFromEntity,
     CloneConfigValidator,
+    DEFAULT_CLONE_AI_ACTIONS,
+    DEFAULT_CLONE_ENTITY_ACTIONS,
     type CloneConfigValidationError,
 } from '@memberjunction/record-cloning-base';
 
@@ -71,7 +73,12 @@ export class EntityCloneConfigEditorComponent extends BaseAngularComponent {
             { text: 'Skip (default)', value: 'skip' },
             { text: 'Include', value: 'include' },
         ] as Option<string>[],
-        Hooks: [
+        // Entity Actions run on cloned rows by default, as for any create; AI Actions don't.
+        EntityActions: [
+            { text: 'Fire (default)', value: 'fire' },
+            { text: 'Suppress', value: 'suppress' },
+        ] as Option<string>[],
+        AIActions: [
             { text: 'Suppress (default)', value: 'suppress' },
             { text: 'Fire', value: 'fire' },
         ] as Option<string>[],
@@ -199,9 +206,11 @@ export class EntityCloneConfigEditorComponent extends BaseAngularComponent {
         this.Patch({ [key]: value && value > 0 ? Math.floor(value) : undefined });
     }
 
+
     public OnHooksChange(key: 'EntityActions' | 'AIActions', value: 'suppress' | 'fire'): void {
         const hooks = { ...(this.Config.Hooks ?? {}), [key]: value };
-        if (value === 'suppress') delete hooks[key];
+        // Only the default leaves the key out; the other value must be written to take effect.
+        if (value === (key === 'EntityActions' ? DEFAULT_CLONE_ENTITY_ACTIONS : DEFAULT_CLONE_AI_ACTIONS)) delete hooks[key];
         this.Patch({ Hooks: Object.keys(hooks).length > 0 ? hooks : undefined });
     }
 

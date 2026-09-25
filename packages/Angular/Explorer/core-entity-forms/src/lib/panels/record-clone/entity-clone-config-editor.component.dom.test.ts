@@ -119,6 +119,21 @@ describe('EntityCloneConfigEditorComponent (DOM)', () => {
         expect(out.at(-1)).toEqual({ Enabled: true, Relationships: { 'MJ: User Roles.UserID': { Policy: 'Deep' } } });
     });
 
+    it('writes Suppress for Entity Actions, whose default is Fire, and clears it again on Fire', () => {
+        const f = render({ CloneConfig: { Enabled: true } });
+        const out = capture(f.componentInstance.CloneConfigChange);
+        f.componentInstance.OnHooksChange('EntityActions', 'suppress');
+        expect(out.at(-1)).toEqual({ Enabled: true, Hooks: { EntityActions: 'suppress' } });
+
+        f.componentInstance.CloneConfig = out.at(-1) as IEntityCloneConfiguration;
+        f.componentInstance.OnHooksChange('EntityActions', 'fire');
+        expect(out.at(-1)).toEqual({ Enabled: true });
+
+        f.componentInstance.CloneConfig = out.at(-1) as IEntityCloneConfiguration;
+        f.componentInstance.OnHooksChange('AIActions', 'fire');
+        expect(out.at(-1)).toEqual({ Enabled: true, Hooks: { AIActions: 'fire' } });
+    });
+
     it('applies valid Advanced JSON and reports invalid JSON without emitting', () => {
         const f = render({ CloneConfig: { Enabled: true } });
         const out = capture(f.componentInstance.CloneConfigChange);

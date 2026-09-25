@@ -51,12 +51,12 @@
     </label>
     <label class="mj-clone-config-field">
       <span>Entity Actions</span>
-      <mj-dropdown [Data]="ScopeOptions.Hooks" TextField="text" ValueField="value" [ValuePrimitive]="true"
-        [ngModel]="Config.Hooks?.EntityActions ?? 'suppress'" [Disabled]="!EditMode" (ngModelChange)="OnHooksChange('EntityActions', $event)"></mj-dropdown>
+      <mj-dropdown [Data]="ScopeOptions.EntityActions" TextField="text" ValueField="value" [ValuePrimitive]="true"
+        [ngModel]="Config.Hooks?.EntityActions ?? 'fire'" [Disabled]="!EditMode" (ngModelChange)="OnHooksChange('EntityActions', $event)"></mj-dropdown>
     </label>
     <label class="mj-clone-config-field">
       <span>AI Actions</span>
-      <mj-dropdown [Data]="ScopeOptions.Hooks" TextField="text" ValueField="value" [ValuePrimitive]="true"
+      <mj-dropdown [Data]="ScopeOptions.AIActions" TextField="text" ValueField="value" [ValuePrimitive]="true"
         [ngModel]="Config.Hooks?.AIActions ?? 'suppress'" [Disabled]="!EditMode" (ngModelChange)="OnHooksChange('AIActions', $event)"></mj-dropdown>
     </label>
     <label class="mj-clone-config-field mj-clone-config-field--wide">
