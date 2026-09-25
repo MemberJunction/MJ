@@ -1,0 +1,5 @@
+---
+"@memberjunction/ng-entity-viewer": patch
+---
+
+Stop `mj-entity-data-grid` computing a saved view's AGGREGATES against an entity they do not belong to. `buildAgColumnDefs()` already refuses a column state matching no field of the current entity (MemberJunction/MJ#4244), but nothing refused that same state's aggregates — and because they are raw SQL expressions carrying their own labels, the symptom is not a blank grid but a plausible number under someone else's label: `COUNT(*)` evaluates against any entity, so a card reading "Open Orders" rendered a real count of whatever the grid was actually showing. `buildCurrentGridState()` then carried the foreign config forward, so one column resize persisted the wrong aggregates into the new entity's own saved view. A single `gridStateDescribesCurrentEntity()` check now gates the aggregates fallback, the adoption in `onGridStateChanged()`, and the captured state, reusing the column-list evidence `buildAgColumnDefs()` already computes rather than parsing the SQL. A state with no `columnSettings` is no evidence either way and is still trusted, and an explicit `[Aggregates]` config still always wins.
