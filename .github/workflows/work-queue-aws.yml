@@ -1,0 +1,113 @@
+name: Work Queue AWS
+
+# Checks the AWS Terraform module, the destructive-plan gate, and the dependency/size budget of the thin Lambda entry
+# point (@memberjunction/work-queue-aws/lambda). The unit tests of the packages run in test.yml like every package.
+
+on:
+  pull_request:
+    branches: [next]
+    paths:
+      - 'infrastructure/terraform/work-queue/aws/**'
+      - 'packages/WorkQueue/core/**'
+      - 'packages/WorkQueue/aws/**'
+      - '.github/workflows/work-queue-aws.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: work-queue-aws-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  terraform-module:
+    name: Terraform module checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: infrastructure/terraform/work-queue/aws
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.3
+          terraform_wrapper: false
+      - uses: terraform-linters/setup-tflint@v4
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - run: tflint --init && tflint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - run: terraform test
+      - name: Validate example
+        working-directory: infrastructure/terraform/work-queue/aws/examples/basic
+        run: terraform init -backend=false -input=false && terraform validate
+
+  plan-gate:
+    name: Destructive-plan gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: infrastructure/terraform/work-queue/aws/scripts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Safe plan passes
+        run: node check-destructive-plan.mjs fixtures/plan-safe.json
+      - name: Destructive plan is blocked
+        run: |
+          if node check-destructive-plan.mjs fixtures/plan-destructive.json; then
+            echo "The gate let a destructive plan through"; exit 1
+          fi
+      - name: Destructive plan passes with the approval flag
+        run: node check-destructive-plan.mjs fixtures/plan-destructive.json --allow-destructive
+
+  lambda-bundle:
+    name: Lambda bundle budget
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/mj-setup
+      - run: cd packages/WorkQueue/core && pnpm run build
+      - run: cd packages/WorkQueue/aws && pnpm run build
+      - run: cd packages/WorkQueue/aws && pnpm run check:lambda-bundle
+
+  localstack-conformance:
+    name: LocalStack conformance (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      localstack:
+        image: localstack/localstack:4
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: sns,sqs
+          AWS_DEFAULT_REGION: us-east-1
+        options: >-
+          --health-cmd "curl -sf http://localhost:4566/_localstack/health"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/mj-setup
+      - run: cd packages/WorkQueue/core && pnpm run build
+      - run: cd packages/WorkQueue/aws && pnpm run build
+      - run: cd packages/WorkQueue/aws && pnpm run test:localstack
+        env:
+          LOCALSTACK_ENDPOINT: http://localhost:4566
