@@ -361,6 +361,25 @@ describe('MjEntityFormHostComponent — standard-form switch (DOM)', () => {
     expect(f.componentInstance.FormMode).toBe('standard');
   });
 
+  it('in the error state a switch still retries the load (the no-alternative short-circuit does not apply)', async () => {
+    // fail() leaves HasStandardFormAlternative=false and Loading=false too — the
+    // no-op path must not swallow what used to be a reload that retries the load.
+    const entityInfo = makeEntityInfo();
+    let attempts = 0;
+    const provider = Object.assign(
+      createFakeProvider({ entityByName: (n) => (n === ENTITY_NAME ? entityInfo : undefined) }),
+      { GetEntityObject: async () => { attempts++; return null; } },
+    );
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), provider, inputs: { EntityName: ENTITY_NAME } });
+    expect(query(f, '.mj-form-host-error')).not.toBeNull();
+    expect(attempts).toBe(1);
+
+    f.componentInstance.SwitchFormMode('standard');
+    await settle(f);
+
+    expect(attempts).toBe(2);
+  });
+
   it('logs the missing-standard-form fallback once per entity, not on every reload', async () => {
     vi.mocked(LogError).mockClear();
     let loads = 0;

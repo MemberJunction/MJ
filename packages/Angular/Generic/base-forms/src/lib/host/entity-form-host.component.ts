@@ -301,13 +301,16 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
    * returning false and emitting a `warning` Notification — when remounting
    * would silently discard unsaved work (see {@link hasUnsavedWorkToLose}).
    * A brand-new record is carried across instead (see {@link _carryNewRecord}).
-   * With no standard alternative (the generated form is the only one), both
-   * modes mount the same form: the mode is recorded and emitted, with no
-   * reload and so nothing for the unsaved-work guard to protect.
+   * With a form mounted but no standard alternative (the generated form is
+   * the only one), both modes mount the same form: the mode is recorded and
+   * emitted, with no reload and so nothing for the unsaved-work guard to
+   * protect. The error state is excluded: `fail()` also clears
+   * `HasStandardFormAlternative` and `Loading`, and there the switch must
+   * still reload — it is the retry of the failed load.
    */
   public SwitchFormMode(mode: EntityFormMode): boolean {
     if (mode === this._formMode) return true;
-    if (!this.HasStandardFormAlternative && !this.Loading) {
+    if (!this.HasStandardFormAlternative && !this.Loading && !this.ErrorTitle) {
       this._formMode = mode;
       this.FormModeChange.emit(mode);
       return true;
