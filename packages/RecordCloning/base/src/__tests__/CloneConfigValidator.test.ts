@@ -172,4 +172,52 @@ describe('CloneConfigValidator', () => {
             expect(errors).toHaveLength(0);
         });
     });
+
+    describe('structural checks', () => {
+        const withConfig = (CloneConfiguration: CloneConfigEntityMeta['CloneConfiguration'], extra: Partial<CloneConfigEntityMeta> = {}) =>
+            CloneConfigValidator.Validate({ ...baseEntity, ...extra, CloneConfiguration });
+
+        it('rejects non-integer and non-positive caps', () => {
+            const found = withConfig({ Enabled: true, MaxDepth: 2.5, MaxRecords: 0 });
+            expect(found.map((e) => e.PropertyPath).sort()).toEqual(['MaxDepth', 'MaxRecords']);
+        });
+
+        it('rejects a policy that is not Deep, Reference or Skip, wherever it appears', () => {
+            const found = withConfig({
+                Enabled: true,
+                Relationships: { [baseEntity.Relationships?.[0]?.RelatedEntity ?? 'X']: { Policy: 'Shallow' } },
+                Descendants: { Anything: { Policy: 'deep' } },
+                Presets: [{ Key: 'p', Label: 'P', Relationships: { Anything: { Policy: 'Maybe' } } }],
+            });
+            expect(found.filter((e) => e.PropertyPath.endsWith('.Policy')).map((e) => e.PropertyPath)).toHaveLength(3);
+        });
+
+        it('reports a JsonRemap entry without a Field instead of throwing', () => {
+            const found = withConfig({ Enabled: true, Fields: { JsonRemap: [{} as never], Strict: true } });
+            expect(found.some((e) => e.PropertyPath === 'Fields.JsonRemap')).toBe(true);
+        });
+
+        it('accepts qualified keys and FK targets, and only warns for an entity reached further down', () => {
+            const entity: CloneConfigEntityMeta = {
+                Name: 'Orders',
+                Fields: [{ Name: 'ID', IsPrimaryKey: true }, { Name: 'CustomerID', IsPrimaryKey: false, RelatedEntity: 'Customers' }],
+                Relationships: [{ RelatedEntity: 'Order Lines', RelatedEntityJoinField: 'OrderID' }],
+                CloneConfiguration: {
+                    Enabled: true,
+                    Relationships: {
+                        'Order Lines.OrderID': { Policy: 'Deep' },
+                        Customers: { Policy: 'Reference' },
+                        'Line Notes': { Policy: 'Skip' },
+                        Nonsense: { Policy: 'Skip' },
+                    },
+                },
+            };
+            const all = [entity, { Name: 'Order Lines', Fields: [] }, { Name: 'Customers', Fields: [] }, { Name: 'Line Notes', Fields: [] }] as CloneConfigEntityMeta[];
+            const found = CloneConfigValidator.Validate(entity, all);
+            expect(found.map((e) => [e.PropertyPath, e.Severity])).toEqual([
+                ['Relationships[Line Notes]', 'Warning'],
+                ['Relationships[Nonsense]', 'Error'],
+            ]);
+        });
+    });
 });

@@ -160,6 +160,22 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('blocks a plan whose clone configuration is invalid, and only warns about unknown relationship keys', async () => {
+        const bad = { ...parentEntity, RelatedEntities: [], CloneConfiguration: { Enabled: true, MaxDepth: 1.5, Relationships: { 'No Such Entity': { Policy: 'Deep' } } } } as unknown as EntityInfo;
+        const provider = { ...mockProvider, Entities: [bad], EntityByName: (n: string) => (n === 'ParentEntity' ? bad : null) } as IMetadataProvider;
+        mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] });
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+
+        const invalid = plan.Warnings.filter((w) => w.Code === 'CONFIG_INVALID');
+        expect(invalid.map((w) => [w.Field, w.Severity])).toEqual([
+            ['MaxDepth', 'Error'],
+            ['Relationships[No Such Entity]', 'Warning'],
+        ]);
+        expect(plan.Blocked).toBe(true);
+        mockRunViewInstance.mockReset();
+    });
+
     it('computes valid clone plan with pre-minted target keys and stable hash', async () => {
         const planner = new ClonePlanner({ Provider: mockProvider });
 

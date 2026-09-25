@@ -4,9 +4,8 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { RecordClonePlanDetails } from '@memberjunction/core-entities';
 import { RecordCloneService, CompositeKeyToRecordCloneKey } from '@memberjunction/ng-record-clone';
 import {
+    CloneConfigMetaFromEntity,
     CloneConfigValidator,
-    FieldMetaFromEntity,
-    type CloneConfigEntityMeta,
     type CloneConfigValidationError,
 } from '@memberjunction/record-cloning-base';
 
@@ -277,15 +276,8 @@ export class EntityCloneConfigEditorComponent extends BaseAngularComponent {
     /** Runs the client-side validator against this entity's fields and relationships. */
     public Validate(): void {
         if (!this.Entity) return;
-        const toMeta = (e: EntityInfo, config?: IEntityCloneConfiguration | null): CloneConfigEntityMeta => ({
-            Name: e.Name,
-            // Same field flags the planner uses, so automatic fields aren't reported as unclassified.
-            Fields: FieldMetaFromEntity(e),
-            Relationships: e.RelatedEntities.map((r) => ({ ID: r.ID, RelatedEntity: r.RelatedEntity, RelatedEntityJoinField: r.RelatedEntityJoinField })),
-            CloneConfiguration: (config ?? undefined) as CloneConfigEntityMeta['CloneConfiguration'],
-        });
-        const all = (this.ProviderToUse?.Entities ?? []).map((e) => toMeta(e, e.CloneConfig));
-        this.ValidationResults = CloneConfigValidator.Validate(toMeta(this.Entity, { ...this.Config, Enabled: true }), all);
+        const all = (this.ProviderToUse?.Entities ?? []).map((e) => CloneConfigMetaFromEntity(e, e.CloneConfig));
+        this.ValidationResults = CloneConfigValidator.Validate(CloneConfigMetaFromEntity(this.Entity, { ...this.Config, Enabled: true }), all);
         this.cdr.markForCheck();
     }
 

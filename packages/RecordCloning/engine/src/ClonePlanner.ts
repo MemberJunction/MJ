@@ -33,6 +33,8 @@ import {
     ResolveEffectiveCloneOptions,
     NormalizeClonePresets,
     FieldMetaFromEntity,
+    CloneConfigMetaFromEntity,
+    CloneConfigValidator,
     IsRenameField,
     NameCollisionPrefix,
     NameTemplateOptions,
@@ -102,6 +104,27 @@ export class ClonePlanner {
 
         const rootConfig = rootEntityInfo.CloneConfig ?? (rootEntityInfo as unknown as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration }).CloneConfiguration ?? null;
         const authorizer = new CloneAuthorizer(md);
+
+        // The configuration is checked here, not only in the Entities form: an invalid bag (a bad
+        // policy, a cap that isn't a positive integer, a rule on a missing field) blocks the plan.
+        if (rootConfig) {
+            const findings = CloneConfigValidator.Validate(
+                CloneConfigMetaFromEntity(rootEntityInfo, { ...rootConfig, Enabled: true }),
+                md.Entities.map((e) => ({ Name: e.Name, Fields: [] }))
+            );
+            for (const finding of findings) {
+                // A relationship key that matches nothing only means that edge isn't configured
+                // (a stale key, say): report it, but don't refuse every clone of the entity over it.
+                const blocking = finding.Severity === 'Error' && !finding.PropertyPath.startsWith('Relationships[');
+                warnings.push({
+                    Code: 'CONFIG_INVALID',
+                    Severity: blocking ? 'Error' : 'Warning',
+                    Field: finding.PropertyPath,
+                    Message: `Clone configuration for '${entityName}': ${finding.Message}`,
+                });
+                if (blocking) planBlocked = true;
+            }
+        }
 
         // A preset (Clone.Presets, looked up by Key) contributes options under the request's own
         // options and edge policy overrides by related entity name.

@@ -6,8 +6,9 @@
  * validation in the UI.
  */
 
-import type { EntityInfo } from '@memberjunction/core';
+import type { EntityInfo, IEntityCloneConfiguration } from '@memberjunction/core';
 import type { FieldMappingFieldMeta } from './CloneFieldMapper';
+import type { CloneConfigEntityMeta } from './CloneConfigValidator';
 
 /** Field metadata for every field of `entity`, in the shape `MapFieldsForClone` and `CloneConfigValidator` expect. */
 export function FieldMetaFromEntity(entity: EntityInfo): FieldMappingFieldMeta[] {
@@ -31,4 +32,15 @@ export function FieldMetaFromEntity(entity: EntityInfo): FieldMappingFieldMeta[]
         Encrypted: f.Encrypt === true,
         MaxLength: f.MaxLength,
     }));
+}
+
+/** The validator's view of `entity` with `config` as its clone configuration. */
+export function CloneConfigMetaFromEntity(entity: EntityInfo, config?: IEntityCloneConfiguration | null): CloneConfigEntityMeta {
+    return {
+        Name: entity.Name,
+        // Same field flags the planner uses, so automatic fields aren't reported as unclassified.
+        Fields: FieldMetaFromEntity(entity),
+        Relationships: (entity.RelatedEntities ?? []).map((r) => ({ ID: r.ID, RelatedEntity: r.RelatedEntity, RelatedEntityJoinField: r.RelatedEntityJoinField })),
+        CloneConfiguration: (config ?? undefined) as unknown as CloneConfigEntityMeta['CloneConfiguration'],
+    };
 }

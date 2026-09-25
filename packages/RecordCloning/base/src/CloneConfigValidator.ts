@@ -56,6 +56,7 @@ export interface CloneConfigEntityMeta {
         Relationships?: Record<string, {
             Policy?: string;
             Locked?: boolean;
+            ExcludeRows?: Array<{ Field?: string }>;
         }>;
         Descendants?: Record<string, {
             Policy?: string;
@@ -67,12 +68,15 @@ export interface CloneConfigEntityMeta {
             Key: string;
             Label: string;
             Options?: Record<string, unknown>;
+            Relationships?: Record<string, { Policy?: string }>;
         }>;
         Derivation?: {
             Field?: string;
         };
     } | null;
 }
+
+const VALID_POLICIES = new Set(['Deep', 'Reference', 'Skip']);
 
 export class CloneConfigValidator {
     /**
@@ -93,21 +97,33 @@ export class CloneConfigValidator {
         );
 
         // 1. Validate Caps
-        if (config.MaxDepth !== undefined && config.MaxDepth <= 0) {
-            errors.push({
-                EntityName: entity.Name,
-                PropertyPath: 'MaxDepth',
-                Message: `MaxDepth must be a positive integer, received: ${config.MaxDepth}`,
-                Severity: 'Error',
-            });
+        for (const cap of ['MaxDepth', 'MaxRecords'] as const) {
+            const value = config[cap];
+            if (value !== undefined && (!Number.isInteger(value) || value <= 0)) {
+                errors.push({
+                    EntityName: entity.Name,
+                    PropertyPath: cap,
+                    Message: `${cap} must be a positive integer, received: ${String(value)}`,
+                    Severity: 'Error',
+                });
+            }
         }
-        if (config.MaxRecords !== undefined && config.MaxRecords <= 0) {
-            errors.push({
-                EntityName: entity.Name,
-                PropertyPath: 'MaxRecords',
-                Message: `MaxRecords must be a positive integer, received: ${config.MaxRecords}`,
-                Severity: 'Error',
-            });
+
+        // 1b. Policies: Relationships, Descendants and preset overrides use Deep, Reference or Skip.
+        const checkPolicy = (policy: unknown, path: string) => {
+            if (policy !== undefined && !VALID_POLICIES.has(String(policy))) {
+                errors.push({
+                    EntityName: entity.Name,
+                    PropertyPath: path,
+                    Message: `Policy must be Deep, Reference or Skip, received: ${String(policy)}`,
+                    Severity: 'Error',
+                });
+            }
+        };
+        for (const [key, rel] of Object.entries(config.Relationships ?? {})) checkPolicy(rel?.Policy, `Relationships[${key}].Policy`);
+        for (const [key, desc] of Object.entries(config.Descendants ?? {})) checkPolicy(desc?.Policy, `Descendants[${key}].Policy`);
+        for (const preset of config.Presets ?? []) {
+            for (const [key, rel] of Object.entries(preset?.Relationships ?? {})) checkPolicy(rel?.Policy, `Presets[${preset.Key}].Relationships[${key}].Policy`);
         }
 
         // 2. Validate Fields section
@@ -172,6 +188,15 @@ export class CloneConfigValidator {
 
             // Check JsonRemap columns (must exist and be string type)
             for (const remap of fieldsConfig.JsonRemap || []) {
+                if (!remap?.Field) {
+                    errors.push({
+                        EntityName: entity.Name,
+                        PropertyPath: 'Fields.JsonRemap',
+                        Message: 'Each JsonRemap entry needs a Field naming the JSON column.',
+                        Severity: 'Error',
+                    });
+                    continue;
+                }
                 checkFieldExists(remap.Field, `Fields.JsonRemap[${remap.Field}]`);
                 const f = entityFields.get(remap.Field.toLowerCase());
                 if (f && f.Type && !f.Type.toLowerCase().includes('varchar') && !f.Type.toLowerCase().includes('text') && !f.Type.toLowerCase().includes('json')) {
@@ -193,7 +218,7 @@ export class CloneConfigValidator {
                 for (const f of fieldsConfig.Ownership || []) classifiedFields.add(f.toLowerCase());
                 for (const f of fieldsConfig.ServerAllocated || []) classifiedFields.add(f.toLowerCase());
                 for (const f of fieldsConfig.PromptFor || []) classifiedFields.add(f.toLowerCase());
-                for (const remap of fieldsConfig.JsonRemap || []) classifiedFields.add(remap.Field.toLowerCase());
+                for (const remap of fieldsConfig.JsonRemap || []) if (remap?.Field) classifiedFields.add(remap.Field.toLowerCase());
                 for (const rule of fieldsConfig.Rules?.Rules || []) {
                     const target = (rule as { TargetField?: string; Field?: string }).TargetField || (rule as { TargetField?: string; Field?: string }).Field;
                     if (target) classifiedFields.add(target.toLowerCase());
@@ -229,22 +254,34 @@ export class CloneConfigValidator {
 
         // 3. Validate Relationships section
         if (config.Relationships) {
+            // Keys may name a relationship (ID or Name), its related entity, "<Entity>.<JoinField>",
+            // or an entity this one references through a foreign key.
             const relMap = new Set<string>();
             for (const r of entity.Relationships || []) {
                 if (r.ID) relMap.add(r.ID.toLowerCase());
                 if (r.Name) relMap.add(r.Name.toLowerCase());
                 if (r.RelatedEntity) relMap.add(r.RelatedEntity.toLowerCase());
+                if (r.RelatedEntity && r.RelatedEntityJoinField) relMap.add(`${r.RelatedEntity}.${r.RelatedEntityJoinField}`.toLowerCase());
             }
+            for (const f of entity.Fields) {
+                if (f.RelatedEntity) relMap.add(f.RelatedEntity.toLowerCase());
+            }
+            const knownEntities = allEntities ? new Set(allEntities.map((e) => e.Name.toLowerCase())) : null;
 
             for (const relKey of Object.keys(config.Relationships)) {
-                if (!relMap.has(relKey.toLowerCase())) {
-                    errors.push({
-                        EntityName: entity.Name,
-                        PropertyPath: `Relationships[${relKey}]`,
-                        Message: `Relationship key '${relKey}' does not match any known relationship or related entity on '${entity.Name}'.`,
-                        Severity: 'Error',
-                    });
-                }
+                if (relMap.has(relKey.toLowerCase())) continue;
+                const entityPart = relKey.includes('.') && knownEntities && !knownEntities.has(relKey.toLowerCase()) ? relKey.slice(0, relKey.lastIndexOf('.')) : relKey;
+                const exists = knownEntities?.has(entityPart.toLowerCase());
+                errors.push({
+                    EntityName: entity.Name,
+                    PropertyPath: `Relationships[${relKey}]`,
+                    // A root's keys also apply to rows further down the graph, so an entity that
+                    // exists may still be reached through a descendant.
+                    Message: exists
+                        ? `'${relKey}' is not a direct relationship of '${entity.Name}'; it applies only where the clone reaches it through a descendant.`
+                        : `Relationship key '${relKey}' does not match any known relationship or related entity on '${entity.Name}'.`,
+                    Severity: exists ? 'Warning' : 'Error',
+                });
             }
         }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { IEntityCloneConfiguration } from '@memberjunction/core';
 import { ResolveEdgePolicy } from '../ClonePolicyResolver';
@@ -77,5 +77,22 @@ describe('shipped clone configurations', () => {
                 if (policy !== undefined) expect(valid.has(policy), `${name} -> ${key}`).toBe(true);
             }
         }
+    });
+
+    it('is the only metadata file that sets Configuration on these entities', () => {
+        // mj sync push writes the whole Configuration field, so two files setting it on one
+        // entity would overwrite each other depending on push order.
+        const dir = resolve(__dirname, '../../../../../metadata/entities');
+        const owners = new Map<string, string[]>();
+        for (const file of readdirSync(dir).filter((f) => f.endsWith('.json') && !f.startsWith('.mj-sync'))) {
+            const parsed: unknown = JSON.parse(readFileSync(resolve(dir, file), 'utf8'));
+            for (const record of Array.isArray(parsed) ? (parsed as ShippedRecord[]) : []) {
+                if (record?.fields?.Configuration === undefined) continue;
+                owners.set(record.fields.Name, [...(owners.get(record.fields.Name) ?? []), file]);
+            }
+        }
+        expect(owners.size).toBeGreaterThan(20);
+        const clash = [...owners].filter(([, files]) => files.length > 1);
+        expect(clash).toEqual([]);
     });
 });
