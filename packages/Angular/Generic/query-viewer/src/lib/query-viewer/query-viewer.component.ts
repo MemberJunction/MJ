@@ -29,8 +29,8 @@ import {
     QueryGridStateChangedEvent,
     QuerySelectionChangedEvent,
     QueryRowClickEvent,
-    getQueryGridStateKey,
-    getQueryParamsKey
+    GetQueryGridStateKey,
+    GetQueryParamsKey
 } from '../query-data-grid/models/query-grid-types';
 
 /**
@@ -289,7 +289,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         try {
             // Load grid state
             if (this.PersistState) {
-                const gridStateKey = getQueryGridStateKey(this._queryId);
+                const gridStateKey = GetQueryGridStateKey(this._queryId);
                 const gridStateSetting = await this.getUserSetting(gridStateKey);
                 if (gridStateSetting) {
                     this.SavedGridState = JSON.parse(gridStateSetting) as QueryGridState;
@@ -298,7 +298,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
 
             // Load saved parameters
             if (this.PersistParameters) {
-                const paramsKey = getQueryParamsKey(this._queryId);
+                const paramsKey = GetQueryParamsKey(this._queryId);
                 const paramsSetting = await this.getUserSetting(paramsKey);
                 if (paramsSetting) {
                     this.SavedParams = JSON.parse(paramsSetting) as QueryParameterValues;
@@ -313,7 +313,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         if (!this._queryId || !this.PersistState) return;
 
         try {
-            const key = getQueryGridStateKey(this._queryId);
+            const key = GetQueryGridStateKey(this._queryId);
             await this.setUserSetting(key, JSON.stringify(state));
         } catch (error) {
             console.warn('Error saving grid state:', error);
@@ -324,7 +324,7 @@ export class QueryViewerComponent extends BaseAngularComponent implements OnInit
         if (!this._queryId || !this.PersistParameters) return;
 
         try {
-            const key = getQueryParamsKey(this._queryId);
+            const key = GetQueryParamsKey(this._queryId);
             await this.setUserSetting(key, JSON.stringify(params));
         } catch (error) {
             console.warn('Error saving parameters:', error);

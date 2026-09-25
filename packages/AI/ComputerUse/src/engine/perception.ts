@@ -43,7 +43,7 @@ function describeElement(el: InteractiveElement): string {
  * Output is capped at `maxChars` — once the budget is hit, remaining elements
  * are dropped and a truncation note is appended (never a silent cap).
  */
-export function serializeInteractiveElements(
+export function SerializeInteractiveElements(
     elements: InteractiveElement[],
     prevElements?: InteractiveElement[],
     maxChars: number = DEFAULT_ELEMENT_LIST_MAX_CHARS
@@ -75,6 +75,15 @@ export function serializeInteractiveElements(
     return lines.join('\n');
 }
 
+/** @deprecated Use {@link SerializeInteractiveElements}. */
+export function serializeInteractiveElements(
+    elements: InteractiveElement[],
+    prevElements?: InteractiveElement[],
+    maxChars: number = DEFAULT_ELEMENT_LIST_MAX_CHARS
+): string {
+    return SerializeInteractiveElements(elements, prevElements, maxChars);
+}
+
 // ─── Prompt Digests ────────────────────────────────────
 
 /** Default diagnostics digest cap, in characters. */
@@ -95,7 +104,7 @@ function isSignal(e: BrowserDiagnosticEvent): boolean {
  * Digest a step's diagnostics oldest-first, capped to `maxChars` with a trailing
  * ellipsis when truncated. Returns '' when nothing signal-bearing was captured.
  */
-export function formatDiagnosticsDigest(
+export function FormatDiagnosticsDigest(
     events: readonly BrowserDiagnosticEvent[],
     maxChars: number = DEFAULT_DIGEST_MAX_CHARS
 ): string {
@@ -119,6 +128,14 @@ export function formatDiagnosticsDigest(
     return lines.join('\n');
 }
 
+/** @deprecated Use {@link FormatDiagnosticsDigest}. */
+export function formatDiagnosticsDigest(
+    events: readonly BrowserDiagnosticEvent[],
+    maxChars: number = DEFAULT_DIGEST_MAX_CHARS
+): string {
+    return FormatDiagnosticsDigest(events, maxChars);
+}
+
 /** Path + query only (origin dropped), for compact per-path counting. */
 function compactPath(url: string): string {
     if (!url) return '';
@@ -135,7 +152,7 @@ function compactPath(url: string): string {
  * (paths seen more than once are marked `×N`, preserving the loop signal), and an
  * error count. Returns '' for an empty input.
  */
-export function summarizeOlderSteps(steps: StepRecord[]): string {
+export function SummarizeOlderSteps(steps: StepRecord[]): string {
     if (steps.length === 0) {
         return '';
     }
@@ -158,4 +175,9 @@ export function summarizeOlderSteps(steps: StepRecord[]): string {
     const errNote = errorCount > 0 ? `; ${errorCount} error(s)` : '';
     const pathNote = paths ? `visited ${paths}` : 'no navigation';
     return `Steps ${first}–${last} (summarized): ${pathNote}${errNote}`;
+}
+
+/** @deprecated Use {@link SummarizeOlderSteps}. */
+export function summarizeOlderSteps(steps: StepRecord[]): string {
+    return SummarizeOlderSteps(steps);
 }

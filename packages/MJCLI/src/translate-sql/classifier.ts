@@ -102,10 +102,10 @@ function isOnlySimpleTransformations(sql: string, sourceDialect: DatabasePlatfor
  * Batch classification result.
  */
 export interface ClassificationResult {
-    sql: string;
-    classification: SQLClassification;
+    sql: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    classification: SQLClassification;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Specific dialect markers found in the SQL */
-    markers: string[];
+    markers: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /**

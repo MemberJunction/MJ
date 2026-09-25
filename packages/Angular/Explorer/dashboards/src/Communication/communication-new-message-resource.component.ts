@@ -315,29 +315,137 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
   // Local lifecycle goes through super.ngOnDestroy().
 
   // Channel state
-  public loadingProviders = true;
-  public providers: MJCommunicationProviderEntity[] = [];
-  public messageTypes: MJCommunicationProviderMessageTypeEntity[] = [];
-  public selectedProviderID: string | null = null;
-  public selectedMessageTypeID: string | null = null;
+  public LoadingProviders = true;
+
+  /** @deprecated Use {@link LoadingProviders}. */
+  public get loadingProviders() {
+    return this.LoadingProviders;
+  }
+  /** @deprecated Use {@link LoadingProviders}. */
+  public set loadingProviders(value) {
+    this.LoadingProviders = value;
+  }
+  public Providers: MJCommunicationProviderEntity[] = [];
+
+  /** @deprecated Use {@link Providers}. */
+  public get providers(): MJCommunicationProviderEntity[] {
+    return this.Providers;
+  }
+  /** @deprecated Use {@link Providers}. */
+  public set providers(value: MJCommunicationProviderEntity[]) {
+    this.Providers = value;
+  }
+  public MessageTypes: MJCommunicationProviderMessageTypeEntity[] = [];
+
+  /** @deprecated Use {@link MessageTypes}. */
+  public get messageTypes(): MJCommunicationProviderMessageTypeEntity[] {
+    return this.MessageTypes;
+  }
+  /** @deprecated Use {@link MessageTypes}. */
+  public set messageTypes(value: MJCommunicationProviderMessageTypeEntity[]) {
+    this.MessageTypes = value;
+  }
+  public SelectedProviderID: string | null = null;
+
+  /** @deprecated Use {@link SelectedProviderID}. */
+  public get selectedProviderID(): string | null {
+    return this.SelectedProviderID;
+  }
+  /** @deprecated Use {@link SelectedProviderID}. */
+  public set selectedProviderID(value: string | null) {
+    this.SelectedProviderID = value;
+  }
+  public SelectedMessageTypeID: string | null = null;
+
+  /** @deprecated Use {@link SelectedMessageTypeID}. */
+  public get selectedMessageTypeID(): string | null {
+    return this.SelectedMessageTypeID;
+  }
+  /** @deprecated Use {@link SelectedMessageTypeID}. */
+  public set selectedMessageTypeID(value: string | null) {
+    this.SelectedMessageTypeID = value;
+  }
 
   // Message state
-  public fromAddress = '';
-  public subject = '';
+  public FromAddress = '';
+
+  /** @deprecated Use {@link FromAddress}. */
+  public get fromAddress() {
+    return this.FromAddress;
+  }
+  /** @deprecated Use {@link FromAddress}. */
+  public set fromAddress(value) {
+    this.FromAddress = value;
+  }
+  public Subject = '';
+
+  /** @deprecated Use {@link Subject}. */
+  public get subject() {
+    return this.Subject;
+  }
+  /** @deprecated Use {@link Subject}. */
+  public set subject(value) {
+    this.Subject = value;
+  }
   public body = '';
 
   // Audience state
-  public audienceSource: AudienceSource | null = null;
-  public recipientField = '';
-  public audienceSummary: AudienceSummary | null = null;
+  public AudienceSource: AudienceSource | null = null;
+
+  /** @deprecated Use {@link AudienceSource}. */
+  public get audienceSource(): AudienceSource | null {
+    return this.AudienceSource;
+  }
+  /** @deprecated Use {@link AudienceSource}. */
+  public set audienceSource(value: AudienceSource | null) {
+    this.AudienceSource = value;
+  }
+  public RecipientField = '';
+
+  /** @deprecated Use {@link RecipientField}. */
+  public get recipientField() {
+    return this.RecipientField;
+  }
+  /** @deprecated Use {@link RecipientField}. */
+  public set recipientField(value) {
+    this.RecipientField = value;
+  }
+  public AudienceSummary: AudienceSummary | null = null;
+
+  /** @deprecated Use {@link AudienceSummary}. */
+  public get audienceSummary(): AudienceSummary | null {
+    return this.AudienceSummary;
+  }
+  /** @deprecated Use {@link AudienceSummary}. */
+  public set audienceSummary(value: AudienceSummary | null) {
+    this.AudienceSummary = value;
+  }
 
   // Action IDs — looked up lazily on first use to avoid an extra RunView
   // on every page open. Cached for the session.
   private resolveAudienceActionID: string | null = null;
   private sendToAudienceActionID: string | null = null;
 
-  public isResolvingAudience = false;
-  public isSending = false;
+  public IsResolvingAudience = false;
+
+  /** @deprecated Use {@link IsResolvingAudience}. */
+  public get isResolvingAudience() {
+    return this.IsResolvingAudience;
+  }
+  /** @deprecated Use {@link IsResolvingAudience}. */
+  public set isResolvingAudience(value) {
+    this.IsResolvingAudience = value;
+  }
+  public IsSending = false;
+
+  /** @deprecated Use {@link IsSending}. */
+  public get isSending() {
+    return this.IsSending;
+  }
+  /** @deprecated Use {@link IsSending}. */
+  public set isSending(value) {
+    this.IsSending = value;
+  }
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -356,39 +464,74 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
     super.ngOnDestroy();
   }
 
-  public get filteredMessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
-    if (!this.selectedProviderID) return [];
-    return this.messageTypes.filter(
-      (mt) => mt.CommunicationProviderID === this.selectedProviderID,
+  public get FilteredMessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
+    if (!this.SelectedProviderID) return [];
+    return this.MessageTypes.filter(
+      (mt) => mt.CommunicationProviderID === this.SelectedProviderID,
     );
   }
 
+  /** @deprecated Use {@link FilteredMessageTypes}. */
+  public get filteredMessageTypes(): MJCommunicationProviderMessageTypeEntity[] {
+    return this.FilteredMessageTypes;
+  }
+
+  public get SelectedProvider(): MJCommunicationProviderEntity | null {
+    return this.Providers.find((p) => UUIDsEqual(p.ID, this.SelectedProviderID)) ?? null;
+  }
+
+  /** @deprecated Use {@link SelectedProvider}. */
   public get selectedProvider(): MJCommunicationProviderEntity | null {
-    return this.providers.find((p) => UUIDsEqual(p.ID, this.selectedProviderID)) ?? null;
+    return this.SelectedProvider;
   }
 
+  public get SelectedMessageType(): MJCommunicationProviderMessageTypeEntity | null {
+    return this.MessageTypes.find((mt) => UUIDsEqual(mt.ID, this.SelectedMessageTypeID)) ?? null;
+  }
+
+  /** @deprecated Use {@link SelectedMessageType}. */
   public get selectedMessageType(): MJCommunicationProviderMessageTypeEntity | null {
-    return this.messageTypes.find((mt) => UUIDsEqual(mt.ID, this.selectedMessageTypeID)) ?? null;
+    return this.SelectedMessageType;
   }
 
+  public get CanPreview(): boolean {
+    return !!this.AudienceSource && this.RecipientField.trim().length > 0;
+  }
+
+  /** @deprecated Use {@link CanPreview}. */
   public get canPreview(): boolean {
-    return !!this.audienceSource && this.recipientField.trim().length > 0;
+    return this.CanPreview;
   }
 
+  public get CanSend(): boolean {
+    return this.CanPreview
+      && !!this.SelectedProviderID
+      && !!this.SelectedMessageTypeID
+      && this.FromAddress.trim().length > 0;
+  }
+
+  /** @deprecated Use {@link CanSend}. */
   public get canSend(): boolean {
-    return this.canPreview
-      && !!this.selectedProviderID
-      && !!this.selectedMessageTypeID
-      && this.fromAddress.trim().length > 0;
+    return this.CanSend;
   }
 
+  public OnProviderChange(): void {
+    this.SelectedMessageTypeID = null;
+  }
+
+  /** @deprecated Use {@link OnProviderChange}. */
   public onProviderChange(): void {
-    this.selectedMessageTypeID = null;
+    return this.OnProviderChange();
   }
 
+  public OnAudienceSourceChange(source: AudienceSource | null): void {
+    this.AudienceSource = source;
+    this.AudienceSummary = null;
+  }
+
+  /** @deprecated Use {@link OnAudienceSourceChange}. */
   public onAudienceSourceChange(source: AudienceSource | null): void {
-    this.audienceSource = source;
-    this.audienceSummary = null;
+    return this.OnAudienceSourceChange(source);
   }
 
   /**
@@ -397,10 +540,10 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
    * mockup 21 shows. Cheaper than `Resolve Audience` for our purposes
    * because it also evaluates the recipient-field skip rule.
    */
-  public async onPreviewAudience(): Promise<void> {
-    if (!this.canPreview) return;
-    this.isResolvingAudience = true;
-    this.audienceSummary = null;
+  public async OnPreviewAudience(): Promise<void> {
+    if (!this.CanPreview) return;
+    this.IsResolvingAudience = true;
+    this.AudienceSummary = null;
     this.cdr.detectChanges();
     try {
       const actionID = await this.getSendToAudienceActionID();
@@ -412,35 +555,40 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
         return;
       }
       const result = await this.invokeAction(actionID, {
-        Source: JSON.stringify(this.audienceSource!),
-        RecipientField: this.recipientField.trim(),
-        ProviderName: this.selectedProvider?.Name ?? 'Preview',
-        ProviderMessageTypeName: this.selectedMessageType?.Name ?? 'Preview',
-        From: this.fromAddress || 'preview@local',
-        Subject: this.subject,
+        Source: JSON.stringify(this.AudienceSource!),
+        RecipientField: this.RecipientField.trim(),
+        ProviderName: this.SelectedProvider?.Name ?? 'Preview',
+        ProviderMessageTypeName: this.SelectedMessageType?.Name ?? 'Preview',
+        From: this.FromAddress || 'preview@local',
+        Subject: this.Subject,
         Body: this.body,
         PreviewOnly: 'true',
       });
 
       const data = this.parseResultData(result);
-      this.audienceSummary = {
+      this.AudienceSummary = {
         TotalAudienceSize: this.coerceNumber(data['TotalAudienceSize']),
         WillReceiveCount: this.coerceNumber(data['WillReceiveCount']),
         SkippedCount: this.coerceNumber(data['SkippedCount']),
-        EntityName: this.audienceSource ? this.describeSource(this.audienceSource) : '',
+        EntityName: this.AudienceSource ? this.describeSource(this.AudienceSource) : '',
       };
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.notificationService.CreateSimpleNotification(`Preview failed: ${message}`, 'error', 5000);
     } finally {
-      this.isResolvingAudience = false;
+      this.IsResolvingAudience = false;
       this.cdr.detectChanges();
     }
   }
 
-  public async onSend(): Promise<void> {
-    if (!this.canSend) return;
-    this.isSending = true;
+  /** @deprecated Use {@link OnPreviewAudience}. */
+  public async onPreviewAudience(): Promise<void> {
+    return this.OnPreviewAudience();
+  }
+
+  public async OnSend(): Promise<void> {
+    if (!this.CanSend) return;
+    this.IsSending = true;
     this.cdr.detectChanges();
     try {
       const actionID = await this.getSendToAudienceActionID();
@@ -452,12 +600,12 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
         return;
       }
       const result = await this.invokeAction(actionID, {
-        Source: JSON.stringify(this.audienceSource!),
-        RecipientField: this.recipientField.trim(),
-        ProviderName: this.selectedProvider!.Name,
-        ProviderMessageTypeName: this.selectedMessageType!.Name,
-        From: this.fromAddress,
-        Subject: this.subject,
+        Source: JSON.stringify(this.AudienceSource!),
+        RecipientField: this.RecipientField.trim(),
+        ProviderName: this.SelectedProvider!.Name,
+        ProviderMessageTypeName: this.SelectedMessageType!.Name,
+        From: this.FromAddress,
+        Subject: this.Subject,
         Body: this.body,
         PreviewOnly: 'false',
       });
@@ -478,9 +626,14 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
       const message = e instanceof Error ? e.message : String(e);
       this.notificationService.CreateSimpleNotification(`Send failed: ${message}`, 'error', 5000);
     } finally {
-      this.isSending = false;
+      this.IsSending = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link OnSend}. */
+  public async onSend(): Promise<void> {
+    return this.OnSend();
   }
 
   // -----------------------------------------------------------------
@@ -493,7 +646,7 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
    * channel selection. Use RunViews (plural) so it's a single round trip.
    */
   private async loadChannelMetadata(): Promise<void> {
-    this.loadingProviders = true;
+    this.LoadingProviders = true;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const [providersResult, messageTypesResult] = await rv.RunViews([
@@ -510,13 +663,13 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
           ResultType: 'simple',
         },
       ]);
-      this.providers = (providersResult.Success ? providersResult.Results ?? [] : []) as MJCommunicationProviderEntity[];
-      this.messageTypes = (messageTypesResult.Success ? messageTypesResult.Results ?? [] : []) as MJCommunicationProviderMessageTypeEntity[];
+      this.Providers = (providersResult.Success ? providersResult.Results ?? [] : []) as MJCommunicationProviderEntity[];
+      this.MessageTypes = (messageTypesResult.Success ? messageTypesResult.Results ?? [] : []) as MJCommunicationProviderMessageTypeEntity[];
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.notificationService.CreateSimpleNotification(`Failed to load channels: ${message}`, 'error', 5000);
     } finally {
-      this.loadingProviders = false;
+      this.LoadingProviders = false;
       this.cdr.detectChanges();
     }
   }

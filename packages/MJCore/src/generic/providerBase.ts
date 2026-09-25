@@ -276,6 +276,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return false;
     }
 
+    // Two subclasses in other packages — GraphQLDataProvider and PostgreSQLDataProvider — each
+    // declare their own private `_configData`. TypeScript rejects two separate declarations of
+    // one private name across a hierarchy (TS2415), so the camelCase form is already taken here.
+    // case-violation-ok-legacy-back-compat: camelCase name is claimed by subclasses' own privates
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -786,6 +790,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Checks whether an entity record name is currently available in the in-memory LRU cache.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns True if the record name is cached in memory, false otherwise
+     */
+    public HasCachedRecordName(entityName: string, compositeKey: CompositeKey): boolean {
+        return this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey)) !== undefined;
+    }
+
+    /**
+     * Retrieves an entity record name from the in-memory LRU cache if already cached.
+     * Returns undefined immediately when not cached and will NEVER initiate a database lookup.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @returns The cached display name, or undefined if not in cache
+     */
+    public GetCachedRecordNameOnlyIfCached(entityName: string, compositeKey: CompositeKey): string | undefined {
+        return this._entityRecordNameCache.Get(this.getCacheKey(entityName, compositeKey));
+    }
+
+    /**
      * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
      * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
      * @param entityName - The name of the entity
@@ -1105,8 +1130,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // CALLER's objects — reusing params across calls must be safe.
         params = params.map(p => ({ ...p }));
         // Bypass dedup for side-effect calls (SaveViewResults creates DB records)
-        if (this.ShouldBypassDedup(params)) {
-            return this.ExecuteRunViewsPipeline<T>(params, contextUser);
+        if (this.shouldBypassDedup(params)) {
+            return this.executeRunViewsPipeline<T>(params, contextUser);
         }
 
         // ── Coalescing: merge concurrent RunViews into one mega-batch ──
@@ -1116,7 +1141,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return this.enqueueCoalescedRunViews<T>(params, contextUser);
         }
 
-        const key = this.GenerateDedupKey(params, contextUser);
+        const key = this.generateDedupKey(params, contextUser);
         const existing = this._inflightViews.get(key);
 
         // ── Linger hit: resolved result still within the linger window ──
@@ -1128,7 +1153,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     message: `[Dedup] Linger hit for [${entities}] — returning cached result (age ${age}ms, window ${ProviderBase.DedupLingerMs}ms)`,
                     verboseOnly: true
                 });
-                return existing.resolvedResults.map(r => this.ShallowCopyResult<T>(r));
+                return existing.resolvedResults.map(r => this.shallowCopyResult<T>(r));
             }
             // Linger expired — fall through to fresh execution
             this._inflightViews.delete(key);
@@ -1142,11 +1167,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 verboseOnly: true
             });
             const results = await existing.promise;
-            return results.map(r => this.ShallowCopyResult<T>(r));
+            return results.map(r => this.shallowCopyResult<T>(r));
         }
 
         // ── Fresh execution ──
-        const promise = this.ExecuteRunViewsPipeline<T>(params, contextUser)
+        const promise = this.executeRunViewsPipeline<T>(params, contextUser)
             .then(results => {
                 // Stash resolved results for the linger window. Safety cap: under
                 // extreme churn (hundreds of distinct keys resolving within one linger
@@ -1184,7 +1209,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this._inflightViews.set(key, { promise, entityNames: this.collectParamEntityNames(params) });
 
         const results = await promise;
-        return results.map(r => this.ShallowCopyResult<T>(r));
+        return results.map(r => this.shallowCopyResult<T>(r));
     }
 
     // ── Dedup helpers ──────────────────────────────────────────────────
@@ -1193,7 +1218,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * The original RunViews execution pipeline (pre-processing, cache,
      * internal execution, post-processing).
      */
-    private async ExecuteRunViewsPipeline<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+    private async executeRunViewsPipeline<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         // Pre-processing for batch
         const preResult = await this.PreRunViews(params, contextUser);
 
@@ -1276,7 +1301,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (queue.length === 1) {
             const entry = queue[0];
             try {
-                const results = await this.RunViewsUncoalesced(entry.params, entry.contextUser);
+                const results = await this.runViewsUncoalesced(entry.params, entry.contextUser);
                 entry.resolve(results);
             } catch (err) {
                 entry.reject(err);
@@ -1297,7 +1322,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         for (const entry of queue) {
             const entryIndices: number[] = [];
             for (const param of entry.params) {
-                const key = this.GenerateDedupKey([param], contextUser);
+                const key = this.generateDedupKey([param], contextUser);
                 let idx = uniqueKeys.get(key);
                 if (idx === undefined) {
                     idx = uniqueParams.length;
@@ -1332,13 +1357,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         try {
             // Execute the deduplicated mega-batch as a single pipeline call
-            const uniqueResults = await this.RunViewsUncoalesced(uniqueParams, contextUser);
+            const uniqueResults = await this.runViewsUncoalesced(uniqueParams, contextUser);
 
             // Route deduped results back to each original caller, preserving order.
             // ShallowCopyResult gives each caller an independent Results array (rows
             // are still shared refs; callers should not mutate rows in place).
             for (let i = 0; i < queue.length; i++) {
-                const callerResults = callerIndexMaps[i].map(idx => this.ShallowCopyResult(uniqueResults[idx]));
+                const callerResults = callerIndexMaps[i].map(idx => this.shallowCopyResult(uniqueResults[idx]));
                 queue[i].resolve(callerResults);
             }
 
@@ -1479,15 +1504,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return textField?.Name ?? entity.FirstPrimaryKey.Name; // first-pk-ok: display-column fallback for FTS results, not a key construction
     }
 
-    private async RunViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
-        const key = this.GenerateDedupKey(params, contextUser);
+    private async runViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const key = this.generateDedupKey(params, contextUser);
         const existing = this._inflightViews.get(key);
 
         // ── Linger hit ──
         if (existing?.resolvedResults && existing.resolvedAt) {
             const age = Date.now() - existing.resolvedAt;
             if (age < ProviderBase.DedupLingerMs) {
-                return existing.resolvedResults.map(r => this.ShallowCopyResult<T>(r));
+                return existing.resolvedResults.map(r => this.shallowCopyResult<T>(r));
             }
             this._inflightViews.delete(key);
         }
@@ -1495,11 +1520,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // ── In-flight hit ──
         if (existing && !existing.resolvedResults) {
             const results = await existing.promise;
-            return results.map(r => this.ShallowCopyResult<T>(r));
+            return results.map(r => this.shallowCopyResult<T>(r));
         }
 
         // ── Fresh execution ──
-        const promise = this.ExecuteRunViewsPipeline<T>(params, contextUser)
+        const promise = this.executeRunViewsPipeline<T>(params, contextUser)
             .then(results => {
                 const entry = this._inflightViews.get(key);
                 if (entry && entry.promise === promise) {
@@ -1526,7 +1551,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this.ensureInflightViewInvalidation();
         this._inflightViews.set(key, { promise, entityNames: this.collectParamEntityNames(params) });
         const results = await promise;
-        return results.map(r => this.ShallowCopyResult<T>(r));
+        return results.map(r => this.shallowCopyResult<T>(r));
     }
 
     /**
@@ -1664,11 +1689,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return result;
     }
 
-    private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
+    private generateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
             const extras = [
-                ProviderBase.NormalizeFieldsKey(p.Fields),
+                ProviderBase.normalizeFieldsKey(p.Fields),
                 p.ResultType ?? 'simple',
                 p.UserSearchString ?? '',
                 p.ViewID ?? '',
@@ -1687,7 +1712,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * semantically identical requests collapse to the same key. Used by both the
      * request-dedup key and the client-side cache fingerprint.
      */
-    private static NormalizeFieldsKey(fields: string[] | undefined): string {
+    private static normalizeFieldsKey(fields: string[] | undefined): string {
         return fields && fields.length > 0
             ? fields.map(f => f.trim().toLowerCase()).sort().join(',')
             : '*';
@@ -1744,7 +1769,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // This touches ONLY how the slot is keyed. param.Fields is left untouched, so what the
         // provider FETCHES is unchanged — an earlier attempt cleared param.Fields instead and was
         // reverted precisely because fetch behavior could not be verified.
-        const fieldsKey = this.isFullCoverageFieldList(param) ? '*' : ProviderBase.NormalizeFieldsKey(param.Fields);
+        const fieldsKey = this.isFullCoverageFieldList(param) ? '*' : ProviderBase.normalizeFieldsKey(param.Fields);
         const fingerprint = `${base}|f:${fieldsKey}`;
         this._clientFingerprintMemo.set(param, fingerprint);
         return fingerprint;
@@ -2089,7 +2114,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * which means the call has a side effect (creating UserViewRun records)
      * and must not be deduplicated.
      */
-    private ShouldBypassDedup(params: RunViewParams[]): boolean {
+    private shouldBypassDedup(params: RunViewParams[]): boolean {
         // BypassCache:true MUST bypass the dedup-linger cache as well —
         // otherwise the "skip the cache to see DB truth" contract leaks: a
         // recent identical RunView (within DedupLingerMs) would return its
@@ -2107,7 +2132,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * new array instance (protecting against push/sort/splice by other
      * callers) but the individual row objects inside are shared references.
      */
-    private ShallowCopyResult<T>(result: RunViewResult): RunViewResult<T> {
+    private shallowCopyResult<T>(result: RunViewResult): RunViewResult<T> {
         return {
             ...result,
             Results: [...result.Results]
@@ -2786,7 +2811,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (denied.size === 0) {
             return rows;
         }
-        return ProviderBase.OmitFieldsFromRows(rows, denied);
+        return ProviderBase.omitFieldsFromRows(rows, denied);
     }
 
     /**
@@ -2797,7 +2822,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      *
      * @param deniedLowercase field names to omit, already lowercased
      */
-    private static OmitFieldsFromRows<T>(rows: T[], deniedLowercase: Set<string>): T[] {
+    private static omitFieldsFromRows<T>(rows: T[], deniedLowercase: Set<string>): T[] {
         const probe = rows[0] as Record<string, unknown>;
         if (!probe || typeof probe !== 'object') {
             return rows;

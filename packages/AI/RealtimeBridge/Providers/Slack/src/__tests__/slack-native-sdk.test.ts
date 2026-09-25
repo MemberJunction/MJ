@@ -10,12 +10,12 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     SlackNativeMeetingSdk,
     BindSlackNative,
-    readNativeConfig,
-    mapNativeAudioFrame,
-    mapNativeParticipant,
-    mapNativeRole,
-    toArrayBuffer,
-    defaultNativeLoader,
+    ReadNativeConfig,
+    MapNativeAudioFrame,
+    MapNativeParticipant,
+    MapNativeRole,
+    ToArrayBuffer,
+    DefaultNativeLoader,
     NativeMeetingModule,
     NativeMeetingClient,
     NativeAudioFrame,
@@ -102,21 +102,21 @@ const cfg = { NativeModuleSpecifier: '@acme/slack-huddle-addon', BotToken: 'xoxb
 
 describe('SlackNativeMeetingSdk — pure mappings', () => {
     it('mapNativeRole normalizes host/cohost/participant', () => {
-        expect(mapNativeRole('host')).toBe('Host');
-        expect(mapNativeRole('co-host')).toBe('CoHost');
-        expect(mapNativeRole('cohost')).toBe('CoHost');
-        expect(mapNativeRole('member')).toBe('Participant');
-        expect(mapNativeRole(undefined)).toBe('Participant');
+        expect(MapNativeRole('host')).toBe('Host');
+        expect(MapNativeRole('co-host')).toBe('CoHost');
+        expect(MapNativeRole('cohost')).toBe('CoHost');
+        expect(MapNativeRole('member')).toBe('Participant');
+        expect(MapNativeRole(undefined)).toBe('Participant');
     });
 
     it('mapNativeParticipant coerces numeric ids and maps role + self flag', () => {
-        const p: SlackParticipant = mapNativeParticipant({ userId: 42, displayName: 'Dana', role: 'host', isSelf: true });
+        const p: SlackParticipant = MapNativeParticipant({ userId: 42, displayName: 'Dana', role: 'host', isSelf: true });
         expect(p).toEqual({ ParticipantId: '42', DisplayName: 'Dana', Role: 'Host', IsSelf: true });
     });
 
     it('mapNativeAudioFrame copies PCM, resolves label, defaults timestamp', () => {
         const view = new Uint8Array([1, 2, 3]);
-        const frame: SlackAudioFrame = mapNativeAudioFrame({ data: view, userId: 7, displayName: 'Lee', timestampMs: 99 });
+        const frame: SlackAudioFrame = MapNativeAudioFrame({ data: view, userId: 7, displayName: 'Lee', timestampMs: 99 });
         expect(frame.ParticipantId).toBe('7');
         expect(frame.DisplayName).toBe('Lee');
         expect(frame.TimestampMs).toBe(99);
@@ -126,21 +126,21 @@ describe('SlackNativeMeetingSdk — pure mappings', () => {
     it('toArrayBuffer copies a Uint8Array view (not aliasing the underlying buffer window)', () => {
         const backing = new Uint8Array([9, 8, 7, 6]).buffer;
         const view = new Uint8Array(backing, 1, 2); // [8,7]
-        const out = toArrayBuffer(view);
+        const out = ToArrayBuffer(view);
         expect(out.byteLength).toBe(2);
         expect(new Uint8Array(out)).toEqual(new Uint8Array([8, 7]));
     });
 
     it('toArrayBuffer returns a standalone ArrayBuffer as-is', () => {
         const buf = new ArrayBuffer(4);
-        expect(toArrayBuffer(buf)).toBe(buf);
+        expect(ToArrayBuffer(buf)).toBe(buf);
     });
 });
 
 describe('SlackNativeMeetingSdk — join + two-way audio', () => {
     it('join() loads the addon, joins with the resolved bot token, and returns bot/huddle ids', async () => {
         const client = new FakeNativeClient();
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const result = await sdk.join(baseArgs);
         expect(result).toEqual({ BotParticipantId: 'U-bot', HuddleId: 'huddle:C123' });
         expect(client.joined?.botToken).toBe('xoxb-tok');
@@ -151,7 +151,7 @@ describe('SlackNativeMeetingSdk — join + two-way audio', () => {
 
     it('sendAudioFrame forwards the agent voice to the native huddle-media send path', async () => {
         const client = new FakeNativeClient();
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         const pcm = new Uint8Array([5, 5, 5]).buffer;
         sdk.sendAudioFrame(pcm);
@@ -160,13 +160,13 @@ describe('SlackNativeMeetingSdk — join + two-way audio', () => {
     });
 
     it('sendAudioFrame before join is a safe no-op (no throw)', () => {
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
         expect(() => sdk.sendAudioFrame(new ArrayBuffer(2))).not.toThrow();
     });
 
     it('inbound native audio is mapped to a diarized SlackAudioFrame and delivered to the handler', async () => {
         const client = new FakeNativeClient();
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const heard: SlackAudioFrame[] = [];
         sdk.onAudioFrame((f) => heard.push(f));
         await sdk.join(baseArgs);
@@ -180,7 +180,7 @@ describe('SlackNativeMeetingSdk — join + two-way audio', () => {
 describe('SlackNativeMeetingSdk — roster, signals, huddle controls', () => {
     it('participant join/leave + hand-raise events map and reach the handlers', async () => {
         const client = new FakeNativeClient();
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const joined: SlackParticipant[] = [];
         const left: string[] = [];
         const hands: Array<[string, boolean]> = [];
@@ -201,19 +201,19 @@ describe('SlackNativeMeetingSdk — roster, signals, huddle controls', () => {
     it('getParticipants maps the native roster', async () => {
         const client = new FakeNativeClient();
         client.roster = [{ userId: 'U1', displayName: 'Host', role: 'host', isSelf: false }];
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         expect(await sdk.getParticipants()).toEqual([{ ParticipantId: 'U1', DisplayName: 'Host', Role: 'Host', IsSelf: false }]);
     });
 
     it('getParticipants returns [] before join', async () => {
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(new FakeNativeClient()));
         expect(await sdk.getParticipants()).toEqual([]);
     });
 
     it('postChatMessage + muteParticipant reach the native client (real huddle controls)', async () => {
         const client = new FakeNativeClient();
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         await sdk.join(baseArgs);
         await sdk.postChatMessage('hello');
         await sdk.muteParticipant('U11');
@@ -223,7 +223,7 @@ describe('SlackNativeMeetingSdk — roster, signals, huddle controls', () => {
 
     it('huddle-ended fires the handler; leave() releases the client', async () => {
         const client = new FakeNativeClient();
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig(cfg), async () => fakeModule(client));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig(cfg), async () => fakeModule(client));
         const ended = vi.fn();
         sdk.onMeetingEnded(ended);
         await sdk.join(baseArgs);
@@ -236,7 +236,7 @@ describe('SlackNativeMeetingSdk — roster, signals, huddle controls', () => {
 
 describe('SlackNativeMeetingSdk — config + errors', () => {
     it('readNativeConfig extracts typed fields and ignores unknown keys', () => {
-        const out = readNativeConfig({
+        const out = ReadNativeConfig({
             BotToken: 'xoxb',
             TeamId: 'T1',
             ChannelId: 'C1',
@@ -260,19 +260,19 @@ describe('SlackNativeMeetingSdk — config + errors', () => {
     });
 
     it('readNativeConfig drops non-finite / non-string values', () => {
-        const out = readNativeConfig({ SampleRate: NaN, Channels: 'two', BotToken: 42 });
+        const out = ReadNativeConfig({ SampleRate: NaN, Channels: 'two', BotToken: 42 });
         expect(out.SampleRate).toBeUndefined();
         expect(out.Channels).toBeUndefined();
         expect(out.BotToken).toBeUndefined();
     });
 
     it('join() throws an actionable error when no NativeModuleSpecifier is configured', async () => {
-        const sdk = new SlackNativeMeetingSdk(readNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
+        const sdk = new SlackNativeMeetingSdk(ReadNativeConfig({}), async () => fakeModule(new FakeNativeClient()));
         await expect(sdk.join(baseArgs)).rejects.toThrow(/NativeModuleSpecifier/);
     });
 
     it('defaultNativeLoader throws an actionable error when the addon specifier cannot be resolved', async () => {
-        await expect(defaultNativeLoader('@nonexistent/slack-huddle-addon-xyz')).rejects.toThrow(
+        await expect(DefaultNativeLoader('@nonexistent/slack-huddle-addon-xyz')).rejects.toThrow(
             /could not load the native huddle media addon/,
         );
     });

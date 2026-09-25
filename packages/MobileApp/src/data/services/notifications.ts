@@ -11,43 +11,60 @@
  * today, so we store the token under the user's server-side settings
  * (`MJ: User Settings`, key {@link PUSH_TOKEN_SETTING_KEY}). This is per-user,
  * not per-device — a single row holds one token. See the TODO on
- * {@link registerDeviceToken}: a dedicated `Device Tokens` entity (one row per
+ * {@link RegisterDeviceToken}: a dedicated `Device Tokens` entity (one row per
  * device, so a user with multiple devices can be targeted individually) is the
  * proper follow-up.
  */
 import { Platform } from 'react-native';
+import { PrefsStorage } from '@/data/preferences';
 import * as Notifications from 'expo-notifications';
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type { MJUserSettingEntity } from '@memberjunction/core-entities';
+import type { UserInfo } from '@memberjunction/core';
+import { RemovePushToken, SavePushToken } from './push-token-store';
 
 /** `MJ: User Settings` key under which this user's push token bundle is stored. */
-export const PUSH_TOKEN_SETTING_KEY = 'mobile.pushDeviceToken';
+// The setting key lives with the store that owns it; re-exported here for existing callers.
+export { PUSH_TOKEN_SETTING_KEY } from './push-token-store';
 
-/** Outcome of {@link registerForPushNotifications}. */
+/** Outcome of {@link RegisterForPushNotifications}. */
 export type PushRegistrationResult = {
     /** Whether the OS granted notification permission (or provisional on iOS). */
-    granted: boolean;
+    granted: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** The acquired Expo push token, or `null` when one couldn't be minted (simulator). */
-    token: string | null;
+    token: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Whether the token was successfully written to the backend. */
-    persisted: boolean;
+    persisted: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Human-readable explanation when `token`/`persisted` is falsy. */
-    reason?: string;
+    reason?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 };
 
-/** Shape persisted as the JSON `Value` of the push-token user setting. */
-type StoredPushToken = {
-    token: string;
-    platform: typeof Platform.OS;
-    updatedAt: string;
-};
+/**
+ * A stable id for this app installation.
+ *
+ * Generated once and persisted in MMKV, so it survives app restarts and updates but not a
+ * reinstall — which is the correct lifetime: a reinstalled app gets a new push token anyway, so the
+ * old entry would be undeliverable regardless, and MMKV storage is cleared with the app.
+ *
+ * Deliberately not `expo-application`'s installation id. That would be one more native dependency
+ * for a value this app is free to choose, and the lifetimes are the same either way.
+ */
+function DeviceInstallationId(): string {
+    const existing = PrefsStorage.getString(DEVICE_ID_PREF_KEY);
+    if (existing) return existing;
+    const generated = `${Platform.OS}-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+    PrefsStorage.set(DEVICE_ID_PREF_KEY, generated);
+    return generated;
+}
+
+/** MMKV key holding this installation's generated device id. */
+const DEVICE_ID_PREF_KEY = 'mobile.pushDeviceId';
+
 
 /**
  * Install the foreground notification handler: while the app is open, show the
  * banner + list entry but stay quiet (no sound/badge). Safe to call more than
  * once — the last handler wins.
  */
-export function configureNotificationHandler(): void {
+export function ConfigureNotificationHandler(): void {
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
             shouldShowBanner: true,
@@ -64,7 +81,7 @@ export function configureNotificationHandler(): void {
  *
  * @returns `true` if notifications are permitted; `false` on denial or error.
  */
-export async function requestNotificationPermission(): Promise<boolean> {
+export async function RequestNotificationPermission(): Promise<boolean> {
     try {
         const current = await Notifications.getPermissionsAsync();
         if (isGranted(current)) return true;
@@ -90,7 +107,7 @@ function isGranted(status: Notifications.NotificationPermissionsStatus): boolean
  *
  * @returns The Expo push token string, or `null` when unavailable.
  */
-export async function getExpoPushToken(): Promise<string | null> {
+export async function GetExpoPushToken(): Promise<string | null> {
     try {
         // projectId defaults from Constants.expoConfig.extra.eas.projectId.
         const result = await Notifications.getExpoPushTokenAsync();
@@ -105,30 +122,15 @@ export async function getExpoPushToken(): Promise<string | null> {
 /**
  * Persist this device's push token to the backend so the server can target it.
  *
- * TODO(P2.3 follow-up): replace this single-row `MJ: User Settings` fallback
- * with a dedicated per-device entity (e.g. `Device Tokens`) so a user's
- * multiple devices can each be addressed. Today one row holds one token per
- * user, so signing in on a second device overwrites the first.
+ * Tokens are stored as a map keyed by installation id, so a user's phone and tablet each keep
+ * their own slot and registering on one never unregisters the other.
  *
  * @param token The Expo push token to store.
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns `true` when the token was saved.
  */
-export async function registerDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    const currentUser = contextUser ?? md.CurrentUser;
-    if (!currentUser?.ID) {
-        console.warn('[notifications] no current user; cannot register device token');
-        return false;
-    }
-    const setting = await findOrCreateTokenSetting(md, currentUser);
-    const payload: StoredPushToken = { token, platform: Platform.OS, updatedAt: new Date().toISOString() };
-    setting.Value = JSON.stringify(payload);
-    const saved = await setting.Save();
-    if (!saved) {
-        console.warn('[notifications] failed to persist device token:', setting.LatestResult?.CompleteMessage ?? 'unknown');
-    }
-    return saved;
+export async function RegisterDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
+    return SavePushToken(DeviceInstallationId(), token, Platform.OS, contextUser);
 }
 
 /**
@@ -139,22 +141,13 @@ export async function registerDeviceToken(token: string, contextUser?: UserInfo)
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns `true` when the stored token was deleted (or there was nothing to delete).
  */
-export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boolean> {
+export async function UnregisterDeviceToken(contextUser?: UserInfo): Promise<boolean> {
     try {
         await Notifications.unregisterForNotificationsAsync();
     } catch (e) {
         console.log('[notifications] unregisterForNotificationsAsync no-op:', errText(e));
     }
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    const currentUser = contextUser ?? md.CurrentUser;
-    if (!currentUser?.ID) return true;
-    const existing = await loadTokenSetting(currentUser);
-    if (!existing) return true;
-    const deleted = await existing.Delete();
-    if (!deleted) {
-        console.warn('[notifications] failed to delete device token:', existing.LatestResult?.CompleteMessage ?? 'unknown');
-    }
-    return deleted;
+    return RemovePushToken(DeviceInstallationId(), contextUser);
 }
 
 /**
@@ -166,49 +159,26 @@ export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boo
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns A {@link PushRegistrationResult} describing what succeeded.
  */
-export async function registerForPushNotifications(contextUser?: UserInfo): Promise<PushRegistrationResult> {
-    configureNotificationHandler();
+export async function RegisterForPushNotifications(contextUser?: UserInfo): Promise<PushRegistrationResult> {
+    ConfigureNotificationHandler();
 
-    const granted = await requestNotificationPermission();
+    const granted = await RequestNotificationPermission();
     if (!granted) {
         return { granted: false, token: null, persisted: false, reason: 'Notification permission not granted.' };
     }
 
-    const token = await getExpoPushToken();
+    const token = await GetExpoPushToken();
     if (!token) {
         return { granted: true, token: null, persisted: false, reason: 'No Expo push token (simulator or APNs unavailable).' };
     }
 
-    const persisted = await registerDeviceToken(token, contextUser);
+    const persisted = await RegisterDeviceToken(token, contextUser);
     return { granted: true, token, persisted, reason: persisted ? undefined : 'Token acquired but backend persistence failed.' };
 }
 
 /** Load the existing push-token setting row for a user, or `null` if none. */
-async function loadTokenSetting(user: UserInfo): Promise<MJUserSettingEntity | null> {
-    const rv = new RunView();
-    const result = await rv.RunView<MJUserSettingEntity>(
-        {
-            EntityName: 'MJ: User Settings',
-            ExtraFilter: `UserID='${user.ID}' AND Setting='${PUSH_TOKEN_SETTING_KEY}'`,
-            ResultType: 'entity_object',
-            MaxRows: 1,
-        },
-        user,
-    );
-    if (result.Success && result.Results && result.Results.length > 0) return result.Results[0];
-    return null;
-}
 
 /** Load the user's push-token setting row, or create a fresh (unsaved) one. */
-async function findOrCreateTokenSetting(md: Metadata, user: UserInfo): Promise<MJUserSettingEntity> {
-    const existing = await loadTokenSetting(user);
-    if (existing) return existing;
-    const created = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', user);
-    created.NewRecord();
-    created.UserID = user.ID;
-    created.Setting = PUSH_TOKEN_SETTING_KEY;
-    return created;
-}
 
 /** Normalize an unknown thrown value into a message string. */
 function errText(e: unknown): string {

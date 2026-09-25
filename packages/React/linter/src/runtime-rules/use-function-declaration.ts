@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { traverse, NodePath, createViolation, truncateCode } from '../lint-utils';
+import { Traverse, NodePath, CreateViolation, TruncateCode } from '../lint-utils';
 
 /**
  * Rule: use-function-declaration
@@ -21,7 +21,7 @@ export class UseFunctionDeclarationRule extends BaseLintRule {
   Test(ast: t.File, componentName: string): Violation[] {
     const violations: Violation[] = [];
 
-    traverse(ast, {
+    Traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         // Only check TOP-LEVEL declarations (not nested inside functions)
         // This prevents flagging arrow functions inside the component
@@ -38,12 +38,12 @@ export class UseFunctionDeclarationRule extends BaseLintRule {
           // Check if it's an arrow function
           if (t.isArrowFunctionExpression(init)) {
             violations.push(
-              createViolation(
+              CreateViolation(
                 'use-function-declaration',
                 'critical',
                 path.node,
                 `Component "${componentName}" must be defined using function declaration syntax, not arrow function.`,
-                truncateCode(path.toString(), 150),
+                TruncateCode(path.toString(), 150),
                 {
                   text: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
                   example: `// ❌ WRONG - Top-level arrow function component:
@@ -91,12 +91,12 @@ function ChildComponent() {
           if (t.isArrowFunctionExpression(init)) {
             // Only flag if it's at the top level (parallel to main component)
             violations.push(
-              createViolation(
+              CreateViolation(
                 'use-function-declaration',
                 'high',
                 path.node,
                 `Top-level component "${path.node.id.name}" should use function declaration syntax.`,
-                truncateCode(path.toString(), 150),
+                TruncateCode(path.toString(), 150),
                 {
                   text: 'Use function declaration syntax for TOP-LEVEL component definitions. Arrow functions are fine inside components.',
                   example: `// ❌ WRONG - Top-level arrow function component:

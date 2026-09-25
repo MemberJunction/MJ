@@ -17,7 +17,7 @@ import {
   ClusterVisualizationResult,
   DefaultClusterConfig,
 } from '../clustering.types';
-import { ClusterViewConfig, toClusterViewConfig } from './cluster-view.types';
+import { ClusterViewConfig, ToClusterViewConfig } from './cluster-view.types';
 import { EntityDocumentAvailabilityEngine } from './entity-document-availability.engine';
 
 /**
@@ -137,14 +137,14 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
   private _config: Record<string, unknown> = {};
   @Input()
   set config(value: Record<string, unknown>) {
-    const next = toClusterViewConfig(value ?? {});
+    const next = ToClusterViewConfig(value ?? {});
     // Only re-cluster when the clustering-relevant config actually changed. The host re-pushes the
     // (unchanged) config on unrelated events — notably when a point is clicked / selection changes —
     // and re-clustering on every push made clicking a point recompute the whole scatter. Comparing
     // the normalized config keeps clustering stable across those no-op re-pushes.
-    const changed = JSON.stringify(next) !== JSON.stringify(this.activeConfig);
+    const changed = JSON.stringify(next) !== JSON.stringify(this.ActiveConfig);
     this._config = value ?? {};
-    this.activeConfig = next;
+    this.ActiveConfig = next;
     if (changed) {
       this.scheduleRecluster();
     }
@@ -162,13 +162,58 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
   // ---- Render state ----
 
   /** The current parsed config (defaults applied). */
-  public activeConfig: ClusterViewConfig = toClusterViewConfig({});
-  public points: ClusterPoint[] = [];
-  public clusters: ClusterInfo[] = [];
+  public ActiveConfig: ClusterViewConfig = ToClusterViewConfig({});
+
+  /** @deprecated Use {@link ActiveConfig}. */
+  public get activeConfig(): ClusterViewConfig {
+    return this.ActiveConfig;
+  }
+  /** @deprecated Use {@link ActiveConfig}. */
+  public set activeConfig(value: ClusterViewConfig) {
+    this.ActiveConfig = value;
+  }
+  public Points: ClusterPoint[] = [];
+
+  /** @deprecated Use {@link Points}. */
+  public get points(): ClusterPoint[] {
+    return this.Points;
+  }
+  /** @deprecated Use {@link Points}. */
+  public set points(value: ClusterPoint[]) {
+    this.Points = value;
+  }
+  public Clusters: ClusterInfo[] = [];
+
+  /** @deprecated Use {@link Clusters}. */
+  public get clusters(): ClusterInfo[] {
+    return this.Clusters;
+  }
+  /** @deprecated Use {@link Clusters}. */
+  public set clusters(value: ClusterInfo[]) {
+    this.Clusters = value;
+  }
   /** Ordered field keys for prioritized display in the scatter tooltip / detail panel. */
-  public fieldPriority: string[] = [];
+  public FieldPriority: string[] = [];
+
+  /** @deprecated Use {@link FieldPriority}. */
+  public get fieldPriority(): string[] {
+    return this.FieldPriority;
+  }
+  /** @deprecated Use {@link FieldPriority}. */
+  public set fieldPriority(value: string[]) {
+    this.FieldPriority = value;
+  }
   /** Map of field names → human-readable display names for the scatter tooltip / detail panel. */
-  public fieldDisplayNames: Record<string, string> = {};
+  public FieldDisplayNames: Record<string, string> = {};
+
+  /** @deprecated Use {@link FieldDisplayNames}. */
+  public get fieldDisplayNames(): Record<string, string> {
+    return this.FieldDisplayNames;
+  }
+  /** @deprecated Use {@link FieldDisplayNames}. */
+  public set fieldDisplayNames(value: Record<string, string>) {
+    this.FieldDisplayNames = value;
+  }
   public isLoading = false;
   public errorMessage: string | null = null;
 
@@ -220,8 +265,8 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
     const token = ++this.runToken;
     const entity = this._entity;
     if (!entity) {
-      this.points = [];
-      this.clusters = [];
+      this.Points = [];
+      this.Clusters = [];
       this.cdr.detectChanges();
       return;
     }
@@ -262,12 +307,12 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
         return;
       }
 
-      this.fieldPriority = this.computeFieldPriority(entity);
+      this.FieldPriority = this.computeFieldPriority(entity);
       this.applyResult(token, result.Points, result.Clusters);
 
       // Fire LLM cluster naming in the background (non-blocking) when enabled. Clusters render
       // immediately with provisional names; semantic labels appear when the LLM responds.
-      if (this.activeConfig.nameClusters) {
+      if (this.ActiveConfig.nameClusters) {
         void this.requestClusterLabelsFromLLM(gqlProvider, token, result);
       }
     } catch (err) {
@@ -285,8 +330,8 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
     if (this.isStale(token)) {
       return;
     }
-    this.points = points;
-    this.clusters = clusters;
+    this.Points = points;
+    this.Clusters = clusters;
     this.isLoading = false;
     this.cdr.detectChanges();
   }
@@ -297,8 +342,8 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
       return;
     }
     this.errorMessage = message;
-    this.points = [];
-    this.clusters = [];
+    this.Points = [];
+    this.Clusters = [];
     this.isLoading = false;
     this.cdr.detectChanges();
   }
@@ -333,7 +378,7 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
     const aiClient = new GraphQLAIClient(gqlProvider);
     const result = await aiClient.FetchEntityVectors({
       entityDocumentID: docID,
-      maxRecords: this.activeConfig.maxRecords,
+      maxRecords: this.ActiveConfig.maxRecords,
       filter: this.filterText?.trim() ? this.filterText.trim() : undefined,
     });
 
@@ -398,7 +443,7 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
     for (const f of entity.Fields) {
       displayNames[f.Name] = f.DisplayNameOrName;
     }
-    this.fieldDisplayNames = displayNames;
+    this.FieldDisplayNames = displayNames;
 
     return entity.Fields.filter((f) => !internalKeys.has(f.Name) && !f.IsVirtual && !f.IsPrimaryKey)
       .sort((a, b) => {
@@ -411,7 +456,7 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
 
   /** Build the engine {@link ClusterConfig} from the entity + the view-type config. */
   private buildClusterConfig(entity: EntityInfo, docID: string): ClusterConfig {
-    const c = this.activeConfig;
+    const c = this.ActiveConfig;
     return {
       ...DefaultClusterConfig(),
       EntityName: entity.Name,
@@ -505,7 +550,7 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
   /** Apply LLM-generated labels onto the live {@link clusters} array by cluster ID. */
   private applyLabelsToClusters(labels: ClusterLabel[]): void {
     for (const label of labels) {
-      const cluster = this.clusters.find((c) => c.Id === label.ClusterId);
+      const cluster = this.Clusters.find((c) => c.Id === label.ClusterId);
       if (cluster) {
         cluster.Label = label.Label;
       }
@@ -516,12 +561,22 @@ export class ClusterViewRendererComponent extends BaseAngularComponent implement
   // Point → record mapping
   // ================================================================
 
-  onPointClicked(point: ClusterPoint): void {
+  OnPointClicked(point: ClusterPoint): void {
     this.recordSelected.emit(this.recordForPoint(point) ?? { ID: point.VectorKey });
   }
 
-  onOpenRecordRequested(point: ClusterPoint): void {
+  /** @deprecated Use {@link OnPointClicked}. */
+  onPointClicked(point: ClusterPoint): void {
+    return this.OnPointClicked(point);
+  }
+
+  OnOpenRecordRequested(point: ClusterPoint): void {
     this.recordOpened.emit(this.recordForPoint(point) ?? { ID: point.VectorKey });
+  }
+
+  /** @deprecated Use {@link OnOpenRecordRequested}. */
+  onOpenRecordRequested(point: ClusterPoint): void {
+    return this.OnOpenRecordRequested(point);
   }
 
   /**

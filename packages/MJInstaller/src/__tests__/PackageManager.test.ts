@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   PackageManagerCommands,
-  resolvePackageManager,
+  ResolvePackageManager,
   type PackageManagerType,
 } from '../models/PackageManager.js';
 
 describe('resolvePackageManager', () => {
   it('defaults to pnpm when no value is configured', () => {
-    expect(resolvePackageManager(undefined)).toBe('pnpm');
+    expect(ResolvePackageManager(undefined)).toBe('pnpm');
   });
 
   it('honors an explicit npm override', () => {
-    expect(resolvePackageManager('npm')).toBe('npm');
+    expect(ResolvePackageManager('npm')).toBe('npm');
   });
 
   it('honors an explicit pnpm value', () => {
-    expect(resolvePackageManager('pnpm')).toBe('pnpm');
+    expect(ResolvePackageManager('pnpm')).toBe('pnpm');
   });
 });
 

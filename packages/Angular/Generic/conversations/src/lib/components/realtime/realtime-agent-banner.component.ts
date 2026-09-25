@@ -1,6 +1,6 @@
 import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RealtimeConnectionState } from '../../services/realtime-session.service';
+import { RealtimeConnectionState } from '@memberjunction/realtime-runtime';
 import { RealtimeUxDensity } from './realtime-disclosure';
 
 /**

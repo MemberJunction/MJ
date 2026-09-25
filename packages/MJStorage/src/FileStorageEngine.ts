@@ -8,7 +8,7 @@ import {
     MJFileStorageProviderEntity
 } from '@memberjunction/core-entities';
 import { FileStorageBase } from './generic/FileStorageBase';
-import { initializeDriverWithAccountCredentials } from './util';
+import { InitializeDriverWithAccountCredentials } from './util';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -269,7 +269,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         const contextUser = this._contextUser;
         const results = await Promise.allSettled(
             activeAccounts.map(async ({ account, provider: storageProvider }) => {
-                const driver = await initializeDriverWithAccountCredentials({
+                const driver = await InitializeDriverWithAccountCredentials({
                     accountEntity: account,
                     providerEntity: storageProvider,
                     contextUser
@@ -349,7 +349,7 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
             throw new Error(`FileStorageEngine.GetDriver: account '${accountId}' not found in cached metadata. Did you call Config() first?`);
         }
 
-        const driver = await initializeDriverWithAccountCredentials({
+        const driver = await InitializeDriverWithAccountCredentials({
             accountEntity: resolved.account,
             providerEntity: resolved.provider,
             contextUser

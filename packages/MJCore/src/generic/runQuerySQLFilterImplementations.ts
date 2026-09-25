@@ -410,24 +410,39 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
      * @param name The filter name
      * @returns The filter with implementation or undefined if not found
      */
-    public getFilter(name: string): RunQuerySQLFilter | undefined {
+    public GetFilter(name: string): RunQuerySQLFilter | undefined {
         return this._filters.get(name);
+    }
+
+    /** @deprecated Use {@link GetFilter}. */
+    public getFilter(name: string): RunQuerySQLFilter | undefined {
+        return this.GetFilter(name);
     }
 
     /**
      * Gets all available filter names
      * @returns Array of filter names
      */
-    public getFilterNames(): string[] {
+    public GetFilterNames(): string[] {
         return Array.from(this._filters.keys());
+    }
+
+    /** @deprecated Use {@link GetFilterNames}. */
+    public getFilterNames(): string[] {
+        return this.GetFilterNames();
     }
 
     /**
      * Gets all filters with implementations
      * @returns Array of all filters
      */
-    public getAllFilters(): RunQuerySQLFilter[] {
+    public GetAllFilters(): RunQuerySQLFilter[] {
         return Array.from(this._filters.values());
+    }
+
+    /** @deprecated Use {@link GetAllFilters}. */
+    public getAllFilters(): RunQuerySQLFilter[] {
+        return this.GetAllFilters();
     }
 
     /**
@@ -437,11 +452,16 @@ export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterMan
      * @returns The filtered result
      * @throws Error if filter is not found or execution fails
      */
-    public executeFilter(filterName: string, value: unknown): unknown {
+    public ExecuteFilter(filterName: string, value: unknown): unknown {
         const filter = this._filters.get(filterName);
         if (!filter || !filter.implementation) {
             throw new Error(`Filter '${filterName}' not found or has no implementation`);
         }
         return filter.implementation(value);
+    }
+
+    /** @deprecated Use {@link ExecuteFilter}. */
+    public executeFilter(filterName: string, value: unknown): unknown {
+        return this.ExecuteFilter(filterName, value);
     }
 }

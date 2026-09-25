@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buildRoleManagementAgentContext,
-  isValidRoleTypeFilter,
-  capRoleNames,
-  resolveRoleByIDOrName,
+  BuildRoleManagementAgentContext,
+  IsValidRoleTypeFilter,
+  CapRoleNames,
+  ResolveRoleByIDOrName,
   ROLE_AGENT_CONTEXT_NAME_LIST_CAP,
   RoleManagementAgentContextInput,
   RoleNameCandidate,
@@ -39,52 +39,52 @@ const summary: RolePermissionSummary = {
 
 describe('isValidRoleTypeFilter', () => {
   it('accepts the three valid filters', () => {
-    expect(isValidRoleTypeFilter('all')).toBe(true);
-    expect(isValidRoleTypeFilter('system')).toBe(true);
-    expect(isValidRoleTypeFilter('custom')).toBe(true);
+    expect(IsValidRoleTypeFilter('all')).toBe(true);
+    expect(IsValidRoleTypeFilter('system')).toBe(true);
+    expect(IsValidRoleTypeFilter('custom')).toBe(true);
   });
   it('rejects anything else', () => {
-    expect(isValidRoleTypeFilter('System')).toBe(false);
-    expect(isValidRoleTypeFilter('')).toBe(false);
-    expect(isValidRoleTypeFilter(7)).toBe(false);
+    expect(IsValidRoleTypeFilter('System')).toBe(false);
+    expect(IsValidRoleTypeFilter('')).toBe(false);
+    expect(IsValidRoleTypeFilter(7)).toBe(false);
   });
 });
 
 describe('capRoleNames', () => {
   it('caps at the configured limit', () => {
     const many = Array.from({ length: ROLE_AGENT_CONTEXT_NAME_LIST_CAP + 3 }, (_, i) => `r${i}`);
-    expect(capRoleNames(many)).toHaveLength(ROLE_AGENT_CONTEXT_NAME_LIST_CAP);
+    expect(CapRoleNames(many)).toHaveLength(ROLE_AGENT_CONTEXT_NAME_LIST_CAP);
   });
 });
 
 describe('resolveRoleByIDOrName', () => {
   it('matches by exact ID (case-insensitive)', () => {
-    const r = resolveRoleByIDOrName('r1', roles);
-    expect(r.ok && r.match.Name).toBe('Administrator');
+    const r = ResolveRoleByIDOrName('r1', roles);
+    expect(r.Ok && r.Match.Name).toBe('Administrator');
   });
   it('matches by exact name', () => {
-    const r = resolveRoleByIDOrName('Developer', roles);
-    expect(r.ok && r.match.ID).toBe('R2');
+    const r = ResolveRoleByIDOrName('Developer', roles);
+    expect(r.Ok && r.Match.ID).toBe('R2');
   });
   it('falls back to contains', () => {
-    const r = resolveRoleByIDOrName('read', roles);
-    expect(r.ok && r.match.Name).toBe('Read Only');
+    const r = ResolveRoleByIDOrName('read', roles);
+    expect(r.Ok && r.Match.Name).toBe('Read Only');
   });
   it('returns a tolerant error listing available roles on a miss', () => {
-    const r = resolveRoleByIDOrName('nope', roles);
-    expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.error).toContain('Administrator');
+    const r = ResolveRoleByIDOrName('nope', roles);
+    expect(r.Ok).toBe(false);
+    if (!r.Ok) {
+      expect(r.Error).toContain('Administrator');
     }
   });
   it('errors on empty input', () => {
-    expect(resolveRoleByIDOrName('  ', roles).ok).toBe(false);
+    expect(ResolveRoleByIDOrName('  ', roles).Ok).toBe(false);
   });
 });
 
 describe('buildRoleManagementAgentContext', () => {
   it('emits the core counts and filter state', () => {
-    const ctx = buildRoleManagementAgentContext(baseInput());
+    const ctx = BuildRoleManagementAgentContext(baseInput());
     expect(ctx['TotalRoleCount']).toBe(4);
     expect(ctx['SystemRoleCount']).toBe(2);
     expect(ctx['CustomRoleCount']).toBe(2);
@@ -92,7 +92,7 @@ describe('buildRoleManagementAgentContext', () => {
     expect(ctx['VisibleRoleNames']).toEqual(['Administrator', 'Developer']);
   });
   it('omits the permission summary when no role is selected', () => {
-    const ctx = buildRoleManagementAgentContext(baseInput());
+    const ctx = BuildRoleManagementAgentContext(baseInput());
     expect(ctx['SelectedRolePermissions']).toBeUndefined();
   });
   it('includes the read-only permission summary when a role is selected', () => {
@@ -100,14 +100,14 @@ describe('buildRoleManagementAgentContext', () => {
     input.SelectedRoleId = 'R1';
     input.SelectedRoleName = 'Administrator';
     input.SelectedRolePermissions = summary;
-    const ctx = buildRoleManagementAgentContext(input);
+    const ctx = BuildRoleManagementAgentContext(input);
     expect(ctx['SelectedRoleName']).toBe('Administrator');
     expect(ctx['SelectedRolePermissions']).toEqual(summary);
   });
   it('caps a long role-name list and emits a companion count', () => {
     const input = baseInput();
     input.VisibleRoleNames = Array.from({ length: ROLE_AGENT_CONTEXT_NAME_LIST_CAP + 4 }, (_, i) => `Role ${i}`);
-    const ctx = buildRoleManagementAgentContext(input);
+    const ctx = BuildRoleManagementAgentContext(input);
     expect((ctx['VisibleRoleNames'] as string[]).length).toBe(ROLE_AGENT_CONTEXT_NAME_LIST_CAP);
     expect(ctx['VisibleRoleCount']).toBe(ROLE_AGENT_CONTEXT_NAME_LIST_CAP + 4);
   });
@@ -115,7 +115,7 @@ describe('buildRoleManagementAgentContext', () => {
     const input = baseInput();
     input.SelectedRolePermissions = summary;
     input.SelectedRoleId = 'R1';
-    const ctx = buildRoleManagementAgentContext(input);
+    const ctx = BuildRoleManagementAgentContext(input);
     const perms = ctx['SelectedRolePermissions'] as Record<string, unknown>;
     expect(Object.keys(perms).sort()).toEqual(['CreateCount', 'DeleteCount', 'EntityCount', 'ReadCount', 'UpdateCount']);
   });

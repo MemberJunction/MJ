@@ -32,7 +32,7 @@ import { RealtimeProxyServer } from './realtimeProxy/RealtimeProxyServer.js';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { default as jwt } from 'jsonwebtoken';
-import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
+import { contextFunction, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import { variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
@@ -67,7 +67,9 @@ import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
-import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { GetAttachmentService } from '@memberjunction/aiengine';
+import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData, ConfigureRecordDataBroadcast } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
 import {
@@ -97,8 +99,13 @@ export { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
  * CodeGenLib). This wrapper keeps the public `getDbType()` symbol that
  * MJServer consumers (and the broader stack) already import.
  */
-export function getDbType(): DatabasePlatform {
+export function GetDbType(): DatabasePlatform {
     return resolveDbPlatformFromEnv() ?? 'sqlserver';
+}
+
+/** @deprecated Use {@link GetDbType}. */
+export function getDbType(): DatabasePlatform {
+  return GetDbType();
 }
 
 export { MaxLength } from 'class-validator';
@@ -261,7 +268,10 @@ const localPath = (p: string) => {
   return resolvedPath;
 };
 
-export const createApp = (): Application => express();
+export const CreateApp = (): Application => express();
+
+/** @deprecated Use {@link CreateApp}. */
+export const createApp = CreateApp;
 
 /**
  * Resolves the MJServer package version for the startup summary header.
@@ -281,7 +291,18 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
-export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
+// Bind MJStorage as the conversation-attachment blob store. The attachment service itself no longer
+// imports `@memberjunction/storage` — that dependency made it unusable from any browser or React
+// Native client, which is why the same attachment rules had been reimplemented three times.
+//
+// This runs at module load, not inside `serve()`, so that merely importing MJServer is enough: any
+// entry point that reaches the attachment service — a resolver under test, a script, a worker that
+// never calls `serve()` — finds storage already bound rather than degrading to "storage is not
+// available on this host". The store is stateless and configures `FileStorageEngine` on use, so
+// there is no ordering hazard in binding this early.
+GetAttachmentService().BlobStore = new MJStorageBlobStore();
+
+export const Serve = async (resolverPaths: Array<string>, app: Application = CreateApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
   // operator knob). At `standard` (default), per-phase timings are collapsed into
@@ -307,8 +328,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
   }
 
-  const setupComplete$ = new ReplaySubject(1);
-  const dbType = getDbType();
+const setupComplete$ = new ReplaySubject(1);
+  const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 
   if (dbType === 'postgresql') {
@@ -896,6 +917,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // publish hook above so the first RSU event also reaches live subscribers.
   RegisterRSUProgressBridge();
 
+  // Hand the resolver its allowlist before anything can publish. It cannot read configInfo itself:
+  // config.ts loads and validates at module scope, so importing it there would pull full config
+  // validation into every import chain that touches the resolver, unit tests included.
+  ConfigureRecordDataBroadcast(configInfo.cacheSettings?.recordDataBroadcastEntities);
+
   // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
   // ANY BaseEntity save/delete occurs on this server — regardless of whether it
   // originated from a GraphQL mutation or internal server-side code (agents, actions,
@@ -905,14 +931,21 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
       const beEvent = event.args as BaseEntityEvent;
       if (beEvent.type === 'save' || beEvent.type === 'delete') {
+        const entityName = beEvent.baseEntity.EntityInfo.Name;
         PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-          entityName: beEvent.baseEntity.EntityInfo.Name,
+          entityName,
           primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
           action: beEvent.type,
           sourceServerId: MJGlobal.Instance.ProcessUUID,
           timestamp: new Date(),
           originSessionId: null,
-          recordData: beEvent.type === 'save' ? JSON.stringify(beEvent.baseEntity.GetAll()) : undefined,
+          // Opt-in only: this event reaches every connected client unfiltered, and this listener
+          // fires for server-internal saves too (agents, actions, orchestrator), which are exactly
+          // the ones no browser session asked for.
+          recordData:
+            beEvent.type === 'save' && MayBroadcastRecordData(entityName)
+              ? JSON.stringify(beEvent.baseEntity.GetAll())
+              : undefined,
         });
       }
     }
@@ -1365,7 +1398,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   startupLog.LogIf('verbose', `[Auth] Public provider catalog registered at ${AUTH_CATALOG_MOUNT_PATH}/providers`);
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
-  app.use(createUnifiedAuthMiddleware(dataSources));
+  app.use(CreateUnifiedAuthMiddleware(dataSources));
 
   // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
   // Middleware here has access to the authenticated user via req.userPayload.
@@ -1663,6 +1696,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // This is critical for server stability when downstream dependencies fail
   });
 };
+
+/** @deprecated Use {@link Serve}. */
+export const serve = Serve;
 
 /**
  * Age at which an unprocessed `MJ: RSU Pending Works` row is reported as stranded.

@@ -64,7 +64,7 @@ export function NoLog(target: object, propertyKey?: string | symbol, parameterIn
  * Pass the resolver class itself (e.g. `MyResolver`) — the function reads from the
  * prototype internally to match how type-graphql stores resolver metadata.
  */
-export function hasNoLogParameter(
+export function HasNoLogParameter(
   resolverClass: Function,
   methodName: string,
   parameterIndex: number,
@@ -74,6 +74,15 @@ export function hasNoLogParameter(
   return marks !== undefined && marks.has(parameterIndex);
 }
 
+/** @deprecated Use {@link HasNoLogParameter}. */
+export function hasNoLogParameter(
+  resolverClass: Function,
+  methodName: string,
+  parameterIndex: number,
+): boolean {
+  return HasNoLogParameter(resolverClass, methodName, parameterIndex);
+}
+
 /**
  * Returns the set of field names decorated `@NoLog` on the given input class. Empty set
  * if none were marked.
@@ -81,8 +90,13 @@ export function hasNoLogParameter(
  * Pass the input class itself (e.g. `GetDataInputType`) — the function reads from the
  * prototype internally.
  */
-export function getNoLogFields(inputTypeClass: Function): ReadonlySet<string> {
+export function GetNoLogFields(inputTypeClass: Function): ReadonlySet<string> {
   const target = inputTypeClass.prototype as object;
   const marks = Reflect.getMetadata(NO_LOG_FIELD_KEY, target) as Set<string> | undefined;
   return marks ?? new Set<string>();
+}
+
+/** @deprecated Use {@link GetNoLogFields}. */
+export function getNoLogFields(inputTypeClass: Function): ReadonlySet<string> {
+  return GetNoLogFields(inputTypeClass);
 }

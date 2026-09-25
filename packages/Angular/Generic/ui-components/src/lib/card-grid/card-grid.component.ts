@@ -28,7 +28,7 @@ let nextCardId = 0;
     standalone: true,
 })
 export class MJCardTitleDirective {
-    constructor(public templateRef: TemplateRef<unknown>) {}
+    constructor(public templateRef: TemplateRef<unknown>) {}  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -39,7 +39,7 @@ export class MJCardTitleDirective {
     standalone: true,
 })
 export class MJCardActionsDirective {
-    constructor(public templateRef: TemplateRef<unknown>) {}
+    constructor(public templateRef: TemplateRef<unknown>) {}  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -50,7 +50,7 @@ export class MJCardActionsDirective {
     standalone: true,
 })
 export class MJCardToolsDirective {
-    constructor(public templateRef: TemplateRef<unknown>) {}
+    constructor(public templateRef: TemplateRef<unknown>) {}  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -61,7 +61,7 @@ export class MJCardToolsDirective {
     standalone: true,
 })
 export class MJCardFooterDirective {
-    constructor(public templateRef: TemplateRef<unknown>) {}
+    constructor(public templateRef: TemplateRef<unknown>) {}  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 const CARD_GRID_CSS = `
@@ -266,7 +266,12 @@ export class MJCardGridComponent implements OnChanges {
     private cdr = inject(ChangeDetectorRef);
 
     /** Stream of the currently maximized card ID across all children. */
-    public readonly maximizedCard$ = new BehaviorSubject<string | null>(null);
+    public readonly MaximizedCard$ = new BehaviorSubject<string | null>(null);
+
+    /** @deprecated Use {@link MaximizedCard$}. */
+    public get maximizedCard$() {
+        return this.MaximizedCard$;
+    }
 
     /** Number of columns for standard layout (defaults to 2). */
     @Input() Columns: number | string = 2;
@@ -288,7 +293,7 @@ export class MJCardGridComponent implements OnChanges {
 
     public ngOnChanges(changes: SimpleChanges): void {
         if (changes['MaximizedCardId'] && !changes['MaximizedCardId'].firstChange) {
-            this.maximizedCard$.next(this.MaximizedCardId);
+            this.MaximizedCard$.next(this.MaximizedCardId);
         }
     }
 
@@ -302,7 +307,7 @@ export class MJCardGridComponent implements OnChanges {
 
     public MaximizeCard(cardId: string): void {
         this.MaximizedCardId = cardId;
-        this.maximizedCard$.next(cardId);
+        this.MaximizedCard$.next(cardId);
         this.MaximizedCardIdChange.emit(cardId);
         this.CardMaximized.emit(cardId);
         this.cdr.markForCheck();
@@ -311,7 +316,7 @@ export class MJCardGridComponent implements OnChanges {
     public Restore(): void {
         if (!this.MaximizedCardId) return;
         this.MaximizedCardId = null;
-        this.maximizedCard$.next(null);
+        this.MaximizedCard$.next(null);
         this.MaximizedCardIdChange.emit(null);
         this.CardRestored.emit();
         this.cdr.markForCheck();

@@ -115,10 +115,10 @@ export interface IDiscordVoiceSdk {
      * @param args Join parameters (guild id, voice-channel id, bot name, auth).
      * @returns The bot user + voice-channel handles.
      */
-    joinVoiceChannel(args: DiscordJoinArgs): Promise<DiscordJoinResult>;
+    joinVoiceChannel(args: DiscordJoinArgs): Promise<DiscordJoinResult>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /** Leaves the voice channel and releases the voice connection + gateway resources. */
-    leaveVoiceChannel(): Promise<void>;
+    leaveVoiceChannel(): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends one raw PCM audio frame as the bot's outbound audio (the agent's voice into the channel).
@@ -126,7 +126,7 @@ export interface IDiscordVoiceSdk {
      *
      * @param pcm The PCM audio bytes to send.
      */
-    sendAudioFrame(pcm: ArrayBuffer): void;
+    sendAudioFrame(pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback for inbound raw per-user audio frames (what the agent hears, carrying the
@@ -134,28 +134,28 @@ export interface IDiscordVoiceSdk {
      *
      * @param cb Invoked with each inbound audio frame.
      */
-    onAudioFrame(cb: (frame: DiscordAudioFrame) => void): void;
+    onAudioFrame(cb: (frame: DiscordAudioFrame) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a member joins the voice channel. "Latest handler wins."
      *
      * @param cb Invoked with the member who joined.
      */
-    onMemberJoin(cb: (member: DiscordMember) => void): void;
+    onMemberJoin(cb: (member: DiscordMember) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when a member leaves the voice channel. "Latest handler wins."
      *
      * @param cb Invoked with the user id that left.
      */
-    onMemberLeave(cb: (userId: string) => void): void;
+    onMemberLeave(cb: (userId: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Returns the current voice-channel member roster (including the bot).
      *
      * @returns The current members.
      */
-    getMembers(): Promise<DiscordMember[]>;
+    getMembers(): Promise<DiscordMember[]>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Posts a message to the associated text channel (everyone in the channel sees it). Discord exposes
@@ -163,14 +163,14 @@ export interface IDiscordVoiceSdk {
      *
      * @param text The chat message text.
      */
-    postChatMessage(text: string): Promise<void>;
+    postChatMessage(text: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Mutes a member in the voice channel (requires the bot to have the guild's "Mute Members" permission).
      *
      * @param userId The user to mute.
      */
-    muteMember(userId: string): Promise<void>;
+    muteMember(userId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers a callback fired when the bot's voice connection is dropped (channel deleted, kicked,
@@ -178,7 +178,7 @@ export interface IDiscordVoiceSdk {
      *
      * @param cb Invoked when the voice connection has ended.
      */
-    onDisconnect(cb: () => void): void;
+    onDisconnect(cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

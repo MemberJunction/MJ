@@ -33,23 +33,23 @@ import {
 } from '../types/browser.js';
 import { ClassifyConnectEndpoint } from './connect-endpoint.js';
 import {
-    getVisibleText,
-    getSelectionText,
-    getTitle,
-    waitForLoadState,
-    getAccessibilitySnapshot,
-    queryElement,
+    GetVisibleText,
+    GetSelectionText,
+    GetTitle,
+    WaitForLoadState,
+    GetAccessibilitySnapshot,
+    QueryElement,
 } from './page-perception.js';
-import { retryPastDismissableOverlay } from './overlay-dismiss.js';
+import { RetryPastDismissableOverlay } from './overlay-dismiss.js';
 import {
-    extractInteractiveElements,
-    clickInteractiveElement,
-    typeIntoInteractiveElement,
+    ExtractInteractiveElements,
+    ClickInteractiveElement,
+    TypeIntoInteractiveElement,
 } from './element-extraction.js';
 // ambiguous-selector narrowing, shared with SharedContextBrowserAdapter.
-import { resolveActionLocator } from './selector-resolution.js';
+import { ResolveActionLocator } from './selector-resolution.js';
 // warm-seed in-page storage helpers, shared with SharedContextBrowserAdapter.
-import { StorageSnapshot, captureStorageInPage, restoreStorageInPage } from './page-storage.js';
+import { StorageSnapshot, CaptureStorageInPage, RestoreStorageInPage } from './page-storage.js';
 
 /**
  * Minimal shape of a CDP `Page.screencastFrame` event payload — only the
@@ -435,36 +435,36 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     // so the suite adapter can't silently inherit no-ops, and the two can't drift.
 
     public override async GetVisibleText(): Promise<string> {
-        return getVisibleText(this.page);
+        return GetVisibleText(this.page);
     }
 
     public override async GetSelectionText(): Promise<string> {
-        return getSelectionText(this.page);
+        return GetSelectionText(this.page);
     }
 
     public override async GetTitle(): Promise<string> {
-        return getTitle(this.page);
+        return GetTitle(this.page);
     }
 
     public override async WaitForLoadState(
         state: 'load' | 'domcontentloaded' | 'networkidle'
     ): Promise<void> {
-        return waitForLoadState(this.page, state);
+        return WaitForLoadState(this.page, state);
     }
 
     public override async GetAccessibilitySnapshot(): Promise<AccessibilityNode | null> {
-        return getAccessibilitySnapshot(this.page);
+        return GetAccessibilitySnapshot(this.page);
     }
 
     public override async QueryElement(selector: string): Promise<ElementInfo> {
-        return queryElement(this.page, selector, this.config.ActionTimeoutMs);
+        return QueryElement(this.page, selector, this.config.ActionTimeoutMs);
     }
 
     /** Last extracted element list, cached so ClickElement/TypeIntoElement can resolve an index. */
     private lastInteractiveElements: InteractiveElement[] = [];
 
     public override async ExtractInteractiveElements(): Promise<InteractiveElement[]> {
-        this.lastInteractiveElements = await extractInteractiveElements(this.page, this.config.ActionTimeoutMs);
+        this.lastInteractiveElements = await ExtractInteractiveElements(this.page, this.config.ActionTimeoutMs);
         return this.lastInteractiveElements;
     }
 
@@ -735,10 +735,10 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                     // is supplied. Modifiers (e.g. Shift-click) ride along.
                     // Ambiguous selectors are narrowed first — strict
                     // mode would otherwise throw on a multi-match.
-                    const target = await resolveActionLocator(page, action.Selector);
+                    const target = await ResolveActionLocator(page, action.Selector);
                     // An open popover's backdrop makes this unwinnable by waiting —
                     // the replay tier's every click comes through here.
-                    await retryPastDismissableOverlay(page, timeout => target.click({
+                    await RetryPastDismissableOverlay(page, timeout => target.click({
                         button: action.Button,
                         clickCount: action.ClickCount,
                         timeout,
@@ -754,7 +754,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 if (action.Selector) {
                     // Selector path: focus the matched element, then type so that
                     // keystroke events (and any input handlers) fire naturally.
-                    const target = await resolveActionLocator(page, action.Selector);
+                    const target = await ResolveActionLocator(page, action.Selector);
                     await target.focus({ timeout: this.config.ActionTimeoutMs });
                     await page.keyboard.type(action.Text);
                 } else {
@@ -766,7 +766,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
             case 'ClickElement':
                 // Element-grounded click: resolve the index to the extracted
                 // element and click its locator with actionability auto-wait.
-                await clickInteractiveElement(
+                await ClickInteractiveElement(
                     page,
                     this.resolveElementByIndex(action.Index),
                     { clickCount: action.ClickCount, button: action.Button, modifiers: action.Modifiers },
@@ -775,7 +775,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 break;
 
             case 'TypeIntoElement':
-                await typeIntoInteractiveElement(
+                await TypeIntoInteractiveElement(
                     page,
                     this.resolveElementByIndex(action.Index),
                     action.Text,
@@ -818,7 +818,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
                 if (action.Selector) {
                     // Selector path: bring the matched element into view; the
                     // delta scroll is ignored when a selector is supplied.
-                    const target = await resolveActionLocator(page, action.Selector);
+                    const target = await ResolveActionLocator(page, action.Selector);
                     await target.scrollIntoViewIfNeeded({ timeout: this.config.ActionTimeoutMs });
                 } else {
                     // a wheel event lands wherever the pointer is, so move
@@ -1137,7 +1137,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
     public override async CaptureContextSeed(origin: string): Promise<ContextSeed | null> {
         this.requirePage();
         try {
-            const snap = await this.page!.evaluate(captureStorageInPage);
+            const snap = await this.page!.evaluate(CaptureStorageInPage);
             const seed = new ContextSeed();
             seed.Origin = origin;
             seed.LocalStorage = snap.localStorage;
@@ -1162,7 +1162,7 @@ export class PlaywrightBrowserAdapter extends BaseBrowserAdapter {
         // addInitScript so the restore runs BEFORE the app's scripts on the next
         // navigation to the seed origin — the app then finds a warm cache instead
         // of cold-booting it. Restore is cold-boot-safe (deletes a DB on failure).
-        await this.page!.addInitScript(restoreStorageInPage, snap);
+        await this.page!.addInitScript(RestoreStorageInPage, snap);
     }
 
     // ─── State ─────────────────────────────────────────────

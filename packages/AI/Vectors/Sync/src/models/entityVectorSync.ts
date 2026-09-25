@@ -10,7 +10,7 @@ import { IsValidUUID, MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunctio
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse, VectorizeProgressUpdate } from '../generic/vectorSync.types';
 import { EntityDocumentConfiguration, EntityDocumentMetadataConfig, EntityDocumentFieldConfig } from '../generic/entityDocumentConfig.types';
-import { EntityDocumentCache } from './EntityDocumentCache';
+import { EntityDocumentCache } from '@memberjunction/entity-documents';
 import { PagedRecords } from './PagedRecords';
 import { AsyncBatchTransform } from './AsyncBatchTransform';
 import { Transform, TransformCallback, Writable } from 'node:stream';
@@ -23,8 +23,26 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
  */
 export class EntityVectorSyncer extends VectorBase {
-  _startTime: Date;
-  _endTime: Date;
+  StartTime: Date;
+
+  /** @deprecated Use {@link StartTime}. */
+  get _startTime(): Date {
+    return this.StartTime;
+  }
+  /** @deprecated Use {@link StartTime}. */
+  set _startTime(value: Date) {
+    this.StartTime = value;
+  }
+  EndTime: Date;
+
+  /** @deprecated Use {@link EndTime}. */
+  get _endTime(): Date {
+    return this.EndTime;
+  }
+  /** @deprecated Use {@link EndTime}. */
+  set _endTime(value: Date) {
+    this.EndTime = value;
+  }
   /** Accumulates render errors across batches so they can be reported through the progress callback */
   private _renderErrors: { RecordID: string; Message: string }[] = [];
   /** Accumulates embedding generation errors across batches */
@@ -90,7 +108,7 @@ export class EntityVectorSyncer extends VectorBase {
     await TemplateEngineServer.Instance.Config(false, contextUser);
 
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
-    const vectorIndexEntity: MJVectorIndexEntity = this.GetVectorIndexForEntityDocument(entityDocument);
+    const vectorIndexEntity: MJVectorIndexEntity = this.getVectorIndexForEntityDocument(entityDocument);
     const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
 
     // Parse configuration for pipeline tuning
@@ -144,9 +162,9 @@ export class EntityVectorSyncer extends VectorBase {
     );
 
     const erdUpserter = new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
-      batchSize: 10,
-      concurrencyLimit: 2,
-      processBatch: async (batch: EmbeddingData[]): Promise<EmbeddingData[]> => {
+      BatchSize: 10,
+      ConcurrencyLimit: 2,
+      ProcessBatch: async (batch: EmbeddingData[]): Promise<EmbeddingData[]> => {
         // Batch the existing-ERD lookup: one RunView per batch instead of one per
         // record (the previous Promise.all(map(...)) issued an N+1 read storm —
         // ~1 RunView per source record — which tripped the sequential/duplicate
@@ -313,9 +331,9 @@ export class EntityVectorSyncer extends VectorBase {
     embeddingDimensions?: number
   ): AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData> {
     return new AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData>({
-      batchSize: batchSize || 50,
-      concurrencyLimit: concurrencyLimit ?? 2,
-      processBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
+      BatchSize: batchSize || 50,
+      ConcurrencyLimit: concurrencyLimit ?? 2,
+      ProcessBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
         this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS, embeddingDimensions),
     });
   }
@@ -335,9 +353,9 @@ export class EntityVectorSyncer extends VectorBase {
     providerConfig?: Record<string, unknown>
   ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
     return new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
-      batchSize: batchSize || 50,
-      concurrencyLimit: 2,
-      processBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
+      BatchSize: batchSize || 50,
+      ConcurrencyLimit: 2,
+      ProcessBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
         this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS, providerConfig),
     });
   }
@@ -935,6 +953,13 @@ export class EntityVectorSyncer extends VectorBase {
       }
     }
 
+    if (!entityDocument.VectorDatabaseID) {
+      throw new Error(`Entity Document '${entityDocument.Name}' (${entityDocument.ID}) cannot be vectorized: VectorDatabaseID is required but is null.`);
+    }
+    if (!entityDocument.AIModelID) {
+      throw new Error(`Entity Document '${entityDocument.Name}' (${entityDocument.ID}) cannot be vectorized: AIModelID is required but is null.`);
+    }
+
     const vectorDBEntity: MJVectorDatabaseEntity = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
     const aiModelEntity: MJAIModelEntity = this.GetAIModel(entityDocument.AIModelID);
 
@@ -1120,7 +1145,7 @@ export class EntityVectorSyncer extends VectorBase {
    * using the cached KnowledgeHubMetadataEngine. If VectorIndexID is not set on the
    * EntityDocument, throws a descriptive error instructing the user to configure it.
    */
-  private GetVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
+  private getVectorIndexForEntityDocument(entityDocument: MJEntityDocumentEntity): MJVectorIndexEntity {
     if (!entityDocument.VectorIndexID) {
       throw new Error(
         `Entity Document "${entityDocument.Name}" (ID: ${entityDocument.ID}) does not have a VectorIndexID configured. ` +

@@ -470,3 +470,25 @@
     padding: 10px 20px;
     border-radius: 0;
 }
+
+/* Caller-supplied line above the body — e.g. what a bulk share left out. */
+.mj-share-dialog-window .share-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--mj-status-warning) 12%, transparent);
+    color: var(--mj-text-primary);
+    font-size: 13px;
+}
+
+/* Why a grant is not simply "everyone, one level": mixed levels or partial coverage. */
+.mj-share-dialog-window .share-person-scope {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}

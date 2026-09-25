@@ -1,7 +1,16 @@
+import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
+import { getTestBed } from '@angular/core/testing';
+import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
 import type { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSCompareComponent } from './ps-compare.component';
+
+try {
+  getTestBed().initTestEnvironment(BrowserTestingModule, platformBrowserTesting());
+} catch {
+  // already initialized
+}
 
 /**
  * DOM coverage for <ps-compare> — the side-by-side run comparison. The engine is an @Input; a minimal

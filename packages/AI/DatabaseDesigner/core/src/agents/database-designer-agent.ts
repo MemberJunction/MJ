@@ -49,7 +49,7 @@ import { RegisterClass } from '@memberjunction/global';
 
 import type { DatabaseDesignerPayload } from '../interfaces.js';
 import type { TableDefinition } from '@memberjunction/schema-engine';
-import { generateERDMermaid } from '../erd-generator.js';
+import { GenerateERDMermaid } from '../erd-generator.js';
 
 // ─── Module-level constants ────────────────────────────────────────────────────
 
@@ -259,7 +259,7 @@ export class DatabaseDesignerAgent extends BaseAgent {
 
         if (tableDefs.length === 0) return currentPayload;
 
-        const erd = generateERDMermaid(tableDefs);
+        const erd = GenerateERDMermaid(tableDefs);
         if (!erd) return currentPayload; // no FKs — skip diagram
 
         return {

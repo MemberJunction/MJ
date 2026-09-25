@@ -108,29 +108,80 @@ import { Component, Input } from '@angular/core';
   `]
 })
 export class ScoreIndicatorComponent {
-  @Input() score!: number; // 0-1.0000
-  @Input() showBar = true;
-  @Input() showIcon = true;
-  @Input() decimals = 4;
+  @Input() Score!: number;
 
-  formatScore(score: number): string {
-    if (score == null) return 'N/A';
-    return score.toFixed(this.decimals);
+  /** @deprecated Use {@link Score}. */
+  @Input() set score(value: number) {
+    this.Score = value;
+  }
+  /** @deprecated Use {@link Score}. */
+  get score(): number {
+    return this.Score;
+  } // 0-1.0000
+  @Input() ShowBar = true;
+
+  /** @deprecated Use {@link ShowBar}. */
+  @Input() set showBar(value: ScoreIndicatorComponent['ShowBar']) {
+    this.ShowBar = value;
+  }
+  /** @deprecated Use {@link ShowBar}. */
+  get showBar(): ScoreIndicatorComponent['ShowBar'] {
+    return this.ShowBar;
+  }
+  @Input() ShowIcon = true;
+
+  /** @deprecated Use {@link ShowIcon}. */
+  @Input() set showIcon(value: ScoreIndicatorComponent['ShowIcon']) {
+    this.ShowIcon = value;
+  }
+  /** @deprecated Use {@link ShowIcon}. */
+  get showIcon(): ScoreIndicatorComponent['ShowIcon'] {
+    return this.ShowIcon;
+  }
+  @Input() Decimals = 4;
+
+  /** @deprecated Use {@link Decimals}. */
+  @Input() set decimals(value: ScoreIndicatorComponent['Decimals']) {
+    this.Decimals = value;
+  }
+  /** @deprecated Use {@link Decimals}. */
+  get decimals(): ScoreIndicatorComponent['Decimals'] {
+    return this.Decimals;
   }
 
-  getColorClass(): string {
-    if (this.score >= 0.9) return 'score-indicator--excellent';
-    if (this.score >= 0.8) return 'score-indicator--good';
-    if (this.score >= 0.6) return 'score-indicator--fair';
-    if (this.score >= 0.4) return 'score-indicator--poor';
+  FormatScore(score: number): string {
+    if (score == null) return 'N/A';
+    return score.toFixed(this.Decimals);
+  }
+
+  /** @deprecated Use {@link FormatScore}. */
+  formatScore(score: number): string {
+    return this.FormatScore(score);
+  }
+
+  GetColorClass(): string {
+    if (this.Score >= 0.9) return 'score-indicator--excellent';
+    if (this.Score >= 0.8) return 'score-indicator--good';
+    if (this.Score >= 0.6) return 'score-indicator--fair';
+    if (this.Score >= 0.4) return 'score-indicator--poor';
     return 'score-indicator--fail';
   }
 
-  getIcon(): string {
-    if (this.score >= 0.9) return 'fa-solid fa-star';
-    if (this.score >= 0.8) return 'fa-solid fa-check';
-    if (this.score >= 0.6) return 'fa-solid fa-minus';
-    if (this.score >= 0.4) return 'fa-solid fa-exclamation';
+  /** @deprecated Use {@link GetColorClass}. */
+  getColorClass(): string {
+    return this.GetColorClass();
+  }
+
+  GetIcon(): string {
+    if (this.Score >= 0.9) return 'fa-solid fa-star';
+    if (this.Score >= 0.8) return 'fa-solid fa-check';
+    if (this.Score >= 0.6) return 'fa-solid fa-minus';
+    if (this.Score >= 0.4) return 'fa-solid fa-exclamation';
     return 'fa-solid fa-times';
+  }
+
+  /** @deprecated Use {@link GetIcon}. */
+  getIcon(): string {
+    return this.GetIcon();
   }
 }

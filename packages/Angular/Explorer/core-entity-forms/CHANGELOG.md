@@ -1,5 +1,94 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 6e6e3f1: Feature Pipelines: schema migration (V202609212241), data feature spec, runtime constraint validation, and write-back extensions.
+
+### Patch Changes
+
+- 6fd16d2: fix(record-processes): sanitize InferProcessor provider guards and tokenize form styles
+- dc04823: Pin the RecordProcessFormPolicy group ordering: the reorder lifts `processOverview` to the lead
+  position and leaves every other group in its original order. The existing tests only asserted that
+  `processOverview` ends up first, which a sort-based implementation would also satisfy while
+  quietly shuffling the groups behind it.
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [50241c8]
+- Updated dependencies [6207578]
+- Updated dependencies [5df9486]
+- Updated dependencies [5df9486]
+- Updated dependencies [e225ece]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [1ed606c]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.0
+  - @memberjunction/ng-base-forms@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/predictive-studio-core@6.2.0-edge.0
+  - @memberjunction/ng-shared@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ng-search@6.2.0-edge.0
+  - @memberjunction/ng-actions@6.2.0-edge.0
+  - @memberjunction/ng-ai-test-harness@6.2.0-edge.0
+  - @memberjunction/ng-base-application@6.2.0-edge.0
+  - @memberjunction/ng-testing@6.2.0-edge.0
+  - @memberjunction/ng-action-gallery@6.2.0-edge.0
+  - @memberjunction/ng-agents@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-code-editor@6.2.0-edge.0
+  - @memberjunction/ng-flow-editor@6.2.0-edge.0
+  - @memberjunction/ng-hierarchy-tree@6.2.0-edge.0
+  - @memberjunction/ng-join-grid@6.2.0-edge.0
+  - @memberjunction/ng-list-management@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ng-record-process-studio@6.2.0-edge.0
+  - @memberjunction/ng-resource-permissions@6.2.0-edge.0
+  - @memberjunction/ng-task-graph-editor@6.2.0-edge.0
+  - @memberjunction/ng-trees@6.2.0-edge.0
+  - @memberjunction/ng-versions@6.2.0-edge.0
+  - @memberjunction/templates-base-types@6.2.0-edge.0
+  - @memberjunction/ng-link-directives@6.2.0-edge.0
+  - @memberjunction/ng-deep-diff@6.2.0-edge.0
+  - @memberjunction/ng-entity-relationship-diagram@6.2.0-edge.0
+  - @memberjunction/ng-timeline@6.2.0-edge.0
+  - @memberjunction/ng-tabstrip@6.2.0-edge.0
+  - @memberjunction/ng-markdown@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

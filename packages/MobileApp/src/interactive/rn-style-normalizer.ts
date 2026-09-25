@@ -31,8 +31,35 @@ const WEB_ONLY_KEYS: ReadonlySet<string> = new Set(['boxShadow', 'cursor', 'tran
 /** Matches a bare pixel length such as `'12px'` or `'-1.5px'`. */
 const PX_LENGTH = /^(-?\d+(?:\.\d+)?)px$/;
 
-/** Matches viewport / percentage units RN cannot resolve on a raw style value. */
-const WEB_ONLY_UNIT = /(?:%|vh|vw|vmin|vmax)$/;
+/**
+ * Matches viewport units React Native cannot resolve on a raw style value.
+ *
+ * `%` is deliberately NOT here. React Native resolves percentage strings natively on dimension,
+ * position and spacing properties, and dropping them silently is how an agent-authored bar chart
+ * renders as six identical full-width bars — every bar reading 100% because its `width: '38%'` was
+ * discarded. That is a wrong answer displayed confidently, which is worse than a missing chart.
+ */
+const VIEWPORT_UNIT = /(?:vh|vw|vmin|vmax)$/;
+
+/** Matches a percentage length such as `'38%'` or `'12.5%'`. */
+const PERCENT_LENGTH = /^-?\d+(?:\.\d+)?%$/;
+
+/**
+ * Properties React Native resolves a percentage against a parent for.
+ *
+ * Everything else — `borderRadius`, `fontSize`, `gap`, `borderWidth` — takes a number only, so a
+ * percentage there is still meaningless and still dropped. Keeping the list explicit means a
+ * percentage that RN would silently ignore is reported rather than passed through to be ignored.
+ */
+const PERCENT_CAPABLE = new Set([
+    'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+    'top', 'bottom', 'left', 'right', 'start', 'end',
+    'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight',
+    'marginHorizontal', 'marginVertical', 'marginStart', 'marginEnd',
+    'padding', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight',
+    'paddingHorizontal', 'paddingVertical', 'paddingStart', 'paddingEnd',
+    'flexBasis',
+]);
 
 /**
  * Emit a one-line dev warning when a web-only declaration is discarded. No-op
@@ -76,9 +103,16 @@ function normalizeDeclaration(key: string, value: unknown): unknown {
         return undefined;
     }
     if (typeof value === 'string') {
+        const trimmed = value.trim();
         const px = pxStringToNumber(value);
         if (px !== null) return px;
-        if (WEB_ONLY_UNIT.test(value.trim())) {
+        if (PERCENT_LENGTH.test(trimmed)) {
+            // Kept where RN can resolve it against a parent; dropped where it would be ignored.
+            if (PERCENT_CAPABLE.has(key)) return trimmed;
+            warnDropped(key, value);
+            return undefined;
+        }
+        if (VIEWPORT_UNIT.test(trimmed)) {
             warnDropped(key, value);
             return undefined;
         }
@@ -89,15 +123,16 @@ function normalizeDeclaration(key: string, value: unknown): unknown {
 /**
  * Convert a web CSS-in-JS style object into a React-Native-safe style object.
  *
- * Strips `className` and the compiler's `display: 'contents'` marker silently;
- * drops shadow/cursor/transition, fixed positioning, pseudo-selectors, and
- * viewport/percentage string values with a dev warning; converts `'<n>px'`
- * lengths to numbers; and passes every remaining declaration through unchanged.
+ * Strips `className` and the compiler's `display: 'contents'` marker silently; drops
+ * shadow/cursor/transition, fixed positioning, pseudo-selectors, and viewport units with a dev
+ * warning; converts `'<n>px'` lengths to numbers; KEEPS percentage lengths on the properties React
+ * Native resolves them for and drops them elsewhere; and passes every remaining declaration
+ * through unchanged.
  *
  * @param style A single inline style object as authored for web React.
  * @returns A new object containing only React-Native-valid declarations.
  */
-export function normalizeWebStyle(style: Record<string, unknown>): Record<string, unknown> {
+export function NormalizeWebStyle(style: Record<string, unknown>): Record<string, unknown> {
     const normalized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(style)) {
         const kept = normalizeDeclaration(key, value);
@@ -106,4 +141,9 @@ export function normalizeWebStyle(style: Record<string, unknown>): Record<string
         }
     }
     return normalized;
+}
+
+/** @deprecated Use {@link NormalizeWebStyle}. */
+export function normalizeWebStyle(style: Record<string, unknown>): Record<string, unknown> {
+    return NormalizeWebStyle(style);
 }

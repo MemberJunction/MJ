@@ -21,7 +21,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
      * CommunicationEngine.Instance was a SECOND BaseEngine singleton issuing a duplicate RunViews batch and
      * holding a second copy of all 5 communication arrays.
      */
-    private get Base(): CommunicationEngineBase {
+    private get base(): CommunicationEngineBase {
         return CommunicationEngineBase.Instance;
     }
 
@@ -36,13 +36,13 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
         if (contextUser) {
             this._contextUser = contextUser;
         }
-        await this.Base.Config(forceRefresh, contextUser, provider);
+        await this.base.Config(forceRefresh, contextUser, provider);
     }
 
     /** True once the underlying CommunicationEngineBase cache has loaded. */
-    public get Loaded(): boolean { return this.Base.Loaded; }
+    public get Loaded(): boolean { return this.base.Loaded; }
 
-    public get ContextUser(): UserInfo { return this._contextUser ?? this.Base.ContextUser; }
+    public get ContextUser(): UserInfo { return this._contextUser ?? this.base.ContextUser; }
     public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
     /**
@@ -58,10 +58,10 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
     private _providerInstanceCache: Map<string, BaseCommunicationProvider> = new Map();
 
     // ── Proxied cached collections (single source of truth: CommunicationEngineBase.Instance) ──
-    public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] { return this.Base.BaseMessageTypes; }
-    public get Providers(): MJCommunicationProviderEntityExtended[] { return this.Base.Providers; }
-    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] { return this.Base.ProviderMessageTypes; }
-    public get Metadata() { return this.Base.Metadata; }
+    public get BaseMessageTypes(): MJCommunicationBaseMessageTypeEntity[] { return this.base.BaseMessageTypes; }
+    public get Providers(): MJCommunicationProviderEntityExtended[] { return this.base.Providers; }
+    public get ProviderMessageTypes(): MJCommunicationProviderMessageTypeEntity[] { return this.base.ProviderMessageTypes; }
+    public get Metadata() { return this.base.Metadata; }
 
      /**
       * Gets an instance of the class for the specified provider. The provider must be one of the providers that are configured in the system.
@@ -124,7 +124,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
         previewOnly: boolean = false,
         credentials?: ProviderCredentialsBase
      ): Promise<MessageResult[]> {
-        const run = await this.Base.StartRun();
+        const run = await this.base.StartRun();
         if (!run)
             throw new Error(`Failed to start communication run.`);
 
@@ -137,7 +137,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
             results.push(result);
         }
 
-        if (!await this.Base.EndRun(run))
+        if (!await this.base.EndRun(run))
             throw new Error(`Failed to end communication run.`);
 
         return results;
@@ -200,7 +200,7 @@ export class CommunicationEngine extends BaseSingleton<CommunicationEngine> {
                 return { Success: true, Error: '', Message: processedMessage };
             }
             else {
-                const log = await this.Base.StartLog(processedMessage, run);
+                const log = await this.base.StartLog(processedMessage, run);
                 if (log) {
                     const sendResult = await provider.SendSingleMessage(processedMessage, credentials);
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';

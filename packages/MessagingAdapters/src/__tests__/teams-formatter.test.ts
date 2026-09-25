@@ -4,12 +4,12 @@
  * Tests conversion of Markdown to Adaptive Card JSON structure.
  */
 import { describe, it, expect } from 'vitest';
-import { markdownToAdaptiveCard } from '../teams/teams-formatter.js';
+import { MarkdownToAdaptiveCard } from '../teams/teams-formatter.js';
 
 describe('markdownToAdaptiveCard', () => {
     describe('card structure', () => {
         it('should return a valid Adaptive Card structure', () => {
-            const card = markdownToAdaptiveCard('Hello');
+            const card = MarkdownToAdaptiveCard('Hello');
             expect(card.type).toBe('AdaptiveCard');
             expect(card.version).toBe('1.4');
             expect(card['$schema']).toBe('http://adaptivecards.io/schemas/adaptive-card.json');
@@ -19,7 +19,7 @@ describe('markdownToAdaptiveCard', () => {
 
     describe('text elements', () => {
         it('should create a TextBlock for plain text', () => {
-            const card = markdownToAdaptiveCard('Simple text');
+            const card = MarkdownToAdaptiveCard('Simple text');
             const body = card.body as Record<string, unknown>[];
             expect(body).toHaveLength(1);
             expect(body[0]).toEqual({
@@ -32,7 +32,7 @@ describe('markdownToAdaptiveCard', () => {
 
     describe('header elements', () => {
         it('should create a styled TextBlock for headers', () => {
-            const card = markdownToAdaptiveCard('# My Title');
+            const card = MarkdownToAdaptiveCard('# My Title');
             const body = card.body as Record<string, unknown>[];
             expect(body).toHaveLength(1);
             expect(body[0]).toEqual({
@@ -48,7 +48,7 @@ describe('markdownToAdaptiveCard', () => {
 
     describe('code elements', () => {
         it('should create a monospace TextBlock for code blocks', () => {
-            const card = markdownToAdaptiveCard('```\nconst x = 1;\n```');
+            const card = MarkdownToAdaptiveCard('```\nconst x = 1;\n```');
             const body = card.body as Record<string, unknown>[];
             expect(body).toHaveLength(1);
             expect(body[0].type).toBe('TextBlock');
@@ -61,7 +61,7 @@ describe('markdownToAdaptiveCard', () => {
     describe('mixed content', () => {
         it('should handle header + text + code together', () => {
             const md = '# Report\n\nHere are the results.\n\n```\ndata = [1, 2, 3]\n```';
-            const card = markdownToAdaptiveCard(md);
+            const card = MarkdownToAdaptiveCard(md);
             const body = card.body as Record<string, unknown>[];
             expect(body.length).toBeGreaterThanOrEqual(3);
             expect(body[0].size).toBe('Large');  // header
@@ -72,14 +72,14 @@ describe('markdownToAdaptiveCard', () => {
 
     describe('edge cases', () => {
         it('should return a fallback element for empty input', () => {
-            const card = markdownToAdaptiveCard('');
+            const card = MarkdownToAdaptiveCard('');
             const body = card.body as Record<string, unknown>[];
             expect(body).toHaveLength(1);
             expect(body[0].text).toBe('(empty response)');
         });
 
         it('should preserve Markdown formatting in text (Teams handles it natively)', () => {
-            const card = markdownToAdaptiveCard('This is **bold** and *italic*');
+            const card = MarkdownToAdaptiveCard('This is **bold** and *italic*');
             const body = card.body as Record<string, unknown>[];
             expect((body[0].text as string)).toContain('**bold**');
             expect((body[0].text as string)).toContain('*italic*');

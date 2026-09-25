@@ -43,6 +43,8 @@ import {
   type ProblemType,
   type FittedPreprocessing,
   type FeatureStepGraph,
+  type OutcomeConfig,
+  resolveOutcomeConfig,
 } from '@memberjunction/predictive-studio-core';
 import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
@@ -62,6 +64,7 @@ interface ResolvedPipeline {
   asOf: AsOfStrategy;
   leakageGuard: LeakageGuard;
   validation: ValidationStrategy;
+  outcomeConfig: OutcomeConfig;
 }
 
 /** The result of carving a matrix into a training portion + a locked holdout. */
@@ -93,7 +96,7 @@ export class TrainingEngine {
    * @param deps the injected dependency bundle (entity factory, loader, sidecar, store)
    * @returns the produced `Draft` model and the `Completed`/`Failed` training run
    */
-  public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {
+  public async trainModel(input: TrainModelInput, deps: TrainingDeps): Promise<TrainModelResult> {  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it
     const resolved = await this.resolvePipeline(input.pipelineId, deps);
     const run = await this.createRunRow(resolved, input, deps);
 
@@ -135,6 +138,11 @@ export class TrainingEngine {
     const resolvedDriverKey =
       (await deps.recordLoader.resolveAlgorithmDriverKey?.(pipeline.AlgorithmID, deps.contextUser, deps.provider)) ??
       pipeline.Algorithm;
+    const stepsRaw = parseJson<Record<string, unknown>>(pipeline.FeatureSteps, {});
+    const hyperRaw = parseJson<Record<string, unknown>>(pipeline.Hyperparameters, {});
+    const explicitOutcome = (stepsRaw.OutcomeConfig ?? stepsRaw.outcomeConfig ?? hyperRaw.OutcomeConfig ?? hyperRaw.outcomeConfig) as OutcomeConfig | undefined;
+    const outcomeConfig = explicitOutcome ?? resolveOutcomeConfig(pipeline);
+
     return {
       pipeline,
       targetEntityName: pipeline.TargetEntity,
@@ -147,6 +155,7 @@ export class TrainingEngine {
       asOf: parseJson<AsOfStrategy>(pipeline.AsOfStrategy, { Mode: 'none' }),
       leakageGuard: parseJson<LeakageGuard>(pipeline.LeakageGuard, { DenyFields: [], SingleFeatureDominanceThreshold: DOMINANCE_THRESHOLD_DEFAULT }),
       validation: parseJson<ValidationStrategy>(pipeline.ValidationStrategy, { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 }),
+      outcomeConfig,
     };
   }
 
@@ -359,6 +368,7 @@ export class TrainingEngine {
       sourceBindings: resolved.sourceBindings,
       featureSteps: resolved.featureSteps,
       asOfStrategy: resolved.asOf,
+      outcomeConfig: resolved.outcomeConfig,
       sidecarVersion: input.sidecarVersion ?? null,
       lockedHoldoutRowCount: split.holdoutRowCount,
       trainingRowCount: split.trainingRowCount,

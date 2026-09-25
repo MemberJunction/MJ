@@ -22,12 +22,17 @@ const KEYSET_ORDERABLE_PK_TYPES = new Set<string>([
  * Serializes a record's primary key to a composite-key-safe string. Single-PK entities return the
  * raw value; composite-PK entities use `CompositeKey.ToConcatenatedString()`.
  */
-export function serializeRecordId(entity: EntityInfo, row: Record<string, unknown>): string {
+export function SerializeRecordId(entity: EntityInfo, row: Record<string, unknown>): string {
     return CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
 }
 
+/** @deprecated Use {@link SerializeRecordId}. */
+export function serializeRecordId(entity: EntityInfo, row: Record<string, unknown>): string {
+    return SerializeRecordId(entity, row);
+}
+
 /** Returns true when the entity has a single, orderable primary key suitable for keyset pagination. */
-export function canUseKeyset(entity: EntityInfo): boolean {
+export function CanUseKeyset(entity: EntityInfo): boolean {
     if (!entity.FirstPrimaryKey || entity.PrimaryKeys.length !== 1) { // first-pk-ok: this is the single-column guard for keyset eligibility
         return false;
     }
@@ -38,13 +43,18 @@ export function canUseKeyset(entity: EntityInfo): boolean {
     return KEYSET_ORDERABLE_PK_TYPES.has(normalizedType);
 }
 
+/** @deprecated Use {@link CanUseKeyset}. */
+export function canUseKeyset(entity: EntityInfo): boolean {
+    return CanUseKeyset(entity);
+}
+
 /**
  * Pages an entity's rows by filter, returning one batch of {@link RecordRef}. Uses keyset (seek)
  * pagination when `preferKeyset` is set and the entity supports it (single orderable PK), otherwise
  * falls back to offset (StartRow) pagination. Selects only the PK columns and bypasses the cache —
  * these single-use sweep pages should never pollute the local cache.
  */
-export async function pageEntityByFilter(opts: {
+export async function PageEntityByFilter(opts: {
     entity: EntityInfo;
     filter?: string;
     cursor: ProcessCursor | undefined;
@@ -54,7 +64,7 @@ export async function pageEntityByFilter(opts: {
 }): Promise<RecordBatch> {
     const { entity, filter, cursor, batchSize, contextUser, preferKeyset } = opts;
     const pkName = entity.FirstPrimaryKey?.Name; // first-pk-ok: keyset seek column — used only when canUseKeyset(entity) (single-column) holds; composite keys take the offset path
-    const useKeyset = preferKeyset && canUseKeyset(entity) && !!pkName;
+    const useKeyset = preferKeyset && CanUseKeyset(entity) && !!pkName;
 
     const rv = new RunView();
     const sharedParams = {
@@ -82,7 +92,7 @@ export async function pageEntityByFilter(opts: {
     const rows = (result.Results ?? []) as Record<string, unknown>[];
     const records: RecordRef[] = rows.map((row) => ({
         EntityID: entity.ID,
-        RecordID: serializeRecordId(entity, row),
+        RecordID: SerializeRecordId(entity, row),
         Record: row,
     }));
     const exhausted = records.length < batchSize;
@@ -96,4 +106,16 @@ export async function pageEntityByFilter(opts: {
     }
 
     return { Records: records, NextCursor: nextCursor, Exhausted: exhausted, TotalRowCount: result.TotalRowCount };
+}
+
+/** @deprecated Use {@link PageEntityByFilter}. */
+export async function pageEntityByFilter(opts: {
+    entity: EntityInfo;
+    filter?: string;
+    cursor: ProcessCursor | undefined;
+    batchSize: number;
+    contextUser: UserInfo;
+    preferKeyset: boolean;
+}): Promise<RecordBatch> {
+    return PageEntityByFilter(opts);
 }

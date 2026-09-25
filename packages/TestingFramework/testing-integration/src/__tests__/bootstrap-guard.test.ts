@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { LocalCacheManager } from '@memberjunction/core';
-import { bootstrapIntegrationServer, serverProcessAlreadyClaimed } from '../bootstrap';
-import { bootstrapIntegrationClient } from '../bootstrap-client';
+import { BootstrapIntegrationServer, serverProcessAlreadyClaimed } from '../bootstrap';
+import { BootstrapIntegrationClient } from '../bootstrap-client';
 
 /**
  * Proves the D1 anti-corruption guard WITHOUT a DB: when LocalCacheManager is
@@ -14,12 +14,12 @@ describe('integration bootstrap ownership guard', () => {
 
     it('bootstrapIntegrationServer throws when the cache is already initialized', async () => {
         vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
-        await expect(bootstrapIntegrationServer()).rejects.toThrow(/must own its process/);
+        await expect(BootstrapIntegrationServer()).rejects.toThrow(/must own its process/);
     });
 
     it('bootstrapIntegrationClient throws when the cache is already initialized', async () => {
         vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
-        await expect(bootstrapIntegrationClient()).rejects.toThrow(/must own its process/);
+        await expect(BootstrapIntegrationClient()).rejects.toThrow(/must own its process/);
     });
 
     it('serverProcessAlreadyClaimed reflects LocalCacheManager.IsInitialized (the D1 host check)', () => {
