@@ -187,6 +187,27 @@ describe('RecordCloneOperationsHandler', () => {
             expect(exec).not.toHaveBeenCalled();
         });
 
+        it('returns the plan and writes nothing for a dry run', async () => {
+            vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(enginePlan({ Hash: 'hash-current' }) as never);
+            const exec = vi.spyOn(CloneExecutor.prototype, 'Execute');
+
+            const res = await handler.Execute({ EntityName: 'ParentEntity', SourceRecordKey: key, Options: { DryRun: true } }, mockUser);
+
+            expect(exec).not.toHaveBeenCalled();
+            expect(res.Success).toBe(true);
+            expect(res.Created).toEqual([]);
+            expect(res.CloneLogID).toBeNull();
+            expect(res.Plan?.Hash).toBe('hash-current');
+        });
+
+        it('still refuses a blocked plan on a dry run', async () => {
+            vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(
+                enginePlan({ Blocked: true, Warnings: [{ Code: 'CAP_EXCEEDED', Severity: 'Error', Message: 'too many' }] }) as never
+            );
+            const res = await handler.Execute({ EntityName: 'ParentEntity', SourceRecordKey: key, Options: { DryRun: true } }, mockUser);
+            expect(res.ResultCode).toBe('BLOCKED');
+        });
+
         it('refuses a blocked plan with FORBIDDEN when an authorization caused it', async () => {
             vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(
                 enginePlan({ Blocked: true, Warnings: [{ Code: 'FORBIDDEN', Severity: 'Error', Message: 'needs auth' }] }) as never

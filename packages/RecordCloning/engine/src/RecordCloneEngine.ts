@@ -34,10 +34,21 @@ export class RecordCloneEngine {
     }
 
     /**
-     * Executes an end-to-end clone operation (planning + execution).
+     * Plans and executes a clone. With `Options.DryRun` it stops after planning and returns the
+     * plan, writing nothing.
      */
     public async Clone(request: RecordCloneRequest, user: UserInfo): Promise<RecordCloneResult> {
         const plan = await this._planner.Plan(request, user);
+        if (request.Options?.DryRun === true) {
+            return {
+                Success: !plan.Blocked,
+                ResultCode: plan.Blocked ? 'BLOCKED' : 'SUCCESS',
+                Created: [],
+                Counts: plan.Counts,
+                Warnings: plan.Warnings,
+                Plan: plan,
+            };
+        }
         return this._executor.Execute(plan, user);
     }
 

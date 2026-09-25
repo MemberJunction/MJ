@@ -261,6 +261,21 @@ export class RecordCloneOperationsHandler {
             return refusedExecute(forbidden ? 'FORBIDDEN' : 'BLOCKED', reasons || 'The clone plan is blocked.', plan);
         }
 
+        // A dry run stops after planning: nothing is written, and the plan is the result.
+        if (input.Options?.DryRun === true) {
+            return {
+                Success: true,
+                ResultCode: 'SUCCESS',
+                CloneLogID: null,
+                Roots: [],
+                Created: [],
+                Skipped: [],
+                Counts: plan.Counts,
+                Warnings: plan.Warnings,
+                Plan: ToPlanDetails(plan),
+            };
+        }
+
         if (input.ExpectedPlanHash && (plan.Hash || plan.PlanHash) !== input.ExpectedPlanHash) {
             const changed = refusedExecute('PLAN_CHANGED', 'The records changed since the plan was reviewed. Review the new plan and confirm again.', plan);
             changed.Warnings = [
