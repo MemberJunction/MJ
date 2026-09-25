@@ -8,6 +8,8 @@
 import {
     CompositeKey,
     EntityInfo,
+    ICloneRowExclusion,
+    IEntityCloneConfiguration,
     IMetadataProvider,
     Metadata,
     UserInfo,
@@ -30,6 +32,7 @@ import {
     ResolveEffectiveCloneOptions,
     NormalizeClonePresets,
     FieldMetaFromEntity,
+    RowMatchesExclusion,
 } from '@memberjunction/record-cloning-base';
 import { CloneAuthorizer } from './CloneAuthorization';
 import { ComputeClonePlanHash } from './ClonePlanHash';
@@ -317,8 +320,8 @@ export class ClonePlanner {
             contextUser
         );
 
-        // Flatten graph nodes
-        const flatGraphNodes = walker.FlattenTopological(rootNode);
+        // Flatten graph nodes, leaving out rows a relationship's ExcludeRows names (and everything under them)
+        const flatGraphNodes = this.dropExcludedRows(walker.FlattenTopological(rootNode), rootConfig, excludedNodes, warnings);
 
         // Build concrete edges connecting discovered graph nodes
         const edges: ClonePlanEdge[] = [];
@@ -705,5 +708,55 @@ export class ClonePlanner {
             EffectiveOptions: effectiveOptions,
             Overrides: resolved.Overrides,
         };
+    }
+
+    /**
+     * Drops rows matching their relationship's `ExcludeRows`, with every row discovered beneath them.
+     * The root's `Relationships` entry wins over the relationship's own bag. One Info warning per relationship.
+     */
+    private dropExcludedRows(
+        nodes: DependencyNode[],
+        rootConfig: IEntityCloneConfiguration | null,
+        excludedNodes: Array<{ EntityName: string; SourceKey: string; Reason: string }>,
+        warnings: CloneWarning[]
+    ): DependencyNode[] {
+        const dropped = new Set<string>();
+        const counts = new Map<string, number>();
+        const isDropped = (key: string) => dropped.has(key) || dropped.has(key.split('::')[1] ?? '');
+        const kept: DependencyNode[] = [];
+
+        for (const node of nodes) {
+            const edge = node.DiscoveringEdge;
+            if (!edge) {
+                kept.push(node);
+                continue;
+            }
+            const rules: ICloneRowExclusion[] | undefined =
+                rootConfig?.Relationships?.[`${edge.TargetEntityName}.${edge.JoinField}`]?.ExcludeRows ??
+                rootConfig?.Relationships?.[edge.TargetEntityName]?.ExcludeRows ??
+                edge.Relationship?.CloneConfig?.ExcludeRows;
+            const matched = RowMatchesExclusion(node.RecordData ?? {}, rules);
+            if (!matched && !isDropped(edge.FromKey)) {
+                kept.push(node);
+                continue;
+            }
+            dropped.add(`${node.EntityName}::${node.RecordID}`);
+            dropped.add(node.RecordID);
+            excludedNodes.push({
+                EntityName: node.EntityName,
+                SourceKey: node.RecordID,
+                Reason: matched ? 'Row matches the relationship\'s ExcludeRows.' : 'Parent row was excluded.',
+            });
+            if (matched) counts.set(node.EntityName, (counts.get(node.EntityName) ?? 0) + 1);
+        }
+
+        for (const [entityName, count] of counts) {
+            warnings.push({
+                Code: 'ROWS_EXCLUDED',
+                Severity: 'Info',
+                Message: `${count} ${entityName} row${count === 1 ? '' : 's'} left out by the configuration (per-person or per-device data).`,
+            });
+        }
+        return kept;
     }
 }

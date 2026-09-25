@@ -84,7 +84,10 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
         Relationships: {
             'MJ: User Roles': { Policy: 'Deep' as const, Locked: true },
             'MJ: User Applications': { Policy: 'Deep' as const },
-            'MJ: User Settings': { Policy: 'Deep' as const },
+            'MJ: User Settings': {
+                Policy: 'Skip' as const,
+                ExcludeRows: [{ Field: 'Setting', StartsWith: ['mobile.', 'mj.chat.drafts', 'mj.realtimeVoice.recordingConsent', 'search.recent', 'mj.shell.recentApps'] }],
+            },
             'MJ: User Notification Preferences': { Policy: 'Deep' as const },
             'MJ: User Views': {
                 Policy: 'Skip' as const,
@@ -120,6 +123,12 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
                 Options: {
                     MaxDepth: 2,
                 },
+                Relationships: { 'MJ: User Views': { Policy: 'Deep' as const } },
+            },
+            {
+                Key: 'with-settings',
+                Label: 'Include personal settings',
+                Relationships: { 'MJ: User Settings': { Policy: 'Deep' as const } },
             },
         ],
         UI: {
@@ -527,7 +536,7 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
         );
 
         expect(plan.Blocked).toBe(false);
-        expect(plan.Nodes.length).toBe(4); // 1 User + 2 Roles + 1 Setting
+        expect(plan.Nodes.length).toBe(3); // 1 User + 2 Roles; User Settings are Skip by default
 
         const rootNode = plan.Nodes.find((n) => n.EntityName === 'MJ: Users');
         expect(rootNode).toBeDefined();
@@ -564,11 +573,41 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
             expect(getFieldChange(roleNode, 'UserID')?.NewValue).toBe(rootNode?.TargetKey);
         }
 
-        const settingNodes = plan.Nodes.filter((n) => n.EntityName === 'MJ: User Settings');
-        expect(settingNodes.length).toBe(1);
-        expect(getFieldChange(settingNodes[0], 'UserID')?.NewValue).toBe(rootNode?.TargetKey);
-        expect(getFieldChange(settingNodes[0], 'Setting')?.NewValue).toBe('theme');
-        expect(getFieldChange(settingNodes[0], 'Value')?.NewValue).toBe('dark');
+        expect(plan.Nodes.filter((n) => n.EntityName === 'MJ: User Settings')).toHaveLength(0);
+    });
+
+    it('copies personal settings only with the with-settings preset, never device, draft or consent keys', async () => {
+        mockRunViewInstance.mockImplementation(async (params: { EntityName: string }) => {
+            if (params.EntityName === 'MJ: Users') {
+                return { Success: true, Results: [{ ID: 'alice-id', Name: 'alice@company.com', Email: 'alice@company.com', Type: 'Owner', IsActive: true }] };
+            }
+            if (params.EntityName === 'MJ: User Settings') {
+                return {
+                    Success: true,
+                    Results: [
+                        { ID: 'setting-1', UserID: 'alice-id', Setting: 'theme', Value: 'dark' },
+                        { ID: 'setting-2', UserID: 'alice-id', Setting: 'mobile.pushDeviceToken', Value: 'device-token' },
+                        { ID: 'setting-3', UserID: 'alice-id', Setting: 'mj.chat.drafts.v1', Value: '{"c1":"unsent"}' },
+                        { ID: 'setting-4', UserID: 'alice-id', Setting: 'mj.realtimeVoice.recordingConsent.v1', Value: 'true' },
+                    ],
+                };
+            }
+            return { Success: true, Results: [] };
+        });
+
+        const plan = await new ClonePlanner({ Provider: mockMetadataProvider }).Plan(
+            {
+                EntityName: 'MJ: Users',
+                SourceRecordKey: { KeyValuePairs: [{ FieldName: 'ID', Value: 'alice-id' }] },
+                PromptedValues: { Email: 'bob@company.com', FirstName: 'Bob', LastName: 'Jones' },
+                Options: { Preset: 'with-settings' },
+            },
+            ownerUser
+        );
+
+        const settings = plan.Nodes.filter((n) => n.EntityName === 'MJ: User Settings');
+        expect(settings.map((n) => n.FieldChanges.find((f) => f.Field === 'Setting')?.NewValue)).toEqual(['theme']);
+        expect(plan.Warnings.find((w) => w.Code === 'ROWS_EXCLUDED')?.Message).toContain('3 MJ: User Settings rows');
     });
 
     it('executes user clone end-to-end via CloneExecutor', async () => {

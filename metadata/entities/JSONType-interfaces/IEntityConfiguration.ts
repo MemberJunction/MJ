@@ -239,7 +239,16 @@ export interface ICloneRelationshipPolicy {
     PreserveSequence?: boolean;
     /** Formula over the child row (fields.X); only rows evaluating true are cloned. */
     IncludeWhen?: string;
+    /** Rows left out even when the edge is Deep, e.g. per-device or per-person settings. A row matching any entry is not cloned, nor are its descendants. */
+    ExcludeRows?: ICloneRowExclusion[];
     Fields?: ICloneFieldRules;
+}
+
+/** Matches a child row by one field: equal to one of `Equals`, or a string starting with one of `StartsWith` (case-sensitive). */
+export interface ICloneRowExclusion {
+    Field: string;
+    Equals?: Array<string | number | boolean>;
+    StartsWith?: string[];
 }
 
 export interface ICloneDescendantConfig {

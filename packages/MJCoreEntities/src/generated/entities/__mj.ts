@@ -83462,7 +83462,16 @@ export interface MJEntityEntity_ICloneRelationshipPolicy {
     PreserveSequence?: boolean;
     /** Formula over the child row (fields.X); only rows evaluating true are cloned. */
     IncludeWhen?: string;
+    /** Rows left out even when the edge is Deep, e.g. per-device or per-person settings. A row matching any entry is not cloned, nor are its descendants. */
+    ExcludeRows?: MJEntityEntity_ICloneRowExclusion[];
     Fields?: MJEntityEntity_ICloneFieldRules;
+}
+
+/** Matches a child row by one field: equal to one of `Equals`, or a string starting with one of `StartsWith` (case-sensitive). */
+export interface MJEntityEntity_ICloneRowExclusion {
+    Field: string;
+    Equals?: Array<string | number | boolean>;
+    StartsWith?: string[];
 }
 
 export interface MJEntityEntity_ICloneDescendantConfig {
@@ -90083,7 +90092,16 @@ export interface MJEntityRelationshipEntity_ICloneRelationshipPolicy {
     PreserveSequence?: boolean;
     /** Formula over the child row (fields.X); only rows evaluating true are cloned. */
     IncludeWhen?: string;
+    /** Rows left out even when the edge is Deep, e.g. per-device or per-person settings. A row matching any entry is not cloned, nor are its descendants. */
+    ExcludeRows?: MJEntityRelationshipEntity_ICloneRowExclusion[];
     Fields?: MJEntityRelationshipEntity_ICloneFieldRules;
+}
+
+/** Matches a child row by one field: equal to one of `Equals`, or a string starting with one of `StartsWith` (case-sensitive). */
+export interface MJEntityRelationshipEntity_ICloneRowExclusion {
+    Field: string;
+    Equals?: Array<string | number | boolean>;
+    StartsWith?: string[];
 }
 
 export interface MJEntityRelationshipEntity_ICloneFieldRules {

@@ -43,7 +43,8 @@
   },
   {
     "_comments": [
-      "Cloning configuration for MJ: Users — Onboard a user like Alice with same roles, apps, and settings, inactive, owner-only."
+      "Cloning configuration for MJ: Users — Onboard a user like Alice with same roles, apps, and settings, inactive, owner-only.",
+      "User Settings are Skip by default (RK review): they hold push-device tokens, drafts and consent. The with-settings preset copies the rest."
     ],
     "fields": {
       "Name": "MJ: Users",
@@ -100,7 +101,19 @@
               "Policy": "Deep"
             },
             "MJ: User Settings": {
-              "Policy": "Deep"
+              "Policy": "Skip",
+              "ExcludeRows": [
+                {
+                  "Field": "Setting",
+                  "StartsWith": [
+                    "mobile.",
+                    "mj.chat.drafts",
+                    "mj.realtimeVoice.recordingConsent",
+                    "search.recent",
+                    "mj.shell.recentApps"
+                  ]
+                }
+              ]
             },
             "MJ: User Notification Preferences": {
               "Policy": "Deep"
@@ -205,6 +218,21 @@
               "Label": "Include saved views",
               "Options": {
                 "MaxDepth": 2
+              },
+              "Relationships": {
+                "MJ: User Views": {
+                  "Policy": "Deep"
+                }
+              }
+            },
+            {
+              "Key": "with-settings",
+              "Label": "Include personal settings",
+              "Description": "Copies the source user's layout and preference settings. Device tokens, chat drafts, recording consent and recent-item history are never copied.",
+              "Relationships": {
+                "MJ: User Settings": {
+                  "Policy": "Deep"
+                }
               }
             }
           ],
@@ -220,8 +248,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Users"
     },
     "sync": {
-      "lastModified": "2026-09-24T20:55:51.658Z",
-      "checksum": "fc909c3cb09d7895f03fbde2bd8251711a23b6db2c8e388aed4a6ed5832fce6b"
+      "lastModified": "2026-09-25T16:38:35.513Z",
+      "checksum": "d846d0481da436d4dde18653e52d47e024b46de1a92340cd8eb8048507f05c6b"
     }
   },
   {
@@ -482,8 +510,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
     },
     "sync": {
-      "lastModified": "2026-09-24T19:19:15.236Z",
-      "checksum": "227fc0a27c580c0bbbd8ef3af9cc63e2df1fd935aad03e8c9427323019584f19"
+      "lastModified": "2026-09-25T16:34:21.073Z",
+      "checksum": "6769cd10dd714ebe5c926cde0c2fd8c3d66820c9abd16fd8430703bdad6f2229"
     }
   },
   {
@@ -589,6 +617,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Credentials"
+    },
+    "sync": {
+      "lastModified": "2026-09-25T16:34:21.147Z",
+      "checksum": "99f95c5729636b0879f8d9de3a694d297b03f5f3098370a7baad85b2c0fb152d"
     }
   },
   {
@@ -606,6 +638,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Company Integrations"
+    },
+    "sync": {
+      "lastModified": "2026-09-25T16:34:21.205Z",
+      "checksum": "e7d3c0af6af5a6978d5ffccad5b146217cfb58dc8033cb442c81106ade6509b5"
     }
   },
   {
@@ -707,8 +743,8 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
     },
     "sync": {
-      "lastModified": "2026-09-24T18:58:53.330Z",
-      "checksum": "dab0be37895c494f4c061dec79c106d29742cbd9397d0e16641a085a6672e1b6"
+      "lastModified": "2026-09-25T16:34:21.260Z",
+      "checksum": "8ff245f7bef69bc15d9ce3dd9765d0296000bab414e0970e136db8d7de1feab7"
     }
   },
   {

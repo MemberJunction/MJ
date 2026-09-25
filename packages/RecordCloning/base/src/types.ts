@@ -95,7 +95,9 @@ export type CloneWarningCode =
     /** A request tried to widen scope without the `Clone Records: Override Scope` authorization; it was ignored. */
     | 'SCOPE_OVERRIDE_FORBIDDEN'
     /** A row's new primary key would equal its source key (no key column is remapped), so the copy would collide. */
-    | 'TARGET_KEY_UNCHANGED';
+    | 'TARGET_KEY_UNCHANGED'
+    /** Rows the relationship's `ExcludeRows` leaves out, e.g. device tokens or drafts on a user clone. */
+    | 'ROWS_EXCLUDED';
 
 /**
  * Warning or notification emitted by the planning or execution engine.
