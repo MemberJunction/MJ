@@ -54,6 +54,12 @@ interface Internals {
     _resolvedTrailingStateMode?: boolean;
 }
 
+/** The two catalog collections a test may hang on the mocked AIEngine instance. */
+interface EngineCatalogMock {
+    PromptModels?: Array<{ PromptID: string; ModelID: string }>;
+    Models?: Array<{ ID: string; Name: string }>;
+}
+
 const USER = { ID: 'u1', Name: 'Tester' } as unknown as UserInfo;
 const AGENT_TYPE = { ID: 'type-1', Name: 'Loop', AgentPromptPlaceholder: 'agentSpecificPrompt' } as unknown as MJAIAgentTypeEntity;
 const CHILD = { ID: 'child-1', Name: 'Sage - System Prompt', TemplateID: 'tmpl-sage' } as unknown as MJAIPromptEntityExtended;
@@ -393,17 +399,18 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         const { promptParams } = makeInputs({});
         // Even with an OpenAI model bound to the prompt, turn 1 must not guess append-only:
         // prompts bind several vendors for failover and the run may select any of them.
-        (AIEngine.Instance as any).PromptModels = [{ PromptID: 'prompt-1', ModelID: 'model-openai' }];
-        (AIEngine.Instance as any).Models = [{ ID: 'model-openai', Name: 'gpt-4o' }];
-        promptParams.prompt = { ID: 'prompt-1' } as any;
+        const engine = AIEngine.Instance as unknown as EngineCatalogMock;
+        engine.PromptModels = [{ PromptID: 'prompt-1', ModelID: 'model-openai' }];
+        engine.Models = [{ ID: 'model-openai', Name: 'gpt-4o' }];
+        promptParams.prompt = { ID: 'prompt-1' } as unknown as MJAIPromptEntityExtended;
 
         a._lastModelSelectionInfo = undefined;
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
         // ...and nothing is frozen by that answer: turn 2 still decides from the real selection
         expect(a._resolvedTrailingStateMode).toBeUndefined();
 
-        delete (AIEngine.Instance as any).PromptModels;
-        delete (AIEngine.Instance as any).Models;
+        delete engine.PromptModels;
+        delete engine.Models;
     });
 
     it('freezes the mode at the first model selection: a later vendor change never flips it', () => {

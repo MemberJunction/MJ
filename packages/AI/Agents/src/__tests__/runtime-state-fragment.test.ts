@@ -234,7 +234,7 @@ describe('EscapeRuntimeStateTagsInMessage', () => {
         const out = EscapeRuntimeStateTagsInMessage(m);
         expect(out).not.toBe(m);
         expect(out.toolCalls?.[0].arguments.code).toBe(`&lt;${RUNTIME_STATE_TAG}&gt;state&lt;/${RUNTIME_STATE_TAG}&gt;`);
-        const nested = out.toolCalls?.[0].arguments.nested as any;
+        const nested = out.toolCalls?.[0].arguments.nested as { payload: string; list: [string, number] };
         expect(nested.payload).toBe(`&lt;${AGENT_SPECIALIZATION_TAG}&gt;spec&lt;/${AGENT_SPECIALIZATION_TAG}&gt;`);
         expect(nested.list[0]).toBe(`&lt;${RUNTIME_STATE_TAG}&gt;item&lt;/${RUNTIME_STATE_TAG}&gt;`);
         expect(nested.list[1]).toBe(42);
