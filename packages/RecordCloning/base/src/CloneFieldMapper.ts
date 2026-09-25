@@ -29,6 +29,13 @@ export interface FieldMappingFieldMeta {
     IsSoftDeleteField?: boolean;
     /** Stored encrypted. Its values are masked wherever a plan leaves the server. */
     Encrypted?: boolean;
+    /** Column width in characters; 0 or unset means unlimited. */
+    MaxLength?: number;
+}
+
+/** Whether the mapper renames this field on a clone: the name field, a field called Name, or a unique nvarchar. */
+export function IsRenameField(field: FieldMappingFieldMeta): boolean {
+    return !!field.IsNameField || field.Name.toLowerCase() === 'name' || (!!field.IsUnique && field.Type === 'nvarchar');
 }
 
 export interface CloneFieldMappingContext {
@@ -39,6 +46,8 @@ export interface CloneFieldMappingContext {
     KeyMap?: Record<string, string>;
     NamingOptions?: NameTemplateOptions & {
         ExistingNames?: Set<string>;
+        /** Values already in use, per field, so a rename avoids them. Takes precedence over `ExistingNames`. */
+        ExistingNamesByField?: Record<string, Set<string>>;
         UserName?: string;
     };
     FieldRules?: {
@@ -255,15 +264,15 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
     for (const field of ctx.Fields) {
         if (excludedOrDenied.has(field.Name)) continue;
 
-        const isNameField = field.IsNameField || field.Name.toLowerCase() === 'name' || (field.IsUnique && field.Type === 'nvarchar');
-        if (isNameField && values[field.Name] !== undefined && values[field.Name] !== null) {
+        if (IsRenameField(field) && values[field.Name] !== undefined && values[field.Name] !== null) {
             const oldName = String(values[field.Name]);
             const newName = FindNextAvailableName(
                 oldName,
-                ctx.NamingOptions?.ExistingNames || new Set(),
+                ctx.NamingOptions?.ExistingNamesByField?.[field.Name] ?? ctx.NamingOptions?.ExistingNames ?? new Set(),
                 {
                     Template: ctx.NamingOptions?.Template,
                     Strategy: ctx.NamingOptions?.Strategy,
+                    MaxLength: field.MaxLength,
                     Context: {
                         UserName: ctx.NamingOptions?.UserName,
                     },

@@ -12,6 +12,7 @@ import {
     IEntityCloneConfiguration,
     IMetadataProvider,
     Metadata,
+    RunView,
     UserInfo,
 } from '@memberjunction/core';
 import { DependencyGraphWalker, DependencyNode, GraphEdgeCandidate } from '@memberjunction/record-graph';
@@ -32,8 +33,12 @@ import {
     ResolveEffectiveCloneOptions,
     NormalizeClonePresets,
     FieldMetaFromEntity,
+    IsRenameField,
+    NameCollisionPrefix,
+    NameTemplateOptions,
     RowMatchesExclusion,
 } from '@memberjunction/record-cloning-base';
+import { EscapeSQLString } from '@memberjunction/global';
 import { CloneAuthorizer } from './CloneAuthorization';
 import { ComputeClonePlanHash } from './ClonePlanHash';
 import { DeriveTargetKey, IsUuidColumn, KeyStrategyFor, ToRecordKeyString } from './CloneKeys';
@@ -454,6 +459,25 @@ export class ClonePlanner {
             }
         }
 
+        // Naming for each row, and the names already taken, so a repeat clone doesn't collide at save.
+        const cloneConfigOf = (e: EntityInfo) => e.CloneConfig ?? (e as unknown as { CloneConfiguration?: IEntityCloneConfiguration }).CloneConfiguration ?? null;
+        const namingFor = (depNode: DependencyNode): NameTemplateOptions => {
+            if (depNode.Depth === 0) {
+                return {
+                    Template: request.Options?.Naming?.Template || request.Options?.NamingTemplate || rootConfig?.Naming?.Template,
+                    Strategy: request.Options?.Naming?.Strategy || request.Options?.NamingStrategy || rootConfig?.Naming?.Strategy || 'suffix',
+                    Context: { UserName: contextUser.Name },
+                };
+            }
+            const template = rootConfig?.Descendants?.[depNode.EntityName]?.Naming?.Template || cloneConfigOf(depNode.EntityInfo)?.Naming?.Template;
+            return {
+                Template: template,
+                Strategy: rootConfig?.Descendants?.[depNode.EntityName]?.Naming?.Strategy || cloneConfigOf(depNode.EntityInfo)?.Naming?.Strategy || (template ? 'suffix' : 'none'),
+                Context: { UserName: contextUser.Name },
+            };
+        };
+        const existingNames = await this.loadExistingNames(createNodes, namingFor, contextUser);
+
         // Map nodes
         const nodes: ClonePlanNode[] = [];
         const plannedNodesForCollisionCheck: PlannedRecordNode[] = [];
@@ -540,13 +564,9 @@ export class ClonePlanner {
                 CurrentUserId: contextUser.ID,
                 KeyMap: keyMap,
                 NamingOptions: {
-                    Template: isRoot
-                        ? (request.Options?.Naming?.Template || request.Options?.NamingTemplate || rootConfig?.Naming?.Template)
-                        : (rootConfig?.Descendants?.[depNode.EntityName]?.Naming?.Template || entInfo.CloneConfig?.Naming?.Template || (entInfo as unknown as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration }).CloneConfiguration?.Naming?.Template),
-                    Strategy: isRoot
-                        ? (request.Options?.Naming?.Strategy || request.Options?.NamingStrategy || rootConfig?.Naming?.Strategy || 'suffix')
-                        : (rootConfig?.Descendants?.[depNode.EntityName]?.Naming?.Strategy || entInfo.CloneConfig?.Naming?.Strategy || (entInfo as unknown as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration }).CloneConfiguration?.Naming?.Strategy || (rootConfig?.Descendants?.[depNode.EntityName]?.Naming?.Template || entInfo.CloneConfig?.Naming?.Template ? 'suffix' : 'none')),
+                    ...namingFor(depNode),
                     UserName: contextUser.Name,
+                    ExistingNamesByField: existingNames.get(depNode.EntityName),
                 },
                 FieldRules: (() => {
                     const entConfig = entInfo.CloneConfig ?? (entInfo as unknown as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration }).CloneConfiguration ?? null;
@@ -732,6 +752,50 @@ export class ClonePlanner {
             EffectiveOptions: effectiveOptions,
             Overrides: resolved.Overrides,
         };
+    }
+
+    /**
+     * Values already taken in each field a clone renames, per entity, found with one prefix query
+     * per (entity, field). Without them the rename can't avoid "Sales (copy)" on the second clone.
+     */
+    private async loadExistingNames(
+        createNodes: DependencyNode[],
+        namingFor: (node: DependencyNode) => NameTemplateOptions,
+        contextUser: UserInfo
+    ): Promise<Map<string, Record<string, Set<string>>>> {
+        const prefixes = new Map<string, { entity: string; field: string; prefixes: Set<string> }>();
+        for (const node of createNodes) {
+            const naming = namingFor(node);
+            for (const field of FieldMetaFromEntity(node.EntityInfo).filter(IsRenameField)) {
+                const value = node.RecordData?.[field.Name];
+                if (value === null || value === undefined || value === '') continue;
+                const prefix = NameCollisionPrefix(String(value), { ...naming, MaxLength: field.MaxLength });
+                if (!prefix) continue;
+                const k = `${node.EntityName}\u0000${field.Name}`;
+                if (!prefixes.has(k)) prefixes.set(k, { entity: node.EntityName, field: field.Name, prefixes: new Set() });
+                prefixes.get(k)!.prefixes.add(prefix);
+            }
+        }
+
+        const result = new Map<string, Record<string, Set<string>>>();
+        const rv = RunView.FromMetadataProvider(this.Provider);
+        for (const { entity, field, prefixes: set } of prefixes.values()) {
+            const all = [...set];
+            const taken = new Set<string>();
+            for (let i = 0; i < all.length; i += 50) {
+                const filter = all.slice(i, i + 50).map((p) => `${field} LIKE '${EscapeSQLString(p)}%'`).join(' OR ');
+                const res = await rv.RunView<Record<string, unknown>>(
+                    { EntityName: entity, Fields: [field], ExtraFilter: `(${filter})`, ResultType: 'simple', MaxRows: 5000 },
+                    contextUser
+                );
+                for (const row of res?.Success ? res.Results ?? [] : []) {
+                    if (row[field] !== null && row[field] !== undefined) taken.add(String(row[field]));
+                }
+            }
+            if (!result.has(entity)) result.set(entity, {});
+            result.get(entity)![field] = taken;
+        }
+        return result;
     }
 
     /**

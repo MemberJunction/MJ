@@ -23,6 +23,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class MockRunView {
         RunView = mockRunViewInstance;
+        static FromMetadataProvider = () => new MockRunView();
     }
     return {
         ...actual,

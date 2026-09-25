@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     RenderNameTemplate,
+    NameCollisionPrefix,
     IncrementName,
     FindNextAvailableName,
 } from '../NameTemplate';
@@ -126,5 +127,37 @@ describe('NameTemplate', () => {
 
             expect(result).toBe('Untouched Name');
         });
+    });
+});
+
+describe('FindNextAvailableName: column width and case', () => {
+    it('shortens the source name so the result fits MaxLength', () => {
+        const name = FindNextAvailableName('x'.repeat(100), [], { Template: '{Name} (copy)', MaxLength: 100 });
+        expect(name).toHaveLength(100);
+        expect(name.endsWith(' (copy)')).toBe(true);
+    });
+
+    it('keeps the collision counter inside MaxLength too', () => {
+        const first = FindNextAvailableName('Sales', [], { Template: '{Name} (copy)', MaxLength: 12 });
+        const second = FindNextAvailableName('Sales', [first], { Template: '{Name} (copy)', MaxLength: 12 });
+        expect(first).toBe('Sales (copy)');
+        expect(second.length).toBeLessThanOrEqual(12);
+        expect(second).not.toBe(first);
+    });
+
+    it('treats names that differ only in case as taken', () => {
+        expect(FindNextAvailableName('Sales', ['sales (COPY)'], { Template: '{Name} (copy)' })).toBe('Sales (copy) (2)');
+    });
+});
+
+describe('NameCollisionPrefix', () => {
+    it('is the text every candidate starts with', () => {
+        expect(NameCollisionPrefix('Sales', { Template: '{Name} (copy)' })).toBe('Sales (copy)');
+        expect(NameCollisionPrefix('Sales', { Template: '{Name} v{n}' })).toBe('Sales v');
+        expect(NameCollisionPrefix('Project v1', { Strategy: 'increment' })).toBe('Project v');
+    });
+
+    it('is empty when nothing is renamed', () => {
+        expect(NameCollisionPrefix('Sales', { Strategy: 'none' })).toBe('');
     });
 });

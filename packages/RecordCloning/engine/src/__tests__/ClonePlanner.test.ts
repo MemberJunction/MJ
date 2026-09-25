@@ -17,6 +17,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@memberjunction/core')>();
     class MockRunView {
         RunView = mockRunViewInstance;
+        static FromMetadataProvider = () => new MockRunView();
     }
     return {
         ...actual,
@@ -135,6 +136,28 @@ describe('ClonePlanner', () => {
         const salary = plan.Nodes[0].FieldChanges.filter((c) => c.Field === 'Salary');
         expect(salary.map((c) => c.Kind)).toEqual(['DeniedRead']);
         expect(JSON.stringify(salary)).not.toContain('90000');
+    });
+
+    it('avoids names already taken, so a repeat clone does not collide at save', async () => {
+        const noChildren = { ...parentEntity, RelatedEntities: [] } as EntityInfo;
+        const provider = { ...mockProvider, Entities: [noChildren], EntityByName: (n: string) => (n === 'ParentEntity' ? noChildren : null) } as IMetadataProvider;
+        mockRunViewInstance.mockImplementation(async (params: { Fields?: string[]; ExtraFilter?: string }) => {
+            if (params.Fields?.[0] === 'Name') {
+                // The name lookup: an earlier clone already took the first candidate.
+                expect(params.ExtraFilter).toContain("Name LIKE 'Original Parent - Clone%'");
+                return { Success: true, Results: [{ Name: 'original parent - clone' }] };
+            }
+            return { Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] };
+        });
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan(
+            { EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' }, Options: { NamingTemplate: '{Name} - Clone' } },
+            standardUser
+        );
+
+        const rename = plan.Nodes[0].FieldChanges.find((c) => c.Field === 'Name' && c.Kind === 'Rename');
+        expect(rename?.NewValue).toBe('Original Parent - Clone (2)');
+        mockRunViewInstance.mockReset();
     });
 
     it('computes valid clone plan with pre-minted target keys and stable hash', async () => {
