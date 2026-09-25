@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./aws": {
+      "types": "./dist/aws/index.d.ts",
+      "default": "./dist/aws/index.js"
     }
   },
   "files": [
@@ -23,10 +27,13 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
+    "@aws-sdk/credential-providers": "^3.984.0",
     "@memberjunction/core": "6.1.0",
     "@memberjunction/core-entities": "6.1.0",
+    "@memberjunction/credentials": "6.1.0",
     "@memberjunction/global": "6.1.0",
     "@memberjunction/sql-dialect": "6.1.0",
+    "@memberjunction/work-queue-aws": "6.1.0",
     "@memberjunction/work-queue-base": "6.1.0",
     "@memberjunction/work-queue-core": "6.1.0"
   },

@@ -46,3 +46,4 @@ export * from './host/WorkQueueSweeper';
 export * from './operations/WorkQueueOperatorService';
 export * from './operations/operatorAuthorization';
 export * from './operations/WorkQueueOperations';
+export * from './topology/ManifestEnricherRegistry';

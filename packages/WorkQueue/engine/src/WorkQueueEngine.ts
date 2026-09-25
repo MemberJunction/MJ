@@ -22,6 +22,7 @@ import type { WorkQueueExecutorSource } from './sql/WorkQueueSqlExecutor';
 import { DatabaseTransportDriver } from './transports/database/DatabaseTransportDriver';
 import { LoadDatabaseTransportDriverFactory } from './transports/database/DatabaseTransportDriverFactory';
 import type { DeadLetteredEvent, TransportDriverDeps } from './transports/TransportDriverDeps';
+import { ManifestEnricherRegistry } from './topology/ManifestEnricherRegistry';
 
 // The Database transport ships with the engine: its factory is registered whenever the engine module loads.
 LoadDatabaseTransportDriverFactory();
@@ -241,11 +242,12 @@ export class WorkQueueEngine extends BaseSingleton<WorkQueueEngine> implements I
     }
 
     /**
-     * The single manifest post-processing step. Transport-neutral here; plan 07 replaces the body with a registry
-     * apply so the `./aws` entry can add `DriverArtifacts.SnsFilterPolicy` (CD8).
+     * The single manifest post-processing step: the enricher registered for the manifest's DriverClass renders the
+     * transport's artifacts (AWS: `DriverArtifacts.SnsFilterPolicy`, CD8). Database manifests pass through; a cloud
+     * manifest whose engine entry was not imported is refused (03 §0, F12).
      */
     protected EnrichManifest(manifest: TopologyManifest): TopologyManifest {
-        return manifest;
+        return ManifestEnricherRegistry.Instance.Apply(manifest);
     }
 
     /** The shared server provider. Used ONLY to mint independent executors and as PublishAs's default (03 §11). */
