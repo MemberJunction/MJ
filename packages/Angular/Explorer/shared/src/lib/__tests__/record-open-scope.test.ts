@@ -64,6 +64,7 @@ interface ServiceStubs {
   setActiveTab: ReturnType<typeof vi.fn>;
   updateTabTitle: ReturnType<typeof vi.fn>;
   getTab: ReturnType<typeof vi.fn>;
+  updateTabConfiguration: ReturnType<typeof vi.fn>;
 }
 
 function createService(opts?: { shift?: boolean; existingTab?: { id: string } | null }): {
@@ -76,6 +77,7 @@ function createService(opts?: { shift?: boolean; existingTab?: { id: string } | 
     setActiveTab: vi.fn(),
     updateTabTitle: vi.fn(),
     getTab: vi.fn((id: string) => ({ id, title: 'Widget' })),
+    updateTabConfiguration: vi.fn(),
   };
   const service = Object.create(NavigationService.prototype) as NavigationService;
   const internals = service as unknown as Record<string, unknown>;
@@ -85,6 +87,7 @@ function createService(opts?: { shift?: boolean; existingTab?: { id: string } | 
     SetActiveTab: stubs.setActiveTab,
     UpdateTabTitle: stubs.updateTabTitle,
     GetTab: stubs.getTab,
+    UpdateTabConfiguration: stubs.updateTabConfiguration,
   };
   internals['appManager'] = { GetActiveApp: () => ({ ID: 'app-1', GetColor: () => '#ff0000' }) };
   // Real shouldForceNewTab runs against this — the shift state is what a
@@ -189,6 +192,58 @@ describe('NavigationService record opens — temp-tab scope', () => {
   });
 });
 
+
+// ===================== Standard-form escape hatch (MJ#4755) =====================
+// A custom form registered at a higher priority hides the CodeGen form. The
+// tab's Configuration.FormMode is what the record resource reads to ask the
+// form host for the standard form, so every entry point has to carry it.
+describe('NavigationService record opens — formMode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    SetRecordOpenStyle('records');
+  });
+
+  it('OpenNewEntityRecord carries formMode into the tab Configuration', () => {
+    const { service, stubs } = createService();
+    service.OpenNewEntityRecord('Widgets', { formMode: 'standard' });
+    expect(requestFrom(stubs.openTabForced).Configuration['FormMode']).toBe('standard');
+  });
+
+  it('OpenNewEntityRecord without formMode leaves FormMode out entirely', () => {
+    const { service, stubs } = createService();
+    service.OpenNewEntityRecord('Widgets');
+    // Absent, not undefined-valued: the tab config is persisted, and a stray
+    // key would make every record tab look like it had an opinion.
+    expect('FormMode' in requestFrom(stubs.openTabForced).Configuration).toBe(false);
+  });
+
+  it('OpenEntityRecord carries formMode into a new tab', () => {
+    const { service, stubs } = createService();
+    service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
+    expect(requestFrom(stubs.openTab).Configuration['FormMode']).toBe('standard');
+  });
+
+  it('OpenEntityRecord without formMode leaves FormMode out entirely', () => {
+    const { service, stubs } = createService();
+    service.OpenEntityRecord('Widgets', pkey);
+    expect('FormMode' in requestFrom(stubs.openTab).Configuration).toBe(false);
+  });
+
+  it('re-opening an already-open record in standard form switches that tab', () => {
+    const { service, stubs } = createService({ existingTab: { id: 'tab-existing' } });
+    service.OpenEntityRecord('Widgets', pkey, { formMode: 'standard' });
+    // Dedup focuses the existing tab — without this update the user would land
+    // on the custom form they were trying to get away from.
+    expect(stubs.updateTabConfiguration).toHaveBeenCalledWith('tab-existing', { FormMode: 'standard' });
+    expect(stubs.setActiveTab).toHaveBeenCalledWith('tab-existing');
+  });
+
+  it('a plain re-open does not touch the existing tab form mode', () => {
+    const { service, stubs } = createService({ existingTab: { id: 'tab-existing' } });
+    service.OpenEntityRecord('Widgets', pkey);
+    expect(stubs.updateTabConfiguration).not.toHaveBeenCalled();
+  });
+});
 
 // ===================== Record origin chain (crumb ping-pong) =====================
 // Under the preview-tab model an in-record link CONSUMES the parent's tab, so

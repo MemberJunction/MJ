@@ -1,6 +1,6 @@
 import { Component, EventEmitter, inject, Input, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
-import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
+import { EntityFormMode, FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -28,6 +28,11 @@ export class SingleRecordComponent extends BaseAngularComponent {
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public NewRecordValues: string | Record<string, unknown> | null = '';
+  /**
+   * `'standard'` asks the host for the CodeGen form even when a custom form is
+   * registered (MJ#4755). Fed from the tab's `Configuration.FormMode`.
+   */
+  @Input() public FormMode: EntityFormMode = 'default';
 
   /** @deprecated Use {@link NewRecordValues}. */
   @Input() public set newRecordValues(value: string | Record<string, unknown> | null) {

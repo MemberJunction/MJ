@@ -66,6 +66,15 @@ export const SYSTEM_APP_ID = '__explorer';
 const NEUTRAL_APP_COLOR = '#9E9E9E'; // Material Design Gray 500
 
 /**
+ * The tab-Configuration fragment for a standard-form open (MJ#4755). Returns
+ * an empty object when no form mode was requested, so the key is absent from
+ * the persisted config rather than present-but-undefined.
+ */
+function formModeConfiguration(options?: NavigationOptions): { FormMode?: 'standard' } {
+  return options?.formMode ? { FormMode: options.formMode } : {};
+}
+
+/**
  * Centralized navigation service that handles all navigation operations
  * with automatic shift-key detection for power user workflows
  */
@@ -489,6 +498,12 @@ export class NavigationService implements OnDestroy {
         // THIS open, not wherever they were when the tab was first created
         // (possibly days ago, possibly under an older origin schema).
         this.refreshSourceContext(existing.id, options);
+        // An explicit standard-form open must switch the tab it lands on;
+        // otherwise dedup would focus the custom form the user asked to leave.
+        // A plain re-open leaves the tab's current form mode alone.
+        if (options?.formMode) {
+          this.workspaceManager.UpdateTabConfiguration(existing.id, { FormMode: options.formMode });
+        }
         // The activation assert applies to RE-opens too — the same-click
         // stale-stomp that motivated it for fresh opens is equally possible
         // here, and without it the symptom is maddening: opening a record
@@ -521,7 +536,8 @@ export class NavigationService implements OnDestroy {
         resourceType: RECORDS_RESOURCE_TYPE,
         Entity: entityName,  // Must use 'Entity' (capital E) - expected by record-resource.component
         recordId: recordId,  // Also needed in Configuration for tab-container.component to populate ResourceRecordID
-        ...this.resolveSourceContext(options)
+        ...this.resolveSourceContext(options),
+        ...formModeConfiguration(options)
       },
       ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false,
@@ -1079,7 +1095,8 @@ export class NavigationService implements OnDestroy {
         recordId: '',        // Empty recordId indicates new record
         isNew: true,         // Flag to indicate this is a new record
         NewRecordValues: options?.newRecordValues,  // Pass through initial values if provided
-        ...this.resolveSourceContext(options)
+        ...this.resolveSourceContext(options),
+        ...formModeConfiguration(options)
       },
       ResourceRecordId: '',  // Empty for new records
       // Pinned under the records style so the region's preview replacement can

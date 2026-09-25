@@ -49,4 +49,12 @@ export interface NavigationOptions {
    * Use null values to remove a query param.
    */
   queryParams?: Record<string, string | null>;
+
+  /**
+   * Open the record in the CodeGen standard form even when a custom form is
+   * registered (MJ#4755). Carried into the tab's `Configuration.FormMode`,
+   * which the record resource hands to the form host. Omit for the normal
+   * resolution (the highest-priority registered form).
+   */
+  formMode?: 'standard';
 }

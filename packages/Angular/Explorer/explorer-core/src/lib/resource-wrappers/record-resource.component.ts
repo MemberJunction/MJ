@@ -3,13 +3,14 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecordUrlId } from '@memberjunction/core';
+import { EntityFormMode } from '@memberjunction/ng-base-forms';
 import { SingleRecordComponent } from '../single-record/single-record.component';
 @RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
   standalone: false,
     selector: 'mj-record-resource',
     styles: [`:host { display: block; height: 100%; width: 100%; }`],
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()"></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" [FormMode]="FormMode" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     @ViewChild(SingleRecordComponent) private singleRecord?: SingleRecordComponent;
@@ -21,6 +22,15 @@ export class EntityRecordResource extends BaseResourceComponent {
 
     public get PrimaryKey(): CompositeKey {
         return EntityRecordResource.GetPrimaryKey(this.Data, this.ProviderToUse);
+    }
+
+    /**
+     * The tab's requested form mode (MJ#4755). Written by
+     * `NavigationOptions.formMode` and the `?form=standard` deep link; any
+     * other value means the normal (highest-priority) form.
+     */
+    public get FormMode(): EntityFormMode {
+        return this.Data?.Configuration?.FormMode === 'standard' ? 'standard' : 'default';
     }
 
     public static GetPrimaryKey(data: ResourceData, provider?: IMetadataProvider): CompositeKey {
