@@ -376,7 +376,9 @@ async function ResolveCoreSchemaOwner(
     CanControlDatabase: number | null;
   }>(
     `SELECT USER_NAME(s.principal_id) AS OwnerName, ` +
-    `HAS_PERMS_BY_NAME(USER_NAME(s.principal_id), 'USER', 'IMPERSONATE') AS CanImpersonateOwner, ` +
+    // QUOTENAME: HAS_PERMS_BY_NAME parses the securable as an identifier, so a raw owner name
+    // containing `.`, `[` or `]` returns 0/NULL even for db_owner (verified on SQL Server 2022).
+    `HAS_PERMS_BY_NAME(QUOTENAME(USER_NAME(s.principal_id)), 'USER', 'IMPERSONATE') AS CanImpersonateOwner, ` +
     `HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONTROL') AS CanControlDatabase ` +
     `FROM sys.schemas s WHERE s.name = '${EscapeSQLString(coreSchema)}'`
   );

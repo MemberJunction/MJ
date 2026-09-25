@@ -394,6 +394,17 @@ describe('CreateAppSchema — SQL Server schema owner (#4756)', () => {
         expect(result.Warning).toBeDefined();
     });
 
+    it('passes the owner name to HAS_PERMS_BY_NAME as a quoted identifier', async () => {
+        // HAS_PERMS_BY_NAME parses its securable as an identifier: unquoted, an owner named
+        // `john.smith` returns 0 and `odd]owner` returns NULL even for a db_owner member (verified
+        // on SQL Server 2022), which would send a fully-permitted installer down the fallback.
+        const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'dbo', CanImpersonateOwner: 1, CanControlDatabase: 1 }]]);
+        await CreateAppSchema('bcsaas', provider);
+        expect(executeSql.mock.calls[1][0] as string).toContain(
+            "HAS_PERMS_BY_NAME(QUOTENAME(USER_NAME(s.principal_id)), 'USER', 'IMPERSONATE')"
+        );
+    });
+
     it('quotes an owner name that needs escaping', async () => {
         const { provider, executeSql } = makeMockProvider([[], [{ OwnerName: 'odd]owner', CanImpersonateOwner: 1, CanControlDatabase: 1 }]]);
         const result = await CreateAppSchema('bcsaas', provider);
