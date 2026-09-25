@@ -3137,9 +3137,8 @@ export class AIPromptRunner {
    * capabilities. It will attempt to execute with different models/vendors according
    * to the configured failover strategy when errors occur.
    * 
-   * The method calls several smaller, focused helper methods:
-   * - buildFailoverCandidates: Creates candidate models based on type restrictions
-   * - createCandidatesFromModels: Converts models to vendor-specific candidates
+   * Candidates come from model selection (`allCandidates`), already filtered to the prompt's
+   * model type by ID. The method calls several smaller, focused helper methods:
    * - updatePromptRunWithFailoverSuccess: Records successful failover metadata
    * - updatePromptRunWithFailoverFailure: Records failed failover metadata
    * - createFailoverErrorResult: Creates standardized error response
@@ -3357,78 +3356,6 @@ export class AIPromptRunner {
     }
 
     return this.createFailoverErrorResult(lastError, failoverAttempts);
-  }
-
-  /**
-   * Builds failover candidates for a prompt based on available models and type restrictions
-   */
-  protected async buildFailoverCandidates(prompt: MJAIPromptEntityExtended): Promise<ModelVendorCandidate[]> {
-    const aiEngine = AIEngine.Instance;
-    
-    // Get all models, filtered by type if specified
-    let allModels: MJAIModelEntityExtended[];
-    if (prompt.AIModelTypeID) {
-      // Find the model type from the prompt
-      const modelType = aiEngine.ModelTypes.find(mt => UUIDsEqual(mt.ID, prompt.AIModelTypeID));
-      if (!modelType) {
-        throw new Error(`Model type ${prompt.AIModelTypeID} not found`);
-      }
-      
-      // Get all models of this specific type
-      const targetTypeName = modelType.Name.trim().toLowerCase();
-      allModels = aiEngine.Models.filter(m => {
-        // Guard against AIModelType being non-string (defensive coding for data issues)
-        const mType = typeof m.AIModelType === 'string' ? m.AIModelType.trim().toLowerCase() : '';
-        return mType === targetTypeName;
-      });
-    } else {
-      // No type restriction - get all models
-      allModels = aiEngine.Models;
-    }
-    
-    return this.createCandidatesFromModels(allModels);
-  }
-
-  /**
-   * Creates model-vendor candidates from a list of models
-   */
-  protected createCandidatesFromModels(models: MJAIModelEntityExtended[]): ModelVendorCandidate[] {
-    const candidates: ModelVendorCandidate[] = [];
-
-    for (const model of models) {
-      const vendors = model.ModelVendors || [];
-      if (vendors.length === 0) {
-        // Model without specific vendors
-        candidates.push({
-          model: model,
-          vendorId: undefined,
-          vendorName: undefined,
-          driverClass: model.DriverClass,
-          apiName: model.APIName,
-          supportsEffortLevel: model.SupportsEffortLevel ?? false,
-          isPreferredVendor: false,
-          priority: model.PowerRank || 0,
-          source: 'power-rank'
-        });
-      } else {
-        // Add each vendor as a separate candidate
-        for (const vendor of vendors) {
-          candidates.push({
-            model: model,
-            vendorId: vendor.VendorID,
-            vendorName: vendor.Vendor,
-            driverClass: vendor.DriverClass || model.DriverClass,
-            apiName: vendor.APIName || model.APIName,
-            supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
-            isPreferredVendor: vendor.Priority > 0,
-            priority: (model.PowerRank || 0) + (vendor.Priority || 0),
-            source: 'power-rank'
-          });
-        }
-      }
-    }
-
-    return candidates;
   }
 
   /**
