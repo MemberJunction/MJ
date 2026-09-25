@@ -190,6 +190,11 @@ describe('SearchService visibility scope', () => {
   });
 
   const queriesFor = (entityName: string): RunViewParams[] => queries.filter((q) => q.EntityName === entityName);
+  /** The first ExtraFilter sent for an entity, narrowed to string (`ExtraFilter` is `string | PlatformSQL`). */
+  const filterFor = (entityName: string): string => {
+    const filter = queriesFor(entityName)[0]?.ExtraFilter;
+    return typeof filter === 'string' ? filter : '';
+  };
 
   it('searches only conversations the user can see', async () => {
     service.SetSearchFilter('conversations');
@@ -197,7 +202,7 @@ describe('SearchService visibility scope', () => {
     await service.Search('poem', 'env-1', USER);
 
     expect(ConversationEngine.Instance.GetVisibleConversationsFilter).toHaveBeenCalledWith('env-1', USER);
-    const filter = queriesFor('MJ: Conversations')[0].ExtraFilter ?? '';
+    const filter = filterFor('MJ: Conversations');
     expect(filter.startsWith(`${VISIBLE_CONVERSATIONS} AND (`)).toBe(true);
     expect(filter).toContain("LOWER(Name) LIKE '%poem%'");
   });
@@ -212,7 +217,7 @@ describe('SearchService visibility scope', () => {
     expect(idQuery.ExtraFilter).toBe(VISIBLE_CONVERSATIONS);
     expect(idQuery.Fields).toEqual(['ID']);
     expect(idQuery.MaxRows).toBeUndefined();
-    const messageFilter = queriesFor('MJ: Conversation Details')[0].ExtraFilter ?? '';
+    const messageFilter = filterFor('MJ: Conversation Details');
     expect(messageFilter.startsWith("ConversationID IN ('c1','c2') AND ")).toBe(true);
     expect(messageFilter).toContain("LOWER(Message) LIKE '%poem%'");
   });
@@ -242,7 +247,7 @@ describe('SearchService visibility scope', () => {
     await service.Search('poem', 'env-1', USER);
 
     expect(artifactPermissions.GetReadableArtifactsFilter).toHaveBeenCalledWith('user-1', USER);
-    const filter = queriesFor('MJ: Artifacts')[0].ExtraFilter ?? '';
+    const filter = filterFor('MJ: Artifacts');
     expect(filter.startsWith(`EnvironmentID='env-1' AND ${READABLE_ARTIFACTS} AND (`)).toBe(true);
   });
 });
