@@ -25,10 +25,6 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Changes&Name=ChangeContext"
-          },
-          "sync": {
-            "lastModified": "2026-09-21T22:18:45.040Z",
-            "checksum": "66b4ca08ddb881076180e4d3712e8665c93b733ba1c7b736d109591faf377267"
           }
         }
       ]
