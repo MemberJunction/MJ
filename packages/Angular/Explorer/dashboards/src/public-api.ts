@@ -237,5 +237,9 @@ export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } fro
 export * from './shared/shared-dashboard-widgets.module';
 export * from './archiving-dashboards.module';
 
+// Work Queue app — operator dashboard over the WorkQueue.* remote operations (spec 09b)
+export * from './work-queue-dashboards.module';
+export { WorkQueueDashboardComponent } from './WorkQueue/work-queue-dashboard.component';
+
 // Routines app — schedule AI agents to run on a cron cadence
 export { UserRoutinesResourceComponent, LoadUserRoutinesResource } from './UserRoutines/user-routines-resource.component';

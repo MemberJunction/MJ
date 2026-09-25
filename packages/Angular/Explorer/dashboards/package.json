@@ -33,6 +33,10 @@
       "types": "./dist/archiving-dashboards.module.d.ts",
       "default": "./dist/archiving-dashboards.module.js"
     },
+    "./work-queue-dashboards.module": {
+      "types": "./dist/work-queue-dashboards.module.d.ts",
+      "default": "./dist/work-queue-dashboards.module.js"
+    },
     "./communication-dashboards.module": {
       "types": "./dist/communication-dashboards.module.d.ts",
       "default": "./dist/communication-dashboards.module.js"
@@ -161,8 +165,8 @@
     "@memberjunction/ng-search": "6.1.0",
     "@memberjunction/ng-shared": "6.1.0",
     "@memberjunction/ng-shared-generic": "6.1.0",
-    "@memberjunction/ng-task-graph-editor": "6.1.0",
     "@memberjunction/ng-tabstrip": "6.1.0",
+    "@memberjunction/ng-task-graph-editor": "6.1.0",
     "@memberjunction/ng-testing": "6.1.0",
     "@memberjunction/ng-trees": "6.1.0",
     "@memberjunction/ng-ui-components": "6.1.0",
@@ -174,6 +178,8 @@
     "@memberjunction/templates-base-types": "6.1.0",
     "@memberjunction/testing-engine-base": "6.1.0",
     "@memberjunction/theme-engine": "6.1.0",
+    "@memberjunction/work-queue-base": "6.1.0",
+    "@memberjunction/work-queue-core": "6.1.0",
     "ag-grid-angular": "^35.0.1",
     "ag-grid-community": "^35.0.1",
     "angular-split": "^20.0.0",

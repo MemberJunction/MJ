@@ -1,0 +1,47 @@
+<div class="wq-panel">
+  <div class="wq-picker-row">
+    <label class="wq-label" for="wq-bd-transport">Transport</label>
+    <select id="wq-bd-transport" class="wq-select" [ngModel]="SelectedTransport ?? ''" (ngModelChange)="OnTransportChange($event)">
+      <option value="">All transports</option>
+      @for (t of Transports; track t.ID) {
+        <option [value]="t.Name">{{ t.Name }} ({{ t.DriverClass }})</option>
+      }
+    </select>
+    @if (LastRunAt) {
+      <span class="wq-hint">Checked {{ LastRunAt | date:'mediumTime' }}</span>
+    }
+  </div>
+
+  @if (IsLoading) {
+    <div class="wq-loading"><mj-loading text="Validating bindings..." size="medium"></mj-loading></div>
+  } @else if (LoadError) {
+    <mj-alert Variant="error" Title="Validation could not run" [Message]="LoadError"></mj-alert>
+  } @else if (HasRun && Issues.length === 0) {
+    <mj-empty-state Variant="success" Icon="fa-solid fa-circle-check" Title="Bindings are consistent"
+      [Message]="'Every topic and subscription' + (SelectedTransport ? ' on ' + SelectedTransport : '') + ' resolves to a live transport resource with a compatible driver.'" />
+  } @else if (HasRun) {
+    @if (Errors.length > 0) {
+      <section class="wq-issues">
+        <h3 class="wq-issues-title wq-issues-error"><i class="fa-solid fa-circle-xmark"></i> {{ Errors.length }} error{{ Errors.length === 1 ? '' : 's' }}</h3>
+        @for (issue of Errors; track issue.Subject + issue.Message) {
+          <div class="wq-issue wq-issue-error">
+            <span class="wq-issue-subject">{{ issue.Subject }}</span>
+            <span class="wq-issue-message">{{ issue.Message }}</span>
+          </div>
+        }
+      </section>
+    }
+    @if (Warnings.length > 0) {
+      <section class="wq-issues">
+        <h3 class="wq-issues-title wq-issues-warning"><i class="fa-solid fa-triangle-exclamation"></i> {{ Warnings.length }} warning{{ Warnings.length === 1 ? '' : 's' }}</h3>
+        @for (issue of Warnings; track issue.Subject + issue.Message) {
+          <div class="wq-issue wq-issue-warning">
+            <span class="wq-issue-subject">{{ issue.Subject }}</span>
+            <span class="wq-issue-message">{{ issue.Message }}</span>
+          </div>
+        }
+      </section>
+    }
+    <p class="wq-footnote">Errors stop a host from starting the affected subscription. Warnings are advisory. Fix them in the topology records or the transport's infrastructure, then re-check.</p>
+  }
+</div>

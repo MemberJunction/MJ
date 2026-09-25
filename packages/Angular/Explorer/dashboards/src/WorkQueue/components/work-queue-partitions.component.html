@@ -1,0 +1,75 @@
+<div class="wq-panel">
+  <div class="wq-picker-row">
+    <label class="wq-label" for="wq-pt-subscription">Ordered subscription</label>
+    <select id="wq-pt-subscription" class="wq-select" [ngModel]="SelectedSubscription ?? ''" (ngModelChange)="OnSubscriptionChange($event)">
+      <option value="">Choose a subscription…</option>
+      @for (s of OrderedSubscriptions; track s.ID) {
+        <option [value]="s.Name">{{ s.Name }} — {{ s.Topic }} ({{ s.Transport }})</option>
+      }
+    </select>
+    <div class="wq-chips">
+      @for (c of Conditions; track c) {
+        <mj-filter-chip [Label]="c" [Active]="Condition === c" (Clicked)="ToggleCondition(c)"></mj-filter-chip>
+      }
+    </div>
+  </div>
+
+  @if (LastOutcome) {
+    <mj-alert [Variant]="LastOutcome.Ok ? 'success' : 'error'" Size="sm" [Message]="LastOutcome.Message"></mj-alert>
+  }
+
+  @if (OrderedSubscriptions.length === 0) {
+    <mj-empty-state Icon="fa-solid fa-list-ol" Title="No Ordered subscriptions" Message="Partition state only exists for subscriptions with PartitionMode = Ordered." />
+  } @else if (!SelectedSubscription) {
+    <mj-empty-state Icon="fa-solid fa-list-ol" Title="Pick a subscription" Message="Partition keys are listed per Ordered subscription." />
+  } @else if (IsLoading) {
+    <div class="wq-loading"><mj-loading text="Loading partitions..." size="medium"></mj-loading></div>
+  } @else if (LoadError) {
+    <mj-alert Variant="error" Title="Could not list partitions" [Message]="LoadError"></mj-alert>
+  } @else if (!Supported) {
+    <mj-alert Variant="info" Title="Not supported" Message="This transport does not expose partition state to MemberJunction."></mj-alert>
+  } @else if (Rows.length === 0) {
+    <mj-empty-state Variant="empty" Icon="fa-solid fa-circle-check" Title="No partitions" [Message]="Condition ? 'No keys are currently ' + Condition + '.' : 'No partition keys have open work on this subscription.'" />
+  } @else {
+    <table class="wq-table">
+      <thead>
+        <tr>
+          <th>Partition key</th>
+          <th>Condition</th>
+          <th>Head delivery</th>
+          <th class="wq-num">Waiting</th>
+          <th class="wq-num">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of Rows; track row.PartitionKey) {
+          <tr [class.wq-row-blocked]="row.Condition === 'Blocked'">
+            <td class="wq-key">{{ row.PartitionKey }}</td>
+            <td><span class="wq-chip" [ngClass]="ConditionClass(row.Condition)">{{ row.Condition }}</span></td>
+            <td>@if (row.HeadDeliveryID) { <code class="wq-id">{{ row.HeadDeliveryID }}</code> } @else { <span class="wq-muted">—</span> }</td>
+            <td class="wq-num">{{ row.WaitingItems }}</td>
+            <td class="wq-num wq-actions">
+              @if (row.Condition === 'Blocked' && row.HeadDeliveryID) {
+                <button mjButton variant="outline" size="sm" [disabled]="!CanOperate || ActionInProgress" title="Replay the dead-lettered head" (click)="RequestReplay(row, $event)">
+                  <i class="fa-solid fa-rotate-left"></i> Replay head
+                </button>
+                <button mjButton variant="outline" size="sm" [disabled]="!CanOperate || ActionInProgress" title="Discard the dead-lettered head and release the key" (click)="RequestDiscard(row, $event)">
+                  <i class="fa-solid fa-trash"></i> Discard head
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="wq-footnote">Blocked = the head of the key is dead-lettered, so everything behind it waits. Replaying or discarding the head releases the key.</p>
+  }
+</div>
+
+<mj-confirm-dialog [Visible]="ConfirmReplayVisible" Title="Replay blocked head" Type="warning" ConfirmText="Replay" Icon="fa-solid fa-rotate-left"
+  [Message]="'The head delivery of key &quot;' + (PendingHead?.PartitionKey ?? '') + '&quot; will be queued again.'"
+  DetailMessage="If it succeeds, the items waiting behind it run in order. If it fails again it returns to the dead-letter set."
+  (Confirmed)="ReplayHead()" (Cancelled)="ConfirmReplayVisible = false; PendingHead = null"></mj-confirm-dialog>
+
+<mj-work-queue-discard-dialog [Visible]="DiscardVisible" Title="Discard blocked head" [Message]="DiscardMessage" [Busy]="ActionInProgress"
+  (VisibleChange)="DiscardVisible = $event; PendingHead = $event ? PendingHead : null" (Confirmed)="DiscardHead($event)"></mj-work-queue-discard-dialog>
