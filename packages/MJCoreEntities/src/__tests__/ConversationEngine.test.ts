@@ -236,6 +236,7 @@ vi.mock('../engines/artifacts', () => ({
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
 import { ConversationEngine } from '../engines/conversations';
+import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
@@ -265,6 +266,22 @@ function createMockConversation(overrides: Record<string, unknown> = {}) {
         TransactionGroup: null,
         ...overrides,
     };
+}
+
+/**
+ * Makes the next `GetUserAvailableResources` call report these conversations as shared
+ * with the user.
+ */
+function shareConversations(...conversationIds: string[]) {
+    const grants = conversationIds.map((id) => ({
+        ResourceRecordID: id,
+        SharedByUserID: null,
+        SharedByUser: null,
+        PermissionLevel: 'View',
+    }));
+    vi.mocked(ResourcePermissionEngine.Instance.GetUserAvailableResources).mockReturnValueOnce(
+        grants as unknown as ReturnType<typeof ResourcePermissionEngine.Instance.GetUserAvailableResources>
+    );
 }
 
 function createMockDetail(overrides: Record<string, unknown> = {}) {
@@ -512,6 +529,64 @@ describe('ConversationEngine', () => {
             expect(engine.Conversations.map(c => (c as unknown as { ID: string }).ID)).toEqual(['fresh']);
             runViewHook.before = originalRunView;
             runViewHook.firstSeen = false;
+        });
+
+        it('filters to owned and shared, unarchived, Global/Both conversations in the environment', async () => {
+            shareConversations('conv-s1');
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser, true);
+
+            const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
+            expect(params['ExtraFilter']).toBe(
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+            );
+        });
+    });
+
+    // ========================================================================
+    // VISIBLE CONVERSATIONS FILTER
+    // ========================================================================
+    describe('GetVisibleConversationsFilter', () => {
+        it('limits rows to conversations the user owns or was granted, like the list', async () => {
+            shareConversations('conv-s1', 'conv-s2');
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
+
+            expect(filter).toBe(
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+            );
+        });
+
+        it('keeps only the ownership clause when nothing is shared with the user', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
+
+            expect(filter).toBe(
+                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+            );
+        });
+
+        it('includes app-scoped conversations only when asked to', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeApplicationScoped: true });
+
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0)");
+        });
+
+        it('asks the permission engine for the calling user, not a cached one', async () => {
+            shareConversations();
+            const other = new UserInfo();
+            other.ID = 'user-2';
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', other);
+
+            expect(ResourcePermissionEngine.Instance.GetUserAvailableResources).toHaveBeenLastCalledWith(
+                other,
+                '81D4BC3D-9FEB-EF11-B01A-286B35C04427'
+            );
+            expect(filter).toContain("UserID='user-2'");
         });
     });
 

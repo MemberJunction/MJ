@@ -91,12 +91,19 @@ The product decision came back as **Option A — wire the panel into Explorer**,
 Option B recommended above. Recording that the recommendation was overridden, and why
 it is safe:
 
-**The Ctrl/Cmd+K blocker identified above was real and is why the trigger is a button.**
+**The Ctrl/Cmd+K blocker identified above was real and is why the trigger is a visible row.**
 This PR does *not* reuse `mjSearchShortcut`. Explorer's shell owns that chord for global
 search, and adding a second handler is precisely the silent-collision class that produced
-the duplicate-`@HostListener` defect. The affordance is instead a visible
-**"Search everything in Chat"** button above the conversation list — the "visible
-affordance" branch this document called for.
+the duplicate-`@HostListener` defect. The affordance is instead an escalation row
+**beneath** the conversation list, shown only while the list's own filter has a term:
+**Search all of Chat for "…"**. Clicking it opens the panel with that term carried over.
+This is the "visible affordance" branch this document called for.
+
+**The panel shows only what the user can already see.** Conversation and message results
+use `ConversationEngine.GetVisibleConversationsFilter`, the same rule as the conversation
+list (owned or shared, not archived, Global/Both scope). Artifact results use
+`ArtifactPermissionService.GetReadableArtifactsFilter`, the same rule as opening an
+artifact (owner, else explicit grant, else a readable collection).
 
 **This is not redundant with `mj-search-overlay`.** That overlay is the shell-level
 *global* search. The panel here is chat-scoped, across conversations / messages /
@@ -107,5 +114,8 @@ resolved in the direction of parity. `ConversationWorkspaceComponent` still has 
 consumers repo-wide, so the workspace shell remains dead code; retiring it is a separate
 cleanup and is deliberately not done here.
 
-Verified end-to-end: `T098 - Chat Global Search Panel` passes in 54s against a rebuilt
-Explorer image, having failed on every prior run.
+**T098 needs a new goal before it can pass.** Its current goal looks for a magnifying-glass
+icon in the Chat top bar, which this entry point does not have. The rewritten goal, which
+walks the escalation row, is in PR #4724. Verified by hand in a local Explorer, before the
+visibility scoping was added: filtering the list shows the row, the panel opens with the term
+and returns results, a filter button becomes active when clicked, and Escape closes the panel.

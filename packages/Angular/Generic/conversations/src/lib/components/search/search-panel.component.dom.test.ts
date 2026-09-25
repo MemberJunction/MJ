@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, queryAll, useFakeGlobalProvider } from '@memberjunction/ng-test-utils';
 import { RunViewParams, UserInfo } from '@memberjunction/core';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import { SearchPanelComponent } from './search-panel.component';
 
 /**
@@ -17,17 +18,24 @@ const CONVERSATIONS = [
 describe('SearchPanelComponent (DOM, data-bound)', () => {
   const installProvider = useFakeGlobalProvider();
 
-  function render(): ComponentFixture<SearchPanelComponent> {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function render(extraInputs: Record<string, unknown> = {}): ComponentFixture<SearchPanelComponent> {
     // Only the conversations query returns rows; everything else comes back empty, which
     // is the shape of a realistic partial-hit search.
     installProvider({
       runViewResults: (params: RunViewParams) =>
         params.EntityName === 'MJ: Conversations' ? CONVERSATIONS : [],
     });
+    // The visibility rule has its own specs; here it only has to produce a filter.
+    vi.spyOn(ConversationEngine.Instance, 'GetVisibleConversationsFilter').mockResolvedValue("EnvironmentID='env1'");
 
     return renderComponentFixture(SearchPanelComponent, {
       imports: [FormsModule],
       inputs: {
+        ...extraInputs,
         isOpen: true,
         environmentId: 'env1',
         currentUser: { ID: 'me', Name: 'Me' } as unknown as UserInfo,
@@ -43,13 +51,14 @@ describe('SearchPanelComponent (DOM, data-bound)', () => {
     f.componentInstance.onSearchInput();
   };
 
+  // Nothing calls f.detectChanges() after the search settles: the panel must render the
+  // results by itself, with no DOM event to start a change-detection pass.
   it('renders results after typing a query', async () => {
     const f = render();
     type(f, 'poem');
 
     // onSearchInput fire-and-forgets an async search; let it settle.
     await new Promise((r) => setTimeout(r, 0));
-    f.detectChanges();
 
     expect(queryAll(f, '.result-item').length).toBe(CONVERSATIONS.length);
   });
@@ -81,8 +90,18 @@ describe('SearchPanelComponent (DOM, data-bound)', () => {
     expect(f.componentInstance.searchQuery).toBe('poem');
 
     await new Promise((r) => setTimeout(r, 0));
-    f.detectChanges();
 
+    expect(queryAll(f, '.result-item').length).toBe(CONVERSATIONS.length);
+  });
+
+  it('searches for InitialQuery when the panel opens', async () => {
+    const f = render({ InitialQuery: '  poem  ' });
+
+    // One task for the deferred seed, one for the search it starts.
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(f.componentInstance.SearchQuery).toBe('poem');
     expect(queryAll(f, '.result-item').length).toBe(CONVERSATIONS.length);
   });
 });

@@ -8,10 +8,12 @@ import {
   MJCollectionEntity,
   MJCollectionArtifactEntity,
   MJTaskEntity,
-  MJArtifactEntity
+  MJArtifactEntity,
+  ConversationEngine
 } from '@memberjunction/core-entities';
 import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
+import { ArtifactPermissionService } from './artifact-permission.service';
 
 /**
  * Types of searchable content
@@ -130,16 +132,20 @@ export class SearchService {
 
   private _provider: IMetadataProvider | null = null;
 
-  constructor() {
+  constructor(private artifactPermissions: ArtifactPermissionService) {
     this.initializeSearch();
     this.loadRecentSearches();
   }
 
   /**
    * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   * Setting it also propagates to the artifact-permission service this depends on.
    */
   public set Provider(value: IMetadataProvider | null) {
       this._provider = value;
+      if (value !== null) {
+          this.artifactPermissions.Provider = value;
+      }
   }
 
   public get Provider(): IMetadataProvider {
@@ -233,7 +239,8 @@ export class SearchService {
   }
 
   /**
-   * Search conversations by name and description
+   * Search conversations by name and description, limited to the conversations the
+   * conversation list shows the user
    */
   private async searchConversations(
     query: string,
@@ -244,7 +251,7 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    let filter = `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`;
+    let filter = await ConversationEngine.Instance.GetVisibleConversationsFilter(environmentId, currentUser);
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
@@ -274,7 +281,7 @@ export class SearchService {
   }
 
   /**
-   * Search message content
+   * Search message content inside the conversations the conversation list shows the user
    */
   private async searchMessages(
     query: string,
@@ -282,20 +289,17 @@ export class SearchService {
     currentUser: UserInfo,
     dateRange: DateRange
   ): Promise<SearchResult[]> {
-    const rv = RunView.FromMetadataProvider(this.Provider);
-    const lowerQuery = query.toLowerCase();
-
-    // Resolve the view from metadata rather than naming it bare: the SQL login's default
-    // schema is dbo, not __mj, so an unqualified vwConversations fails to resolve and the
-    // whole query errors out — which this method reports only as an empty result.
-    const c = this.Provider.EntityByName('MJ: Conversations');
-    if (!c) {
-      console.warn('⚠️ Missing metadata for Conversations');
+    const conversationIds = await this.getVisibleConversationIds(environmentId, currentUser);
+    if (conversationIds.length === 0) {
       return [];
     }
 
-    // First get conversations in this environment
-    let filter = `ConversationID IN (SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0))`;
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const lowerQuery = query.toLowerCase();
+
+    // The IDs come from a separate query so this filter names only Conversation Details
+    // columns, which every provider can quote.
+    let filter = `ConversationID IN (${conversationIds.map(id => `'${id}'`).join(',')})`;
     filter += ` AND LOWER(Message) LIKE '%${EscapeSQLString(lowerQuery)}%'`;
     filter += ` AND (HiddenToUser IS NULL OR HiddenToUser=0)`;
 
@@ -326,7 +330,30 @@ export class SearchService {
   }
 
   /**
-   * Search artifacts by name and description
+   * IDs of every conversation the conversation list shows the user. Not capped, so older
+   * conversations stay searchable.
+   */
+  private async getVisibleConversationIds(environmentId: string, currentUser: UserInfo): Promise<string[]> {
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<Pick<MJConversationEntity, 'ID'>>(
+      {
+        EntityName: 'MJ: Conversations',
+        ExtraFilter: await ConversationEngine.Instance.GetVisibleConversationsFilter(environmentId, currentUser),
+        Fields: ['ID'],
+        ResultType: 'simple'
+      },
+      currentUser
+    );
+
+    if (!result.Success || !result.Results) {
+      console.error('Failed to load conversations to search messages in:', result.ErrorMessage);
+      return [];
+    }
+    return result.Results.map(c => c.ID);
+  }
+
+  /**
+   * Search artifacts by name and description, limited to the artifacts the user can read
    * Includes artifacts from both conversations and collections
    */
   private async searchArtifacts(
@@ -338,8 +365,8 @@ export class SearchService {
     const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
-    // Search artifacts directly by name and description
-    let filter = `EnvironmentID='${environmentId}'`;
+    const readableFilter = await this.artifactPermissions.GetReadableArtifactsFilter(currentUser.ID, currentUser);
+    let filter = `EnvironmentID='${environmentId}' AND ${readableFilter}`;
     filter += ` AND (LOWER(Name) LIKE '%${EscapeSQLString(lowerQuery)}%' OR LOWER(Description) LIKE '%${EscapeSQLString(lowerQuery)}%')`;
 
     if (dateRange.start) {
