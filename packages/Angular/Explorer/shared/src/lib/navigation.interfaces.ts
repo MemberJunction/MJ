@@ -49,4 +49,12 @@ export interface NavigationOptions {
    * Use null values to remove a query param.
    */
   queryParams?: Record<string, string | null>;
+
+  /**
+   * Open the record in the CodeGen standard form even when a custom form is
+   * registered (MJ#4755). Applied as the tab's `form=standard` query param —
+   * on a new tab or on the existing tab the open focused — which the record
+   * resource hands to the form host. Omit to leave the tab's mode unchanged.
+   */
+  formMode?: 'standard';
 }
