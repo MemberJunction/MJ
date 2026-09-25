@@ -66,33 +66,33 @@
   {
     "fields": {
       "Name": "Clone Records: Fire Hooks",
-      "ParentID": "@lookup:MJ: Authorizations.Name=Clone Records",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Cloning",
       "IsActive": true,
       "UseAuditLog": true,
-      "Description": "Permits overriding the default hook suppression policy to fire Entity Actions and AI Actions during clone save operations."
+      "Description": "Change whether Entity Actions and Entity AI Actions run during a clone, overriding the entity's clone configuration (Entity Actions run by default; AI Actions are suppressed). A sibling of Clone Records, so holding Clone Records does not grant it."
     },
     "primaryKey": {
       "ID": "50B8A92E-6287-48DA-AC9B-87E0FEE52B7B"
     },
     "sync": {
-      "lastModified": "2026-09-22T00:07:51.213Z",
-      "checksum": "c4942cbfdbdc25017ddafa4d43947cc4909d00c59df4f045fcd303e133c138d9"
+      "lastModified": "2026-09-25T16:54:45.220Z",
+      "checksum": "ab4e2aba11242463728b5185b5a6a8d23c92d66ce53002d944490fdaa25cb0e9"
     }
   },
   {
     "fields": {
       "Name": "Clone Records: Batch",
-      "ParentID": "@lookup:MJ: Authorizations.Name=Clone Records",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Record Cloning",
       "IsActive": true,
       "UseAuditLog": true,
-      "Description": "Permits batch cloning operations across multiple records via the grid multi-select or Record Processes."
+      "Description": "Clone several records in one request (the Clone Records action). A sibling of Clone Records, so holding Clone Records does not grant it."
     },
     "primaryKey": {
       "ID": "28640F1A-2D0F-4386-8F9E-CB11159E7709"
     },
     "sync": {
-      "lastModified": "2026-09-22T00:07:51.221Z",
-      "checksum": "f35c8ccc4413be55cbb71750d0beb6aa8df401b57ea200f2de34cb078cf24bdc"
+      "lastModified": "2026-09-25T16:54:45.235Z",
+      "checksum": "ecad2ed9a3457e4f2ff665d5e3de6181f3e300a70baf57a68866f3c26428a4a0"
     }
   },
   {

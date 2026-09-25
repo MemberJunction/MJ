@@ -83480,9 +83480,9 @@ export interface MJEntityEntity_ICloneDescendantConfig {
 }
 
 export interface MJEntityEntity_ICloneHookConfig {
-    /** Entity Actions (Create/Update invocations) during the clone save. Default 'suppress'. */
+    /** Entity Actions (Create/Update invocations) during the clone save. Default 'fire', as for any create. */
     EntityActions?: 'suppress' | 'fire';
-    /** Entity AI Actions. Default 'suppress'. */
+    /** Entity AI Actions. Default 'suppress': each can be a paid model call per cloned row. */
     AIActions?: 'suppress' | 'fire';
     /** Children the entity's own server Save() creates. The engine never clones these, and warns if a relationship policy tries. */
     ServerGeneratedChildren?: string[];

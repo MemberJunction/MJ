@@ -19,7 +19,7 @@ describe('ResolveEffectiveCloneOptions', () => {
         const { Options } = ResolveEffectiveCloneOptions(null, undefined, none);
         expect(Options).toEqual({
             MaxDepth: 3, MaxRecords: 500, Subtypes: 'include', Hierarchy: 'subtree',
-            SoftLinks: 'skip', Embeddings: 'copy', EntityActions: 'suppress', AIActions: 'suppress',
+            SoftLinks: 'skip', Embeddings: 'copy', EntityActions: 'fire', AIActions: 'suppress',
         });
     });
 
@@ -80,20 +80,29 @@ describe('ResolveEffectiveCloneOptions', () => {
         expect(Warnings).toEqual([]);
     });
 
-    it('keeps hooks suppressed without the Fire Hooks authorization', () => {
-        const denied = ResolveEffectiveCloneOptions(null, { EntityActions: 'fire', AIActions: 'fire' }, none);
-        expect(denied.Options).toMatchObject({ EntityActions: 'suppress', AIActions: 'suppress' });
-        expect(denied.Warnings.map((w) => w.Code)).toEqual(['HOOKS_FORBIDDEN', 'HOOKS_FORBIDDEN']);
-
-        const granted = ResolveEffectiveCloneOptions(null, { EntityActions: 'fire' }, { CanFireHooks: true, CanOverrideScope: false });
-        expect(granted.Options.EntityActions).toBe('fire');
-        expect(granted.Warnings).toEqual([]);
+    it('fires Entity Actions and keeps AI Actions off by default, with no authorization needed', () => {
+        const { Options, Warnings } = ResolveEffectiveCloneOptions(null, {}, none);
+        expect(Options).toMatchObject({ EntityActions: 'fire', AIActions: 'suppress' });
+        expect(Warnings).toEqual([]);
     });
 
-    it('applies the Fire Hooks rule to a configured default of fire as well', () => {
-        const { Options, Warnings } = ResolveEffectiveCloneOptions({ Hooks: { EntityActions: 'fire' } }, {}, none);
-        expect(Options.EntityActions).toBe('suppress');
-        expect(Warnings[0].Code).toBe('HOOKS_FORBIDDEN');
+    it('follows the configured hooks without any authorization', () => {
+        const { Options, Warnings } = ResolveEffectiveCloneOptions({ Hooks: { EntityActions: 'suppress', AIActions: 'fire' } }, {}, none);
+        expect(Options).toMatchObject({ EntityActions: 'suppress', AIActions: 'fire' });
+        expect(Warnings).toEqual([]);
+    });
+
+    it('ignores a request to change hooks, either way, without Fire Hooks', () => {
+        const suppress = ResolveEffectiveCloneOptions(null, { EntityActions: 'suppress', AIActions: 'fire' }, none);
+        expect(suppress.Options).toMatchObject({ EntityActions: 'fire', AIActions: 'suppress' });
+        expect(suppress.Warnings.map((w) => [w.Code, w.Field])).toEqual([['HOOKS_FORBIDDEN', 'EntityActions'], ['HOOKS_FORBIDDEN', 'AIActions']]);
+    });
+
+    it('applies a hooks change for a Fire Hooks holder and records it as an override', () => {
+        const granted = ResolveEffectiveCloneOptions(null, { EntityActions: 'suppress' }, { CanFireHooks: true, CanOverrideScope: false });
+        expect(granted.Options.EntityActions).toBe('suppress');
+        expect(granted.Warnings).toEqual([]);
+        expect(granted.Overrides).toEqual(['EntityActions']);
     });
 });
 

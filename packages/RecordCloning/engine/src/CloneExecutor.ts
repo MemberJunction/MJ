@@ -238,8 +238,9 @@ export class CloneExecutor {
     }
 
     /**
-     * Save options for the clone's own rows. Entity Actions and AI Actions are suppressed unless the
-     * plan's effective options say 'fire', which the planner only allows for Fire Hooks holders (plan §8.4).
+     * Save options for the clone's own rows, from the plan's effective options: Entity Actions run
+     * by default and AI Actions don't, unless the entity's configuration (or a Fire Hooks holder's
+     * request) says otherwise.
      */
     private static saveOptionsFor(plan: ClonePlan): EntitySaveOptions {
         const options = new EntitySaveOptions();

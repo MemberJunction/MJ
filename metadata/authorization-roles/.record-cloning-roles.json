@@ -54,5 +54,33 @@
       "lastModified": "2026-09-24T19:32:32.161Z",
       "checksum": "79985e6118e6906d7c8bf13bf9310fd83a1b055c4debcb31116ab7c4a93dd1dc"
     }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Clone Records: Fire Hooks",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "F2200B0F-1EAD-4A68-9C4B-4517177EF2F7"
+    },
+    "sync": {
+      "lastModified": "2026-09-25T16:54:45.271Z",
+      "checksum": "6492f3e5349e4eff1970ab09e2cc58e21c384bdd7e7edc844818c64a7e1abd60"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Clone Records: Batch",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "F36C3FD6-D7C5-40F8-9240-4CC6EAC68041"
+    },
+    "sync": {
+      "lastModified": "2026-09-25T16:54:45.282Z",
+      "checksum": "55eb7044b7db4af593134c68591a9f72457127e8ad9c2cfe9d76ddabd7dd1921"
+    }
   }
 ]

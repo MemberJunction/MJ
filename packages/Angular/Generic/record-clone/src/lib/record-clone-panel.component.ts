@@ -589,8 +589,8 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     public AvailablePresets: string[] = [];
     public SelectedPreset?: string;
     /**
-     * Whether the Fire Hooks toggle is offered: `RecordClone.Describe` reports whether the user holds
-     * `Clone Records: Fire Hooks` (plan §9). The server re-checks and keeps hooks suppressed without it.
+     * Whether the Run Entity Actions toggle is offered: `RecordClone.Describe` reports whether the user
+     * holds `Clone Records: Fire Hooks` (plan §9). Without it the server runs hooks as configured.
      */
     public CanFireHooks = false;
 
@@ -938,7 +938,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
             Subtypes: 'include',
             Hierarchy: 'subtree',
             SoftLinks: 'skip',
-            EntityActions: 'suppress',
+            EntityActions: 'fire',
         };
     }
 

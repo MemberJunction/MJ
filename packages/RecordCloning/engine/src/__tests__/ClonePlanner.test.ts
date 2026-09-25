@@ -325,17 +325,18 @@ describe('ClonePlanner', () => {
             expect(plan.Nodes.find((n) => n.EntityName === 'ChildEntity')?.Action).toBe('Blocked');
         });
 
-        it('keeps hooks suppressed with HOOKS_FORBIDDEN for a user granted only the schema-level node', async () => {
-            // Checks walk ancestors, so a 'Clone Records' holder would also pass Fire Hooks; grant only the leaf.
+        it('fires Entity Actions by default, and ignores a request to suppress them from a Clone Records holder', async () => {
+            // Fire Hooks is a sibling of Clone Records, so holding Clone Records (and every node under it) doesn't grant it.
+            const underCloneRecords = new Set(['Clone Records', 'Clone Records in Platform Schema', 'Clone Records in Custom Schemas']);
             const auths = GrantedCloneAuthorizations(false).map((a) =>
-                a.Name === 'Clone Records in Custom Schemas' ? ({ ...a, UserCanExecute: () => true } as typeof a) : a
+                underCloneRecords.has(a.Name) ? ({ ...a, UserCanExecute: () => true } as typeof a) : a
             );
             mockTwoRows();
             const plan = await new ClonePlanner({ Provider: withAuths(auths) }).Plan(
-                { ...request, Options: { EntityActions: 'fire' } },
+                { ...request, Options: { EntityActions: 'suppress' } },
                 standardUser
             );
-            expect(plan.EffectiveOptions.EntityActions).toBe('suppress');
+            expect(plan.EffectiveOptions.EntityActions).toBe('fire');
             expect(plan.Warnings.some((w) => w.Code === 'HOOKS_FORBIDDEN')).toBe(true);
             expect(plan.Blocked).toBe(false);
         });

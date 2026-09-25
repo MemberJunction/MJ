@@ -46,14 +46,14 @@ describe('CloneScopeControlsComponent (DOM)', () => {
         expect(out.at(-1)).toMatchObject({ MaxDepth: 4, SoftLinks: 'include' });
     });
 
-    it('shows the Fire Entity Actions toggle only with CanFireHooks', () => {
+    it('shows the Run Entity Actions toggle only with CanFireHooks', () => {
         const without = renderComponentFixture(CloneScopeControlsComponent, { inputs: { CanOverrideScope: true } });
-        expect(queryAll(without, '.toggle-label').some((l) => l.textContent?.includes('Fire Entity Actions'))).toBe(false);
+        expect(queryAll(without, '.toggle-label').some((l) => l.textContent?.includes('Run Entity Actions'))).toBe(false);
 
         const withHooks = renderComponentFixture(CloneScopeControlsComponent, { inputs: { CanFireHooks: true } });
         expect(query(withHooks, '.dev-overrides')).not.toBeNull();
         expect(query(withHooks, '#max-depth-input')).toBeNull();
-        expect(queryAll(withHooks, '.toggle-label').some((l) => l.textContent?.includes('Fire Entity Actions'))).toBe(true);
+        expect(queryAll(withHooks, '.toggle-label').some((l) => l.textContent?.includes('Run Entity Actions'))).toBe(true);
     });
 
     it('asks to reset to the entity defaults', () => {

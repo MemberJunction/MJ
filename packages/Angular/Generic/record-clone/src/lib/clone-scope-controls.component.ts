@@ -4,8 +4,9 @@
  * Implements §12.3 of the record cloning plan with the scope rules from the review:
  * everyone sees the preset picker and a summary of what the clone will copy, taken from the
  * entity's `Configuration.Clone`. Only a holder of `Clone Records: Override Scope` gets the
- * developer overrides (depth, record cap, soft links, subtypes, hierarchy); the Fire Entity
- * Actions toggle needs `Clone Records: Fire Hooks`. The server applies the same rules.
+ * developer overrides (depth, record cap, soft links, subtypes, hierarchy). Entity Actions run
+ * by default; the toggle that turns them off (or on, where the entity suppresses them) needs
+ * `Clone Records: Fire Hooks`. The server applies the same rules.
  */
 
 import {
@@ -107,7 +108,7 @@ interface ScopeFact {
 
                         @if (CanFireHooks) {
                             <div class="field-row">
-                                <span class="toggle-label" (click)="OnEntityActionsToggle(EntityActions !== 'fire')">Fire Entity Actions / Hooks</span>
+                                <span class="toggle-label" (click)="OnEntityActionsToggle(EntityActions !== 'fire')">Run Entity Actions</span>
                                 <mj-switch [ngModel]="EntityActions === 'fire'" (ngModelChange)="OnEntityActionsToggle($event)"></mj-switch>
                             </div>
                         }
@@ -326,7 +327,7 @@ export class CloneScopeControlsComponent {
     /** Whether polymorphic EntityID/RecordID rows (tags, attachments, notes) are cloned. */
     @Input() SoftLinks: 'skip' | 'include' = 'skip';
     /** Whether Entity Actions run during the clone's saves. */
-    @Input() EntityActions: 'suppress' | 'fire' = 'suppress';
+    @Input() EntityActions: 'suppress' | 'fire' = 'fire';
 
     /** The entity's configured scope; the summary highlights where the effective values differ. Null = same as effective. */
     @Input() ConfiguredScope: CloneScopeValues | null = null;
@@ -335,7 +336,7 @@ export class CloneScopeControlsComponent {
 
     /** Show the depth, cap and scope toggles. True only for holders of `Clone Records: Override Scope`. */
     @Input() CanOverrideScope = false;
-    /** Show the Fire Entity Actions toggle. True only for holders of `Clone Records: Fire Hooks`. */
+    /** Show the Run Entity Actions toggle. True only for holders of `Clone Records: Fire Hooks`. */
     @Input() CanFireHooks = false;
 
     /** Fires with the full option set whenever any control changes. */

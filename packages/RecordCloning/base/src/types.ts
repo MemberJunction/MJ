@@ -88,7 +88,7 @@ export type CloneWarningCode =
     | 'PLAN_CHANGED'
     /** The user lacks the clone authorization for this entity (plan §9.1). */
     | 'FORBIDDEN'
-    /** Hooks were requested but the user lacks `Clone Records: Fire Hooks`; they stay suppressed. */
+    /** A request changed whether Entity Actions / AI Actions run without `Clone Records: Fire Hooks`; the configured behavior applies. */
     | 'HOOKS_FORBIDDEN'
     /** A request option was ignored because the entity's `UserEditable` does not allow it. */
     | 'OPTION_OVERRIDE_IGNORED'

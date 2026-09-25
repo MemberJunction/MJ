@@ -465,6 +465,7 @@ export interface RecordCloneDescribeOutput {
 
 /** Options controlling clone execution. */
 export interface RecordCloneExecuteOptions {
+    /** Plan and validate only: returns the plan in `Plan` and writes nothing. */
     DryRun?: boolean;
     Preset?: string;
     MaxDepth?: number;
@@ -472,7 +473,9 @@ export interface RecordCloneExecuteOptions {
     Subtypes?: 'include' | 'exclude';
     Hierarchy?: 'subtree' | 'node';
     SoftLinks?: 'skip' | 'include';
+    /** Whether Entity Actions run on the cloned rows. Default from the entity's `Hooks` (else 'fire'); changing it needs `Clone Records: Fire Hooks`. */
     EntityActions?: 'suppress' | 'fire';
+    /** Whether Entity AI Actions run. Default from the entity's `Hooks` (else 'suppress'); changing it needs `Clone Records: Fire Hooks`. */
     AIActions?: 'suppress' | 'fire';
     Embeddings?: 'copy' | 'regenerate';
     FieldOverrides?: Record<string, string | number | boolean | null>;
@@ -609,7 +612,9 @@ export interface RecordClonePlanOptions {
     Subtypes?: 'include' | 'exclude';
     Hierarchy?: 'subtree' | 'node';
     SoftLinks?: 'skip' | 'include';
+    /** Whether Entity Actions run on the cloned rows. Default from the entity's `Hooks` (else 'fire'); changing it needs `Clone Records: Fire Hooks`. */
     EntityActions?: 'suppress' | 'fire';
+    /** Whether Entity AI Actions run. Default from the entity's `Hooks` (else 'suppress'); changing it needs `Clone Records: Fire Hooks`. */
     AIActions?: 'suppress' | 'fire';
     Embeddings?: 'copy' | 'regenerate';
     FieldOverrides?: Record<string, string | number | boolean | null>;
