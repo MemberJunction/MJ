@@ -4410,20 +4410,63 @@ export class ManageMetadataBase {
     * Manages the creation, updating and deletion of entity field records in the metadata based on the database schema.
     *
     * @param entityFilter Optional list of entity NAMES to scope the field-management work to. When provided,
-    *   the three SP/inline-SQL passes (delete unneeded, create new from schema, update existing from schema)
-    *   filter to those entities only. Other steps remain unscoped — they are cheap enough that scoping them
-    *   adds complexity without measurable benefit. An empty array short-circuits the entire method as a no-op,
-    *   which is the typical "no schema changes since last run" case in Pass 2.
+    *   the two schema-sync passes (create new from schema, update existing from schema) filter to those
+    *   entities only. Other steps remain unscoped — they are cheap enough that scoping them adds complexity
+    *   without measurable benefit. An empty array short-circuits the REST of the method as a no-op, which is
+    *   the typical "no schema changes since last run" case in Pass 2 — but NOT the orphan prune, which always
+    *   runs unscoped when asked (see the STEP 1 note in the body, and #4050). Any entity the prune touched is
+    *   folded into the filter, so an empty filter can still produce work.
     *   `undefined` (default) preserves prior full-scan behavior.
     */
    public async ManageEntityFields(pool: CodeGenConnection, excludeSchemas: string[], skipCreatedAtUpdatedAtDeletedAtFieldValidation: boolean, skipEntityFieldValues: boolean, currentUser: UserInfo, skipAdvancedGeneration: boolean, skipDeleteUnneededFields: boolean = false, entityFilter?: string[]): Promise<boolean> {
       let bSuccess = true;
       const startTime: Date = new Date();
 
+      // STEP 1 — prune orphaned EntityField rows. This runs BEFORE the empty-filter fast-exit and
+      // is deliberately UNSCOPED, which is the fix for #4050.
+      //
+      // Step 2 of the SQL pass regenerates the base view of EVERY included entity, so a view can
+      // LOSE columns without the entity's TABLE changing (the 6.1 hierarchy opt-in gate #3939 does
+      // exactly this: `Root*`/`Depth`/`Path` vanish from the view). The virtual EntityField rows
+      // for those columns survive, the declared field count stops matching the view, and every save
+      // on the entity fails with Msg 213.
+      //
+      // `entityFilter` cannot contain that entity. It is `newEntityList ∪ modifiedEntityList`, and
+      // both lists are populated from TABLE-schema changes only — a view-only shrink flags nothing.
+      // So scoping the prune to the filter makes it structurally blind to the very orphans this run
+      // just created, on this run and on every run after it. Only `mj migrate` healed it, via
+      // R__RefreshMetadata's unscoped call to the same SP.
+      //
+      // The prune is a single SP call, so going wide costs one full scan — the same scan
+      // R__RefreshMetadata already performs on every migrate. The scoping optimization stays in
+      // place for the per-entity steps below, which are the ones it was measured on.
+      const step1StartTime: Date = new Date();
+      let prunedEntityNames: string[] = [];
+      if (skipDeleteUnneededFields) {
+         logStatus(`      Skipping deletion of unneeded entity fields (deferred to post-SQL pass)`);
+      } else {
+         const pruneResult = await this.deleteUnneededEntityFields(pool, excludeSchemas);
+         if (!pruneResult.success) {
+            logError ('Error deleting unneeded entity fields');
+            bSuccess = false;
+         }
+         prunedEntityNames = pruneResult.prunedEntityNames;
+         logStatus(`      Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
+      }
+
+      // An entity that just lost fields has to enter THIS pass's scope, or the run still doesn't
+      // converge: spUpdateExistingEntityFieldsFromSchema is what rewrites Sequence from the live
+      // view, and it only touches entities in scope. Widening here (rather than relying on the
+      // prune's `modifiedEntityList` side effect, which the caller already snapshotted) is what
+      // makes a single CodeGen run leave the metadata consistent.
+      const effectiveEntityFilter: string[] | undefined = entityFilter
+         ? [...new Set([...entityFilter, ...prunedEntityNames])]
+         : undefined;
+
       // Fast-exit: an explicit empty filter means "no entities changed in Pass 1, so Pass 2 has nothing to do"
-      if (entityFilter && entityFilter.length === 0) {
+      if (effectiveEntityFilter && effectiveEntityFilter.length === 0) {
          logStatus(`      manageEntityFields: empty entityFilter — skipping Pass 2 (no entities to process)`);
-         return true;
+         return bSuccess;
       }
 
       // Resolve entity names → IDs once up front so SP wrappers can receive UUIDs directly.
@@ -4432,11 +4475,11 @@ export class ManageMetadataBase {
       // unscoped full scan, which is worse than the original intent. Treating "filter
       // provided but nothing resolved" as a no-op is the correct behavior.
       let scopedEntityIDs: string[] | undefined;
-      if (entityFilter) {
-         scopedEntityIDs = this.resolveEntityNamesToIDs(entityFilter);
+      if (effectiveEntityFilter) {
+         scopedEntityIDs = this.resolveEntityNamesToIDs(effectiveEntityFilter);
          if (scopedEntityIDs.length === 0) {
-            logStatus(`      manageEntityFields: entityFilter (${entityFilter.length} names) resolved to 0 IDs — skipping Pass 2`);
-            return true;
+            logStatus(`      manageEntityFields: entityFilter (${effectiveEntityFilter.length} names) resolved to 0 IDs — skipping Pass 2`);
+            return bSuccess;
          }
       }
 
@@ -4447,17 +4490,6 @@ export class ManageMetadataBase {
             bSuccess = false;
          }
          logStatus(`      Ensured ${EntityInfo.CreatedAtFieldName}/${EntityInfo.UpdatedAtFieldName}/${EntityInfo.DeletedAtFieldName} fields exist in ${(new Date().getTime() - startTime.getTime()) / 1000} seconds`);
-      }
-
-      const step1StartTime: Date = new Date();
-      if (skipDeleteUnneededFields) {
-         logStatus(`      Skipping deletion of unneeded entity fields (deferred to post-SQL pass)`);
-      } else {
-         if (! await this.deleteUnneededEntityFields(pool, excludeSchemas, scopedEntityIDs)) {
-            logError ('Error deleting unneeded entity fields');
-            bSuccess = false;
-         }
-         logStatus(`      Deleted unneeded entity fields in ${(new Date().getTime() - step1StartTime.getTime()) / 1000} seconds`);
       }
 
       // AN: 14-June-2025 - See note below about the new order of these steps, this must
@@ -5614,7 +5646,16 @@ export class ManageMetadataBase {
       }
    }
 
-   protected async deleteUnneededEntityFields(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<boolean> {
+   /**
+    * Removes EntityField rows whose column no longer exists on the entity's base view or table.
+    *
+    * @param entityIDs Optional scope. Omit it to scan every entity — which is what the post-SQL
+    *   pass does, because an entity orphaned by a view-only change is never in a change list
+    *   (see {@link manageEntityFields}).
+    * @returns `success`, plus the names of the entities fields were actually deleted from, so the
+    *   caller can bring them into scope for the field-resync steps that follow.
+    */
+   protected async deleteUnneededEntityFields(pool: CodeGenConnection, excludeSchemas: string[], entityIDs?: string[]): Promise<{ success: boolean; prunedEntityNames: string[] }> {
       try   {
          // One SP call regardless of scope: pass the entire entity ID list as a comma-delimited
          // string (mirrors the @ExcludedSchemaNames pattern). The SP fans the list out into
@@ -5633,14 +5674,19 @@ export class ManageMetadataBase {
          const result = await this.logSQLAndExecute(pool, sSQL, label, true);
          // result contains the DELETED entity fields. Get a distinct list of entity names
          // and add them to the modified entity list if they're not already in there.
+         let prunedEntityNames: string[] = [];
          if (result && result.length > 0) {
-            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Entity: any; }) => r.Entity));
+            const names: string[] = result
+               .map((r: { Entity: unknown; }) => r.Entity)
+               .filter((name: unknown): name is string => typeof name === 'string' && name.trim().length > 0);
+            prunedEntityNames = [...new Set(names)];
+            ManageMetadataBase.addNewEntitiesToModifiedList(prunedEntityNames);
          }
-         return true;
+         return { success: true, prunedEntityNames };
       }
       catch (e) {
          logError(e as string);
-         return false;
+         return { success: false, prunedEntityNames: [] };
       }
    }
 
