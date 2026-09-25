@@ -78,17 +78,20 @@ describe('MjEntityFormHostComponent (DOM)', () => {
 
 @Component({ standalone: true, selector: 'test-gen-form', template: '<p class="gen">generated</p>' })
 class GenForm extends BaseFormComponent {
+  public record!: BaseEntity;
   override async ngOnInit(): Promise<void> { /* skip provider-backed bootstrap */ }
 }
 
 @Component({ standalone: true, selector: 'test-custom-form', template: '<p class="custom">custom</p>' })
 class CustomForm extends BaseFormComponent {
+  public record!: BaseEntity;
   override async ngOnInit(): Promise<void> { /* skip provider-backed bootstrap */ }
 }
 
 /** A custom form holding unsaved work its record doesn't show (e.g. a canvas/designer section). */
 @Component({ standalone: true, selector: 'test-busy-custom-form', template: '<p class="custom">custom</p>' })
 class BusyCustomForm extends BaseFormComponent {
+  public record!: BaseEntity;
   override async ngOnInit(): Promise<void> { /* skip provider-backed bootstrap */ }
   override get HasAdditionalUnsavedChanges(): boolean { return true; }
 }

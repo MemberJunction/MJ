@@ -8,12 +8,14 @@
 // first (same convention as the other component-importing suites here).
 import '@angular/compiler';
 import { describe, it, expect } from 'vitest';
+import type { BaseEntity } from '@memberjunction/core';
 import { BaseFormComponent, FormResolution } from '@memberjunction/ng-base-forms';
 import { ShouldOfferStandardFormCreate } from '../standard-form-create';
 
-// Dummy form classes: only their identity matters to the resolution.
-class GeneratedForm extends BaseFormComponent {}
-class CustomForm extends BaseFormComponent {}
+// Dummy form classes: only their identity matters to the resolution. `record` is
+// abstract on BaseFormComponent, so each declares it to be a concrete subclass.
+class GeneratedForm extends BaseFormComponent { public record!: BaseEntity; }
+class CustomForm extends BaseFormComponent { public record!: BaseEntity; }
 
 /** A custom class form registered above the generated one. */
 const customHidesStandard: FormResolution = { kind: 'class', subClass: CustomForm, variants: [], standard: GeneratedForm };

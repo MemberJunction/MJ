@@ -39,8 +39,11 @@ function makeEntityInfo(): EntityInfo {
   });
 }
 
+/** BaseEntity is abstract; a bare concrete subclass is all this test needs. */
+class TestEntity extends BaseEntity {}
+
 function makeRecord(): BaseEntity {
-  const record = new BaseEntity(makeEntityInfo());
+  const record = new TestEntity(makeEntityInfo());
   record.SetMany({ ID: '11111111-2222-3333-4444-555555555555', Name: 'Original' }, true, true);
   return record;
 }
