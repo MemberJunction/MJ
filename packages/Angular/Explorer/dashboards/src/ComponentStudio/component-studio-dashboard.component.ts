@@ -336,12 +336,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       this.OnNewComponent();
     }
 
-    // Ctrl+/ or ? = Toggle keyboard shortcuts
-    if ((event.ctrlKey || event.metaKey) && event.key === '/') {
-      event.preventDefault();
-      this.ShowKeyboardShortcuts = !this.ShowKeyboardShortcuts;
-      this.cdr.detectChanges();
-    } else if (event.key === '?' && !isInputFocused) {
+    // ? = Toggle keyboard shortcuts (Ctrl/Cmd+/ belongs to the shell's command palette)
+    if (event.key === '?' && !isInputFocused) {
       this.ShowKeyboardShortcuts = !this.ShowKeyboardShortcuts;
       this.cdr.detectChanges();
     }
