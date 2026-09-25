@@ -201,9 +201,9 @@ describe('RecordClonePanelComponent (DOM)', () => {
         });
         await fixture.componentInstance.Start();
 
-        let answerFirst: (v: unknown) => void = () => undefined;
+        let answerFirst: (v: RecordClonePlanOutput) => void = () => undefined;
         vi.spyOn(mockService, 'PlanClone')
-            .mockImplementationOnce(() => new Promise((r) => (answerFirst = r)) as never)
+            .mockImplementationOnce(() => new Promise<RecordClonePlanOutput>((r) => (answerFirst = r)))
             .mockResolvedValueOnce({ Plan: { ...MOCK_PLAN.Plan!, Hash: 'second' } });
         const first = fixture.componentInstance.Replan();
         const second = fixture.componentInstance.Replan();
