@@ -3422,10 +3422,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    *   off: the chord FOCUSES the inline header composite on desktop (results attach
    *   beneath it), so keep the don't-steal-focus-mid-typing guard; on mobile (no
    *   composite rendered) it opens the Spotlight overlay instead.
-   * - **Ctrl/Cmd+/** opens the command palette. Deliberately NOT gated on "is focus
-   *   in an input?" — it responds to exactly one chord that can never be mistaken
-   *   for ordinary typing, and focus-stealing is the expected behavior when you
-   *   summon a modal palette.
+   * - **Ctrl/Cmd+/** opens the command palette, even from an input — the chord can
+   *   never be mistaken for ordinary typing. It yields only when an element under
+   *   focus already handled it (`defaultPrevented`): CodeMirror binds Mod-/ to toggle
+   *   comment and calls `preventDefault()` without stopping propagation.
    */
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
@@ -3436,6 +3436,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
 
       if (event.key === '/') {
+          if (event.defaultPrevented) {
+              return;
+          }
           event.preventDefault();
           event.stopPropagation();
           if (this.UseOmnibar) {
@@ -3517,6 +3520,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       (same destination as the omnibar's see-all row). */
   OnOverlaySeeAll(query: string): void {
       this.LegacySearchOpen = false;
+      this.navigationService.OpenSearch(query);
+  }
+
+  /** Command palette "Search everything" row → full Search Results workspace. Does
+      nothing while the chrome hides search, like the other search entry points. */
+  OnCommandPaletteSearch(query: string): void {
+      if (!this.ShowSearchBar || !query.trim()) {
+          return;
+      }
       this.navigationService.OpenSearch(query);
   }
 
