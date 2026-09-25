@@ -9,7 +9,7 @@
  * 4. Markdown action results include actionable guidance notes for both fatal and recoverable failures.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BaseAgent } from '../base-agent';
+import { BaseAgent, CircuitBreakerActionResult } from '../base-agent';
 import '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -670,6 +670,42 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(r5.Message).toContain('disabled for these inputs');
             expect(harness.runActionCallCount).toBe(4);
         });
+
+        it('a blocked call carries the rule that fired, and a spent budget wins over an identical tail', async () => {
+            const agent = new BaseAgent();
+            const actionEntity = { ID: ACTION_ID, Name: ACTION_NAME } as unknown as import('@memberjunction/actions-base').MJActionEntityExtended;
+            const params = makeParams();
+
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'Downstream 500 error';
+                ar.RunParams = new RunActionParams();
+                ar.RunParams.Action = actionEntity;
+                return ar;
+            };
+
+            // Five dispatched failures: A, B, C, D, D — the last two identical, total = 5
+            for (const q of ['A', 'B', 'C', 'D', 'D']) {
+                await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q } }, actionEntity);
+            }
+            expect(harness.runActionCallCount).toBe(5);
+
+            // A NEW argument is blocked by the budget, not the identical-arguments rule
+            const blocked = await agent.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'E' } }, actionEntity);
+            expect(harness.runActionCallCount).toBe(5);
+            expect(blocked).toBeInstanceOf(CircuitBreakerActionResult);
+            expect((blocked as CircuitBreakerActionResult).Reason).toBe('attempts-exhausted');
+            expect(blocked.Message).toContain('after 5 consecutive failures');
+
+            // The identical rule still names itself when it is the one that fires
+            const agent2 = new BaseAgent();
+            await agent2.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'X' } }, actionEntity);
+            await agent2.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'X' } }, actionEntity);
+            const identical = await agent2.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'X' } }, actionEntity);
+            expect((identical as CircuitBreakerActionResult).Reason).toBe('identical-arguments');
+        });
     });
 
     describe('Full execution loop failure guidance directives', () => {
@@ -730,6 +766,96 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             expect(guidanceMsg).toContain('Parameter "query" cannot be empty');
             expect(guidanceMsg).toContain('(attempt 1 of 5)');
             expect(guidanceMsg).toContain("DO NOT retry calling 'Perplexity Search' with identical arguments");
+        });
+
+        it('once the budget is spent the directive says ATTEMPTS_EXHAUSTED, never REPEATED_IDENTICAL_CALL', async () => {
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'Downstream 500 error';
+                ar.Params = [];
+                ar.Result = { ResultCode: 'ERROR' } as unknown as import('@memberjunction/core-entities').MJActionResultCodeEntity;
+                return ar;
+            };
+
+            // A, B, C, D, D spend the budget with an identical tail; E is then blocked; then the model gives up.
+            const queries = ['A', 'B', 'C', 'D', 'D', 'E'];
+            const { agent } = makeAgent([
+                ...queries.map(q => () => llmEnvelope({
+                    taskComplete: false,
+                    reasoning: `Try query ${q}`,
+                    nextStep: { type: 'Actions', actions: [{ name: ACTION_NAME, params: { query: q } }] },
+                })),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams();
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+            expect(harness.runActionCallCount).toBe(5); // E never dispatched
+
+            const guidance = params.conversationMessages
+                .map(m => typeof m.content === 'string' ? m.content : '')
+                .filter(c => c.includes('Action Execution Failure Guidance'));
+            expect(guidance).toHaveLength(6);
+
+            // Attempts 1–4 warn with a running count
+            expect(guidance[0]).toContain('(attempt 1 of 5)');
+            expect(guidance[3]).toContain('(attempt 4 of 5)');
+            // The fifth failure spends the budget: exhausted, even though its arguments repeated the fourth's
+            expect(guidance[4]).toContain('[CRITICAL/ATTEMPTS_EXHAUSTED]');
+            // The blocked sixth call reports the rule that blocked it — not "same arguments", which E was not
+            expect(guidance[5]).toContain('[CRITICAL/ATTEMPTS_EXHAUSTED]');
+            expect(guidance[5]).toContain('after 5 consecutive failures');
+            expect(guidance.some(g => g.includes('[CRITICAL/REPEATED_IDENTICAL_CALL]'))).toBe(false);
+        });
+
+        it('ForEach iterations bypass the breaker and do not consume the model\'s attempt budget', async () => {
+            harness.runAction = () => {
+                harness.runActionCallCount++;
+                const ar = new ActionResult();
+                ar.Success = false;
+                ar.Message = 'HTTP 404 from downstream';
+                ar.Params = [];
+                ar.Result = { ResultCode: 'ERROR' } as unknown as import('@memberjunction/core-entities').MJActionResultCodeEntity;
+                return ar;
+            };
+
+            const { agent } = makeAgent([
+                // Six items, every one fails
+                () => llmEnvelope({
+                    taskComplete: false,
+                    reasoning: 'Fetch every URL',
+                    nextStep: {
+                        type: 'ForEach',
+                        forEach: {
+                            collectionPath: 'payload.urls',
+                            itemVariable: 'url',
+                            continueOnError: true,
+                            executionMode: 'sequential',
+                            action: { name: ACTION_NAME, params: { query: '{{url}}' } },
+                        },
+                    },
+                }),
+                // Then the model calls the same action directly
+                () => llmEnvelope(actionsEnvelope()),
+                () => llmEnvelope(successEnvelope()),
+            ]);
+
+            const params = makeParams({ payload: { urls: ['u1', 'u2', 'u3', 'u4', 'u5', 'u6'] } });
+            const result = await agent.Execute(params);
+            expect(result.success).toBe(true);
+
+            // All six loop items dispatched (no lockout after the fifth), plus the model's direct call
+            expect(harness.runActionCallCount).toBe(7);
+
+            // The direct call is the model's FIRST attempt as far as the breaker is concerned
+            const contents = params.conversationMessages.map(m => typeof m.content === 'string' ? m.content : '');
+            const guidance = contents.filter(c => c.includes('Action Execution Failure Guidance'));
+            expect(guidance).toHaveLength(1);
+            expect(guidance[0]).toContain('[WARNING/ACTION_FAILURE]');
+            expect(guidance[0]).toContain('(attempt 1 of 5)');
         });
 
         it('does NOT inject failure directives when all actions succeed', async () => {

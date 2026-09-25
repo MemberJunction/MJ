@@ -173,6 +173,8 @@ interface ActionResultSummary {
     resultCode: string;
     message: string;
     aiDirectives?: AIDirective[];
+    /** Set when the circuit breaker blocked the call without dispatching it. */
+    breakerReason?: ActionCircuitBreakerReason;
 }
 
 /**
@@ -326,12 +328,42 @@ export interface ExecuteSingleActionOptions {
      * pre-execution checks (fatal lockout, identical-arguments rule, consecutive-attempt budget)
      * apply, and the outcome neither increments nor resets the failure history.
      *
-     * Set by the pipeline registry. The pipeline executor's `map` stage does its own per-element
-     * failure accounting and expects elements to be independent, and there is no model in that
-     * loop to act on the breaker's guidance, so counting those calls would let a run of bad
-     * elements block the rest of the batch.
+     * Set by the pipeline registry and by the ForEach / While iteration paths. Those callers do
+     * their own per-element failure accounting and expect elements to be independent, and there
+     * is no model in the loop to act on the breaker's guidance, so counting those calls would let
+     * a run of bad elements block the rest of the batch and then block the model's next direct
+     * call too.
      */
     skipCircuitBreaker?: boolean;
+}
+
+/**
+ * Which circuit-breaker rule blocked an action call without dispatching it.
+ *
+ * - `'fatal'` — the action failed earlier in the run with a configuration or credential error and is
+ *   locked out for the rest of the run.
+ * - `'identical-arguments'` — the action already failed {@link IDENTICAL_FAILURE_THRESHOLD} times
+ *   with these exact arguments.
+ * - `'attempts-exhausted'` — the action has failed {@link ACTION_FAILURE_BUDGET} consecutive times
+ *   across any arguments.
+ */
+export type ActionCircuitBreakerReason = 'fatal' | 'identical-arguments' | 'attempts-exhausted';
+
+/** Identical-arguments rule: this many failures with the same arguments block further identical calls. */
+export const IDENTICAL_FAILURE_THRESHOLD = 2;
+
+/** Attempt budget: this many consecutive failures, across any arguments, disable the action for the run. */
+export const ACTION_FAILURE_BUDGET = 5;
+
+/**
+ * The {@link ActionResult} returned when the run-scoped circuit breaker blocks a call before it
+ * reaches the action engine. Carries the rule that fired so the failure directive can name it
+ * directly instead of re-deriving it from the failure history, which a blocked call never updates.
+ */
+export class CircuitBreakerActionResult extends ActionResult {
+    constructor(public readonly Reason: ActionCircuitBreakerReason) {
+        super();
+    }
 }
 
 /**
@@ -566,6 +598,95 @@ export class BaseAgent {
         this._actionFailureHistory.delete(action.name);
         if (actionEntity?.Name) {
             this._actionFailureHistory.delete(actionEntity.Name);
+        }
+    }
+
+    /**
+     * Applies the three circuit-breaker rules to a call that is about to be dispatched. Returns a
+     * blocked result, with the rule that fired, when the call must not go to the action engine;
+     * null when it may proceed. Rules are checked fatal → identical-arguments → budget.
+     */
+    protected checkActionCircuitBreaker(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        normalizedParams: string
+    ): CircuitBreakerActionResult | null {
+        const entityKey = actionEntity?.Name;
+        if (this._fatalActionFailures.has(action.name) || (entityKey && this._fatalActionFailures.has(entityKey))) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): fatal configuration or credential error earlier in this run`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'fatal',
+                `Action '${action.name}' is disabled for this run because it previously failed with an unrecoverable configuration or credential error. You must select an alternative action.`);
+        }
+
+        const record = this._actionFailureHistory.get(action.name) || (entityKey ? this._actionFailureHistory.get(entityKey) : undefined);
+        if (!record) {
+            return null;
+        }
+        if (record.lastParamsString === normalizedParams && record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on identical retry loop (0ms)`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'identical-arguments',
+                `Action '${action.name}' is disabled for these inputs because it already failed ${record.identicalFailures} times with identical arguments. You must modify your parameters or select an alternative tool.`);
+        }
+        if (record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
+            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on max retry attempts (0ms)`, false, params);
+            return this.buildBlockedActionResult(actionEntity, 'attempts-exhausted',
+                `Action '${action.name}' is disabled for this run after ${ACTION_FAILURE_BUDGET} consecutive failures across parameter attempts. You must select an alternative tool or proceed with available data.`);
+        }
+        return null;
+    }
+
+    /** The failed {@link ActionResult} a blocked call returns in place of dispatching. */
+    protected buildBlockedActionResult(actionEntity: MJActionEntityExtended, reason: ActionCircuitBreakerReason, message: string): CircuitBreakerActionResult {
+        const blocked = new CircuitBreakerActionResult(reason);
+        blocked.Success = false;
+        blocked.Message = message;
+        blocked.Params = [];
+        blocked.RunParams = new RunActionParams();
+        blocked.RunParams.Action = actionEntity;
+        return blocked;
+    }
+
+    /**
+     * Names the rule behind a failed action summary so the directive matches what actually
+     * happened. A blocked call reports the rule that blocked it. A dispatched failure is fatal if
+     * its message says so; otherwise the budget is checked BEFORE the identical-arguments rule,
+     * because once the budget is spent the action is blocked whatever the arguments are, and
+     * telling the model to change them would send it in circles.
+     */
+    protected classifyActionFailure(summary: ActionResultSummary): ActionCircuitBreakerReason | 'warning' {
+        if (summary.breakerReason) {
+            return summary.breakerReason;
+        }
+        if (this.isFatalActionError(summary.message) || this._fatalActionFailures.has(summary.actionName)) {
+            return 'fatal';
+        }
+        const record = this._actionFailureHistory.get(summary.actionName);
+        if (!record) {
+            return 'warning';
+        }
+        if (record.totalConsecutiveFailures >= ACTION_FAILURE_BUDGET) {
+            return 'attempts-exhausted';
+        }
+        if (record.identicalFailures >= IDENTICAL_FAILURE_THRESHOLD) {
+            return 'identical-arguments';
+        }
+        return 'warning';
+    }
+
+    /** The guidance line appended to the history for one failed action. */
+    protected formatActionFailureDirective(summary: ActionResultSummary): string {
+        const name = summary.actionName;
+        const record = this._actionFailureHistory.get(name);
+        switch (this.classifyActionFailure(summary)) {
+            case 'fatal':
+                return `[CRITICAL/ACTION_UNAVAILABLE] Action '${name}' failed with an unrecoverable configuration or credential error: "${summary.message}". This action cannot execute in this environment. DO NOT call '${name}' again during this run. You MUST select an alternative tool or proceed with available data.`;
+            case 'attempts-exhausted':
+                return `[CRITICAL/ATTEMPTS_EXHAUSTED] Action '${name}' has failed ${record?.totalConsecutiveFailures ?? ACTION_FAILURE_BUDGET} consecutive times: "${summary.message}". Retries for this action are exhausted. You MUST pivot to an alternative tool or continue with available data.`;
+            case 'identical-arguments':
+                return `[CRITICAL/REPEATED_IDENTICAL_CALL] Action '${name}' failed again with the EXACT SAME arguments: "${summary.message}". Calling '${name}' with these parameters will not work. You MUST either adjust your parameters or pivot to an alternative tool.`;
+            default:
+                return `[WARNING/ACTION_FAILURE] Action '${name}' failed: "${summary.message}". Review the error and adjust your input parameters (attempt ${record?.totalConsecutiveFailures ?? 1} of ${ACTION_FAILURE_BUDGET}). DO NOT retry calling '${name}' with identical arguments.`;
         }
     }
 
@@ -7898,47 +8019,14 @@ The context is now within limits. Please retry your request with the recovered c
         
         const skipBreaker = options?.skipCircuitBreaker === true;
         const normalizedParams = this.normalizeActionParams(action.params);
-        const actionKey = action.name;
-        const entityKey = actionEntity?.Name;
-        const failureRecord = this._actionFailureHistory.get(actionKey) || (entityKey ? this._actionFailureHistory.get(entityKey) : undefined);
 
-        // 1. Fatal configuration / credential error (0ms short-circuit)
-        if (!skipBreaker && (this._fatalActionFailures.has(actionKey) || (entityKey && this._fatalActionFailures.has(entityKey)))) {
-            const blockedMessage = `Action '${action.name}' is disabled for this run because it previously failed with an unrecoverable configuration or credential error. You must select an alternative action.`;
-            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited (0ms): ${blockedMessage}`, false, params);
-            const blockedResult = new ActionResult();
-            blockedResult.Success = false;
-            blockedResult.Message = blockedMessage;
-            blockedResult.Params = [];
-            blockedResult.RunParams = new RunActionParams();
-            blockedResult.RunParams.Action = actionEntity;
-            return blockedResult;
-        }
-
-        // 2. Identical parameters repeated failure loop (threshold >= 2 failures with exact same params)
-        if (!skipBreaker && failureRecord && failureRecord.lastParamsString === normalizedParams && failureRecord.identicalFailures >= 2) {
-            const blockedMessage = `Action '${action.name}' is disabled for these inputs because it already failed ${failureRecord.identicalFailures} times with identical arguments. You must modify your parameters or select an alternative tool.`;
-            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on identical retry loop (0ms)`, false, params);
-            const blockedResult = new ActionResult();
-            blockedResult.Success = false;
-            blockedResult.Message = blockedMessage;
-            blockedResult.Params = [];
-            blockedResult.RunParams = new RunActionParams();
-            blockedResult.RunParams.Action = actionEntity;
-            return blockedResult;
-        }
-
-        // 3. Consecutive modified failure limit (threshold >= 5 attempts)
-        if (!skipBreaker && failureRecord && failureRecord.totalConsecutiveFailures >= 5) {
-            const blockedMessage = `Action '${action.name}' is disabled for this run after 5 consecutive failures across parameter attempts. You must select an alternative tool or proceed with available data.`;
-            this.logStatus(`   ⚡ Circuit breaker: Action '${action.name}' short-circuited on max retry attempts (0ms)`, false, params);
-            const blockedResult = new ActionResult();
-            blockedResult.Success = false;
-            blockedResult.Message = blockedMessage;
-            blockedResult.Params = [];
-            blockedResult.RunParams = new RunActionParams();
-            blockedResult.RunParams.Action = actionEntity;
-            return blockedResult;
+        // Run-scoped circuit breaker: each rule short-circuits in 0ms with a result that carries the
+        // rule that fired, so the failure directive can name it without consulting the history.
+        if (!skipBreaker) {
+            const blocked = this.checkActionCircuitBreaker(params, action, actionEntity, normalizedParams);
+            if (blocked) {
+                return blocked;
+            }
         }
 
         try {
@@ -12155,7 +12243,8 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep,
         parentStepId: string,
         addConversationMessage: boolean = true,
-        stepCount: number = 0
+        stepCount: number = 0,
+        actionOptions?: ExecuteSingleActionOptions
     ): Promise<BaseAgentNextStep> {
         
         try {
@@ -12340,7 +12429,7 @@ The context is now within limits. Please retry your request with the recovered c
                 let actionResult: ActionResult;
                 try {
                     // Execute the action
-                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser);
+                    actionResult = await this.ExecuteSingleAction(params, aa, actionEntity, params.contextUser, actionOptions);
                     
                     // Update step entity with ActionExecutionLog ID if available
                     if (actionResult.LogEntry?.ID) {
@@ -12406,7 +12495,8 @@ The context is now within limits. Please retry your request with the recovered c
                     params: sanitizedParams,
                     resultCode: actionResult?.Result?.ResultCode || (isActionSuccess ? 'SUCCESS' : 'ERROR'),
                     message: actionResult?.Message || (isActionSuccess ? 'Action completed' : result.error || 'Unknown error'),
-                    aiDirectives: isActionSuccess ? actionResult?.AIDirectives : undefined
+                    aiDirectives: isActionSuccess ? actionResult?.AIDirectives : undefined,
+                    breakerReason: actionResult instanceof CircuitBreakerActionResult ? actionResult.Reason : undefined
                 };
             });
             
@@ -12483,22 +12573,7 @@ The context is now within limits. Please retry your request with the recovered c
 
                 // Surface failure guidance for failed actions so the model does not repeatedly loop on broken tools
                 if (failedActions.length > 0) {
-                    const failureText = failedActions.map(f => {
-                        const isFatal = this.isFatalActionError(f.message) || this._fatalActionFailures.has(f.actionName);
-                        if (isFatal) {
-                            return `[CRITICAL/ACTION_UNAVAILABLE] Action '${f.actionName}' failed with an unrecoverable configuration or credential error: "${f.message}". This action cannot execute in this environment. DO NOT call '${f.actionName}' again during this run. You MUST select an alternative tool or proceed with available data.`;
-                        }
-
-                        const record = this._actionFailureHistory.get(f.actionName);
-                        if (record && record.identicalFailures >= 2) {
-                            return `[CRITICAL/REPEATED_IDENTICAL_CALL] Action '${f.actionName}' failed again with the EXACT SAME arguments: "${f.message}". Calling '${f.actionName}' with these parameters will not work. You MUST either adjust your parameters or pivot to an alternative tool.`;
-                        } else if (record && record.totalConsecutiveFailures >= 5) {
-                            return `[CRITICAL/ATTEMPTS_EXHAUSTED] Action '${f.actionName}' has failed ${record.totalConsecutiveFailures} consecutive times: "${f.message}". Retries for this action are exhausted. You MUST pivot to an alternative tool or continue with available data.`;
-                        } else {
-                            const attemptCount = record?.totalConsecutiveFailures ?? 1;
-                            return `[WARNING/ACTION_FAILURE] Action '${f.actionName}' failed: "${f.message}". Review the error and adjust your input parameters (attempt ${attemptCount} of 5). DO NOT retry calling '${f.actionName}' with identical arguments.`;
-                        }
-                    }).join('\n\n');
+                    const failureText = failedActions.map(f => this.formatActionFailureDirective(f)).join('\n\n');
 
                     params.conversationMessages.push({
                         role: 'user',
@@ -14388,7 +14463,9 @@ The context is now within limits. Please retry your request with the recovered c
                     params: resolvedParams
                 }
                 const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
-                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
+                // Loop iterations bypass the circuit breaker: the loop does its own per-item accounting and
+                // there is no model between items to act on the breaker's guidance.
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false, 0, { skipCircuitBreaker: true });
             } else if (forEach.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
                 result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, item);
@@ -14782,7 +14859,8 @@ The context is now within limits. Please retry your request with the recovered c
                     params: resolvedParams
                 };
                 const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
-                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
+                // Same exemption as ForEach: the loop owns per-iteration accounting.
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false, 0, { skipCircuitBreaker: true });
             } else if (whileOp.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
                 result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, attemptContext);
