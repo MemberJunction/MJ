@@ -1458,8 +1458,7 @@ export class NavigationService implements OnDestroy {
     };
 
     const currentDriverClass = (config['resourceTypeDriverClass'] || config['driverClass']) as string | undefined;
-    const currentRecordId = tab.resourceRecordId || (config['recordId'] as string | undefined) || '';
-    const currentEntity = (config['Entity'] || config['entity']) as string | undefined;
+    const { Entity: currentEntity, RecordId: currentRecordId } = this.recordIdentityOf(tab);
 
     // Resource type and entity names can vary by casing/metadata spelling; class names,
     // record IDs, and nav labels are canonical tab identity fields and stay exact-match.
@@ -1474,6 +1473,26 @@ export class NavigationService implements OnDestroy {
       matches(guard.recordId, currentRecordId) &&
       matches(guard.navItemName, config['navItemName']) &&
       matches(guard.entity, currentEntity, true);
+  }
+
+  /**
+   * The record a tab hosts right now — entity and record id, read from the
+   * live workspace — or null when the tab no longer exists. Lets a component
+   * that may be cached (detached, tab id since reused) check it still owns
+   * its tab before reacting to that tab's query params.
+   */
+  public GetTabRecordIdentity(tabId: string): { Entity: string | undefined; RecordId: string } | null {
+    const tab = this.workspaceManager.GetTab(tabId);
+    return tab ? this.recordIdentityOf(tab) : null;
+  }
+
+  /** Entity + record id from a tab, with the legacy key spellings. Shared by the write guard and {@link GetTabRecordIdentity}. */
+  private recordIdentityOf(tab: { resourceRecordId?: string; configuration?: Record<string, unknown> }): { Entity: string | undefined; RecordId: string } {
+    const config = tab.configuration || {};
+    return {
+      Entity: (config['Entity'] || config['entity']) as string | undefined,
+      RecordId: tab.resourceRecordId || (config['recordId'] as string | undefined) || ''
+    };
   }
 
   /**

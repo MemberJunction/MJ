@@ -35,7 +35,11 @@ export class SingleRecordComponent extends BaseAngularComponent {
    */
   @Input() public FormMode: EntityFormMode = 'default';
 
-  /** Re-emitted host `FormModeChange`: the user switched forms from the host's strip. */
+  /**
+   * Re-emitted host `FormModeChange`: the mode changed inside the host — the
+   * strip, a {@link SwitchFormMode} call, or an interactive-variant pick
+   * (which returns to `'default'`).
+   */
   @Output() public FormModeChange: EventEmitter<EntityFormMode> = new EventEmitter<EntityFormMode>();
 
   /** @deprecated Use {@link NewRecordValues}. */

@@ -18,6 +18,25 @@ export function FormModeQueryParams(mode: EntityFormMode): Record<string, string
   return { [FORM_MODE_QUERY_PARAM]: mode === 'standard' ? 'standard' : null };
 }
 
+/** The record a tab hosts, or that a record component was opened for. */
+export interface RecordTabIdentity {
+  Entity: string | undefined;
+  RecordId: string;
+}
+
+/**
+ * Whether a record component still owns its tab: the live tab hosts the same
+ * record (entity compared case- and whitespace-insensitively, like the tab
+ * identity guard; record id exact). False for a closed tab. A cached
+ * component whose tab id was reused for another record is not the owner, so
+ * that tab's `form` param is not addressed to it.
+ */
+export function IsRecordTabOwner(liveTab: RecordTabIdentity | null, own: RecordTabIdentity): boolean {
+  if (!liveTab) return false;
+  const entityKey = (entity: string | undefined): string => (entity ?? '').trim().toLowerCase();
+  return entityKey(liveTab.Entity) === entityKey(own.Entity) && liveTab.RecordId === own.RecordId;
+}
+
 /** Whatever can switch a mounted form (SingleRecordComponent → the form host). */
 export interface FormModeSwitcher {
   SwitchFormMode(mode: EntityFormMode): boolean;

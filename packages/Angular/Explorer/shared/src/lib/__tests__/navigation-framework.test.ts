@@ -560,6 +560,16 @@ describe('UpdateTabQueryParams guard', () => {
     expect(updateTabConfiguration).not.toHaveBeenCalled();
   });
 
+  it('GetTabRecordIdentity reads the record a tab hosts NOW (entity + record id)', () => {
+    const { service } = createService(recordsTab());
+    expect(service.GetTabRecordIdentity('tab-1')).toEqual({ Entity: 'Caliber: Assessments', RecordId: '499EB' });
+  });
+
+  it('GetTabRecordIdentity is null for a closed tab', () => {
+    const { service } = createService(null);
+    expect(service.GetTabRecordIdentity('tab-1')).toBeNull();
+  });
+
   it('quietly ignores writes to closed or removed tabs', () => {
     const { service, updateTabConfiguration } = createService(null);
 

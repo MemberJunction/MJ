@@ -2,9 +2,10 @@ import { Component, ViewChild } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecordUrlId } from '@memberjunction/core';
+import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecordUrlId, LogError } from '@memberjunction/core';
+import { take } from 'rxjs/operators';
 import { EntityFormMode } from '@memberjunction/ng-base-forms';
-import { FormModeFromQueryParams, FormModeQueryParams, ReconcileFormMode } from './record-form-mode';
+import { FormModeFromQueryParams, FormModeQueryParams, IsRecordTabOwner, ReconcileFormMode } from './record-form-mode';
 import { SingleRecordComponent } from '../single-record/single-record.component';
 @RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
@@ -50,26 +51,101 @@ export class EntityRecordResource extends BaseResourceComponent {
         return super.Data;
     }
 
+    private destroyed = false;
+
+    public override ngOnDestroy(): void {
+        this.destroyed = true;
+        super.ngOnDestroy();
+    }
+
     /**
      * Follow the tab's `form` param — a standard-form open that dedup routed
      * to this tab, a deep link, back/forward, or a plain URL clearing it.
      */
     protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
-        const result = ReconcileFormMode(params, this._formMode, this.singleRecord ?? null);
-        this._formMode = result.Mode;
-        const writeBack = result.WriteBack;
-        if (writeBack) {
-            // The switch was refused (unsaved work; the host warned the user):
-            // put the URL back to what is on screen. Deferred a microtask because
-            // UpdateQueryParams is suppressed for the whole delivery that called us.
-            void Promise.resolve().then(() => this.UpdateQueryParams(writeBack));
+        this.applyFormModeParams(params);
+    }
+
+    /**
+     * Re-home after a cache reattach. A reattach to a DIFFERENT tab id replays
+     * that tab's params in the base class. A same-id reattach does not — and
+     * a delivery this component skipped while its tab hosted another record
+     * (see {@link applyFormModeParams}) is recorded as delivered, so it would
+     * never come again. Re-read the live params in that case.
+     */
+    public override RebindTabId(tabId: string): void {
+        const sameTab = this.getTabId() === tabId;
+        super.RebindTabId(tabId);
+        if (sameTab) {
+            this.resyncFormModeFromTab();
         }
     }
 
-    /** The user switched forms from the host's strip: record it on the tab (and so the URL). */
+    /**
+     * The host switched forms and told us: the strip, a programmatic
+     * {@link SingleRecordComponent.SwitchFormMode} (including our own, from
+     * {@link applyFormModeParams}), or an interactive-variant pick (back to
+     * default). Record it on the tab, and so the URL. For our own switch this
+     * runs inside a query-param delivery, where UpdateQueryParams is suppressed
+     * — correct, since the tab already says it, and it cannot loop.
+     */
     public OnFormModeChange(mode: EntityFormMode): void {
         this._formMode = mode;
         this.UpdateQueryParams(FormModeQueryParams(mode));
+    }
+
+    /**
+     * Reconcile the mounted form with a tab's `form` param. Ignored unless this
+     * component still owns its tab: a cached (detached) record stays subscribed
+     * to its birth tab id, which may now host another record — whose params
+     * would otherwise reload this form in the background or raise a spurious
+     * "save or discard" warning.
+     */
+    private applyFormModeParams(params: Record<string, string>): void {
+        if (!this.ownsTab()) return;
+        const result = ReconcileFormMode(params, this._formMode, this.singleRecord ?? null);
+        this._formMode = result.Mode;
+        if (result.WriteBack) {
+            this.writeBackRefusedMode(result.WriteBack);
+        }
+    }
+
+    /**
+     * The switch was refused (unsaved work; the host warned the user): put the
+     * URL back to what is on screen. Deferred a microtask because
+     * UpdateQueryParams is suppressed for the whole delivery that called us;
+     * re-checked then, since the component may be gone or its tab reused.
+     */
+    private writeBackRefusedMode(writeBack: Record<string, string | null>): void {
+        Promise.resolve()
+            .then(() => {
+                if (!this.destroyed && this.ownsTab()) {
+                    this.UpdateQueryParams(writeBack);
+                }
+            })
+            .catch((err: unknown) => {
+                LogError(`EntityRecordResource: could not restore the form-mode query param for "${this.Data?.Configuration?.Entity}" (tab ${this.getTabId()}): ${err instanceof Error ? err.message : String(err)}`);
+            });
+    }
+
+    /** Re-read the live tab's params and reconcile (same-id cache reattach). */
+    private resyncFormModeFromTab(): void {
+        const tabId = this.getTabId();
+        if (!tabId) return;
+        // The workspace stream replays its current value on subscribe, so take(1) is a synchronous read.
+        this.navigationService.ObserveTabQueryParams(tabId)
+            .pipe(take(1))
+            .subscribe(params => this.applyFormModeParams(params));
+    }
+
+    /** Whether the live tab still hosts this component's record. */
+    private ownsTab(): boolean {
+        const tabId = this.getTabId();
+        if (!tabId) return false;
+        return IsRecordTabOwner(
+            this.navigationService.GetTabRecordIdentity(tabId),
+            { Entity: this.Data?.Configuration?.Entity, RecordId: this.Data?.ResourceRecordID || this.Data?.Configuration?.recordId || '' }
+        );
     }
 
     public static GetPrimaryKey(data: ResourceData, provider?: IMetadataProvider): CompositeKey {

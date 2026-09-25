@@ -8,7 +8,7 @@
 // first (same convention as the other component-importing suites here).
 import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
-import { FormModeFromQueryParams, FormModeQueryParams, ReconcileFormMode } from '../record-form-mode';
+import { FormModeFromQueryParams, FormModeQueryParams, IsRecordTabOwner, ReconcileFormMode } from '../record-form-mode';
 
 describe('FormModeFromQueryParams (initial mode)', () => {
   it('is standard for form=standard, so a deep link mounts the standard form directly', () => {
@@ -61,5 +61,36 @@ describe('ReconcileFormMode (later param changes)', () => {
 
   it('before the form is mounted, just adopts the requested mode (the input binding carries it)', () => {
     expect(ReconcileFormMode({ form: 'standard' }, 'default', null)).toEqual({ Mode: 'standard', WriteBack: null });
+  });
+});
+
+// A cached (detached) record component stays subscribed to the tab id it was
+// born on. When that tab is reused for another record, `form` deliveries for
+// the NEW record must not switch — or warn about — the cached one.
+describe('IsRecordTabOwner', () => {
+  const own = { Entity: 'Caliber: Assessments', RecordId: 'ID|A' };
+
+  it('owns the tab while the tab hosts this record', () => {
+    expect(IsRecordTabOwner({ Entity: 'Caliber: Assessments', RecordId: 'ID|A' }, own)).toBe(true);
+  });
+
+  it('tolerates entity casing and whitespace like the rest of the tab identity checks', () => {
+    expect(IsRecordTabOwner({ Entity: ' caliber: assessments ', RecordId: 'ID|A' }, own)).toBe(true);
+  });
+
+  it('does not own a tab reused for another record of the same entity', () => {
+    expect(IsRecordTabOwner({ Entity: 'Caliber: Assessments', RecordId: 'ID|B' }, own)).toBe(false);
+  });
+
+  it('does not own a tab reused for another entity', () => {
+    expect(IsRecordTabOwner({ Entity: 'MJ: Roles', RecordId: 'ID|A' }, own)).toBe(false);
+  });
+
+  it('does not own a closed tab', () => {
+    expect(IsRecordTabOwner(null, own)).toBe(false);
+  });
+
+  it('a new-record tab (empty id) owns its own tab', () => {
+    expect(IsRecordTabOwner({ Entity: 'Caliber: Assessments', RecordId: '' }, { Entity: 'Caliber: Assessments', RecordId: '' })).toBe(true);
   });
 });
