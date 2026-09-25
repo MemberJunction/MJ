@@ -92,24 +92,24 @@ interface ScopeFact {
                                     [ngModel]="MaxRecords" (ngModelChange)="OnMaxRecordsChange($event)" />
                             </div>
                             <div class="field-row">
-                                <span class="toggle-label" (click)="OnSoftLinksToggle(SoftLinks !== 'include')">Include soft links</span>
-                                <mj-switch [ngModel]="SoftLinks === 'include'" (ngModelChange)="OnSoftLinksToggle($event)"></mj-switch>
+                                <span class="toggle-label" [id]="IdPrefix + '-softlinks'" (click)="OnSoftLinksToggle(SoftLinks !== 'include')">Include soft links</span>
+                                <mj-switch [AriaLabelledBy]="IdPrefix + '-softlinks'" [ngModel]="SoftLinks === 'include'" (ngModelChange)="OnSoftLinksToggle($event)"></mj-switch>
                                 <span class="field-hint">Tags, attachments, notes and other EntityID/RecordID rows</span>
                             </div>
                             <div class="field-row">
-                                <span class="toggle-label" (click)="OnSubtypesToggle(Subtypes !== 'include')">Include IS-A subtypes</span>
-                                <mj-switch [ngModel]="Subtypes === 'include'" (ngModelChange)="OnSubtypesToggle($event)"></mj-switch>
+                                <span class="toggle-label" [id]="IdPrefix + '-subtypes'" (click)="OnSubtypesToggle(Subtypes !== 'include')">Include IS-A subtypes</span>
+                                <mj-switch [AriaLabelledBy]="IdPrefix + '-subtypes'" [ngModel]="Subtypes === 'include'" (ngModelChange)="OnSubtypesToggle($event)"></mj-switch>
                             </div>
                             <div class="field-row">
-                                <span class="toggle-label" (click)="OnHierarchyToggle(Hierarchy !== 'subtree')">Copy the whole hierarchy subtree</span>
-                                <mj-switch [ngModel]="Hierarchy === 'subtree'" (ngModelChange)="OnHierarchyToggle($event)"></mj-switch>
+                                <span class="toggle-label" [id]="IdPrefix + '-hierarchy'" (click)="OnHierarchyToggle(Hierarchy !== 'subtree')">Copy the whole hierarchy subtree</span>
+                                <mj-switch [AriaLabelledBy]="IdPrefix + '-hierarchy'" [ngModel]="Hierarchy === 'subtree'" (ngModelChange)="OnHierarchyToggle($event)"></mj-switch>
                             </div>
                         }
 
                         @if (CanFireHooks) {
                             <div class="field-row">
-                                <span class="toggle-label" (click)="OnEntityActionsToggle(EntityActions !== 'fire')">Run Entity Actions</span>
-                                <mj-switch [ngModel]="EntityActions === 'fire'" (ngModelChange)="OnEntityActionsToggle($event)"></mj-switch>
+                                <span class="toggle-label" [id]="IdPrefix + '-entityactions'" (click)="OnEntityActionsToggle(EntityActions !== 'fire')">Run Entity Actions</span>
+                                <mj-switch [AriaLabelledBy]="IdPrefix + '-entityactions'" [ngModel]="EntityActions === 'fire'" (ngModelChange)="OnEntityActionsToggle($event)"></mj-switch>
                             </div>
                         }
 
@@ -336,6 +336,10 @@ export class CloneScopeControlsComponent {
 
     /** Show the depth, cap and scope toggles. True only for holders of `Clone Records: Override Scope`. */
     @Input() CanOverrideScope = false;
+    private static nextId = 0;
+    /** Prefix for this instance's element ids, so the switches' labels stay unique on a page with two panels. */
+    public readonly IdPrefix = `mj-clone-scope-${++CloneScopeControlsComponent.nextId}`;
+
     /** Show the Run Entity Actions toggle. True only for holders of `Clone Records: Fire Hooks`. */
     @Input() CanFireHooks = false;
 

@@ -233,6 +233,7 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                             [RootName]="RootRecordName"
                             [Reason]="CloneReason"
                             [IsExecuting]="CurrentState === 'executing'"
+                            [IsPlanning]="IsReplanning"
                             (Confirm)="ExecuteClone()"
                             (Cancel)="OnClose()"
                             (NodeClicked)="OnReviewNodeClicked($event)">
@@ -701,27 +702,43 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         this.RetargetFields = [];
         this.CloneReason = '';
         this.RootRecordName = '';
+        this.HasUserEditedRootName = false;
         return this.Start();
     }
 
-    /** Re-runs the plan with the current {@link ScopeOptions}, e.g. after a host changes them. */
-    public async Replan(): Promise<void> {
-        const planOutput = await this.cloneService.PlanClone(
-            {
-                EntityName: this.EffectiveEntityName,
-                SourceRecordKey: this.EffectiveRecordKey,
-                Options: this.ScopeOptions,
-                EdgeOverrides: this.wireEdgeOverrides(),
-                ExpectedPlanHash: this.ActivePlan?.Hash,
-            },
-            this.ProviderToUse
-        );
+    /** True while a re-plan is in flight; Review disables Confirm so the user only confirms a plan they have seen. */
+    public IsReplanning = false;
+    private replanRequestId = 0;
 
-        this.ActivePlan = planOutput.Plan;
-        if (planOutput.Plan) {
-            this.PlanChanged.emit(planOutput.Plan);
-        }
+    /**
+     * Re-runs the plan with the current {@link ScopeOptions}, e.g. after a host changes them. When
+     * several re-plans overlap, only the latest request's answer is kept.
+     */
+    public async Replan(): Promise<void> {
+        const requestId = ++this.replanRequestId;
+        this.IsReplanning = true;
         this.cdr.markForCheck();
+        try {
+            const planOutput = await this.cloneService.PlanClone(
+                {
+                    EntityName: this.EffectiveEntityName,
+                    SourceRecordKey: this.EffectiveRecordKey,
+                    Options: this.ScopeOptions,
+                    EdgeOverrides: this.wireEdgeOverrides(),
+                    ExpectedPlanHash: this.ActivePlan?.Hash,
+                },
+                this.ProviderToUse
+            );
+            if (requestId !== this.replanRequestId) return; // a newer re-plan superseded this one
+
+            this.ActivePlan = planOutput.Plan;
+            if (planOutput.Plan) {
+                this.PlanChanged.emit(planOutput.Plan);
+            }
+        } finally {
+            if (requestId === this.replanRequestId) this.IsReplanning = false;
+            this.cdr.markForCheck();
+        }
     }
 
     /**
@@ -737,7 +754,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         this.CurrentState = step;
         this.cdr.markForCheck();
 
-        if (step === 'review' && (this.RootRecordName || Object.keys(this.PromptedValues).length > 0)) {
+        if (step === 'review' && (this.HasUserEditedRootName || Object.keys(this.PromptedValues).length > 0 || this.retargets().length > 0)) {
             this.ScopeOptions = this.buildOptionsWithValues();
             void this.replanOrFail();
         }
@@ -745,7 +762,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     /** Executes the reviewed plan. The server refuses with `PLAN_CHANGED` if the plan hash moved. */
     public async ExecuteClone(): Promise<void> {
-        if (!this.ActivePlan || this.ActivePlan.Blocked) return;
+        if (!this.ActivePlan || this.ActivePlan.Blocked || this.IsReplanning) return;
 
         this.CurrentState = 'executing';
         this.ExecutionProgress = {
@@ -1081,15 +1098,25 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     }
 
     /** Current options plus the root name, prompted values and reason the user entered. */
+    /** Retarget pickers the user pointed at a different record, in the `Options.Retarget` shape. */
+    private retargets(): NonNullable<RecordClonePlanOptions['Retarget']> {
+        return this.RetargetFields
+            .filter((r) => r.NewValue && r.NewValue !== r.CurrentValue)
+            .map((r) => ({ EntityName: this.EffectiveEntityName, Field: r.FieldName, Value: r.NewValue as string }));
+    }
+
     private buildOptionsWithValues(): RecordClonePlanOptions {
         const entInfo = this.ProviderToUse?.EntityByName(this.EffectiveEntityName);
         const nameField = entInfo?.NameField?.Name || 'Name';
+        const retarget = this.retargets();
         return {
             ...this.ScopeOptions,
+            // Only a name the user typed overrides the server's naming, which avoids names already taken.
             FieldOverrides: {
                 ...(this.ScopeOptions.FieldOverrides ?? {}),
-                ...(this.RootRecordName ? { [nameField]: this.RootRecordName } : {}),
+                ...(this.HasUserEditedRootName && this.RootRecordName ? { [nameField]: this.RootRecordName } : {}),
             },
+            ...(retarget.length > 0 ? { Retarget: retarget } : {}),
             PromptedValues: {
                 ...(this.ScopeOptions.PromptedValues ?? {}),
                 ...this.PromptedValues,

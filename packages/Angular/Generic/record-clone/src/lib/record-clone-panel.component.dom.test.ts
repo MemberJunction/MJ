@@ -194,6 +194,52 @@ describe('RecordClonePanelComponent (DOM)', () => {
         expect(events.every((e) => e.baseEntity === null && (e.payload as { action: string }).action === 'save')).toBe(true);
     });
 
+    it('keeps the latest re-plan when an earlier one answers late, and refuses to execute mid re-plan', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        await fixture.componentInstance.Start();
+
+        let answerFirst: (v: unknown) => void = () => undefined;
+        vi.spyOn(mockService, 'PlanClone')
+            .mockImplementationOnce(() => new Promise((r) => (answerFirst = r)) as never)
+            .mockResolvedValueOnce({ Plan: { ...MOCK_PLAN.Plan!, Hash: 'second' } });
+        const first = fixture.componentInstance.Replan();
+        const second = fixture.componentInstance.Replan();
+
+        expect(fixture.componentInstance.IsReplanning).toBe(true);
+        await fixture.componentInstance.ExecuteClone();
+        expect(mockService.ExecuteClone).not.toHaveBeenCalled();
+
+        await second;
+        answerFirst({ Plan: { ...MOCK_PLAN.Plan!, Hash: 'first' } });
+        await first;
+        expect(fixture.componentInstance.ActivePlan?.Hash).toBe('second');
+        expect(fixture.componentInstance.IsReplanning).toBe(false);
+    });
+
+    it('sends retarget picks, and a root name only when the user typed one', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        await fixture.componentInstance.Start();
+        const panel = fixture.componentInstance;
+        panel.RetargetFields = [{ FieldName: 'CompanyID', DisplayName: 'Company', RelatedEntity: 'Companies', CurrentValue: 'co-1', NewValue: 'co-2' }];
+
+        panel.GoToStep('review');
+        await Promise.resolve();
+        const sent = (mockService.PlanClone as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0].Options;
+        expect(sent.Retarget).toEqual([{ EntityName: 'Users', Field: 'CompanyID', Value: 'co-2' }]);
+        expect(sent.FieldOverrides).toEqual({});
+
+        panel.OnRootNameChange('Jane (copy)');
+        panel.GoToStep('review');
+        await Promise.resolve();
+        expect((mockService.PlanClone as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0].Options.FieldOverrides).toEqual({ Name: 'Jane (copy)' });
+    });
+
     it('emits CloseRequested when panel close is triggered', () => {
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],

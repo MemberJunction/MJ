@@ -176,6 +176,36 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('retargets only the root foreign keys the configuration offers', async () => {
+        const withFk = {
+            ...parentEntity,
+            RelatedEntities: [],
+            Fields: [
+                ...(parentEntity.Fields ?? []),
+                { Name: 'CompanyID', IsPrimaryKey: false, Type: 'uniqueidentifier', RelatedEntity: 'Companies', RelatedEntityID: 'ent-co', IsSPParameter: () => true } as unknown as EntityFieldInfo,
+                { Name: 'OwnerID', IsPrimaryKey: false, Type: 'uniqueidentifier', RelatedEntity: 'Users', RelatedEntityID: 'ent-u', IsSPParameter: () => true } as unknown as EntityFieldInfo,
+            ],
+            CloneConfiguration: { Enabled: true, UI: { RetargetFields: ['CompanyID'] } },
+        } as unknown as EntityInfo;
+        const provider = { ...mockProvider, Entities: [withFk], EntityByName: (n: string) => (n === 'ParentEntity' ? withFk : null) } as IMetadataProvider;
+        mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'parent-1', Name: 'P', CompanyID: 'co-1', OwnerID: 'u-1' }] });
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan(
+            {
+                EntityName: 'ParentEntity',
+                SourceRecordKey: { ID: 'parent-1' },
+                Options: { Retarget: [{ EntityName: 'ParentEntity', Field: 'CompanyID', Value: 'co-2' }, { EntityName: 'ParentEntity', Field: 'OwnerID', Value: 'u-9' }] },
+            },
+            standardUser
+        );
+
+        const last = (field: string) => [...plan.Nodes[0].FieldChanges].reverse().find((c) => c.Field === field)?.NewValue;
+        expect(last('CompanyID')).toBe('co-2');
+        expect(last('OwnerID')).toBe('u-1');
+        expect(plan.Warnings.some((w) => w.Code === 'OPTION_OVERRIDE_IGNORED' && w.Field === 'OwnerID')).toBe(true);
+        mockRunViewInstance.mockReset();
+    });
+
     it('computes valid clone plan with pre-minted target keys and stable hash', async () => {
         const planner = new ClonePlanner({ Provider: mockProvider });
 

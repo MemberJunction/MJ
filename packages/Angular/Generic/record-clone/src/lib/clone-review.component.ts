@@ -189,11 +189,14 @@ interface NodeFieldChangesSummary {
                     type="button"
                     mjButton
                     variant="primary"
-                    [disabled]="IsBlocked || IsExecuting"
+                    [disabled]="IsBlocked || IsExecuting || IsPlanning"
                     (click)="OnConfirm()">
                     @if (IsExecuting) {
                         <i class="fa-solid fa-spinner fa-spin"></i>
                         Cloning...
+                    } @else if (IsPlanning) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        Updating plan...
                     } @else {
                         <i class="fa-solid fa-clone"></i>
                         Execute Clone ({{CreateCount}} Records)
@@ -471,6 +474,8 @@ export class CloneReviewComponent {
     @Input() Reason = '';
     /** Disables Confirm while the clone runs. */
     @Input() IsExecuting = false;
+    /** Disables Confirm while the plan is being recomputed, so the user never confirms a plan they haven't seen. */
+    @Input() IsPlanning = false;
 
     /** The user confirmed; the host executes the plan. */
     @Output() Confirm = new EventEmitter<void>();
@@ -559,7 +564,7 @@ export class CloneReviewComponent {
     }
 
     public OnConfirm(): void {
-        if (!this.IsBlocked && !this.IsExecuting) {
+        if (!this.IsBlocked && !this.IsExecuting && !this.IsPlanning) {
             this.Confirm.emit();
         }
     }

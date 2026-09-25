@@ -482,6 +482,23 @@ export class ClonePlanner {
             }
         }
 
+        // Retarget: point a root foreign key at another record. Only the fields the entity offers
+        // for it (Clone.UI.RetargetFields) apply; they then go through the field-override rules.
+        const retargetable = new Set((rootConfig?.UI?.RetargetFields ?? []).map((f) => f.toLowerCase()));
+        const retargetOverrides: Record<string, unknown> = {};
+        for (const r of request.Options?.Retarget ?? []) {
+            if (r.EntityName === entityName && retargetable.has(r.Field.toLowerCase())) {
+                retargetOverrides[r.Field] = r.Value;
+            } else {
+                warnings.push({
+                    Code: 'OPTION_OVERRIDE_IGNORED',
+                    Severity: 'Warning',
+                    Field: r.Field,
+                    Message: `Retarget of '${r.EntityName}.${r.Field}' was ignored: the entity's clone configuration doesn't offer that field for retargeting.`,
+                });
+            }
+        }
+
         // Naming for each row, and the names already taken, so a repeat clone doesn't collide at save.
         const cloneConfigOf = (e: EntityInfo) => e.CloneConfig ?? (e as unknown as { CloneConfiguration?: IEntityCloneConfiguration }).CloneConfiguration ?? null;
         const namingFor = (depNode: DependencyNode): NameTemplateOptions => {
@@ -651,7 +668,7 @@ export class ClonePlanner {
                             : undefined,
                     };
                 })(),
-                RequestOverrides: isRoot ? (request.FieldOverrides ?? request.Options?.FieldOverrides) : undefined,
+                RequestOverrides: isRoot ? { ...(request.FieldOverrides ?? request.Options?.FieldOverrides ?? {}), ...retargetOverrides } : undefined,
                 PromptedValues: isRoot ? (request.PromptedValues ?? request.Options?.PromptedValues) : undefined,
                 RequestFieldsEditable: ['fields', 'all'].includes(rootConfig?.UserEditable ?? 'all'),
                 FLS: fieldLevelDenials(entInfo, contextUser),

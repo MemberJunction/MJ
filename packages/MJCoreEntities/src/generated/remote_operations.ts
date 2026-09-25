@@ -480,6 +480,8 @@ export interface RecordCloneExecuteOptions {
     Embeddings?: 'copy' | 'regenerate';
     FieldOverrides?: Record<string, string | number | boolean | null>;
     PromptedValues?: Record<string, string | number | boolean | null>;
+    /** Point foreign keys on the root at other records. Only fields listed in the entity's `Clone.UI.RetargetFields` apply. */
+    Retarget?: Array<{ EntityName: string; Field: string; Value: string }>;
     NamingTemplate?: string;
     NamingStrategy?: 'suffix' | 'increment' | 'prompt' | 'none';
     Naming?: {
@@ -619,6 +621,8 @@ export interface RecordClonePlanOptions {
     Embeddings?: 'copy' | 'regenerate';
     FieldOverrides?: Record<string, string | number | boolean | null>;
     PromptedValues?: Record<string, string | number | boolean | null>;
+    /** Point foreign keys on the root at other records. Only fields listed in the entity's `Clone.UI.RetargetFields` apply. */
+    Retarget?: Array<{ EntityName: string; Field: string; Value: string }>;
     NamingTemplate?: string;
     NamingStrategy?: 'suffix' | 'increment' | 'prompt' | 'none';
     Naming?: {
