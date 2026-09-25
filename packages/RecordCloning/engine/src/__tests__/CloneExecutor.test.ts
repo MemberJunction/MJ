@@ -249,6 +249,7 @@ describe('CloneExecutor', () => {
 
         expect(result.Success).toBe(false);
         expect(result.ResultCode).toBe('EXECUTION_ERROR');
+        expect(result.CloneLogID).toBeTruthy();
         const log = rows().find((e) => e.Status === 'Error');
         expect(log?.ErrorMessage).toBeTruthy();
         expect(rows().some((e) => e.LinkType === 'ClonedFrom' || e.Status === 'Created')).toBe(false);
@@ -299,6 +300,8 @@ describe('CloneExecutor', () => {
         expect(result.Success).toBe(true);
         expect(result.RecordsCloned).toBe(2);
         expect(result.Created).toHaveLength(2);
+        // Source keys come back as pairs, not a record-id string wrapped in another pair.
+        expect(result.Created?.find((c) => c.EntityName === 'Notes')?.SourceKey).toEqual({ KeyValuePairs: [{ FieldName: 'ID', Value: 'n-1' }] });
         const note = savedEntities.find((e) => e.EntityInfo?.Name === 'Notes');
         expect(note?.CloneContext?.SourceRecordID).toBe('n-1');
     });

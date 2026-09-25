@@ -371,7 +371,6 @@ export class RecordCloneOperationsHandler {
                 SourceRecordKey: key,
                 Roots: [{ EntityName: entityName, Key: key }],
                 Options: input.Options as CloneRequestOptions | undefined,
-                NodeOverrides: input.NodeOverrides,
                 EdgeOverrides: input.EdgeOverrides,
                 ExpectedPlanHash: input.ExpectedPlanHash,
             },

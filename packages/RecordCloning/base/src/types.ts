@@ -157,15 +157,6 @@ export interface CloneRequestOptions {
 }
 
 /**
- * Per-node override provided by user review.
- */
-export interface CloneNodeOverride {
-    Key: string;
-    Action?: CloneNodeAction;
-    FieldOverrides?: Record<string, unknown>;
-}
-
-/**
  * Per-edge policy override provided by user review.
  */
 export interface CloneEdgeOverride {
@@ -184,7 +175,6 @@ export interface RecordCloneRequest {
     SourceRecordKey?: CompositeKeyLike | Record<string, unknown>;
     Preset?: string;
     Options?: CloneRequestOptions;
-    NodeOverrides?: CloneNodeOverride[];
     EdgeOverrides?: CloneEdgeOverride[];
     FieldOverrides?: Record<string, unknown>;
     PromptedValues?: Record<string, unknown>;
@@ -252,6 +242,8 @@ export interface ClonePlan {
     Blocked: boolean;
     /** Options widened beyond the entity's configuration through `Clone Records: Override Scope`. */
     Overrides?: string[];
+    /** Why the user is cloning (`Options.Reason`); recorded on the clone log and each row's clone context. */
+    Reason?: string;
     EffectiveOptions: Required<
         Pick<
             CloneRequestOptions,

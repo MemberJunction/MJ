@@ -261,6 +261,7 @@ export class DependencyGraphWalker {
                     CollectionName: rel.CollectionName,
                     IsSoftLink: false,
                     Depth: parentNode.Depth + 1,
+                    HierarchyDirection: isHierarchyRel ? 'Down' : undefined,
                 };
                 const decision = options.EdgePolicy(candidate);
                 if (decision === 'Skip') {
@@ -299,6 +300,7 @@ export class DependencyGraphWalker {
                         CollectionName: rel.CollectionName,
                         IsSoftLink: false,
                         Depth: parentNode.Depth + 1,
+                        HierarchyDirection: isHierarchyRel ? 'Down' : undefined,
                     };
                     decision = options.EdgePolicy(candidate);
                     if (decision === 'Skip') continue;
@@ -640,6 +642,7 @@ export class DependencyGraphWalker {
                         Relationship: null,
                         IsSoftLink: false,
                         Depth: parentNode.Depth + 1,
+                        HierarchyDirection: 'Up',
                     };
 
                     const decision = options.EdgePolicy ? options.EdgePolicy(candidate) : 'Deep';

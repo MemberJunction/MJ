@@ -53,6 +53,13 @@ export interface EdgePolicyResolutionContext {
         Relationships?: Record<string, { Policy?: CloneEdgePolicy; Locked?: boolean }>;
         Descendants?: Record<string, { Policy?: CloneEdgePolicy; Locked?: boolean }>;
     };
+    /**
+     * The `Relationships` of the entity the edge starts from, for edges below the root: a prompt's
+     * template follows `MJ: Templates`' own configuration. The root's configuration still wins.
+     */
+    ParentEntityConfig?: {
+        Relationships?: Record<string, { Policy?: CloneEdgePolicy; Locked?: boolean }>;
+    };
     PresetConfig?: {
         EdgeOverrides?: Array<{
             RelationshipID?: string;
@@ -87,7 +94,8 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
         (ctx.RelationshipID ? ctx.RootEntityConfig?.Relationships?.[ctx.RelationshipID]?.Policy : undefined) ??
         ctx.RootEntityConfig?.Relationships?.[`${ctx.ChildEntityName}.${ctx.JoinField}`]?.Policy ??
         ctx.RootEntityConfig?.Relationships?.[ctx.ChildEntityName]?.Policy ??
-        ctx.RootEntityConfig?.Descendants?.[ctx.ChildEntityName]?.Policy;
+        ctx.RootEntityConfig?.Descendants?.[ctx.ChildEntityName]?.Policy ??
+        parentRelationship(ctx)?.Policy;
 
     // TIER 0 / EXCLUSION. Explicit NotCloneable and AllowCreateAPI=false win unconditionally.
     // The name heuristics only apply when no configuration says what to do with this edge.
@@ -164,6 +172,16 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
         if (ctx.RelationshipConfig.Policy) {
             policy = ctx.RelationshipConfig.Policy;
             policySource = 'Relationship';
+        }
+    }
+
+    // 4b. The parent entity's own configuration, below the root
+    const parentMatch = parentRelationship(ctx);
+    if (parentMatch) {
+        if (parentMatch.Locked) locked = true;
+        if (parentMatch.Policy) {
+            policy = parentMatch.Policy;
+            policySource = 'Entity';
         }
     }
 
@@ -258,4 +276,11 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
         Locked: locked,
         Warnings: warnings,
     };
+}
+
+/** The parent entity's own entry for this edge: by relationship ID, "<Child>.<JoinField>", or child name. */
+function parentRelationship(ctx: EdgePolicyResolutionContext): { Policy?: CloneEdgePolicy; Locked?: boolean } | undefined {
+    const rels = ctx.ParentEntityConfig?.Relationships;
+    if (!rels) return undefined;
+    return (ctx.RelationshipID ? rels[ctx.RelationshipID] : undefined) ?? rels[`${ctx.ChildEntityName}.${ctx.JoinField}`] ?? rels[ctx.ChildEntityName];
 }

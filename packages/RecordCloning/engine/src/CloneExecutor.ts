@@ -47,8 +47,14 @@ function toCompositeKey(key: CompositeKeyLike | CompositeKey | string | null | u
             })),
         };
     }
+    // A record-id string: "F|V" or "F|V||F|V" names its columns; a bare value uses the default column.
+    const text = String(key);
+    if (!text.includes('|')) return { KeyValuePairs: [{ FieldName: defaultFieldName, Value: text }] };
     return {
-        KeyValuePairs: [{ FieldName: defaultFieldName, Value: String(key) }],
+        KeyValuePairs: text.split('||').map((pair) => {
+            const at = pair.indexOf('|');
+            return { FieldName: pair.slice(0, at), Value: pair.slice(at + 1) };
+        }),
     };
 }
 
@@ -146,11 +152,12 @@ export class CloneExecutor {
                         SourceEntityName: planNode?.EntityName || entity.EntityInfo.Name,
                         SourceRecordID: ToRecordKeyString(planNode?.SourceKey),
                         RootEntityName: plan.RootEntityName || entity.EntityInfo.Name,
-                        RootSourceRecordID: plan.RootSourceKey || '',
-                        RootTargetRecordID: plan.RootTargetKey || '',
+                        RootSourceRecordID: ToRecordKeyString(plan.RootSourceKey),
+                        RootTargetRecordID: ToRecordKeyString(plan.RootTargetKey),
                         Depth: planNode?.Depth ?? 0,
                         Route: planNode?.Route ?? 'RootSave',
                         FieldChangeSummary: [],
+                        Reason: plan.Reason,
                     });
                 }
 
@@ -227,9 +234,10 @@ export class CloneExecutor {
         } catch (e) {
             const detail = e instanceof Error ? e.message : String(e);
             // The transaction rolled back, taking any log written inside it; record the failure outside it.
-            await this.writeLog(plan, contextUser, { ID: cloneLogId, Status: 'Error', StartedAt: startedAt, ErrorMessage: detail });
+            const logged = await this.writeLog(plan, contextUser, { ID: cloneLogId, Status: 'Error', StartedAt: startedAt, ErrorMessage: detail });
             await this.writeAudit(plan, contextUser, false, cloneLogId, null, detail);
             return {
+                CloneLogID: logged ? cloneLogId : null,
                 Success: false,
                 ResultCode: 'EXECUTION_ERROR',
                 RootRecordKey: plan.RootTargetKey,
@@ -369,6 +377,7 @@ export class CloneExecutor {
             log.OptionsJSON = JSON.stringify({ Effective: plan.EffectiveOptions, Overrides: plan.Overrides ?? [] });
             log.ResultJSON = fields.ResultJSON ?? null;
             log.ErrorMessage = fields.ErrorMessage ?? null;
+            log.Reason = plan.Reason ?? null;
             log.CreatedCount = fields.CreatedCount ?? 0;
             log.ReferencedCount = plan.Nodes.filter((n) => n.Action === 'Reference').length;
             log.SkippedCount = plan.Excluded?.length ?? 0;

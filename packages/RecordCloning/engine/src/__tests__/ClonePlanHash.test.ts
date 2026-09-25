@@ -197,4 +197,36 @@ describe('ClonePlanHash', () => {
             });
         expect(withSecret('sk-one')).toBe(withSecret('sk-two'));
     });
+
+    it('ignores the key values a plan mints, including remapped FKs and IDs inside JSON', () => {
+        const planWith = (minted: string) =>
+            ComputePlanHash({
+                Nodes: [
+                    { ...baseNode1, TargetKey: minted, FieldChanges: [] },
+                    {
+                        ...baseNode2,
+                        Action: 'Create',
+                        TargetKey: `child-${minted}`,
+                        FieldChanges: [
+                            { Field: 'UserID', Kind: 'Remap', OldValue: '101', NewValue: minted, Reason: '' },
+                            { Field: 'Config', Kind: 'RemapJSON', OldValue: '{"u":"101"}', NewValue: `{"u":"${minted}"}`, Reason: '' },
+                        ],
+                    },
+                ],
+                Edges: [baseEdge],
+            });
+        expect(planWith('AAAA-1111')).toBe(planWith('bbbb-2222'));
+    });
+
+    it('still changes when a remap points at an existing record instead of the new one', () => {
+        const withRemap = (value: string) =>
+            ComputePlanHash({
+                Nodes: [
+                    { ...baseNode1, TargetKey: 'new-1', FieldChanges: [] },
+                    { ...baseNode2, Action: 'Create', TargetKey: 'new-2', FieldChanges: [{ Field: 'UserID', Kind: 'Remap', OldValue: '101', NewValue: value, Reason: '' }] },
+                ],
+                Edges: [baseEdge],
+            });
+        expect(withRemap('new-1')).not.toBe(withRemap('existing-7'));
+    });
 });

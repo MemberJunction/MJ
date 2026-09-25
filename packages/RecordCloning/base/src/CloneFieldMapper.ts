@@ -300,14 +300,17 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
         if (ctx.HierarchyParentField && field.Name === ctx.HierarchyParentField) {
             const oldParent = values[field.Name];
             if (ctx.IsRoot) {
-                values[field.Name] = ctx.NewParentKey ?? null;
-                changes.push({
-                    Field: field.Name,
-                    Kind: 'Reset',
-                    OldValue: oldParent,
-                    NewValue: ctx.NewParentKey ?? null,
-                    Reason: 'Hierarchy root parent reset.',
-                });
+                // The copy stays under the same parent unless the request moves it (null = top level).
+                if (ctx.NewParentKey !== undefined) {
+                    values[field.Name] = ctx.NewParentKey;
+                    changes.push({
+                        Field: field.Name,
+                        Kind: 'Reset',
+                        OldValue: oldParent,
+                        NewValue: ctx.NewParentKey,
+                        Reason: 'Hierarchy root moved to the requested parent.',
+                    });
+                }
             } else if (oldParent && String(oldParent) in keyMap) {
                 const newParent = keyMap[String(oldParent)];
                 values[field.Name] = newParent;

@@ -43,6 +43,11 @@ export interface GraphEdgeCandidate {
     IsSoftLink?: boolean;
     EntityIDFieldName?: string;
     Depth: number;
+    /**
+     * For `Hierarchy` edges: `Down` to a child row (its parent FK points at the source), `Up` to the
+     * source's own parent (the source's parent FK). A subtree walk goes down; up is the parent it hangs from.
+     */
+    HierarchyDirection?: 'Up' | 'Down';
 }
 
 /**

@@ -38,13 +38,6 @@ export interface RecordClonePlanOptions {
     Reason?: string;
 }
 
-/** Per-node action override. */
-export interface RecordCloneNodeOverride {
-    Key: string;
-    Action?: 'Create' | 'Reference' | 'Skip' | 'Blocked';
-    FieldOverrides?: Record<string, string | number | boolean | null>;
-}
-
 /** Per-edge policy override. */
 export interface RecordCloneEdgeOverride {
     RelationshipID?: string;
@@ -57,7 +50,6 @@ export interface RecordClonePlanInput {
     SourceRecordKey?: RecordCloneKey;
     Roots?: Array<{ EntityName: string; Key: RecordCloneKey }>;
     Options?: RecordClonePlanOptions;
-    NodeOverrides?: RecordCloneNodeOverride[];
     EdgeOverrides?: RecordCloneEdgeOverride[];
     ExpectedPlanHash?: string;
 }

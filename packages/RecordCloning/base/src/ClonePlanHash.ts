@@ -10,14 +10,40 @@ import {
     CloneFieldChange,
     ClonePlanEdge,
     ClonePlanNode,
+    CompositeKeyLike,
     FormatCompositeKey,
 } from './types';
 import { MaskSensitiveFieldChange } from './SensitiveValues';
 
+/** The key values of a key given as pairs, a record-id segment ("F|V||F|V") or a bare value. */
+function keyValues(key: CompositeKeyLike | string | null | undefined): string[] {
+    if (!key) return [];
+    if (typeof key !== 'string') return (key.KeyValuePairs ?? []).map((p) => String(p.Value ?? ''));
+    if (!key.includes('|')) return [key];
+    return key.split('||').map((pair) => pair.slice(pair.indexOf('|') + 1));
+}
+
 /**
- * Deterministically stringifies an arbitrary value for canonical hashing.
+ * Tokens for the key values a plan mints (a new UUID, a remapped key column): each maps to a stable
+ * name for the row it belongs to. Without this, remapped foreign keys would change the hash on every
+ * re-plan, and every Execute of an unchanged plan would come back PLAN_CHANGED.
  */
-function canonicalizeValue(val: unknown): string {
+function mintedKeyTokens(nodes: ClonePlanNode[]): Map<string, string> {
+    const tokens = new Map<string, string>();
+    for (const n of nodes) {
+        const source = new Set(keyValues(n.SourceKey).map((v) => v.toLowerCase()));
+        keyValues(n.TargetKey).forEach((value, i) => {
+            if (value && !source.has(value.toLowerCase())) tokens.set(value.toLowerCase(), `@new(${n.EntityName}::${FormatCompositeKey(n.SourceKey)}#${i})`);
+        });
+    }
+    return tokens;
+}
+
+/**
+ * Deterministically stringifies an arbitrary value for canonical hashing, with minted key values
+ * (also inside strings, such as remapped JSON) replaced by their stable tokens.
+ */
+function canonicalizeValue(val: unknown, tokens: Map<string, string>, pattern: RegExp | null): string {
     if (val === null || val === undefined) {
         return '';
     }
@@ -26,13 +52,20 @@ function canonicalizeValue(val: unknown): string {
             return val.toISOString();
         }
         if (Array.isArray(val)) {
-            return `[${val.map(canonicalizeValue).join(',')}]`;
+            return `[${val.map((v) => canonicalizeValue(v, tokens, pattern)).join(',')}]`;
         }
         const obj = val as Record<string, unknown>;
         const keys = Object.keys(obj).sort();
-        return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalizeValue(obj[k])}`).join(',')}}`;
+        return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalizeValue(obj[k], tokens, pattern)}`).join(',')}}`;
+    }
+    if (typeof val === 'string' && pattern) {
+        return JSON.stringify(val.replace(pattern, (m) => tokens.get(m.toLowerCase()) ?? m));
     }
     return JSON.stringify(val);
+}
+
+function escapeRegExp(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -54,6 +87,9 @@ export interface ClonePlanHashInput {
  * - Immune to array ordering of nodes, edges, or field changes
  */
 export function CanonicalPlanPayload(plan: ClonePlanHashInput): string {
+    const tokens = mintedKeyTokens(plan.Nodes);
+    const pattern = tokens.size > 0 ? new RegExp([...tokens.keys()].sort((a, b) => b.length - a.length).map(escapeRegExp).join('|'), 'gi') : null;
+
     // 1. Canonicalize and sort nodes
     const sortedNodes = [...plan.Nodes]
         .map((n) => {
@@ -63,8 +99,8 @@ export function CanonicalPlanPayload(plan: ClonePlanHashInput): string {
                 .map((fc: CloneFieldChange) => ({
                     Field: fc.Field,
                     Kind: fc.Kind,
-                    OldValue: canonicalizeValue(fc.OldValue),
-                    NewValue: canonicalizeValue(fc.NewValue),
+                    OldValue: canonicalizeValue(fc.OldValue, tokens, pattern),
+                    NewValue: canonicalizeValue(fc.NewValue, tokens, pattern),
                     Reason: fc.Reason || '',
                 }));
 

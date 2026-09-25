@@ -206,6 +206,69 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('plans an unchanged parent and child to the same hash every time', async () => {
+        const planOnce = async () => {
+            mockRunViewInstance.mockImplementation(async (params: { EntityName: string; Fields?: string[] }) => {
+                if (params.Fields) return { Success: true, Results: [] };
+                return params.EntityName === 'ParentEntity'
+                    ? { Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] }
+                    : { Success: true, Results: [{ ID: 'child-1', Name: 'Original Child', ParentID: 'parent-1' }] };
+            });
+            const withChildren = { ...parentEntity, CloneConfiguration: { Enabled: true, Relationships: { ChildEntity: { Policy: 'Deep' } } } } as unknown as EntityInfo;
+            const list = [withChildren, childEntity as EntityInfo];
+            const provider = { ...mockProvider, Entities: list, EntityByName: (n: string) => list.find((e) => e.Name === n) ?? null } as IMetadataProvider;
+            return new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+        };
+        const first = await planOnce();
+        const second = await planOnce();
+        expect(first.Nodes.length).toBe(2);
+        expect(first.RootTargetKey).not.toBe(second.RootTargetKey);
+        expect(second.Hash).toBe(first.Hash);
+        mockRunViewInstance.mockReset();
+    });
+
+    it('clones a child node with its subtree, keeping its parent as a reference and leaving siblings out', async () => {
+        const folder = {
+            ID: 'ent-folder', Name: 'Folders', BaseView: 'vwFolders', TrackRecordChanges: true, AllowCreateAPI: true,
+            PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
+            Fields: [
+                { Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', IsSPParameter: () => true },
+                { Name: 'Name', IsPrimaryKey: false, Type: 'nvarchar', IsSPParameter: () => true },
+                { Name: 'ParentID', IsPrimaryKey: false, Type: 'uniqueidentifier', RelatedEntityID: 'ent-folder', RelatedEntity: 'Folders', RelatedEntityFieldName: 'ID', IsHierarchy: true, IsSPParameter: () => true },
+            ],
+            RelatedEntities: [{ ID: 'rel-sub', Type: 'One To Many', RelatedEntity: 'Folders', RelatedEntityID: 'ent-folder', RelatedEntityJoinField: 'ParentID' }],
+            GetUserPermisions: () => ({ CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }),
+            CloneConfiguration: { Enabled: true, Relationships: { Folders: { Policy: 'Deep' } } },
+        } as unknown as EntityInfo;
+        const rows = [
+            { ID: 'f-parent', Name: 'Root', ParentID: null },
+            { ID: 'f-child', Name: 'Child', ParentID: 'f-parent' },
+            { ID: 'f-sib', Name: 'Sibling', ParentID: 'f-parent' },
+            { ID: 'f-grand', Name: 'Grandchild', ParentID: 'f-child' },
+        ];
+        mockRunViewInstance.mockImplementation(async (params: { ExtraFilter?: string; Fields?: string[] }) => {
+            if (params.Fields) return { Success: true, Results: [] };
+            const f = params.ExtraFilter ?? '';
+            const id = /\[?ID\]?\s*=\s*'([^']+)'/.exec(f)?.[1];
+            const parents = [...f.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+            const results = /ParentID/.test(f) ? rows.filter((r) => r.ParentID && parents.includes(r.ParentID)) : rows.filter((r) => r.ID === id);
+            return { Success: true, Results: results };
+        });
+        const provider = { ...mockProvider, Entities: [folder], EntityByName: (n: string) => (n === 'Folders' ? folder : null) } as IMetadataProvider;
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan(
+            { EntityName: 'Folders', SourceRecordKey: { ID: 'f-child' }, Options: { Hierarchy: 'subtree' } },
+            standardUser
+        );
+
+        const by = (action: string) => plan.Nodes.filter((n) => n.Action === action).map((n) => String(n.SourceKey)).sort();
+        expect(by('Create')).toEqual(['ID|f-child', 'ID|f-grand']);
+        expect(plan.Nodes.some((n) => String(n.SourceKey).includes('f-sib'))).toBe(false);
+        const root = plan.Nodes.find((n) => n.Depth === 0)!;
+        expect([...root.FieldChanges].reverse().find((c) => c.Field === 'ParentID')?.NewValue).toBe('f-parent');
+        mockRunViewInstance.mockReset();
+    });
+
     it('computes valid clone plan with pre-minted target keys and stable hash', async () => {
         const planner = new ClonePlanner({ Provider: mockProvider });
 

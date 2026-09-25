@@ -301,7 +301,10 @@ export class ClonePlanner {
                     const relPolicy = candidate.Relationship?.CloneConfig ?? (candidate.Relationship as { CloneConfiguration?: import('@memberjunction/core').ICloneRelationshipPolicy } | null | undefined)?.CloneConfiguration ?? undefined;
                     const targetConfig = targetEntity?.CloneConfig ?? (targetEntity as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration } | null | undefined)?.CloneConfiguration ?? null;
 
-                    const resolution = ResolveEdgePolicy({
+                    // Up a hierarchy is the parent the row hangs from: a pointer to keep, never a
+                    // subtree to copy. Configuration keys name the downward relationship, so they don't apply.
+                    const upward = candidate.Kind === 'Hierarchy' && candidate.HierarchyDirection === 'Up';
+                    const resolution = upward ? { Policy: 'Reference' as const, PolicySource: 'BuiltIn' as const, Locked: true, Warnings: [] } : ResolveEdgePolicy({
                         FromKey: `${candidate.SourceEntityName}::${candidate.SourceKey.ToConcatenatedString()}`,
                         ToKey: `${candidate.TargetEntityName}::${candidate.TargetKey ? candidate.TargetKey.ToConcatenatedString() : 'pending'}`,
                         Kind: candidate.Kind as CloneEdgeKind,
@@ -320,6 +323,10 @@ export class ClonePlanner {
                         RootEntityConfig: rootConfig ? {
                             Relationships: rootConfig.Relationships,
                         } : undefined,
+                        // Below the root, the parent entity's own configuration applies too.
+                        ParentEntityConfig: candidate.SourceEntityName !== entityName && parentConfig?.Relationships
+                            ? { Relationships: parentConfig.Relationships }
+                            : undefined,
                         PresetConfig: presetEdgeOverrides ? {
                             EdgeOverrides: presetEdgeOverrides,
                         } : undefined,
@@ -368,12 +375,13 @@ export class ClonePlanner {
         for (const depNode of flatGraphNodes) {
             if (depNode.DiscoveringEdge) {
                 const disc = depNode.DiscoveringEdge;
-                const cand = candidateEdges.find(
-                    (c) =>
-                        c.FromKey === disc.FromKey &&
-                        c.RelatedEntityName === disc.TargetEntityName &&
-                        c.JoinField.toLowerCase() === disc.JoinField.toLowerCase()
-                );
+                // Up and down a hierarchy share (from, entity, join field), so prefer the candidate
+                // for this exact target row when there is one.
+                const sameEdge = (c: ClonePlanEdge) =>
+                    c.FromKey === disc.FromKey &&
+                    c.RelatedEntityName === disc.TargetEntityName &&
+                    c.JoinField.toLowerCase() === disc.JoinField.toLowerCase();
+                const cand = candidateEdges.find((c) => sameEdge(c) && c.ToKey === disc.ToKey) ?? candidateEdges.find(sameEdge);
                 edges.push({
                     FromKey: disc.FromKey,
                     ToKey: disc.ToKey,
@@ -674,7 +682,8 @@ export class ClonePlanner {
                 FLS: fieldLevelDenials(entInfo, contextUser),
                 IsRoot: isRoot,
                 HierarchyParentField: entInfo.Fields.find((f) => f.IsHierarchy)?.Name,
-                NewParentKey: isRoot ? (request.Options?.NewParentKey ?? null) : undefined,
+                // Undefined keeps the root under its current parent; a value (or null) moves it.
+                NewParentKey: isRoot ? request.Options?.NewParentKey : undefined,
             });
 
             for (const ignored of fieldMappingResult.IgnoredRequestValues) {
@@ -725,14 +734,11 @@ export class ClonePlanner {
                 if (depNode.EntityInfo.CloneConfig?.Fields?.UniqueKeys && depNode.EntityInfo.CloneConfig.Fields.UniqueKeys.length > 0) {
                     uqs.push(...depNode.EntityInfo.CloneConfig.Fields.UniqueKeys);
                 } else {
-                    for (const f of depNode.EntityInfo.Fields) {
-                        if (f.IsUnique && !f.IsPrimaryKey && !f.RelatedEntityID) {
-                            uqs.push({
-                                Fields: [f.Name],
-                                Scope: 'Global',
-                            });
-                        }
-                    }
+                    // Metadata flags every column of a composite unique constraint IsUnique (Action
+                    // Params: Name and ActionID, unique together), so the flagged columns form one key.
+                    // A copy whose FK column is remapped then never collides with its source.
+                    const flagged = depNode.EntityInfo.Fields.filter((f) => f.IsUnique && !f.IsPrimaryKey).map((f) => f.Name);
+                    if (flagged.length > 0) uqs.push({ Fields: flagged, Scope: 'Global' });
                 }
                 uniqueKeysByEntity[depNode.EntityName] = uqs;
             }
@@ -791,6 +797,7 @@ export class ClonePlanner {
             Blocked: planBlocked,
             EffectiveOptions: effectiveOptions,
             Overrides: resolved.Overrides,
+            Reason: request.Options?.Reason,
         };
     }
 

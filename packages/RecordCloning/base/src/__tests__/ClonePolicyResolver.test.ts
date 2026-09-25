@@ -190,4 +190,12 @@ describe('ClonePolicyResolver', () => {
         });
         expect(res.Policy).toBe('Skip');
     });
+
+    it('follows the parent entity\'s own configuration below the root, and lets the root override it', () => {
+        const edge = { ...baseContext, ParentEntityName: 'MJ: Templates', ChildEntityName: 'MJ: Template Contents', JoinField: 'TemplateID', RelationshipID: undefined, CurrentDepth: 2 };
+        const parent = { Relationships: { 'MJ: Template Contents': { Policy: 'Deep' as const } } };
+        expect(ResolveEdgePolicy({ ...edge, ParentEntityConfig: parent }).Policy).toBe('Deep');
+        expect(ResolveEdgePolicy({ ...edge, ParentEntityConfig: parent, RootEntityConfig: { Relationships: { 'MJ: Template Contents': { Policy: 'Skip' } } } }).Policy).toBe('Skip');
+        expect(ResolveEdgePolicy(edge).Policy).toBe('Skip');
+    });
 });
