@@ -181,7 +181,19 @@ export abstract class BaseLLM extends BaseModel {
      */
     protected abstract nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult>;
     
+    /**
+     * @deprecated Classification through a driver method is deprecated along with the legacy AI
+     * Actions system, its only caller, and will be removed in the next major version. Most drivers
+     * do not implement it. Run an AI Prompt through `AIPromptRunner` (`@memberjunction/ai-prompts`)
+     * instead, which adds model selection, failover and cost tracking.
+     */
     public abstract ClassifyText(params: ClassifyParams): Promise<ClassifyResult>;
+    /**
+     * @deprecated Summarisation through a driver method is deprecated along with the legacy AI
+     * Actions system, its only caller, and will be removed in the next major version. Run a
+     * summarisation AI Prompt through `AIPromptRunner` (`@memberjunction/ai-prompts`) instead,
+     * which adds model selection, failover and cost tracking.
+     */
     public abstract SummarizeText(params: SummarizeParams): Promise<SummarizeResult>;
     
     /**
