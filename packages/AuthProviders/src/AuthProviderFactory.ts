@@ -87,6 +87,14 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
       throw new Error(`Invalid configuration for provider: ${provider.name}`);
     }
 
+    // Dispose the provider being replaced (if any) so its HTTP agent/JWKS client's socket pool
+    // is released immediately rather than leaking until its own idle timeout. Re-registering the
+    // SAME instance (e.g. an idempotent re-register) must not dispose it out from under itself.
+    const existing = this.providers.get(provider.name);
+    if (existing && existing !== provider) {
+      existing.Dispose?.();
+    }
+
     this.providers.set(provider.name, provider);
 
     // Clear issuer caches when registering new provider
@@ -201,9 +209,16 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
   }
 
   /**
-   * Clears all registered providers (useful for testing)
+   * Clears all registered providers (useful for testing, and called on every server boot /
+   * runtime catalog refresh — see `initializeProviders.ts`). Disposes each provider first so its
+   * HTTP agent/JWKS client's socket pool is released immediately rather than leaking until its
+   * own idle timeout.
    */
   Clear(): void {
+    for (const provider of this.providers.values()) {
+      provider.Dispose?.();
+    }
+    
     this.providers.clear();
     this.issuerCache.Clear();
     this.issuerMultiCache.Clear();
