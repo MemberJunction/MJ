@@ -91,7 +91,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitH
 import { CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, PruneDynamicPackagesNotInManifest } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -100,6 +100,7 @@ import {
     FindInstalledApp,
     ListInstalledApps,
     CheckSchemaSharedByOtherApps,
+    UpdateAppRecord,
 } from '../install/history-recorder.js';
 
 /** Records the name of each app as it reaches the "record installation" step. */
@@ -856,6 +857,143 @@ describe('UpgradeApp — config prune ordering', () => {
         expect(result.Success).toBe(false);
         expect(vi.mocked(PruneDynamicPackagesNotInManifest)).not.toHaveBeenCalled();
         expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
+    });
+});
+
+describe('UpgradeApp — repairs a drifted OpenApp.SchemaName', () => {
+    // The app's schema name is denormalized onto OpenApp.SchemaName at INSTALL time, but the
+    // manifest is the source of truth and upgrade already rewrites ManifestJSON. Before the fix,
+    // upgrade left the column alone, so an app whose manifest later corrected its schema name —
+    // in practice its CASING — kept the install-time value forever. That value is load-bearing:
+    // CodeGen's spUpdateSchemaInfoFromDatabase backfills SchemaInfo.CanonicalSchemaName FROM it
+    // (fill-NULLs-only, so it never self-corrects), and vwEntities prefers CanonicalSchemaName
+    // when deriving entity ClassName/CodeName and the runtime GraphQL type names — so stale
+    // casing became client GraphQL operation names the server's generated resolvers reject.
+    // Real-world instance: the BCSaaS app installed as '__bcsaas', corrected to '__BCSaaS'.
+    const executedSQL: string[] = [];
+
+    /** Fully-stubbed dialect so PersistCanonicalSchemaName can build and "run" its UPDATE. */
+    const driftContext = {
+        ...context,
+        Callbacks: {},
+        MJCoreSchema: '__mj',
+        DatabaseProvider: {
+            Dialect: {
+                PlatformKey: 'sqlserver',
+                CanonicalSchemaName: (schema: string) => schema,
+                QuoteSchema: (schema: string, obj: string) => `[${schema}].[${obj}]`,
+                QuoteIdentifier: (id: string) => `[${id}]`,
+                QuoteStringLiteral: (value: string) => `'${value}'`,
+            },
+            ExecuteSQL: async (sql: string) => {
+                executedSQL.push(sql);
+            },
+        },
+    } as unknown as OrchestratorContext;
+
+    /** v2 manifest naming the CORRECTED schema casing, `__BCSaaS`. */
+    function correctedCasingManifest(): string {
+        return JSON.stringify({
+            manifestVersion: 1,
+            name: 'app-x',
+            displayName: 'app-x',
+            description: 'app-x test app description',
+            version: '2.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/app-x',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: '__BCSaaS' },
+            packages: {},
+            dependencies: {},
+        });
+    }
+
+    /** v2 manifest declaring NO schema at all — the column must not be clobbered. */
+    function schemalessManifest(): string {
+        return JSON.stringify({
+            manifestVersion: 1,
+            name: 'app-x',
+            displayName: 'app-x',
+            description: 'app-x test app description',
+            version: '2.0.0',
+            publisher: { name: 'Test' },
+            repository: 'https://github.com/test/app-x',
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            packages: {},
+            dependencies: {},
+        });
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        executedSQL.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        // A casing correction reads as a schema RENAME to PruneStaleServerConfig, which strips the
+        // old name's config references — so this stub is on the path for these cases.
+        vi.mocked(RemoveEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true } as ReturnType<typeof AddServerDynamicPackages>);
+        vi.mocked(PruneDynamicPackagesNotInManifest).mockReturnValue(
+            { Success: true } as ReturnType<typeof PruneDynamicPackagesNotInManifest>
+        );
+        // The INSTALLED row still carries the stale lowercase name.
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: '__bcsaas',
+            ManifestJSON: JSON.stringify({ schema: { name: '__bcsaas' } }),
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+    });
+
+    it('rewrites SchemaName from the manifest, so corrected casing survives the upgrade', async () => {
+        serveManifests({ 'https://github.com/test/app-x': correctedCasingManifest() });
+
+        const result = await UpgradeApp({ AppName: 'app-x', AllowDoubleUnderscoreSchema: true }, driftContext);
+
+        expect(result.Success).toBe(true);
+        expect(vi.mocked(UpdateAppRecord)).toHaveBeenCalledWith(
+            expect.anything(),
+            'app-x-id',
+            expect.objectContaining({ SchemaName: '__BCSaaS', ManifestJSON: expect.any(String) }),
+        );
+    });
+
+    it('re-asserts CanonicalSchemaName on the SchemaInfo row, healing a value frozen from the stale column', async () => {
+        // The codegen backfill only fills NULLs, so a CanonicalSchemaName already frozen to the bad
+        // casing is never corrected by another codegen pass — only this unconditional UPDATE heals it.
+        serveManifests({ 'https://github.com/test/app-x': correctedCasingManifest() });
+
+        const result = await UpgradeApp({ AppName: 'app-x', AllowDoubleUnderscoreSchema: true }, driftContext);
+
+        expect(result.Success).toBe(true);
+        const canonicalUpdate = executedSQL.find((sql) => sql.includes('CanonicalSchemaName'));
+        expect(canonicalUpdate).toBeDefined();
+        expect(canonicalUpdate).toContain("[CanonicalSchemaName] = '__BCSaaS'");
+        // Keyed case-insensitively on the physical name, so it matches the poisoned row.
+        expect(canonicalUpdate).toContain('LOWER([SchemaName]) = LOWER(');
+    });
+
+    it('leaves SchemaName alone when the new manifest declares no schema', async () => {
+        serveManifests({ 'https://github.com/test/app-x': schemalessManifest() });
+
+        const result = await UpgradeApp({ AppName: 'app-x' }, driftContext);
+
+        expect(result.Success).toBe(true);
+        const updates = vi.mocked(UpdateAppRecord).mock.calls.map(([, , u]) => u);
+        const recordUpdate = updates.find((u) => u && 'ManifestJSON' in u);
+        expect(recordUpdate).toBeDefined();
+        expect(recordUpdate).not.toHaveProperty('SchemaName');
+        expect(executedSQL).toEqual([]);
     });
 });
 
