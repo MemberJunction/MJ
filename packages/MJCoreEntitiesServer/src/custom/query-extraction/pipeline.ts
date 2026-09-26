@@ -144,12 +144,14 @@ async function sync(
 ): Promise<void> {
     const syncPromises: Promise<void>[] = [];
 
-    // Parameters
-    if (finalParams) {
-        syncPromises.push(SyncParameters(ctx.queryID, finalParams, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
-    } else {
-        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
-    }
+    // Parameters. The no-parameter case goes through SyncParameters with an empty list
+    // rather than RemoveAllRecords: the delete-everything shortcut skipped the only code
+    // that knows a row may have been declared rather than inferred, so a parameter whose
+    // token this pipeline does not recognise was wiped silently on every save. An empty
+    // list produces the same removals, and says so for each declared row it takes.
+    syncPromises.push(
+        SyncParameters(ctx.queryID, finalParams ?? [], ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved)
+    );
 
     // Fields: when finalFields is null, preserve existing fields instead of deleting them.
     // Deletion only happens when we have a positive new field list (handled inside SyncFields via diff).

@@ -3062,6 +3062,7 @@ export class PushService {
         const matchedItemSet = new Set<BaseEntity>();
         const colConfig = entityConfig?.collections?.[colName];
         const mode = colConfig?.mode ?? 'upsert';
+        const matchOn = colConfig?.matchOn ?? [];
 
         for (const itemData of colItems) {
           if (!itemData || typeof itemData !== 'object') continue;
@@ -3078,6 +3079,28 @@ export class PushService {
               }
               return true;
             }) ?? null;
+          }
+
+          // Fall back to the child's natural key. A row the server created for itself — a
+          // query parameter the extraction pipeline inferred, say — carries an id the
+          // declaration cannot know, so a primary-key match can never find it and the item
+          // below would be created a second time, colliding on the child's unique
+          // constraint. Matching on the declared fields adopts that row instead.
+          if (!targetChild && matchOn.length > 0 && loadedItems.length > 0 && itemData.fields) {
+            const fields = itemData.fields;
+            const wanted = matchOn.filter((f) => f in fields);
+            if (wanted.length === matchOn.length) {
+              targetChild = loadedItems.find((child) =>
+                wanted.every((f) => {
+                  const childValue = child.Get(f);
+                  const declaredValue = fields[f];
+                  if (childValue == null || declaredValue == null) return childValue === declaredValue;
+                  // Case-insensitive: the constraints these keys stand in for are, and a
+                  // declaration differing only in case means the same row, not a new one.
+                  return String(childValue).toLowerCase() === String(declaredValue).toLowerCase();
+                })
+              ) ?? null;
+            }
           }
 
           if (itemData.deleteRecord?.delete === true) {

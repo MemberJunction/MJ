@@ -738,6 +738,114 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       expect(existingItems.some((i) => i.Get('ID') === 'line-10')).toBe(false);
     });
 
+    // A row the server created for itself carries an id the metadata cannot know — a query
+    // parameter the extraction pipeline inferred is the motivating case. Matching by
+    // primary key alone can never find it, so the declaration created a second row and
+    // collided on the child's unique constraint. matchOn names the natural key instead.
+    describe('collection matchOn — natural-key identity (#4545)', () => {
+      const buildCollection = (items: MockEntity[]) => ({
+        Items: items,
+        IsLoaded: true,
+        Create: () => {
+          const created = new MockEntity('QueryParameters');
+          items.push(created);
+          return created;
+        },
+        Remove: (item: MockEntity) => {
+          const idx = items.indexOf(item);
+          if (idx !== -1) items.splice(idx, 1);
+        },
+      });
+
+      const declaredParameter = {
+        fields: { Name: 'agentRunID', DetectionMethod: 'Manual', Description: 'declared' },
+      };
+
+      const configWithMatchOn = (matchOn?: string[]): EntityConfig => ({
+        entity: 'Orders',
+        filePattern: '*.json',
+        collections: matchOn ? { Parameters: { matchOn } } : { Parameters: {} },
+      });
+
+      it('adopts a server-created row instead of creating a duplicate', async () => {
+        const existing = new MockEntity('QueryParameters', {
+          ID: 'generated-by-the-server',
+          Name: 'agentRunID',
+          DetectionMethod: 'AI',
+          Description: 'inferred',
+        });
+        const items = [existing];
+        mockOwnerEntity.collections['Parameters'] = buildCollection(items);
+
+        await callApplyAxes(
+          mockOwnerEntity,
+          { primaryKey: { ID: 'ord-1' }, fields: { ID: 'ord-1' }, collections: { Parameters: [declaredParameter] } },
+          {},
+          configWithMatchOn(['Name'])
+        );
+
+        expect(items).toHaveLength(1);
+        expect(items[0]).toBe(existing);
+        expect(existing.Get('ID')).toBe('generated-by-the-server');
+        expect(existing.Get('DetectionMethod')).toBe('Manual');
+        expect(existing.Get('Description')).toBe('declared');
+      });
+
+      it('creates the row when nothing matches the natural key', async () => {
+        const items: MockEntity[] = [
+          new MockEntity('QueryParameters', { ID: 'other', Name: 'maxDepth', DetectionMethod: 'AI' }),
+        ];
+        mockOwnerEntity.collections['Parameters'] = buildCollection(items);
+
+        await callApplyAxes(
+          mockOwnerEntity,
+          { primaryKey: { ID: 'ord-1' }, fields: { ID: 'ord-1' }, collections: { Parameters: [declaredParameter] } },
+          {},
+          configWithMatchOn(['Name'])
+        );
+
+        expect(items).toHaveLength(2);
+        expect(items[1].Get('Name')).toBe('agentRunID');
+      });
+
+      it('matches case-insensitively, as the unique constraints it stands in for do', async () => {
+        const existing = new MockEntity('QueryParameters', {
+          ID: 'generated', Name: 'AGENTRUNID', DetectionMethod: 'AI',
+        });
+        const items = [existing];
+        mockOwnerEntity.collections['Parameters'] = buildCollection(items);
+
+        await callApplyAxes(
+          mockOwnerEntity,
+          { primaryKey: { ID: 'ord-1' }, fields: { ID: 'ord-1' }, collections: { Parameters: [declaredParameter] } },
+          {},
+          configWithMatchOn(['Name'])
+        );
+
+        expect(items).toHaveLength(1);
+        expect(existing.Get('DetectionMethod')).toBe('Manual');
+      });
+
+      it('still duplicates without matchOn — the behaviour that made this necessary', async () => {
+        const existing = new MockEntity('QueryParameters', {
+          ID: 'generated', Name: 'agentRunID', DetectionMethod: 'AI',
+        });
+        const items = [existing];
+        mockOwnerEntity.collections['Parameters'] = buildCollection(items);
+
+        await callApplyAxes(
+          mockOwnerEntity,
+          { primaryKey: { ID: 'ord-1' }, fields: { ID: 'ord-1' }, collections: { Parameters: [declaredParameter] } },
+          {},
+          configWithMatchOn(undefined)
+        );
+
+        // Two rows with the same (parent, Name) — the unique-constraint violation.
+        expect(items).toHaveLength(2);
+        expect(existing.Get('DetectionMethod')).toBe('AI');
+      });
+    });
+
     it('proceeds with authoritative deletes when onConfirm is undefined (fail-open / non-interactive / CI)', async () => {
       const existingItems: MockEntity[] = [];
       for (let i = 1; i <= 10; i++) {
