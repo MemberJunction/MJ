@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -21,6 +21,7 @@ describe('AgentInit Command', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     if (existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -37,7 +38,7 @@ describe('AgentInit Command', () => {
 
   it('scaffolds citizen-builder workspace into target directory', async () => {
     const target = path.join(tempDir, 'workspace');
-    await AgentInit.run([target, '--skip-docker-check']);
+    await AgentInit.run([target, '--skip-docker-check', '--no-start']);
 
     expect(existsSync(path.join(target, 'AGENTS.md'))).toBe(true);
     expect(existsSync(path.join(target, 'README.md'))).toBe(true);
@@ -54,7 +55,7 @@ describe('AgentInit Command', () => {
     const target = path.join(tempDir, 'custom-app-workspace');
     const customUrl = 'https://github.com/BlueCypress/bc-sampledata';
 
-    await AgentInit.run([target, '--skip-docker-check', '--app', customUrl]);
+    await AgentInit.run([target, '--skip-docker-check', '--no-start', '--app', customUrl]);
 
     const envContent = readFileSync(path.join(target, '.env'), 'utf8');
     expect(envContent).toContain(`OPEN_APP_INSTALL_URL=${customUrl}`);
@@ -62,21 +63,21 @@ describe('AgentInit Command', () => {
 
   it('does not overwrite existing workspace without --force', async () => {
     const target = path.join(tempDir, 'existing-workspace');
-    await AgentInit.run([target, '--skip-docker-check']);
+    await AgentInit.run([target, '--skip-docker-check', '--no-start']);
 
     // Overwrite AGENTS.md with custom text
     const customContent = '# My Custom Agents File';
     writeFileSync(path.join(target, 'AGENTS.md'), customContent, 'utf8');
 
     // Run again without --force
-    await AgentInit.run([target, '--skip-docker-check']);
+    await AgentInit.run([target, '--skip-docker-check', '--no-start']);
 
     // Content should NOT have been overwritten
     const currentContent = readFileSync(path.join(target, 'AGENTS.md'), 'utf8');
     expect(currentContent).toBe(customContent);
 
     // Run with --force
-    await AgentInit.run([target, '--skip-docker-check', '--force']);
+    await AgentInit.run([target, '--skip-docker-check', '--no-start', '--force']);
 
     // Content should now be reset to template
     const resetContent = readFileSync(path.join(target, 'AGENTS.md'), 'utf8');
@@ -127,6 +128,16 @@ describe('AgentInit Command', () => {
     const env = readFileSync(path.join(target, '.env'), 'utf8');
     expect(envLines(target, 'OPEN_APP_INSTALL_URL')).toEqual([`OPEN_APP_INSTALL_URL=${customUrl}`]);
     expect(env).toMatch(/^# OPEN_APP_INSTALL_URL=/m);
+  });
+
+  it('--skip-docker-check assumes Docker is available rather than absent', async () => {
+    const logSpy = vi.spyOn(AgentInit.prototype, 'log').mockImplementation(() => undefined);
+    const target = path.join(tempDir, 'skip-docker-check-workspace');
+    await AgentInit.run([target, '--skip-docker-check', '--no-start']);
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain('Start your local environment');
+    expect(output).not.toContain('Launch Docker Desktop');
   });
 
   it('respects --no-start flag without error', async () => {

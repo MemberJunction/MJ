@@ -45,7 +45,8 @@ export default class AgentInit extends Command {
       description: 'Open App Git URL to install for business context (default: More Cheese).',
     }),
     'skip-docker-check': Flags.boolean({
-      description: 'Skip verifying whether Docker Desktop is currently running.',
+      description:
+        'Skip the Docker availability check and assume Docker is running (the stack still starts unless --no-start is passed).',
       default: false,
     }),
   };
@@ -65,8 +66,10 @@ export default class AgentInit extends Command {
       );
     }
 
-    // 2. Check Docker availability & attempt auto-launch if stopped on macOS
-    const dockerAvailable = flags['skip-docker-check'] ? false : this.ensureDockerRunning();
+    // 2. Check Docker availability & attempt auto-launch if stopped on macOS. --skip-docker-check
+    //    skips the probe and ASSUMES Docker is available (remote daemon, colima, Podman shim...);
+    //    it must not decide Docker is absent, or the stack never starts for exactly those users.
+    const dockerAvailable = flags['skip-docker-check'] ? true : this.ensureDockerRunning();
 
     // 3. Ensure target directory exists
     if (!existsSync(targetDir)) {
