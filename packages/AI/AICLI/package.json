@@ -56,6 +56,7 @@
     "@memberjunction/ai": "6.2.0-edge.0",
     "@memberjunction/ai-agents": "6.2.0-edge.0",
     "@memberjunction/ai-anthropic": "6.2.0-edge.0",
+    "@memberjunction/ai-betty": "6.2.0-edge.0",
     "@memberjunction/ai-betty-bot": "6.2.0-edge.0",
     "@memberjunction/ai-cerebras": "6.2.0-edge.0",
     "@memberjunction/ai-core-plus": "6.2.0-edge.0",
