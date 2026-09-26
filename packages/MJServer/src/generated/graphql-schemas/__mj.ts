@@ -66952,6 +66952,10 @@ export class MJProject_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.`}) 
+    @MaxLength(36)
+    OwnerUserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Environment?: string;
@@ -66959,6 +66963,10 @@ export class MJProject_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    OwnerUser?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -67010,6 +67018,9 @@ export class CreateMJProjectInput {
     @Field(() => Boolean, { nullable: true })
     IsArchived?: boolean;
 
+    @Field({ nullable: true })
+    OwnerUserID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -67043,6 +67054,9 @@ export class UpdateMJProjectInput {
 
     @Field(() => Boolean, { nullable: true })
     IsArchived?: boolean;
+
+    @Field({ nullable: true })
+    OwnerUserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

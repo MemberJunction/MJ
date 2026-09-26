@@ -306,6 +306,25 @@ interface ListContextMenu {
         <i class="fas fa-chevron-right folder-chevron" [class.expanded]="IsFolderExpanded(node.project.ID)"></i>
         <i class="fas {{ node.project.Icon || 'fa-folder' }} folder-icon" [style.color]="node.project.Color || null"></i>
         <span class="folder-name">{{ node.project.Name }}</span>
+        <!-- SHARED is the marked state, not personal. Two reasons: it is the state with
+             consequences for other people ("anyone here can read this folder's name"),
+             and personal is the create-time default, so marking personal would badge
+             nearly every row in steady state while marking shared thins out over time.
+             On an environment upgrading to this column every existing folder is shared
+             and so every row is badged — which is exactly the disclosure people need at
+             that moment. Sits beside the name rather than at the right edge, where the
+             count lives and the hover actions overlay it. -->
+        @if (!node.project.OwnerUserID) {
+          <!-- role="img" so the aria-label is actually announced: on a bare span with no
+               role, an aria-label is not reliably exposed, and the <i> carrying the glyph
+               is aria-hidden. -->
+          <span class="folder-shared" role="img"
+                title="Shared — everyone can see this folder and its name, but not the conversations in it"
+                aria-label="Shared folder">
+            <i class="fas fa-users" aria-hidden="true"></i>
+          </span>
+        }
+        <span class="folder-spacer"></span>
         <span class="folder-count">{{ node.totalCount }}</span>
       </div>
       @if (IsFolderExpanded(node.project.ID)) {
@@ -1180,7 +1199,12 @@ interface ListContextMenu {
     .folder-chevron.expanded { transform: rotate(90deg); }
     .folder-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
     .folder-name {
-      flex: 1;
+      /* NOT flex: 1. Growing to fill the row pushed the shared badge to the right edge,
+         next to the count and under the hover actions, where the users glyph and the
+         edit pencil overlapped into one icon. The badge belongs beside the name; the
+         .folder-spacer after it takes the slack instead. Shrink + min-width:0 keeps the
+         ellipsis behaviour on a long name. */
+      flex: 0 1 auto;
       min-width: 0;
       white-space: nowrap;
       overflow: hidden;
@@ -1195,6 +1219,19 @@ interface ListContextMenu {
       margin-left: auto;
       padding-left: 6px;
       text-align: right;
+    }
+    .folder-spacer {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .folder-shared {
+      flex-shrink: 0;
+      margin-left: 6px;
+      font-size: 10px;
+      line-height: 1;
+      /* Same muted treatment as .folder-count, so it reads as metadata and does not
+         compete with the folder's own colour. */
+      color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent);
     }
     .folder-children { display: block; }
     .folder-empty-hint {

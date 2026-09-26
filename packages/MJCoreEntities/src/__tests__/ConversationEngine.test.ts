@@ -235,7 +235,7 @@ vi.mock('../engines/artifacts', () => ({
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
-import { ConversationEngine } from '../engines/conversations';
+import { ConversationEngine, BuildProjectVisibilityFilter, ExplainProjectDeleteFailure } from '../engines/conversations';
 import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
@@ -1410,6 +1410,215 @@ describe('ConversationEngine', () => {
             });
         });
 
+        // ====================================================================
+        // OWNERSHIP — who may SEE a folder
+        // ====================================================================
+        // Personal folders are the point of OwnerUserID, and everything here is the
+        // difference between a private folder and a folder whose NAME leaks. The server
+        // enforces the same rule through a row-level-security filter on the UI role's read
+        // permission; these pin the client half, which still has to agree with it.
+        describe('folder visibility', () => {
+            it('the read asks for shared folders OR the user\'s own — never all of them', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+
+                const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects').at(-1)!;
+                const filter = String(params['ExtraFilter']);
+                expect(filter).toContain("OwnerUserID IS NULL OR OwnerUserID='user-1'");
+                // The environment clause is still there — ownership NARROWS, it does not replace.
+                expect(filter).toContain("EnvironmentID='env-1'");
+            });
+
+            it('escapes the user id rather than pasting it into SQL', () => {
+                // A UserInfo.ID is a uuid today; the filter is a SQL string either way, and the
+                // one place the rule lives is the one place it has to hold.
+                expect(BuildProjectVisibilityFilter("o'brien")).toBe("(OwnerUserID IS NULL OR OwnerUserID='o''brien')");
+            });
+
+            it('a missing user gets SHARED ONLY, never every personal folder in the environment', () => {
+                // Widening on absent input is how a personal folder reaches a stranger's list.
+                expect(BuildProjectVisibilityFilter(undefined)).toBe('OwnerUserID IS NULL');
+                expect(BuildProjectVisibilityFilter(null)).toBe('OwnerUserID IS NULL');
+                expect(BuildProjectVisibilityFilter('   ')).toBe('OwnerUserID IS NULL');
+            });
+
+            // The cache key is load-bearing SECURITY, not a performance detail: the engine is a
+            // process-wide singleton, so without the user in the key the second user served by a
+            // process is handed the first user's personal folders from cache, with no read.
+            it('re-reads for a DIFFERENT user in the same environment', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'mine', OwnerUserID: 'user-1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+                expect(engine.Projects).toHaveLength(1);
+
+                const otherUser = new UserInfo();
+                otherUser.ID = 'user-2';
+                runViewResultQueue.push({ Success: true, Results: [] });
+                await engine.LoadProjects('env-1', otherUser);
+
+                // Not user-1's folder, and a real read happened for user-2.
+                expect(engine.Projects).toHaveLength(0);
+                const reads = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects');
+                expect(reads).toHaveLength(2);
+                expect(String(reads[1]['ExtraFilter'])).toContain("OwnerUserID='user-2'");
+            });
+
+            it('still skips the read for the SAME user and environment', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+                await engine.LoadProjects('env-1', contextUser);
+                expect(runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects')).toHaveLength(1);
+            });
+        });
+
+        // ====================================================================
+        // OWNERSHIP — remote events
+        // ====================================================================
+        describe('folder visibility on remote save', () => {
+            // The row is passed as the handler's third argument: the caller resolves it
+            // (ResolveEntityEventRow) before dispatch, and the handler no longer parses it
+            // from the payload itself.
+            const dispatch = (data: Record<string, unknown>) =>
+                (engine as unknown as {
+                    handleProjectEntityEvent(e: Record<string, unknown>, action: string, d: Record<string, unknown> | null): boolean;
+                }).handleProjectEntityEvent({
+                    baseEntity: null,
+                    payload: { recordData: JSON.stringify(data) },
+                }, 'save', data);
+
+            async function loadSharedFolder() {
+                runViewResultQueue.push({ Success: true, Results: [
+                    createMockProject({ ID: 'p1', Name: 'Team', EnvironmentID: 'env-1', OwnerUserID: null }),
+                ] });
+                await engine.LoadProjects('env-1', contextUser);
+                expect(engine.Projects).toHaveLength(1);
+            }
+
+            it('drops a folder that someone else just made private', async () => {
+                // This is what the dialog's confirm promises. Merging and KEEPING would leave the
+                // folder in this user's sidebar until reload — the opposite of what they were told.
+                await loadSharedFolder();
+                dispatch({ ID: 'p1', Name: 'Team', EnvironmentID: 'env-1', OwnerUserID: 'user-2' });
+                expect(engine.Projects).toHaveLength(0);
+            });
+
+            it('keeps a folder that the CURRENT user just made private', async () => {
+                await loadSharedFolder();
+                dispatch({ ID: 'p1', Name: 'Team', EnvironmentID: 'env-1', OwnerUserID: 'user-1' });
+                expect(engine.Projects).toHaveLength(1);
+            });
+
+            it('keeps a shared folder and applies the rename', async () => {
+                await loadSharedFolder();
+                dispatch({ ID: 'p1', Name: 'Team (renamed)', EnvironmentID: 'env-1', OwnerUserID: null });
+                expect(engine.Projects).toHaveLength(1);
+                expect((engine.Projects[0] as unknown as { Name: string }).Name).toBe('Team (renamed)');
+            });
+
+            it('still drops an archived folder', async () => {
+                await loadSharedFolder();
+                dispatch({ ID: 'p1', Name: 'Team', EnvironmentID: 'env-1', OwnerUserID: null, IsArchived: true });
+                expect(engine.Projects).toHaveLength(0);
+            });
+        });
+
+        // ====================================================================
+        // THE DELETE MUST NOT BE DRIVEN BY THE NARROWED CACHE
+        // ====================================================================
+        describe('DeleteProject and folders it cannot see', () => {
+            it('reads children by ParentID with NO ownership clause', async () => {
+                // A structural operation on the tree cannot run off a view of the tree that is
+                // missing rows: an unseen child still holds the RESTRICT foreign key.
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+                runViewResultQueue.push({ Success: true, Results: [] });
+
+                await engine.DeleteProject('p1', contextUser);
+
+                const childRead = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects').at(-1)!;
+                expect(String(childRead['ExtraFilter'])).toBe("ParentID='p1'");
+                expect(String(childRead['ExtraFilter'])).not.toContain('OwnerUserID');
+            });
+
+            it('reparents a child that was never in the cache at all', async () => {
+                // Someone else's personal subfolder under a shared parent. Before this, the cache
+                // had no such row, nothing was reparented, and the delete died on the FK.
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1', ParentID: null })] });
+                await engine.LoadProjects('env-1', contextUser);
+                expect(engine.Projects).toHaveLength(1);
+
+                const unseenChild = createMockProject({ ID: 'p9', ParentID: 'p1', OwnerUserID: 'user-2' });
+                runViewResultQueue.push({ Success: true, Results: [unseenChild] });
+
+                await engine.DeleteProject('p1', contextUser);
+
+                expect(unseenChild['ParentID']).toBeNull();
+                expect(unseenChild['Save']).toHaveBeenCalled();
+            });
+
+            it('does not let the entity\'s own MaxRows truncate a completeness-critical read', async () => {
+                // One child left out is one foreign key left pointing at the row. Omitting
+                // MaxRows is not enough: the entity's UserViewMaxRows would then apply.
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+                runViewResultQueue.push({ Success: true, Results: [] });
+
+                await engine.DeleteProject('p1', contextUser);
+
+                const childRead = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects').at(-1)!;
+                expect(childRead['IgnoreMaxRows']).toBe(true);
+            });
+
+            it('refuses to read children without an id, instead of answering "none"', async () => {
+                // EscapeSQLString would turn an empty id into ParentID = '', which matches
+                // nothing — and "no children" reads as permission to delete.
+                const read = (engine as unknown as {
+                    readChildFolders(id: string, u: UserInfo): Promise<unknown[]>;
+                }).readChildFolders('   ', contextUser);
+                await expect(read).rejects.toThrow(/without a folder id/i);
+            });
+
+            it('refuses to delete when the child read fails, rather than deleting blind', async () => {
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+                runViewResultQueue.push({ Success: false, Results: [], ErrorMessage: 'timeout' });
+
+                await expect(engine.DeleteProject('p1', contextUser)).rejects.toThrow(/subfolders/i);
+                expect(engine.Projects).toHaveLength(1);   // untouched
+            });
+        });
+
+        // A delete can still fail on a row the caller may not read. The message has to say so.
+        describe('ExplainProjectDeleteFailure', () => {
+            it('explains an FK failure on the folder tree in terms the reader can act on', () => {
+                const msg = ExplainProjectDeleteFailure(
+                    'The DELETE statement conflicted with the REFERENCE constraint "FK_Project_Parent".');
+                expect(msg).toMatch(/subfolders that you do not have access to/i);
+                expect(msg).toContain('FK_Project_Parent');   // the constraint name survives, for support
+            });
+
+            it('passes an unrelated database error through untouched', () => {
+                expect(ExplainProjectDeleteFailure('Login timeout expired')).toBe('Login timeout expired');
+            });
+
+            it('does not claim a permissions problem just because a message mentions ProjectID', () => {
+                // Answering "conversations you do not have access to" to a schema error would be
+                // worse than saying nothing: it sends the reader after a cause that is not there.
+                const raw = "Invalid column name 'ProjectID'.";
+                expect(ExplainProjectDeleteFailure(raw)).toBe(raw);
+            });
+
+            it('explains an FK failure on conversations by its constraint name', () => {
+                const msg = ExplainProjectDeleteFailure(
+                    'The DELETE statement conflicted with the REFERENCE constraint "FK_Conversation_Project".');
+                expect(msg).toMatch(/conversations that you do not have access to/i);
+            });
+
+            it('has something to say when the provider gave no message at all', () => {
+                expect(ExplainProjectDeleteFailure(null)).toBe('Failed to delete folder.');
+                expect(ExplainProjectDeleteFailure('   ')).toBe('Failed to delete folder.');
+            });
+        });
+
         describe('MoveConversationToProject', () => {
             it('should set ProjectID on the cached conversation', async () => {
                 runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', ProjectID: null })] });
@@ -1446,6 +1655,8 @@ describe('ConversationEngine', () => {
                     child,
                 ] });
                 await engine.LoadProjects('env-1', contextUser);
+                // The child set now comes from a keyed read, not from the cache.
+                runViewResultQueue.push({ Success: true, Results: [child] });
 
                 await engine.DeleteProject('p1', contextUser);
 
