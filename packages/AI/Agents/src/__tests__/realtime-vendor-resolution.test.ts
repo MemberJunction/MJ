@@ -20,7 +20,10 @@ vi.mock('@memberjunction/aiengine', () => ({
 }));
 
 vi.mock('@memberjunction/ai', () => ({
-    GetAIAPIKey: (driverClass: string) => (driverClass === 'EnvKeyedDriver' ? 'env-key' : '')
+    GetAIAPIKey: (driverClass: string) => (driverClass === 'EnvKeyedDriver' ? 'env-key' : ''),
+    // The module's default resolver is built from this at import time. Mocked alongside GetAIAPIKey
+    // because MakeAIAPIKeyResolver closes over it through a same-module binding a mock cannot reach.
+    MakeAIAPIKeyResolver: () => (driverClass: string) => (driverClass === 'EnvKeyedDriver' ? 'env-key' : undefined),
 }));
 
 /** A `MJ: AI Model Vendors` row shaped as the selector reads it. */
@@ -121,5 +124,37 @@ describe('SelectRealtimeVendorForModel', () => {
     it('falls back to the environment key resolver when none is supplied', () => {
         engineState.ModelVendors = [vendor('m1', 'UnkeyedDriver', 9), vendor('m1', 'EnvKeyedDriver', 1)];
         expect(SelectRealtimeVendorForModel('m1')?.DriverClass).toBe('EnvKeyedDriver');
+    });
+});
+
+describe('SelectRealtimeVendorForModel — run-scoped (customer) API keys', () => {
+    /**
+     * Vendor selection picks the first vendor whose key RESOLVES, so handing it a run's keys does
+     * more than change who is billed: it changes which vendor runs the session. That is the point of
+     * bringing your own key — an organization that keys a vendor the platform has no key for must be
+     * able to reach it — but it is a behaviour change, so it is pinned here rather than assumed.
+     */
+    beforeEach(() => {
+        engineState.ModelVendors = [];
+    });
+
+    it('reaches a vendor the PLATFORM has no key for, when the run carries one', () => {
+        engineState.ModelVendors = [vendor('m1', 'CustomerOnlyDriver', 9), vendor('m1', 'EnvKeyedDriver', 1)];
+        // Platform-only: the env-keyed vendor is all that resolves, despite its lower priority.
+        expect(SelectRealtimeVendorForModel('m1')?.DriverClass).toBe('EnvKeyedDriver');
+        // With the run's key, the higher-priority vendor resolves and wins.
+        const runKeys = (driverClass: string) => (driverClass === 'CustomerOnlyDriver' ? 'sk-customer' : undefined);
+        expect(SelectRealtimeVendorForModel('m1', runKeys)?.DriverClass).toBe('CustomerOnlyDriver');
+    });
+
+    it('still falls past a vendor the run has no key for — one unkeyed vendor never dead-ends the session', () => {
+        engineState.ModelVendors = [vendor('m1', 'UnkeyedDriver', 9), vendor('m1', 'CustomerOnlyDriver', 1)];
+        const runKeys = (driverClass: string) => (driverClass === 'CustomerOnlyDriver' ? 'sk-customer' : undefined);
+        expect(SelectRealtimeVendorForModel('m1', runKeys)?.DriverClass).toBe('CustomerOnlyDriver');
+    });
+
+    it('resolves nothing when neither the run nor the platform can key any vendor', () => {
+        engineState.ModelVendors = [vendor('m1', 'UnkeyedDriver', 9)];
+        expect(SelectRealtimeVendorForModel('m1', () => undefined)).toBeNull();
     });
 });

@@ -8,6 +8,7 @@ import { ComputerUseAuthConfig } from './auth.js';
 import { BrowserConfig } from './browser.js';
 import type { BrowserAction, ContextSeed } from './browser.js';
 import { ComputerUseTool } from './tools.js';
+import type { AIAPIKey } from '@memberjunction/ai';
 import type { JudgeFrequency } from './judge.js';
 import type { AppProfile } from './app-profile.js';
 import { GoalPostcondition } from './trace.js';
@@ -137,6 +138,14 @@ export class RunComputerUseParams {
 
     /** Model selection for the judge LLM */
     public JudgeModel?: ModelConfig;
+
+    /**
+     * Runtime API keys for this run, when it was started from an agent run that carries them
+     * (`ExecuteAgentParams.apiKeys`). The controller and judge LLMs resolve against these first and
+     * fall back to the platform key per driver class — the same precedence every prompt follows.
+     * Absent ⇒ platform keys, which is every run that does not supply them.
+     */
+    public APIKeys?: AIAPIKey[];
 
     /** Tools the LLM can invoke during execution */
     public Tools?: ComputerUseTool[];

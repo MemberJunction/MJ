@@ -104,3 +104,32 @@ export function GetAIAPIKeyGlobal(AIDriverName: string): string {
     else
         throw new Error('Could not instantiate AIAPIKeys class');
 }
+/**
+ * Resolves the API key to use for ONE AI driver class.
+ *
+ * This is the canonical shape for handing a *scoped* key-resolution capability to code that spends
+ * an AI key — prompts, actions, realtime sessions — without handing over the key list itself. A
+ * holder can ask for the one driver class it needs; it cannot enumerate the run's credentials, and
+ * whoever built the resolver decides whether to answer.
+ *
+ * `undefined` means "no key for that driver class" — which is also how a deliberate refusal reads,
+ * so a caller treats both the same way: fall back to the platform key, or skip that vendor.
+ *
+ * Build one with {@link MakeAIAPIKeyResolver}.
+ */
+export type AIAPIKeyResolver = (driverClass: string) => string | undefined;
+
+/**
+ * Builds an {@link AIAPIKeyResolver} over a runtime key list: the list's key for the driver class
+ * first, then the platform (environment) key — the same precedence `GetAIAPIKey` applies, and the
+ * same one every prompt in a run already follows.
+ *
+ * Pass the run's `apiKeys` and the resolver honours a customer's own credentials; pass nothing and
+ * it is exactly the platform lookup, so a caller never has to special-case "this run has no keys".
+ *
+ * @param apiKeys The runtime keys for a run, if any (`ExecuteAgentParams.apiKeys`).
+ * @param verbose Log which source answered — never the key itself.
+ */
+export function MakeAIAPIKeyResolver(apiKeys?: AIAPIKey[], verbose?: boolean): AIAPIKeyResolver {
+    return (driverClass: string): string | undefined => GetAIAPIKey(driverClass, apiKeys, verbose) || undefined;
+}
