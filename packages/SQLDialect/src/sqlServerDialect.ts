@@ -134,11 +134,13 @@ export class SQLServerDialect extends SQLDialect {
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
-        return `[${name}]`;
+        // Double embedded closing brackets so a name containing `]` cannot terminate the
+        // quoting early (mirrors the PostgreSQL dialect's doubling of embedded `"`).
+        return `[${name.replace(/]/g, ']]')}]`;
     }
 
     QuoteSchema(schema: string, object: string): string {
-        return `[${schema}].[${object}]`;
+        return `${this.QuoteIdentifier(schema)}.${this.QuoteIdentifier(object)}`;
     }
 
     /**
