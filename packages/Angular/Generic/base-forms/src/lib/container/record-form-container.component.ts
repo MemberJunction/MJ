@@ -1569,7 +1569,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       const meta = reg.Metadata;
       if (!meta || meta.entity !== entityName || meta.contributionKey === 'header') continue;
       const key = contributionRailKey(meta);
-      if (key) byKey.set(key, { SectionKey: key, Metadata: meta });
+      // Counts / badges / whenEmpty key off the panel the user sees.
+      if (key) byKey.set(key, { SectionKey: meta.sectionKey?.trim() || key, Metadata: meta });
     }
     return [...byKey.values()];
   }

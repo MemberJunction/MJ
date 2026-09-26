@@ -120,6 +120,13 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      */
     whenEmpty?: FormWhenEmpty;
     /**
+     * The `SectionKey` of the `<mj-collapsible-panel>` this contribution renders,
+     * when it differs from {@link contributionKey} (e.g. `contributionKey: 'links'`
+     * rendering `SectionKey="activityParticipants"`). Counts, badges and `whenEmpty`
+     * are keyed by the section the user sees. Omit when they are the same.
+     */
+    sectionKey?: string;
+    /**
      * Prefetch this contribution's row count when the record loads and show it as
      * a badge. Omit to inherit the parent entity's `UI.Form.ShowRelatedCounts`
      * (default `true`).

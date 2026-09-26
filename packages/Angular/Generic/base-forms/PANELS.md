@@ -364,6 +364,8 @@ A contribution opts in with three optional keys:
   everything.
 - A section that had rows this session is never hidden when it empties (no yank), and the open
   rail item is never hidden.
+- If the panel's `<mj-collapsible-panel SectionKey>` differs from its `contributionKey` (or the
+  key derived from `relatedEntity`), set `sectionKey` so counts land on the section the user sees.
 - A contribution with no count source (`count: false`, no `relatedEntity`) can still report
   `this.FormComponent.SetSectionRowCount(sectionKey, n)` after it loads; hide/more then applies.
 - Relationships use the same verbs in `EntityRelationship.Configuration.UI` (`whenEmpty`,
