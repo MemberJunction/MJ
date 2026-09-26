@@ -2,8 +2,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
-import { loadEntityConfig } from '../config';
-import { findEntityDirectories } from '../lib/provider-utils';
+import { LoadEntityConfig } from '../config';
+import { FindEntityDirectories } from '../lib/provider-utils';
 
 export interface StatusOptions {
   dir?: string;
@@ -25,12 +25,12 @@ export interface StatusResult {
 }
 
 export interface EntityStatusResult {
-  entityName: string;
-  directory: string;
-  new: number;
-  modified: number;
-  deleted: number;
-  unchanged: number;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  directory: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  new: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  modified: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  deleted: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  unchanged: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class StatusService {
@@ -40,7 +40,7 @@ export class StatusService {
     this.syncEngine = syncEngine;
   }
   
-  async checkStatus(options: StatusOptions, callbacks?: StatusCallbacks): Promise<{
+  async CheckStatus(options: StatusOptions, callbacks?: StatusCallbacks): Promise<{
     summary: StatusResult;
     details: EntityStatusResult[];
   }> {
@@ -49,7 +49,7 @@ export class StatusService {
       throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
     }
 
-    const entityDirs = findEntityDirectories(
+    const entityDirs = FindEntityDirectories(
       process.cwd(),
       options.dir,
       undefined,
@@ -71,7 +71,7 @@ export class StatusService {
     let totalUnchanged = 0;
     
     for (const entityDir of entityDirs) {
-      const entityConfig = await loadEntityConfig(entityDir);
+      const entityConfig = await LoadEntityConfig(entityDir);
       if (!entityConfig) {
         callbacks?.onWarn?.(`Skipping ${entityDir} - no valid entity configuration`);
         continue;
@@ -113,6 +113,14 @@ export class StatusService {
       },
       details
     };
+  }
+
+  /** @deprecated Use {@link CheckStatus}. */
+  async checkStatus(options: StatusOptions, callbacks?: StatusCallbacks): Promise<{
+    summary: StatusResult;
+    details: EntityStatusResult[];
+  }> {
+    return this.CheckStatus(options, callbacks);
   }
   
   private async checkEntityDirectory(
@@ -168,7 +176,7 @@ export class StatusService {
         
         // Load subdirectory config and merge with parent config
         let subEntityConfig = { ...entityConfig };
-        const subDirConfig = await loadEntityConfig(subDir);
+        const subDirConfig = await LoadEntityConfig(subDir);
         
         if (subDirConfig) {
           // Check if this is a new entity type (has different entity name)

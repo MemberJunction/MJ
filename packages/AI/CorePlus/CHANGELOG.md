@@ -1,5 +1,56 @@
 # @memberjunction/ai-core-plus
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- 37891d3: Move the conversation-attachment blob seam (`IAttachmentBlobStore`, `AttachmentBlobUploadInput`,
+  `AttachmentBlobUploadResult`, `AttachmentBlobStoreUnavailableError`) from `@memberjunction/aiengine`
+  to `@memberjunction/ai-core-plus`, next to the placement policy in `ConversationUtility`. `aiengine`
+  re-exports it, so existing consumers are unaffected.
+
+  `ng-conversations` implements this seam for the browser and imported the types with `import type`,
+  on the reasoning that an erased import costs nothing. It costs nothing at _runtime_ — but the
+  class-registration manifest generator walks **package.json**, not imports, so the declared
+  dependency was a live edge regardless. When `aiengine` gained a `@memberjunction/storage`
+  dependency, that edge carried seven storage-driver classes into the browser manifest and broke the
+  MJExplorer bundle on `node:net` / `node:stream` / `node-fetch`.
+
+  The rule this encodes: a browser-reachable package must not _declare_ a server-only dependency,
+  even for a type. `ng-conversations` no longer declares `aiengine` at all.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [b518dfa]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [575bfae]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [e962151]
+- Updated dependencies [2c590b0]
+- Updated dependencies [fc3da91]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/ai@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/templates-base-types@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

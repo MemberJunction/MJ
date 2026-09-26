@@ -1,8 +1,14 @@
 import { Injectable } from '@angular/core';
 import { UserInfo, RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactPermissionEntity, MJArtifactEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
+import type { MJArtifactVersionEntity, MJCollectionPermissionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService } from './collection-permission.service';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+
+type ArtifactGrantRow = Pick<MJArtifactPermissionEntity, 'ArtifactID' | 'CanRead'>;
+type CollectionGrantRow = Pick<MJCollectionPermissionEntity, 'CollectionID'>;
+type CollectionArtifactRow = Pick<MJCollectionArtifactEntity, 'ArtifactVersionID'>;
+type ArtifactVersionRow = Pick<MJArtifactVersionEntity, 'ArtifactID'>;
 
 export interface ArtifactPermission {
     id: string;
@@ -55,7 +61,7 @@ export class ArtifactPermissionService {
     /**
      * Load all explicit permissions for an artifact
      */
-    async loadPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermission[]> {
+    async LoadPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermission[]> {
         const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJArtifactPermissionEntity>({
             EntityName: 'MJ: Artifact Permissions',
@@ -70,11 +76,16 @@ export class ArtifactPermissionService {
         return [];
     }
 
+    /** @deprecated Use {@link LoadPermissions}. */
+    async loadPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermission[]> {
+        return this.LoadPermissions(artifactId, currentUser);
+    }
+
     /**
      * Check if user has specific permission for an artifact (HYBRID CHECK)
      * Checks in order: Owner > Explicit Permission > Collection Inheritance
      */
-    async checkPermission(
+    async CheckPermission(
         artifactId: string,
         userId: string,
         permission: 'read' | 'edit' | 'share',
@@ -87,7 +98,7 @@ export class ArtifactPermissionService {
         }
 
         // 2. Check explicit artifact permission
-        const explicit = await this.getExplicitPermission(artifactId, userId, currentUser);
+        const explicit = await this.GetExplicitPermission(artifactId, userId, currentUser);
         if (explicit) {
             return this.hasPermission(explicit, permission);
         }
@@ -110,10 +121,20 @@ export class ArtifactPermissionService {
         return false;
     }
 
+    /** @deprecated Use {@link CheckPermission}. */
+    async checkPermission(
+        artifactId: string,
+        userId: string,
+        permission: 'read' | 'edit' | 'share',
+        currentUser: UserInfo
+    ): Promise<boolean> {
+        return this.CheckPermission(artifactId, userId, permission, currentUser);
+    }
+
     /**
      * Get explicit permission record for a user on an artifact
      */
-    async getExplicitPermission(
+    async GetExplicitPermission(
         artifactId: string,
         userId: string,
         currentUser: UserInfo
@@ -132,10 +153,19 @@ export class ArtifactPermissionService {
         return null;
     }
 
+    /** @deprecated Use {@link GetExplicitPermission}. */
+    async getExplicitPermission(
+        artifactId: string,
+        userId: string,
+        currentUser: UserInfo
+    ): Promise<ArtifactPermission | null> {
+        return this.GetExplicitPermission(artifactId, userId, currentUser);
+    }
+
     /**
      * Get all effective permissions for an artifact (owner + explicit + inherited)
      */
-    async getEffectiveUsers(artifactId: string, currentUser: UserInfo): Promise<EffectivePermission[]> {
+    async GetEffectiveUsers(artifactId: string, currentUser: UserInfo): Promise<EffectivePermission[]> {
         const effectivePermissions: EffectivePermission[] = [];
         const seenUsers = new Set<string>();
 
@@ -159,7 +189,7 @@ export class ArtifactPermissionService {
         }
 
         // 2. Add explicit permissions
-        const explicitPerms = await this.loadPermissions(artifactId, currentUser);
+        const explicitPerms = await this.LoadPermissions(artifactId, currentUser);
         for (const perm of explicitPerms) {
             if (!seenUsers.has(perm.userId)) {
                 effectivePermissions.push({
@@ -202,10 +232,15 @@ export class ArtifactPermissionService {
         return effectivePermissions;
     }
 
+    /** @deprecated Use {@link GetEffectiveUsers}. */
+    async getEffectiveUsers(artifactId: string, currentUser: UserInfo): Promise<EffectivePermission[]> {
+        return this.GetEffectiveUsers(artifactId, currentUser);
+    }
+
     /**
      * Grant explicit permission to a user
      */
-    async grantPermission(
+    async GrantPermission(
         artifactId: string,
         userId: string,
         permissions: ArtifactPermissionSet,
@@ -233,10 +268,21 @@ export class ArtifactPermissionService {
         return permission;
     }
 
+    /** @deprecated Use {@link GrantPermission}. */
+    async grantPermission(
+        artifactId: string,
+        userId: string,
+        permissions: ArtifactPermissionSet,
+        sharedByUserId: string,
+        currentUser: UserInfo
+    ): Promise<MJArtifactPermissionEntity> {
+        return this.GrantPermission(artifactId, userId, permissions, sharedByUserId, currentUser);
+    }
+
     /**
      * Update existing permission
      */
-    async updatePermission(
+    async UpdatePermission(
         permissionId: string,
         permissions: ArtifactPermissionSet,
         currentUser: UserInfo
@@ -255,10 +301,19 @@ export class ArtifactPermissionService {
         return await permission.Save();
     }
 
+    /** @deprecated Use {@link UpdatePermission}. */
+    async updatePermission(
+        permissionId: string,
+        permissions: ArtifactPermissionSet,
+        currentUser: UserInfo
+    ): Promise<boolean> {
+        return this.UpdatePermission(permissionId, permissions, currentUser);
+    }
+
     /**
      * Revoke explicit permission
      */
-    async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
+    async RevokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
         const md = this.Provider;
         const permission = await md.GetEntityObject<MJArtifactPermissionEntity>(
             'MJ: Artifact Permissions',
@@ -269,10 +324,15 @@ export class ArtifactPermissionService {
         return await permission.Delete();
     }
 
+    /** @deprecated Use {@link RevokePermission}. */
+    async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
+        return this.RevokePermission(permissionId, currentUser);
+    }
+
     /**
      * Validate that requested permissions don't exceed granter's permissions
      */
-    validatePermissions(
+    ValidatePermissions(
         requested: ArtifactPermissionSet,
         granter: ArtifactPermissionSet,
         isOwner: boolean
@@ -286,10 +346,19 @@ export class ArtifactPermissionService {
         return true;
     }
 
+    /** @deprecated Use {@link ValidatePermissions}. */
+    validatePermissions(
+        requested: ArtifactPermissionSet,
+        granter: ArtifactPermissionSet,
+        isOwner: boolean
+    ): boolean {
+        return this.ValidatePermissions(requested, granter, isOwner);
+    }
+
     /**
      * Get available permissions for a user to grant based on their own permissions
      */
-    getAvailablePermissions(userPermissions: ArtifactPermissionSet, isOwner: boolean): string[] {
+    GetAvailablePermissions(userPermissions: ArtifactPermissionSet, isOwner: boolean): string[] {
         if (isOwner) {
             return ['Read', 'Edit', 'Share'];
         }
@@ -301,25 +370,140 @@ export class ArtifactPermissionService {
         return available;
     }
 
+    /** @deprecated Use {@link GetAvailablePermissions}. */
+    getAvailablePermissions(userPermissions: ArtifactPermissionSet, isOwner: boolean): string[] {
+        return this.GetAvailablePermissions(userPermissions, isOwner);
+    }
+
     /**
      * Check if user is owner of artifact
      */
-    async isOwner(artifactId: string, userId: string, currentUser: UserInfo): Promise<boolean> {
+    async IsOwner(artifactId: string, userId: string, currentUser: UserInfo): Promise<boolean> {
         const artifact = await this.getArtifact(artifactId, currentUser);
         return artifact ? UUIDsEqual(artifact.UserID, userId) : false;
+    }
+
+    /** @deprecated Use {@link IsOwner}. */
+    async isOwner(artifactId: string, userId: string, currentUser: UserInfo): Promise<boolean> {
+        return this.IsOwner(artifactId, userId, currentUser);
     }
 
     /**
      * Get all permissions for current user on an artifact (convenience method for UI)
      */
-    async getUserPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermissionSet> {
+    async GetUserPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermissionSet> {
         const [canRead, canEdit, canShare] = await Promise.all([
-            this.checkPermission(artifactId, currentUser.ID, 'read', currentUser),
-            this.checkPermission(artifactId, currentUser.ID, 'edit', currentUser),
-            this.checkPermission(artifactId, currentUser.ID, 'share', currentUser)
+            this.CheckPermission(artifactId, currentUser.ID, 'read', currentUser),
+            this.CheckPermission(artifactId, currentUser.ID, 'edit', currentUser),
+            this.CheckPermission(artifactId, currentUser.ID, 'share', currentUser)
         ]);
 
         return { canRead, canEdit, canShare };
+    }
+
+    /** @deprecated Use {@link GetUserPermissions}. */
+    async getUserPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermissionSet> {
+        return this.GetUserPermissions(artifactId, currentUser);
+    }
+
+    /**
+     * Returns an `ExtraFilter` for `MJ: Artifacts` that matches the artifacts the user can read,
+     * by the same rule as {@link CheckPermission}: the user owns it, else an explicit grant
+     * decides, else a read grant on a collection that holds a version of it.
+     *
+     * Each lookup runs against its own entity, so the filter holds only `UserID` and IDs.
+     */
+    async GetReadableArtifactsFilter(userId: string, currentUser: UserInfo): Promise<string> {
+        const ownerOnly = `(UserID='${userId}')`;
+        const rv = RunView.FromMetadataProvider(this.Provider);
+        const [grantResult, collectionResult] = await rv.RunViews([
+            {
+                EntityName: 'MJ: Artifact Permissions',
+                ExtraFilter: `UserID='${userId}'`,
+                Fields: ['ArtifactID', 'CanRead'],
+                ResultType: 'simple'
+            },
+            {
+                EntityName: 'MJ: Collection Permissions',
+                ExtraFilter: `UserID='${userId}' AND CanRead=1`,
+                Fields: ['CollectionID'],
+                ResultType: 'simple'
+            }
+        ], currentUser);
+
+        // Without the explicit grants, a grant that withholds read is unknown, so collection
+        // access cannot be applied safely.
+        if (!grantResult.Success) {
+            console.error('Failed to load artifact grants:', grantResult.ErrorMessage);
+            return ownerOnly;
+        }
+
+        const grants = (grantResult.Results ?? []) as ArtifactGrantRow[];
+        const collectionIds = collectionResult.Success
+            ? ((collectionResult.Results ?? []) as CollectionGrantRow[]).map(r => r.CollectionID)
+            : [];
+        const collectionArtifactIds = await this.getArtifactIdsInCollections(collectionIds, currentUser);
+
+        const readableIds = this.resolveReadableArtifactIds(grants, collectionArtifactIds);
+        return readableIds.length > 0
+            ? `(UserID='${userId}' OR ID IN (${readableIds.map(id => `'${id}'`).join(',')}))`
+            : ownerOnly;
+    }
+
+    /**
+     * IDs of artifacts that have at least one version in any of the given collections.
+     */
+    private async getArtifactIdsInCollections(collectionIds: string[], currentUser: UserInfo): Promise<string[]> {
+        if (collectionIds.length === 0) {
+            return [];
+        }
+
+        const rv = RunView.FromMetadataProvider(this.Provider);
+        const versionResult = await rv.RunView<CollectionArtifactRow>({
+            EntityName: 'MJ: Collection Artifacts',
+            ExtraFilter: `CollectionID IN (${collectionIds.map(id => `'${id}'`).join(',')})`,
+            Fields: ['ArtifactVersionID'],
+            ResultType: 'simple'
+        }, currentUser);
+        const versionIds = versionResult.Success ? (versionResult.Results ?? []).map(r => r.ArtifactVersionID) : [];
+        if (versionIds.length === 0) {
+            return [];
+        }
+
+        const artifactResult = await rv.RunView<ArtifactVersionRow>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${versionIds.map(id => `'${id}'`).join(',')})`,
+            Fields: ['ArtifactID'],
+            ResultType: 'simple'
+        }, currentUser);
+        return artifactResult.Success ? (artifactResult.Results ?? []).map(r => r.ArtifactID) : [];
+    }
+
+    /**
+     * Applies the grant order: an explicit grant decides for its artifact; collection access
+     * counts only for artifacts that have no explicit grant.
+     */
+    private resolveReadableArtifactIds(grants: ArtifactGrantRow[], collectionArtifactIds: string[]): string[] {
+        const explicitRead = new Map<string, { id: string; canRead: boolean }>();
+        for (const grant of grants) {
+            const key = NormalizeUUID(grant.ArtifactID);
+            const canRead = (explicitRead.get(key)?.canRead ?? false) || !!grant.CanRead;
+            explicitRead.set(key, { id: grant.ArtifactID, canRead });
+        }
+
+        const readable = new Map<string, string>();
+        for (const { id, canRead } of explicitRead.values()) {
+            if (canRead) {
+                readable.set(NormalizeUUID(id), id);
+            }
+        }
+        for (const id of collectionArtifactIds) {
+            const key = NormalizeUUID(id);
+            if (!explicitRead.has(key) && !readable.has(key)) {
+                readable.set(key, id);
+            }
+        }
+        return [...readable.values()];
     }
 
     /**

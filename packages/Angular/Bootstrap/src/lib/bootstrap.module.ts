@@ -33,8 +33,13 @@ import { MJAuthBase } from '@memberjunction/ng-auth-services';
  * This ensures auth providers can process OAuth redirect responses before Angular's router
  * consumes the URL hash
  */
-export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
+export function InitializeAuth(authService: MJAuthBase): () => Promise<void> {
   return () => authService.initialize();
+}
+
+/** @deprecated Use {@link InitializeAuth}. */
+export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
+  return InitializeAuth(authService);
 }
 
 @NgModule({
@@ -69,7 +74,7 @@ export class MJBootstrapModule {
    * export class AppModule {}
    * ```
    */
-  static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJBootstrapModule> {
+  static ForRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJBootstrapModule> {
     return {
       ngModule: MJBootstrapModule,
       providers: [
@@ -77,11 +82,16 @@ export class MJBootstrapModule {
         // MJInitializationService uses providedIn: 'root'
         {
           provide: APP_INITIALIZER,
-          useFactory: initializeAuth,
+          useFactory: InitializeAuth,
           deps: [MJAuthBase],
           multi: true
         }
       ]
     };
+  }
+
+  /** @deprecated Use {@link ForRoot}. */
+  static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJBootstrapModule> {
+    return this.ForRoot(environment);
   }
 }

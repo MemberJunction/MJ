@@ -110,7 +110,7 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
 })
 export class RecordOriginCrumbComponent {
   private _origin: RecordSourceContext | null = null;
-  public asyncResolvedLabel?: string;
+  public asyncResolvedLabel?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   @Input()
   set Origin(value: RecordSourceContext | null) {

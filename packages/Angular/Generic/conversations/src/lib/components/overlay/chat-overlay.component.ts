@@ -88,19 +88,19 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
     // --- Inputs ---
 
     /** Controls external visibility (e.g., parent hides overlay on chat route) */
-    private _IsVisible = true;
+    private _isVisible = true;
 
     @Input()
     set IsVisible(value: boolean) {
-        const prev = this._IsVisible;
-        this._IsVisible = value;
+        const prev = this._isVisible;
+        this._isVisible = value;
         if (!value && prev && this.State !== 'collapsed') {
             this.Collapse();
         }
         this.cdr.detectChanges();
     }
     get IsVisible(): boolean {
-        return this._IsVisible;
+        return this._isVisible;
     }
 
     /** Current user info, passed through to conversation-chat-area. Auto-resolved from Metadata if not provided. */

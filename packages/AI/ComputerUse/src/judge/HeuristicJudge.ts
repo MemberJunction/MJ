@@ -16,7 +16,7 @@
 
 import { BaseJudge } from './BaseJudge.js';
 import { JudgeContext, JudgeVerdict, StepRecord } from '../types/judge.js';
-import { hashesSimilar } from '../utils/perceptual-hash.js';
+import { HashesSimilar } from '../utils/perceptual-hash.js';
 
 /** Default number of consecutive identical states before declaring stagnation */
 const DEFAULT_STAGNATION_THRESHOLD = 3;
@@ -103,7 +103,7 @@ export class HeuristicJudge extends BaseJudge {
         // Are the last N fingerprints all visually the same as the most recent?
         const recent = hashes.slice(-this.stagnationThreshold);
         const latest = recent[recent.length - 1];
-        const allSimilar = recent.every(h => hashesSimilar(h, latest));
+        const allSimilar = recent.every(h => HashesSimilar(h, latest));
 
         if (allSimilar) {
             return this.CreateVerdict(

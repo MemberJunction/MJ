@@ -24,11 +24,11 @@ type ZoomDirection = 1 | -1;
 })
 export class RealtimeWhiteboardZoomComponent implements OnDestroy {
   /** How long a press must be held before continuous zooming kicks in. */
-  private static readonly HoldDelayMs = 350;
+  private static readonly holdDelayMs = 350;
   /** Continuous-zoom tick cadence while held. */
-  private static readonly HoldIntervalMs = 50;
+  private static readonly holdIntervalMs = 50;
   /** Multiplicative zoom factor per held tick (~3.5%). */
-  private static readonly HoldFactor = 1.035;
+  private static readonly holdFactor = 1.035;
 
   /** Current zoom as a percentage (e.g. 90). */
   @Input() ZoomPercent = 100;
@@ -67,11 +67,11 @@ export class RealtimeWhiteboardZoomComponent implements OnDestroy {
       this.holdDelayTimer = null;
       this.suppressNextClick = true;
       const factor = direction === 1
-        ? RealtimeWhiteboardZoomComponent.HoldFactor
-        : 1 / RealtimeWhiteboardZoomComponent.HoldFactor;
+        ? RealtimeWhiteboardZoomComponent.holdFactor
+        : 1 / RealtimeWhiteboardZoomComponent.holdFactor;
       this.ZoomBy.emit(factor); // first tick fires immediately when the hold engages
-      this.holdIntervalTimer = setInterval(() => this.ZoomBy.emit(factor), RealtimeWhiteboardZoomComponent.HoldIntervalMs);
-    }, RealtimeWhiteboardZoomComponent.HoldDelayMs);
+      this.holdIntervalTimer = setInterval(() => this.ZoomBy.emit(factor), RealtimeWhiteboardZoomComponent.holdIntervalMs);
+    }, RealtimeWhiteboardZoomComponent.holdDelayMs);
   }
 
   /** Pointer up / leave / cancel: stop any pending or running continuous zoom. */

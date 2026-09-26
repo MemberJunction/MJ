@@ -10,10 +10,10 @@ import {
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { ordinalCompare, RegisterClass } from '@memberjunction/global';
-import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
-import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
-import { logError, logStatus, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
+import { SortBySequenceAndCreatedAt } from '../../../Misc/util';
+import { configInfo, dbDatabase, MjCoreSchema } from '../../../Config/config';
+import { MSSQLConnection, GetSqlConfig } from '../../../Config/db-connection';
+import { logError, logStatus, LogWarning, StartSpinner, SucceedSpinner } from '../../../Misc/status_logging';
 import { SQLServerDataProvider, SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
@@ -57,9 +57,9 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
      * mean touching the orchestrator.
      */
     async SetupDataSource(): Promise<DataSourceResult> {
-        startSpinner('Initializing database connection...');
+        StartSpinner('Initializing database connection...');
         const pool = await MSSQLConnection();
-        const config = new SQLServerProviderConfigData(pool, mj_core_schema());
+        const config = new SQLServerProviderConfigData(pool, MjCoreSchema());
         // CodeGen is a short-lived process ⇒ 'task' entry-point default: skip engine
         // pre-warm; MJ_STARTUP_MODE or mj.config.cjs startup.mode can override
         const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'task' });
@@ -70,7 +70,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         // MSSQLConnection() above. The non-null assertion is safe because the
         // call to MSSQLConnection on the line above is what guarantees the
         // accessor has a value to return.
-        const cfg = getSqlConfig()!;
+        const cfg = GetSqlConfig()!;
         let connectionInfo = cfg.server;
         if (cfg.port) connectionInfo += ':' + cfg.port;
         if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
@@ -80,7 +80,7 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
         const currentUser = userMatch ?? UserCache.Users[0];
 
-        succeedSpinner('SQL Server connection initialized: ' + connectionInfo);
+        SucceedSpinner('SQL Server connection initialized: ' + connectionInfo);
         return { provider, connection: conn, currentUser, connectionInfo };
     }
 
@@ -1132,7 +1132,7 @@ GO
                 if (context.ServiceProtectedRoleSQLNames.has(sqlName.trim().toLowerCase())) {
                     if (!this._serviceProtectedDenySkipsWarned.has(sqlName)) {
                         this._serviceProtectedDenySkipsWarned.add(sqlName);
-                        logWarning(
+                        LogWarning(
                             `   ⚠️  SKIPPED field-security DENY to role '${sqlName}': a protected service login is a member of this role. ` +
                             `A column DENY here would strip the column from the service login itself (DENY beats every sibling GRANT) and break the API for all users. ` +
                             `Remove the service login from the role to enable DB-tier enforcement; app-tier enforcement is unaffected.`
@@ -1234,7 +1234,7 @@ GO
         const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
         if (!parentKey) {
             const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
-            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
+            LogWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
             return '\n' + warning;
         }
         const whereClause = `${qi(fkField.CodeName)} = @${parentKey.CodeName}`;
@@ -1276,7 +1276,7 @@ GO
         const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
         if (!parentKey) {
             const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
-            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
+            LogWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
             return '\n' + warning;
         }
         const whereClause = `${qi(fkField.CodeName)} = @${parentKey.CodeName}`;
@@ -1342,7 +1342,7 @@ GO
         allParams = pkComponents.routineParams;
 
         // Then, add all updateable fields with the same prefix
-        const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
+        const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
         for (const ef of sortedFields) {
             if (!ef.IsPrimaryKey && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement && !ef.IsSpecialDateField) {
                 if (declarations !== '')
@@ -2057,7 +2057,7 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
                     await pool.request().query(batch);
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                    LogWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
                 }
             }
 

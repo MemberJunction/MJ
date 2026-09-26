@@ -58,9 +58,9 @@ export class WatermarkService {
     ): Promise<void> {
         const existing = await this.Load(entityMapID, contextUser, direction);
         if (existing) {
-            await this.UpdateExistingWatermark(existing, newValue);
+            await this.updateExistingWatermark(existing, newValue);
         } else {
-            await this.CreateNewWatermark(entityMapID, newValue, contextUser, direction);
+            await this.createNewWatermark(entityMapID, newValue, contextUser, direction);
         }
     }
 
@@ -235,7 +235,7 @@ export class WatermarkService {
      * a CURSOR — and {@link Load}'s consumers read the type to decide what the value means, feeding
      * it back to the connector as a seek key on the next run.
      */
-    private async UpdateExistingWatermark(
+    private async updateExistingWatermark(
         watermark: ICompanyIntegrationSyncWatermark,
         newValue: string
     ): Promise<void> {
@@ -252,7 +252,7 @@ export class WatermarkService {
      * Creates a new watermark record for the given entity map (Timestamp type — the default for
      * incremental connectors).
      */
-    private async CreateNewWatermark(
+    private async createNewWatermark(
         entityMapID: string,
         newValue: string,
         contextUser: UserInfo,

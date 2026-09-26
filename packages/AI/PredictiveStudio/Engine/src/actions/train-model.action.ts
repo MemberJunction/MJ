@@ -21,7 +21,7 @@ import { BaseAction } from '@memberjunction/actions';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { resolveActiveFileStorageProviderId, buildArtifactStore } from '../training/artifact-store';
+import { ResolveActiveFileStorageProviderId, BuildArtifactStore } from '../training/artifact-store';
 import type { TrainingDeps, TrainModelResult } from '../training/types';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
 
@@ -102,12 +102,12 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
    */
   protected async buildDeps(params: RunActionParams): Promise<TrainingDeps> {
     const entityFactory = new MetadataEntityFactory(params.Provider);
-    const providerId = await resolveActiveFileStorageProviderId(params.ContextUser, params.Provider);
+    const providerId = await ResolveActiveFileStorageProviderId(params.ContextUser, params.Provider);
     return {
       entityFactory,
       recordLoader: new RunViewRecordLoader(),
       sidecar: new MJSidecarTrainer(),
-      artifactStore: buildArtifactStore(providerId, entityFactory),
+      artifactStore: BuildArtifactStore(providerId, entityFactory),
       contextUser: params.ContextUser,
       provider: params.Provider,
     };

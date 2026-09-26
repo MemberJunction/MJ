@@ -66,7 +66,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * Job titles to exclude when creating contact records
      * These are typically not decision-makers or relevant contacts
      */
-    private readonly ExcludeTitles: string[] = ['member', 'student member', 'student', 'volunteer'];
+    private readonly excludeTitles: string[] = ['member', 'student member', 'student', 'volunteer'];
 
     /**
      * Main entry point for the Apollo account enrichment action
@@ -1030,7 +1030,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         if (!title) {
             return false;
         }
-        return this.ExcludeTitles.includes(title.toLowerCase());
+        return this.excludeTitles.includes(title.toLowerCase());
     }
 
     /**
@@ -1069,7 +1069,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
             if (response.Status === 429) {
                 if (retryAttempts > 0) {
                     LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
-                    await this.Timeout(60000); // wait 1 minute
+                    await this.timeout(60000); // wait 1 minute
                     return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else{
@@ -1084,7 +1084,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
             if (IsHttpError(apolloError) && apolloError.Status === 429) {
                 if (retryAttempts > 0) {
                     LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
-                    await this.Timeout(60000); // wait 1 minute
+                    await this.timeout(60000); // wait 1 minute
                     return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else {
@@ -1104,7 +1104,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param ms - Number of milliseconds to wait
      * @returns Promise that resolves after the specified delay
      */
-    private async Timeout(ms: number): Promise<void> {
+    private async timeout(ms: number): Promise<void> {
         return new Promise(resolve => setTimeout(resolve, ms));
     }  
 }

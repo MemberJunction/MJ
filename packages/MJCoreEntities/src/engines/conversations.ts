@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, EntityEventRowIsFree, IMetadataProvider, ResolveEntityEventKey, ResolveEntityEventRow, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { EscapeSQLString, NormalizeUUID, ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
@@ -15,6 +15,7 @@ import {
     MJUserEntityType,
     MJProjectEntity
 } from "../generated/entity_subclasses";
+import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
 
@@ -135,6 +136,18 @@ export interface SharedByInfo {
     Level: 'View' | 'Edit' | 'Owner';
 }
 
+/** Per-item outcome of a bulk conversation operation. */
+export interface ConversationBulkResult {
+    Successful: string[];
+    Failed: Array<{ ID: string; Name: string; Error: string }>;
+}
+
+/** Fields a bulk conversation update may write. */
+export interface ConversationBulkUpdate {
+    ProjectID?: MJConversationEntity['ProjectID'];
+    IsPinned?: MJConversationEntity['IsPinned'];
+}
+
 // ========================================================================
 // QUERY RESULT TYPES (from GetConversationComplete stored query)
 // ========================================================================
@@ -192,7 +205,7 @@ export interface ConversationDetailParsed extends MJConversationDetailEntityType
 /**
  * Helper: parse a raw ConversationDetailComplete row into typed arrays.
  */
-export function parseConversationDetailComplete(
+export function ParseConversationDetailComplete(
     queryResult: ConversationDetailComplete
 ): ConversationDetailParsed {
     return {
@@ -207,6 +220,13 @@ export function parseConversationDetailComplete(
             ? JSON.parse(queryResult.RatingsJSON) as RatingJSON[]
             : []
     };
+}
+
+/** @deprecated Use {@link ParseConversationDetailComplete}. */
+export function parseConversationDetailComplete(
+    queryResult: ConversationDetailComplete
+): ConversationDetailParsed {
+    return ParseConversationDetailComplete(queryResult);
 }
 
 /** User avatar info extracted from the query */
@@ -648,6 +668,31 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * True when the user may grant others access to the conversation: they own it,
+     * or hold an Owner-level grant on it. Mirrors the server's share gate in
+     * `MJResourcePermissionEntityExtended`, so the UI never offers a share the save
+     * would refuse.
+     */
+    public CanShareConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        return this.GetSharedByInfo(conversation.ID)?.Level === 'Owner';
+    }
+
+    /**
+     * True when the user may change the conversation's folder and pin: they own
+     * it, or hold an Edit or Owner grant on it. A View grant is read-only.
+     */
+    public CanEditConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        const level = this.GetSharedByInfo(conversation.ID)?.Level;
+        return level === 'Edit' || level === 'Owner';
+    }
+
+    /**
      * Guard flag: set true while the engine itself is performing a mutation.
      * Prevents the entity event handler from re-processing our own saves/deletes,
      * which would cause redundant cache updates or infinite loops.
@@ -709,31 +754,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // the newest one — see _conversationsLoadGeneration.
         const generation = ++this._conversationsLoadGeneration;
 
-        // Include conversations the user has been granted access to via
-        // `MJ: Resource Permissions`. ResourcePermissionEngine caches the full
-        // permission table; GetUserAvailableResources filters it to approved
-        // grants (direct + role-inherited) for this user + resource type.
-        await ResourcePermissionEngine.Instance.Config(false, contextUser);
-        const sharedPermissions = ResourcePermissionEngine.Instance
-            .GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
-        const sharedConversationIds = sharedPermissions.map((p) => p.ResourceRecordID);
+        const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const filter = this.buildVisibleConversationsFilter(
+            environmentId,
+            contextUser.ID,
+            sharedPermissions.map((p) => p.ResourceRecordID),
+            options
+        );
 
         const rv = new RunView();
-        const ownershipClause = `UserID='${contextUser.ID}'`;
-        const sharedClause =
-            sharedConversationIds.length > 0
-                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
-                : '';
-        // Default main-chat view shows Global + Both. App-scoped
-        // conversations live inside their owning Application's embedded
-        // surface and are filtered out here. Callers that want to surface
-        // them (e.g. an "Include app conversations" toggle) pass
-        // includeApplicationScoped=true to drop the scope predicate.
-        const scopeClause = options?.includeApplicationScoped
-            ? ''
-            : ` AND ApplicationScope IN ('Global', 'Both')`;
-        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
-
         const result = await rv.RunView<MJConversationEntity>(
             {
                 EntityName: 'MJ: Conversations',
@@ -788,6 +817,60 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // delayed) and after the early-return guard above; LoadProjects has its
         // own per-environment guard to avoid redundant reloads.
         await this.LoadProjects(environmentId, contextUser, forceRefresh);
+    }
+
+    /**
+     * Returns an `ExtraFilter` for `MJ: Conversations` that matches exactly the conversations
+     * {@link LoadConversations} shows the user: owned by the user or shared with them, not
+     * archived, and (unless `includeApplicationScoped`) Global or Both scope.
+     *
+     * Use it anywhere that reads conversations for display (search, pickers) so those reads
+     * cannot show more than the conversation list does. It is not capped, unlike the list load.
+     *
+     * @param environmentId - The environment to filter conversations by
+     * @param contextUser - The user whose conversations to match
+     * @param options - `includeApplicationScoped` also matches app-scoped conversations
+     */
+    public async GetVisibleConversationsFilter(
+        environmentId: string,
+        contextUser: UserInfo,
+        options?: { includeApplicationScoped?: boolean }
+    ): Promise<string> {
+        const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        return this.buildVisibleConversationsFilter(
+            environmentId,
+            contextUser.ID,
+            sharedPermissions.map((p) => p.ResourceRecordID),
+            options
+        );
+    }
+
+    /**
+     * Approved conversation grants (direct and role-inherited) for the user, from
+     * `MJ: Resource Permissions`. ResourcePermissionEngine caches the full permission table.
+     */
+    private async getSharedConversationPermissions(contextUser: UserInfo): Promise<MJResourcePermissionEntity[]> {
+        await ResourcePermissionEngine.Instance.Config(false, contextUser);
+        return ResourcePermissionEngine.Instance.GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
+    }
+
+    private buildVisibleConversationsFilter(
+        environmentId: string,
+        userId: string,
+        sharedConversationIds: string[],
+        options?: { includeApplicationScoped?: boolean }
+    ): string {
+        const ownershipClause = `UserID='${userId}'`;
+        const sharedClause =
+            sharedConversationIds.length > 0
+                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
+                : '';
+        // The main chat view shows Global and Both. App-scoped conversations live inside
+        // their owning Application's embedded surface.
+        const scopeClause = options?.includeApplicationScoped
+            ? ''
+            : ` AND ApplicationScope IN ('Global', 'Both')`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
     }
 
     /**
@@ -1467,6 +1550,122 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return { Successful: successful, Failed: failed };
     }
 
+    /**
+     * Moves multiple conversations into a folder (project), or out of every folder
+     * when projectId is null. Emits the updated list once for the whole batch.
+     *
+     * @param ids - Conversation IDs to move
+     * @param projectId - Target folder ID, or null for no folder
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async MoveMultipleConversationsToProject(
+        ids: string[],
+        projectId: string | null,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Pins or unpins multiple conversations. Emits the re-sorted list once for the
+     * whole batch, so pinned conversations move to the top in a single UI update.
+     *
+     * @param ids - Conversation IDs to pin or unpin
+     * @param isPinned - True to pin, false to unpin
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async PinMultipleConversations(
+        ids: string[],
+        isPinned: boolean,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { IsPinned: isPinned }, contextUser);
+    }
+
+    /**
+     * Applies the same field updates to several conversations, one save at a time so
+     * a single rejection cannot fail the batch, then re-emits the list once.
+     * A conversation whose save fails keeps its previous field values in memory.
+     * Conversations the user holds only View access to are refused without a save.
+     */
+    private async saveMultipleConversations(
+        ids: string[],
+        updates: ConversationBulkUpdate,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        const successful: string[] = [];
+        const failed: Array<{ ID: string; Name: string; Error: string }> = [];
+        if (ids.length === 0) {
+            return { Successful: successful, Failed: failed };
+        }
+
+        const md = this.ProviderToUse;
+        this._selfMutating = true;
+        try {
+            for (const id of ids) {
+                let conversation = this.GetConversation(id);
+                try {
+                    if (!conversation) {
+                        const entity = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+                        const loaded = await entity.Load(id);
+                        if (!loaded) {
+                            failed.push({ ID: id, Name: 'Unknown', Error: 'Conversation not found' });
+                            continue;
+                        }
+                        conversation = entity;
+                    }
+
+                    if (!this.CanEditConversation(conversation, contextUser.ID)) {
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: 'You have View access only'
+                        });
+                        continue;
+                    }
+
+                    const previous: ConversationBulkUpdate = {
+                        ProjectID: conversation.ProjectID,
+                        IsPinned: conversation.IsPinned
+                    };
+                    this.applyBulkUpdate(conversation, updates);
+
+                    const saved = await conversation.Save();
+                    if (saved) {
+                        successful.push(conversation.ID);
+                    } else {
+                        this.applyBulkUpdate(conversation, previous);
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: conversation.LatestResult?.Message || 'Failed to update conversation'
+                        });
+                    }
+                } catch (error) {
+                    failed.push({
+                        ID: id,
+                        Name: conversation?.Name || 'Unknown',
+                        Error: error instanceof Error ? error.message : 'Unknown error'
+                    });
+                }
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        if (successful.length > 0) {
+            this._conversations$.next(this.sortConversations(this._conversations$.value));
+        }
+        return { Successful: successful, Failed: failed };
+    }
+
+    private applyBulkUpdate(conversation: MJConversationEntity, updates: ConversationBulkUpdate): void {
+        if (updates.ProjectID !== undefined) conversation.ProjectID = updates.ProjectID;
+        if (updates.IsPinned !== undefined) conversation.IsPinned = updates.IsPinned;
+    }
+
     // ========================================================================
     // CONVERSATION DETAILS (Messages)
     // ========================================================================
@@ -1766,7 +1965,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         for (const row of rawData) {
             if (!row.ID) continue;
 
-            const parsed = parseConversationDetailComplete(row);
+            const parsed = ParseConversationDetailComplete(row);
 
             // Agent runs
             if (parsed.agentRuns.length > 0) {
@@ -2021,7 +2220,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 existing.Details.push(newDetail);
             }
 
-            const parsed = parseConversationDetailComplete(row);
+            const parsed = ParseConversationDetailComplete(row);
 
             // Merge agent runs: update in-place or add.
             //
@@ -2545,24 +2744,43 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             ? (event.payload as { action?: string })?.action || 'save'
             : event.type;
 
-        if (normalizedName === 'mj: conversations') {
-            return this.handleConversationEntityEvent(event, effectiveType);
-        }
+        const handled =
+            normalizedName === 'mj: conversations' ||
+            normalizedName === 'mj: conversation details' ||
+            normalizedName === 'mj: projects' ||
+            normalizedName === 'mj: ai agent runs' ||
+            normalizedName === 'mj: conversation detail artifacts' ||
+            normalizedName === 'mj: conversation detail ratings';
 
-        if (normalizedName === 'mj: conversation details') {
-            return this.handleConversationDetailEntityEvent(event, effectiveType);
-        }
+        if (handled) {
+            // Hydrate ONCE, here, because this is the only async frame on the path. A remote event
+            // carries the row only for entities on the server's broadcast allowlist (see
+            // `cacheSettings.recordDataBroadcastEntities`); otherwise this re-reads the single
+            // record through the provider, as this user, so access control decides what comes
+            // back. Handlers below stay synchronous and simply receive the row — passing it down
+            // rather than letting each fetch its own keeps this to one read per event and avoids
+            // turning five handlers async for a value the dispatcher can obtain once.
+            // ...and only when something below will actually use it — see eventNeedsRow. On a
+            // remote event without `recordData`, hydrating means a read through the provider, and
+            // this dispatcher runs in EVERY connected browser for every save of these entities
+            // anywhere in the system, whether or not this session has any claim to the record.
+            const row = this.eventNeedsRow(event, normalizedName, effectiveType)
+                ? await ResolveEntityEventRow(event, this.ProviderToUse, this.ContextUser)
+                : null;
 
-        if (normalizedName === 'mj: projects') {
-            return this.handleProjectEntityEvent(event, effectiveType);
-        }
-
-        if (normalizedName === 'mj: ai agent runs') {
-            return this.handleAgentRunEntityEvent(event, effectiveType);
-        }
-
-        if (normalizedName === 'mj: conversation detail artifacts' || normalizedName === 'mj: conversation detail ratings') {
-            return this.handlePeripheralJunctionEntityEvent(event);
+            if (normalizedName === 'mj: conversations') {
+                return this.handleConversationEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: conversation details') {
+                return this.handleConversationDetailEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: projects') {
+                return this.handleProjectEntityEvent(event, effectiveType, row);
+            }
+            if (normalizedName === 'mj: ai agent runs') {
+                return this.handleAgentRunEntityEvent(event, effectiveType, row);
+            }
+            return this.handlePeripheralJunctionEntityEvent(event, row);
         }
 
         // Not a conversation entity — let BaseEngine handle it
@@ -2570,28 +2788,96 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Extracts record data from a BaseEntityEvent.
-     * For local events: uses baseEntity directly.
-     * For remote-invalidate events: parses recordData JSON from the payload.
-     * Returns null if no data is available.
+     * Will anything below actually use the row, or does the primary key suffice?
+     *
+     * Asked BEFORE hydrating, because for a remote event whose entity is not on the server's
+     * broadcast allowlist, hydrating costs a read through the provider. This dispatcher runs in
+     * every connected browser, for every save of these entities anywhere in the system — and
+     * conversation details are the hottest write path in the product, so an unconditional read
+     * here is one round trip per connected client per message, nearly all of them refused for a
+     * session with no claim to the record.
+     *
+     * Every `false` below is a case where the handler already returns early without touching the
+     * row, so skipping the read changes nothing a caller can observe.
      */
-    private extractRecordData(event: BaseEntityEvent): Record<string, unknown> | null {
-        // Local event — entity is available directly
-        if (event.baseEntity) {
-            return event.baseEntity.GetAll();
+    private eventNeedsRow(event: BaseEntityEvent, normalizedName: string, effectiveType: string): boolean {
+        // A row that costs nothing is never worth skipping. Free for a local event (the row IS the
+        // live entity) and for a remote event whose payload already carries `recordData`, because
+        // the entity is on the server's broadcast allowlist.
+        //
+        // This has to come first, and the per-entity reasoning below has to be read as being about
+        // THE READ. Applying it to a free row is what dropped a remote project save: the save
+        // branch uses EnvironmentID and IsArchived off the row, and with the row nulled it read
+        // them as undefined/false, concluded the project was outside the loaded environment, and
+        // filtered it out of the list — for exactly the sessions displaying it.
+        if (EntityEventRowIsFree(event)) {
+            return true;
         }
 
-        // Remote event — parse from payload
-        const payload = event.payload as { recordData?: string } | undefined;
-        if (payload?.recordData) {
-            try {
-                return JSON.parse(payload.recordData);
-            } catch {
-                return null;
+        // Projects: a DELETE needs only the id. A SAVE genuinely uses the row — `EnvironmentID` and
+        // `IsArchived` are what decide whether the project stays in the list — so it has to be
+        // hydrated whenever we hold the project.
+        //
+        // The earlier reasoning here ("a save that got this far has nothing to merge regardless")
+        // was true of the MERGE and false of the branch beside it: without the row, `EnvironmentID`
+        // reads as absent, `inLoadedEnvironment` comes out false for any session that has loaded an
+        // environment, and the save REMOVES the project instead. That is precisely the cross-client
+        // case this change exists to serve, so it is gated like conversations are: when we do not
+        // hold the project the remote path does nothing anyway (the append branch below requires
+        // `event.baseEntity`), and the row would be fetched only to be discarded.
+        if (normalizedName === 'mj: projects') {
+            if (effectiveType !== 'save') {
+                return false;
             }
+            const id = this.eventRecordID(event, null);
+            return !!id && this._projects$.value.some(p => UUIDsEqual(p.ID, id));
         }
 
-        return null;
+        if (normalizedName === 'mj: conversations') {
+            // A delete needs only the id. A save merges fields onto a conversation we already
+            // hold — and when we do not hold it, the remote branch of the handler does nothing,
+            // so the row would be fetched only to be discarded.
+            if (effectiveType !== 'save') {
+                return false;
+            }
+            const id = this.eventRecordID(event, null);
+            return !!id && !!this.GetConversation(id);
+        }
+
+        // Details, agent runs and the junction entities all resolve through the detail cache and
+        // return early when the conversation they name is not in it.
+        //
+        // A remote DELETE can never be served: the record is gone, so the re-read comes back null
+        // and every one of those handlers early-returns on the missing foreign key. The round trip
+        // could not change an outcome, so it is not made. (That these handlers cannot act on a
+        // remote delete at all is a pre-existing gap — deletes never carried `recordData` at either
+        // publish site — and is not what this method is for.) Local deletes are unaffected: the
+        // free-row check above already returned true for them.
+        if (effectiveType === 'delete') {
+            return false;
+        }
+
+        // With the cache empty — any session that has not opened a conversation — none of them can
+        // do anything, whatever the row says. (A non-empty cache still needs the read:
+        // ConversationID is a foreign key, so the primary key cannot tell us whether this detail
+        // belongs to a conversation we hold.)
+        return this._detailCache.size > 0;
+    }
+
+    /**
+     * This record's id, from the primary key the event always carries.
+     *
+     * Prefers the key over the row: the key is broadcast unconditionally, whereas the row is only
+     * present for allowlisted entities or after a re-read. Falls back to the row's `ID` so a
+     * single-column entity still resolves if the key is ever absent.
+     */
+    private eventRecordID(event: BaseEntityEvent, data: Record<string, unknown> | null): string | undefined {
+        const key = ResolveEntityEventKey(event);
+        const fromKey = key?.KeyValuePairs?.find(kv => kv.FieldName?.toLowerCase() === 'id')?.Value;
+        if (fromKey != null && String(fromKey).length > 0) {
+            return String(fromKey);
+        }
+        return data?.['ID'] as string | undefined;
     }
 
     /**
@@ -2611,12 +2897,20 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Handles save/delete events on Conversation entities from local or remote code.
      */
-    private handleConversationEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleConversationEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        // Identity comes from the primary key, which is broadcast unconditionally — a delete needs
+        // nothing else, so it no longer depends on the row being available.
+        const id = this.eventRecordID(event, data);
         if (!id) return true;
 
         if (action === 'save') {
+            // Same reasoning as handleProjectEntityEvent: the row can be null even when
+            // `eventNeedsRow` said yes, because the re-read can be refused, find the record gone,
+            // or simply fail — all of which `ResolveEntityEventRow` reports as null rather than
+            // throwing. `mergeDataOntoRecord` would hand that null to `BaseEntity.SetMany`, which
+            // throws, and nothing above this frame catches it. A conversation we cannot re-read
+            // stays as it was; the next `LoadConversations` corrects it.
+            if (!data) return true;
             const existing = this.GetConversation(id);
             if (existing) {
                 this.mergeDataOntoRecord(existing, data);
@@ -2651,10 +2945,11 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     /**
      * Handles save/delete events on ConversationDetail entities from local or remote code.
      */
-    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string): boolean {
+    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
         const entity = event.baseEntity as MJConversationDetailEntity | null;
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+        const id = this.eventRecordID(event, data);
+        // ConversationID is a foreign key, so the primary key cannot supply it — this is the field
+        // the dispatcher's re-read exists to obtain.
         const conversationId = data?.['ConversationID'] as string;
         if (!id || !conversationId) return true;
 
@@ -2694,9 +2989,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * deleted via the project form modal. Only tracks projects in the currently-loaded
      * environment; archived projects are dropped from the active list.
      */
-    private handleProjectEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleProjectEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        const id = this.eventRecordID(event, data);
         if (!id) return true;
 
         const current = this._projects$.value;
@@ -2709,11 +3003,35 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
 
+        // WITHOUT THE ROW WE KNOW NOTHING, and must not guess. Every field below would read as
+        // absent: `IsArchived` becomes false, which is harmless, but `EnvironmentID` becomes
+        // undefined — and "no environment" is indistinguishable from "moved to another one", so the
+        // branch that DROPS the project is the one that runs. Leaving it untouched is the only
+        // honest response to a row we do not have.
+        //
+        // `eventNeedsRow` is supposed to guarantee this never happens for a project we hold, but
+        // that contract is enforced by a comment and `strictNullChecks` is off in this package, so
+        // the guarantee is restated here where the damage would be done. Hydration can also simply
+        // fail: `ResolveEntityEventRow` returns null rather than throwing.
+        //
+        // KEEPING IT IS DELIBERATE EVEN WHEN THE ROW WAS WITHHELD ON PURPOSE. A null can mean the
+        // re-read was refused — the viewer may no longer read this project — or that it failed.
+        // The two are indistinguishable here, and they want opposite responses, so this takes the
+        // one whose wrong case is recoverable: a stale row in a sidebar is corrected by the next
+        // `LoadProjects`, whereas a project deleted from the UI on a transient read failure is
+        // gone until the user reloads and cannot be told why.
+        if (!data) {
+            return true;
+        }
+
         // save — the cached list holds folders that are in the loaded environment, not
         // archived, AND visible to this user. All three are conditions the save can change,
         // so all three are re-evaluated here rather than only the first two.
-        const environmentId = data?.['EnvironmentID'] as string | undefined;
-        const isArchived = data?.['IsArchived'] === true;
+        // No `?.` past the guard above: `data` is non-null here, and optional chaining would say
+        // otherwise. It is also what let `mergeDataOntoRecord(…, data)` accept a nullable argument
+        // without complaint, since `strictNullChecks` is off in this package.
+        const environmentId = data['EnvironmentID'] as string | undefined;
+        const isArchived = data['IsArchived'] === true;
         const inLoadedEnvironment =
             !this._lastProjectsEnvironmentId ||
             (environmentId != null && UUIDsEqual(environmentId, this._lastProjectsEnvironmentId));
@@ -2726,7 +3044,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // else is someone else's. An unknown viewer sees shared only, never every personal
         // folder in the environment — widening on absent input is the failure mode worth
         // avoiding, and it is the same rule the read path applies.
-        const ownerUserId = data?.['OwnerUserID'] as string | null | undefined;
+        const ownerUserId = data['OwnerUserID'] as string | null | undefined;
         const isVisibleToViewer =
             ownerUserId == null || ownerUserId === ''
                 ? true
@@ -2753,9 +3071,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * Handles save/delete events on AI Agent Run entities from local or remote code.
      * Updates the AgentRunsByDetailId map so timers and status reflect reality.
      */
-    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string): boolean {
-        const data = this.extractRecordData(event);
-        const id = data?.['ID'] as string;
+    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string, data: Record<string, unknown> | null): boolean {
+        const id = this.eventRecordID(event, data);
+        // Foreign key, not part of this row's primary key — supplied by the dispatcher's re-read.
         const detailId = data?.['ConversationDetailID'] as string;
         if (!id || !detailId) return true;
 
@@ -2792,8 +3110,9 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * reconstructed from the entity event alone, so we flag the cache as stale.
      * The UI component checks PeripheralDataStale and force-refreshes when needed.
      */
-    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent): boolean {
-        const data = this.extractRecordData(event);
+    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent, data: Record<string, unknown> | null): boolean {
+        // The junction's own primary key is not useful here; what matters is which detail it hangs
+        // off, which is a foreign key and therefore only available from the row.
         const detailId = data?.['ConversationDetailID'] as string;
         if (!detailId) return true;
 

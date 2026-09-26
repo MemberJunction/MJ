@@ -18,7 +18,7 @@ const { Parser } = NodeSqlParser;
 import { MJLexer } from './mj-lexer.js';
 import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 import type { SQLParserDialect } from '@memberjunction/sql-dialect';
-import { getASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
+import { GetASTDialectAdapter, type ASTDialectAdapter, type RowCapInfo } from './ASTDialectAdapter.js';
 import {
     MJToken,
     MJTemplateExpr,
@@ -204,7 +204,7 @@ export class SQLParser {
     constructor(sql: string, dialect: SQLParserDialect) {
         this._sql = sql;
         this._dialect = dialect;
-        this._adapter = getASTDialectAdapter(dialect);
+        this._adapter = GetASTDialectAdapter(dialect);
 
         // Fast path: direct parse (matches the old static ParseSQL contract).
         const direct = SQLParser.parseSQL(sql, dialect.ParserDialect);

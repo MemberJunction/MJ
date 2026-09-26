@@ -21,7 +21,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     return { ...actual, RunView: class { RunView = runViewMock; } };
 });
 
-import { verifyPromptRun } from '../ai-verify';
+import { VerifyPromptRun } from '../ai-verify';
 
 const user = { ID: 'user-1' } as Partial<UserInfo> as UserInfo;
 
@@ -35,7 +35,7 @@ describe('ai-verify fetchById bounded poll (WI4, #3251)', () => {
 
     it('failure states the actual bound waited and names MJ_IT_FETCH_POLL_MS (not "write never landed")', async () => {
         process.env.MJ_IT_FETCH_POLL_MS = '500';
-        const err: Error = await verifyPromptRun('missing-id', user).catch((e: Error) => e);
+        const err: Error = await VerifyPromptRun('missing-id', user).catch((e: Error) => e);
         expect(err.message).toMatch(/within 500ms/);
         expect(err.message).toMatch(/MJ_IT_FETCH_POLL_MS/);
         expect(err.message).not.toMatch(/write never landed/);
@@ -43,7 +43,7 @@ describe('ai-verify fetchById bounded poll (WI4, #3251)', () => {
 
     it('MJ_IT_FETCH_POLL_MS resizes the poll budget (fewer RunView attempts)', async () => {
         process.env.MJ_IT_FETCH_POLL_MS = '1000';
-        await verifyPromptRun('missing-id', user).catch(() => undefined);
+        await VerifyPromptRun('missing-id', user).catch(() => undefined);
         // 1000ms budget / 500ms interval = 2 attempts (vs. the 24 of the 12000ms default the
         // pre-fix code always ran, which ignored this env var entirely).
         expect(runViewMock).toHaveBeenCalledTimes(2);
@@ -53,7 +53,7 @@ describe('ai-verify fetchById bounded poll (WI4, #3251)', () => {
         // 700ms nominal → round(700/500)=1 attempt → the poll actually waits 500ms. The message
         // must report what it waited (500ms), not the nominal 700ms it was configured with.
         process.env.MJ_IT_FETCH_POLL_MS = '700';
-        const err: Error = await verifyPromptRun('missing-id', user).catch((e: Error) => e);
+        const err: Error = await VerifyPromptRun('missing-id', user).catch((e: Error) => e);
         expect(err.message).toMatch(/within 500ms/);
         expect(err.message).not.toMatch(/within 700ms/);
     });

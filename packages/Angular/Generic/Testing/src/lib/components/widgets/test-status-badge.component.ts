@@ -95,11 +95,29 @@ export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' |
   `]
 })
 export class TestStatusBadgeComponent {
-  @Input() status!: TestStatus;
-  @Input() showIcon = true;
+  @Input() Status!: TestStatus;
 
-  getIcon(): string {
-    switch (this.status) {
+  /** @deprecated Use {@link Status}. */
+  @Input() set status(value: TestStatus) {
+    this.Status = value;
+  }
+  /** @deprecated Use {@link Status}. */
+  get status(): TestStatus {
+    return this.Status;
+  }
+  @Input() ShowIcon = true;
+
+  /** @deprecated Use {@link ShowIcon}. */
+  @Input() set showIcon(value: TestStatusBadgeComponent['ShowIcon']) {
+    this.ShowIcon = value;
+  }
+  /** @deprecated Use {@link ShowIcon}. */
+  get showIcon(): TestStatusBadgeComponent['ShowIcon'] {
+    return this.ShowIcon;
+  }
+
+  GetIcon(): string {
+    switch (this.Status) {
       case 'Passed':
         return 'fa-solid fa-check-circle';
       case 'Failed':
@@ -117,5 +135,10 @@ export class TestStatusBadgeComponent {
       default:
         return 'fa-solid fa-question-circle';
     }
+  }
+
+  /** @deprecated Use {@link GetIcon}. */
+  getIcon(): string {
+    return this.GetIcon();
   }
 }

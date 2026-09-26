@@ -85,7 +85,7 @@ function isSingleTypedStatement(ast: unknown): boolean {
  * Configure External Data Sources with a read-only/least-privilege credential as the real authority;
  * this screen is the app-level backstop against the common write/DDL/injection vectors.
  */
-export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey): void {
+export function AssertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey): void {
     const dialect = dialectFor(dialectKey);
     if (SQLParser.HasStackedStatements(sql, dialect)) {
         throw new Error(
@@ -140,6 +140,11 @@ export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey
     }
 }
 
+/** @deprecated Use {@link AssertReadOnlyNativeQuery}. */
+export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey): void {
+    return AssertReadOnlyNativeQuery(sql, dialectKey);
+}
+
 /**
  * Defense-in-depth screen for a caller-supplied WHERE-body / ORDER-BY-body fragment before it is
  * interpolated into a driver SELECT (see `BaseSqlExternalDataSourceDriver.buildSelectSql`).
@@ -157,7 +162,7 @@ export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey
  * attempt to block every read-side resource-abuse function (e.g. `pg_sleep`, `UTL_HTTP`); the data
  * source connects under its own (ideally least-privilege, read-only) credential for that surface.
  */
-export function assertReadOnlyClause(clause: string, dialectKey: SqlDialectKey, kind: "where" | "orderby"): void {
+export function AssertReadOnlyClause(clause: string, dialectKey: SqlDialectKey, kind: "where" | "orderby"): void {
     // Reject any comment marker. NOTE: this also rejects the (rare) legitimate clause that contains
     // `--`/`/*`/`*/` inside a string literal (e.g. `Note = 'a--b'`). That's an accepted false-positive:
     // per the fail-closed / refuse-under-uncertainty posture, over-rejecting a filter is preferable to
@@ -186,4 +191,9 @@ export function assertReadOnlyClause(clause: string, dialectKey: SqlDialectKey, 
             `External ${kind} clause rejected: not a safe read-only ${kind} fragment — refusing under uncertainty.`,
         );
     }
+}
+
+/** @deprecated Use {@link AssertReadOnlyClause}. */
+export function assertReadOnlyClause(clause: string, dialectKey: SqlDialectKey, kind: "where" | "orderby"): void {
+    return AssertReadOnlyClause(clause, dialectKey, kind);
 }

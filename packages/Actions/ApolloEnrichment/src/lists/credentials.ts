@@ -59,7 +59,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * configuration error worth surfacing, not a reason to silently use a different
  * workspace's key.
  */
-export function extractApolloKey(values: string | null | undefined, credentialName: string): string | null {
+export function ExtractApolloKey(values: string | null | undefined, credentialName: string): string | null {
     if (!values || values.trim().length === 0) return null;
     let parsed: unknown;
     try {
@@ -80,6 +80,11 @@ export function extractApolloKey(values: string | null | undefined, credentialNa
     return null;
 }
 
+/** @deprecated Use {@link ExtractApolloKey}. */
+export function extractApolloKey(values: string | null | undefined, credentialName: string): string | null {
+    return ExtractApolloKey(values, credentialName);
+}
+
 /**
  * Resolve the key for this run. `companyID` is optional: without it, only the
  * environment is consulted.
@@ -88,7 +93,7 @@ export function extractApolloKey(values: string | null | undefined, credentialNa
  * answer with `CREDENTIALS_NOT_FOUND` instead of a stack trace. A credential that
  * exists but is malformed does throw — see {@link extractApolloKey}.
  */
-export async function resolveApolloAPIKey(
+export async function ResolveApolloAPIKey(
     companyID: string | null,
     contextUser: UserInfo | undefined,
 ): Promise<ResolvedApolloKey | null> {
@@ -101,6 +106,14 @@ export async function resolveApolloAPIKey(
         return { apiKey: env, source: 'environment', companyIntegrationID: null };
     }
     return null;
+}
+
+/** @deprecated Use {@link ResolveApolloAPIKey}. */
+export async function resolveApolloAPIKey(
+    companyID: string | null,
+    contextUser: UserInfo | undefined,
+): Promise<ResolvedApolloKey | null> {
+    return ResolveApolloAPIKey(companyID, contextUser);
 }
 
 /** Canonical 8-4-4-4-12 hex form. `CompanyID` is a uniqueidentifier, so anything else is not one. */
@@ -180,7 +193,7 @@ async function resolveFromCompany(companyID: string, contextUser: UserInfo | und
         return null;
     }
 
-    const apiKey = extractApolloKey(values ? JSON.stringify(values) : null, credential.Name);
+    const apiKey = ExtractApolloKey(values ? JSON.stringify(values) : null, credential.Name);
     if (!apiKey) {
         LogError(`resolveApolloAPIKey: MJ: Credentials record '${credential.Name}' contains no apiKey value.`);
         return null;

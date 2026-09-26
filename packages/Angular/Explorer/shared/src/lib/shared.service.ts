@@ -22,7 +22,16 @@ export class SharedService {
   private static _resourceTypes: MJResourceTypeEntity[] = [];
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
-  tabChange$ = this.tabChange.asObservable();
+  TabChange$ = this.tabChange.asObservable();
+
+  /** @deprecated Use {@link TabChange$}. */
+  get tabChange$() {
+    return this.TabChange$;
+  }
+  /** @deprecated Use {@link TabChange$}. */
+  set tabChange$(value) {
+    this.TabChange$ = value;
+  }
   private _navigationService: NavigationService | null = null;
 
   constructor(
@@ -330,7 +339,7 @@ export class SharedService {
    * @param resourceTypeName 
    * @returns 
    */
-  public mapResourceTypeNameToRouteSegment(resourceTypeName: string) {
+  public MapResourceTypeNameToRouteSegment(resourceTypeName: string) {
     const item =  this._resourceTypeMap.find(rt => rt.name.trim().toLowerCase() === resourceTypeName.trim().toLowerCase());
     if (item)
       return item.routeSegment;
@@ -338,17 +347,27 @@ export class SharedService {
       return null 
   }
 
+  /** @deprecated Use {@link MapResourceTypeNameToRouteSegment}. */
+  public mapResourceTypeNameToRouteSegment(resourceTypeName: string) {
+    return this.MapResourceTypeNameToRouteSegment(resourceTypeName);
+  }
+
   /**
    * Maps a route segment to the corresponding Resource Type record Name column
    * @param resourceRouteSegment 
    * @returns 
    */
-  public mapResourceTypeRouteSegmentToName(resourceRouteSegment: string) {
+  public MapResourceTypeRouteSegmentToName(resourceRouteSegment: string) {
     const item =  this._resourceTypeMap.find(rt => rt.routeSegment.trim().toLowerCase() === resourceRouteSegment.trim().toLowerCase());
     if (item)
       return item.name;
     else
       return null 
+  }
+
+  /** @deprecated Use {@link MapResourceTypeRouteSegmentToName}. */
+  public mapResourceTypeRouteSegmentToName(resourceRouteSegment: string) {
+    return this.MapResourceTypeRouteSegmentToName(resourceRouteSegment);
   }
 
   /**

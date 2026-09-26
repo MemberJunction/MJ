@@ -144,6 +144,28 @@ this.selectedId = (this.selectedId != null && UUIDsEqual(this.selectedId, itemId
   : itemId;
 ```
 
+### Pattern 8: Hot loops — nested scans and per-render code
+
+`UUIDsEqual()` short-circuits only when the two strings are already identical. When they differ — which is most comparisons in a `.filter()`, or in an inner `.some()`/`.find()` over another list — it trims and lowercases **both** operands, allocating two strings per call. A single `.find()` is fine (Patterns 1–3). The cost shows up when the comparison is **nested** (list × list) or runs in code that re-executes on every render, such as an Angular getter or a method called from a template.
+
+```typescript
+// SLOW when both lists grow - n x m comparisons, two allocations each
+const picked = roles.filter(r => selectedIds.some(id => UUIDsEqual(id, r.ID)));
+
+// CORRECT and linear - normalize each side once (Pattern 5)
+const selected = new Set(selectedIds.map(id => NormalizeUUID(id)));
+const picked = roles.filter(r => selected.has(NormalizeUUID(r.ID)));
+
+// Counting matches per ID across a list: build the counts once, not once per item
+const counts = new Map<string, number>();
+for (const item of items) {
+  const id = NormalizeUUID(item.RelatedEntityID);
+  counts.set(id, (counts.get(id) ?? 0) + 1);
+}
+```
+
+Hoist `NormalizeUUID()` of a fixed operand out of the loop. Use a `Set`/`Map` whenever each element of one list is compared against a whole second list. This is a performance rule, not a correctness one: both forms compare correctly. Apply it where the list sizes are unbounded or the code runs per render. Don't rewrite one-off `.find()` lookups.
+
 ## When You Do NOT Need `UUIDsEqual()`
 
 Not every `.ID ===` comparison involves UUIDs. These patterns are safe with `===`:
@@ -192,6 +214,7 @@ The file `packages/MJCoreEntities/src/__tests__/UUIDCrossDbCompliance.test.ts` v
 | `items.some(x => x.ID === id)` | `items.some(x => UUIDsEqual(x.ID, id))` |
 | `new Set(ids); set.has(id)` | `new Set(ids.map(NormalizeUUID)); set.has(NormalizeUUID(id))` |
 | Template: `item.ID === selectedId` | Add component method using `UUIDsEqual()` |
+| `a.filter(x => b.some(y => UUIDsEqual(x.ID, y)))` (nested / per render) | `Set` of `NormalizeUUID(y)`, then `set.has(NormalizeUUID(x.ID))` |
 
 ## Import
 

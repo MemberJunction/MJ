@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { mergePack } from '../../lib/claude-pack/PackMerger.js';
+import { MergePack } from '../../lib/claude-pack/PackMerger.js';
 import type { Manifest } from '../../lib/claude-pack/PackTypes.js';
 
 const PACK_CLAUDE_MD = `# Project Instructions for Claude Code
@@ -76,7 +76,7 @@ describe('mergePack', () => {
     // ───────────────────────────────────────────────────────────────────
     describe('CLAUDE.md', () => {
         it('writes the file when absent', () => {
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -89,7 +89,7 @@ describe('mergePack', () => {
             const existing = `# My project\n\n<!-- MJ-MANAGED:CLAUDE-PACK START version=5.0.0 -->\nOLD\n<!-- MJ-MANAGED:CLAUDE-PACK END -->\n\n## My notes\nproject-specific\n`;
             writeFileSync(path.join(tmp, 'CLAUDE.md'), existing);
 
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -106,7 +106,7 @@ describe('mergePack', () => {
 
         it('wraps unmanaged CLAUDE.md with markers, keeping user content below', () => {
             writeFileSync(path.join(tmp, 'CLAUDE.md'), '# my project\n\nuser stuff\n');
-            mergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
+            MergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
             const written = readFileSync(path.join(tmp, 'CLAUDE.md'), 'utf8');
             const startIdx = written.indexOf('MJ-MANAGED:CLAUDE-PACK START');
             const endIdx = written.indexOf('MJ-MANAGED:CLAUDE-PACK END');
@@ -118,7 +118,7 @@ describe('mergePack', () => {
 
         it('skips when rewrite produces identical content', () => {
             writeFileSync(path.join(tmp, 'CLAUDE.md'), PACK_CLAUDE_MD);
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -130,7 +130,7 @@ describe('mergePack', () => {
             // END before START
             const broken = `<!-- MJ-MANAGED:CLAUDE-PACK END -->\nstuff\n<!-- MJ-MANAGED:CLAUDE-PACK START -->\n`;
             writeFileSync(path.join(tmp, 'CLAUDE.md'), broken);
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -144,7 +144,7 @@ describe('mergePack', () => {
         it('records an error when pack CLAUDE.md is absent', () => {
             const files = makePackFiles();
             files.delete('CLAUDE.md');
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: files,
                 Manifest: STUB_MANIFEST,
@@ -158,7 +158,7 @@ describe('mergePack', () => {
     // ───────────────────────────────────────────────────────────────────
     describe('.claude/mj/** (managed bundle)', () => {
         it('writes all mj/* files when absent', () => {
-            mergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
+            MergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
             expect(existsSync(path.join(tmp, '.claude/mj/core.md'))).toBe(true);
             expect(existsSync(path.join(tmp, '.claude/mj/v5.md'))).toBe(true);
             expect(existsSync(path.join(tmp, '.claude/mj/VERSION'))).toBe(true);
@@ -170,14 +170,14 @@ describe('mergePack', () => {
             // Pre-seed with a stale file
             mkdirSync(path.join(tmp, '.claude/mj'), { recursive: true });
             writeFileSync(path.join(tmp, '.claude/mj/stale-file.md'), 'leftover');
-            mergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
+            MergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
             expect(existsSync(path.join(tmp, '.claude/mj/stale-file.md'))).toBe(false);
         });
 
         it('skips identical mj/* files', () => {
             mkdirSync(path.join(tmp, '.claude/mj'), { recursive: true });
             writeFileSync(path.join(tmp, '.claude/mj/core.md'), PACK_CORE);
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -191,7 +191,7 @@ describe('mergePack', () => {
     // ───────────────────────────────────────────────────────────────────
     describe('.claude/settings.json', () => {
         it('writes the baseline when absent', () => {
-            mergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
+            MergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
             const written = JSON.parse(
                 readFileSync(path.join(tmp, '.claude/settings.json'), 'utf8')
             );
@@ -209,7 +209,7 @@ describe('mergePack', () => {
                     permissions: { allow: ['Bash(my-custom)'], deny: ['Bash(rm -rf)'] },
                 })
             );
-            mergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
+            MergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
             const written = JSON.parse(
                 readFileSync(path.join(tmp, '.claude/settings.json'), 'utf8')
             );
@@ -220,7 +220,7 @@ describe('mergePack', () => {
         });
 
         it('--skip-settings leaves the file untouched', () => {
-            mergePack({
+            MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -232,7 +232,7 @@ describe('mergePack', () => {
         it('warns and skips when existing settings.json is malformed JSON', () => {
             mkdirSync(path.join(tmp, '.claude'));
             writeFileSync(path.join(tmp, '.claude/settings.json'), '{ not valid');
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -249,7 +249,7 @@ describe('mergePack', () => {
     // ───────────────────────────────────────────────────────────────────
     describe('.claude/commands/* (seed-once)', () => {
         it('writes new commands when absent', () => {
-            mergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
+            MergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
             expect(existsSync(path.join(tmp, '.claude/commands/commit.md'))).toBe(true);
         });
 
@@ -259,7 +259,7 @@ describe('mergePack', () => {
                 path.join(tmp, '.claude/commands/commit.md'),
                 '# my customized commit command\n'
             );
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -277,7 +277,7 @@ describe('mergePack', () => {
                 path.join(tmp, '.claude/commands/commit.md'),
                 '# my customized commit command\n'
             );
-            mergePack({
+            MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -294,7 +294,7 @@ describe('mergePack', () => {
         it('--refresh-commands forces overwrite (same effect as --force for commands)', () => {
             mkdirSync(path.join(tmp, '.claude/commands'), { recursive: true });
             writeFileSync(path.join(tmp, '.claude/commands/commit.md'), 'user\n');
-            mergePack({
+            MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -308,7 +308,7 @@ describe('mergePack', () => {
         it('skips identical commands', () => {
             mkdirSync(path.join(tmp, '.claude/commands'), { recursive: true });
             writeFileSync(path.join(tmp, '.claude/commands/commit.md'), PACK_COMMAND);
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -319,7 +319,7 @@ describe('mergePack', () => {
         });
 
         it('--skip-commands omits commands entirely', () => {
-            mergePack({
+            MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -331,12 +331,12 @@ describe('mergePack', () => {
 
     describe('.claude/skills/** (seed-once, nested)', () => {
         it('writes nested skill files when absent', () => {
-            mergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
+            MergePack({ TargetDir: tmp, PackFiles: makePackFiles(), Manifest: STUB_MANIFEST });
             expect(existsSync(path.join(tmp, '.claude/skills/test-skill/SKILL.md'))).toBe(true);
         });
 
         it('--skip-skills omits skills entirely', () => {
-            mergePack({
+            MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,
@@ -351,7 +351,7 @@ describe('mergePack', () => {
     // ───────────────────────────────────────────────────────────────────
     describe('--dry-run', () => {
         it('reports actions without writing anything', () => {
-            const result = mergePack({
+            const result = MergePack({
                 TargetDir: tmp,
                 PackFiles: makePackFiles(),
                 Manifest: STUB_MANIFEST,

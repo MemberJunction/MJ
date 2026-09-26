@@ -12,9 +12,9 @@ import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
 import { Metadata, UserInfo } from '@memberjunction/core';
-import { getSystemUser } from '../../utils/user-helpers';
+import { GetSystemUser } from '../../utils/user-helpers';
 import { MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
-import { extractErrorMessage } from '../../utils/error-handlers';
+import { ExtractErrorMessage } from '../../utils/error-handlers';
 import { QueryMetadataRecord } from '../../data/schema';
 
 /**
@@ -22,7 +22,7 @@ import { QueryMetadataRecord } from '../../data/schema';
  *
  * Loads queries from database and exports them to metadata files.
  */
-export async function exportCommand(options: Record<string, unknown>): Promise<void> {
+export async function ExportCommand(options: Record<string, unknown>): Promise<void> {
   const spinner = ora('Initializing export...').start();
 
   try {
@@ -30,7 +30,7 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
     const verbose = Boolean(options.verbose);
 
     // 1. Get system user from UserCache (populated by provider initialization)
-    const contextUser = getSystemUser();
+    const contextUser = GetSystemUser();
 
     // 2. Verify database connection and load metadata
     spinner.text = 'Loading metadata...';
@@ -72,7 +72,7 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
           spinner.info(`${queryPrefix} ${chalk.green('✓')} Exported ${query.Name}`);
         }
       } catch (error: unknown) {
-        const errorMsg = extractErrorMessage(error, 'Query Export');
+        const errorMsg = ExtractErrorMessage(error, 'Query Export');
         errors.push({ query: query.Name, error: errorMsg });
         if (verbose) {
           spinner.warn(`${queryPrefix} ${chalk.red('✗')} ${query.Name}: ${errorMsg}`);
@@ -109,9 +109,14 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
 
   } catch (error: unknown) {
     spinner.fail(chalk.red('Export failed'));
-    console.error(chalk.red(extractErrorMessage(error, 'Query Export')));
+    console.error(chalk.red(ExtractErrorMessage(error, 'Query Export')));
     process.exit(1);
   }
+}
+
+/** @deprecated Use {@link ExportCommand}. */
+export async function exportCommand(options: Record<string, unknown>): Promise<void> {
+  return ExportCommand(options);
 }
 
 /**

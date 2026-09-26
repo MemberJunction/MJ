@@ -22,7 +22,7 @@ import { GetDiscovery, GetRedirectUri, ExchangeCodeForTokens, type MJAuthTokens 
  *    user cancels/errors, or no code/verifier is present.
  *  - `ready`: `true` once the underlying auth request has initialized.
  */
-export function useMsalAuth() {
+export function UseMsalAuth() {
     const discovery = GetDiscovery();
     const [request, , promptAsync] = useAuthRequest(
         {
@@ -52,4 +52,9 @@ export function useMsalAuth() {
     }, [request, promptAsync]);
 
     return { signIn, ready: !!request };
+}
+
+/** @deprecated Use {@link UseMsalAuth}. */
+export function useMsalAuth() {
+    return UseMsalAuth();
 }

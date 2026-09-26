@@ -49,7 +49,7 @@ export class DatabaseReferenceScanner {
      * @param allMetadataRecords All records from metadata (for checking if DB record exists in metadata)
      * @returns Array of database references found
      */
-    async scanForReferences(
+    async ScanForReferences(
         recordsToDelete: FlattenedRecord[],
         reverseFKMap: Map<string, ReverseFKInfo[]>,
         allMetadataRecords: FlattenedRecord[]
@@ -83,6 +83,15 @@ export class DatabaseReferenceScanner {
         }
 
         return references;
+    }
+
+    /** @deprecated Use {@link ScanForReferences}. */
+    async scanForReferences(
+        recordsToDelete: FlattenedRecord[],
+        reverseFKMap: Map<string, ReverseFKInfo[]>,
+        allMetadataRecords: FlattenedRecord[]
+    ): Promise<DatabaseReference[]> {
+        return this.ScanForReferences(recordsToDelete, reverseFKMap, allMetadataRecords);
     }
 
     /**
@@ -313,15 +322,25 @@ export class DatabaseReferenceScanner {
      * Get orphaned references (database-only records not in metadata)
      * These will prevent deletion unless handled
      */
-    getOrphanedReferences(references: DatabaseReference[]): DatabaseReference[] {
+    GetOrphanedReferences(references: DatabaseReference[]): DatabaseReference[] {
         return references.filter(ref => !ref.existsInMetadata);
+    }
+
+    /** @deprecated Use {@link GetOrphanedReferences}. */
+    getOrphanedReferences(references: DatabaseReference[]): DatabaseReference[] {
+        return this.GetOrphanedReferences(references);
     }
 
     /**
      * Get metadata references (records in metadata that reference deletion targets)
      * These should already be marked for deletion if the user set things up correctly
      */
-    getMetadataReferences(references: DatabaseReference[]): DatabaseReference[] {
+    GetMetadataReferences(references: DatabaseReference[]): DatabaseReference[] {
         return references.filter(ref => ref.existsInMetadata);
+    }
+
+    /** @deprecated Use {@link GetMetadataReferences}. */
+    getMetadataReferences(references: DatabaseReference[]): DatabaseReference[] {
+        return this.GetMetadataReferences(references);
     }
 }

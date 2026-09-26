@@ -1,5 +1,93 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- 5df9486: IS-A promotion — an EXISTING parent record gaining a subtype ("this Animal is now also a Dog") —
+  now works over GraphQL. It already worked against a direct database provider, which is what made it
+  expensive to find: every server-side reproduction passed while the browser silently inserted a
+  **second copy of the parent row** (surfacing as a unique-constraint violation on an unrelated column,
+  with a different GUID on every retry).
+
+  Two independent defects, both required:
+  - **Client** (`GraphQLDataProvider.Save`): the create-side field filter admitted a primary key only
+    when the entity was already saved, and an IS-A child's key is ReadOnly (the shared key is the
+    relationship), so on a promotion the key never left the browser. The parent's own save is
+    short-circuited (`IsParentEntitySave`) on the premise that the leaf mutation carries the whole
+    chain — so nothing told the server which parent row this was about. The create input now carries
+    the shared key for a promotion — an unsaved IS-A child whose parent is already saved. A
+    whole-chain create (new parent + new child) still sends no key, so the server keeps minting the
+    root identity and pays no parent lookup on that path.
+  - **Server** (`ResolverBase.CreateRecord`): `NewRecord()` reset the whole chain to "new", so even
+    with the key present the parent saved as a CREATE. When a child create carries a complete key,
+    the resolver now binds the new child to the existing parent row with `AttachToParent` (#3825):
+    the parent saves as an UPDATE and only the child is INSERTed. A key that matches no row is the
+    ordinary whole-chain create and proceeds on the caller's key; non-IS-A entities are untouched.
+
+- 8d1a373: Resolve record display names in search preview and display entity friendly names instead of full schema names.
+  - **Search Record Display Name Resolution**:
+    - In `SearchEngine.ts`, enable enrichment for preview searches on top results so record display names are resolved before preview autocomplete items render.
+    - In `SearchEnricher.ts`, resolve missing record names or sentinel titles (`${EntityName} Record`, `${EntityDisplayName} Record`) via `providerToUse.GetEntityRecordNames()`, setting both `RecordName` and `Title` to the live record name.
+    - Pass `SearchEngine.ProviderToUse` to `SearchEnricher` to ensure multi-provider alignment.
+  - **Entity Display Names**:
+    - Add `EntityDisplayName` to search results across `@memberjunction/search-engine`, `@memberjunction/server`, `@memberjunction/graphql-dataprovider`, and `@memberjunction/ng-search`.
+    - In `search-suggest.component.html` and `search-results.component.html`, display `EntityDisplayName || EntityName` for both preview results and result cards/detail views.
+    - In `SearchService.buildEntityNameFilter`, use entity display names for filter labels and icons while preserving `EntityName` for filtering.
+
+- af57e8d: A transaction group whose rows are refused server-side no longer reports success.
+
+  Fixes [#4309](https://github.com/MemberJunction/MJ/issues/4309).
+
+  `BaseEntity.Save()` and `Delete()` report a logical refusal by **returning `false`** — they do not throw — and a refused row is never enrolled in the group, because `TransactionGroup.AddTransaction(...)` is reached only from inside `ProviderToUse.Save()`/`Delete()`. `ExecuteTransactionGroup` discarded that boolean, which produced two wrong outcomes:
+  - **Every row refused** — the server's group arrived at `Submit()` empty, took its legitimate "nothing to do" branch and returned `true`, and the resolver reported `Success: true` while serialising each entity's never-persisted **in-memory** state into `ResultsJSON`. The client's per-item test (`resultObject !== null`) could not tell that apart from a real row, so `Submit()` returned `true` to the caller.
+  - **Only some rows refused** — the survivors committed and the caller still saw unqualified success, with the refused rows silently gone.
+
+  Nothing was ever written that should not have been: the guards did their job, and this was a false success report rather than a security bypass. But an administrator performing a bulk operation the server refused in full was told the opposite of what happened, and every server-side `Validate()` guard inherited the behaviour.
+
+  **`@memberjunction/server`** — `ExecuteTransactionGroup` now captures what `Save()`/`Delete()` return and, when any row was refused, logs which ones and returns `PrepareReturnValue(false, …)` **before** `tg.Submit()`. Nothing has been written at that point (enrolment is deferral), so a partially-refused group fails whole rather than committing the survivors.
+
+  The predicate is the **return value**, not whether the group ended up empty: a row that is not dirty also fails to enrol and correctly returns `true`, and an empty group legitimately means "nothing to do" for a caller that enrolled nothing (pinned by `transaction-groups.TG1`). That is also why the fix belongs in the resolver rather than `TransactionGroupBase.Submit()` — the resolver is the only layer that still knows _which_ row was refused and why.
+
+  **`@memberjunction/graphql-dataprovider`** — `GraphQLTransactionGroup.HandleSubmit` now copies the server's own failure result for each item onto that item's entity, so `BaseEntity.LatestResult` carries the reason a UI needs instead of the generic "Transaction group failed". It only ever _upgrades_ the message: every item of a failed group reports `Success: false` (the provider registers an entity's result before enrolling the row and only flips it in the transaction callback), so a result with no message or errors is left alone.
+
+  **`@memberjunction/server`** — a second fix on the same path: `ExecuteTransactionGroup` called the **async** `entity.GetDataObject()` without `await` when assembling a `Delete` item's result, so `PrepareReturnValue` serialised a `Promise` and **every** `Delete` in a transaction group returned `ResultsJSON: ["{}"]` — successful ones included. Neither `tsc` nor a floating-promise lint could see it, because the array is typed `any[]` and pushing a promise is not a floating promise. The empty payload also reached `GraphQLDataProvider`'s own `Delete` transaction callback, which validates a commit with `pk.Value !== results[pk.FieldName]`; against `{}` every key mismatched, so a delete that **did** commit reported `Transaction failed to commit` on its entity. Deletes now report the row they removed.
+
+  **`@memberjunction/ng-explorer-settings`** — the reason now reaches the operator, which is what #4309's _"Verify by"_ asks for: _"step 5 must now show an error naming the refused user(s) and the rule."_ Both Explorer surfaces that submit `MJ: User Roles` transaction groups — bulk **Assign Role** and the single-user dialog — took the `!await tg.Submit()` branch and threw a hardcoded "all changes have been rolled back", never reading the `LatestResult` the provider had just populated. They now keep their enrolled rows and read the server's reason back off them, so the screen names the refused user and the rule it broke. A shared `serverRefusalReasons` helper holds the one piece of knowledge both need, including which messages are the provider's own placeholders rather than a reason worth showing.
+
+  **`@memberjunction/integration-test-suite`** — `transaction-groups.TG6`'s third assertion could never fail. It searched the joined `ErrorMessages` for the substring `name` to prove the refusal reason had travelled, but each entry is a whole serialized `BaseEntityResult`, which always carries `OriginalValues: [{FieldName, …}]` — and `"FieldName"` lowercases to `"fieldname"`, which contains `"name"`. Strip every reason from the payload and the check still passed. It now extracts only the reason-bearing fields (`Message`, `Error`, `Errors[].Message`) and asserts both that a reason exists at all and that it names the offending column.
+
+  No public interface changed. One existing test expectation did change, deliberately: `TransactionGroupResolver.refusals.test.ts`'s fake declared `GetDataObject()` **synchronous**, diverging from the real `Promise<any>` signature — which is exactly why the suite could not see the missing `await`. The fake now matches production.
+
+- Updated dependencies [abf8778]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/actions-base@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/interactive-component-types@6.2.0-edge.0
+  - @memberjunction/lists-base@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

@@ -202,7 +202,7 @@ function readConfigString(
  * `MailNickname` from the local part of the requested address. Throws when no `RequestedValue` is
  * supplied — a Graph mailbox must be created at a known address (Graph does not allocate one).
  */
-export function buildGraphMailboxPayload(
+export function BuildGraphMailboxPayload(
     request: AgentIdentityProvisionRequest,
 ): GraphCreateMailboxPayload {
     const address = request.RequestedValue?.trim();
@@ -223,11 +223,18 @@ export function buildGraphMailboxPayload(
     };
 }
 
+/** @deprecated Use {@link BuildGraphMailboxPayload}. */
+export function buildGraphMailboxPayload(
+    request: AgentIdentityProvisionRequest,
+): GraphCreateMailboxPayload {
+    return BuildGraphMailboxPayload(request);
+}
+
 /**
  * **Pure** mapping of a provisioning request to the Google Workspace create-mailbox payload. Throws
  * when no `RequestedValue` is supplied — a Workspace user is created at a known primary email.
  */
-export function buildGoogleWorkspaceMailboxPayload(
+export function BuildGoogleWorkspaceMailboxPayload(
     request: AgentIdentityProvisionRequest,
 ): GoogleWorkspaceCreateMailboxPayload {
     const address = request.RequestedValue?.trim();
@@ -247,11 +254,18 @@ export function buildGoogleWorkspaceMailboxPayload(
     };
 }
 
+/** @deprecated Use {@link BuildGoogleWorkspaceMailboxPayload}. */
+export function buildGoogleWorkspaceMailboxPayload(
+    request: AgentIdentityProvisionRequest,
+): GoogleWorkspaceCreateMailboxPayload {
+    return BuildGoogleWorkspaceMailboxPayload(request);
+}
+
 /**
  * **Pure** mapping of a provisioning request to the carrier number-order payload. A DID is allocatable
  * by the carrier, so `RequestedValue` is optional (when omitted, the carrier picks from its pool).
  */
-export function buildCarrierNumberOrderPayload(
+export function BuildCarrierNumberOrderPayload(
     request: AgentIdentityProvisionRequest,
 ): CarrierNumberOrderPayload {
     const requestedNumber = request.RequestedValue?.trim();
@@ -261,6 +275,13 @@ export function buildCarrierNumberOrderPayload(
         ...(region ? { Region: region } : {}),
         Label: request.DisplayName ?? request.AgentID,
     };
+}
+
+/** @deprecated Use {@link BuildCarrierNumberOrderPayload}. */
+export function buildCarrierNumberOrderPayload(
+    request: AgentIdentityProvisionRequest,
+): CarrierNumberOrderPayload {
+    return BuildCarrierNumberOrderPayload(request);
 }
 
 /** The injected admin surfaces a {@link StubAgentIdentityProvisioner} binds. All optional. */
@@ -345,7 +366,7 @@ export class StubAgentIdentityProvisioner implements IAgentIdentityProvisioner {
         if (!this.graph) {
             throw new IdentityProvisionerNotBoundError(this.targetLabel('Email'));
         }
-        const payload = buildGraphMailboxPayload(request);
+        const payload = BuildGraphMailboxPayload(request);
         const result = await this.graph.CreateMailbox(payload);
         return {
             IdentityValue: result.UserPrincipalName,
@@ -361,7 +382,7 @@ export class StubAgentIdentityProvisioner implements IAgentIdentityProvisioner {
         if (!this.googleWorkspace) {
             throw new IdentityProvisionerNotBoundError(this.targetLabel('Email'));
         }
-        const payload = buildGoogleWorkspaceMailboxPayload(request);
+        const payload = BuildGoogleWorkspaceMailboxPayload(request);
         const result = await this.googleWorkspace.CreateMailbox(payload);
         return {
             IdentityValue: result.PrimaryEmail,
@@ -377,7 +398,7 @@ export class StubAgentIdentityProvisioner implements IAgentIdentityProvisioner {
         if (!this.carrier) {
             throw new IdentityProvisionerNotBoundError(this.targetLabel('PhoneNumber'));
         }
-        const payload = buildCarrierNumberOrderPayload(request);
+        const payload = BuildCarrierNumberOrderPayload(request);
         const result = await this.carrier.OrderNumber(payload);
         return {
             IdentityValue: result.PhoneNumber,

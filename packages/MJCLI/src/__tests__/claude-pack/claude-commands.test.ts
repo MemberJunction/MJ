@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
-import InstallClaude, { mapFlagsToInstallOptions } from '../../commands/install/claude.js';
+import InstallClaude, { MapFlagsToInstallOptions } from '../../commands/install/claude.js';
 import UpdateClaude from '../../commands/update/claude.js';
 
 // ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ describe('update:claude command class', () => {
 
 describe('mapFlagsToInstallOptions', () => {
     it('maps every flag to its installPack option name', () => {
-        const opts = mapFlagsToInstallOptions({
+        const opts = MapFlagsToInstallOptions({
             dir: '/some/dir',
             major: '5',
             ref: 'v5.33.0',
@@ -119,19 +119,19 @@ describe('mapFlagsToInstallOptions', () => {
     });
 
     it('defaults TargetDir to "." when dir is empty/undefined', () => {
-        expect(mapFlagsToInstallOptions({}).TargetDir).toBe('.');
-        expect(mapFlagsToInstallOptions({ dir: '' }).TargetDir).toBe('.');
+        expect(MapFlagsToInstallOptions({}).TargetDir).toBe('.');
+        expect(MapFlagsToInstallOptions({ dir: '' }).TargetDir).toBe('.');
     });
 
     it('leaves optional string fields undefined when absent', () => {
-        const opts = mapFlagsToInstallOptions({});
+        const opts = MapFlagsToInstallOptions({});
         expect(opts.Major).toBeUndefined();
         expect(opts.Ref).toBeUndefined();
         expect(opts.FromPath).toBeUndefined();
     });
 
     it('booleans default to undefined / false, not true', () => {
-        const opts = mapFlagsToInstallOptions({});
+        const opts = MapFlagsToInstallOptions({});
         expect(opts.Offline).toBe(false);
         expect(opts.DryRun).toBe(false);
         expect(opts.Force).toBe(false);
@@ -139,7 +139,7 @@ describe('mapFlagsToInstallOptions', () => {
 
     it('passes OnProgress through when provided', () => {
         const cb = vi.fn();
-        const opts = mapFlagsToInstallOptions({}, cb);
+        const opts = MapFlagsToInstallOptions({}, cb);
         expect(opts.OnProgress).toBe(cb);
     });
 });

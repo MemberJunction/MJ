@@ -45,11 +45,11 @@ import type { ChatMessage, ChatToolChoice } from '@memberjunction/ai';
 // "lite" bootstrap deliberately excludes @memberjunction/server, so this costs a registry and
 // nothing else — no config validation, no DB.
 import '@memberjunction/server-bootstrap-lite';
-import { buildManifest, DEFAULT_MATRIX_SPEC, expandMatrix } from '../src/native-tool-matrix/matrix';
-import { buildUserPrompt, getScenario } from '../src/native-tool-matrix/scenarios';
-import { observeChatResult } from '../src/native-tool-matrix/observe';
-import { isAuthFailure } from '../src/native-tool-matrix/credentials';
-import { renderScorecard, summarizeCells } from '../src/native-tool-matrix/report';
+import { BuildManifest, DEFAULT_MATRIX_SPEC, ExpandMatrix } from '../src/native-tool-matrix/matrix';
+import { BuildUserPrompt, GetScenario } from '../src/native-tool-matrix/scenarios';
+import { ObserveChatResult } from '../src/native-tool-matrix/observe';
+import { IsAuthFailure } from '../src/native-tool-matrix/credentials';
+import { RenderScorecard, SummarizeCells } from '../src/native-tool-matrix/report';
 import type { ProbeRecord } from '../src/native-tool-matrix/report';
 import type { MatrixCell, MatrixModel, MatrixSpec, ProbeResponseFormat, ProbeScenario, ProbeToolMode } from '../src/native-tool-matrix/types';
 
@@ -112,7 +112,7 @@ function buildSpec(options: RigOptions): MatrixSpec {
     // out of the default sweep to bound its cost — can be asked for by name. getScenario throws on
     // an unknown id, so a typo fails loudly instead of quietly running nothing.
     const scenarioIds = options.scenarioFilter.length > 0
-        ? options.scenarioFilter.map((id) => getScenario(id).id)
+        ? options.scenarioFilter.map((id) => GetScenario(id).id)
         : base.scenarioIds;
 
     return {
@@ -141,7 +141,7 @@ function messagesFor(scenario: ProbeScenario, responseFormat: ProbeResponseForma
     if (scenario.systemPrompt) {
         messages.push({ role: ChatMessageRole.system, content: scenario.systemPrompt });
     }
-    messages.push({ role: ChatMessageRole.user, content: buildUserPrompt(scenario, responseFormat) });
+    messages.push({ role: ChatMessageRole.user, content: BuildUserPrompt(scenario, responseFormat) });
     return messages;
 }
 
@@ -190,12 +190,12 @@ async function preflightCredential(driver: BaseLLM, model: MatrixModel): Promise
         const message = result.errorMessage ?? 'unknown error';
         // Only a credential failure is disqualifying. Anything else — a quota, a bad model id, a
         // transient 5xx — is the sweep's business to observe, not the preflight's to veto.
-        return isAuthFailure(message)
+        return IsAuthFailure(message)
             ? { ok: false, reason: `credential rejected — ${message.slice(0, 160)}` }
             : { ok: true, reason: '' };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        return isAuthFailure(message)
+        return IsAuthFailure(message)
             ? { ok: false, reason: `credential rejected — ${message.slice(0, 160)}` }
             : { ok: true, reason: '' };
     }
@@ -247,7 +247,7 @@ async function runOnce(driver: BaseLLM, cell: MatrixCell, scenario: ProbeScenari
         effortLevel: cell.effortLevel,
         rep,
         latencyMs,
-        observation: observeChatResult(result, scenario, cell.toolMode, cell.toolMode !== 'no-tools')
+        observation: ObserveChatResult(result, scenario, cell.toolMode, cell.toolMode !== 'no-tools')
     };
 }
 
@@ -299,7 +299,7 @@ async function runModel(
     const records: ProbeRecord[] = [];
     let consecutiveAuthFailures = 0;
     for (const cell of cells) {
-        const scenario = getScenario(cell.scenarioId);
+        const scenario = GetScenario(cell.scenarioId);
         for (let rep = 1; rep <= reps; rep++) {
             const record = await runOnce(driver, cell, scenario, label, rep);
             appendRecord(jsonlPath, record);
@@ -308,7 +308,7 @@ async function runModel(
 
             // A key can be revoked mid-run. Preflight passing does not make the rest of the sweep
             // immune, and grinding through the remainder proves nothing once auth is gone.
-            const failedOnAuth = !record.observation.driverSucceeded && isAuthFailure(record.observation.errorMessage ?? '');
+            const failedOnAuth = !record.observation.driverSucceeded && IsAuthFailure(record.observation.errorMessage ?? '');
             consecutiveAuthFailures = failedOnAuth ? consecutiveAuthFailures + 1 : 0;
             if (consecutiveAuthFailures >= AUTH_FAILURE_ABORT_THRESHOLD) {
                 const reason = `credential stopped working mid-sweep after ${records.length} calls`;
@@ -322,8 +322,8 @@ async function runModel(
 }
 
 function printManifest(spec: MatrixSpec, live: boolean): { cells: MatrixCell[]; skippedCount: number } {
-    const expanded = expandMatrix(spec);
-    const manifest = buildManifest(expanded, spec.reps);
+    const expanded = ExpandMatrix(spec);
+    const manifest = BuildManifest(expanded, spec.reps);
     console.log('── BaseLLM tool-calling matrix ──');
     console.log(`   models      : ${spec.models.map((m) => m.label).join(', ') || '(none — check --models)'}`);
     console.log(`   scenarios   : ${spec.scenarioIds.join(', ')}`);
@@ -346,8 +346,8 @@ function printManifest(spec: MatrixSpec, live: boolean): { cells: MatrixCell[]; 
 
 /** Writes the JSONL evidence path and the rendered scorecard beside it. */
 function writeResults(options: RigOptions, records: ProbeRecord[], meta: { startedAt: string; cellCount: number; skippedCount: number }): string {
-    const summaries = summarizeCells(records);
-    const markdown = renderScorecard(summaries, {
+    const summaries = SummarizeCells(records);
+    const markdown = RenderScorecard(summaries, {
         label: options.label,
         startedAt: meta.startedAt,
         finishedAt: new Date().toISOString(),
@@ -377,7 +377,7 @@ function rerenderFromRecords(options: RigOptions): void {
     const label = records[0].label;
     const cellCount = new Set(records.map((r) => r.cellId)).size;
     const reps = Math.max(...records.map((r) => r.rep));
-    const markdown = renderScorecard(summarizeCells(records), {
+    const markdown = RenderScorecard(SummarizeCells(records), {
         label,
         startedAt: records[0].timestamp,
         finishedAt: records[records.length - 1].timestamp,

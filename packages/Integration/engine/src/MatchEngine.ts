@@ -1,8 +1,8 @@
 import { DatabaseProviderBase, IMetadataProvider, Metadata, RunView, type RunViewParams, type RunViewResult, type UserInfo } from '@memberjunction/core';
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
-import { serializeKeyValue } from './KeySerialization.js';
-import { quoteTextLiteral } from './prefetchFilter.js';
+import { SerializeKeyValue } from './KeySerialization.js';
+import { QuoteTextLiteral } from './prefetchFilter.js';
 
 /**
  * The field/value pairs a record is matched on — parallel arrays, so the same criteria can be
@@ -121,13 +121,13 @@ export class MatchEngine {
         // criteria-shape group. These are independent queries with no data dependency between
         // them, which is exactly what RunViews is for — issuing them separately (or as a
         // Promise.all of RunView calls) pays a round trip per leg for no reason.
-        const { MapIndex: mapIndex, KeyIndex: keyIndex } = await this.PrefetchBatchLookups(
+        const { MapIndex: mapIndex, KeyIndex: keyIndex } = await this.prefetchBatchLookups(
             records, entityMap, keyFields, contextUser
         );
 
         const results: MappedRecord[] = [];
         for (const record of records) {
-            const resolved = await this.ResolveSingleRecord(
+            const resolved = await this.resolveSingleRecord(
                 record,
                 entityMap,
                 keyFields,
@@ -153,7 +153,7 @@ export class MatchEngine {
      * treat every record as unmapped and turn an incremental sync into a batch of duplicate
      * creates, so the two are kept distinct all the way down.
      */
-    private async PrefetchBatchLookups(
+    private async prefetchBatchLookups(
         records: MappedRecord[],
         entityMap: ICompanyIntegrationEntityMap,
         keyFields: ICompanyIntegrationFieldMap[],
@@ -285,7 +285,7 @@ export class MatchEngine {
     /**
      * Resolves a single record by checking for an existing MJ match.
      */
-    private async ResolveSingleRecord(
+    private async resolveSingleRecord(
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
         keyFields: ICompanyIntegrationFieldMap[],
@@ -295,15 +295,15 @@ export class MatchEngine {
         keyIndex?: KeyMatchIndex | null
     ): Promise<MappedRecord> {
         if (record.ExternalRecord.IsDeleted) {
-            return this.ResolveDeletedRecord(record, entityMap, contextUser, mapIndex);
+            return this.resolveDeletedRecord(record, entityMap, contextUser, mapIndex);
         }
 
-        const existingID = await this.FindExistingRecord(
+        const existingID = await this.findExistingRecord(
             record, entityMap, keyFields, contextUser, mapIndex, keyIndex
         );
 
         if (existingID) {
-            return this.ResolveExistingRecord(record, existingID, conflictResolution);
+            return this.resolveExistingRecord(record, existingID, conflictResolution);
         }
 
         return { ...record, ChangeType: 'Create' };
@@ -312,13 +312,13 @@ export class MatchEngine {
     /**
      * Handles records marked as deleted in the external system.
      */
-    private async ResolveDeletedRecord(
+    private async resolveDeletedRecord(
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo,
         mapIndex?: RecordMapIndex | null
     ): Promise<MappedRecord> {
-        const existingID = await this.FindRecordMapEntry(
+        const existingID = await this.findRecordMapEntry(
             entityMap.CompanyIntegrationID,
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
@@ -336,7 +336,7 @@ export class MatchEngine {
     /**
      * Determines change type for a record that matches an existing MJ record.
      */
-    private ResolveExistingRecord(
+    private resolveExistingRecord(
         record: MappedRecord,
         existingID: string,
         conflictResolution: ConflictResolution
@@ -362,7 +362,7 @@ export class MatchEngine {
      * see `LoadAllRecordMaps`) re-CREATED a row whose PK already existed. Integration shadow
      * tables are exactly this shape: a single soft PK holding the external ID.
      */
-    private async FindExistingRecord(
+    private async findExistingRecord(
         record: MappedRecord,
         entityMap: ICompanyIntegrationEntityMap,
         keyFields: ICompanyIntegrationFieldMap[],
@@ -371,11 +371,11 @@ export class MatchEngine {
         keyIndex?: KeyMatchIndex | null
     ): Promise<string | null> {
         if (keyFields.length > 0 || this.hasCompleteMappedPrimaryKey(record)) {
-            const idByKeys = await this.LookupByKeyFields(record, keyFields, contextUser, keyIndex);
+            const idByKeys = await this.lookupByKeyFields(record, keyFields, contextUser, keyIndex);
             if (idByKeys) return idByKeys;
         }
 
-        return this.FindRecordMapEntry(
+        return this.findRecordMapEntry(
             entityMap.CompanyIntegrationID,
             record.ExternalRecord.ExternalID,
             entityMap.EntityID,
@@ -388,22 +388,22 @@ export class MatchEngine {
      * Answers the identity/key lookup from the batch prefetch when it can, and only issues the
      * per-record query when the prefetch neither found the record nor proved it absent.
      */
-    private async LookupByKeyFields(
+    private async lookupByKeyFields(
         record: MappedRecord,
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo,
         keyIndex?: KeyMatchIndex | null
     ): Promise<string | null> {
         if (keyIndex) {
-            const criteria = this.BuildMatchCriteria(record, keyFields);
+            const criteria = this.buildMatchCriteria(record, keyFields);
             if (criteria) {
-                const key = this.CriteriaKey(criteria.Fields, criteria.Values);
+                const key = this.criteriaKey(criteria.Fields, criteria.Values);
                 const matched = keyIndex.Matched.get(key);
                 if (matched) return matched;
                 if (keyIndex.Unmatched.has(key)) return null;
             }
         }
-        return this.FindByKeyFields(record, keyFields, contextUser);
+        return this.findByKeyFields(record, keyFields, contextUser);
     }
 
     /**
@@ -443,19 +443,19 @@ export class MatchEngine {
      * The returned ID is always the PK values in `PrimaryKeys` order, '|'-joined — the same
      * format `ExternalID`/`EntityRecordID` use — so the caller can load the row directly.
      */
-    private async FindByKeyFields(
+    private async findByKeyFields(
         record: MappedRecord,
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
         const pkFields = this.primaryKeyFieldsFor(record.MJEntityName);
-        const match = this.BuildMatchCriteria(record, keyFields);
+        const match = this.buildMatchCriteria(record, keyFields);
         if (!match) return null;
 
         const rv = new RunView();
         const result = await rv.RunView<Record<string, string>>({
             EntityName: record.MJEntityName,
-            ExtraFilter: this.CriteriaToSQL(match),
+            ExtraFilter: this.criteriaToSQL(match),
             Fields: pkFields.map(f => f.Name),
             MaxRows: 1,
             ResultType: 'simple',
@@ -476,7 +476,7 @@ export class MatchEngine {
      * Field/value pairs (rather than pre-rendered SQL) so the same criteria can be rendered as a
      * filter clause AND used as a local lookup key when a whole batch is resolved in one query.
      */
-    private BuildMatchCriteria(
+    private buildMatchCriteria(
         record: MappedRecord,
         keyFields: ICompanyIntegrationFieldMap[]
     ): MatchCriteria | null {
@@ -490,7 +490,7 @@ export class MatchEngine {
             const value = record.MappedFields[pkField.Name];
             if (value == null) continue;
             pk.Fields.push(pkField.Name);
-            pk.Values.push(serializeKeyValue(value));
+            pk.Values.push(SerializeKeyValue(value));
         }
 
         // Complete PK → identity match, on the PK alone. Configured key fields are deliberately
@@ -510,7 +510,7 @@ export class MatchEngine {
         for (const kf of keyFields) {
             const value = record.MappedFields[kf.DestinationFieldName];
             if (value == null) continue;
-            add(kf.DestinationFieldName, serializeKeyValue(value));
+            add(kf.DestinationFieldName, SerializeKeyValue(value));
         }
         for (let i = 0; i < pk.Fields.length; i++) add(pk.Fields[i], pk.Values[i]);
 
@@ -534,7 +534,7 @@ export class MatchEngine {
     private quoteLiteral(value: string): string {
         const provider = this.ProviderToUse;
         return provider instanceof DatabaseProviderBase
-            ? quoteTextLiteral(value, provider.Dialect)
+            ? QuoteTextLiteral(value, provider.Dialect)
             : `'${value.replace(/'/g, "''")}'`;
     }
 
@@ -546,7 +546,7 @@ export class MatchEngine {
      * identifiers break on a column named for a reserved word (e.g. a soft PK named
      * `open`/`order`); brackets would fix SQL Server but break Postgres, so double-quote.
      */
-    private CriteriaToSQL(criteria: MatchCriteria): string {
+    private criteriaToSQL(criteria: MatchCriteria): string {
         return criteria.Fields
             .map((f, i) => `"${f}" = ${this.quoteLiteral(criteria.Values[i])}`)
             .join(' AND ');
@@ -560,7 +560,7 @@ export class MatchEngine {
      * = `C` and field `A` = `B C` both render `A B C` — and since this key is what decides which
      * row answers which criteria, a collision attributes a row to the wrong record.
      */
-    private CriteriaKey(fields: string[], values: string[]): string {
+    private criteriaKey(fields: string[], values: string[]): string {
         return fields
             .map((f, i) => [f, values[i]] as const)
             .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
@@ -597,7 +597,7 @@ export class MatchEngine {
         for (const record of records) {
             if (record.ExternalRecord.IsDeleted) continue;
             if (keyFields.length === 0 && !this.hasCompleteMappedPrimaryKey(record)) continue;
-            const criteria = this.BuildMatchCriteria(record, keyFields);
+            const criteria = this.buildMatchCriteria(record, keyFields);
             if (!criteria) continue;
             // `\0`-delimited for the same reason CriteriaKey is: entity `AB` + field `C` and
             // entity `A` + field `BC` would otherwise share a signature, merging two entities
@@ -615,7 +615,7 @@ export class MatchEngine {
 
             // Distinct clause sets only — a batch commonly repeats the same external record.
             const clauses = new Map<string, MatchCriteria>();
-            for (const c of group.Criteria) clauses.set(this.CriteriaKey(c.Fields, c.Values), c);
+            for (const c of group.Criteria) clauses.set(this.criteriaKey(c.Fields, c.Values), c);
 
             const lookupFields = group.Criteria[0].Fields;
             groups.push({
@@ -625,7 +625,7 @@ export class MatchEngine {
                 Params: {
                     EntityName: group.EntityName,
                     ExtraFilter: Array.from(clauses.values())
-                        .map(c => `(${this.CriteriaToSQL(c)})`)
+                        .map(c => `(${this.criteriaToSQL(c)})`)
                         .join(' OR '),
                     Fields: Array.from(new Set([...pkFields.map(f => f.Name), ...lookupFields])),
                     IgnoreMaxRows: true, // a batch's matches can exceed the entity's default row cap
@@ -653,9 +653,9 @@ export class MatchEngine {
 
             const rows = result.Results as Array<Record<string, unknown>>;
             for (const row of rows) {
-                const rowKey = this.CriteriaKey(
+                const rowKey = this.criteriaKey(
                     group.LookupFields,
-                    group.LookupFields.map(f => serializeKeyValue(row[f]))
+                    group.LookupFields.map(f => SerializeKeyValue(row[f]))
                 );
                 if (index.Matched.has(rowKey)) continue; // first row wins, as MaxRows:1 did
                 index.Matched.set(
@@ -676,7 +676,7 @@ export class MatchEngine {
     /**
      * Checks the CompanyIntegrationRecordMap for a previous external↔MJ mapping.
      */
-    private async FindRecordMapEntry(
+    private async findRecordMapEntry(
         companyIntegrationID: string,
         externalID: string,
         entityID: string,
