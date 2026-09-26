@@ -49,18 +49,33 @@ export const TESTING_CONTEXT_BREAKDOWN_CAP = 5;
  * Type-guard / validator for a tab string. Keeps the `SwitchTestingTab` client
  * tool tolerant of arbitrary agent input — only the four known tabs are accepted.
  */
-export function isValidTestingTab(tab: unknown): tab is TestingTab {
+export function IsValidTestingTab(tab: unknown): tab is TestingTab {
     return typeof tab === 'string' && (TESTING_TABS as readonly string[]).includes(tab);
 }
 
+/** @deprecated Use {@link IsValidTestingTab}. */
+export function isValidTestingTab(tab: unknown): tab is TestingTab {
+    return IsValidTestingTab(tab);
+}
+
 /** Type-guard for a status filter string (used by `FilterTestsByStatus`). */
-export function isValidTestingStatusFilter(status: unknown): status is TestingStatusFilter {
+export function IsValidTestingStatusFilter(status: unknown): status is TestingStatusFilter {
     return typeof status === 'string' && (TESTING_STATUS_FILTERS as readonly string[]).includes(status);
 }
 
+/** @deprecated Use {@link IsValidTestingStatusFilter}. */
+export function isValidTestingStatusFilter(status: unknown): status is TestingStatusFilter {
+    return IsValidTestingStatusFilter(status);
+}
+
 /** Type-guard for a time-range string (used by `FilterTestsByTimeRange`). */
-export function isValidTestingTimeRange(range: unknown): range is TestingTimeRange {
+export function IsValidTestingTimeRange(range: unknown): range is TestingTimeRange {
     return typeof range === 'string' && (TESTING_TIME_RANGES as readonly string[]).includes(range);
+}
+
+/** @deprecated Use {@link IsValidTestingTimeRange}. */
+export function isValidTestingTimeRange(range: unknown): range is TestingTimeRange {
+    return IsValidTestingTimeRange(range);
 }
 
 /**
@@ -68,21 +83,26 @@ export function isValidTestingTimeRange(range: unknown): range is TestingTimeRan
  * override) entries. Pure + deterministic; never mutates the input. Tolerates a
  * non-finite cap by falling back to the default.
  */
-export function capList(names: readonly string[], cap: number = TESTING_CONTEXT_LIST_CAP): string[] {
+export function CapList(names: readonly string[], cap: number = TESTING_CONTEXT_LIST_CAP): string[] {
     const safeCap = Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : TESTING_CONTEXT_LIST_CAP;
     return names.slice(0, safeCap);
 }
 
+/** @deprecated Use {@link CapList}. */
+export function capList(names: readonly string[], cap: number = TESTING_CONTEXT_LIST_CAP): string[] {
+    return CapList(names, cap);
+}
+
 /** A minimal id+name pair describing a test run, as the Runs surface holds them. */
 export interface TestRunNameCandidate {
-    id: string;
-    testName: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    testName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Outcome of {@link resolveTestRunByReference}: a matched run, or an error. */
 export type TestRunResolution<T extends TestRunNameCandidate> =
-    | { ok: true; run: T }
-    | { ok: false; error: string };
+    | { Ok: true; Run: T }
+    | { Ok: false; Error: string };
 
 /**
  * Resolve an agent-supplied run reference (either an exact run ID or a run name)
@@ -99,37 +119,45 @@ export type TestRunResolution<T extends TestRunNameCandidate> =
  * @param candidates - the runs currently loaded on the Runs surface
  * @returns the matched run, or a clear error message
  */
-export function resolveTestRunByReference<T extends TestRunNameCandidate>(
+export function ResolveTestRunByReference<T extends TestRunNameCandidate>(
     reference: string,
     candidates: readonly T[],
 ): TestRunResolution<T> {
     const needle = reference.trim().toLowerCase();
     if (!needle) {
-        return { ok: false, error: 'Provide a test-run ID or a test name to select.' };
+        return { Ok: false, Error: 'Provide a test-run ID or a test name to select.' };
     }
     if (candidates.length === 0) {
-        return { ok: false, error: 'No test runs are currently loaded in the Runs view to select from.' };
+        return { Ok: false, Error: 'No test runs are currently loaded in the Runs view to select from.' };
     }
     const byId = candidates.find(c => c.id.toLowerCase() === needle);
     if (byId) {
-        return { ok: true, run: byId };
+        return { Ok: true, Run: byId };
     }
     const byExactName = candidates.find(c => c.testName.toLowerCase() === needle);
     if (byExactName) {
-        return { ok: true, run: byExactName };
+        return { Ok: true, Run: byExactName };
     }
     const byContains = candidates.find(c => c.testName.toLowerCase().includes(needle));
     if (byContains) {
-        return { ok: true, run: byContains };
+        return { Ok: true, Run: byContains };
     }
     const sample = candidates.slice(0, 5).map(c => c.testName).join(', ');
-    return { ok: false, error: `No loaded test run matches "${reference}". Loaded runs include: ${sample}.` };
+    return { Ok: false, Error: `No loaded test run matches "${reference}". Loaded runs include: ${sample}.` };
+}
+
+/** @deprecated Use {@link ResolveTestRunByReference}. */
+export function resolveTestRunByReference<T extends TestRunNameCandidate>(
+    reference: string,
+    candidates: readonly T[],
+): TestRunResolution<T> {
+    return ResolveTestRunByReference(reference, candidates);
 }
 
 /** One analytics breakdown row published to the agent (name + a metric). */
 export interface TestingBreakdownEntry {
-    name: string;
-    value: number;
+    Name: string;
+    Value: number;
 }
 
 /**
@@ -251,7 +279,7 @@ function buildKpiContext(input: TestingAgentContextInput): Record<string, unknow
         PassRateTrend: roundTo(input.PassRateTrend, 1),
     };
     if (input.ActiveRunNames.length > 0) {
-        context['ActiveRunNames'] = capList(input.ActiveRunNames);
+        context['ActiveRunNames'] = CapList(input.ActiveRunNames);
     }
     return context;
 }
@@ -268,7 +296,7 @@ function buildRunsContext(runs: TestingRunsSurfaceState): Record<string, unknown
         DetailPanelOpen: runs.DetailPanelOpen,
     };
     if (runs.VisibleRunNames.length > 0) {
-        context['VisibleRunNames'] = capList(runs.VisibleRunNames);
+        context['VisibleRunNames'] = CapList(runs.VisibleRunNames);
         if (runs.VisibleRunNames.length > TESTING_CONTEXT_LIST_CAP) {
             context['VisibleRunNamesTruncated'] = true;
         }
@@ -281,9 +309,9 @@ function buildAnalyticsContext(a: TestingAnalyticsSurfaceState): Record<string, 
     return {
         SelectedDays: a.SelectedDays,
         VersionCount: a.VersionCount,
-        TopFailingTests: capList(a.TopFailingTests, TESTING_CONTEXT_BREAKDOWN_CAP),
-        SlowestTests: capList(a.SlowestTests, TESTING_CONTEXT_BREAKDOWN_CAP),
-        MostExpensiveTests: capList(a.MostExpensiveTests, TESTING_CONTEXT_BREAKDOWN_CAP),
+        TopFailingTests: CapList(a.TopFailingTests, TESTING_CONTEXT_BREAKDOWN_CAP),
+        SlowestTests: CapList(a.SlowestTests, TESTING_CONTEXT_BREAKDOWN_CAP),
+        MostExpensiveTests: CapList(a.MostExpensiveTests, TESTING_CONTEXT_BREAKDOWN_CAP),
     };
 }
 
@@ -315,7 +343,7 @@ function buildReviewContext(r: TestingReviewSurfaceState): Record<string, unknow
  * @param input - the component's current state snapshot
  * @returns a flat key-value object suitable for `SetAgentContext`
  */
-export function buildTestingAgentContext(input: TestingAgentContextInput): Record<string, unknown> {
+export function BuildTestingAgentContext(input: TestingAgentContextInput): Record<string, unknown> {
     const context = buildKpiContext(input);
 
     if (input.ActiveTab === 'runs' && input.Runs) {
@@ -327,6 +355,11 @@ export function buildTestingAgentContext(input: TestingAgentContextInput): Recor
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildTestingAgentContext}. */
+export function buildTestingAgentContext(input: TestingAgentContextInput): Record<string, unknown> {
+    return BuildTestingAgentContext(input);
 }
 
 /** Round a number to a fixed number of decimal places, tolerating non-finite input. */

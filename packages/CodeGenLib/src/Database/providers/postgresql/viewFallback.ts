@@ -29,11 +29,11 @@
 
 import {
     type PGQueryable,
-    resolveViewOid,
-    captureDependentViews,
-    captureDependentFunctions,
-    captureGrants,
-    captureMetadata,
+    ResolveViewOid,
+    CaptureDependentViews,
+    CaptureDependentFunctions,
+    CaptureGrants,
+    CaptureMetadata,
     type DependentView,
     type DependentFunction,
     type ViewGrant,
@@ -49,8 +49,8 @@ const SQLSTATE_INVALID_TABLE_DEFINITION = '42P16';
  */
 export class ViewFallbackRestoreError extends Error {
     constructor(
-        public readonly phase: 'restore-view' | 'restore-function' | 'restore-grant' | 'restore-comment' | 'restore-owner',
-        public readonly target: { schema?: string; name?: string; sql?: string },
+        public readonly phase: 'restore-view' | 'restore-function' | 'restore-grant' | 'restore-comment' | 'restore-owner',  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+        public readonly target: { schema?: string; name?: string; sql?: string },  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
         cause: unknown
     ) {
         const causeMsg = cause instanceof Error ? cause.message : String(cause);
@@ -61,11 +61,11 @@ export class ViewFallbackRestoreError extends Error {
 
 export interface ExecuteWithFallbackOptions {
     /** A connected pg Client (not a pool) — we issue BEGIN/COMMIT on this. */
-    client: PGQueryable;
-    schema: string;
-    viewName: string;
+    Client: PGQueryable;
+    schema: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    ViewName: string;
     /** The exact `CREATE OR REPLACE VIEW ...` SQL the generator produced. */
-    createOrReplaceSQL: string;
+    CreateOrReplaceSQL: string;
     /**
      * Optional — set of view names in `schema.name` form that CodeGen will
      * regenerate later in the same run. Dependents in this set are skipped
@@ -76,7 +76,7 @@ export interface ExecuteWithFallbackOptions {
      * Names are compared case-sensitively because PG identifiers are stored
      * as-written when quoted.
      */
-    willRegenerate?: Set<string>;
+    WillRegenerate?: Set<string>;
     /**
      * Optional — the qualified base table this view selects from
      * (e.g. `__mj."RecordChange"`). Used to materialize a stub view first
@@ -90,7 +90,7 @@ export interface ExecuteWithFallbackOptions {
      * CREATE OR REPLACE — which now succeeds because the self-reference
      * can resolve to the stub.
      */
-    baseTableQualified?: string;
+    BaseTableQualified?: string;
 }
 
 /**
@@ -100,9 +100,9 @@ export interface ExecuteWithFallbackOptions {
  * Caller must pass a connected pg Client. Concurrent usage of the same client
  * from other code is not allowed — this function manages transaction state.
  */
-export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Promise<void> {
-    const { client, schema, viewName, createOrReplaceSQL, baseTableQualified } = opts;
-    const willRegenerate = opts.willRegenerate ?? new Set<string>();
+export async function ExecuteWithFallback(opts: ExecuteWithFallbackOptions): Promise<void> {
+    const { Client: client, schema, ViewName: viewName, CreateOrReplaceSQL: createOrReplaceSQL, BaseTableQualified: baseTableQualified } = opts;
+    const willRegenerate = opts.WillRegenerate ?? new Set<string>();
 
     // First attempt: happy-path CREATE OR REPLACE. If this succeeds there's
     // nothing to capture or restore.
@@ -139,7 +139,7 @@ export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Pro
     // restore rolls back to the pre-drop state.
     await client.query('BEGIN');
     try {
-        const oid = await resolveViewOid(client, schema, viewName);
+        const oid = await ResolveViewOid(client, schema, viewName);
         // If the view doesn't exist, 42P16 would never have been raised — so
         // this should be impossible, but fail loudly if it happens.
         if (oid === null) {
@@ -148,7 +148,7 @@ export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Pro
             );
         }
 
-        const dependents = await captureDependentViews(client, oid);
+        const dependents = await CaptureDependentViews(client, oid);
 
         // Capture functions transitively. A DROP VIEW ... CASCADE on the
         // target removes BOTH directly-dependent functions (those whose
@@ -159,11 +159,11 @@ export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Pro
         // through the cascade chain — surfacing as "Post-CodeGen CRUD
         // validation FAILED: missing create routine spCreateX" and forcing
         // a second codegen pass to converge.
-        const directFunctions = await captureDependentFunctions(client, oid);
+        const directFunctions = await CaptureDependentFunctions(client, oid);
         const transitiveFnLists = await Promise.all(
             dependents.map(async (dep) => {
-                const depOid = await resolveViewOid(client, dep.schema, dep.name);
-                return depOid !== null ? captureDependentFunctions(client, depOid) : [];
+                const depOid = await ResolveViewOid(client, dep.schema, dep.name);
+                return depOid !== null ? CaptureDependentFunctions(client, depOid) : [];
             })
         );
         // De-duplicate by schema+name — direct + transitive lists can overlap
@@ -177,8 +177,8 @@ export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Pro
         });
 
 
-        const grants = await captureGrants(client, schema, viewName);
-        const metadata = await captureMetadata(client, oid);
+        const grants = await CaptureGrants(client, schema, viewName);
+        const metadata = await CaptureMetadata(client, oid);
 
         const qualified = quoteQualified(schema, viewName);
         await client.query(`DROP VIEW IF EXISTS ${qualified} CASCADE`);
@@ -200,6 +200,11 @@ export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Pro
         await safelyRollback(client);
         throw err;
     }
+}
+
+/** @deprecated Use {@link ExecuteWithFallback}. */
+export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Promise<void> {
+    return ExecuteWithFallback(opts);
 }
 
 // ─── Restore ─────────────────────────────────────────────────────────────

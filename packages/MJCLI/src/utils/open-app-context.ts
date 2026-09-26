@@ -10,15 +10,15 @@
  * paths receive a provider whose `Dialect.PlatformKey` matches the real database.
  */
 import ora from 'ora-classic';
-import { isInteractiveRun } from '../lib/interactive-guard.js';
+import { IsInteractiveRun } from '../lib/interactive-guard.js';
 import { input, confirm, select, password } from '@inquirer/prompts';
 import { createRequire } from 'node:module';
 import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
-import { getValidatedConfig } from '../config.js';
+import { GetValidatedConfig } from '../config.js';
 
-type ResolvedConfig = ReturnType<typeof getValidatedConfig>;
+type ResolvedConfig = ReturnType<typeof GetValidatedConfig>;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider initialization — delegated to MetadataSync's shared, db-generic
@@ -33,7 +33,7 @@ type ResolvedConfig = ReturnType<typeof getValidatedConfig>;
  * MetadataSync's shared `initializeProvider` consumes.
  */
 async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
-  return initializeProvider(toMJConfig(getValidatedConfig()));
+  return initializeProvider(toMJConfig(GetValidatedConfig()));
 }
 
 /**
@@ -71,8 +71,13 @@ function toMJConfig(config: ResolvedConfig) {
  * MetadataSync's `cleanupProvider`, which tears down whichever pool (mssql or pg)
  * was opened and resets the shared provider singleton.
  */
-export async function closeConnectionPool(): Promise<void> {
+export async function CloseConnectionPool(): Promise<void> {
   await cleanupProvider();
+}
+
+/** @deprecated Use {@link CloseConnectionPool}. */
+export async function closeConnectionPool(): Promise<void> {
+  return CloseConnectionPool();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,20 +119,25 @@ function getSystemUserInfo(): UserInfo {
  * Builds a context user for read-only commands (list, info, check-updates).
  * Initializes the MJ runtime and returns the system user.
  */
-export async function buildContextUser(): Promise<UserInfo> {
+export async function BuildContextUser(): Promise<UserInfo> {
   await ensureProviderInitialized();
   return getSystemUserInfo();
+}
+
+/** @deprecated Use {@link BuildContextUser}. */
+export async function buildContextUser(): Promise<UserInfo> {
+  return BuildContextUser();
 }
 
 /**
  * Builds the full OrchestratorContext for install/upgrade/remove/disable/enable commands.
  */
-export async function buildOrchestratorContext(
+export async function BuildOrchestratorContext(
   command: { log: (msg: string) => void; warn: (msg: string | Error) => void },
   verbose?: boolean,
   interactive: boolean = true,
 ): Promise<OrchestratorContextShape> {
-  const config = getValidatedConfig();
+  const config = GetValidatedConfig();
   const provider = await ensureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
@@ -136,7 +146,7 @@ export async function buildOrchestratorContext(
   // which then fall back to env/defaults instead of blocking on @inquirer (which errors in CI).
   // `interactive` is the per-command opt-out (--non-interactive); isInteractiveRun() is the
   // global rule: a real terminal unless --no-interactive / CI says otherwise.
-  const wantPrompts = interactive && isInteractiveRun();
+  const wantPrompts = interactive && IsInteractiveRun();
 
   return {
     ContextUser: contextUser,
@@ -151,7 +161,7 @@ export async function buildOrchestratorContext(
       TrustServerCertificate: config.dbTrustServerCertificate,
       RequestTimeout: config.dbRequestTimeout,
     },
-    GitHubOptions: buildGitHubOptions(config),
+    GitHubOptions: BuildGitHubOptions(config),
     RepoRoot: process.cwd(),
     MJVersion: getMJVersion(),
     ServerPackagePath: config.openApps?.serverPackagePath,
@@ -193,6 +203,15 @@ export async function buildOrchestratorContext(
         : {}),
     },
   };
+}
+
+/** @deprecated Use {@link BuildOrchestratorContext}. */
+export async function buildOrchestratorContext(
+  command: { log: (msg: string) => void; warn: (msg: string | Error) => void },
+  verbose?: boolean,
+  interactive: boolean = true,
+): Promise<OrchestratorContextShape> {
+  return BuildOrchestratorContext(command, verbose, interactive);
 }
 
 /**
@@ -252,13 +271,20 @@ interface OrchestratorContextShape {
  * — and for a read-only check that shows up as "up to date" (a 404 is indistinguishable from
  * "no releases"), not as an error.
  */
-export function buildGitHubOptions(config: {
+export function BuildGitHubOptions(config: {
   openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
 }): { Token?: string; TokenMap?: Record<string, string> } {
   return {
     Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
     TokenMap: filterDefinedTokens(config.openApps?.github?.tokens),
   };
+}
+
+/** @deprecated Use {@link BuildGitHubOptions}. */
+export function buildGitHubOptions(config: {
+  openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
+}): { Token?: string; TokenMap?: Record<string, string> } {
+  return BuildGitHubOptions(config);
 }
 
 function filterDefinedTokens(tokens: Record<string, string | undefined> | undefined): Record<string, string> | undefined {

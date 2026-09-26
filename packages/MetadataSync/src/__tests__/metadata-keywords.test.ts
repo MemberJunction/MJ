@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest';
 import {
   METADATA_KEYWORDS,
   METADATA_KEYWORD_PREFIXES,
-  isMetadataKeyword,
-  getMetadataKeywordType,
-  extractKeywordValue,
-  hasMetadataKeyword,
-  isNonKeywordAtSymbol,
-  isContextDependentKeyword,
-  isExternalReferenceKeyword,
-  createKeywordReference,
+  IsMetadataKeyword,
+  GetMetadataKeywordType,
+  ExtractKeywordValue,
+  HasMetadataKeyword,
+  IsNonKeywordAtSymbol,
+  IsContextDependentKeyword,
+  IsExternalReferenceKeyword,
+  CreateKeywordReference,
   CONTEXT_DEPENDENT_KEYWORDS,
   EXTERNAL_REFERENCE_KEYWORDS,
   LOOKUP_KEYWORDS,
@@ -54,274 +54,274 @@ describe('METADATA_KEYWORD_PREFIXES', () => {
 
 describe('isMetadataKeyword', () => {
   it('should return true for @file: references', () => {
-    expect(isMetadataKeyword('@file:template.md')).toBe(true);
+    expect(IsMetadataKeyword('@file:template.md')).toBe(true);
   });
 
   it('should return true for @lookup: references', () => {
-    expect(isMetadataKeyword('@lookup:Users.Email=test@example.com')).toBe(true);
+    expect(IsMetadataKeyword('@lookup:Users.Email=test@example.com')).toBe(true);
   });
 
   it('should return true for @parent: references', () => {
-    expect(isMetadataKeyword('@parent:ID')).toBe(true);
+    expect(IsMetadataKeyword('@parent:ID')).toBe(true);
   });
 
   it('should return true for @owner: references', () => {
-    expect(isMetadataKeyword('@owner:ShipToPersonID')).toBe(true);
+    expect(IsMetadataKeyword('@owner:ShipToPersonID')).toBe(true);
   });
 
   it('should return true for @root: references', () => {
-    expect(isMetadataKeyword('@root:Name')).toBe(true);
+    expect(IsMetadataKeyword('@root:Name')).toBe(true);
   });
 
   it('should return true for @env: references', () => {
-    expect(isMetadataKeyword('@env:NODE_ENV')).toBe(true);
+    expect(IsMetadataKeyword('@env:NODE_ENV')).toBe(true);
   });
 
   it('should return true for @url: references', () => {
-    expect(isMetadataKeyword('@url:https://example.com')).toBe(true);
+    expect(IsMetadataKeyword('@url:https://example.com')).toBe(true);
   });
 
   it('should return true for @template: references', () => {
-    expect(isMetadataKeyword('@template:templates/standard.json')).toBe(true);
+    expect(IsMetadataKeyword('@template:templates/standard.json')).toBe(true);
   });
 
   it('should return true for bare @include', () => {
-    expect(isMetadataKeyword('@include')).toBe(true);
+    expect(IsMetadataKeyword('@include')).toBe(true);
   });
 
   it('should return false for regular strings', () => {
-    expect(isMetadataKeyword('regular string')).toBe(false);
+    expect(IsMetadataKeyword('regular string')).toBe(false);
   });
 
   it('should return false for non-string values', () => {
-    expect(isMetadataKeyword(123)).toBe(false);
-    expect(isMetadataKeyword(null)).toBe(false);
-    expect(isMetadataKeyword(undefined)).toBe(false);
-    expect(isMetadataKeyword({})).toBe(false);
-    expect(isMetadataKeyword([])).toBe(false);
-    expect(isMetadataKeyword(true)).toBe(false);
+    expect(IsMetadataKeyword(123)).toBe(false);
+    expect(IsMetadataKeyword(null)).toBe(false);
+    expect(IsMetadataKeyword(undefined)).toBe(false);
+    expect(IsMetadataKeyword({})).toBe(false);
+    expect(IsMetadataKeyword([])).toBe(false);
+    expect(IsMetadataKeyword(true)).toBe(false);
   });
 
   it('should return false for unknown @ strings', () => {
-    expect(isMetadataKeyword('@unknown:value')).toBe(false);
-    expect(isMetadataKeyword('@angular/core')).toBe(false);
-    expect(isMetadataKeyword('@mui/material')).toBe(false);
+    expect(IsMetadataKeyword('@unknown:value')).toBe(false);
+    expect(IsMetadataKeyword('@angular/core')).toBe(false);
+    expect(IsMetadataKeyword('@mui/material')).toBe(false);
   });
 
   it('should return false for empty string', () => {
-    expect(isMetadataKeyword('')).toBe(false);
+    expect(IsMetadataKeyword('')).toBe(false);
   });
 });
 
 describe('getMetadataKeywordType', () => {
   it('should return "file" for @file: references', () => {
-    expect(getMetadataKeywordType('@file:template.md')).toBe('file');
+    expect(GetMetadataKeywordType('@file:template.md')).toBe('file');
   });
 
   it('should return "lookup" for @lookup: references', () => {
-    expect(getMetadataKeywordType('@lookup:Users.Name=John')).toBe('lookup');
+    expect(GetMetadataKeywordType('@lookup:Users.Name=John')).toBe('lookup');
   });
 
   it('should return "parent" for @parent: references', () => {
-    expect(getMetadataKeywordType('@parent:ID')).toBe('parent');
+    expect(GetMetadataKeywordType('@parent:ID')).toBe('parent');
   });
 
   it('should return "owner" for @owner: references', () => {
-    expect(getMetadataKeywordType('@owner:ShipToPersonID')).toBe('owner');
+    expect(GetMetadataKeywordType('@owner:ShipToPersonID')).toBe('owner');
   });
 
   it('should return "root" for @root: references', () => {
-    expect(getMetadataKeywordType('@root:ID')).toBe('root');
+    expect(GetMetadataKeywordType('@root:ID')).toBe('root');
   });
 
   it('should return "env" for @env: references', () => {
-    expect(getMetadataKeywordType('@env:DATABASE_URL')).toBe('env');
+    expect(GetMetadataKeywordType('@env:DATABASE_URL')).toBe('env');
   });
 
   it('should return "url" for @url: references', () => {
-    expect(getMetadataKeywordType('@url:https://example.com')).toBe('url');
+    expect(GetMetadataKeywordType('@url:https://example.com')).toBe('url');
   });
 
   it('should return "template" for @template: references', () => {
-    expect(getMetadataKeywordType('@template:standard.json')).toBe('template');
+    expect(GetMetadataKeywordType('@template:standard.json')).toBe('template');
   });
 
   it('should return "include" for bare @include', () => {
-    expect(getMetadataKeywordType('@include')).toBe('include');
+    expect(GetMetadataKeywordType('@include')).toBe('include');
   });
 
   it('should return "include" for @include. dot notation', () => {
-    expect(getMetadataKeywordType('@include.models')).toBe('include');
+    expect(GetMetadataKeywordType('@include.models')).toBe('include');
   });
 
   it('should return null for regular strings', () => {
-    expect(getMetadataKeywordType('regular string')).toBeNull();
+    expect(GetMetadataKeywordType('regular string')).toBeNull();
   });
 
   it('should return null for unknown @ strings', () => {
-    expect(getMetadataKeywordType('@unknown:value')).toBeNull();
+    expect(GetMetadataKeywordType('@unknown:value')).toBeNull();
   });
 });
 
 describe('extractKeywordValue', () => {
   it('should extract value from @file: reference', () => {
-    expect(extractKeywordValue('@file:template.md')).toBe('template.md');
+    expect(ExtractKeywordValue('@file:template.md')).toBe('template.md');
   });
 
   it('should extract value from @lookup: reference', () => {
-    expect(extractKeywordValue('@lookup:Users.Email=test@example.com')).toBe('Users.Email=test@example.com');
+    expect(ExtractKeywordValue('@lookup:Users.Email=test@example.com')).toBe('Users.Email=test@example.com');
   });
 
   it('should extract value from @parent: reference', () => {
-    expect(extractKeywordValue('@parent:ID')).toBe('ID');
+    expect(ExtractKeywordValue('@parent:ID')).toBe('ID');
   });
 
   it('should extract value from @owner: reference', () => {
-    expect(extractKeywordValue('@owner:ShipToPersonID')).toBe('ShipToPersonID');
+    expect(ExtractKeywordValue('@owner:ShipToPersonID')).toBe('ShipToPersonID');
   });
 
   it('should extract value from @root: reference', () => {
-    expect(extractKeywordValue('@root:Name')).toBe('Name');
+    expect(ExtractKeywordValue('@root:Name')).toBe('Name');
   });
 
   it('should extract value from @env: reference', () => {
-    expect(extractKeywordValue('@env:NODE_ENV')).toBe('NODE_ENV');
+    expect(ExtractKeywordValue('@env:NODE_ENV')).toBe('NODE_ENV');
   });
 
   it('should return empty string for bare @include', () => {
-    expect(extractKeywordValue('@include')).toBe('');
+    expect(ExtractKeywordValue('@include')).toBe('');
   });
 
   it('should extract suffix from @include. dot notation', () => {
-    expect(extractKeywordValue('@include.models')).toBe('models');
+    expect(ExtractKeywordValue('@include.models')).toBe('models');
   });
 
   it('should return null for non-keyword strings', () => {
-    expect(extractKeywordValue('regular string')).toBeNull();
+    expect(ExtractKeywordValue('regular string')).toBeNull();
   });
 
   it('should return null for non-string input', () => {
-    expect(extractKeywordValue(123 as unknown as string)).toBeNull();
+    expect(ExtractKeywordValue(123 as unknown as string)).toBeNull();
   });
 });
 
 describe('hasMetadataKeyword', () => {
   it('should behave identically to isMetadataKeyword', () => {
-    expect(hasMetadataKeyword('@file:test.md')).toBe(true);
-    expect(hasMetadataKeyword('plain text')).toBe(false);
-    expect(hasMetadataKeyword(42)).toBe(false);
-    expect(hasMetadataKeyword(null)).toBe(false);
+    expect(HasMetadataKeyword('@file:test.md')).toBe(true);
+    expect(HasMetadataKeyword('plain text')).toBe(false);
+    expect(HasMetadataKeyword(42)).toBe(false);
+    expect(HasMetadataKeyword(null)).toBe(false);
   });
 });
 
 describe('isNonKeywordAtSymbol', () => {
   it('should return true for npm package names', () => {
-    expect(isNonKeywordAtSymbol('@mui/material')).toBe(true);
-    expect(isNonKeywordAtSymbol('@angular/core')).toBe(true);
+    expect(IsNonKeywordAtSymbol('@mui/material')).toBe(true);
+    expect(IsNonKeywordAtSymbol('@angular/core')).toBe(true);
   });
 
   it('should return false for metadata keywords', () => {
-    expect(isNonKeywordAtSymbol('@file:template.md')).toBe(false);
-    expect(isNonKeywordAtSymbol('@lookup:Users.Name=John')).toBe(false);
+    expect(IsNonKeywordAtSymbol('@file:template.md')).toBe(false);
+    expect(IsNonKeywordAtSymbol('@lookup:Users.Name=John')).toBe(false);
   });
 
   it('should return false for strings not starting with @', () => {
-    expect(isNonKeywordAtSymbol('regular string')).toBe(false);
+    expect(IsNonKeywordAtSymbol('regular string')).toBe(false);
   });
 
   it('should return false for non-string values', () => {
-    expect(isNonKeywordAtSymbol(123)).toBe(false);
-    expect(isNonKeywordAtSymbol(null)).toBe(false);
+    expect(IsNonKeywordAtSymbol(123)).toBe(false);
+    expect(IsNonKeywordAtSymbol(null)).toBe(false);
   });
 });
 
 describe('isContextDependentKeyword', () => {
   it('should return true for @parent: keywords', () => {
-    expect(isContextDependentKeyword('@parent:ID')).toBe(true);
+    expect(IsContextDependentKeyword('@parent:ID')).toBe(true);
   });
 
   it('should return true for @root: keywords', () => {
-    expect(isContextDependentKeyword('@root:Name')).toBe(true);
+    expect(IsContextDependentKeyword('@root:Name')).toBe(true);
   });
 
   it('should return true for @owner: keywords', () => {
-    expect(isContextDependentKeyword('@owner:ShipToPersonID')).toBe(true);
+    expect(IsContextDependentKeyword('@owner:ShipToPersonID')).toBe(true);
   });
 
   it('should return false for @file: keywords', () => {
-    expect(isContextDependentKeyword('@file:test.md')).toBe(false);
+    expect(IsContextDependentKeyword('@file:test.md')).toBe(false);
   });
 
   it('should return false for @lookup: keywords', () => {
-    expect(isContextDependentKeyword('@lookup:Users.Name=Test')).toBe(false);
+    expect(IsContextDependentKeyword('@lookup:Users.Name=Test')).toBe(false);
   });
 
   it('should return false for non-keyword strings', () => {
-    expect(isContextDependentKeyword('regular string')).toBe(false);
+    expect(IsContextDependentKeyword('regular string')).toBe(false);
   });
 });
 
 describe('isExternalReferenceKeyword', () => {
   it('should return true for @file: keywords', () => {
-    expect(isExternalReferenceKeyword('@file:test.md')).toBe(true);
+    expect(IsExternalReferenceKeyword('@file:test.md')).toBe(true);
   });
 
   it('should return true for @url: keywords', () => {
-    expect(isExternalReferenceKeyword('@url:https://example.com')).toBe(true);
+    expect(IsExternalReferenceKeyword('@url:https://example.com')).toBe(true);
   });
 
   it('should return true for @template: keywords', () => {
-    expect(isExternalReferenceKeyword('@template:standard.json')).toBe(true);
+    expect(IsExternalReferenceKeyword('@template:standard.json')).toBe(true);
   });
 
   it('should return false for @lookup: keywords', () => {
-    expect(isExternalReferenceKeyword('@lookup:Users.Name=Test')).toBe(false);
+    expect(IsExternalReferenceKeyword('@lookup:Users.Name=Test')).toBe(false);
   });
 
   it('should return false for @parent: keywords', () => {
-    expect(isExternalReferenceKeyword('@parent:ID')).toBe(false);
+    expect(IsExternalReferenceKeyword('@parent:ID')).toBe(false);
   });
 
   it('should return false for @owner: keywords', () => {
-    expect(isExternalReferenceKeyword('@owner:ShipToPersonID')).toBe(false);
+    expect(IsExternalReferenceKeyword('@owner:ShipToPersonID')).toBe(false);
   });
 });
 
 describe('createKeywordReference', () => {
   it('should create @file: reference', () => {
-    expect(createKeywordReference('file', 'template.md')).toBe('@file:template.md');
+    expect(CreateKeywordReference('file', 'template.md')).toBe('@file:template.md');
   });
 
   it('should create @lookup: reference', () => {
-    expect(createKeywordReference('lookup', 'Users.Email=test@example.com')).toBe('@lookup:Users.Email=test@example.com');
+    expect(CreateKeywordReference('lookup', 'Users.Email=test@example.com')).toBe('@lookup:Users.Email=test@example.com');
   });
 
   it('should create @parent: reference', () => {
-    expect(createKeywordReference('parent', 'ID')).toBe('@parent:ID');
+    expect(CreateKeywordReference('parent', 'ID')).toBe('@parent:ID');
   });
 
   it('should create @owner: reference', () => {
-    expect(createKeywordReference('owner', 'ShipToPersonID')).toBe('@owner:ShipToPersonID');
+    expect(CreateKeywordReference('owner', 'ShipToPersonID')).toBe('@owner:ShipToPersonID');
   });
 
   it('should create @root: reference', () => {
-    expect(createKeywordReference('root', 'Name')).toBe('@root:Name');
+    expect(CreateKeywordReference('root', 'Name')).toBe('@root:Name');
   });
 
   it('should create @env: reference', () => {
-    expect(createKeywordReference('env', 'NODE_ENV')).toBe('@env:NODE_ENV');
+    expect(CreateKeywordReference('env', 'NODE_ENV')).toBe('@env:NODE_ENV');
   });
 
   it('should create @include with dot notation for non-empty values', () => {
-    expect(createKeywordReference('include', 'models')).toBe('@include.models');
+    expect(CreateKeywordReference('include', 'models')).toBe('@include.models');
   });
 
   it('should create bare @include for empty value', () => {
-    expect(createKeywordReference('include', '')).toBe('@include');
+    expect(CreateKeywordReference('include', '')).toBe('@include');
   });
 
   it('should throw for unknown keyword type', () => {
-    expect(() => createKeywordReference('unknown' as 'file', 'value')).toThrow('Unknown metadata keyword type: unknown');
+    expect(() => CreateKeywordReference('unknown' as 'file', 'value')).toThrow('Unknown metadata keyword type: unknown');
   });
 });
 

@@ -69,7 +69,7 @@ export interface MJServiceWorkerOptions {
     exports: [UpdateNotificationComponent]
 })
 export class MJServiceWorkerModule {
-    static forRoot(options: MJServiceWorkerOptions): ModuleWithProviders<MJServiceWorkerModule> {
+    static ForRoot(options: MJServiceWorkerOptions): ModuleWithProviders<MJServiceWorkerModule> {
         // ServiceWorkerModule.register is always called — the `enabled` flag
         // tells Angular whether to actually attempt registration. We pass the
         // module reference into the providers chain so the SwUpdate token tree
@@ -86,5 +86,10 @@ export class MJServiceWorkerModule {
                 ...(swModule.providers ?? [])
             ]
         };
+    }
+
+    /** @deprecated Use {@link ForRoot}. */
+    static forRoot(options: MJServiceWorkerOptions): ModuleWithProviders<MJServiceWorkerModule> {
+        return this.ForRoot(options);
     }
 }

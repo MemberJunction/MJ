@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { PNG } from 'pngjs';
 
 import {
-    computePerceptualHash,
-    hashDistance,
-    hashesSimilar,
+    ComputePerceptualHash,
+    HashDistance,
+    HashesSimilar,
 } from '../utils/perceptual-hash.js';
 
 /**
@@ -33,16 +33,16 @@ const gradient = makePng(64, 48, (x) => {
 
 describe('perceptual-hash', () => {
     it('produces a 16-char hex (64-bit) hash for a valid PNG', () => {
-        const h = computePerceptualHash(gradient);
+        const h = ComputePerceptualHash(gradient);
         expect(h).toMatch(/^[0-9a-f]{16}$/);
     });
 
     it('is stable — identical frames hash identically (distance 0, similar)', () => {
-        const a = computePerceptualHash(gradient);
-        const b = computePerceptualHash(gradient);
+        const a = ComputePerceptualHash(gradient);
+        const b = ComputePerceptualHash(gradient);
         expect(a).toBe(b);
-        expect(hashDistance(a, b)).toBe(0);
-        expect(hashesSimilar(a, b)).toBe(true);
+        expect(HashDistance(a, b)).toBe(0);
+        expect(HashesSimilar(a, b)).toBe(true);
     });
 
     it('treats a tiny 1-pixel change as unchanged (defeats byte-equality brittleness)', () => {
@@ -53,9 +53,9 @@ describe('perceptual-hash', () => {
             }
             return [v, v, v];
         });
-        const a = computePerceptualHash(gradient);
-        const b = computePerceptualHash(nudged);
-        expect(hashesSimilar(a, b)).toBe(true);
+        const a = ComputePerceptualHash(gradient);
+        const b = ComputePerceptualHash(nudged);
+        expect(HashesSimilar(a, b)).toBe(true);
     });
 
     it('flags a large content change as different', () => {
@@ -63,29 +63,29 @@ describe('perceptual-hash', () => {
             const v = Math.round(((63 - x) / 63) * 255);
             return [v, v, v];
         });
-        const a = computePerceptualHash(gradient);
-        const b = computePerceptualHash(inverted);
-        expect(hashDistance(a, b)).toBeGreaterThan(3);
-        expect(hashesSimilar(a, b)).toBe(false);
+        const a = ComputePerceptualHash(gradient);
+        const b = ComputePerceptualHash(inverted);
+        expect(HashDistance(a, b)).toBeGreaterThan(3);
+        expect(HashesSimilar(a, b)).toBe(false);
     });
 
     it('returns empty hash on undecodable input and never throws', () => {
-        expect(computePerceptualHash('')).toBe('');
-        expect(computePerceptualHash('not-base64-@@@')).toBe('');
-        expect(computePerceptualHash('data:image/png;base64,zzzz')).toBe('');
+        expect(ComputePerceptualHash('')).toBe('');
+        expect(ComputePerceptualHash('not-base64-@@@')).toBe('');
+        expect(ComputePerceptualHash('data:image/png;base64,zzzz')).toBe('');
     });
 
     it('empty/mismatched hashes are maximally distant and never "similar"', () => {
-        const h = computePerceptualHash(gradient);
-        expect(hashDistance('', h)).toBe(64);
-        expect(hashDistance(h, '')).toBe(64);
-        expect(hashesSimilar('', '')).toBe(false);
-        expect(hashesSimilar('', h)).toBe(false);
+        const h = ComputePerceptualHash(gradient);
+        expect(HashDistance('', h)).toBe(64);
+        expect(HashDistance(h, '')).toBe(64);
+        expect(HashesSimilar('', '')).toBe(false);
+        expect(HashesSimilar('', h)).toBe(false);
     });
 
     it('accepts a data-URI prefixed base64', () => {
-        const h1 = computePerceptualHash(gradient);
-        const h2 = computePerceptualHash('data:image/png;base64,' + gradient);
+        const h1 = ComputePerceptualHash(gradient);
+        const h2 = ComputePerceptualHash('data:image/png;base64,' + gradient);
         expect(h2).toBe(h1);
     });
 });

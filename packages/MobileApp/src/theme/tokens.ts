@@ -225,3 +225,8 @@ export function ColorForAgent(agentName: string | undefined | null): string {
   if (key.includes('email')) return Colors.agentEmailDrafter;
   return Colors.agentFallback;
 }
+
+/** @deprecated Use {@link ColorForAgent}. */
+export function colorForAgent(agentName: string | undefined | null): string {
+  return ColorForAgent(agentName);
+}

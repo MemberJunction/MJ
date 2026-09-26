@@ -31,22 +31,103 @@ interface TypeWithStats extends MJCredentialTypeEntity {
 })
 export class CredentialsTypesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = true;
-    public types: TypeWithStats[] = [];
-    public filteredTypes: TypeWithStats[] = [];
-    public credentials: MJCredentialEntity[] = [];
-    public selectedType: TypeWithStats | null = null;
-    public schemaProperties: FieldSchemaProperty[] = [];
+    public Types: TypeWithStats[] = [];
+
+    /** @deprecated Use {@link Types}. */
+    public get types(): TypeWithStats[] {
+      return this.Types;
+    }
+    /** @deprecated Use {@link Types}. */
+    public set types(value: TypeWithStats[]) {
+      this.Types = value;
+    }
+    public FilteredTypes: TypeWithStats[] = [];
+
+    /** @deprecated Use {@link FilteredTypes}. */
+    public get filteredTypes(): TypeWithStats[] {
+      return this.FilteredTypes;
+    }
+    /** @deprecated Use {@link FilteredTypes}. */
+    public set filteredTypes(value: TypeWithStats[]) {
+      this.FilteredTypes = value;
+    }
+    public Credentials: MJCredentialEntity[] = [];
+
+    /** @deprecated Use {@link Credentials}. */
+    public get credentials(): MJCredentialEntity[] {
+      return this.Credentials;
+    }
+    /** @deprecated Use {@link Credentials}. */
+    public set credentials(value: MJCredentialEntity[]) {
+      this.Credentials = value;
+    }
+    public SelectedType: TypeWithStats | null = null;
+
+    /** @deprecated Use {@link SelectedType}. */
+    public get selectedType(): TypeWithStats | null {
+      return this.SelectedType;
+    }
+    /** @deprecated Use {@link SelectedType}. */
+    public set selectedType(value: TypeWithStats | null) {
+      this.SelectedType = value;
+    }
+    public SchemaProperties: FieldSchemaProperty[] = [];
+
+    /** @deprecated Use {@link SchemaProperties}. */
+    public get schemaProperties(): FieldSchemaProperty[] {
+      return this.SchemaProperties;
+    }
+    /** @deprecated Use {@link SchemaProperties}. */
+    public set schemaProperties(value: FieldSchemaProperty[]) {
+      this.SchemaProperties = value;
+    }
 
     // Filters
-    public searchText = '';
-    public selectedCategoryFilter = '';
-    public categories: string[] = [];
+    public SearchText = '';
+
+    /** @deprecated Use {@link SearchText}. */
+    public get searchText() {
+      return this.SearchText;
+    }
+    /** @deprecated Use {@link SearchText}. */
+    public set searchText(value) {
+      this.SearchText = value;
+    }
+    public SelectedCategoryFilter = '';
+
+    /** @deprecated Use {@link SelectedCategoryFilter}. */
+    public get selectedCategoryFilter() {
+      return this.SelectedCategoryFilter;
+    }
+    /** @deprecated Use {@link SelectedCategoryFilter}. */
+    public set selectedCategoryFilter(value) {
+      this.SelectedCategoryFilter = value;
+    }
+    public Categories: string[] = [];
+
+    /** @deprecated Use {@link Categories}. */
+    public get categories(): string[] {
+      return this.Categories;
+    }
+    /** @deprecated Use {@link Categories}. */
+    public set categories(value: string[]) {
+      this.Categories = value;
+    }
 
     // Permissions
     private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
-    @ViewChild('typeEditPanel') typeEditPanel!: CredentialTypeEditPanelComponent;
+    @ViewChild('typeEditPanel') TypeEditPanel!: CredentialTypeEditPanelComponent;
+
+    /** @deprecated Use {@link TypeEditPanel}. */
+    get typeEditPanel(): CredentialTypeEditPanelComponent {
+      return this.TypeEditPanel;
+    }
+    /** @deprecated Use {@link TypeEditPanel}. */
+    set typeEditPanel(value: CredentialTypeEditPanelComponent) {
+      this.TypeEditPanel = value;
+    }
 
     public get FilterFields(): FilterFieldConfig[] {
         return [
@@ -59,25 +140,35 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
                 filterable: true,
                 options: [
                     { text: 'All Categories', value: '' },
-                    ...this.categories.map(c => ({ text: c, value: c }))
+                    ...this.Categories.map(c => ({ text: c, value: c }))
                 ]
             }
         ];
     }
     public get FilterValues(): Record<string, unknown> {
-        return { categoryFilter: this.selectedCategoryFilter };
+        return { categoryFilter: this.SelectedCategoryFilter };
     }
     public get ActiveFilterCount(): number {
-        return this.selectedCategoryFilter ? 1 : 0;
+        return this.SelectedCategoryFilter ? 1 : 0;
     }
-    public onFilterValuesChange(v: Record<string, unknown>): void {
+    public OnFilterValuesChange(v: Record<string, unknown>): void {
         const next = (v ?? {}) as { categoryFilter?: string };
-        if ((next.categoryFilter ?? '') !== this.selectedCategoryFilter) {
-            this.onCategoryFilterChange(next.categoryFilter ?? '');
+        if ((next.categoryFilter ?? '') !== this.SelectedCategoryFilter) {
+            this.OnCategoryFilterChange(next.categoryFilter ?? '');
         }
     }
+
+    /** @deprecated Use {@link OnFilterValuesChange}. */
+    public onFilterValuesChange(v: Record<string, unknown>): void {
+      return this.OnFilterValuesChange(v);
+    }
+    public ResetFilters(): void {
+        if (this.SelectedCategoryFilter) this.OnCategoryFilterChange('');
+    }
+
+    /** @deprecated Use {@link ResetFilters}. */
     public resetFilters(): void {
-        if (this.selectedCategoryFilter) this.onCategoryFilterChange('');
+      return this.ResetFilters();
     }
 
     constructor(
@@ -174,13 +265,13 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
 
             if (typeResult.Success) {
                 const baseTypes = typeResult.Results as MJCredentialTypeEntity[];
-                this.credentials = credResult.Success ? credResult.Results as MJCredentialEntity[] : [];
+                this.Credentials = credResult.Success ? credResult.Results as MJCredentialEntity[] : [];
 
                 // Calculate stats for each type
-                this.types = baseTypes.map(type => this.enrichTypeWithStats(type));
+                this.Types = baseTypes.map(type => this.enrichTypeWithStats(type));
 
                 // Extract unique categories
-                this.categories = [...new Set(this.types.map(t => t.Category))].sort();
+                this.Categories = [...new Set(this.Types.map(t => t.Category))].sort();
             }
 
             // Apply any navigation config (e.g., category filter from Categories nav item)
@@ -206,12 +297,12 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
 
         // Apply category filter from navigation config
         if (config.categoryFilter) {
-            this.selectedCategoryFilter = config.categoryFilter as string;
+            this.SelectedCategoryFilter = config.categoryFilter as string;
         }
     }
 
     private enrichTypeWithStats(type: MJCredentialTypeEntity): TypeWithStats {
-        const typeCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
+        const typeCredentials = this.Credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
         const now = new Date();
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
@@ -231,22 +322,32 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
 
     // === CRUD Operations ===
 
-    public createNewType(): void {
-        if (this.typeEditPanel) {
-            this.typeEditPanel.open(null);
+    public CreateNewType(): void {
+        if (this.TypeEditPanel) {
+            this.TypeEditPanel.open(null);
         }
     }
 
-    public editType(type: TypeWithStats, event?: Event): void {
+    /** @deprecated Use {@link CreateNewType}. */
+    public createNewType(): void {
+      return this.CreateNewType();
+    }
+
+    public EditType(type: TypeWithStats, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
-        if (this.typeEditPanel) {
-            this.typeEditPanel.open(type);
+        if (this.TypeEditPanel) {
+            this.TypeEditPanel.open(type);
         }
     }
 
-    public async deleteType(type: TypeWithStats, event?: Event): Promise<void> {
+    /** @deprecated Use {@link EditType}. */
+    public editType(type: TypeWithStats, event?: Event): void {
+      return this.EditType(type, event);
+    }
+
+    public async DeleteType(type: TypeWithStats, event?: Event): Promise<void> {
         if (event) {
             event.stopPropagation();
         }
@@ -276,9 +377,9 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             const success = await type.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Credential type "${type.Name}" deleted successfully`, 'success', 3000);
-                this.types = this.types.filter(t => !UUIDsEqual(t.ID, type.ID));
-                if (UUIDsEqual(this.selectedType?.ID, type.ID)) {
-                    this.closeDetail();
+                this.Types = this.Types.filter(t => !UUIDsEqual(t.ID, type.ID));
+                if (UUIDsEqual(this.SelectedType?.ID, type.ID)) {
+                    this.CloseDetail();
                 }
                 this.applyFilters();
             } else {
@@ -290,7 +391,12 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    public createCredentialForType(type: TypeWithStats, event?: Event): void {
+    /** @deprecated Use {@link DeleteType}. */
+    public async deleteType(type: TypeWithStats, event?: Event): Promise<void> {
+      return this.DeleteType(type, event);
+    }
+
+    public CreateCredentialForType(type: TypeWithStats, event?: Event): void {
         if (event) {
             event.stopPropagation();
         }
@@ -301,79 +407,114 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         });
     }
 
+    /** @deprecated Use {@link CreateCredentialForType}. */
+    public createCredentialForType(type: TypeWithStats, event?: Event): void {
+      return this.CreateCredentialForType(type, event);
+    }
+
     // === Panel Event Handlers ===
 
-    public onTypeSaved(type: MJCredentialTypeEntity): void {
-        const existingIndex = this.types.findIndex(t => UUIDsEqual(t.ID, type.ID));
+    public OnTypeSaved(type: MJCredentialTypeEntity): void {
+        const existingIndex = this.Types.findIndex(t => UUIDsEqual(t.ID, type.ID));
         const enrichedType = this.enrichTypeWithStats(type);
 
         if (existingIndex >= 0) {
-            this.types[existingIndex] = enrichedType;
+            this.Types[existingIndex] = enrichedType;
         } else {
-            this.types.unshift(enrichedType);
+            this.Types.unshift(enrichedType);
         }
 
         // Update categories if a new one was added
-        if (!this.categories.includes(type.Category)) {
-            this.categories = [...new Set(this.types.map(t => t.Category))].sort();
+        if (!this.Categories.includes(type.Category)) {
+            this.Categories = [...new Set(this.Types.map(t => t.Category))].sort();
         }
 
         this.applyFilters();
         this.cdr.markForCheck();
     }
 
-    public onTypeDeleted(typeId: string): void {
-        this.types = this.types.filter(t => !UUIDsEqual(t.ID, typeId));
-        if (UUIDsEqual(this.selectedType?.ID, typeId)) {
-            this.closeDetail();
+    /** @deprecated Use {@link OnTypeSaved}. */
+    public onTypeSaved(type: MJCredentialTypeEntity): void {
+      return this.OnTypeSaved(type);
+    }
+
+    public OnTypeDeleted(typeId: string): void {
+        this.Types = this.Types.filter(t => !UUIDsEqual(t.ID, typeId));
+        if (UUIDsEqual(this.SelectedType?.ID, typeId)) {
+            this.CloseDetail();
         }
         this.applyFilters();
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnTypeDeleted}. */
+    public onTypeDeleted(typeId: string): void {
+      return this.OnTypeDeleted(typeId);
     }
 
     // === Filtering ===
 
+    public OnSearchChange(value: string): void {
+        this.SearchText = value;
+        this.applyFilters();
+    }
+
+    /** @deprecated Use {@link OnSearchChange}. */
     public onSearchChange(value: string): void {
-        this.searchText = value;
+      return this.OnSearchChange(value);
+    }
+
+    public OnCategoryFilterChange(category: string): void {
+        this.SelectedCategoryFilter = category;
         this.applyFilters();
     }
 
+    /** @deprecated Use {@link OnCategoryFilterChange}. */
     public onCategoryFilterChange(category: string): void {
-        this.selectedCategoryFilter = category;
+      return this.OnCategoryFilterChange(category);
+    }
+
+    public ClearFilters(): void {
+        this.SearchText = '';
+        this.SelectedCategoryFilter = '';
         this.applyFilters();
     }
 
+    /** @deprecated Use {@link ClearFilters}. */
     public clearFilters(): void {
-        this.searchText = '';
-        this.selectedCategoryFilter = '';
-        this.applyFilters();
+      return this.ClearFilters();
     }
 
     /** True when search and/or the category filter narrow the list. */
     public get IsListNarrowed(): boolean {
-        return !!(this.searchText || this.selectedCategoryFilter);
+        return !!(this.SearchText || this.SelectedCategoryFilter);
     }
 
     /** Empty-state CTA: reset filters when narrowed, otherwise create. */
-    public onEmptyStateAction(): void {
+    public OnEmptyStateAction(): void {
         if (this.IsListNarrowed) {
-            this.clearFilters();
+            this.ClearFilters();
         } else {
-            this.createNewType();
+            this.CreateNewType();
         }
     }
 
+    /** @deprecated Use {@link OnEmptyStateAction}. */
+    public onEmptyStateAction(): void {
+      return this.OnEmptyStateAction();
+    }
+
     private applyFilters(): void {
-        let filtered = [...this.types];
+        let filtered = [...this.Types];
 
         // Filter by category
-        if (this.selectedCategoryFilter) {
-            filtered = filtered.filter(t => t.Category === this.selectedCategoryFilter);
+        if (this.SelectedCategoryFilter) {
+            filtered = filtered.filter(t => t.Category === this.SelectedCategoryFilter);
         }
 
         // Filter by search text
-        if (this.searchText.trim()) {
-            const search = this.searchText.toLowerCase().trim();
+        if (this.SearchText.trim()) {
+            const search = this.SearchText.toLowerCase().trim();
             filtered = filtered.filter(t =>
                 t.Name.toLowerCase().includes(search) ||
                 (t.Description && t.Description.toLowerCase().includes(search)) ||
@@ -381,22 +522,32 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             );
         }
 
-        this.filteredTypes = filtered;
+        this.FilteredTypes = filtered;
         this.cdr.markForCheck();
     }
 
     // === Selection ===
 
-    public selectType(type: TypeWithStats): void {
-        this.selectedType = type;
+    public SelectType(type: TypeWithStats): void {
+        this.SelectedType = type;
         this.parseFieldSchema(type.FieldSchema);
         this.cdr.markForCheck();
     }
 
-    public closeDetail(): void {
-        this.selectedType = null;
-        this.schemaProperties = [];
+    /** @deprecated Use {@link SelectType}. */
+    public selectType(type: TypeWithStats): void {
+      return this.SelectType(type);
+    }
+
+    public CloseDetail(): void {
+        this.SelectedType = null;
+        this.SchemaProperties = [];
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link CloseDetail}. */
+    public closeDetail(): void {
+      return this.CloseDetail();
     }
 
     private parseFieldSchema(schemaJson: string): void {
@@ -405,7 +556,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             const properties = schema.properties || {};
             const required = schema.required || [];
 
-            this.schemaProperties = Object.entries(properties).map(([name, prop]) => ({
+            this.SchemaProperties = Object.entries(properties).map(([name, prop]) => ({
                 name,
                 type: (prop.type as string) || 'string',
                 title: (prop.title as string) || name,
@@ -415,7 +566,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             }));
 
             // Sort by order if available, otherwise by name
-            this.schemaProperties.sort((a, b) => {
+            this.SchemaProperties.sort((a, b) => {
                 const propA = properties[a.name];
                 const propB = properties[b.name];
                 const orderA = typeof propA.order === 'number' ? propA.order : 999;
@@ -425,13 +576,13 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
 
         } catch (e) {
             console.error('Failed to parse field schema:', e);
-            this.schemaProperties = [];
+            this.SchemaProperties = [];
         }
     }
 
     // === Helpers ===
 
-    public getCategoryIcon(category: string): string {
+    public GetCategoryIcon(category: string): string {
         const iconMap: Record<string, string> = {
             'AI': 'fa-solid fa-brain',
             'Communication': 'fa-solid fa-envelope',
@@ -443,7 +594,12 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         return iconMap[category] || 'fa-solid fa-key';
     }
 
-    public getCategoryColor(category: string): string {
+    /** @deprecated Use {@link GetCategoryIcon}. */
+    public getCategoryIcon(category: string): string {
+      return this.GetCategoryIcon(category);
+    }
+
+    public GetCategoryColor(category: string): string {
         const colorMap: Record<string, string> = {
             'AI': 'var(--mj-brand-primary)',
             'Communication': 'var(--mj-brand-primary)',
@@ -455,9 +611,14 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         return colorMap[category] || 'var(--mj-brand-primary)';
     }
 
-    public getTypesByCategory(): Map<string, TypeWithStats[]> {
+    /** @deprecated Use {@link GetCategoryColor}. */
+    public getCategoryColor(category: string): string {
+      return this.GetCategoryColor(category);
+    }
+
+    public GetTypesByCategory(): Map<string, TypeWithStats[]> {
         const grouped = new Map<string, TypeWithStats[]>();
-        for (const type of this.filteredTypes) {
+        for (const type of this.FilteredTypes) {
             const category = type.Category;
             if (!grouped.has(category)) {
                 grouped.set(category, []);
@@ -467,16 +628,31 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         return grouped;
     }
 
+    /** @deprecated Use {@link GetTypesByCategory}. */
+    public getTypesByCategory(): Map<string, TypeWithStats[]> {
+      return this.GetTypesByCategory();
+    }
+
     /** Case-insensitive UUID check whether a credential type is the currently selected type. */
     public IsTypeSelected(type: TypeWithStats): boolean {
-        return UUIDsEqual(this.selectedType?.ID, type.ID);
+        return UUIDsEqual(this.SelectedType?.ID, type.ID);
     }
 
+    public GetTotalCredentialCount(): number {
+        return this.Types.reduce((sum, t) => sum + t.credentialCount, 0);
+    }
+
+    /** @deprecated Use {@link GetTotalCredentialCount}. */
     public getTotalCredentialCount(): number {
-        return this.types.reduce((sum, t) => sum + t.credentialCount, 0);
+      return this.GetTotalCredentialCount();
     }
 
-    public refresh(): void {
+    public Refresh(): void {
         this.loadData();
+    }
+
+    /** @deprecated Use {@link Refresh}. */
+    public refresh(): void {
+      return this.Refresh();
     }
 }

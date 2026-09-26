@@ -57,7 +57,16 @@ class VoyageScopeAIReranker extends AIBaseReranker {
      * Last-call usage. Populated on each `doRerank()` so the SearchEngine wrapper can
      * report exact cost via `usage.total_tokens` instead of the pre-call estimate.
      */
-    public lastTokensUsed = 0;
+    public LastTokensUsed = 0;
+
+    /** @deprecated Use {@link LastTokensUsed}. */
+    public get lastTokensUsed() {
+        return this.LastTokensUsed;
+    }
+    /** @deprecated Use {@link LastTokensUsed}. */
+    public set lastTokensUsed(value) {
+        this.LastTokensUsed = value;
+    }
 
     constructor(apiKey: string, modelName: string) {
         super(apiKey, modelName);
@@ -87,7 +96,7 @@ class VoyageScopeAIReranker extends AIBaseReranker {
         }
 
         const json = await response.json() as VoyageRerankResponse;
-        this.lastTokensUsed = json.usage?.total_tokens ?? 0;
+        this.LastTokensUsed = json.usage?.total_tokens ?? 0;
 
         return json.data.map((r, idx) => ({
             id: params.documents[r.index].id,

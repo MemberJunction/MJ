@@ -3,10 +3,10 @@ import type { UserInfo } from '@memberjunction/core';
 import type { BaseBrowserAdapter, ComputerUseResult, RunComputerUseParams, StepRecord } from '@memberjunction/computer-use';
 import { CdpRemoteBrowserSession } from '../cdp-remote-browser-session';
 import {
-  buildProgressNote,
+  BuildProgressNote,
   ComputerUseGoalProgress,
   ComputerUseGoalRun,
-  defaultComputerUseGoalEngineFactory,
+  DefaultComputerUseGoalEngineFactory,
   PROGRESS_MESSAGE_MAX_LENGTH,
 } from '../computer-use-goal-engine';
 import { FakeCdpSessionBackend, FakePlaywrightBrowserAdapter } from './fakes';
@@ -61,7 +61,7 @@ describe('CdpRemoteBrowserSession.RunComputerUseGoal', () => {
     CdpRemoteBrowserSession.SetGoalEngineFactory(() => engine);
   });
   afterEach(() => {
-    CdpRemoteBrowserSession.SetGoalEngineFactory(defaultComputerUseGoalEngineFactory);
+    CdpRemoteBrowserSession.SetGoalEngineFactory(DefaultComputerUseGoalEngineFactory);
   });
 
   it('hands ITS OWN adapter to the engine, runs the goal, and maps the result', async () => {
@@ -132,7 +132,7 @@ function step(partial: Partial<StepRecord>): StepRecord {
 
 describe('buildProgressNote', () => {
   it('carries the step number, reasoning, and url through unchanged when short', () => {
-    expect(buildProgressNote(step({ StepNumber: 3, ControllerReasoning: 'clicking login', Url: 'https://x.test/' }))).toEqual({
+    expect(BuildProgressNote(step({ StepNumber: 3, ControllerReasoning: 'clicking login', Url: 'https://x.test/' }))).toEqual({
       Step: 3,
       Message: 'clicking login',
       Url: 'https://x.test/',
@@ -141,17 +141,17 @@ describe('buildProgressNote', () => {
 
   it('truncates an over-long reasoning to the max length plus an ellipsis', () => {
     const long = 'a'.repeat(PROGRESS_MESSAGE_MAX_LENGTH + 50);
-    const note = buildProgressNote(step({ ControllerReasoning: long }));
+    const note = BuildProgressNote(step({ ControllerReasoning: long }));
     expect(note.Message).toBe('a'.repeat(PROGRESS_MESSAGE_MAX_LENGTH) + '…');
     expect(note.Message.length).toBe(PROGRESS_MESSAGE_MAX_LENGTH + 1); // +1 for the single ellipsis char
   });
 
   it('does not truncate reasoning exactly at the max length', () => {
     const exact = 'b'.repeat(PROGRESS_MESSAGE_MAX_LENGTH);
-    expect(buildProgressNote(step({ ControllerReasoning: exact })).Message).toBe(exact);
+    expect(BuildProgressNote(step({ ControllerReasoning: exact })).Message).toBe(exact);
   });
 
   it('yields an empty message when there is no reasoning', () => {
-    expect(buildProgressNote(step({ ControllerReasoning: '' })).Message).toBe('');
+    expect(BuildProgressNote(step({ ControllerReasoning: '' })).Message).toBe('');
   });
 });

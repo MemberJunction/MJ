@@ -14,7 +14,7 @@ export class MermaidGenerator {
   /**
    * Generate Mermaid ERD diagram
    */
-  public generate(
+  public Generate(
     state: DatabaseDocumentation,
     options: MermaidGeneratorOptions = {}
   ): string {
@@ -61,6 +61,14 @@ export class MermaidGenerator {
     this.appendRelationships(lines, state, options);
 
     return lines.join('\n');
+  }
+
+  /** @deprecated Use {@link Generate}. */
+  public generate(
+    state: DatabaseDocumentation,
+    options: MermaidGeneratorOptions = {}
+  ): string {
+    return this.Generate(state, options);
   }
 
   /**
@@ -193,11 +201,11 @@ export class MermaidGenerator {
    * Generate an HTML-wrapped version of the Mermaid diagram
    * Useful for standalone rendering
    */
-  public generateHtml(
+  public GenerateHtml(
     state: DatabaseDocumentation,
     options: MermaidGeneratorOptions = {}
   ): string {
-    const mermaidDiagram = this.generate(state, options);
+    const mermaidDiagram = this.Generate(state, options);
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -351,6 +359,14 @@ ${mermaidDiagram}
     </script>
 </body>
 </html>`;
+  }
+
+  /** @deprecated Use {@link GenerateHtml}. */
+  public generateHtml(
+    state: DatabaseDocumentation,
+    options: MermaidGeneratorOptions = {}
+  ): string {
+    return this.GenerateHtml(state, options);
   }
 
   private escapeHtml(text: string): string {

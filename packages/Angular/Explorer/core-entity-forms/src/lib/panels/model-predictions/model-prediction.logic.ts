@@ -29,11 +29,11 @@ export type ModelProblemType = 'classification' | 'regression';
 /** One normalized feature-importance driver for display. */
 export interface PredictionDriver {
     /** Raw feature name as the model stored it. */
-    name: string;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Importance magnitude (absolute value of the raw contribution). */
-    importance: number;
+    importance: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Importance as a 0–100 share of the strongest driver, for the bar width. */
-    relativePct: number;
+    RelativePct: number;
 }
 
 /** How a prediction's primary value should be rendered. */
@@ -45,7 +45,7 @@ export const MAX_DRIVERS = 5;
 /**
  * Coerce a dynamic field value into a finite number, or null when it isn't one.
  */
-export function toNumber(value: unknown): number | null {
+export function ToNumber(value: unknown): number | null {
     if (typeof value === 'number') {
         return Number.isFinite(value) ? value : null;
     }
@@ -56,13 +56,18 @@ export function toNumber(value: unknown): number | null {
     return null;
 }
 
+/** @deprecated Use {@link ToNumber}. */
+export function toNumber(value: unknown): number | null {
+    return ToNumber(value);
+}
+
 /**
  * Decide how to render a value given the model's problem type and the value.
  *  - regression + numeric → 'numeric'
  *  - classification + value in [0,1] → 'probability' (a confidence/score we can gauge)
  *  - everything else (a class label, a missing value) → 'class'
  */
-export function valueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
+export function ValueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
     const isRegression = problemType === 'regression';
     if (isRegression && numeric != null) {
         return 'numeric';
@@ -73,20 +78,35 @@ export function valueKind(problemType: ModelProblemType, numeric: number | null)
     return 'class';
 }
 
+/** @deprecated Use {@link ValueKind}. */
+export function valueKind(problemType: ModelProblemType, numeric: number | null): PredictionValueKind {
+    return ValueKind(problemType, numeric);
+}
+
 /**
  * Neutral tercile for a 0–1 value. Position on the value axis only — no
  * assumption that high is good or bad. Values are clamped to [0,1].
  */
-export function bandFor(value: number): PredictionBand {
+export function BandFor(value: number): PredictionBand {
     const v = Math.max(0, Math.min(1, value));
     if (v < 1 / 3) return 'low';
     if (v < 2 / 3) return 'mid';
     return 'high';
 }
 
+/** @deprecated Use {@link BandFor}. */
+export function bandFor(value: number): PredictionBand {
+    return BandFor(value);
+}
+
 /** Round a 0–1 probability to an integer 0–100 gauge fill, clamped. */
-export function gaugePct(value: number): number {
+export function GaugePct(value: number): number {
     return Math.round(Math.max(0, Math.min(1, value)) * 100);
+}
+
+/** @deprecated Use {@link GaugePct}. */
+export function gaugePct(value: number): number {
+    return GaugePct(value);
 }
 
 /**
@@ -96,9 +116,9 @@ export function gaugePct(value: number): number {
  *  - class label → the label string
  *  - missing/empty → "—" (em dash)
  */
-export function formatValue(rawValue: unknown, numeric: number | null, kind: PredictionValueKind): string {
+export function FormatValue(rawValue: unknown, numeric: number | null, kind: PredictionValueKind): string {
     if (kind === 'probability' && numeric != null) {
-        return `${gaugePct(numeric)}%`;
+        return `${GaugePct(numeric)}%`;
     }
     if (kind === 'numeric' && numeric != null) {
         return numeric.toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -109,11 +129,16 @@ export function formatValue(rawValue: unknown, numeric: number | null, kind: Pre
     return String(rawValue);
 }
 
+/** @deprecated Use {@link FormatValue}. */
+export function formatValue(rawValue: unknown, numeric: number | null, kind: PredictionValueKind): string {
+    return FormatValue(rawValue, numeric, kind);
+}
+
 /**
  * Pick the human label for a prediction: prefer the model's target variable,
  * then the bound column name, then a generic fallback.
  */
-export function resolveLabel(targetVariable: string | null, targetColumn: string | null): string {
+export function ResolveLabel(targetVariable: string | null, targetColumn: string | null): string {
     const target = targetVariable?.trim();
     if (target) return target;
     const col = targetColumn?.trim();
@@ -121,12 +146,17 @@ export function resolveLabel(targetVariable: string | null, targetColumn: string
     return 'Prediction';
 }
 
+/** @deprecated Use {@link ResolveLabel}. */
+export function resolveLabel(targetVariable: string | null, targetColumn: string | null): string {
+    return ResolveLabel(targetVariable, targetColumn);
+}
+
 /**
  * Parse a model's `FeatureImportance` JSON (`Record<string, number>`) into the
  * top-N sorted drivers with relative bar widths. Returns [] on null / invalid /
  * empty input — the caller omits the drivers section cleanly when empty.
  */
-export function parseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
+export function ParseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
     if (!featureImportanceJson) {
         return [];
     }
@@ -140,7 +170,7 @@ export function parseDrivers(featureImportanceJson: string | null): PredictionDr
         return [];
     }
     const entries = Object.entries(parsed as Record<string, unknown>)
-        .map(([name, raw]) => ({ name, importance: Math.abs(toNumber(raw) ?? 0) }))
+        .map(([name, raw]) => ({ name, importance: Math.abs(ToNumber(raw) ?? 0) }))
         .filter(d => d.importance > 0)
         .sort((a, b) => b.importance - a.importance)
         .slice(0, MAX_DRIVERS);
@@ -148,12 +178,17 @@ export function parseDrivers(featureImportanceJson: string | null): PredictionDr
     const max = entries.length > 0 ? entries[0].importance : 0;
     return entries.map(d => ({
         ...d,
-        relativePct: max > 0 ? Math.round((d.importance / max) * 100) : 0,
+        RelativePct: max > 0 ? Math.round((d.importance / max) * 100) : 0,
     }));
 }
 
+/** @deprecated Use {@link ParseDrivers}. */
+export function parseDrivers(featureImportanceJson: string | null): PredictionDriver[] {
+    return ParseDrivers(featureImportanceJson);
+}
+
 /** Format a last-scored timestamp to a short date, or null when absent/invalid. */
-export function formatLastScored(lastScoredAt: Date | string | null): string | null {
+export function FormatLastScored(lastScoredAt: Date | string | null): string | null {
     if (!lastScoredAt) {
         return null;
     }
@@ -164,61 +199,66 @@ export function formatLastScored(lastScoredAt: Date | string | null): string | n
     return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+/** @deprecated Use {@link FormatLastScored}. */
+export function formatLastScored(lastScoredAt: Date | string | null): string | null {
+    return FormatLastScored(lastScoredAt);
+}
+
 /**
  * A resolved historical prediction row from `MJ: Process Run Details` for an entity record.
  */
 export interface PredictionHistoryItem {
     /** The MJ: Process Run Details primary key ID */
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** The parent Process Run ID */
-    processRunId: string;
+    ProcessRunId: string;
     /** Model ID if resolved from payload or model lookup */
-    modelId: string | null;
+    modelId: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Resolved model name (e.g. "Member Churn Risk" or "LatePaymentOutcome") */
-    modelName: string;
+    ModelName: string;
     /** Resolved pipeline & version string (e.g. "Pipeline v1") */
-    provenance: string;
+    Provenance: string;
     /** Target variable / label */
-    target: string;
+    target: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Problem type: classification or regression */
-    problemType: ModelProblemType;
+    problemType: ModelProblemType;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Primary numeric value / score */
-    numericValue: number | null;
+    NumericValue: number | null;
     /** Class label if classification */
-    predictedClass: string | null;
+    PredictedClass: string | null;
     /** Formatted display value (e.g. "88%", "Late", "1,240.5") */
-    displayValue: string;
+    DisplayValue: string;
     /** True if 0–1 probability we can gauge/badge */
-    isProbability: boolean;
+    IsProbability: boolean;
     /** Neutral band: 'low' | 'mid' | 'high' */
-    band: PredictionBand | null;
+    Band: PredictionBand | null;
     /** Resolved semantic status band from outcomeConfig */
-    statusBand: OutcomeBand | null;
+    StatusBand: OutcomeBand | null;
     /** Human-readable status label (e.g. "Low Risk", "High") */
-    statusLabel: string | null;
+    StatusLabel: string | null;
     /** Semantic badge color ('green' | 'amber' | 'red' | 'blue' | 'gray') */
-    badgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray';
+    BadgeColor: 'green' | 'amber' | 'red' | 'blue' | 'gray';
     /** Icon class if specified in band/style */
-    badgeIcon: string | null;
+    BadgeIcon: string | null;
     /** Execution status: 'Succeeded' | 'Failed' | 'Pending' | 'Skipped' */
-    status: string;
+    status: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** When processing completed */
-    completedAt: Date | null;
+    CompletedAt: Date | null;
     /** Formatted date/time for history display */
-    formattedTime: string;
+    FormattedTime: string;
     /** Drivers if available in payload */
-    drivers: PredictionDriver[];
+    Drivers: PredictionDriver[];
     /** Error message if Failed */
-    errorMessage: string | null;
+    ErrorMessage: string | null;
     /** Full raw payload object for JSON inspection */
-    rawPayload: Record<string, unknown> | null;
+    RawPayload: Record<string, unknown> | null;
 }
 
 /** Summary descriptor of a model represented in prediction history. */
 export interface ModelHistorySummary {
-    modelId: string;
-    modelName: string;
-    count: number;
+    modelId: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    ModelName: string;
+    count: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /** Input contract for parsing a Process Run Detail record. */
@@ -239,13 +279,13 @@ export interface HistoryModelMetadata {
     ProblemType?: string;
     TargetVariable?: string;
     Lineage?: string | null;
-    outcomeConfig?: OutcomeConfig | null;
+    outcomeConfig?: OutcomeConfig | null;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
  * Format a history completion timestamp with date and time.
  */
-export function formatHistoryTimestamp(date: Date | string | null): string {
+export function FormatHistoryTimestamp(date: Date | string | null): string {
     if (!date) return '—';
     const d = date instanceof Date ? date : new Date(date);
     if (isNaN(d.getTime())) return '—';
@@ -258,10 +298,15 @@ export function formatHistoryTimestamp(date: Date | string | null): string {
     });
 }
 
+/** @deprecated Use {@link FormatHistoryTimestamp}. */
+export function formatHistoryTimestamp(date: Date | string | null): string {
+    return FormatHistoryTimestamp(date);
+}
+
 /**
  * Parse an array of drivers from payload driver shapes (array of { feature, value } or map).
  */
-export function parsePayloadDrivers(rawDrivers: unknown): PredictionDriver[] {
+export function ParsePayloadDrivers(rawDrivers: unknown): PredictionDriver[] {
     if (!rawDrivers) return [];
     if (Array.isArray(rawDrivers)) {
         const entries = rawDrivers
@@ -269,7 +314,7 @@ export function parsePayloadDrivers(rawDrivers: unknown): PredictionDriver[] {
                 if (!item || typeof item !== 'object') return null;
                 const rec = item as Record<string, unknown>;
                 const name = typeof rec['feature'] === 'string' ? rec['feature'] : (typeof rec['name'] === 'string' ? rec['name'] : '');
-                const val = toNumber(rec['value'] ?? rec['importance']);
+                const val = ToNumber(rec['value'] ?? rec['importance']);
                 if (!name || val == null) return null;
                 return { name, importance: Math.abs(val) };
             })
@@ -280,19 +325,24 @@ export function parsePayloadDrivers(rawDrivers: unknown): PredictionDriver[] {
         const max = entries.length > 0 ? entries[0].importance : 0;
         return entries.map(d => ({
             ...d,
-            relativePct: max > 0 ? Math.round((d.importance / max) * 100) : 0,
+            RelativePct: max > 0 ? Math.round((d.importance / max) * 100) : 0,
         }));
     }
     if (typeof rawDrivers === 'object') {
-        return parseDrivers(JSON.stringify(rawDrivers));
+        return ParseDrivers(JSON.stringify(rawDrivers));
     }
     return [];
+}
+
+/** @deprecated Use {@link ParsePayloadDrivers}. */
+export function parsePayloadDrivers(rawDrivers: unknown): PredictionDriver[] {
+    return ParsePayloadDrivers(rawDrivers);
 }
 
 /**
  * Parse a raw `MJ: Process Run Details` row into a decorated {@link PredictionHistoryItem}.
  */
-export function parseHistoryItem(
+export function ParseHistoryItem(
     detail: RawProcessRunDetail,
     modelLookup?: Map<string, HistoryModelMetadata>,
 ): PredictionHistoryItem {
@@ -321,17 +371,17 @@ export function parseHistoryItem(
     const modelMeta = payloadModelId && modelLookup ? modelLookup.get(payloadModelId) : undefined;
 
     const rawScore = payloadSection?.['score'] ?? payloadSection?.['value'] ?? null;
-    const numericScore = toNumber(rawScore);
+    const numericScore = ToNumber(rawScore);
     const predictedClass = typeof payloadSection?.['class'] === 'string' ? payloadSection['class'] : null;
 
     const probTypeStr = (typeof payloadSection?.['problemType'] === 'string' ? payloadSection['problemType'] : modelMeta?.ProblemType) ?? '';
     const problemType: ModelProblemType = probTypeStr.toLowerCase() === 'regression' ? 'regression' : 'classification';
 
-    const kind = valueKind(problemType, numericScore);
-    const displayValue = predictedClass ?? formatValue(rawScore, numericScore, kind);
+    const kind = ValueKind(problemType, numericScore);
+    const displayValue = predictedClass ?? FormatValue(rawScore, numericScore, kind);
 
     const targetVar = (typeof payloadSection?.['target'] === 'string' ? payloadSection['target'] : modelMeta?.TargetVariable) ?? '';
-    const label = resolveLabel(targetVar, null);
+    const label = ResolveLabel(targetVar, null);
 
     const modelName = modelMeta?.Name ?? label;
     const provenance = modelMeta?.Pipeline && modelMeta?.Version
@@ -339,7 +389,7 @@ export function parseHistoryItem(
         : (modelMeta?.Name ?? 'Predictive Model');
 
     const completedAt = detail.CompletedAt ? (detail.CompletedAt instanceof Date ? detail.CompletedAt : new Date(detail.CompletedAt)) : null;
-    const drivers = parsePayloadDrivers(payloadSection?.['drivers']);
+    const drivers = ParsePayloadDrivers(payloadSection?.['drivers']);
 
     const rawOutcomeConfig = (payloadSection?.['outcomeConfig'] ?? modelMeta?.outcomeConfig) as OutcomeConfig | undefined;
     const outcomeConfig = rawOutcomeConfig
@@ -371,34 +421,42 @@ export function parseHistoryItem(
 
     return {
         id: detail.ID,
-        processRunId: detail.ProcessRunID,
+        ProcessRunId: detail.ProcessRunID,
         modelId: payloadModelId,
-        modelName,
-        provenance,
+        ModelName: modelName,
+        Provenance: provenance,
         target: targetVar || label,
         problemType,
-        numericValue: numericScore,
-        predictedClass,
-        displayValue,
-        isProbability: kind === 'probability',
-        band: kind === 'probability' && numericScore != null ? bandFor(numericScore) : null,
-        statusBand,
-        statusLabel,
-        badgeColor,
-        badgeIcon,
+        NumericValue: numericScore,
+        PredictedClass: predictedClass,
+        DisplayValue: displayValue,
+        IsProbability: kind === 'probability',
+        Band: kind === 'probability' && numericScore != null ? BandFor(numericScore) : null,
+        StatusBand: statusBand,
+        StatusLabel: statusLabel,
+        BadgeColor: badgeColor,
+        BadgeIcon: badgeIcon,
         status: detail.Status || 'Succeeded',
-        completedAt,
-        formattedTime: formatHistoryTimestamp(completedAt),
-        drivers,
-        errorMessage: detail.ErrorMessage,
-        rawPayload,
+        CompletedAt: completedAt,
+        FormattedTime: FormatHistoryTimestamp(completedAt),
+        Drivers: drivers,
+        ErrorMessage: detail.ErrorMessage,
+        RawPayload: rawPayload,
     };
+}
+
+/** @deprecated Use {@link ParseHistoryItem}. */
+export function parseHistoryItem(
+    detail: RawProcessRunDetail,
+    modelLookup?: Map<string, HistoryModelMetadata>,
+): PredictionHistoryItem {
+    return ParseHistoryItem(detail, modelLookup);
 }
 
 /**
  * Filter prediction history by a selected model ID (or return all when null / 'ALL').
  */
-export function filterHistoryByModel(
+export function FilterHistoryByModel(
     history: PredictionHistoryItem[],
     selectedModelId: string | null,
 ): PredictionHistoryItem[] {
@@ -408,23 +466,36 @@ export function filterHistoryByModel(
     return history.filter(item => item.modelId === selectedModelId);
 }
 
+/** @deprecated Use {@link FilterHistoryByModel}. */
+export function filterHistoryByModel(
+    history: PredictionHistoryItem[],
+    selectedModelId: string | null,
+): PredictionHistoryItem[] {
+    return FilterHistoryByModel(history, selectedModelId);
+}
+
 /**
  * Aggregate unique models from prediction history for multi-model tabs / filters.
  */
-export function getDistinctModelsFromHistory(history: PredictionHistoryItem[]): ModelHistorySummary[] {
-    const counts = new Map<string, { modelName: string; count: number }>();
+export function GetDistinctModelsFromHistory(history: PredictionHistoryItem[]): ModelHistorySummary[] {
+    const counts = new Map<string, { ModelName: string; count: number }>();
     for (const item of history) {
         const id = item.modelId ?? 'UNKNOWN';
         const existing = counts.get(id);
         if (existing) {
             existing.count += 1;
         } else {
-            counts.set(id, { modelName: item.modelName, count: 1 });
+            counts.set(id, { ModelName: item.ModelName, count: 1 });
         }
     }
     return Array.from(counts.entries()).map(([modelId, data]) => ({
         modelId,
-        modelName: data.modelName,
+        ModelName: data.ModelName,
         count: data.count,
     }));
+}
+
+/** @deprecated Use {@link GetDistinctModelsFromHistory}. */
+export function getDistinctModelsFromHistory(history: PredictionHistoryItem[]): ModelHistorySummary[] {
+    return GetDistinctModelsFromHistory(history);
 }

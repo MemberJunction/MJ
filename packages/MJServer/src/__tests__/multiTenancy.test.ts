@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createTenantPreRunViewHook, createTenantPreSaveHook } from '../multiTenancy/index.js';
+import { CreateTenantPreRunViewHook, CreateTenantPreSaveHook } from '../multiTenancy/index.js';
 import type { MultiTenancyConfig } from '../config.js';
 import type { RunViewParams } from '@memberjunction/core';
 
@@ -66,13 +66,13 @@ function makeUser(tenantId?: string, roles: string[] = []) {
     ID: 'user-1',
     TenantContext: tenantId ? { TenantID: tenantId, Source: 'header' as const } : undefined,
     UserRoles: roles.map(r => ({ Role: r, RoleID: `role-${r}`, UserID: 'user-1' })),
-  } as Parameters<ReturnType<typeof createTenantPreRunViewHook>>[1];
+  } as Parameters<ReturnType<typeof CreateTenantPreRunViewHook>>[1];
 }
 
 describe('Multi-Tenancy Hooks', () => {
   describe('createTenantPreRunViewHook', () => {
     it('should inject tenant filter for scoped entity', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser('tenant-abc');
 
@@ -81,7 +81,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should AND with existing filter', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: "Status = 'Active'" } as RunViewParams;
       const user = makeUser('tenant-abc');
 
@@ -92,7 +92,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should skip core __mj entities when autoExcludeCoreEntities is true', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'AI Models', ExtraFilter: '' } as RunViewParams;
       const user = makeUser('tenant-abc');
 
@@ -101,7 +101,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should not filter when user has no TenantContext', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser(undefined);
 
@@ -110,7 +110,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should bypass filtering for admin users', () => {
-      const hook = createTenantPreRunViewHook(makeConfig());
+      const hook = CreateTenantPreRunViewHook(makeConfig());
       const params = { EntityName: 'Customers', ExtraFilter: '' } as RunViewParams;
       const user = makeUser('tenant-abc', ['Admin']);
 
@@ -119,7 +119,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should use entity column mapping override', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({
+      const hook = CreateTenantPreRunViewHook(makeConfig({
         entityColumnMappings: { 'Orders': 'TenantID' },
       }));
       const params = { EntityName: 'Orders', ExtraFilter: '' } as RunViewParams;
@@ -130,7 +130,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should respect allowlist scoping strategy', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({
+      const hook = CreateTenantPreRunViewHook(makeConfig({
         scopingStrategy: 'allowlist',
         scopedEntities: ['Customers'],
       }));
@@ -148,7 +148,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should respect denylist scoping strategy', () => {
-      const hook = createTenantPreRunViewHook(makeConfig({
+      const hook = CreateTenantPreRunViewHook(makeConfig({
         scopingStrategy: 'denylist',
         scopedEntities: ['Orders'],
       }));
@@ -173,11 +173,11 @@ describe('Multi-Tenancy Hooks', () => {
         IsSaved: isSaved,
         Get: vi.fn((col: string) => col === 'OrganizationID' ? tenantValue : null),
         Set: vi.fn(),
-      } as unknown as Parameters<ReturnType<typeof createTenantPreSaveHook>>[0];
+      } as unknown as Parameters<ReturnType<typeof CreateTenantPreSaveHook>>[0];
     }
 
     it('should allow save when tenant matches', () => {
-      const hook = createTenantPreSaveHook(makeConfig());
+      const hook = CreateTenantPreSaveHook(makeConfig());
       const entity = makeEntity('Customers', 'tenant-abc', true);
       const user = makeUser('tenant-abc');
 
@@ -186,7 +186,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should reject save in strict mode when tenant mismatches', () => {
-      const hook = createTenantPreSaveHook(makeConfig());
+      const hook = CreateTenantPreSaveHook(makeConfig());
       const entity = makeEntity('Customers', 'tenant-other', true);
       const user = makeUser('tenant-abc');
 
@@ -197,7 +197,7 @@ describe('Multi-Tenancy Hooks', () => {
 
     it('should warn but allow in log mode when tenant mismatches', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const hook = createTenantPreSaveHook(makeConfig({ writeProtection: 'log' }));
+      const hook = CreateTenantPreSaveHook(makeConfig({ writeProtection: 'log' }));
       const entity = makeEntity('Customers', 'tenant-other', true);
       const user = makeUser('tenant-abc');
 
@@ -208,7 +208,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should allow when writeProtection is off', () => {
-      const hook = createTenantPreSaveHook(makeConfig({ writeProtection: 'off' }));
+      const hook = CreateTenantPreSaveHook(makeConfig({ writeProtection: 'off' }));
       const entity = makeEntity('Customers', 'tenant-other', true);
       const user = makeUser('tenant-abc');
 
@@ -217,7 +217,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should auto-assign tenant for new records without tenant value', () => {
-      const hook = createTenantPreSaveHook(makeConfig());
+      const hook = CreateTenantPreSaveHook(makeConfig());
       const entity = makeEntity('Customers', null, false);
       const user = makeUser('tenant-abc');
 
@@ -227,7 +227,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should bypass validation for admin users', () => {
-      const hook = createTenantPreSaveHook(makeConfig());
+      const hook = CreateTenantPreSaveHook(makeConfig());
       const entity = makeEntity('Customers', 'tenant-other', true);
       const user = makeUser('tenant-abc', ['Admin']);
 
@@ -236,7 +236,7 @@ describe('Multi-Tenancy Hooks', () => {
     });
 
     it('should skip core __mj entities', () => {
-      const hook = createTenantPreSaveHook(makeConfig());
+      const hook = CreateTenantPreSaveHook(makeConfig());
       const entity = makeEntity('AI Models', 'any-tenant', true);
       const user = makeUser('tenant-abc');
 

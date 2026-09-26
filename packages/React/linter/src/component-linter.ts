@@ -36,7 +36,7 @@ export interface LintResult {
 }
 
 export interface LintOptions {
-  debugMode?: boolean;
+  debugMode?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface Violation {
@@ -55,7 +55,7 @@ export interface Violation {
 
 export class ComponentLinter {
 
-  public static async validateComponentSyntax(code: string, componentName: string): Promise<{ valid: boolean; errors: string[] }> {
+  public static async ValidateComponentSyntax(code: string, componentName: string): Promise<{ valid: boolean; errors: string[] }> {
     try {
       const parseResult = parser.parse(code, {
         sourceType: 'module',
@@ -90,6 +90,11 @@ export class ComponentLinter {
     }
   }
 
+  /** @deprecated Use {@link ValidateComponentSyntax}. */
+  public static async validateComponentSyntax(code: string, componentName: string): Promise<{ valid: boolean; errors: string[] }> {
+    return this.ValidateComponentSyntax(code, componentName);
+  }
+
   /**
    * The SQL dialect used for WHERE clause validation in semantic validators.
    * Defaults to SQL Server. Set via the `sqlDialect` parameter on `lintComponent()`.
@@ -101,7 +106,7 @@ export class ComponentLinter {
     return ComponentLinter._sqlDialect;
   }
 
-  public static async lintComponent(
+  public static async LintComponent(
     code: string,
     componentName: string,
     componentSpec?: ComponentSpec,
@@ -344,6 +349,20 @@ export class ComponentLinter {
         hasErrors: true,
       };
     }
+  }
+
+  /** @deprecated Use {@link LintComponent}. */
+  public static async lintComponent(
+    code: string,
+    componentName: string,
+    componentSpec?: ComponentSpec,
+    isRootComponent?: boolean,
+    contextUser?: UserInfo,
+    debugMode?: boolean,
+    options?: LinterOptions,
+    sqlDialect?: SQLParserDialect,
+  ): Promise<LintResult> {
+    return this.LintComponent(code, componentName, componentSpec, isRootComponent, contextUser, debugMode, options, sqlDialect);
   }
 
   private static validateDataRequirements(ast: t.File, componentSpec: ComponentSpec, options?: LinterOptions): Violation[] {

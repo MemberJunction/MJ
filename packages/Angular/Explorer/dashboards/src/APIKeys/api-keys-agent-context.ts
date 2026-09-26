@@ -22,7 +22,7 @@
  * user-chosen friendly name (e.g. "CI pipeline") — it is NOT the key itself.
  */
 
-import { boundNameList } from '../shared/agent-tool-validation';
+import { BoundNameList } from '../shared/agent-tool-validation';
 
 /** The four tabs the API Keys dashboard exposes. */
 export const VALID_API_KEYS_TABS = ['keys', 'applications', 'scopes', 'usage'] as const;
@@ -38,16 +38,26 @@ export type APIKeysFilter = (typeof VALID_API_KEYS_FILTERS)[number];
  * Type-guard / validator for an API Keys tab string. Keeps the
  * `SwitchAPIKeysTab` client tool tolerant of arbitrary agent input.
  */
-export function isValidAPIKeysTab(tab: unknown): tab is APIKeysTab {
+export function IsValidAPIKeysTab(tab: unknown): tab is APIKeysTab {
     return typeof tab === 'string' && (VALID_API_KEYS_TABS as readonly string[]).includes(tab);
+}
+
+/** @deprecated Use {@link IsValidAPIKeysTab}. */
+export function isValidAPIKeysTab(tab: unknown): tab is APIKeysTab {
+    return IsValidAPIKeysTab(tab);
 }
 
 /**
  * Type-guard / validator for an API Keys status-filter string. Keeps the
  * `FilterAPIKeysByStatus` client tool tolerant of arbitrary agent input.
  */
-export function isValidAPIKeysFilter(filter: unknown): filter is APIKeysFilter {
+export function IsValidAPIKeysFilter(filter: unknown): filter is APIKeysFilter {
     return typeof filter === 'string' && (VALID_API_KEYS_FILTERS as readonly string[]).includes(filter);
+}
+
+/** @deprecated Use {@link IsValidAPIKeysFilter}. */
+export function isValidAPIKeysFilter(filter: unknown): filter is APIKeysFilter {
+    return IsValidAPIKeysFilter(filter);
 }
 
 /**
@@ -105,10 +115,10 @@ export interface APIKeysAgentContextInput {
  * Keeping this a pure function (no `this`) makes the shape unit-testable and lets
  * the test assert no secret-bearing key can ever appear.
  */
-export function buildAPIKeysAgentContext(input: APIKeysAgentContextInput): Record<string, unknown> {
-    const keyLabels = boundNameList(input.KeyLabels);
-    const appNames = boundNameList(input.ApplicationNames);
-    const scopeCategories = boundNameList(input.ScopeCategoryNames);
+export function BuildAPIKeysAgentContext(input: APIKeysAgentContextInput): Record<string, unknown> {
+    const keyLabels = BoundNameList(input.KeyLabels);
+    const appNames = BoundNameList(input.ApplicationNames);
+    const scopeCategories = BoundNameList(input.ScopeCategoryNames);
 
     return {
         // Navigation
@@ -131,7 +141,7 @@ export function buildAPIKeysAgentContext(input: APIKeysAgentContextInput): Recor
         // Bounded display names (friendly labels, NEVER key material)
         VisibleKeyLabels: keyLabels,
         VisibleKeyLabelsTruncated: keyLabels.length < input.KeyLabels.length,
-        TopUsedKeyLabels: boundNameList(input.TopUsedKeyLabels),
+        TopUsedKeyLabels: BoundNameList(input.TopUsedKeyLabels),
         ApplicationNames: appNames,
         ApplicationNamesTruncated: appNames.length < input.ApplicationNames.length,
         ScopeCategoryNames: scopeCategories,
@@ -140,4 +150,9 @@ export function buildAPIKeysAgentContext(input: APIKeysAgentContextInput): Recor
         SelectedKeyId: input.SelectedKeyId,
         SelectedKeyLabel: input.SelectedKeyLabel,
     };
+}
+
+/** @deprecated Use {@link BuildAPIKeysAgentContext}. */
+export function buildAPIKeysAgentContext(input: APIKeysAgentContextInput): Record<string, unknown> {
+    return BuildAPIKeysAgentContext(input);
 }

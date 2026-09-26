@@ -321,53 +321,58 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- FormComponent accessor ----
 
   /** Typed accessor for the form component reference */
-  public get fc(): BaseFormComponent | null {
+  public get Fc(): BaseFormComponent | null {
     return this.FormComponent;
+  }
+
+  /** @deprecated Use {@link Fc}. */
+  public get fc(): BaseFormComponent | null {
+    return this.Fc;
   }
 
   // ---- Effective state (bridges FormComponent → toolbar inputs) ----
 
   get EffectiveRecord(): BaseEntity {
-    return this.fc?.record ?? this.Record;
+    return this.Fc?.record ?? this.Record;
   }
 
   get EffectiveEditMode(): boolean {
-    return this.fc?.EditMode ?? this.EditMode;
+    return this.Fc?.EditMode ?? this.EditMode;
   }
 
   get EffectiveUserCanEdit(): boolean {
-    return this.fc?.UserCanEdit ?? this.UserCanEdit;
+    return this.Fc?.UserCanEdit ?? this.UserCanEdit;
   }
 
   get EffectiveUserCanDelete(): boolean {
-    return this.fc?.UserCanDelete ?? this.UserCanDelete;
+    return this.Fc?.UserCanDelete ?? this.UserCanDelete;
   }
 
   get EffectiveIsFavorite(): boolean {
-    return this.fc?.IsFavorite ?? this.IsFavorite;
+    return this.Fc?.IsFavorite ?? this.IsFavorite;
   }
 
   get EffectiveFavoriteInitDone(): boolean {
-    return this.fc?.FavoriteInitDone ?? this.FavoriteInitDone;
+    return this.Fc?.FavoriteInitDone ?? this.FavoriteInitDone;
   }
 
   get EffectiveEntityInfo(): EntityInfo | null {
-    return (this.fc?.EntityInfo as EntityInfo) ?? this.EntityInfo;
+    return (this.Fc?.EntityInfo as EntityInfo) ?? this.EntityInfo;
   }
 
   get EffectiveIsDirty(): boolean {
-    if (this.fc) {
+    if (this.Fc) {
       // OR'd with the form's own extra state: a section that owns an editor (a flow canvas, a
       // designer) holds edits no entity field reflects, and reporting the record clean would let
       // the navigate-away guard discard them without asking.
-      return (this.fc.record?.Dirty ?? false) || this.fc.HasAdditionalUnsavedChanges;
+      return (this.Fc.record?.Dirty ?? false) || this.Fc.HasAdditionalUnsavedChanges;
     }
     return this.IsDirty;
   }
 
   get EffectiveDirtyFieldNames(): string[] {
-    if (this.fc?.record?.Fields) {
-      return this.fc.record.Fields.filter(f => f.Dirty).map(f => f.Name);
+    if (this.Fc?.record?.Fields) {
+      return this.Fc.record.Fields.filter(f => f.Dirty).map(f => f.Name);
     }
     return this.DirtyFieldNames;
   }
@@ -377,12 +382,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get EffectiveIsRefreshing(): boolean {
-    return this.fc?.IsRefreshing ?? this.IsRefreshing;
+    return this.Fc?.IsRefreshing ?? this.IsRefreshing;
   }
 
   get EffectiveWidthMode(): FormWidthMode {
-    if (this.fc?.getFormWidthMode) {
-      return this.fc.getFormWidthMode();
+    if (this.Fc?.getFormWidthMode) {
+      return this.Fc.getFormWidthMode();
     }
     return this.WidthMode;
   }
@@ -394,7 +399,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Any other value (undefined or a partial config) keeps the toolbar.
    */
   get EffectiveShowToolbar(): boolean {
-    return ResolveFormShowToolbar(this.fc?.Config);
+    return ResolveFormShowToolbar(this.Fc?.Config);
   }
 
   /**
@@ -404,34 +409,34 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * yet per-instance toolbar tweaks still take effect through `fc.Config`.
    */
   get EffectiveToolbarConfig(): FormToolbarConfig {
-    return ResolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.fc?.Config);
+    return ResolveFormToolbarConfig(this.ToolbarConfig ?? DEFAULT_TOOLBAR_CONFIG, this.Fc?.Config);
   }
 
   get EffectiveRegisteredToolbarItems(): FormToolbarItemConfig[] {
-    if (this.fc?.RegisteredToolbarItems && this.fc.RegisteredToolbarItems.length > 0) {
-      return this.fc.RegisteredToolbarItems;
+    if (this.Fc?.RegisteredToolbarItems && this.Fc.RegisteredToolbarItems.length > 0) {
+      return this.Fc.RegisteredToolbarItems;
     }
     return this.RegisteredToolbarItems;
   }
 
   get EffectiveToolbarItemOverrides(): ReadonlyMap<string, Partial<FormToolbarItemConfig>> | null {
-    if (this.fc?.ToolbarItemOverrides && this.fc.ToolbarItemOverrides.size > 0) {
-      return this.fc.ToolbarItemOverrides;
+    if (this.Fc?.ToolbarItemOverrides && this.Fc.ToolbarItemOverrides.size > 0) {
+      return this.Fc.ToolbarItemOverrides;
     }
     return this.ToolbarItemOverrides;
   }
 
   get EffectiveSearchFilter(): string {
-    return this.fc?.searchFilter ?? '';
+    return this.Fc?.searchFilter ?? '';
   }
 
   get EffectiveShowEmptyFields(): boolean {
-    return this.fc?.showEmptyFields ?? false;
+    return this.Fc?.showEmptyFields ?? false;
   }
 
   get EffectiveHasCustomSectionOrder(): boolean {
-    if (this.fc?.hasCustomSectionOrder) {
-      return this.fc.hasCustomSectionOrder();
+    if (this.Fc?.hasCustomSectionOrder) {
+      return this.Fc.hasCustomSectionOrder();
     }
     return false;
   }
@@ -439,8 +444,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- Section counts ----
 
   get TotalSectionCount(): number {
-    if (this.fc?.getTotalSectionCount) {
-      return this.fc.getTotalSectionCount();
+    if (this.Fc?.getTotalSectionCount) {
+      return this.Fc.getTotalSectionCount();
     }
     return this.Panels?.length ?? 0;
   }
@@ -452,8 +457,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       const fromRail = this.ChromeFirstClassGroups.length + this.ChromeMoreItems.length;
       return Math.max(fromPanels, fromRail);
     }
-    if (this.fc?.getVisibleSectionCount) {
-      return this.fc.getVisibleSectionCount();
+    if (this.Fc?.getVisibleSectionCount) {
+      return this.Fc.getVisibleSectionCount();
     }
     return this.Panels?.filter((p) => p.IsVisible).length ?? 0;
   }
@@ -488,7 +493,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get EffectiveShowRelatedEntities(): boolean {
-    return this.fc?.Config?.ShowRelatedEntities !== false;
+    return this.Fc?.Config?.ShowRelatedEntities !== false;
   }
 
   get ChromeLayout(): 'accordion' | 'left-nav' {
@@ -563,7 +568,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get ChromeReorderAllowed(): boolean {
-    return this.fc?.formContext?.allowSectionReorder !== false;
+    return this.Fc?.formContext?.allowSectionReorder !== false;
   }
 
   get ShowMoreToggle(): boolean {
@@ -579,8 +584,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   get ExpandedSectionCount(): number {
-    if (this.fc?.getExpandedCount) {
-      return this.fc.getExpandedCount();
+    if (this.Fc?.getExpandedCount) {
+      return this.Fc.getExpandedCount();
     }
     if (!this.Panels) return 0;
     return this.Panels.filter(p => p.Expanded && p.IsVisible).length;
@@ -634,8 +639,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Current section order from the form component */
   get SectionManagerOrder(): string[] {
-    if (this.fc?.getSectionOrder) {
-      return this.fc.getSectionOrder();
+    if (this.Fc?.getSectionOrder) {
+      return this.Fc.getSectionOrder();
     }
     return [];
   }
@@ -658,11 +663,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (savedWidth) this.TagsPanelWidth = parseInt(savedWidth, 10) || 0;
 
     // Subscribe to panel Navigate events and relay them
-    this.SubscribeToPanelNavigateEvents();
+    this.subscribeToPanelNavigateEvents();
 
     // Watch for panel changes to update counts and re-subscribe
     this.Panels.changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
-      this.SubscribeToPanelNavigateEvents();
+      this.subscribeToPanelNavigateEvents();
       this.scheduleChromeResolve();
       this.cdr.markForCheck();
     });
@@ -680,7 +685,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.cdr.markForCheck();
     });
 
-    this.RestoreChromePrefs();
+    this.restoreChromePrefs();
     this.scheduleChromeResolve();
 
     // Watch for changes to record dirty state
@@ -730,7 +735,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   public OnMoreFolderToggle(): void {
     this.chrome.ToggleMoreFolder();
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.cdr.detectChanges();
   }
 
@@ -748,7 +753,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /**
    * Whole-form totals — what the COLLAPSED rail spine shows, since no individual
-   * rail item is visible there. Summed over the RAIL GROUPS (first-class + More), not
+   * rail item is visible there. The expanded rail shows the same unrouted failures
+   * on their own row (see the template), so neither state hides a refused save. Summed over the RAIL GROUPS (first-class + More), not
    * over every registered panel: a panel the chrome dropped from the rail (System
    * Metadata in left-nav, a claimed baked grid) is not something the user can reach
    * from the rail, so the spine must add up to exactly what the expanded rail shows.
@@ -768,7 +774,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   private unroutedValidationErrors(): ValidationErrorInfo[] {
-    const ctx = this.fc?.formContext;
+    const ctx = this.Fc?.formContext;
     if (!ctx?.showValidation || !ctx.validationErrors?.length) return [];
     // Only a section with a rail item may claim: a registered section the chrome dropped
     // (hidden by config, in no group) has no badge anywhere, so its failures must stay
@@ -800,16 +806,24 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return DescribeSectionErrors(count, where);
   }
 
+  /** Tooltip / screen-reader text for the rail row that holds failures no section owns. */
+  public RailUnroutedErrorTitle(count: number): string {
+    if (count <= 0) return '';
+    return count === 1
+      ? '1 problem is not in any section shown here'
+      : `${count} problems are not in any section shown here`;
+  }
+
   public RailWarningTitle(count: number, where: string): string {
     return DescribeSectionWarnings(count, where);
   }
 
   public ChromeGroupRowCount(group: FormChromeGroup): number | undefined {
-    if (!this.fc?.GetSectionRowCount) return undefined;
+    if (!this.Fc?.GetSectionRowCount) return undefined;
     let total = 0;
     let any = false;
     for (const key of group.SectionKeys) {
-      const count = this.fc.GetSectionRowCount(key);
+      const count = this.Fc.GetSectionRowCount(key);
       if (count !== undefined) {
         total += count;
         any = true;
@@ -829,7 +843,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!this.ChromeRailPinned && previous !== groupKey) {
       this.chromeRailExpanded = false;
     }
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(groupKey));
     this.cdr.detectChanges();
   }
@@ -849,7 +863,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (this.ChromeRailPinned) {
       this.chromeRailExpanded = true;
     }
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.cdr.detectChanges();
   }
 
@@ -874,7 +888,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   public OnRailResizeEnd(): void {
     if (!this.RailResizing) return;
     this.RailResizing = false;
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.cdr.detectChanges();
   }
 
@@ -937,8 +951,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.EffectiveHasCustomSectionOrder ? this.SectionManagerOrder : [],
     );
     const next = MoveChromeGroupInSectionOrder(current, dragged, target);
-    if (this.fc?.setSectionOrder) {
-      this.fc.setSectionOrder(next);
+    if (this.Fc?.setSectionOrder) {
+      this.Fc.setSectionOrder(next);
       this.cdr.detectChanges();
     }
   }
@@ -950,7 +964,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (before.Cancel) return;
     this.chrome.ToggleMore(next);
     this.applyChromeVisibility();
-    this.PersistChromePrefs();
+    this.persistChromePrefs();
     this.AfterSectionActivated.emit(new AfterSectionActivatedEventArgs(MORE_SECTION_KEY));
     this.cdr.detectChanges();
   }
@@ -961,7 +975,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     }
     this.chromeResolveTimer = setTimeout(() => {
       this.chromeResolveTimer = null;
-      this.ResolveChrome();
+      this.resolveChrome();
       this.applyChromeVisibility();
       this.cdr.markForCheck();
     }, 0);
@@ -981,7 +995,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.scheduleChromeResolve();
   }
 
-  private ResolveChrome(): void {
+  private resolveChrome(): void {
     const entity = this.EffectiveEntityInfo;
     if (!entity) return;
     this.loadChromeRulesIfNeeded();
@@ -999,8 +1013,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       ChromeRules: this.chromeRules,
       IncludeUnbakedRelated: this.EffectiveShowRelatedEntities,
       Membership: {
-        moreSectionKeys: this.fc?.getMoreSectionKeys?.() ?? [],
-        firstClassSectionKeys: this.fc?.getFirstClassSectionKeys?.() ?? [],
+        moreSectionKeys: this.Fc?.getMoreSectionKeys?.() ?? [],
+        firstClassSectionKeys: this.Fc?.getFirstClassSectionKeys?.() ?? [],
       },
     });
 
@@ -1020,7 +1034,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (groupKey === MORE_SECTION_KEY) return;
     const group = this.chrome.Spec.Groups.find((g) => g.Key === groupKey);
     const keys = group && !group.IsMore ? group.SectionKeys : [groupKey];
-    const form = this.fc as { SetSectionExpanded?: (key: string, expanded: boolean) => void } | null;
+    const form = this.Fc as { SetSectionExpanded?: (key: string, expanded: boolean) => void } | null;
     if (!form?.SetSectionExpanded) return;
     for (const key of keys) {
       form.SetSectionExpanded(key, true);
@@ -1253,7 +1267,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   private chromePanelSnapshots(): FormChromePanelSnapshot[] {
     const skip = this.contributionHiddenSectionKeys();
-    const ctx = this.fc?.formContext;
+    const ctx = this.Fc?.formContext;
     const byKey = new Map<string, FormChromePanelSnapshot>();
     const add = (snapshot: FormChromePanelSnapshot) => {
       if (!snapshot.SectionKey || skip.has(snapshot.SectionKey)) return;
@@ -1341,7 +1355,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   /** Delegates to the pure decision in `form-chrome-rail-pref`, supplying this form's registrations. */
-  private UnsavedLeadGroupKey(): string | null {
+  private unsavedLeadGroupKey(): string | null {
     return UnsavedLeadGroupKey(
       this.EffectiveEntityInfo?.Name,
       CollectFormPanelRegistrations(),
@@ -1349,7 +1363,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     );
   }
 
-  private RestoreChromePrefs(): void {
+  private restoreChromePrefs(): void {
     if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved)) {
       const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
       if (group) this.chrome.ActiveGroupKey = group;
@@ -1357,7 +1371,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       // A new record has no stored position to restore, so without this it opens on the lead
       // group -- which is usually a summary, and a summary of a record with no data is a page of
       // blanks. A contribution can opt out of that by declaring `leadsWhenUnsaved`.
-      const lead = this.UnsavedLeadGroupKey();
+      const lead = this.unsavedLeadGroupKey();
       if (lead) this.chrome.ActiveGroupKey = lead;
     }
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
@@ -1372,7 +1386,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.chromeRailExpanded = this.ChromeRailPinned;
   }
 
-  private PersistChromePrefs(): void {
+  private persistChromePrefs(): void {
     if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved) && this.chrome.ActiveGroupKey) {
       UserInfoEngine.Instance.SetSettingDebounced(
         this.chromePrefKey('activeGroup'),
@@ -1397,15 +1411,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Subscribes to Navigate events from all child collapsible panels
    * and relays them through this container's Navigate output.
    */
-  private SubscribeToPanelNavigateEvents(): void {
+  private subscribeToPanelNavigateEvents(): void {
     this.panelNavReset$.next(); // tear down previous subscriptions
     // Subscribe to RecordReady on the form component — fires once after record is fully initialized
-    if (this.fc) {
-      this.fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
-        this.LoadBadgeCounts();
+    if (this.Fc) {
+      this.Fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
+        this.loadBadgeCounts();
       });
-      this.fc.RecordRefreshed.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
-        this.OnFormRecordRefreshed(e.Record);
+      this.Fc.RecordRefreshed.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
+        this.onFormRecordRefreshed(e.Record);
       });
     }
 
@@ -1454,7 +1468,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   private badgeCountsLoaded = false;
 
-  private LoadBadgeCounts(): void {
+  private loadBadgeCounts(): void {
     if (this.badgeCountsLoaded) return;
 
     const record = this.EffectiveRecord;
@@ -1463,16 +1477,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.badgeCountsLoaded = true;
 
     // Fire queries in parallel — no await needed, they update state async
-    this.LoadTagCount(record);
-    this.LoadVersionCount(record);
-    this.LoadAttachmentCount(record);
+    this.loadTagCount(record);
+    this.loadVersionCount(record);
+    this.loadAttachmentCount(record);
   }
 
   /**
    * Queries the count of linked attachments for the current entity + record
    * and updates the AttachmentCount badge on the toolbar.
    */
-  private async LoadAttachmentCount(record: BaseEntity): Promise<void> {
+  private async loadAttachmentCount(record: BaseEntity): Promise<void> {
     if (!this.AttachmentsAvailable) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -1495,7 +1509,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Queries the count of tagged items for the current entity + record
    * and updates the TagCount badge on the toolbar.
    */
-  private async LoadTagCount(record: BaseEntity): Promise<void> {
+  private async loadTagCount(record: BaseEntity): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Don't narrow Fields — the server caches RunView results by entity+filter (ignoring Fields),
@@ -1518,7 +1532,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Queries the count of record change entries for the current entity + record
    * and updates the VersionCount badge on the toolbar.
    */
-  private async LoadVersionCount(record: BaseEntity): Promise<void> {
+  private async loadVersionCount(record: BaseEntity): Promise<void> {
     if (!record.EntityInfo.TrackRecordChanges) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
@@ -1550,11 +1564,11 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Edit mode change: delegate to FormComponent if available, otherwise re-emit.
    */
   OnEditModeChange(editMode: boolean): void {
-    if (this.fc) {
+    if (this.Fc) {
       if (editMode) {
-        this.fc.StartEditMode();
+        this.Fc.StartEditMode();
       } else {
-        this.fc.EndEditMode();
+        this.Fc.EndEditMode();
       }
       this.cdr.markForCheck();
     } else {
@@ -1566,16 +1580,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Save: delegate to FormComponent if available, otherwise re-emit.
    */
   async OnSaveRequested(): Promise<void> {
-    if (this.fc?.SaveRecord) {
+    if (this.Fc?.SaveRecord) {
       // Mark as saving to prevent double-click
       this.IsSaving = true;
       this.cdr.markForCheck();
 
       try {
-        await this.fc.SaveRecord(true);
+        await this.Fc.SaveRecord(true);
 
         // After successful save, refresh version count badge and record changes drawer
-        this.RefreshAfterSave();
+        this.refreshAfterSave();
       } finally {
         // Use microtask timing to avoid ExpressionChangedAfterItHasBeenCheckedError
         await Promise.resolve();
@@ -1594,12 +1608,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * The save operation creates a new RecordChange entry server-side, so we need
    * to update the UI to reflect the new version.
    */
-  private RefreshAfterSave(): void {
+  private refreshAfterSave(): void {
     const record = this.EffectiveRecord;
     if (!record?.EntityInfo?.TrackRecordChanges) return;
 
     // Refresh version count badge
-    this.LoadVersionCount(record);
+    this.loadVersionCount(record);
 
     // If the record changes drawer is open, refresh it too
     if (this.ShowRecordChanges && this.recordChangesDrawer) {
@@ -1611,8 +1625,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * Cancel: delegate to FormComponent if available, otherwise re-emit.
    */
   OnCancelRequested(): void {
-    if (this.fc?.CancelEdit) {
-      this.fc.CancelEdit();
+    if (this.Fc?.CancelEdit) {
+      this.Fc.CancelEdit();
       this.cdr.markForCheck();
     } else {
       this.CancelRequested.emit();
@@ -1625,12 +1639,12 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * `host.Refresh()` (which calls `RefreshRecord()` directly) still notifies.
    */
   async OnRefreshRequested(): Promise<void> {
-    if (this.fc?.RefreshRecord) {
+    if (this.Fc?.RefreshRecord) {
       this.IsRefreshing = true;
       this.cdr.markForCheck();
 
       try {
-        await this.fc.RefreshRecord();
+        await this.Fc.RefreshRecord();
       } finally {
         await Promise.resolve();
         this.ngZone.run(() => {
@@ -1648,9 +1662,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * the record itself (badges, open history drawer) and broadcast to
    * in-form listeners (related grids, IS-A panel, custom panels).
    */
-  private OnFormRecordRefreshed(record: BaseEntity): void {
+  private onFormRecordRefreshed(record: BaseEntity): void {
     this.badgeCountsLoaded = false;
-    this.LoadBadgeCounts();
+    this.loadBadgeCounts();
     if (this.ShowRecordChanges && this.recordChangesDrawer) {
       this.recordChangesDrawer.Refresh();
     }
@@ -1708,7 +1722,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // Refresh tag count — tags may have been added/removed while panel was open
     const record = this.EffectiveRecord;
     if (record?.EntityInfo) {
-      this.LoadTagCount(record);
+      this.loadTagCount(record);
     }
   }
 
@@ -1737,7 +1751,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // Refresh attachment count — attachments may have been added/removed while panel was open
     const record = this.EffectiveRecord;
     if (record?.EntityInfo) {
-      this.LoadAttachmentCount(record);
+      this.loadAttachmentCount(record);
     }
   }
 
@@ -1762,7 +1776,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     // Refresh version count — new changes may have occurred
     const record = this.EffectiveRecord;
     if (record?.EntityInfo) {
-      this.LoadVersionCount(record);
+      this.loadVersionCount(record);
     }
   }
 
@@ -1802,7 +1816,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
           );
 
           // Refresh version count — the save just produced a new restore-tagged change.
-          this.LoadVersionCount(record);
+          this.loadVersionCount(record);
           this.cdr.markForCheck();
         } else {
           const errMsg = record.LatestResult?.CompleteMessage ?? 'unknown error';
@@ -1851,8 +1865,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   OnShowChangesRequested(): void {
-    if (this.fc?.ShowChanges) {
-      this.fc.ShowChanges();
+    if (this.Fc?.ShowChanges) {
+      this.Fc.ShowChanges();
     } else {
       this.ShowChangesRequested.emit();
     }
@@ -1861,8 +1875,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   // ---- Section Control Handlers ----
 
   OnFilterChange(filter: string): void {
-    if (this.fc?.onFilterChange) {
-      this.fc.onFilterChange(filter);
+    if (this.Fc?.onFilterChange) {
+      this.Fc.onFilterChange(filter);
       if (filter.trim() && this.ChromeMoreItems.length > 0) {
         this.chrome.MoreExpanded = true;
       }
@@ -1873,29 +1887,29 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   OnExpandAll(): void {
-    if (this.fc?.expandAllSections) {
-      this.fc.expandAllSections();
+    if (this.Fc?.expandAllSections) {
+      this.Fc.expandAllSections();
       this.cdr.markForCheck();
     }
   }
 
   OnCollapseAll(): void {
-    if (this.fc?.collapseAllSections) {
-      this.fc.collapseAllSections();
+    if (this.Fc?.collapseAllSections) {
+      this.Fc.collapseAllSections();
       this.cdr.markForCheck();
     }
   }
 
   OnShowEmptyFieldsChange(show: boolean): void {
-    if (this.fc) {
-      this.fc.showEmptyFields = show;
+    if (this.Fc) {
+      this.Fc.showEmptyFields = show;
       this.cdr.markForCheck();
     }
   }
 
   OnWidthModeChange(mode: FormWidthMode): void {
-    if (this.fc?.setFormWidthMode) {
-      this.fc.setFormWidthMode(mode);
+    if (this.Fc?.setFormWidthMode) {
+      this.Fc.setFormWidthMode(mode);
       this.cdr.markForCheck();
     } else {
       this.WidthMode = mode;
@@ -1904,8 +1918,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   OnResetSectionOrder(): void {
-    if (this.fc?.resetSectionOrder) {
-      this.fc.resetSectionOrder();
+    if (this.Fc?.resetSectionOrder) {
+      this.Fc.resetSectionOrder();
       this.scheduleChromeResolve();
       this.cdr.markForCheck();
     }
@@ -1915,7 +1929,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Whether the variant dropdown menu is currently open. Toggled by the
    *  control's click handler; closed on blur or after a row is picked. */
-  _variantMenuOpen = false;
+  VariantMenuOpen = false;
+
+  /** @deprecated Use {@link VariantMenuOpen}. */
+  get _variantMenuOpen() {
+    return this.VariantMenuOpen;
+  }
+  /** @deprecated Use {@link VariantMenuOpen}. */
+  set _variantMenuOpen(value) {
+    this.VariantMenuOpen = value;
+  }
 
   /**
    * Effective variants — prefer the form component's list (set by the host
@@ -1925,13 +1948,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * container reads it through this accessor.
    */
   get EffectiveVariants(): VariantPickerItem[] {
-    return (this.fc?.Variants as VariantPickerItem[] | undefined)
+    return (this.Fc?.Variants as VariantPickerItem[] | undefined)
         ?? this.Variants
         ?? [];
   }
 
   get EffectiveCurrentVariantID(): string | null {
-    return this.fc?.CurrentVariantID ?? this.CurrentVariantID;
+    return this.Fc?.CurrentVariantID ?? this.CurrentVariantID;
   }
 
   /** Whether to show the variant picker at all. Hidden when the entity has
@@ -1947,8 +1970,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   /** Compact subtitle: scope + status, e.g. "User · Active". */
-  variantSubtitle(v: VariantPickerItem): string {
+  VariantSubtitle(v: VariantPickerItem): string {
     return `${v.Scope} · ${v.Status}`;
+  }
+
+  /** @deprecated Use {@link VariantSubtitle}. */
+  variantSubtitle(v: VariantPickerItem): string {
+    return this.VariantSubtitle(v);
   }
 
   /**
@@ -1958,8 +1986,8 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    */
   OnVariantPicked(variantID: string | null): void {
     if (variantID === this.EffectiveCurrentVariantID) return;
-    if (this.fc && typeof this.fc.OnVariantChanged === 'function') {
-      this.fc.OnVariantChanged(variantID);
+    if (this.Fc && typeof this.Fc.OnVariantChanged === 'function') {
+      this.Fc.OnVariantChanged(variantID);
     } else {
       this.VariantChange.emit(variantID);
     }
@@ -1973,16 +2001,16 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   }
 
   OnSectionOrderChange(newOrder: string[]): void {
-    if (this.fc?.setSectionOrder) {
-      this.fc.setSectionOrder(newOrder);
+    if (this.Fc?.setSectionOrder) {
+      this.Fc.setSectionOrder(newOrder);
       this.scheduleChromeResolve();
       this.cdr.markForCheck();
     }
   }
 
   OnChromeMembershipChange(change: ChromeMembershipChange): void {
-    if (this.fc?.setChromeMembership) {
-      this.fc.setChromeMembership(change.moreSectionKeys, change.firstClassSectionKeys);
+    if (this.Fc?.setChromeMembership) {
+      this.Fc.setChromeMembership(change.moreSectionKeys, change.firstClassSectionKeys);
       this.scheduleChromeResolve();
       this.cdr.markForCheck();
     }

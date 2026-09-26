@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectFieldsToMap } from '../integration/EntityMapLifecycle.js';
+import { SelectFieldsToMap } from '../integration/EntityMapLifecycle.js';
 
 /**
  * Deselecting the primary key must not cost the object its identity.
@@ -18,41 +18,41 @@ const names = (out: Array<{ Name: string }>) => out.map(x => x.Name);
 
 describe('selectFieldsToMap — the primary key is never optional', () => {
     it('includes the key even when the user did not select it', () => {
-        expect(names(selectFieldsToMap(ALL, ['name', 'email']))).toEqual(['id', 'name', 'email']);
+        expect(names(SelectFieldsToMap(ALL, ['name', 'email']))).toEqual(['id', 'name', 'email']);
     });
 
     it('includes the key when the selection is EMPTY — an empty choice is still a choice', () => {
         // Distinct from "no selection". An empty array is unusual but real, and it still cannot
         // produce a keyless map.
-        expect(names(selectFieldsToMap(ALL, []))).toEqual(['id']);
+        expect(names(SelectFieldsToMap(ALL, []))).toEqual(['id']);
     });
 
     it('does not duplicate the key when it IS selected', () => {
-        expect(names(selectFieldsToMap(ALL, ['id', 'name']))).toEqual(['id', 'name']);
+        expect(names(SelectFieldsToMap(ALL, ['id', 'name']))).toEqual(['id', 'name']);
     });
 
     it('null or undefined selection means every field', () => {
-        expect(names(selectFieldsToMap(ALL, null))).toEqual(['id', 'name', 'email', 'notes']);
-        expect(names(selectFieldsToMap(ALL, undefined))).toEqual(['id', 'name', 'email', 'notes']);
+        expect(names(SelectFieldsToMap(ALL, null))).toEqual(['id', 'name', 'email', 'notes']);
+        expect(names(SelectFieldsToMap(ALL, undefined))).toEqual(['id', 'name', 'email', 'notes']);
     });
 
     it('keeps every part of a COMPOSITE key, selected or not', () => {
         const composite = [f('tenant_id', true), f('row_id', true), f('label')];
-        expect(names(selectFieldsToMap(composite, ['label']))).toEqual(['tenant_id', 'row_id', 'label']);
+        expect(names(SelectFieldsToMap(composite, ['label']))).toEqual(['tenant_id', 'row_id', 'label']);
     });
 
     it('matches selection names case-insensitively', () => {
-        expect(names(selectFieldsToMap(ALL, ['NAME', 'Email']))).toEqual(['id', 'name', 'email']);
+        expect(names(SelectFieldsToMap(ALL, ['NAME', 'Email']))).toEqual(['id', 'name', 'email']);
     });
 
     it('preserves the discovered field order', () => {
         // Field-map creation walks this list; reordering would reshuffle Priority-adjacent behaviour
         // for no reason.
-        expect(names(selectFieldsToMap(ALL, ['notes', 'name']))).toEqual(['id', 'name', 'notes']);
+        expect(names(SelectFieldsToMap(ALL, ['notes', 'name']))).toEqual(['id', 'name', 'notes']);
     });
 
     it('an object with no key at all is unaffected', () => {
         const keyless = [f('a'), f('b')];
-        expect(names(selectFieldsToMap(keyless, ['a']))).toEqual(['a']);
+        expect(names(SelectFieldsToMap(keyless, ['a']))).toEqual(['a']);
     });
 });

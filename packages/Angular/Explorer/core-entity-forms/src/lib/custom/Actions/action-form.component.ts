@@ -23,17 +23,58 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     // expand/collapse, manage-sections, and width-toggle widgets don't
     // apply. `CUSTOM_LAYOUT_TOOLBAR_CONFIG` hides the entire right-hand
     // group while keeping favorite / history / tags / list buttons intact.
-    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+    public readonly ToolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** @deprecated Use {@link ToolbarConfig}. */
+    public get toolbarConfig() {
+      return this.ToolbarConfig;
+    }
 
     /** Custom-layout Action form looks best full-width on first open. */
     public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
 
     // Related entities
     public category: MJActionCategoryEntity | null = null;
-    public actionParams: MJActionParamEntity[] = [];
-    public resultCodes: MJActionResultCodeEntity[] = [];
-    public recentExecutions: MJActionExecutionLogEntity[] = [];
-    public actionLibraries: MJActionLibraryEntity[] = [];
+    public ActionParams: MJActionParamEntity[] = [];
+
+    /** @deprecated Use {@link ActionParams}. */
+    public get actionParams(): MJActionParamEntity[] {
+      return this.ActionParams;
+    }
+    /** @deprecated Use {@link ActionParams}. */
+    public set actionParams(value: MJActionParamEntity[]) {
+      this.ActionParams = value;
+    }
+    public ResultCodes: MJActionResultCodeEntity[] = [];
+
+    /** @deprecated Use {@link ResultCodes}. */
+    public get resultCodes(): MJActionResultCodeEntity[] {
+      return this.ResultCodes;
+    }
+    /** @deprecated Use {@link ResultCodes}. */
+    public set resultCodes(value: MJActionResultCodeEntity[]) {
+      this.ResultCodes = value;
+    }
+    public RecentExecutions: MJActionExecutionLogEntity[] = [];
+
+    /** @deprecated Use {@link RecentExecutions}. */
+    public get recentExecutions(): MJActionExecutionLogEntity[] {
+      return this.RecentExecutions;
+    }
+    /** @deprecated Use {@link RecentExecutions}. */
+    public set recentExecutions(value: MJActionExecutionLogEntity[]) {
+      this.RecentExecutions = value;
+    }
+    public ActionLibraries: MJActionLibraryEntity[] = [];
+
+    /** @deprecated Use {@link ActionLibraries}. */
+    public get actionLibraries(): MJActionLibraryEntity[] {
+      return this.ActionLibraries;
+    }
+    /** @deprecated Use {@link ActionLibraries}. */
+    public set actionLibraries(value: MJActionLibraryEntity[]) {
+      this.ActionLibraries = value;
+    }
     public libraries: MJLibraryEntity[] = [];
     
     // Cached filtered params
@@ -47,13 +88,49 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     private resultCodesToDelete: MJActionResultCodeEntity[] = [];
     
     // Loading states
-    public isLoadingParams = false;
-    public isLoadingResultCodes = false;
-    public isLoadingExecutions = false;
-    public isLoadingLibraries = false;
+    public IsLoadingParams = false;
+
+    /** @deprecated Use {@link IsLoadingParams}. */
+    public get isLoadingParams() {
+      return this.IsLoadingParams;
+    }
+    /** @deprecated Use {@link IsLoadingParams}. */
+    public set isLoadingParams(value) {
+      this.IsLoadingParams = value;
+    }
+    public IsLoadingResultCodes = false;
+
+    /** @deprecated Use {@link IsLoadingResultCodes}. */
+    public get isLoadingResultCodes() {
+      return this.IsLoadingResultCodes;
+    }
+    /** @deprecated Use {@link IsLoadingResultCodes}. */
+    public set isLoadingResultCodes(value) {
+      this.IsLoadingResultCodes = value;
+    }
+    public IsLoadingExecutions = false;
+
+    /** @deprecated Use {@link IsLoadingExecutions}. */
+    public get isLoadingExecutions() {
+      return this.IsLoadingExecutions;
+    }
+    /** @deprecated Use {@link IsLoadingExecutions}. */
+    public set isLoadingExecutions(value) {
+      this.IsLoadingExecutions = value;
+    }
+    public IsLoadingLibraries = false;
+
+    /** @deprecated Use {@link IsLoadingLibraries}. */
+    public get isLoadingLibraries() {
+      return this.IsLoadingLibraries;
+    }
+    /** @deprecated Use {@link IsLoadingLibraries}. */
+    public set isLoadingLibraries(value) {
+      this.IsLoadingLibraries = value;
+    }
     
     // UI state
-    public expandedSections = {
+    public ExpandedSections = {
         overview: true,
         code: true,
         params: true,
@@ -61,21 +138,66 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         execution: false,
         configuration: false
     };
+
+    /** @deprecated Use {@link ExpandedSections}. */
+    public get expandedSections() {
+      return this.ExpandedSections;
+    }
+    /** @deprecated Use {@link ExpandedSections}. */
+    public set expandedSections(value) {
+      this.ExpandedSections = value;
+    }
     
     // Test harness state
-    public showTestHarness = false;
+    public ShowTestHarness = false;
+
+    /** @deprecated Use {@link ShowTestHarness}. */
+    public get showTestHarness() {
+      return this.ShowTestHarness;
+    }
+    /** @deprecated Use {@link ShowTestHarness}. */
+    public set showTestHarness(value) {
+      this.ShowTestHarness = value;
+    }
     
     // Execution stats
-    public executionStats = {
+    public ExecutionStats = {
         totalRuns: 0,
         successRate: 0,
         avgDuration: 0,
         lastRun: null as Date | null
     };
+
+    /** @deprecated Use {@link ExecutionStats}. */
+    public get executionStats() {
+      return this.ExecutionStats;
+    }
+    /** @deprecated Use {@link ExecutionStats}. */
+    public set executionStats(value) {
+      this.ExecutionStats = value;
+    }
     
     // Code editor config
-    public codeLanguage = 'typescript';
-    public showCodeComments = false;
+    public CodeLanguage = 'typescript';
+
+    /** @deprecated Use {@link CodeLanguage}. */
+    public get codeLanguage() {
+      return this.CodeLanguage;
+    }
+    /** @deprecated Use {@link CodeLanguage}. */
+    public set codeLanguage(value) {
+      this.CodeLanguage = value;
+    }
+    public ShowCodeComments = false;
+
+    /** @deprecated Use {@link ShowCodeComments}. */
+    public get showCodeComments() {
+      return this.ShowCodeComments;
+    }
+    /** @deprecated Use {@link ShowCodeComments}. */
+    public set showCodeComments(value) {
+      this.ShowCodeComments = value;
+    }
     
     private dialogService = inject(MJDialogService);
     private viewContainerRef = inject(ViewContainerRef);
@@ -224,7 +346,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     }
 
     private async loadActionParams() {
-        this.isLoadingParams = true;
+        this.IsLoadingParams = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionParamEntity>({
@@ -235,34 +357,34 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             });
             
             if (result.Success) {
-                this.actionParams = result.Results || [];
+                this.ActionParams = result.Results || [];
                 // Update cached filtered params - trim and lowercase Type values to handle any whitespace and case
-                this._inputParams = this.actionParams.filter(p => {
+                this._inputParams = this.ActionParams.filter(p => {
                     const type = p.Type?.trim().toLowerCase();
                     return type === 'input' || type === 'both';
                 });
-                this._outputParams = this.actionParams.filter(p => {
+                this._outputParams = this.ActionParams.filter(p => {
                     const type = p.Type?.trim().toLowerCase();
                     return type === 'output' || type === 'both';
                 });
             } else {
                 // Failed to load action params
-                this.actionParams = [];
+                this.ActionParams = [];
                 this._inputParams = [];
                 this._outputParams = [];
             }
         } catch (error) {
             // Error loading action params
-            this.actionParams = [];
+            this.ActionParams = [];
             this._inputParams = [];
             this._outputParams = [];
         } finally {
-            this.isLoadingParams = false;
+            this.IsLoadingParams = false;
         }
     }
 
     private async loadResultCodes() {
-        this.isLoadingResultCodes = true;
+        this.IsLoadingResultCodes = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionResultCodeEntity>({
@@ -273,16 +395,16 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             });
             
             if (result.Success) {
-                this.resultCodes = result.Results || [];
+                this.ResultCodes = result.Results || [];
             } else {
                 // Failed to load result codes
-                this.resultCodes = [];
+                this.ResultCodes = [];
             }
         } catch (error) {
             // Error loading result codes
-            this.resultCodes = [];
+            this.ResultCodes = [];
         } finally {
-            this.isLoadingResultCodes = false;
+            this.IsLoadingResultCodes = false;
         }
     }
 
@@ -324,7 +446,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
             // Single synchronous commit — all template-observable arrays
             // swap at once, avoiding interleaved CD passes.
-            this.actionParams = params;
+            this.ActionParams = params;
             this._inputParams = params.filter((p) => {
                 const type = p.Type?.trim().toLowerCase();
                 return type === 'input' || type === 'both';
@@ -333,7 +455,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
                 const type = p.Type?.trim().toLowerCase();
                 return type === 'output' || type === 'both';
             });
-            this.resultCodes = codes;
+            this.ResultCodes = codes;
 
             this.cdr.detectChanges();
         } catch (e) {
@@ -342,7 +464,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     }
 
     private async loadRecentExecutions() {
-        this.isLoadingExecutions = true;
+        this.IsLoadingExecutions = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionExecutionLogEntity>({
@@ -353,21 +475,21 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             });
             
             if (result.Success) {
-                this.recentExecutions = result.Results || [];
+                this.RecentExecutions = result.Results || [];
             } else {
                 // Failed to load executions
-                this.recentExecutions = [];
+                this.RecentExecutions = [];
             }
         } catch (error) {
             // Error loading executions
-            this.recentExecutions = [];
+            this.RecentExecutions = [];
         } finally {
-            this.isLoadingExecutions = false;
+            this.IsLoadingExecutions = false;
         }
     }
 
     private async loadActionLibraries() {
-        this.isLoadingLibraries = true;
+        this.IsLoadingLibraries = true;
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionLibraryEntity>({
@@ -377,11 +499,11 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             });
             
             if (result.Success) {
-                this.actionLibraries = result.Results || [];
+                this.ActionLibraries = result.Results || [];
             
                 // Load library details
-                if (this.actionLibraries.length > 0) {
-                    const libraryIds = this.actionLibraries.map(al => al.LibraryID).filter(id => id);
+                if (this.ActionLibraries.length > 0) {
+                    const libraryIds = this.ActionLibraries.map(al => al.LibraryID).filter(id => id);
                     const md = this.ProviderToUse;
                     this.libraries = [];
                     
@@ -397,7 +519,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         } catch (error) {
             // Error loading libraries
         } finally {
-            this.isLoadingLibraries = false;
+            this.IsLoadingLibraries = false;
         }
     }
 
@@ -413,16 +535,16 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             
             if (result.Success && result.Results && result.Results.length > 0) {
                 const allExecutions = result.Results;
-                this.executionStats.totalRuns = allExecutions.length;
+                this.ExecutionStats.totalRuns = allExecutions.length;
                 
                 // Calculate success rate based on result codes
                 const successfulRuns = allExecutions.filter(e => {
-                    const resultCode = this.resultCodes.find(rc => rc.ResultCode === e.ResultCode);
+                    const resultCode = this.ResultCodes.find(rc => rc.ResultCode === e.ResultCode);
                     return resultCode?.IsSuccess || false;
                 });
                 
-                this.executionStats.successRate = this.executionStats.totalRuns > 0 
-                    ? (successfulRuns.length / this.executionStats.totalRuns) * 100 
+                this.ExecutionStats.successRate = this.ExecutionStats.totalRuns > 0 
+                    ? (successfulRuns.length / this.ExecutionStats.totalRuns) * 100 
                     : 0;
                 
                 // Calculate average duration from ALL completed executions
@@ -433,11 +555,11 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
                         // Use absolute value to handle any swapped dates
                         return sum + Math.abs(duration);
                     }, 0);
-                    this.executionStats.avgDuration = totalDuration / completedExecutions.length;
+                    this.ExecutionStats.avgDuration = totalDuration / completedExecutions.length;
                 }
                 
                 // Get last run date from most recent execution
-                this.executionStats.lastRun = new Date(allExecutions[0].StartedAt);
+                this.ExecutionStats.lastRun = new Date(allExecutions[0].StartedAt);
             }
         } catch (error) {
             // Error loading execution stats
@@ -445,7 +567,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     }
 
     // UI Helper Methods
-    getStatusColor(): string {
+    GetStatusColor(): string {
         switch (this.record.Status) {
             case 'Active': return 'var(--mj-status-success)';
             case 'Pending': return 'var(--mj-status-warning)';
@@ -454,7 +576,12 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
     }
 
-    getStatusIcon(): string {
+    /** @deprecated Use {@link GetStatusColor}. */
+    getStatusColor(): string {
+      return this.GetStatusColor();
+    }
+
+    GetStatusIcon(): string {
         switch (this.record.Status) {
             case 'Active': return 'fa-check-circle';
             case 'Pending': return 'fa-clock';
@@ -463,7 +590,12 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
     }
 
-    getTypeColor(): string {
+    /** @deprecated Use {@link GetStatusIcon}. */
+    getStatusIcon(): string {
+      return this.GetStatusIcon();
+    }
+
+    GetTypeColor(): string {
         switch (this.record.Type) {
             case 'Runtime':
                 return 'var(--mj-status-warning)';
@@ -474,13 +606,23 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
     }
 
-    getTypeIcon(): string {
+    /** @deprecated Use {@link GetTypeColor}. */
+    getTypeColor(): string {
+      return this.GetTypeColor();
+    }
+
+    GetTypeIcon(): string {
         switch (this.record.Type) {
             case 'Runtime': return 'fa-wand-magic-sparkles';
             case 'Generated': return 'fa-robot';
             case 'Custom':
             default: return 'fa-code';
         }
+    }
+
+    /** @deprecated Use {@link GetTypeIcon}. */
+    getTypeIcon(): string {
+      return this.GetTypeIcon();
     }
 
     // =====================================================================
@@ -493,54 +635,94 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     // permission set an approver is implicitly blessing.
     // =====================================================================
 
-    public get isRuntimeAction(): boolean {
+    public get IsRuntimeAction(): boolean {
         return this.record?.Type === 'Runtime';
     }
 
-    public get runtimeConfig(): MJActionEntity_IRuntimeActionConfiguration | null {
-        if (!this.isRuntimeAction) return null;
+    /** @deprecated Use {@link IsRuntimeAction}. */
+    public get isRuntimeAction(): boolean {
+      return this.IsRuntimeAction;
+    }
+
+    public get RuntimeConfig(): MJActionEntity_IRuntimeActionConfiguration | null {
+        if (!this.IsRuntimeAction) return null;
         const accessor = (this.record as unknown as {
             RuntimeActionConfigurationObject?: MJActionEntity_IRuntimeActionConfiguration | null;
         });
         return accessor.RuntimeActionConfigurationObject ?? null;
     }
 
+    /** @deprecated Use {@link RuntimeConfig}. */
+    public get runtimeConfig(): MJActionEntity_IRuntimeActionConfiguration | null {
+      return this.RuntimeConfig;
+    }
+
+    public GetAllowedEntities(): Array<{ id: string; name: string }> {
+        return this.RuntimeConfig?.permissions?.allowedEntities ?? [];
+    }
+
+    /** @deprecated Use {@link GetAllowedEntities}. */
     public getAllowedEntities(): Array<{ id: string; name: string }> {
-        return this.runtimeConfig?.permissions?.allowedEntities ?? [];
+      return this.GetAllowedEntities();
     }
 
+    public GetAllowedActions(): Array<{ id: string; name: string }> {
+        return this.RuntimeConfig?.permissions?.allowedActions ?? [];
+    }
+
+    /** @deprecated Use {@link GetAllowedActions}. */
     public getAllowedActions(): Array<{ id: string; name: string }> {
-        return this.runtimeConfig?.permissions?.allowedActions ?? [];
+      return this.GetAllowedActions();
     }
 
+    public GetAllowedAgents(): Array<{ id: string; name: string }> {
+        return this.RuntimeConfig?.permissions?.allowedAgents ?? [];
+    }
+
+    /** @deprecated Use {@link GetAllowedAgents}. */
     public getAllowedAgents(): Array<{ id: string; name: string }> {
-        return this.runtimeConfig?.permissions?.allowedAgents ?? [];
+      return this.GetAllowedAgents();
     }
 
+    public GetRequestedLibraries(): Array<{ name: string; version?: string }> {
+        return this.RuntimeConfig?.sandbox?.additionalLibraries ?? [];
+    }
+
+    /** @deprecated Use {@link GetRequestedLibraries}. */
     public getRequestedLibraries(): Array<{ name: string; version?: string }> {
-        return this.runtimeConfig?.sandbox?.additionalLibraries ?? [];
+      return this.GetRequestedLibraries();
     }
 
-    public getRuntimeLimits(): { maxMemoryMB: number; maxBridgeCalls: number } {
-        const limits = this.runtimeConfig?.limits ?? {};
+    public GetRuntimeLimits(): { maxMemoryMB: number; maxBridgeCalls: number } {
+        const limits = this.RuntimeConfig?.limits ?? {};
         return {
             maxMemoryMB: limits.maxMemoryMB ?? 128,
             maxBridgeCalls: limits.maxBridgeCalls ?? 100
         };
     }
 
-    public getRuntimeConfigSummary(): string {
-        const perms = this.runtimeConfig?.permissions;
+    /** @deprecated Use {@link GetRuntimeLimits}. */
+    public getRuntimeLimits(): { maxMemoryMB: number; maxBridgeCalls: number } {
+      return this.GetRuntimeLimits();
+    }
+
+    public GetRuntimeConfigSummary(): string {
+        const perms = this.RuntimeConfig?.permissions;
         if (!perms) return 'No permissions declared';
         const e = perms.allowedEntities?.length ?? 0;
         const a = perms.allowedActions?.length ?? 0;
         const ag = perms.allowedAgents?.length ?? 0;
-        const wildcards = this.getWildcardFlags();
+        const wildcards = this.GetWildcardFlags();
         const parts: string[] = [];
         parts.push(wildcards.entity ? 'ANY entity' : `${e} entit${e === 1 ? 'y' : 'ies'}`);
         parts.push(wildcards.action ? 'ANY action' : `${a} action${a === 1 ? '' : 's'}`);
         parts.push(wildcards.agent ? 'ANY agent' : `${ag} agent${ag === 1 ? '' : 's'}`);
         return parts.join(', ');
+    }
+
+    /** @deprecated Use {@link GetRuntimeConfigSummary}. */
+    public getRuntimeConfigSummary(): string {
+      return this.GetRuntimeConfigSummary();
     }
 
     /**
@@ -549,14 +731,19 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
      * concession to the action — the approval UI renders a warning banner
      * when any of these are on so the approver sees the blast radius.
      */
-    public getWildcardFlags(): { entity: boolean; action: boolean; agent: boolean; any: boolean } {
-        const perms = this.runtimeConfig?.permissions as
+    public GetWildcardFlags(): { entity: boolean; action: boolean; agent: boolean; any: boolean } {
+        const perms = this.RuntimeConfig?.permissions as
             | { allowAnyEntity?: boolean; allowAnyAction?: boolean; allowAnyAgent?: boolean }
             | undefined;
         const entity = perms?.allowAnyEntity === true;
         const action = perms?.allowAnyAction === true;
         const agent = perms?.allowAnyAgent === true;
         return { entity, action, agent, any: entity || action || agent };
+    }
+
+    /** @deprecated Use {@link GetWildcardFlags}. */
+    public getWildcardFlags(): { entity: boolean; action: boolean; agent: boolean; any: boolean } {
+      return this.GetWildcardFlags();
     }
 
     /**
@@ -571,11 +758,16 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
      * is the standard fix for NG0100 when a conditional's expression
      * depends on a method call.
      */
-    get hasCodeApproval(): boolean {
+    get HasCodeApproval(): boolean {
         return this.record?.Type === 'Generated' || this.record?.Type === 'Runtime';
     }
 
-    getApprovalStatusColor(): string {
+    /** @deprecated Use {@link HasCodeApproval}. */
+    get hasCodeApproval(): boolean {
+      return this.HasCodeApproval;
+    }
+
+    GetApprovalStatusColor(): string {
         switch (this.record.CodeApprovalStatus) {
             case 'Approved': return 'var(--mj-status-success)';
             case 'Pending': return 'var(--mj-status-warning)';
@@ -584,7 +776,12 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
     }
 
-    getApprovalStatusIcon(): string {
+    /** @deprecated Use {@link GetApprovalStatusColor}. */
+    getApprovalStatusColor(): string {
+      return this.GetApprovalStatusColor();
+    }
+
+    GetApprovalStatusIcon(): string {
         switch (this.record.CodeApprovalStatus) {
             case 'Approved': return 'fa-check-circle';
             case 'Pending': return 'fa-clock';
@@ -593,7 +790,12 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
     }
 
-    getParamTypeIcon(type: string): string {
+    /** @deprecated Use {@link GetApprovalStatusIcon}. */
+    getApprovalStatusIcon(): string {
+      return this.GetApprovalStatusIcon();
+    }
+
+    GetParamTypeIcon(type: string): string {
         switch (type) {
             case 'Input': return 'fa-sign-in-alt';
             case 'Output': return 'fa-sign-out-alt';
@@ -602,13 +804,23 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
     }
 
-    getParamTypeColor(type: string): string {
+    /** @deprecated Use {@link GetParamTypeIcon}. */
+    getParamTypeIcon(type: string): string {
+      return this.GetParamTypeIcon(type);
+    }
+
+    GetParamTypeColor(type: string): string {
         switch (type) {
             case 'Input': return 'var(--mj-brand-primary)';
             case 'Output': return 'var(--mj-status-success)';
             case 'Both': return 'var(--mj-brand-primary)';
             default: return 'var(--mj-text-muted)';
         }
+    }
+
+    /** @deprecated Use {@link GetParamTypeColor}. */
+    getParamTypeColor(type: string): string {
+      return this.GetParamTypeColor(type);
     }
 
     formatDuration(ms: number): string {
@@ -632,43 +844,73 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     }
 
     // Navigation
-    navigateToEntity(entityName: string, recordId: string | null) {
+    NavigateToEntity(entityName: string, recordId: string | null) {
         if (!recordId) return;
         SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
     }
 
-    navigateToCategory() {
+    /** @deprecated Use {@link NavigateToEntity}. */
+    navigateToEntity(entityName: string, recordId: string | null) {
+      return this.NavigateToEntity(entityName, recordId);
+    }
+
+    NavigateToCategory() {
         if (this.record.CategoryID) {
-            this.navigateToEntity('MJ: Action Categories', this.record.CategoryID);
+            this.NavigateToEntity('MJ: Action Categories', this.record.CategoryID);
         }
     }
 
-    navigateToExecution(executionId: string) {
-        this.navigateToEntity('MJ: Action Execution Logs', executionId);
+    /** @deprecated Use {@link NavigateToCategory}. */
+    navigateToCategory() {
+      return this.NavigateToCategory();
     }
 
+    NavigateToExecution(executionId: string) {
+        this.NavigateToEntity('MJ: Action Execution Logs', executionId);
+    }
+
+    /** @deprecated Use {@link NavigateToExecution}. */
+    navigateToExecution(executionId: string) {
+      return this.NavigateToExecution(executionId);
+    }
+
+    NavigateToLibrary(libraryId: string) {
+        this.NavigateToEntity('MJ: Libraries', libraryId);
+    }
+
+    /** @deprecated Use {@link NavigateToLibrary}. */
     navigateToLibrary(libraryId: string) {
-        this.navigateToEntity('MJ: Libraries', libraryId);
+      return this.NavigateToLibrary(libraryId);
     }
 
     // Actions
-    openTestHarness() {
+    OpenTestHarness() {
         if (!this.record || !this.record.ID || !this.record.IsSaved || this.record.Status !== 'Active') {
             // Cannot open test harness: Action must be saved and active
             return;
         }
         
-        this.showTestHarness = true;
+        this.ShowTestHarness = true;
+    }
+
+    /** @deprecated Use {@link OpenTestHarness}. */
+    openTestHarness() {
+      return this.OpenTestHarness();
     }
     
     /**
      * Event handler for test harness visibility changes
      */
-    public onTestHarnessVisibilityChanged(isVisible: boolean) {
-        this.showTestHarness = isVisible;
+    public OnTestHarnessVisibilityChanged(isVisible: boolean) {
+        this.ShowTestHarness = isVisible;
     }
 
-    async regenerateCode() {
+    /** @deprecated Use {@link OnTestHarnessVisibilityChanged}. */
+    public onTestHarnessVisibilityChanged(isVisible: boolean) {
+      return this.OnTestHarnessVisibilityChanged(isVisible);
+    }
+
+    async RegenerateCode() {
         if (!this.EditMode) return;
         
         this.record.ForceCodeGeneration = true;
@@ -677,11 +919,21 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         await this.loadResultCodes();
     }
 
-    toggleCodeComments() {
-        this.showCodeComments = !this.showCodeComments;
+    /** @deprecated Use {@link RegenerateCode}. */
+    async regenerateCode() {
+      return this.RegenerateCode();
     }
 
-    async approveCode() {
+    ToggleCodeComments() {
+        this.ShowCodeComments = !this.ShowCodeComments;
+    }
+
+    /** @deprecated Use {@link ToggleCodeComments}. */
+    toggleCodeComments() {
+      return this.ToggleCodeComments();
+    }
+
+    async ApproveCode() {
         if (!this.EditMode) return;
         
         this.record.CodeApprovalStatus = 'Approved';
@@ -690,14 +942,24 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         await this.record.Save();
     }
 
-    async rejectCode() {
+    /** @deprecated Use {@link ApproveCode}. */
+    async approveCode() {
+      return this.ApproveCode();
+    }
+
+    async RejectCode() {
         if (!this.EditMode) return;
 
         this.record.CodeApprovalStatus = 'Rejected';
         await this.record.Save();
     }
 
-    async copyToClipboard(text: string) {
+    /** @deprecated Use {@link RejectCode}. */
+    async rejectCode() {
+      return this.RejectCode();
+    }
+
+    async CopyToClipboard(text: string) {
         try {
             await navigator.clipboard.writeText(text);
             // Could add a notification here
@@ -706,8 +968,13 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
     }
 
+    /** @deprecated Use {@link CopyToClipboard}. */
+    async copyToClipboard(text: string) {
+      return this.CopyToClipboard(text);
+    }
+
     // Helper methods for template filtering
-    getInputParams(): MJActionParamEntity[] {
+    GetInputParams(): MJActionParamEntity[] {
         // Sort by IsRequired (required first) then by Name
         return this._inputParams.sort((a, b) => {
             if (a.IsRequired === b.IsRequired) {
@@ -717,15 +984,25 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         });
     }
 
-    getOutputParams(): MJActionParamEntity[] {
+    /** @deprecated Use {@link GetInputParams}. */
+    getInputParams(): MJActionParamEntity[] {
+      return this.GetInputParams();
+    }
+
+    GetOutputParams(): MJActionParamEntity[] {
         // Sort by Name
         return this._outputParams.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
     }
 
-    isExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
+    /** @deprecated Use {@link GetOutputParams}. */
+    getOutputParams(): MJActionParamEntity[] {
+      return this.GetOutputParams();
+    }
+
+    IsExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
         const code = execution.ResultCode?.toLowerCase();
         // First check if we have a result code definition
-        const resultCode = this.resultCodes.find(rc => rc.ResultCode === execution.ResultCode);
+        const resultCode = this.ResultCodes.find(rc => rc.ResultCode === execution.ResultCode);
         if (resultCode) {
             return resultCode.IsSuccess;
         }
@@ -733,7 +1010,12 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
     }
 
-    getExecutionDuration(execution: MJActionExecutionLogEntity): number {
+    /** @deprecated Use {@link IsExecutionSuccess}. */
+    isExecutionSuccess(execution: MJActionExecutionLogEntity): boolean {
+      return this.IsExecutionSuccess(execution);
+    }
+
+    GetExecutionDuration(execution: MJActionExecutionLogEntity): number {
         if (!execution.EndedAt) return 0;
         
         const startTime = new Date(execution.StartedAt).getTime();
@@ -744,15 +1026,25 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         return Math.abs(duration);
     }
 
-    getSuccessRateColor(): string {
-        const rate = this.executionStats.successRate;
+    /** @deprecated Use {@link GetExecutionDuration}. */
+    getExecutionDuration(execution: MJActionExecutionLogEntity): number {
+      return this.GetExecutionDuration(execution);
+    }
+
+    GetSuccessRateColor(): string {
+        const rate = this.ExecutionStats.successRate;
         if (rate >= 80) return 'var(--mj-status-success)';
         if (rate >= 60) return 'var(--mj-status-warning)';
         return 'var(--mj-status-error)';
     }
 
+    /** @deprecated Use {@link GetSuccessRateColor}. */
+    getSuccessRateColor(): string {
+      return this.GetSuccessRateColor();
+    }
+
     // Parameter management methods
-    async addParameter(type: 'Input' | 'Output' | 'Both') {
+    async AddParameter(type: 'Input' | 'Output' | 'Both') {
         if (!this.EditMode || !this.record.IsSaved) return;
         
         const md = this.ProviderToUse;
@@ -783,7 +1075,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
                 // New entities are automatically dirty (IsSaved = false)
 
                 // Add to local array
-                this.actionParams.push(newParam);
+                this.ActionParams.push(newParam);
 
                 // Add to pending records for saving
                 this.PendingRecords.push({
@@ -798,7 +1090,12 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         });
     }
 
-    async editParameter(param: MJActionParamEntity) {
+    /** @deprecated Use {@link AddParameter}. */
+    async addParameter(type: 'Input' | 'Output' | 'Both') {
+      return this.AddParameter(type);
+    }
+
+    async EditParameter(param: MJActionParamEntity) {
         const dialogRef = this.dialogService.open({
             content: ActionParamDialogComponent,
             width: 500,
@@ -832,8 +1129,13 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             }
         });
     }
+
+    /** @deprecated Use {@link EditParameter}. */
+    async editParameter(param: MJActionParamEntity) {
+      return this.EditParameter(param);
+    }
     
-    onParamClick(param: MJActionParamEntity, event: Event) {
+    OnParamClick(param: MJActionParamEntity, event: Event) {
         // Prevent event bubbling if clicking on edit/delete buttons
         const target = event.target as HTMLElement;
         if (target.closest('.param-edit-btn') || target.closest('.param-delete-btn')) {
@@ -841,13 +1143,18 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
         
         // Show the parameter dialog
-        this.editParameter(param);
+        this.EditParameter(param);
+    }
+
+    /** @deprecated Use {@link OnParamClick}. */
+    onParamClick(param: MJActionParamEntity, event: Event) {
+      return this.OnParamClick(param, event);
     }
 
     
     private async updateParamArrays() {
         // Update cached filtered params - exclude deleted items
-        const activeParams = this.actionParams.filter(p => !this.paramsToDelete || !this.paramsToDelete.includes(p));
+        const activeParams = this.ActionParams.filter(p => !this.paramsToDelete || !this.paramsToDelete.includes(p));
         
         this._inputParams = activeParams.filter(p => {
             const type = p.Type?.trim().toLowerCase();
@@ -883,7 +1190,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
         
         // Add action params that need saving
-        for (const param of this.actionParams) {
+        for (const param of this.ActionParams) {
             if (!param.IsSaved || param.Dirty) {
                 // Check if not already in pending records
                 const exists = this.PendingRecords.some(pr => 
@@ -915,7 +1222,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
         
         // Add result codes that need saving
-        for (const resultCode of this.resultCodes) {
+        for (const resultCode of this.ResultCodes) {
             if (!resultCode.IsSaved || resultCode.Dirty) {
                 // Check if not already in pending records
                 const exists = this.PendingRecords.some(pr => 
@@ -951,12 +1258,17 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
      * Gets the action's display icon
      * Falls back to default cog icon if no IconClass is set
      */
-    public getActionIcon(): string {
+    public GetActionIcon(): string {
         return this.record?.IconClass || 'fa-solid fa-cog';
+    }
+
+    /** @deprecated Use {@link GetActionIcon}. */
+    public getActionIcon(): string {
+      return this.GetActionIcon();
     }
     
     // Result Code management methods
-    async addResultCode() {
+    async AddResultCode() {
         if (!this.EditMode || !this.record.IsSaved) return;
         
         const md = this.ProviderToUse;
@@ -982,7 +1294,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         dialogRef.Result.subscribe(result => {
             if (result && typeof result === 'object' && 'save' in result) {
                 // Add to local array
-                this.resultCodes.push(newResultCode);
+                this.ResultCodes.push(newResultCode);
 
                 // Add to pending records for saving
                 this.PendingRecords.push({
@@ -994,8 +1306,13 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             }
         });
     }
+
+    /** @deprecated Use {@link AddResultCode}. */
+    async addResultCode() {
+      return this.AddResultCode();
+    }
     
-    async editResultCode(resultCode: MJActionResultCodeEntity) {
+    async EditResultCode(resultCode: MJActionResultCodeEntity) {
         const dialogRef = this.dialogService.open({
             content: ActionResultCodeDialogComponent,
             width: 500,
@@ -1026,8 +1343,13 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
             }
         });
     }
+
+    /** @deprecated Use {@link EditResultCode}. */
+    async editResultCode(resultCode: MJActionResultCodeEntity) {
+      return this.EditResultCode(resultCode);
+    }
     
-    onResultCodeClick(resultCode: MJActionResultCodeEntity, event: Event) {
+    OnResultCodeClick(resultCode: MJActionResultCodeEntity, event: Event) {
         // Prevent event bubbling if clicking on edit/delete buttons
         const target = event.target as HTMLElement;
         if (target.closest('.result-edit-btn') || target.closest('.result-delete-btn')) {
@@ -1035,19 +1357,24 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
         
         // Show the result code dialog
-        this.editResultCode(resultCode);
+        this.EditResultCode(resultCode);
+    }
+
+    /** @deprecated Use {@link OnResultCodeClick}. */
+    onResultCodeClick(resultCode: MJActionResultCodeEntity, event: Event) {
+      return this.OnResultCodeClick(resultCode, event);
     }
     
     /**
      * Delete a result code (marks for deletion on save)
      */
-    deleteResultCode(resultCode: MJActionResultCodeEntity) {
+    DeleteResultCode(resultCode: MJActionResultCodeEntity) {
         if (!this.EditMode) return;
         
         // Remove from main array
-        const index = this.resultCodes.indexOf(resultCode);
+        const index = this.ResultCodes.indexOf(resultCode);
         if (index > -1) {
-            this.resultCodes.splice(index, 1);
+            this.ResultCodes.splice(index, 1);
         }
         
         // Handle pending records
@@ -1072,17 +1399,22 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         
         this.cdr.detectChanges();
     }
+
+    /** @deprecated Use {@link DeleteResultCode}. */
+    deleteResultCode(resultCode: MJActionResultCodeEntity) {
+      return this.DeleteResultCode(resultCode);
+    }
     
     /**
      * Delete a parameter (marks for deletion on save)
      */
-    deleteParameter(param: MJActionParamEntity) {
+    DeleteParameter(param: MJActionParamEntity) {
         if (!this.EditMode) return;
         
         // Remove from main array
-        const index = this.actionParams.indexOf(param);
+        const index = this.ActionParams.indexOf(param);
         if (index > -1) {
-            this.actionParams.splice(index, 1);
+            this.ActionParams.splice(index, 1);
         }
         
         // Handle pending records
@@ -1108,5 +1440,10 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         // Update filtered arrays
         this.updateParamArrays();
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link DeleteParameter}. */
+    deleteParameter(param: MJActionParamEntity) {
+      return this.DeleteParameter(param);
     }
 }
