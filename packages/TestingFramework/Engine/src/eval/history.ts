@@ -14,6 +14,11 @@ import { EncodeToolTurnsAsText, type ChatMessage } from '@memberjunction/ai';
  * native→envelope fallback applies, so the harness's envelope arms and the runner's fallback can
  * never drift apart.
  */
-export function encodeHistoryForArm(messages: ChatMessage[], nativeResults: boolean): ChatMessage[] {
+export function EncodeHistoryForArm(messages: ChatMessage[], nativeResults: boolean): ChatMessage[] {
     return nativeResults ? messages : EncodeToolTurnsAsText(messages);
+}
+
+/** @deprecated Use {@link EncodeHistoryForArm}. */
+export function encodeHistoryForArm(messages: ChatMessage[], nativeResults: boolean): ChatMessage[] {
+    return EncodeHistoryForArm(messages, nativeResults);
 }

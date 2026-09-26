@@ -1,0 +1,37 @@
+{
+  "name": "@memberjunction/realtime-runtime",
+  "type": "module",
+  "version": "6.2.0-edge.0",
+  "description": "MemberJunction: Framework-agnostic Realtime Session Runtime — client-direct realtime co-agent session orchestration (mint, driver resolution, transcripts, tool relay, delegation narration, channel lifecycle, usage relay). Pure TypeScript, zero UX dependencies. Consumable from browser (Angular/React/Vue), React Native, or Node test harnesses.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/ai": "6.2.0-edge.0",
+    "@memberjunction/ai-core-plus": "6.2.0-edge.0",
+    "@memberjunction/ai-engine-base": "6.2.0-edge.0",
+    "@memberjunction/ai-realtime-client": "6.2.0-edge.0",
+    "@memberjunction/core": "6.2.0-edge.0",
+    "@memberjunction/core-entities": "6.2.0-edge.0",
+    "@memberjunction/global": "6.2.0-edge.0",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.0",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

@@ -48,7 +48,7 @@ const CACHE_MAX_AGE_SECONDS = 60;
  * list so the browser falls back to its compiled `AUTH_TYPE` and the user can still sign in.
  * Returning 500 would take the login screen down for a problem the client can route around.
  */
-export function createAuthProviderCatalogRouter(): Router {
+export function CreateAuthProviderCatalogRouter(): Router {
   const router = Router();
 
   const limiter = rateLimit({
@@ -73,4 +73,9 @@ export function createAuthProviderCatalogRouter(): Router {
   });
 
   return router;
+}
+
+/** @deprecated Use {@link CreateAuthProviderCatalogRouter}. */
+export function createAuthProviderCatalogRouter(): Router {
+  return CreateAuthProviderCatalogRouter();
 }

@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -24,7 +24,7 @@ export class NoChildImplementationRule extends BaseLintRule {
     const declaredFunctions: string[] = [];
 
     // First pass: collect all function declarations
-    traverse(ast, {
+    Traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
         if (path.node.id) {
           declaredFunctions.push(path.node.id.name);

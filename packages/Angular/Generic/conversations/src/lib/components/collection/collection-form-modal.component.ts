@@ -111,21 +111,93 @@ import { UUIDsEqual } from '@memberjunction/global';
   `]
 })
 export class CollectionFormModalComponent extends BaseAngularComponent implements OnChanges  {
-  @Input() isOpen: boolean = false;
-  @Input() collection?: MJCollectionEntity;
-  @Input() parentCollection?: MJCollectionEntity;
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
+  @Input() IsOpen: boolean = false;
 
-  @Output() saved = new EventEmitter<MJCollectionEntity>();
+  /** @deprecated Use {@link IsOpen}. */
+  @Input() set isOpen(value: boolean) {
+    this.IsOpen = value;
+  }
+  /** @deprecated Use {@link IsOpen}. */
+  get isOpen(): boolean {
+    return this.IsOpen;
+  }
+  @Input() Collection?: MJCollectionEntity;
+
+  /** @deprecated Use {@link Collection}. */
+  @Input() set collection(value: MJCollectionEntity | undefined) {
+    this.Collection = value;
+  }
+  /** @deprecated Use {@link Collection}. */
+  get collection(): MJCollectionEntity | undefined {
+    return this.Collection;
+  }
+  @Input() ParentCollection?: MJCollectionEntity;
+
+  /** @deprecated Use {@link ParentCollection}. */
+  @Input() set parentCollection(value: MJCollectionEntity | undefined) {
+    this.ParentCollection = value;
+  }
+  /** @deprecated Use {@link ParentCollection}. */
+  get parentCollection(): MJCollectionEntity | undefined {
+    return this.ParentCollection;
+  }
+  @Input() EnvironmentId!: string;
+
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
+
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+
+  @Output() Saved = new EventEmitter<MJCollectionEntity>();
+
+  /**
+   * @deprecated Use {@link Saved}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (saved) keeps working. Must stay AFTER Saved: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() saved = this.Saved;
   @Output() cancelled = new EventEmitter<void>();
 
-  public formData = {
+  public FormData = {
     name: '',
     description: ''
   };
 
-  public isSaving: boolean = false;
+  /** @deprecated Use {@link FormData}. */
+  public get formData() {
+    return this.FormData;
+  }
+  /** @deprecated Use {@link FormData}. */
+  public set formData(value) {
+    this.FormData = value;
+  }
+
+  public IsSaving: boolean = false;
+
+  /** @deprecated Use {@link IsSaving}. */
+  public get isSaving(): boolean {
+    return this.IsSaving;
+  }
+  /** @deprecated Use {@link IsSaving}. */
+  public set isSaving(value: boolean) {
+    this.IsSaving = value;
+  }
   public errorMessage: string = '';
 
   constructor(
@@ -139,93 +211,98 @@ export class CollectionFormModalComponent extends BaseAngularComponent implement
     this.permissionService.Provider = this.ProviderToUse;
 
     if (changes['collection'] || changes['isOpen']) {
-      if (this.isOpen && this.collection) {
-        this.formData.name = this.collection.Name || '';
-        this.formData.description = this.collection.Description || '';
-      } else if (this.isOpen && !this.collection) {
-        this.formData = { name: '', description: '' };
+      if (this.IsOpen && this.Collection) {
+        this.FormData.name = this.Collection.Name || '';
+        this.FormData.description = this.Collection.Description || '';
+      } else if (this.IsOpen && !this.Collection) {
+        this.FormData = { name: '', description: '' };
       }
     }
   }
 
-  get canSave(): boolean {
-    return this.formData.name.trim().length > 0;
+  get CanSave(): boolean {
+    return this.FormData.name.trim().length > 0;
   }
 
-  async onSave(): Promise<void> {
-    if (!this.canSave) return;
+  /** @deprecated Use {@link CanSave}. */
+  get canSave(): boolean {
+    return this.CanSave;
+  }
 
-    this.isSaving = true;
+  async OnSave(): Promise<void> {
+    if (!this.CanSave) return;
+
+    this.IsSaving = true;
     this.errorMessage = '';
 
     try {
       // Validate permissions before saving
-      if (this.collection) {
+      if (this.Collection) {
         // Editing existing collection - need Edit permission
-        if (this.collection.OwnerID && !UUIDsEqual(this.collection.OwnerID, this.currentUser.ID)) {
+        if (this.Collection.OwnerID && !UUIDsEqual(this.Collection.OwnerID, this.CurrentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
-            this.collection.ID,
-            this.currentUser.ID,
-            this.currentUser
+            this.Collection.ID,
+            this.CurrentUser.ID,
+            this.CurrentUser
           );
 
           if (!permission?.canEdit) {
             this.errorMessage = 'You do not have Edit permission for this collection.';
-            this.isSaving = false;
+            this.IsSaving = false;
             return;
           }
         }
-      } else if (this.parentCollection) {
+      } else if (this.ParentCollection) {
         // Creating child collection - need Edit permission on parent
-        if (this.parentCollection.OwnerID && !UUIDsEqual(this.parentCollection.OwnerID, this.currentUser.ID)) {
+        if (this.ParentCollection.OwnerID && !UUIDsEqual(this.ParentCollection.OwnerID, this.CurrentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
-            this.parentCollection.ID,
-            this.currentUser.ID,
-            this.currentUser
+            this.ParentCollection.ID,
+            this.CurrentUser.ID,
+            this.CurrentUser
           );
 
           if (!permission?.canEdit) {
             this.errorMessage = 'You do not have Edit permission for the parent collection.';
-            this.isSaving = false;
+            this.IsSaving = false;
             return;
           }
         }
       }
 
       const md = this.ProviderToUse;
-      const collection = this.collection ||
-        await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = this.Collection ||
+        await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.CurrentUser);
 
-      collection.Name = this.formData.name.trim();
-      collection.Description = this.formData.description.trim() || null;
-      collection.EnvironmentID = this.environmentId;
+      collection.Name = this.FormData.name.trim();
+      collection.Description = this.FormData.description.trim() || null;
+      collection.EnvironmentID = this.EnvironmentId;
 
       // Set owner and parent relationship if creating new collection
-      if (!this.collection) {
-        if (this.parentCollection) {
+      if (!this.Collection) {
+        if (this.ParentCollection) {
           // Child collection inherits parent's owner to maintain permission hierarchy
-          collection.ParentID = this.parentCollection.ID;
-          collection.OwnerID = this.parentCollection.OwnerID || this.currentUser.ID;
+          collection.ParentID = this.ParentCollection.ID;
+          collection.OwnerID = this.ParentCollection.OwnerID || this.CurrentUser.ID;
         } else {
           // Root collection - current user becomes owner
-          collection.OwnerID = this.currentUser.ID;
+          collection.OwnerID = this.CurrentUser.ID;
         }
-      } else if (this.parentCollection) {
+      } else if (this.ParentCollection) {
         // Updating existing collection's parent
-        collection.ParentID = this.parentCollection.ID;
+        collection.ParentID = this.ParentCollection.ID;
       }
 
       const saved = await collection.Save();
       if (saved) {
         // If creating new collection, set up permissions
-        if (!this.collection) {
-          if (this.parentCollection) {
+        if (!this.Collection) {
+          if (this.ParentCollection) {
             // Child collection - copy non-owner permissions from parent.
             // (The owner gets implicit full access via OwnerID; no self-share row is written.)
             await this.permissionService.copyParentPermissions(
-              this.parentCollection.ID,
+              this.ParentCollection.ID,
               collection.ID,
-              this.currentUser
+              this.CurrentUser
             );
           }
           // Root collection: nothing to do. CollectionPermissionProvider treats OwnerID as
@@ -234,9 +311,9 @@ export class CollectionFormModalComponent extends BaseAngularComponent implement
         }
 
         this.toastService.success(
-          this.collection ? 'Collection updated successfully' : 'Collection created successfully'
+          this.Collection ? 'Collection updated successfully' : 'Collection created successfully'
         );
-        this.saved.emit(collection);
+        this.Saved.emit(collection);
         this.resetForm();
       } else {
         this.errorMessage = collection.LatestResult?.Message || 'Failed to save collection';
@@ -247,8 +324,13 @@ export class CollectionFormModalComponent extends BaseAngularComponent implement
       this.errorMessage = 'An unexpected error occurred';
       this.toastService.error(this.errorMessage);
     } finally {
-      this.isSaving = false;
+      this.IsSaving = false;
     }
+  }
+
+  /** @deprecated Use {@link OnSave}. */
+  async onSave(): Promise<void> {
+    return this.OnSave();
   }
 
   onCancel(): void {
@@ -257,7 +339,7 @@ export class CollectionFormModalComponent extends BaseAngularComponent implement
   }
 
   private resetForm(): void {
-    this.formData = {
+    this.FormData = {
       name: '',
       description: ''
     };

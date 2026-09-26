@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T153 - Command Palette",
+    "Description": "Opens the command palette and walks its two branches (fuzzy jump-to-application with navigation, and the no-match empty state), verifying each via checkpoints. Consolidates old T374, T375.",
+    "InputDefinition": "{\n  \"goal\": \"You are logged in at http://localhost:4200. Then walk these command-palette behaviors IN ORDER, and as you arrive at each one set \\\"checkpointReached\\\" to the exact checkpoint name shown: (1) palette-jump-to-app — press Ctrl+/ (Windows/Linux) or Cmd+/ (Mac) to open the command palette (a centered modal search box with an application list), type an application name such as 'Admin' and confirm the results list narrows to matching applications as you type, then click the matching application (or press Enter with it highlighted) and confirm that app opens/loads (its landing/section renders); (2) palette-no-match — reopen the command palette (Ctrl+/ or Cmd+/), type a nonsense string that matches no application such as 'zzzqqqxyz', and confirm the palette responds with a clear no-results state (a 'No applications found' empty-state and/or a fallback action such as 'Search Knowledge Hub' for the typed text) rather than showing stale/leftover application results or crashing. Keep going until both branches are done. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"finalUrlPattern\": \"^http://localhost:4200\",\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 45,\n  \"checkpoints\": [\n    {\n      \"name\": \"palette-jump-to-app\",\n      \"instruction\": \"Palette fuzzy-filters and navigates to an application\",\n      \"visualCriteria\": [\n        \"The command palette modal opens with a search input and a list of applications, typing an app name narrows the list to matching application(s), and selecting a result navigates to that application (its landing/section renders)\"\n      ]\n    },\n    {\n      \"name\": \"palette-no-match\",\n      \"instruction\": \"Palette no-match empty state\",\n      \"visualCriteria\": [\n        \"Typing a gibberish no-match query into the command palette shows a clear no-results/empty state (e.g. 'No applications found') and/or a Knowledge/Search fallback action row, with no unrelated leftover application results and no crash\"\n      ]\n    }\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "url-match": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,shell",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "1B61785E-4920-4940-973E-40D5644D915C"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:54.287Z",
+    "checksum": "f33c956c18000818f5859a14215a9794d11437acf0e57e7e6a3573b01c3f5714"
+  }
+}

@@ -264,12 +264,48 @@ import { UUIDsEqual } from '@memberjunction/global';
   `]
 })
 export class TaskDetailPanelComponent implements OnInit, OnChanges {
-  @Input() task!: MJTaskEntity;
-  @Input() agentRunId: string | null = null;
-  @Output() closePanel = new EventEmitter<void>();
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Input() Task!: MJTaskEntity;
 
-  public agent: MJAIAgentEntityExtended | null = null;
+  /** @deprecated Use {@link Task}. */
+  @Input() set task(value: MJTaskEntity) {
+    this.Task = value;
+  }
+  /** @deprecated Use {@link Task}. */
+  get task(): MJTaskEntity {
+    return this.Task;
+  }
+  @Input() agentRunId: string | null = null;
+  @Output() ClosePanel = new EventEmitter<void>();
+
+  /**
+   * @deprecated Use {@link ClosePanel}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (closePanel) keeps working. Must stay AFTER ClosePanel: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() closePanel = this.ClosePanel;
+  @Output() OpenEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+
+  /**
+   * @deprecated Use {@link OpenEntityRecord}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (openEntityRecord) keeps working. Must stay AFTER OpenEntityRecord: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() openEntityRecord = this.OpenEntityRecord;
+
+  public Agent: MJAIAgentEntityExtended | null = null;
+
+  /** @deprecated Use {@link Agent}. */
+  public get agent(): MJAIAgentEntityExtended | null {
+    return this.Agent;
+  }
+  /** @deprecated Use {@link Agent}. */
+  public set agent(value: MJAIAgentEntityExtended | null) {
+    this.Agent = value;
+  }
 
   ngOnInit(): void {
     this.loadAgentInfo();
@@ -280,18 +316,18 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
   }
 
   private async loadAgentInfo(): Promise<void> {
-    if (!this.task?.AgentID) {
-      this.agent = null;
+    if (!this.Task?.AgentID) {
+      this.Agent = null;
       return;
     }
 
     // AIEngineBase is deferred at startup; ensure loaded before reading .Agents.
     await AIEngineBase.Instance.EnsureLoaded();
     const agents = AIEngineBase.Instance.Agents;
-    this.agent = agents.find((a: MJAIAgentEntityExtended) => UUIDsEqual(a.ID, this.task.AgentID)) || null;
+    this.Agent = agents.find((a: MJAIAgentEntityExtended) => UUIDsEqual(a.ID, this.Task.AgentID)) || null;
   }
 
-  public formatDateTime(date: Date | null): string {
+  public FormatDateTime(date: Date | null): string {
     if (!date) return '';
     const d = new Date(date);
     return d.toLocaleDateString('en-US', {
@@ -303,21 +339,36 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
     });
   }
 
-  public openAgent(): void {
-    if (this.task.AgentID) {
-      this.openEntityRecord.emit({
+  /** @deprecated Use {@link FormatDateTime}. */
+  public formatDateTime(date: Date | null): string {
+    return this.FormatDateTime(date);
+  }
+
+  public OpenAgent(): void {
+    if (this.Task.AgentID) {
+      this.OpenEntityRecord.emit({
         entityName: 'MJ: AI Agents',
-        recordId: this.task.AgentID
+        recordId: this.Task.AgentID
       });
     }
   }
 
-  public openAgentRun(): void {
+  /** @deprecated Use {@link OpenAgent}. */
+  public openAgent(): void {
+    return this.OpenAgent();
+  }
+
+  public OpenAgentRun(): void {
     if (this.agentRunId) {
-      this.openEntityRecord.emit({
+      this.OpenEntityRecord.emit({
         entityName: 'MJ: AI Agent Runs',
         recordId: this.agentRunId
       });
     }
+  }
+
+  /** @deprecated Use {@link OpenAgentRun}. */
+  public openAgentRun(): void {
+    return this.OpenAgentRun();
   }
 }

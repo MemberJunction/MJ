@@ -41,10 +41,15 @@ export interface IRealtimeChannelServerDataAware {
  * @param plugin The resolved server channel plugin (typed as the core-free base by the host).
  * @returns `true` when the plugin implements {@link IRealtimeChannelServerDataAware}.
  */
-export function isRealtimeChannelServerDataAware(plugin: unknown): plugin is IRealtimeChannelServerDataAware {
+export function IsRealtimeChannelServerDataAware(plugin: unknown): plugin is IRealtimeChannelServerDataAware {
     return (
         typeof plugin === 'object' &&
         plugin !== null &&
         typeof (plugin as IRealtimeChannelServerDataAware).SetSessionDataContext === 'function'
     );
+}
+
+/** @deprecated Use {@link IsRealtimeChannelServerDataAware}. */
+export function isRealtimeChannelServerDataAware(plugin: unknown): plugin is IRealtimeChannelServerDataAware {
+    return IsRealtimeChannelServerDataAware(plugin);
 }

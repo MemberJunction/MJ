@@ -25,7 +25,7 @@ export class Metadata {
      * Bolt Optimization: Populate entity maps on demand to ensure O(1) hash map lookups
      * in EntityByName and EntityByID instead of O(N) array scans.
      */
-    private PopulateEntityMaps() {
+    private populateEntityMaps() {
         if (this._entityMapPopulated) return;
 
         const entities = this.Entities;
@@ -128,7 +128,7 @@ export class Metadata {
         } catch { /* Provider not set — fall through to search */ }
 
         const key = entityName.trim().toLowerCase();
-        this.PopulateEntityMaps();
+        this.populateEntityMaps();
 
         if (this._entityMapPopulated) {
             return this._entityMapByName.get(key);
@@ -151,7 +151,7 @@ export class Metadata {
         } catch { /* Provider not set — fall through to search */ }
 
         const key = NormalizeUUID(entityID);
-        this.PopulateEntityMaps();
+        this.populateEntityMaps();
 
         if (this._entityMapPopulated) {
             return this._entityMapByID.get(key);

@@ -10,8 +10,8 @@ import { TreeDropdownComponent } from '@memberjunction/ng-trees';
  * Result emitted when a query is successfully saved
  */
 export interface SaveQueryResult {
-  queryId: string;
-  queryName: string;
+  queryId: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  queryName: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -486,7 +486,16 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
   @Output() Saved = new EventEmitter<SaveQueryResult>();
   @Output() Cancelled = new EventEmitter<void>();
 
-  @ViewChild('categoryTree') categoryTree!: TreeDropdownComponent;
+  @ViewChild('categoryTree') CategoryTree!: TreeDropdownComponent;
+
+  /** @deprecated Use {@link CategoryTree}. */
+  get categoryTree(): TreeDropdownComponent {
+    return this.CategoryTree;
+  }
+  /** @deprecated Use {@link CategoryTree}. */
+  set categoryTree(value: TreeDropdownComponent) {
+    this.CategoryTree = value;
+  }
 
   // Form state
   public Name = '';
@@ -611,7 +620,7 @@ export class SaveQueryPanelComponent extends BaseAngularComponent {
         MJNotificationService.Instance.CreateSimpleNotification(`Category "${name}" created`, 'success', 2500);
 
         // Refresh tree to pick up the new category
-        await this.categoryTree.Refresh();
+        await this.CategoryTree.Refresh();
 
         // Auto-select the newly created category.
         // Must use detectChanges() (not markForCheck) to immediately propagate

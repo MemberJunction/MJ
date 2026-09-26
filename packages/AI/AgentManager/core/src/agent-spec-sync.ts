@@ -128,7 +128,16 @@ export class AgentSpecSync {
     /**
      * The raw specification data structure containing all agent configuration
      */
-    public spec: AgentSpec;
+    public Spec: AgentSpec;
+
+    /** @deprecated Use {@link Spec}. */
+    public get spec(): AgentSpec {
+        return this.Spec;
+    }
+    /** @deprecated Use {@link Spec}. */
+    public set spec(value: AgentSpec) {
+        this.Spec = value;
+    }
 
     /**
      * Tracks whether this spec has been loaded from the database
@@ -183,11 +192,11 @@ export class AgentSpecSync {
      */
     constructor(spec?: Partial<AgentSpec>, contextUser?: UserInfo, provider?: IMetadataProvider) {
         if (spec) {
-            this.spec = this.initializeSpec(spec);
+            this.Spec = this.initializeSpec(spec);
             this._isDirty = true;
         } else {
             // Create minimal empty spec
-            this.spec = {
+            this.Spec = {
                 ID: '', // Will be set on save if empty
                 Name: '',
                 StartingPayloadValidationMode: 'Fail',
@@ -223,15 +232,25 @@ export class AgentSpecSync {
      * Get all mutations tracked during the last save operation
      * @returns Array of mutations
      */
-    public getMutations(): AgentSpecSyncMutation[] {
+    public GetMutations(): AgentSpecSyncMutation[] {
         return [...this._mutations];
+    }
+
+    /** @deprecated Use {@link GetMutations}. */
+    public getMutations(): AgentSpecSyncMutation[] {
+        return this.GetMutations();
     }
 
     /**
      * Clear all tracked mutations
      */
-    public clearMutations(): void {
+    public ClearMutations(): void {
         this._mutations = [];
+    }
+
+    /** @deprecated Use {@link ClearMutations}. */
+    public clearMutations(): void {
+        return this.ClearMutations();
     }
 
     // ===== STATIC FACTORY METHODS =====
@@ -475,7 +494,7 @@ export class AgentSpecSync {
         }
 
         // Step 3: Map entities to raw spec format
-        this.spec = this.mapEntitiesToRawSpec(
+        this.Spec = this.mapEntitiesToRawSpec(
             agentEntity,
             actionsResult.Results || [],
             childAgentsResult.Results || [],
@@ -487,9 +506,9 @@ export class AgentSpecSync {
         );
 
         // Step 4: Recursively load sub-agents if requested
-        if (includeSubAgents && this.spec.SubAgents && this.spec.SubAgents.length > 0) {
+        if (includeSubAgents && this.Spec.SubAgents && this.Spec.SubAgents.length > 0) {
             // Recursively load complete specs for all sub-agents
-            for (const subAgentSpec of this.spec.SubAgents) {
+            for (const subAgentSpec of this.Spec.SubAgents) {
                 if (subAgentSpec.SubAgent && subAgentSpec.SubAgent.ID) {
                     try {
                         // Load the complete sub-agent spec recursively
@@ -786,12 +805,12 @@ export class AgentSpecSync {
      */
     async SaveToDatabase(validate: boolean = true): Promise<AgentSpecSyncResult> {
         // Clear previous mutations
-        this.clearMutations();
+        this.ClearMutations();
 
         if (!this._isDirty && this._isLoaded) {
             // No changes to save
             return {
-                agentId: this.spec.ID,
+                agentId: this.Spec.ID,
                 success: true,
                 mutations: []
             };
@@ -799,12 +818,12 @@ export class AgentSpecSync {
 
         try {
             // Step 0: Delete orphaned records (if this is an update)
-            if (this._isLoaded && this.spec.ID) {
-                console.log(`🗑️ SaveToDatabase: Loading current database state for agent ${this.spec.ID}...`);
-                const dbState = await this.loadCurrentDatabaseState(this.spec.ID);
+            if (this._isLoaded && this.Spec.ID) {
+                console.log(`🗑️ SaveToDatabase: Loading current database state for agent ${this.Spec.ID}...`);
+                const dbState = await this.loadCurrentDatabaseState(this.Spec.ID);
 
                 console.log(`🔍 SaveToDatabase: Identifying orphaned records...`);
-                const orphans = this.identifyOrphans(dbState, this.spec);
+                const orphans = this.identifyOrphans(dbState, this.Spec);
 
                 console.log(`🗑️ SaveToDatabase: Deleting ${orphans.paths.length} paths, ${orphans.actions.length} actions, ${orphans.steps.length} steps, ${orphans.prompts.length} prompts, ${orphans.relationships.length} relationships, orphaning ${orphans.childAgents.length} child agents...`);
                 await this.deleteOrphans(orphans);
@@ -836,14 +855,14 @@ export class AgentSpecSync {
             return {
                 agentId,
                 success: true,
-                mutations: this.getMutations()
+                mutations: this.GetMutations()
             };
         } catch (error) {
             // Return failure with whatever mutations were completed before error
             return {
-                agentId: this.spec.ID || '',
+                agentId: this.Spec.ID || '',
                 success: false,
-                mutations: this.getMutations()
+                mutations: this.GetMutations()
             };
         }
     }
@@ -864,85 +883,85 @@ export class AgentSpecSync {
         );
 
         // Track if this is an update or create
-        const isUpdate = !!this.spec.ID;
+        const isUpdate = !!this.Spec.ID;
 
         // If ID exists, load existing record
-        if (this.spec.ID) {
-            const loaded = await agentEntity.Load(this.spec.ID);
+        if (this.Spec.ID) {
+            const loaded = await agentEntity.Load(this.Spec.ID);
             if (!loaded) {
-                throw new Error(`Cannot update non-existent agent with ID ${this.spec.ID}`);
+                throw new Error(`Cannot update non-existent agent with ID ${this.Spec.ID}`);
             }
         }
 
         // Map spec to entity fields
-        agentEntity.Name = this.spec.Name;
-        agentEntity.Description = this.spec.Description || null;
-        agentEntity.IconClass = this.spec.IconClass || null;
-        agentEntity.LogoURL = this.spec.LogoURL || null;
-        agentEntity.ParentID = this.spec.ParentID || null;
-        agentEntity.DriverClass = this.spec.DriverClass || null;
-        agentEntity.ModelSelectionMode = this.spec.ModelSelectionMode || 'Agent Type';
+        agentEntity.Name = this.Spec.Name;
+        agentEntity.Description = this.Spec.Description || null;
+        agentEntity.IconClass = this.Spec.IconClass || null;
+        agentEntity.LogoURL = this.Spec.LogoURL || null;
+        agentEntity.ParentID = this.Spec.ParentID || null;
+        agentEntity.DriverClass = this.Spec.DriverClass || null;
+        agentEntity.ModelSelectionMode = this.Spec.ModelSelectionMode || 'Agent Type';
 
         // Handle TypeID - supports lookup references or direct GUID
-        if ((this.spec as any).TypeID) {
-            agentEntity.TypeID = (this.spec as any).TypeID;
+        if ((this.Spec as any).TypeID) {
+            agentEntity.TypeID = (this.Spec as any).TypeID;
         }
 
         // Handle Status - defaults to Active if not specified. Typed rather than cast: the cast is
         // what let `'Inactive'` — a value the CHECK constraint rejects — reach the entity unchallenged.
-        agentEntity.Status = this.spec.Status ?? 'Active';
+        agentEntity.Status = this.Spec.Status ?? 'Active';
 
         // Serialize JSON fields
         agentEntity.PayloadDownstreamPaths = JSON.stringify(
-            this.spec.PayloadDownstreamPaths || ['*']
+            this.Spec.PayloadDownstreamPaths || ['*']
         );
         agentEntity.PayloadUpstreamPaths = JSON.stringify(
-            this.spec.PayloadUpstreamPaths || ['*']
+            this.Spec.PayloadUpstreamPaths || ['*']
         );
-        agentEntity.PayloadSelfReadPaths = this.spec.PayloadSelfReadPaths
-            ? JSON.stringify(this.spec.PayloadSelfReadPaths)
+        agentEntity.PayloadSelfReadPaths = this.Spec.PayloadSelfReadPaths
+            ? JSON.stringify(this.Spec.PayloadSelfReadPaths)
             : null;
-        agentEntity.PayloadSelfWritePaths = this.spec.PayloadSelfWritePaths
-            ? JSON.stringify(this.spec.PayloadSelfWritePaths)
+        agentEntity.PayloadSelfWritePaths = this.Spec.PayloadSelfWritePaths
+            ? JSON.stringify(this.Spec.PayloadSelfWritePaths)
             : null;
-        agentEntity.PayloadScope = this.spec.PayloadScope || null;
+        agentEntity.PayloadScope = this.Spec.PayloadScope || null;
 
         // Validation fields
-        agentEntity.FinalPayloadValidation = this.spec.FinalPayloadValidation || null;
-        agentEntity.FinalPayloadValidationMode = this.spec.FinalPayloadValidationMode || 'Retry';
-        agentEntity.FinalPayloadValidationMaxRetries = this.spec.FinalPayloadValidationMaxRetries || 3;
+        agentEntity.FinalPayloadValidation = this.Spec.FinalPayloadValidation || null;
+        agentEntity.FinalPayloadValidationMode = this.Spec.FinalPayloadValidationMode || 'Retry';
+        agentEntity.FinalPayloadValidationMaxRetries = this.Spec.FinalPayloadValidationMaxRetries || 3;
 
-        agentEntity.StartingPayloadValidation = this.spec.StartingPayloadValidation || null;
-        agentEntity.StartingPayloadValidationMode = this.spec.StartingPayloadValidationMode || 'Fail';
+        agentEntity.StartingPayloadValidation = this.Spec.StartingPayloadValidation || null;
+        agentEntity.StartingPayloadValidationMode = this.Spec.StartingPayloadValidationMode || 'Fail';
 
         // Resource limits
-        agentEntity.MaxCostPerRun = this.spec.MaxCostPerRun || null;
-        agentEntity.MaxTokensPerRun = this.spec.MaxTokensPerRun || null;
-        agentEntity.MaxIterationsPerRun = this.spec.MaxIterationsPerRun || null;
-        agentEntity.MaxTimePerRun = this.spec.MaxTimePerRun || null;
+        agentEntity.MaxCostPerRun = this.Spec.MaxCostPerRun || null;
+        agentEntity.MaxTokensPerRun = this.Spec.MaxTokensPerRun || null;
+        agentEntity.MaxIterationsPerRun = this.Spec.MaxIterationsPerRun || null;
+        agentEntity.MaxTimePerRun = this.Spec.MaxTimePerRun || null;
 
         // Execution frequency
-        agentEntity.MinExecutionsPerRun = this.spec.MinExecutionsPerRun || null;
-        agentEntity.MaxExecutionsPerRun = this.spec.MaxExecutionsPerRun || null;
+        agentEntity.MinExecutionsPerRun = this.Spec.MinExecutionsPerRun || null;
+        agentEntity.MaxExecutionsPerRun = this.Spec.MaxExecutionsPerRun || null;
 
         // Other config
-        agentEntity.DefaultPromptEffortLevel = this.spec.DefaultPromptEffortLevel || null;
-        agentEntity.ChatHandlingOption = this.spec.ChatHandlingOption || null;
-        agentEntity.DefaultArtifactTypeID = this.spec.DefaultArtifactTypeID || null;
+        agentEntity.DefaultPromptEffortLevel = this.Spec.DefaultPromptEffortLevel || null;
+        agentEntity.ChatHandlingOption = this.Spec.ChatHandlingOption || null;
+        agentEntity.DefaultArtifactTypeID = this.Spec.DefaultArtifactTypeID || null;
 
         // Set OwnerUserID - always use contextUser if available (user creating/modifying the agent)
         if (this._contextUser) {
             agentEntity.OwnerUserID = this._contextUser.ID;
-        } else if (this.spec.OwnerUserID) {
+        } else if (this.Spec.OwnerUserID) {
             // Fallback to spec value if no contextUser provided
-            agentEntity.OwnerUserID = this.spec.OwnerUserID;
+            agentEntity.OwnerUserID = this.Spec.OwnerUserID;
         }
 
-        agentEntity.InvocationMode = this.spec.InvocationMode || 'Any';
+        agentEntity.InvocationMode = this.Spec.InvocationMode || 'Any';
 
         // Requirements and design documentation
-        agentEntity.FunctionalRequirements = this.spec.FunctionalRequirements || null;
-        agentEntity.TechnicalDesign = this.spec.TechnicalDesign || null;
+        agentEntity.FunctionalRequirements = this.Spec.FunctionalRequirements || null;
+        agentEntity.TechnicalDesign = this.Spec.TechnicalDesign || null;
 
         // Validate if requested
         if (validate) {
@@ -960,14 +979,14 @@ export class AgentSpecSync {
         }
 
         // Update spec with saved ID
-        this.spec.ID = agentEntity.ID;
+        this.Spec.ID = agentEntity.ID;
 
         // Track the mutation
         this.trackMutation(
             'MJ: AI Agents',
             isUpdate ? 'Update' : 'Create',
             agentEntity.ID,
-            `${isUpdate ? 'Updated' : 'Created'} agent: ${this.spec.Name}`
+            `${isUpdate ? 'Updated' : 'Created'} agent: ${this.Spec.Name}`
         );
 
         return agentEntity.ID;
@@ -985,13 +1004,13 @@ export class AgentSpecSync {
      * @throws {Error} If any action save fails
      */
     private async saveActions(agentId: string): Promise<void> {
-        if (!this.spec.Actions || this.spec.Actions.length === 0) {
+        if (!this.Spec.Actions || this.Spec.Actions.length === 0) {
             return;
         }
 
         const md = this.providerToUse;
 
-        for (const actionSpec of this.spec.Actions) {
+        for (const actionSpec of this.Spec.Actions) {
             const actionEntity = await md.GetEntityObject<MJAIAgentActionEntity>(
                 'MJ: AI Agent Actions',
                 this._contextUser
@@ -1046,11 +1065,11 @@ export class AgentSpecSync {
      * @throws {Error} If any sub-agent save fails
      */
     private async saveSubAgents(agentId: string): Promise<void> {
-        if (!this.spec.SubAgents || this.spec.SubAgents.length === 0) {
+        if (!this.Spec.SubAgents || this.Spec.SubAgents.length === 0) {
             return;
         }
 
-        for (const SubAgentSpec of this.spec.SubAgents) {
+        for (const SubAgentSpec of this.Spec.SubAgents) {
             if (SubAgentSpec.Type === 'child') {
                 await this.saveChildSubAgent(agentId, SubAgentSpec);
             } else {
@@ -1194,20 +1213,20 @@ export class AgentSpecSync {
      * @throws {Error} If any prompt save fails
      */
     private async savePrompts(agentId: string): Promise<void> {
-        console.log(`💬 savePrompts: Called with agentId=${agentId}, Prompts=${this.spec.Prompts ? this.spec.Prompts.length : 'undefined'}`);
+        console.log(`💬 savePrompts: Called with agentId=${agentId}, Prompts=${this.Spec.Prompts ? this.Spec.Prompts.length : 'undefined'}`);
 
-        if (!this.spec.Prompts || this.spec.Prompts.length === 0) {
+        if (!this.Spec.Prompts || this.Spec.Prompts.length === 0) {
             console.log('💬 savePrompts: No prompts to save, returning early');
             return;
         }
 
-        console.log(`💬 savePrompts: Processing ${this.spec.Prompts.length} prompt(s)...`);
+        console.log(`💬 savePrompts: Processing ${this.Spec.Prompts.length} prompt(s)...`);
         const md = this.providerToUse;
         const rv = RunView.FromMetadataProvider(this._provider);
 
         // Step 1: Create or update AIPrompt records
-        for (let i = 0; i < this.spec.Prompts.length; i++) {
-            const promptSpec = this.spec.Prompts[i];
+        for (let i = 0; i < this.Spec.Prompts.length; i++) {
+            const promptSpec = this.Spec.Prompts[i];
 
             // Check if this is an update (has PromptID) or create (no PromptID)
             let promptEntity = await md.GetEntityObject<any>(
@@ -1228,8 +1247,8 @@ export class AgentSpecSync {
             }
 
             // Set all required fields (both create and update)
-            promptEntity.Name = `${this.spec.Name} - Prompt ${i + 1}`;
-            promptEntity.Description = `Agent prompt ${i + 1} for ${this.spec.Name}`;
+            promptEntity.Name = `${this.Spec.Name} - Prompt ${i + 1}`;
+            promptEntity.Description = `Agent prompt ${i + 1} for ${this.Spec.Name}`;
             promptEntity.TypeID = 'a6da423e-f36b-1410-8dac-00021f8b792e'; // Chat type
             promptEntity.Status = 'Active';
             promptEntity.ResponseFormat = 'JSON';
@@ -1257,7 +1276,7 @@ export class AgentSpecSync {
 
             const saved = await promptEntity.Save();
             if (!saved) {
-                throw new Error(`Failed to save prompt ${i + 1} for agent ${this.spec.Name}`);
+                throw new Error(`Failed to save prompt ${i + 1} for agent ${this.Spec.Name}`);
             }
 
             // Track mutation
@@ -1320,7 +1339,7 @@ export class AgentSpecSync {
             console.log(`✅ savePrompts: ${isJunctionUpdate ? 'Updated' : 'Created'} AIAgentPrompt junction with ID: ${agentPromptEntity.ID}`);
         }
 
-        console.log(`✅ savePrompts: Successfully saved all ${this.spec.Prompts.length} prompt(s)`);
+        console.log(`✅ savePrompts: Successfully saved all ${this.Spec.Prompts.length} prompt(s)`);
     }
 
     /**
@@ -1334,17 +1353,17 @@ export class AgentSpecSync {
      * @throws {Error} If any step save fails
      */
     private async saveSteps(agentId: string): Promise<void> {
-        console.log(`🔷 saveSteps: Called with agentId=${agentId}, Steps=${this.spec.Steps ? this.spec.Steps.length : 'undefined'}`);
+        console.log(`🔷 saveSteps: Called with agentId=${agentId}, Steps=${this.Spec.Steps ? this.Spec.Steps.length : 'undefined'}`);
 
-        if (!this.spec.Steps || this.spec.Steps.length === 0) {
+        if (!this.Spec.Steps || this.Spec.Steps.length === 0) {
             console.log('🔷 saveSteps: No steps to save, returning early');
             return;
         }
 
-        console.log(`🔷 saveSteps: Processing ${this.spec.Steps.length} step(s)...`);
+        console.log(`🔷 saveSteps: Processing ${this.Spec.Steps.length} step(s)...`);
         const md = this.providerToUse;
 
-        for (const stepSpec of this.spec.Steps) {
+        for (const stepSpec of this.Spec.Steps) {
             const stepEntity = await md.GetEntityObject<MJAIAgentStepEntity>(
                 'MJ: AI Agent Steps',
                 this._contextUser
@@ -1438,7 +1457,7 @@ export class AgentSpecSync {
 
             const saved = await stepEntity.Save();
             if (!saved) {
-                throw new Error(`Failed to save step "${stepSpec.Name}" for agent ${this.spec.Name}`);
+                throw new Error(`Failed to save step "${stepSpec.Name}" for agent ${this.Spec.Name}`);
             }
 
             // Track mutation
@@ -1455,7 +1474,7 @@ export class AgentSpecSync {
             console.log(`✅ saveSteps: Created AIAgentStep with ID: ${stepEntity.ID}`);
         }
 
-        console.log(`✅ saveSteps: Successfully saved all ${this.spec.Steps.length} step(s)`);
+        console.log(`✅ saveSteps: Successfully saved all ${this.Spec.Steps.length} step(s)`);
     }
 
     /**
@@ -1469,27 +1488,27 @@ export class AgentSpecSync {
      * @throws {Error} If any path save fails
      */
     private async saveStepPaths(agentId: string): Promise<void> {
-        console.log(`🔶 saveStepPaths: Called with agentId=${agentId}, Paths=${this.spec.Paths ? this.spec.Paths.length : 'undefined'}`);
+        console.log(`🔶 saveStepPaths: Called with agentId=${agentId}, Paths=${this.Spec.Paths ? this.Spec.Paths.length : 'undefined'}`);
 
-        if (!this.spec.Paths || this.spec.Paths.length === 0) {
+        if (!this.Spec.Paths || this.Spec.Paths.length === 0) {
             console.log('🔶 saveStepPaths: No paths to save, returning early');
             return;
         }
 
-        console.log(`🔶 saveStepPaths: Processing ${this.spec.Paths.length} path(s)...`);
+        console.log(`🔶 saveStepPaths: Processing ${this.Spec.Paths.length} path(s)...`);
         const md = this.providerToUse;
 
         // Create a map of step names to IDs for easy lookup
         const stepNameToId = new Map<string, string>();
-        if (this.spec.Steps) {
-            for (const step of this.spec.Steps) {
+        if (this.Spec.Steps) {
+            for (const step of this.Spec.Steps) {
                 if (step.ID) {
                     stepNameToId.set(step.Name, step.ID);
                 }
             }
         }
 
-        for (const pathSpec of this.spec.Paths) {
+        for (const pathSpec of this.Spec.Paths) {
             const pathEntity = await md.GetEntityObject<MJAIAgentStepPathEntity>(
                 'MJ: AI Agent Step Paths',
                 this._contextUser
@@ -1541,7 +1560,7 @@ export class AgentSpecSync {
             console.log(`✅ saveStepPaths: Created AIAgentStepPath with ID: ${pathEntity.ID}`);
         }
 
-        console.log(`✅ saveStepPaths: Successfully saved all ${this.spec.Paths.length} path(s)`);
+        console.log(`✅ saveStepPaths: Successfully saved all ${this.Spec.Paths.length} path(s)`);
     }
 
     // ===== UTILITY METHODS =====
@@ -1641,7 +1660,7 @@ export class AgentSpecSync {
      * ```
      */
     public toJSON(): AgentSpec {
-        return { ...this.spec };
+        return { ...this.Spec };
     }
 
     /**
@@ -1649,8 +1668,13 @@ export class AgentSpecSync {
      *
      * @returns True if there are unsaved changes, false otherwise
      */
-    public get isDirty(): boolean {
+    public get IsDirty(): boolean {
         return this._isDirty;
+    }
+
+    /** @deprecated Use {@link IsDirty}. */
+    public get isDirty(): boolean {
+        return this.IsDirty;
     }
 
     /**
@@ -1658,8 +1682,13 @@ export class AgentSpecSync {
      *
      * @returns True if loaded from database, false if created in memory
      */
-    public get isLoaded(): boolean {
+    public get IsLoaded(): boolean {
         return this._isLoaded;
+    }
+
+    /** @deprecated Use {@link IsLoaded}. */
+    public get isLoaded(): boolean {
+        return this.IsLoaded;
     }
 
     /**
@@ -1677,8 +1706,13 @@ export class AgentSpecSync {
      * await spec.SaveToDatabase();
      * ```
      */
-    public markDirty(): void {
+    public MarkDirty(): void {
         this._isDirty = true;
+    }
+
+    /** @deprecated Use {@link MarkDirty}. */
+    public markDirty(): void {
+        return this.MarkDirty();
     }
 
     /**
@@ -1698,8 +1732,13 @@ export class AgentSpecSync {
      * await childSync.SaveToDatabase();
      * ```
      */
-    public markLoaded(): void {
+    public MarkLoaded(): void {
         this._isLoaded = true;
+    }
+
+    /** @deprecated Use {@link MarkLoaded}. */
+    public markLoaded(): void {
+        return this.MarkLoaded();
     }
 
     // ===== DELETE/ORPHAN METHODS =====

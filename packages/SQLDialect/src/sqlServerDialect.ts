@@ -215,23 +215,23 @@ export class SQLServerDialect extends SQLDialect {
     // SQL Server's column-type names as they appear in `sys.columns.name`
     // / `EntityField.Type` for entities backed by a SQL Server schema.
 
-    private static readonly _BooleanTypeNames = ['bit'] as const;
-    private static readonly _StringTypeNames = ['text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar'] as const;
+    private static readonly _booleanTypeNames = ['bit'] as const;
+    private static readonly _stringTypeNames = ['text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar'] as const;
     /** `char` and `nchar` right-pad stored values with spaces up to declared length. */
-    private static readonly _FixedWidthStringTypeNames = ['char', 'nchar'] as const;
-    private static readonly _DateTypeNames = ['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime'] as const;
-    private static readonly _IntegerTypeNames = ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'rowversion', 'timestamp'] as const;
-    private static readonly _FloatTypeNames = ['decimal', 'numeric', 'float', 'real'] as const;
-    private static readonly _UuidTypeNames = ['uniqueidentifier'] as const;
-    private static readonly _BinaryTypeNames = ['binary', 'varbinary', 'image'] as const;
-    private static readonly _JsonTypeNames = ['xml'] as const;
-    private static readonly _CurrencyTypeNames = ['money', 'smallmoney'] as const;
-    private static readonly _IntervalTypeNames = [] as const;
-    private static readonly _NetworkTypeNames = [] as const;
+    private static readonly _fixedWidthStringTypeNames = ['char', 'nchar'] as const;
+    private static readonly _dateTypeNames = ['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime'] as const;
+    private static readonly _integerTypeNames = ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'rowversion', 'timestamp'] as const;
+    private static readonly _floatTypeNames = ['decimal', 'numeric', 'float', 'real'] as const;
+    private static readonly _uuidTypeNames = ['uniqueidentifier'] as const;
+    private static readonly _binaryTypeNames = ['binary', 'varbinary', 'image'] as const;
+    private static readonly _jsonTypeNames = ['xml'] as const;
+    private static readonly _currencyTypeNames = ['money', 'smallmoney'] as const;
+    private static readonly _intervalTypeNames = [] as const;
+    private static readonly _networkTypeNames = [] as const;
 
-    get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._BooleanTypeNames; }
-    get StringTypeNames(): readonly string[]   { return SQLServerDialect._StringTypeNames; }
-    get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._FixedWidthStringTypeNames; }
+    get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._booleanTypeNames; }
+    get StringTypeNames(): readonly string[]   { return SQLServerDialect._stringTypeNames; }
+    get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._fixedWidthStringTypeNames; }
     /** SQL Server index keys are limited to 900 bytes → 450 NVARCHAR (2-byte) chars. */
     override get MaxKeyStringLength(): number { return 450; }
 
@@ -270,15 +270,15 @@ export class SQLServerDialect extends SQLDialect {
         if (/^TIME\b/.test(t)) return 5;
         return 24; // unknown → treat as off-row variable-length pointer (conservative)
     }
-    get DateTypeNames(): readonly string[]     { return SQLServerDialect._DateTypeNames; }
-    get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._IntegerTypeNames; }
-    get FloatTypeNames(): readonly string[]    { return SQLServerDialect._FloatTypeNames; }
-    get UuidTypeNames(): readonly string[]     { return SQLServerDialect._UuidTypeNames; }
-    get BinaryTypeNames(): readonly string[]   { return SQLServerDialect._BinaryTypeNames; }
-    get JsonTypeNames(): readonly string[]     { return SQLServerDialect._JsonTypeNames; }
-    get CurrencyTypeNames(): readonly string[] { return SQLServerDialect._CurrencyTypeNames; }
-    get IntervalTypeNames(): readonly string[] { return SQLServerDialect._IntervalTypeNames; }
-    get NetworkTypeNames(): readonly string[]  { return SQLServerDialect._NetworkTypeNames; }
+    get DateTypeNames(): readonly string[]     { return SQLServerDialect._dateTypeNames; }
+    get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._integerTypeNames; }
+    get FloatTypeNames(): readonly string[]    { return SQLServerDialect._floatTypeNames; }
+    get UuidTypeNames(): readonly string[]     { return SQLServerDialect._uuidTypeNames; }
+    get BinaryTypeNames(): readonly string[]   { return SQLServerDialect._binaryTypeNames; }
+    get JsonTypeNames(): readonly string[]     { return SQLServerDialect._jsonTypeNames; }
+    get CurrencyTypeNames(): readonly string[] { return SQLServerDialect._currencyTypeNames; }
+    get IntervalTypeNames(): readonly string[] { return SQLServerDialect._intervalTypeNames; }
+    get NetworkTypeNames(): readonly string[]  { return SQLServerDialect._networkTypeNames; }
 
     NewUUID(): string {
         return 'NEWID()';

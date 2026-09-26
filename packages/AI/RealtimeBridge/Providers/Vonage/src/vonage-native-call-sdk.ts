@@ -139,7 +139,7 @@ export interface VonageNativeSdkConfig {
  * Defined here (the Vonage package has no other PCM-coercion helper) so there is no duplicate `export *`
  * collision under `index.ts`.
  */
-export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function ToArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     // Copy into a fresh Uint8Array — its `.buffer` is always a plain ArrayBuffer (not SharedArrayBuffer)
     // and is sized to exactly the frame, so a view onto a larger window never aliases extra bytes.
     const source = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
@@ -148,12 +148,22 @@ export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
     return copy.buffer;
 }
 
+/** @deprecated Use {@link ToArrayBuffer}. */
+export function toArrayBuffer(data: Uint8Array | ArrayBuffer): ArrayBuffer {
+    return ToArrayBuffer(data);
+}
+
 /**
  * **Pure mapping** of one native inbound media frame onto the seam's PCM `ArrayBuffer`. Copies the PCM (see
  * {@link toArrayBuffer}) so the caller never aliases the native client's buffer. Isolated for direct testing.
  */
+export function MapNativeMediaFrame(frame: NativeMediaFrame): ArrayBuffer {
+    return ToArrayBuffer(frame.data);
+}
+
+/** @deprecated Use {@link MapNativeMediaFrame}. */
 export function mapNativeMediaFrame(frame: NativeMediaFrame): ArrayBuffer {
-    return toArrayBuffer(frame.data);
+    return MapNativeMediaFrame(frame);
 }
 
 /**
@@ -192,7 +202,7 @@ function unwrapDefault(mod: unknown): unknown {
  * VERIFY against the native Vonage Voice client: the module's default/namespace interop + that it exposes
  * `createClient`.
  */
-export const defaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeCallModule> => {
+export const DefaultNativeLoader: NativeModuleLoader = async (specifier: string): Promise<NativeCallModule> => {
     try {
         const mod: unknown = await import(/* @vite-ignore */ specifier);
         const resolved = unwrapDefault(mod);
@@ -210,6 +220,9 @@ export const defaultNativeLoader: NativeModuleLoader = async (specifier: string)
         );
     }
 };
+
+/** @deprecated Use {@link DefaultNativeLoader}. */
+export const defaultNativeLoader: NativeModuleLoader = DefaultNativeLoader;
 
 /**
  * A **real, two-way** {@link ITelephonyCallSdk} over the native Vonage Voice API + WebSocket media.
@@ -249,7 +262,7 @@ export class VonageNativeCallSdk implements ITelephonyCallSdk {
      * @param config Resolved credentials + media URL + the native module specifier.
      * @param loadModule The native-module loader (defaults to the lazy specifier loader).
      */
-    constructor(config: VonageNativeSdkConfig, loadModule: NativeModuleLoader = defaultNativeLoader) {
+    constructor(config: VonageNativeSdkConfig, loadModule: NativeModuleLoader = DefaultNativeLoader) {
         this.config = config;
         this.loadModule = loadModule;
     }
@@ -428,7 +441,7 @@ export class VonageNativeCallSdk implements ITelephonyCallSdk {
 
     /** Attaches the inbound-media callback, mapping each native frame to a copied PCM `ArrayBuffer`. */
     private attachAudio(client: NativeCallClient, callUuid: string, cb: (pcm: ArrayBuffer) => void): void {
-        client.onMedia(callUuid, (frame) => cb(mapNativeMediaFrame(frame)));
+        client.onMedia(callUuid, (frame) => cb(MapNativeMediaFrame(frame)));
     }
 }
 
@@ -450,9 +463,9 @@ export class VonageNativeCallSdk implements ITelephonyCallSdk {
  * @returns A factory `(config) => VonageNativeCallSdk`.
  */
 export function BindVonageNativeCall(
-    loadModule: NativeModuleLoader = defaultNativeLoader,
+    loadModule: NativeModuleLoader = DefaultNativeLoader,
 ): (config?: Record<string, unknown>) => VonageNativeCallSdk {
-    return (config?: Record<string, unknown>) => new VonageNativeCallSdk(readNativeConfig(config), loadModule);
+    return (config?: Record<string, unknown>) => new VonageNativeCallSdk(ReadNativeConfig(config), loadModule);
 }
 
 /**
@@ -461,7 +474,7 @@ export function BindVonageNativeCall(
  * partially-resolved object (and {@link VonageNativeCallSdk.dial}/{@link VonageNativeCallSdk.answer} then
  * throw a precise error if the required specifier is absent) rather than a half-typed blob.
  */
-export function readNativeConfig(config?: Record<string, unknown>): VonageNativeSdkConfig {
+export function ReadNativeConfig(config?: Record<string, unknown>): VonageNativeSdkConfig {
     const cfg = config ?? {};
     return {
         ApplicationId: readString(cfg.ApplicationId),
@@ -471,6 +484,11 @@ export function readNativeConfig(config?: Record<string, unknown>): VonageNative
         WebsocketMediaUrl: readString(cfg.WebsocketMediaUrl),
         NativeModuleSpecifier: readString(cfg.NativeModuleSpecifier),
     };
+}
+
+/** @deprecated Use {@link ReadNativeConfig}. */
+export function readNativeConfig(config?: Record<string, unknown>): VonageNativeSdkConfig {
+    return ReadNativeConfig(config);
 }
 
 /** Reads a value as a non-empty string, or `undefined`. */

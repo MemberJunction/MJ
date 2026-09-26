@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { InsertRule } from '../rules/InsertRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new InsertRule();
-const context = createConversionContext('tsql', 'postgres');
+const context = CreateConversionContext('tsql', 'postgres');
 
 function convert(sql: string): string {
   return rule.PostProcess!(sql, sql, context);
@@ -31,14 +31,14 @@ describe('InsertRule', () => {
    */
   describe('schema substitution ($-expansion, #3171)', () => {
     it('keeps the $1 back-reference working for a normal schema', () => {
-      const ctx = createConversionContext('tsql', 'postgres');
+      const ctx = CreateConversionContext('tsql', 'postgres');
       ctx.Schema = '__mj';
       const out = rule.PostProcess!('INSERT INTO __mj.vwUsers VALUES (1)', '', ctx);
       expect(out).toContain('__mj."vwUsers"');
     });
 
     it('does not expand a $-sequence in the configured schema name', () => {
-      const ctx = createConversionContext('tsql', 'postgres');
+      const ctx = CreateConversionContext('tsql', 'postgres');
       ctx.Schema = 'a$&b';
       const out = rule.PostProcess!('INSERT INTO a$&b.vwUsers VALUES (1)', '', ctx);
       // The schema must appear literally, never with the match spliced into it.

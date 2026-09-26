@@ -129,7 +129,7 @@ pnpm install             # always from the repo root — never `npm install`
 pnpm run build
 
 pnpm run start:api       # GraphQL API on port 4000
-pnpm run start:explorer  # Angular UI on port 4201
+pnpm run start:explorer  # Angular UI on port 4200
 ```
 
 > **Prerequisites:** Node.js 22+ (24 recommended), pnpm 10.33+, SQL Server 2019+ (or Azure SQL).

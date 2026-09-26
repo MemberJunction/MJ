@@ -10,7 +10,7 @@ import { LogError, LogStatus } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { ApolloRESTBaseAction } from './ApolloRESTBaseAction.js';
-import { getParam } from './params.js';
+import { GetParam } from './params.js';
 
 /**
  * Lists the Apollo labels — lists and tags — with each one's kind
@@ -83,10 +83,10 @@ export class ApolloGetListsAction extends ApolloRESTBaseAction {
 @RegisterClass(BaseAction, 'ApolloCreateListAction')
 export class ApolloCreateListAction extends ApolloRESTBaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const listName = getParam(params, 'ListName');
+        const listName = GetParam(params, 'ListName');
         if (!listName) return this.MissingField('ListName');
 
-        const rawModality = getParam(params, 'Modality');
+        const rawModality = GetParam(params, 'Modality');
         const modality = (rawModality ?? 'contacts').toLowerCase();
         if (modality !== 'contacts' && modality !== 'accounts') {
             return this.Invalid(`Modality must be 'contacts' or 'accounts' (got '${rawModality}').`);

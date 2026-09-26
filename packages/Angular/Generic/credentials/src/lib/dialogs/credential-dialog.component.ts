@@ -80,7 +80,16 @@ export interface CredentialDialogResult {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class CredentialDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
-    @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
+    @ViewChild('editPanel') EditPanel!: CredentialEditPanelComponent;
+
+    /** @deprecated Use {@link EditPanel}. */
+    get editPanel(): CredentialEditPanelComponent {
+      return this.EditPanel;
+    }
+    /** @deprecated Use {@link EditPanel}. */
+    set editPanel(value: CredentialEditPanelComponent) {
+      this.EditPanel = value;
+    }
 
     @Input() Visible = false;
     @Input() Credential: MJCredentialEntity | null = null;
@@ -92,7 +101,16 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
     @Output() close = new EventEmitter<CredentialDialogResult>();
 
     public IsLoading = false;
-    public credentialTypes: MJCredentialTypeEntity[] = [];
+    public CredentialTypes: MJCredentialTypeEntity[] = [];
+
+    /** @deprecated Use {@link CredentialTypes}. */
+    public get credentialTypes(): MJCredentialTypeEntity[] {
+      return this.CredentialTypes;
+    }
+    /** @deprecated Use {@link CredentialTypes}. */
+    public set credentialTypes(value: MJCredentialTypeEntity[]) {
+      this.CredentialTypes = value;
+    }
 
     private _dialogTitle = 'Credential';
 
@@ -114,25 +132,30 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
                 this.cdr.detectChanges();
                 // Use setTimeout to ensure ViewChild is resolved after render
                 setTimeout(() => {
-                    if (this.editPanel) {
-                        this.editPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
+                    if (this.EditPanel) {
+                        this.EditPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
                     }
                 }, 0);
             });
         }
     }
 
-    public get dialogTitle(): string {
+    public get DialogTitle(): string {
         if (this.Title) {
             return this.Title;
         }
         return this.Credential?.ID ? 'Edit Credential' : 'Create Credential';
     }
 
+    /** @deprecated Use {@link DialogTitle}. */
+    public get dialogTitle(): string {
+      return this.DialogTitle;
+    }
+
     /**
      * Opens the dialog with the specified options
      */
-    public async open(options?: CredentialDialogOptions): Promise<void> {
+    public async Open(options?: CredentialDialogOptions): Promise<void> {
         this.Credential = options?.credential ?? null;
         this.PreselectedTypeId = options?.preselectedTypeId;
         this.PreselectedCategoryId = options?.preselectedCategoryId;
@@ -149,13 +172,18 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
         this.cdr.detectChanges();
 
         // Initialize the edit panel after types are loaded and template is rendered
-        if (this.editPanel) {
-            await this.editPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
+        if (this.EditPanel) {
+            await this.EditPanel.open(this.Credential, this.PreselectedTypeId, this.PreselectedCategoryId);
         }
     }
 
+    /** @deprecated Use {@link Open}. */
+    public async open(options?: CredentialDialogOptions): Promise<void> {
+      return this.Open(options);
+    }
+
     private async loadCredentialTypes(): Promise<void> {
-        if (this.credentialTypes.length > 0) {
+        if (this.CredentialTypes.length > 0) {
             return; // Already loaded
         }
 
@@ -171,7 +199,7 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
             });
 
             if (result.Success) {
-                this.credentialTypes = result.Results;
+                this.CredentialTypes = result.Results;
             }
         } catch (error) {
             console.error('Error loading credential types:', error);
@@ -181,7 +209,7 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
         }
     }
 
-    public onSaved(credential: MJCredentialEntity): void {
+    public OnSaved(credential: MJCredentialEntity): void {
         this.Visible = false;
         this.close.emit({
             success: true,
@@ -191,7 +219,12 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
         this.cdr.markForCheck();
     }
 
-    public onDeleted(credentialId: string): void {
+    /** @deprecated Use {@link OnSaved}. */
+    public onSaved(credential: MJCredentialEntity): void {
+      return this.OnSaved(credential);
+    }
+
+    public OnDeleted(credentialId: string): void {
         this.Visible = false;
         this.close.emit({
             success: true,
@@ -199,6 +232,11 @@ export class CredentialDialogComponent extends BaseAngularComponent implements O
             action: 'deleted'
         });
         this.cdr.markForCheck();
+    }
+
+    /** @deprecated Use {@link OnDeleted}. */
+    public onDeleted(credentialId: string): void {
+      return this.OnDeleted(credentialId);
     }
 
     public onCancel(): void {

@@ -1,9 +1,9 @@
 # Plan: Citizen Agent Builder Program
 
-**Branch:** `claude/mj-agent-building-guide-ro98ux`
-**Status:** Proposal — not yet implemented
+**Branch:** `feat/citizen-agent-builder`
+**Status:** Implemented — ready for review and merge
 **Author:** Claude (with Amith)
-**Last updated:** 2026-09-18
+**Last updated:** 2026-09-19
 
 ---
 

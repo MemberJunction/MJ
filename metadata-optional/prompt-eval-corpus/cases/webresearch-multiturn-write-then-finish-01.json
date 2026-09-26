@@ -286,8 +286,7 @@
       {
         "kind": "taskComplete",
         "forbiddenActions": [
-          "Perplexity Search",
-          "Google Custom Search",
+          "Web Search",
           "Web Page Content",
           "Summarize Content"
         ]
@@ -298,8 +297,7 @@
           "matcher": "nonEmpty"
         },
         "forbiddenActions": [
-          "Perplexity Search",
-          "Google Custom Search",
+          "Web Search",
           "Web Page Content",
           "Summarize Content"
         ]

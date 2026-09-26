@@ -39,7 +39,7 @@ export class ScriptLoaderService implements OnDestroy {
    * @param autoCleanup - Whether to cleanup on service destroy
    * @returns Promise resolving to the global object
    */
-  async loadScript(url: string, globalName: string, autoCleanup = false): Promise<any> {
+  async LoadScript(url: string, globalName: string, autoCleanup = false): Promise<any> {
     const existing = this.loadedResources.get(url);
     if (existing) {
       return existing.promise;
@@ -58,6 +58,11 @@ export class ScriptLoaderService implements OnDestroy {
     return promise;
   }
 
+  /** @deprecated Use {@link LoadScript}. */
+  async loadScript(url: string, globalName: string, autoCleanup = false): Promise<any> {
+    return this.LoadScript(url, globalName, autoCleanup);
+  }
+
   /**
    * Load a script with additional validation function
    * @param url - Script URL to load
@@ -66,7 +71,7 @@ export class ScriptLoaderService implements OnDestroy {
    * @param autoCleanup - Whether to cleanup on service destroy
    * @returns Promise resolving to the validated global object
    */
-  async loadScriptWithValidation(
+  async LoadScriptWithValidation(
     url: string, 
     globalName: string, 
     validator: (obj: any) => boolean,
@@ -95,11 +100,21 @@ export class ScriptLoaderService implements OnDestroy {
     return promise;
   }
 
+  /** @deprecated Use {@link LoadScriptWithValidation}. */
+  async loadScriptWithValidation(
+    url: string, 
+    globalName: string, 
+    validator: (obj: any) => boolean,
+    autoCleanup = false
+  ): Promise<any> {
+    return this.LoadScriptWithValidation(url, globalName, validator, autoCleanup);
+  }
+
   /**
    * Load CSS from URL
    * @param url - CSS URL to load
    */
-  loadCSS(url: string): void {
+  LoadCSS(url: string): void {
     if (this.loadedResources.has(url)) {
       return;
     }
@@ -120,6 +135,11 @@ export class ScriptLoaderService implements OnDestroy {
     });
   }
 
+  /** @deprecated Use {@link LoadCSS}. */
+  loadCSS(url: string): void {
+    return this.LoadCSS(url);
+  }
+
   /**
    * Load common React libraries and UI frameworks
    * @param config Optional library configuration
@@ -127,7 +147,7 @@ export class ScriptLoaderService implements OnDestroy {
    * @param options Optional options including debug flag
    * @returns Promise resolving to React ecosystem objects
    */
-  async loadReactEcosystem(
+  async LoadReactEcosystem(
     config?: LibraryConfiguration,
     additionalLibraries?: ExternalLibraryConfig[],
     options?: { debug?: boolean }
@@ -150,6 +170,20 @@ export class ScriptLoaderService implements OnDestroy {
     });
     
     return result;
+  }
+
+  /** @deprecated Use {@link LoadReactEcosystem}. */
+  async loadReactEcosystem(
+    config?: LibraryConfiguration,
+    additionalLibraries?: ExternalLibraryConfig[],
+    options?: { debug?: boolean }
+  ): Promise<{
+    React: any;
+    ReactDOM: any;
+    Babel: any;
+    libraries: any;
+  }> {
+    return this.LoadReactEcosystem(config, additionalLibraries, options);
   }
 
   /**
@@ -178,7 +212,7 @@ export class ScriptLoaderService implements OnDestroy {
    * Remove a specific loaded resource
    * @param url - URL of resource to remove
    */
-  removeResource(url: string): void {
+  RemoveResource(url: string): void {
     const resource = this.loadedResources.get(url);
     if (resource?.element && resource.element.parentNode) {
       resource.element.parentNode.removeChild(resource.element);
@@ -187,12 +221,17 @@ export class ScriptLoaderService implements OnDestroy {
     this.cleanupOnDestroy.delete(url);
   }
 
+  /** @deprecated Use {@link RemoveResource}. */
+  removeResource(url: string): void {
+    return this.RemoveResource(url);
+  }
+
   /**
    * Clean up all resources marked for auto-cleanup
    */
   private cleanup(): void {
     for (const url of this.cleanupOnDestroy) {
-      this.removeResource(url);
+      this.RemoveResource(url);
     }
     this.cleanupOnDestroy.clear();
   }

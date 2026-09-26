@@ -93,9 +93,36 @@ import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } f
     `]
 })
 export class ViewPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
-    public hasView = false;
-    public viewEntity: MJUserViewEntityExtended | null = null;
-    public entityInfo: EntityInfo | null = null;
+    public HasView = false;
+
+    /** @deprecated Use {@link HasView}. */
+    public get hasView() {
+      return this.HasView;
+    }
+    /** @deprecated Use {@link HasView}. */
+    public set hasView(value) {
+      this.HasView = value;
+    }
+    public ViewEntity: MJUserViewEntityExtended | null = null;
+
+    /** @deprecated Use {@link ViewEntity}. */
+    public get viewEntity(): MJUserViewEntityExtended | null {
+      return this.ViewEntity;
+    }
+    /** @deprecated Use {@link ViewEntity}. */
+    public set viewEntity(value: MJUserViewEntityExtended | null) {
+      this.ViewEntity = value;
+    }
+    public EntityInfo: EntityInfo | null = null;
+
+    /** @deprecated Use {@link EntityInfo}. */
+    public get entityInfo(): EntityInfo | null {
+      return this.EntityInfo;
+    }
+    /** @deprecated Use {@link EntityInfo}. */
+    public set entityInfo(value: EntityInfo | null) {
+      this.EntityInfo = value;
+    }
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
@@ -113,7 +140,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
         const entityName = config?.['entityName'] as string | undefined;
 
         if (!viewId && !entityName) {
-            this.hasView = false;
+            this.HasView = false;
             this.cdr.detectChanges();
             return;
         }
@@ -127,7 +154,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                 // Load saved view by ID
                 const viewEntity = await p.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', p.CurrentUser);
                 const loaded = await viewEntity.Load(viewId);
-                this.viewEntity = viewEntity; // IMPORTANT - only set this.viewEntity AFTER we have it loaded in the above
+                this.ViewEntity = viewEntity; // IMPORTANT - only set this.viewEntity AFTER we have it loaded in the above
 
                 if (!loaded) {
                     throw new Error('View not found');
@@ -136,37 +163,37 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                 // Get entity info from the view - prefer ViewEntityInfo if available (set by MJUserViewEntityExtended.Load)
                 // Fall back to looking up by Entity name (virtual field) or EntityID
                 if (viewEntity.ViewEntityInfo) {
-                    this.entityInfo = viewEntity.ViewEntityInfo;
+                    this.EntityInfo = viewEntity.ViewEntityInfo;
                 } else if (viewEntity.Entity) {
-                    this.entityInfo = p.EntityByName(viewEntity!.Entity) || null;
+                    this.EntityInfo = p.EntityByName(viewEntity!.Entity) || null;
                 } else if (viewEntity.EntityID) {
                     // Last resort: look up by EntityID
-                    this.entityInfo = p.Entities.find(e => UUIDsEqual(e.ID, viewEntity!.EntityID)) || null;
+                    this.EntityInfo = p.Entities.find(e => UUIDsEqual(e.ID, viewEntity!.EntityID)) || null;
                 }
 
-                if (!this.entityInfo) {
-                    throw new Error(`Could not determine entity for view "${this.viewEntity.Name}" (ID: ${viewId})`);
+                if (!this.EntityInfo) {
+                    throw new Error(`Could not determine entity for view "${this.ViewEntity.Name}" (ID: ${viewId})`);
                 }
             } else if (entityName) {
                 // Create dynamic view for entity (no saved view)
-                this.entityInfo = p.EntityByName(entityName) || null;
+                this.EntityInfo = p.EntityByName(entityName) || null;
 
-                if (!this.entityInfo) {
+                if (!this.EntityInfo) {
                     throw new Error(`Entity "${entityName}" not found`);
                 }
 
                 // No viewEntity means the entity-viewer will show all records
-                this.viewEntity = null;
+                this.ViewEntity = null;
             }
 
-            this.hasView = true;
+            this.HasView = true;
             this.setLoading(false);
         } catch (error) {
             this.setError(error instanceof Error ? error.message : 'Failed to load view');
         }
     }
 
-    public onRecordSelected(event: RecordSelectedEvent): void {
+    public OnRecordSelected(event: RecordSelectedEvent): void {
         // Emit data change event with selected record
         this.emitDataChanged({
             type: 'record-selected',
@@ -175,7 +202,12 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
         });
     }
 
-    public onRecordOpened(event: RecordOpenedEvent): void {
+    /** @deprecated Use {@link OnRecordSelected}. */
+    public onRecordSelected(event: RecordSelectedEvent): void {
+      return this.OnRecordSelected(event);
+    }
+
+    public OnRecordOpened(event: RecordOpenedEvent): void {
         // Emit data change event for record open (for any listeners that need it)
         this.emitDataChanged({
             type: 'record-opened',
@@ -194,6 +226,11 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
         }
     }
 
+    /** @deprecated Use {@link OnRecordOpened}. */
+    public onRecordOpened(event: RecordOpenedEvent): void {
+      return this.OnRecordOpened(event);
+    }
+
     /**
      * Handle a plug-in renderer's request (bubbled up via the inner entity-viewer) to open a
      * *related* record on a (possibly different) entity — e.g. a grid foreign-key drill-through.
@@ -201,7 +238,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
      *
      * @param nav the related-record navigation payload: the target entity name and the record's key.
      */
-    public onOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
+    public OnOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
         if (nav?.entityName && nav.recordKey != null) {
             this.RequestOpenEntityRecord(
                 nav.entityName,
@@ -212,9 +249,14 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
         }
     }
 
+    /** @deprecated Use {@link OnOpenRelatedRecordRequested}. */
+    public onOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
+      return this.OnOpenRelatedRecordRequested(nav);
+    }
+
     protected override cleanup(): void {
         // EntityViewer handles its own cleanup
-        this.viewEntity = null;
-        this.entityInfo = null;
+        this.ViewEntity = null;
+        this.EntityInfo = null;
     }
 }
