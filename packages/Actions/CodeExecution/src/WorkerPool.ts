@@ -631,16 +631,31 @@ export class WorkerPool {
                         return;
                     }
 
-                    worker.process.once('exit', () => resolve());
-                    worker.process.kill('SIGTERM');
-
-                    // Force kill after 5 seconds
-                    setTimeout(() => {
-                        if (!worker.process.killed) {
-                            worker.process.kill('SIGKILL');
+                    let forceKillTimer: NodeJS.Timeout | undefined;
+                    worker.process.once('exit', () => {
+                        if (forceKillTimer) {
+                            clearTimeout(forceKillTimer);
                         }
                         resolve();
+                    });
+                    worker.process.kill('SIGTERM');
+
+                    // Force kill after 5 seconds if the process is still running.
+                    // `worker.process.killed` becomes `true` synchronously as soon as `kill()`
+                    // successfully SENDS a signal (set inside Node's `kill()` itself, immediately) —
+                    // NOT once the process has actually exited — so it can't be used here to detect
+                    // "still running": the previous check, `!worker.process.killed`, was always
+                    // false by the time this timer fired (killed was already true from the SIGTERM
+                    // call above) and the SIGKILL escalation never actually ran. The `once('exit', ...)`
+                    // listener above is what tells us the process is truly gone, by clearing this
+                    // timer before it fires — so if this callback DOES run, the worker is still
+                    // alive and SIGKILL is unconditionally correct. The extra `resolve()` here is a
+                    // defensive fallback in case 'exit' never arrives.
+                    forceKillTimer = setTimeout(() => {
+                        worker.process.kill('SIGKILL');
+                        resolve();
                     }, 5000);
+                    forceKillTimer.unref();
                 });
             });
 

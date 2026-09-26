@@ -492,14 +492,29 @@ export class ToolArgumentsError extends Error {
  * reaches for the global default provider, so it is safe in multi-provider/multi-tenant servers.
  */
 export class RealtimeClientSessionService {
-    /** Maps session id -> (wireName -> MJActionEntityExtended) built during tool projection. */
-    protected readonly sessionWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
+    /**
+     * Maps session id -> (wireName -> MJActionEntityExtended) built during tool projection.
+     * Bounded with `MJLruCache` (rather than a plain `Map`): the resolver holds ONE shared service
+     * instance for the process lifetime (see class doc above), and there is no "session ended" hook
+     * this service can key eviction off — every voice session ever prepared would otherwise leave an
+     * entry here forever. Same TTL/maxSize rationale as {@link promptRunWriteChains} below.
+     */
+    protected readonly sessionWireActionMaps = new MJLruCache<string, Map<string, MJActionEntityExtended>>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000, // 4h — generous vs. any realistic voice-session duration
+    });
 
-    /** Maps targetAgentID -> (wireName -> MJActionEntityExtended) fallback built during tool projection. */
-    protected readonly targetWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
+    /** Maps targetAgentID -> (wireName -> MJActionEntityExtended) fallback built during tool projection. Bounded for the same reason as {@link sessionWireActionMaps}. */
+    protected readonly targetWireActionMaps = new MJLruCache<string, Map<string, MJActionEntityExtended>>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000,
+    });
 
-    /** Maps session id -> direct actions config resolved during session prep. */
-    protected readonly sessionDirectConfigs = new Map<string, RealtimeDirectActionsConfig>();
+    /** Maps session id -> direct actions config resolved during session prep. Bounded for the same reason as {@link sessionWireActionMaps}. */
+    protected readonly sessionDirectConfigs = new MJLruCache<string, RealtimeDirectActionsConfig>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000,
+    });
 
     /**
      * Builds a wire-name to action map from candidate actions, sanitizing each
@@ -2733,12 +2748,12 @@ export class RealtimeClientSessionService {
 
         const wireMap = this.BuildWireActionMap(allowedActions);
         if (agentSessionID) {
-            this.sessionWireActionMaps.set(agentSessionID, wireMap);
+            this.sessionWireActionMaps.Set(agentSessionID, wireMap);
             if (directConfig) {
-                this.sessionDirectConfigs.set(agentSessionID, directConfig);
+                this.sessionDirectConfigs.Set(agentSessionID, directConfig);
             }
         }
-        this.targetWireActionMaps.set(targetAgentID, wireMap);
+        this.targetWireActionMaps.Set(targetAgentID, wireMap);
 
         const tools: RealtimeToolDefinition[] = [];
         for (const [wireName, action] of wireMap.entries()) {
@@ -2842,7 +2857,7 @@ export class RealtimeClientSessionService {
 
         const candidateActions = this.getTargetAgentActions(target.ID);
         const candidateWireMap = this.BuildWireActionMap(candidateActions);
-        const action = (input?.AgentSessionID ? this.sessionWireActionMaps.get(input.AgentSessionID)?.get(call.ToolName) : undefined)
+        const action = (input?.AgentSessionID ? this.sessionWireActionMaps.Get(input.AgentSessionID)?.get(call.ToolName) : undefined)
             ?? candidateWireMap.get(call.ToolName)
             ?? Array.from(candidateWireMap.entries()).find(([w]) => w.toLowerCase() === call.ToolName.trim().toLowerCase())?.[1];
 
@@ -2855,7 +2870,7 @@ export class RealtimeClientSessionService {
         }
 
         const directConfig = input?.DirectActions
-            ?? (input?.AgentSessionID ? this.sessionDirectConfigs.get(input.AgentSessionID) : undefined)
+            ?? (input?.AgentSessionID ? this.sessionDirectConfigs.Get(input.AgentSessionID) : undefined)
             ?? GetDirectActionsConfig(this.resolveEffectiveConfig(target, undefined, target));
 
         if (!IsActionAllowedForDirectInvocation(action.Name, directConfig)) {

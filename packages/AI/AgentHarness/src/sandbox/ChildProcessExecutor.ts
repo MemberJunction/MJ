@@ -25,9 +25,28 @@ export function WrapChildProcess(child: ChildProcessWithoutNullStreams): Harness
             child.once('error', () => resolve(null));
         }),
         Kill: () => {
-            if (child.exitCode === null && !child.killed) {
-                child.kill();
+            if (child.exitCode !== null || child.killed) {
+                return;
             }
+            child.kill('SIGTERM');
+            // Escalate to SIGKILL if the harness ignores/hangs on SIGTERM. This runs on every
+            // AI-agent CLI turn (BaseCliHarnessAdapter calls Kill() per turn), so without this a
+            // harness process that hangs on SIGTERM becomes a permanent orphan with no cap over many
+            // runs.
+            //
+            // NOTE: `child.killed` becomes `true` synchronously as soon as `kill()` successfully
+            // *sends* a signal — NOT once the process has actually exited (Node sets it inside
+            // `kill()` itself, independent of whether the OS delivered/honored it). So this callback
+            // cannot re-check `!child.killed` to decide whether to escalate — it would already be
+            // `true` from the SIGTERM call above and the SIGKILL would never fire. The `once('exit', …)`
+            // listener below is what actually tells us the process is gone (by clearing this timer
+            // before it runs), so if this callback DOES run, the process is still alive and SIGKILL is
+            // unconditionally correct.
+            const forceKillTimer = setTimeout(() => {
+                child.kill('SIGKILL');
+            }, 5000);
+            forceKillTimer.unref();
+            child.once('exit', () => clearTimeout(forceKillTimer));
         },
     };
 }

@@ -327,6 +327,55 @@ describe('WorkerPool', () => {
       // Should not throw
       await expect(pool.shutdown()).resolves.not.toThrow();
     });
+
+    // Round 16 memory-leak fix: `worker.process.killed` is set to `true` by Node's real ChildProcess
+    // synchronously as soon as `kill()` successfully SENDS a signal — NOT once the process has
+    // actually exited. The default `MockChildProcess.kill()` above always simulates a well-behaved
+    // process (emits 'exit' unconditionally), which is exactly why this bug went unnoticed: the
+    // escalation's old `!worker.process.killed` check was always false by the time the force-kill
+    // timer fired, so SIGKILL never actually ran for a genuinely hung worker. These tests model a
+    // worker that ignores SIGTERM to prove the escalation now actually fires.
+    it('escalates to SIGKILL if a worker ignores SIGTERM instead of exiting', async () => {
+      // Real timers during setup — `pool.initialize()` itself relies on `setImmediate` (the mock's
+      // simulated 'ready' message) to resolve; only fake the clock around the shutdown escalation.
+      pool = new WorkerPool({ poolSize: 1 });
+      await pool.initialize();
+
+      const proc = mockProcesses[0];
+      // Override kill() so it records the call but does NOT emit 'exit' — a hung/ignoring worker.
+      proc.kill = vi.fn().mockImplementation((_signal?: string) => {
+        proc.killed = true; // matches real Node semantics: set on send, not on actual exit
+      });
+
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = pool.shutdown();
+        await vi.advanceTimersByTimeAsync(5000);
+        await shutdownPromise;
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(proc.kill).toHaveBeenNthCalledWith(1, 'SIGTERM');
+      expect(proc.kill).toHaveBeenNthCalledWith(2, 'SIGKILL');
+    });
+
+    it('does not send a redundant SIGKILL when the worker exits promptly after SIGTERM', async () => {
+      pool = new WorkerPool({ poolSize: 1 });
+      await pool.initialize();
+      const proc = mockProcesses[0];
+
+      vi.useFakeTimers();
+      try {
+        const shutdownPromise = pool.shutdown(); // default mock kill() emits 'exit' via setImmediate
+        await vi.advanceTimersByTimeAsync(5000);
+        await shutdownPromise;
+      } finally {
+        vi.useRealTimers();
+      }
+
+      expect(proc.kill).toHaveBeenCalledTimes(1); // SIGTERM only — no SIGKILL follow-up
+    });
   });
 
   describe('worker crash handling', () => {
