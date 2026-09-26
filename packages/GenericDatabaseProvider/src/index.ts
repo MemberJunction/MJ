@@ -31,6 +31,8 @@ export { SystemUserFieldAccessCheck, LoadSystemUserFieldAccessCheck } from './Sy
 export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 export { SqlLoggingSessionImpl } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';
+export { CountOnlyBatchCoalescer, IsCoalescibleCountBatch } from './countOnlyBatch.js';
+export type { CountOnlyRow, CountSQLExecutor } from './countOnlyBatch.js';
 export { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
 export { RenderPipeline, RenderContext, RenderResult, RenderTrace, CompositionDiagnostic } from './renderPipeline.js';
 export { SymbolTable } from './symbolTable.js';

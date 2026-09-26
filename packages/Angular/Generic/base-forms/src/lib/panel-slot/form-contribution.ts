@@ -375,3 +375,15 @@ export function ClaimedRelatedSectionKeys(
 ): string[] {
     return ContributionHiddenSectionKeys(entityName, relatedEntities, isaChildEntityIDs, registrations);
 }
+
+/**
+ * `DisplayInForm` relationships that can appear on the parent form (IS-A
+ * children excluded), in Sequence order — the same peer set
+ * {@link ResolveFormContributions} and {@link CreateRelatedEntitySectionKeyResolver} use.
+ */
+export function VisibleFormRelationships<T extends FormContributionRelationship>(
+    related: readonly T[],
+    isaChildIds: readonly string[],
+): T[] {
+    return visibleRelationships(related, isaChildIds) as T[];
+}

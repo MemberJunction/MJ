@@ -106,6 +106,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
+import { CountOnlyBatchCoalescer, CountOnlyRow, IsCoalescibleCountBatch } from './countOnlyBatch';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -1779,6 +1780,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * aggregates, parallel query execution, post-processing, and audit logging.
      */
     protected override async InternalRunView<T = unknown>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
+        return this.RunViewCore<T>(params, contextUser);
+    }
+
+    /**
+     * The body of {@link InternalRunView}. `countExecutor`, when supplied, replaces the
+     * direct execution of a `count_only` view's COUNT query — {@link InternalRunViews} uses
+     * it to coalesce an all-`count_only` batch into one statement (see countOnlyBatch.ts).
+     * Everything before that step — permissions, RLS, filter screening — is unchanged.
+     */
+    protected async RunViewCore<T = unknown>(
+        params: RunViewParams,
+        contextUser?: UserInfo,
+        countExecutor?: (countSQL: string) => Promise<CountOnlyRow[]>,
+    ): Promise<RunViewResult<T>> {
         if (params?.Aggregates?.length) {
             LogStatus(`[GenericDatabaseProvider] InternalRunView received aggregates: entityName=${params.EntityName}, viewID=${params.ViewID}, viewName=${params.ViewName}, aggregateCount=${params.Aggregates.length}`);
         }
@@ -2111,7 +2126,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const maxRowsUsed = params.MaxRows || entityInfo.UserViewMaxRows;
             const willNeedCount = countSQL && (usingPagination || params.ResultType === 'count_only');
             if (willNeedCount) {
-                queries.push(this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
+                queries.push(countExecutor && params.ResultType === 'count_only'
+                    ? countExecutor(countSQL!)
+                    : this.ExecuteSQL(countSQL!, undefined, undefined, contextUser));
                 queryKeys.push('count');
             }
 
@@ -2214,8 +2231,29 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     protected override async InternalRunViews<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        if (IsCoalescibleCountBatch(params)) {
+            return this.RunCoalescedCountBatch<T>(params, contextUser);
+        }
         const promises = params.map((p) => this.InternalRunView<T>(p, contextUser));
         return Promise.all(promises);
+    }
+
+    /**
+     * All-`count_only` batch: every view runs the normal per-view path (so every
+     * security gate applies per view), but their COUNT queries are executed as ONE
+     * `UNION ALL` statement — one database round trip for, e.g., every related-section
+     * badge on a form. A view that fails keeps its own `Success:false` result.
+     */
+    protected async RunCoalescedCountBatch<T = unknown>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const batch = new CountOnlyBatchCoalescer(
+            params.length,
+            (sql) => this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser),
+            (name) => this.QuoteIdentifier(name),
+        );
+        return Promise.all(params.map((p, index) =>
+            this.RunViewCore<T>(p, contextUser, (countSQL) => batch.Execute(index, countSQL))
+                .finally(() => batch.MarkSettled(index)),
+        ));
     }
 
     /**************************************************************************/

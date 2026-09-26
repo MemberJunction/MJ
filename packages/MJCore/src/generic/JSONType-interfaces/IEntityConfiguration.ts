@@ -128,4 +128,18 @@ export interface IEntityFormConfiguration {
      * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
+
+    /**
+     * Default empty-section behaviour for this form's related sections when a
+     * relationship does not set `UI.whenEmpty` itself.
+     * `'show'` | `'hide'` | `'more'` — see `IEntityRelationshipUIConfiguration.whenEmpty`.
+     * Omit to treat as `'show'`.
+     */
+    RelatedWhenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Default for prefetching related-section row counts (badges) when a
+     * relationship does not set `UI.showCount` itself. Omit to treat as `true`.
+     */
+    ShowRelatedCounts?: boolean;
 }

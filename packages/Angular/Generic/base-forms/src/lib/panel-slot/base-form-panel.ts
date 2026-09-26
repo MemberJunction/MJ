@@ -1,5 +1,5 @@
 import { Directive, HostBinding, Input } from '@angular/core';
-import { BaseEntity, ValidationResult, type FormInclusion } from '@memberjunction/core';
+import { BaseEntity, ValidationResult, type FormInclusion, type FormWhenEmpty } from '@memberjunction/core';
 import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { FormToolbarItemConfig, FormToolbarItemKey } from '../types/form-toolbar-item';
@@ -111,6 +111,39 @@ export interface FormPanelRegistrationMetadata extends Record<string, unknown> {
      * how every other conflict between registrations is settled.
      */
     leadsWhenUnsaved?: boolean;
+
+    /**
+     * What the form does with this contribution's section when it has 0 rows.
+     * `'show'` (default) | `'hide'` | `'more'` (moved into the More folder while
+     * empty). Same verbs as `EntityRelationship.Configuration.UI.whenEmpty`; omit to
+     * inherit the parent entity's `UI.Form.RelatedWhenEmpty`.
+     */
+    whenEmpty?: FormWhenEmpty;
+    /**
+     * Prefetch this contribution's row count when the record loads and show it as
+     * a badge. Omit to inherit the parent entity's `UI.Form.ShowRelatedCounts`
+     * (default `true`).
+     */
+    showCount?: boolean;
+    /**
+     * What to count for this contribution. Omit to derive it from
+     * {@link relatedEntity} / {@link relatedJoinField}. `false` disables the
+     * prefetch. A contribution with no count source can still report its own
+     * count after it mounts via `FormComponent.SetSectionRowCount(key, n)`.
+     */
+    count?: FormContributionCountSpec | false;
+}
+
+/** The related rows a contribution's badge / empty check counts. */
+export interface FormContributionCountSpec {
+    /** Entity to count (e.g. `'MJ_BizApps_Orders: Order Headers'`). */
+    entity: string;
+    /**
+     * FK field(s) on {@link entity} that point at the parent record. Several
+     * fields are ORed (Bill-To OR Ship-To). Omit when the entity has exactly one
+     * relationship to the parent.
+     */
+    joinFields?: string[];
 }
 
 /**

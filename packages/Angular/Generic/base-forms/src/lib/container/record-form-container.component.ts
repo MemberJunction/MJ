@@ -4,8 +4,8 @@ import {
   ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
-import { UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, EntityInfo, LogError, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
+import { EscapeSQLString, UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
@@ -58,6 +58,16 @@ import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-
 import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-panel';
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
+import {
+  ApplyFormCountResults,
+  BuildFormCountPlan,
+  FormCountPlanParams,
+  ResolveEmptySectionBehavior,
+  type FormCountContribution,
+  type FormCountPhase,
+  type FormCountPlan,
+  type FormCountResults,
+} from '../section-counts/form-section-counts';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
 import {
@@ -169,6 +179,17 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Number of tracked record change versions for this record */
   VersionCount = 0;
+
+  // ---- Section counts (one batched round trip per saved record) ----
+  /** What was requested for the current record; null until a saved record loads. */
+  private countPlan: FormCountPlan | null = null;
+  private countPhase: FormCountPhase = 'none';
+  /** Bumped per request so a slow response for a previous record is ignored. */
+  private countRequestToken = 0;
+  /** Sections seen with rows this session — never hidden or moved when they empty out (no yank). */
+  private stickySectionKeys = new Set<string>();
+  /** Last resolved `whenEmpty` outcome, applied by chrome + DOM visibility. */
+  private emptySectionBehavior = new Map<string, 'hide' | 'more'>();
 
   /** Controls visibility of list management dialog */
   ShowListManagement = false;
@@ -818,6 +839,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return DescribeSectionWarnings(count, where);
   }
 
+  /** Sum of the row counts of every section in More (shown on the collapsed folder). */
+  public get ChromeMoreRowCount(): number | undefined {
+    const keys = this.chrome.Spec.MoreSectionKeys;
+    if (keys.length === 0) return undefined;
+    return this.ChromeGroupRowCount({ Key: MORE_SECTION_KEY, Title: 'More', Icon: '', SectionKeys: keys, IsMore: true });
+  }
+
   public ChromeGroupRowCount(group: FormChromeGroup): number | undefined {
     if (!this.Fc?.GetSectionRowCount) return undefined;
     let total = 0;
@@ -1012,6 +1040,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       ContributionSortKeyByKey: this.contributionSortKeyByKey(),
       ChromeRules: this.chromeRules,
       IncludeUnbakedRelated: this.EffectiveShowRelatedEntities,
+      EmptySectionBehavior: this.refreshEmptySectionBehavior(),
       Membership: {
         moreSectionKeys: this.Fc?.getMoreSectionKeys?.() ?? [],
         firstClassSectionKeys: this.Fc?.getFirstClassSectionKeys?.() ?? [],
@@ -1183,6 +1212,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   private isChromeKeyVisible(sectionKey: string, variant: string): boolean {
     if (this.contributionHiddenSectionKeys().has(sectionKey)) return false;
+    if (this.emptySectionBehavior.get(sectionKey) === 'hide') return false;
     if (this.chrome.Spec.Layout === 'accordion') {
       return this.chrome.IsAccordionSectionVisible(sectionKey);
     }
@@ -1418,6 +1448,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.Fc.RecordReady.pipe(takeUntil(this.panelNavReset$)).subscribe(() => {
         this.loadBadgeCounts();
       });
+      this.Fc.SectionRowCountChanged?.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
+        this.onSectionRowCountChanged(e);
+      });
       this.Fc.RecordRefreshed.pipe(takeUntil(this.panelNavReset$)).subscribe((e) => {
         this.onFormRecordRefreshed(e.Record);
       });
@@ -1475,11 +1508,124 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!record?.EntityInfo) return;
 
     this.badgeCountsLoaded = true;
+    // Fire and forget — counts land while the form renders; nothing awaits them.
+    void this.loadFormCounts(record);
+  }
 
-    // Fire queries in parallel — no await needed, they update state async
-    this.loadTagCount(record);
-    this.loadVersionCount(record);
-    this.loadAttachmentCount(record);
+  /**
+   * ONE `RunViews` call for every count the form shows: each related section's
+   * rows (badges + `whenEmpty` chrome) and the tag / attachment / version toolbar
+   * badges. All items are `count_only`, which the database provider runs as a
+   * single `UNION ALL` statement. Skipped entirely for unsaved records.
+   */
+  private async loadFormCounts(record: BaseEntity): Promise<void> {
+    const plan = this.buildFormCountPlan(record);
+    this.countPlan = plan;
+    this.stickySectionKeys.clear();
+    this.applyBadgeVisibility(plan);
+    const params = FormCountPlanParams(plan);
+    const token = ++this.countRequestToken;
+    if (params.length === 0) {
+      this.countPhase = 'none';
+      this.scheduleChromeResolve();
+      return;
+    }
+    this.countPhase = 'loading';
+    this.scheduleChromeResolve();
+    try {
+      const results = await RunView.FromMetadataProvider(this.ProviderToUse).RunViews(params);
+      if (token !== this.countRequestToken) return;
+      this.applyFormCounts(ApplyFormCountResults(plan, results));
+      this.countPhase = 'loaded';
+    } catch (e) {
+      if (token !== this.countRequestToken) return;
+      // Fail open: every section shows, badges stay at their defaults.
+      LogError(`Form section counts failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
+      this.countPhase = 'failed';
+    }
+    this.scheduleChromeResolve();
+    this.cdr.detectChanges();
+  }
+
+  private buildFormCountPlan(record: BaseEntity): FormCountPlan {
+    const entity = record.EntityInfo;
+    return BuildFormCountPlan({
+      Record: record,
+      Entity: entity,
+      IsaChildEntityIDs: (entity.ChildEntities ?? []).map((child) => child.ID),
+      HiddenSectionKeys: this.contributionHiddenSectionKeys(),
+      Contributions: this.countContributions(),
+      IncludeAttachments: this.AttachmentsAvailable,
+    });
+  }
+
+  /** Winning contribution registrations (by rail key) with their metadata, for counting. */
+  private countContributions(): FormCountContribution[] {
+    const entityName = this.EffectiveEntityInfo?.Name;
+    if (!entityName) return [];
+    const byKey = new Map<string, FormCountContribution>();
+    const regs = [...CollectFormPanelRegistrations()].sort((a, b) => (a.Priority ?? 0) - (b.Priority ?? 0));
+    for (const reg of regs) {
+      const meta = reg.Metadata;
+      if (!meta || meta.entity !== entityName || meta.contributionKey === 'header') continue;
+      const key = contributionRailKey(meta);
+      if (key) byKey.set(key, { SectionKey: key, Metadata: meta });
+    }
+    return [...byKey.values()];
+  }
+
+  private applyBadgeVisibility(plan: FormCountPlan): void {
+    const form = this.Fc;
+    if (!form?.SetSectionBadgeVisible) return;
+    const suppressed = new Set(plan.SuppressedBadgeKeys);
+    for (const target of plan.Sections) form.SetSectionBadgeVisible(target.SectionKey, !suppressed.has(target.SectionKey));
+    for (const key of suppressed) form.SetSectionBadgeVisible(key, false);
+  }
+
+  private applyFormCounts(counts: FormCountResults): void {
+    const tags = counts.System.get('tags');
+    if (tags !== undefined) this.TagCount = tags;
+    const attachments = counts.System.get('attachments');
+    if (attachments !== undefined) this.AttachmentCount = attachments;
+    const versions = counts.System.get('versions');
+    if (versions !== undefined) this.VersionCount = versions;
+    // Each call fires SectionRowCountChanged → onSectionRowCountChanged; the
+    // chrome re-resolve is debounced, so this is one pass however many sections.
+    for (const [key, count] of counts.Sections) this.Fc?.SetSectionRowCount?.(key, count);
+  }
+
+  /**
+   * A section's count changed (prefetch, grid load, manual grid refresh, or a
+   * contribution reporting). Re-resolve chrome when it crosses zero for a section
+   * whose `whenEmpty` is not 'show'.
+   */
+  private onSectionRowCountChanged(e: { SectionKey: string; RowCount: number; Previous: number | undefined }): void {
+    if (e.RowCount > 0) this.stickySectionKeys.add(e.SectionKey);
+    const target = this.countPlan?.Sections.find((t) => t.SectionKey === e.SectionKey);
+    if (!target || target.WhenEmpty === 'show') return;
+    const crossedZero = e.Previous === undefined || (e.Previous === 0) !== (e.RowCount === 0);
+    if (crossedZero) this.scheduleChromeResolve();
+  }
+
+  private refreshEmptySectionBehavior(): Map<string, 'hide' | 'more'> {
+    this.emptySectionBehavior = this.computeEmptySectionBehavior();
+    return this.emptySectionBehavior;
+  }
+
+  /** `whenEmpty` outcome for the current state. Fail open everywhere. */
+  private computeEmptySectionBehavior(): Map<string, 'hide' | 'more'> {
+    const sticky = new Set(this.stickySectionKeys);
+    // Never hide what the user has open in the left-nav rail.
+    const active = this.chrome.ActiveGroupKey;
+    const activeGroup = active ? this.chrome.Spec.Groups.find((g) => g.Key === active && !g.IsMore) : undefined;
+    for (const key of activeGroup?.SectionKeys ?? (active ? [active] : [])) sticky.add(key);
+    return ResolveEmptySectionBehavior({
+      Targets: this.countPlan?.Sections ?? [],
+      CountOf: (key) => this.Fc?.PeekSectionRowCount?.(key),
+      Phase: this.countPhase,
+      ShowEmptyFields: this.EffectiveShowEmptyFields,
+      StickyKeys: sticky,
+    });
   }
 
   /**
@@ -1490,18 +1636,18 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!this.AttachmentsAvailable) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<{ ID: string }>({
+      const result = await rv.RunView({
         EntityName: 'MJ: File Entity Record Links',
-        Fields: ['ID'],
-        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
-        ResultType: 'simple'
+        ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.Values())}'`,
+        ResultType: 'count_only'
       });
       if (result.Success) {
-        this.AttachmentCount = result.Results.length;
+        this.AttachmentCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }
-    } catch {
-      // Non-critical — badge just stays at 0
+    } catch (e) {
+      // Non-critical — the badge keeps its last value.
+      LogError(`Toolbar badge count failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -1512,19 +1658,19 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private async loadTagCount(record: BaseEntity): Promise<void> {
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      // Don't narrow Fields — the server caches RunView results by entity+filter (ignoring Fields),
-      // so a narrow query here would poison the cache for the subsequent full-field load in the Tags panel.
+      // count_only is never cached, so it cannot poison the Tags panel's full load.
       const result = await rv.RunView({
         EntityName: 'MJ: Tagged Items',
-        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.Values()}'`,
-        ResultType: 'simple'
+        ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.Values())}'`,
+        ResultType: 'count_only'
       });
       if (result.Success) {
-        this.TagCount = result.Results.length;
+        this.TagCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }
-    } catch {
-      // Non-critical — badge just stays at 0
+    } catch (e) {
+      // Non-critical — the badge keeps its last value.
+      LogError(`Toolbar badge count failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -1536,18 +1682,18 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     if (!record.EntityInfo.TrackRecordChanges) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<{ ID: string }>({
+      const result = await rv.RunView({
         EntityName: 'MJ: Record Changes',
-        Fields: ['ID'],
-        ExtraFilter: `EntityID='${record.EntityInfo.ID}' AND RecordID='${record.PrimaryKey.ToConcatenatedString()}'`,
-        ResultType: 'simple'
+        ExtraFilter: `EntityID='${EscapeSQLString(record.EntityInfo.ID)}' AND RecordID='${EscapeSQLString(record.PrimaryKey.ToConcatenatedString())}'`,
+        ResultType: 'count_only'
       });
       if (result.Success) {
-        this.VersionCount = result.Results.length;
+        this.VersionCount = result.TotalRowCount ?? 0;
         this.cdr.detectChanges();
       }
-    } catch {
-      // Non-critical — badge just stays at 0
+    } catch (e) {
+      // Non-critical — the badge keeps its last value.
+      LogError(`Toolbar badge count failed for ${record.EntityInfo.Name}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
