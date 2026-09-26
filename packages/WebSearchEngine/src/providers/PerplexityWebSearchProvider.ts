@@ -8,7 +8,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { HttpPost } from '@memberjunction/network-utils';
 import { BaseWebSearchProvider } from '../BaseWebSearchProvider';
 import { WebSearchCapabilities, WebSearchHit, WebSearchParams, WebSearchProviderResponse } from '../types';
-import { classifyHttpFailure, failure } from './httpFailure';
+import { ClassifyHttpFailure, Failure } from './httpFailure';
 
 interface PerplexitySearchResult {
     title?: string;
@@ -99,14 +99,14 @@ export class PerplexityWebSearchProvider extends BaseWebSearchProvider {
             );
 
             if (!response.Data) {
-                return failure('transient', 'Empty response from Perplexity Search.');
+                return Failure('transient', 'Empty response from Perplexity Search.');
             }
 
             const hits = (response.Data.results ?? []).map((item) => this.toHit(item));
             const answer = params.IncludeAnswer ? await this.fetchAnswer(params) : undefined;
             return { Success: true, Hits: hits, Answer: answer };
         } catch (e) {
-            return classifyHttpFailure(e, 'Perplexity');
+            return ClassifyHttpFailure(e, 'Perplexity');
         }
     }
 

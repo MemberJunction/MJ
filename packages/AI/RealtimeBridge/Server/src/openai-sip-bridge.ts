@@ -13,10 +13,10 @@ import {
  * the OpenAI Live session API (`/v1/live/sessions/{id}/...`).
  */
 export interface IOpenAISipRestClient {
-    accept(sessionId: string, sessionConfig: Record<string, unknown>): Promise<void>;
-    reject(sessionId: string, statusCode: number): Promise<void>;
-    refer(sessionId: string, targetUri: string): Promise<void>;
-    hangup(sessionId: string): Promise<void>;
+    accept(sessionId: string, sessionConfig: Record<string, unknown>): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    reject(sessionId: string, statusCode: number): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    refer(sessionId: string, targetUri: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+    hangup(sessionId: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**

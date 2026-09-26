@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BusinessCentralBaseAction } from '../business-central-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { ChartOfAccount } from '../../../types';
 
 /**
@@ -28,7 +28,7 @@ export interface BCGLAccount {
 /**
  * Action to retrieve the Chart of Accounts from Microsoft Dynamics 365 Business Central
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.GetChartOfAccounts, ERP_INTEGRATION.BusinessCentral))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.GetChartOfAccounts, ERP_INTEGRATION.BusinessCentral))
 @RegisterClass(BaseAction, 'GetBusinessCentralGLAccountsAction')
 export class GetBusinessCentralGLAccountsAction extends BusinessCentralBaseAction {
     

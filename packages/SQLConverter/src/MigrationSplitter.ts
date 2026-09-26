@@ -114,7 +114,7 @@ const MAX_HEADER_WALKUP = 25;
  * Split a migration into its hand-authored and CodeGen-generated regions and
  * recommend a routing. Pure function — no I/O.
  */
-export function splitMigration(sql: string, fileName = '<inline>'): MigrationSplitResult {
+export function SplitMigration(sql: string, fileName = '<inline>'): MigrationSplitResult {
   const lines = sql.split('\n');
   const boundary = findCodeGenBoundary(lines);
   const handLines = boundary.line == null ? lines : lines.slice(0, boundary.line - 1);
@@ -131,10 +131,15 @@ export function splitMigration(sql: string, fileName = '<inline>'): MigrationSpl
     boundaryMethod: boundary.method,
     handAuthored,
     codeGenBlock,
-    affectedEntities: extractAffectedEntities(codeGenBlock),
+    affectedEntities: ExtractAffectedEntities(codeGenBlock),
     handAuthoredRegions,
     routing: deriveRouting(handAuthoredRegions),
   };
+}
+
+/** @deprecated Use {@link SplitMigration}. */
+export function splitMigration(sql: string, fileName = '<inline>'): MigrationSplitResult {
+  return SplitMigration(sql, fileName);
 }
 
 /** Locate the first line of the CodeGen block, preferring the explicit delimiter. */
@@ -328,7 +333,7 @@ const ITEM_HEADER = /^\s*--\s*Item:\s*\S/i;
  * block regenerated (`E(M)`). Pure — no I/O. Case-insensitive de-dup, first-seen
  * order and casing preserved. Returns `[]` for an empty/absent block.
  */
-export function extractAffectedEntities(codeGenBlock: string): string[] {
+export function ExtractAffectedEntities(codeGenBlock: string): string[] {
   if (!codeGenBlock) return [];
   const lines = codeGenBlock.split('\n');
   const ordered: string[] = [];
@@ -359,6 +364,11 @@ export function extractAffectedEntities(codeGenBlock: string): string[] {
     }
   }
   return ordered;
+}
+
+/** @deprecated Use {@link ExtractAffectedEntities}. */
+export function extractAffectedEntities(codeGenBlock: string): string[] {
+  return ExtractAffectedEntities(codeGenBlock);
 }
 
 /**

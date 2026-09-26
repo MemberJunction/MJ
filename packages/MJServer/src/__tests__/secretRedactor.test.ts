@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { IMetadataProvider } from '@memberjunction/core';
-import { redactArg } from '../logging/secretRedactor.js';
+import { RedactArg } from '../logging/secretRedactor.js';
 
 type EncryptedField = { Name: string };
 type FakeEntity = { ClassName: string; EncryptedFields: EncryptedField[] };
@@ -22,7 +22,7 @@ describe('redactArg', () => {
   };
 
   it('returns "<redacted>" when noLogParameter is set, regardless of other inputs', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'CreateMJCredentialInput',
       rawValue: { Values: 'FAKE_SECRET_VALUE_DO_NOT_USE' },
       provider: makeProvider([credentialEntity]),
@@ -33,7 +33,7 @@ describe('redactArg', () => {
   });
 
   it('returns "<metadata-not-ready>" when the provider has no entities (bootstrap window)', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'CreateMJCredentialInput',
       rawValue: { Values: 'FAKE_SECRET_VALUE_DO_NOT_USE' },
       provider: makeProvider([]),
@@ -44,7 +44,7 @@ describe('redactArg', () => {
   });
 
   it('fails open (passes through) when input type does not match Create/Update<X>Input regex', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'SomeCustomArgs',
       rawValue: { accessToken: 'FAKE_TOKEN' },
       provider: makeProvider([credentialEntity]),
@@ -55,7 +55,7 @@ describe('redactArg', () => {
   });
 
   it('fails open when input type matches regex but no entity is found', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'CreateUnknownEntityInput',
       rawValue: { Foo: 'bar' },
       provider: makeProvider([credentialEntity]),
@@ -66,7 +66,7 @@ describe('redactArg', () => {
   });
 
   it('redacts top-level keys matching EntityFieldInfo.Encrypt=true on entity-bound CRUD inputs', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'CreateMJCredentialInput',
       rawValue: { ID: 'abc-123', Name: 'HubSpot', Values: 'FAKE_SECRET_VALUE_DO_NOT_USE' },
       provider: makeProvider([credentialEntity]),
@@ -81,7 +81,7 @@ describe('redactArg', () => {
   });
 
   it('redacts top-level keys in noLogFields even when EncryptedFields does not include them', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'CreateUserInput',
       rawValue: { Name: 'Alice', SecretToken: 'oops' },
       provider: makeProvider([userEntity]),
@@ -95,7 +95,7 @@ describe('redactArg', () => {
   });
 
   it('Update<X>Input is also handled (not just Create<X>Input)', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'UpdateMJCredentialInput',
       rawValue: { ID: 'abc-123', Values: 'NEW_FAKE_SECRET' },
       provider: makeProvider([credentialEntity]),
@@ -113,7 +113,7 @@ describe('redactArg', () => {
     // resolvers as metadata-bound instead of flooding with false positives. Security is identical:
     // delete inputs carry PK + Options only — no encrypted field, so nothing is redacted, the keys
     // just pass through. See docs/adr/0001-graphql-variables-logging-tiered-by-verbose.md.
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'DeleteMJCredentialInput',
       rawValue: { ID: 'abc-123' },
       provider: makeProvider([credentialEntity]),
@@ -125,7 +125,7 @@ describe('redactArg', () => {
 
   it('Delete<X>Input never exposes an encrypted value even if one were somehow present', () => {
     // Defense-in-depth: even if a delete input carried an encrypted field name, it must still mask.
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'DeleteMJCredentialInput',
       rawValue: { ID: 'abc-123', Values: 'FAKE_SECRET_VALUE_DO_NOT_USE' },
       provider: makeProvider([credentialEntity]),
@@ -136,7 +136,7 @@ describe('redactArg', () => {
   });
 
   it('only walks TOP-level keys — nested objects with encrypted-field names are not recursed', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'CreateMJCredentialInput',
       rawValue: {
         Name: 'HubSpot',
@@ -151,7 +151,7 @@ describe('redactArg', () => {
   });
 
   it('passes non-object raw values through to shortenForLog', () => {
-    const result = redactArg({
+    const result = RedactArg({
       inputTypeName: 'CreateMJCredentialInput',
       rawValue: 'plain-string',
       provider: makeProvider([credentialEntity]),

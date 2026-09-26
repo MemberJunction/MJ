@@ -29,7 +29,7 @@ export class AuditLogTypeEngine extends BaseEngine<AuditLogTypeEngine> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Audit Log Types',
-                PropertyName: '_AuditLogTypes',
+                PropertyName: '_auditLogTypes',
                 CacheLocal: true,
             },
         ];
@@ -37,9 +37,9 @@ export class AuditLogTypeEngine extends BaseEngine<AuditLogTypeEngine> {
     }
 
     public get AuditLogTypes(): MJAuditLogTypeEntity[] {
-        return this.GetConfigData<MJAuditLogTypeEntity>('_AuditLogTypes');
+        return this.GetConfigData<MJAuditLogTypeEntity>('_auditLogTypes');
     }
-    private _AuditLogTypes: MJAuditLogTypeEntity[] = [];
+    private _auditLogTypes: MJAuditLogTypeEntity[] = [];
 
     /**
      * Look up a row by exact `Name`. Returns `undefined` if the engine
@@ -48,6 +48,6 @@ export class AuditLogTypeEngine extends BaseEngine<AuditLogTypeEngine> {
      * persist rows with an undefined `AuditLogTypeID`.
      */
     public ByName(name: string): MJAuditLogTypeEntity | undefined {
-        return this._AuditLogTypes.find(t => t.Name === name);
+        return this._auditLogTypes.find(t => t.Name === name);
     }
 }

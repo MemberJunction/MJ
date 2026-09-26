@@ -8,7 +8,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, LogError } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJUserViewEntityExtended,
@@ -199,12 +199,12 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    */
   @Input()
   get SelectedView(): MJUserViewEntityExtended | null {
-    return this.currentViewEntity;
+    return this.CurrentViewEntity;
   }
   set SelectedView(value: MJUserViewEntityExtended | null) {
-    this.currentViewEntity = value;
-    this.currentGridState = value ? this.parseViewGridState(value) : this.loadUserDefaultGridState();
-    this.viewModified = false;
+    this.CurrentViewEntity = value;
+    this.CurrentGridState = value ? this.parseViewGridState(value) : this.loadUserDefaultGridState();
+    this.ViewModified = false;
   }
 
   // ----- Host-driven passthrough inputs (forwarded to the inner entity-viewer) -----
@@ -371,16 +371,52 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   // ========================================
 
   /** The currently selected view entity (null = the default/unsaved view). */
-  public currentViewEntity: MJUserViewEntityExtended | null = null;
+  public CurrentViewEntity: MJUserViewEntityExtended | null = null;
+
+  /** @deprecated Use {@link CurrentViewEntity}. */
+  public get currentViewEntity(): MJUserViewEntityExtended | null {
+    return this.CurrentViewEntity;
+  }
+  /** @deprecated Use {@link CurrentViewEntity}. */
+  public set currentViewEntity(value: MJUserViewEntityExtended | null) {
+    this.CurrentViewEntity = value;
+  }
 
   /** The currently selected view ID (null = default view). */
-  public selectedViewId: string | null = null;
+  public SelectedViewId: string | null = null;
+
+  /** @deprecated Use {@link SelectedViewId}. */
+  public get selectedViewId(): string | null {
+    return this.SelectedViewId;
+  }
+  /** @deprecated Use {@link SelectedViewId}. */
+  public set selectedViewId(value: string | null) {
+    this.SelectedViewId = value;
+  }
 
   /** Live grid state (column widths / order / sort / aggregates) reflecting user interaction. */
-  public currentGridState: ViewGridState | null = null;
+  public CurrentGridState: ViewGridState | null = null;
+
+  /** @deprecated Use {@link CurrentGridState}. */
+  public get currentGridState(): ViewGridState | null {
+    return this.CurrentGridState;
+  }
+  /** @deprecated Use {@link CurrentGridState}. */
+  public set currentGridState(value: ViewGridState | null) {
+    this.CurrentGridState = value;
+  }
 
   /** Whether the current view has unsaved modifications. */
-  public viewModified: boolean = false;
+  public ViewModified: boolean = false;
+
+  /** @deprecated Use {@link ViewModified}. */
+  public get viewModified(): boolean {
+    return this.ViewModified;
+  }
+  /** @deprecated Use {@link ViewModified}. */
+  public set viewModified(value: boolean) {
+    this.ViewModified = value;
+  }
 
   /** The current free-text filter. */
   public filterText: string = '';
@@ -389,38 +425,128 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   public selectedRecordId: string | null = null;
 
   /** Records loaded by the viewer, kept for config-panel sample data. */
-  public loadedRecords: Record<string, unknown>[] = [];
+  public LoadedRecords: Record<string, unknown>[] = [];
+
+  /** @deprecated Use {@link LoadedRecords}. */
+  public get loadedRecords(): Record<string, unknown>[] {
+    return this.LoadedRecords;
+  }
+  /** @deprecated Use {@link LoadedRecords}. */
+  public set loadedRecords(value: Record<string, unknown>[]) {
+    this.LoadedRecords = value;
+  }
 
   /** Whether a save operation is in progress (drives the saving spinners). */
-  public isSavingView: boolean = false;
+  public IsSavingView: boolean = false;
+
+  /** @deprecated Use {@link IsSavingView}. */
+  public get isSavingView(): boolean {
+    return this.IsSavingView;
+  }
+  /** @deprecated Use {@link IsSavingView}. */
+  public set isSavingView(value: boolean) {
+    this.IsSavingView = value;
+  }
 
   // ----- Dialog / panel open flags -----
 
   /** Whether the slide-in config panel is open. */
-  public isConfigPanelOpen: boolean = false;
+  public IsConfigPanelOpen: boolean = false;
+
+  /** @deprecated Use {@link IsConfigPanelOpen}. */
+  public get isConfigPanelOpen(): boolean {
+    return this.IsConfigPanelOpen;
+  }
+  /** @deprecated Use {@link IsConfigPanelOpen}. */
+  public set isConfigPanelOpen(value: boolean) {
+    this.IsConfigPanelOpen = value;
+  }
 
   /** Whether the quick-save dialog is open. */
-  public showQuickSaveDialog: boolean = false;
+  public ShowQuickSaveDialog: boolean = false;
+
+  /** @deprecated Use {@link ShowQuickSaveDialog}. */
+  public get showQuickSaveDialog(): boolean {
+    return this.ShowQuickSaveDialog;
+  }
+  /** @deprecated Use {@link ShowQuickSaveDialog}. */
+  public set showQuickSaveDialog(value: boolean) {
+    this.ShowQuickSaveDialog = value;
+  }
 
   /** Whether the duplicate-view dialog is open. */
-  public showDuplicateDialog: boolean = false;
+  public ShowDuplicateDialog: boolean = false;
+
+  /** @deprecated Use {@link ShowDuplicateDialog}. */
+  public get showDuplicateDialog(): boolean {
+    return this.ShowDuplicateDialog;
+  }
+  /** @deprecated Use {@link ShowDuplicateDialog}. */
+  public set showDuplicateDialog(value: boolean) {
+    this.ShowDuplicateDialog = value;
+  }
 
   /** Whether the shared-view warning dialog is open. */
-  public showSharedViewWarning: boolean = false;
+  public ShowSharedViewWarning: boolean = false;
+
+  /** @deprecated Use {@link ShowSharedViewWarning}. */
+  public get showSharedViewWarning(): boolean {
+    return this.ShowSharedViewWarning;
+  }
+  /** @deprecated Use {@link ShowSharedViewWarning}. */
+  public set showSharedViewWarning(value: boolean) {
+    this.ShowSharedViewWarning = value;
+  }
 
   /** Whether the config panel opens in "save as new" mode. */
-  public defaultSaveAsNew: boolean = false;
+  public DefaultSaveAsNew: boolean = false;
+
+  /** @deprecated Use {@link DefaultSaveAsNew}. */
+  public get defaultSaveAsNew(): boolean {
+    return this.DefaultSaveAsNew;
+  }
+  /** @deprecated Use {@link DefaultSaveAsNew}. */
+  public set defaultSaveAsNew(value: boolean) {
+    this.DefaultSaveAsNew = value;
+  }
 
   // ----- Pending state carried across dialogs -----
 
   /** Summary shown in the quick-save dialog. */
-  public quickSaveSummary: ViewConfigSummary | null = null;
+  public QuickSaveSummary: ViewConfigSummary | null = null;
+
+  /** @deprecated Use {@link QuickSaveSummary}. */
+  public get quickSaveSummary(): ViewConfigSummary | null {
+    return this.QuickSaveSummary;
+  }
+  /** @deprecated Use {@link QuickSaveSummary}. */
+  public set quickSaveSummary(value: ViewConfigSummary | null) {
+    this.QuickSaveSummary = value;
+  }
 
   /** Summary shown in the duplicate-view dialog. */
-  public duplicateSummary: ViewConfigSummary | null = null;
+  public DuplicateSummary: ViewConfigSummary | null = null;
+
+  /** @deprecated Use {@link DuplicateSummary}. */
+  public get duplicateSummary(): ViewConfigSummary | null {
+    return this.DuplicateSummary;
+  }
+  /** @deprecated Use {@link DuplicateSummary}. */
+  public set duplicateSummary(value: ViewConfigSummary | null) {
+    this.DuplicateSummary = value;
+  }
 
   /** Source view name shown in the duplicate-view dialog. */
-  public duplicateSourceViewName: string = '';
+  public DuplicateSourceViewName: string = '';
+
+  /** @deprecated Use {@link DuplicateSourceViewName}. */
+  public get duplicateSourceViewName(): string {
+    return this.DuplicateSourceViewName;
+  }
+  /** @deprecated Use {@link DuplicateSourceViewName}. */
+  public set duplicateSourceViewName(value: string) {
+    this.DuplicateSourceViewName = value;
+  }
 
   /** The view ID being duplicated. */
   private duplicateTargetViewId: string | null = null;
@@ -429,32 +555,104 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   private pendingQuickSaveEvent: QuickSaveEvent | null = null;
 
   /** Pre-populated name carried from quick-save dialog into the config panel. */
-  public pendingNewViewName: string = '';
+  public PendingNewViewName: string = '';
+
+  /** @deprecated Use {@link PendingNewViewName}. */
+  public get pendingNewViewName(): string {
+    return this.PendingNewViewName;
+  }
+  /** @deprecated Use {@link PendingNewViewName}. */
+  public set pendingNewViewName(value: string) {
+    this.PendingNewViewName = value;
+  }
 
   /** Pre-populated description carried from quick-save dialog into the config panel. */
-  public pendingNewViewDescription: string = '';
+  public PendingNewViewDescription: string = '';
+
+  /** @deprecated Use {@link PendingNewViewDescription}. */
+  public get pendingNewViewDescription(): string {
+    return this.PendingNewViewDescription;
+  }
+  /** @deprecated Use {@link PendingNewViewDescription}. */
+  public set pendingNewViewDescription(value: string) {
+    this.PendingNewViewDescription = value;
+  }
 
   /** Pre-populated sharing preference carried from quick-save dialog into the config panel. */
-  public pendingNewViewIsShared: boolean = false;
+  public PendingNewViewIsShared: boolean = false;
+
+  /** @deprecated Use {@link PendingNewViewIsShared}. */
+  public get pendingNewViewIsShared(): boolean {
+    return this.PendingNewViewIsShared;
+  }
+  /** @deprecated Use {@link PendingNewViewIsShared}. */
+  public set pendingNewViewIsShared(value: boolean) {
+    this.PendingNewViewIsShared = value;
+  }
 
   // ----- Filter dialog (rendered at workspace level for full width) -----
 
   /** Whether the full-width filter dialog is open. */
-  public isFilterDialogOpen: boolean = false;
+  public IsFilterDialogOpen: boolean = false;
+
+  /** @deprecated Use {@link IsFilterDialogOpen}. */
+  public get isFilterDialogOpen(): boolean {
+    return this.IsFilterDialogOpen;
+  }
+  /** @deprecated Use {@link IsFilterDialogOpen}. */
+  public set isFilterDialogOpen(value: boolean) {
+    this.IsFilterDialogOpen = value;
+  }
 
   /** The filter state currently being edited in the filter dialog. */
-  public filterDialogState: CompositeFilterDescriptor | null = null;
+  public FilterDialogState: CompositeFilterDescriptor | null = null;
+
+  /** @deprecated Use {@link FilterDialogState}. */
+  public get filterDialogState(): CompositeFilterDescriptor | null {
+    return this.FilterDialogState;
+  }
+  /** @deprecated Use {@link FilterDialogState}. */
+  public set filterDialogState(value: CompositeFilterDescriptor | null) {
+    this.FilterDialogState = value;
+  }
 
   /** The filter fields available in the filter dialog. */
-  public filterDialogFields: FilterFieldInfo[] = [];
+  public FilterDialogFields: FilterFieldInfo[] = [];
+
+  /** @deprecated Use {@link FilterDialogFields}. */
+  public get filterDialogFields(): FilterFieldInfo[] {
+    return this.FilterDialogFields;
+  }
+  /** @deprecated Use {@link FilterDialogFields}. */
+  public set filterDialogFields(value: FilterFieldInfo[]) {
+    this.FilterDialogFields = value;
+  }
 
   constructor(private cdr: ChangeDetectorRef) {
     super();
   }
 
   /** Controls the workspace-level export dialog (the same generic dialog the grid uses). */
-  public showExportDialog: boolean = false;
-  public exportDialogConfig: ExportDialogConfig | null = null;
+  public ShowExportDialog: boolean = false;
+
+  /** @deprecated Use {@link ShowExportDialog}. */
+  public get showExportDialog(): boolean {
+    return this.ShowExportDialog;
+  }
+  /** @deprecated Use {@link ShowExportDialog}. */
+  public set showExportDialog(value: boolean) {
+    this.ShowExportDialog = value;
+  }
+  public ExportDialogConfig: ExportDialogConfig | null = null;
+
+  /** @deprecated Use {@link ExportDialogConfig}. */
+  public get exportDialogConfig(): ExportDialogConfig | null {
+    return this.ExportDialogConfig;
+  }
+  /** @deprecated Use {@link ExportDialogConfig}. */
+  public set exportDialogConfig(value: ExportDialogConfig | null) {
+    this.ExportDialogConfig = value;
+  }
 
   /**
    * Handles the toolbar's Export button (the `<mj-view-selector>` `ExportRequested` output). This is
@@ -465,7 +663,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * options. Because the dialog only needs data + columns (it has no view-type dependency), this works
    * identically for Grid, Cards, Map and Timeline. Never fails silently — every path notifies.
    */
-  public async onExportRequested(): Promise<void> {
+  public async OnExportRequested(): Promise<void> {
     const viewer = this.entityViewerRef;
     if (!viewer || !this._entity) {
       console.error('[ViewWorkspace] Export: viewer not ready', { hasViewer: !!viewer, hasEntity: !!this._entity });
@@ -479,7 +677,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
         MJNotificationService.Instance.CreateSimpleNotification('Nothing to export — the view returned no records.', 'warning', 5000);
         return;
       }
-      this.exportDialogConfig = {
+      this.ExportDialogConfig = {
         data: rows,
         columns: this.buildExportColumns(),
         defaultFileName: this.buildExportFileName(),
@@ -489,7 +687,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
         defaultSamplingMode: 'all',
         dialogTitle: `Export ${this._entity.Name}`
       };
-      this.showExportDialog = true;
+      this.ShowExportDialog = true;
       this.cdr.detectChanges();
     } catch (e) {
       MJNotificationService.Instance.CreateSimpleNotification('Error preparing export — see console for details.', 'error', 5000);
@@ -497,31 +695,67 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     }
   }
 
+  /** @deprecated Use {@link OnExportRequested}. */
+  public async onExportRequested(): Promise<void> {
+    return this.OnExportRequested();
+  }
+
   /** Closes the workspace export dialog (the dialog performs the export + download itself). */
-  public onExportDialogClosed(_result: ExportDialogResult): void {
-    this.showExportDialog = false;
-    this.exportDialogConfig = null;
+  public OnExportDialogClosed(_result: ExportDialogResult): void {
+    this.ShowExportDialog = false;
+    this.ExportDialogConfig = null;
     this.cdr.detectChanges();
   }
 
-  /** Columns to export — from the active grid state, else the view's columns, else the entity fields. */
+  /** @deprecated Use {@link OnExportDialogClosed}. */
+  public onExportDialogClosed(_result: ExportDialogResult): void {
+    return this.OnExportDialogClosed(_result);
+  }
+
+  /**
+   * Columns to export: what the active renderer shows on screen (the grid), else the view's saved
+   * columns, else the entity fields. The fallbacks apply the grid's own rules, so Cards, Map and
+   * Timeline export the columns a grid of this view would show: saved settings are sorted by
+   * `orderIndex`, headed by the user's rename, resolved to the entity's field spelling (the export
+   * engine reads each row by that key), and dropped when the field no longer exists; fields the
+   * user is denied read access to are left out.
+   */
   private buildExportColumns(): ExportColumn[] {
-    if (!this._entity) {
+    const entity = this._entity;
+    if (!entity) {
       return [];
     }
-    const gridCols = this.currentGridState?.columnSettings;
-    if (gridCols && gridCols.length > 0) {
-      return gridCols
-        .filter(c => c.hidden !== true)
-        .map(c => ({ name: c.Name, displayName: c.DisplayName || c.Name }));
+    const onScreen = this.entityViewerRef?.GetExportColumns() ?? [];
+    if (onScreen.length > 0) {
+      return onScreen;
     }
-    return this._entity.Fields
-      .filter(f => !f.IsVirtual)
+    const user = this.ProviderToUse?.CurrentUser;
+    const denied = user ? entity.GetDeniedReadFields(user) : new Set<string>();
+    const readable = (f: EntityFieldInfo) => !denied.has(f.Name.trim().toLowerCase());
+
+    const gridCols = this.CurrentGridState?.columnSettings;
+    if (gridCols && gridCols.length > 0) {
+      const columns: ExportColumn[] = [];
+      const sorted = [...gridCols]
+        .filter(c => c.hidden !== true)
+        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+      for (const c of sorted) {
+        const field = entity.Fields.find(f => f.Name.toLowerCase() === c.Name.toLowerCase());
+        if (field && readable(field)) {
+          columns.push({ name: field.Name, displayName: c.userDisplayName || c.DisplayName || field.DisplayNameOrName });
+        }
+      }
+      if (columns.length > 0) {
+        return columns;
+      }
+    }
+    return entity.Fields
+      .filter(f => !f.IsVirtual && readable(f))
       .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
   }
 
   private buildExportFileName(): string {
-    const viewName = this.currentViewEntity?.Name || 'Data';
+    const viewName = this.CurrentViewEntity?.Name || 'Data';
     return `${this._entity!.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
   }
 
@@ -532,29 +766,29 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Initializes the workspace and loads the per-user default grid state for the entity. */
   ngOnInit(): void {
     this._initialized = true;
-    if (this._entity && !this.currentViewEntity) {
-      this.currentGridState = this.loadUserDefaultGridState();
+    if (this._entity && !this.CurrentViewEntity) {
+      this.CurrentGridState = this.loadUserDefaultGridState();
     }
   }
 
   /** Resets all view/selection state when the bound entity changes to a different entity. */
   private resetForEntityChange(): void {
-    this.currentViewEntity = null;
-    this.selectedViewId = null;
-    this.viewModified = false;
+    this.CurrentViewEntity = null;
+    this.SelectedViewId = null;
+    this.ViewModified = false;
     this.selectedRecordId = null;
-    this.currentGridState = this.loadUserDefaultGridState();
+    this.CurrentGridState = this.loadUserDefaultGridState();
     this.closeAllDialogs();
     this.cdr.detectChanges();
   }
 
   /** Closes every dialog/panel — used on entity change. */
   private closeAllDialogs(): void {
-    this.isConfigPanelOpen = false;
-    this.showQuickSaveDialog = false;
-    this.showDuplicateDialog = false;
-    this.showSharedViewWarning = false;
-    this.isFilterDialogOpen = false;
+    this.IsConfigPanelOpen = false;
+    this.ShowQuickSaveDialog = false;
+    this.ShowDuplicateDialog = false;
+    this.ShowSharedViewWarning = false;
+    this.IsFilterDialogOpen = false;
   }
 
   // ========================================
@@ -568,9 +802,14 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * + persistence). The viewer's own header switcher is suppressed via Config, so this is the
    * single switcher in the workspace.
    */
-  public onToolbarViewTypeSelected(event: { viewTypeId: string; driverClass: string }): void {
+  public OnToolbarViewTypeSelected(event: { viewTypeId: string; driverClass: string }): void {
     this.entityViewerRef?.SelectViewTypeById(event.viewTypeId);
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnToolbarViewTypeSelected}. */
+  public onToolbarViewTypeSelected(event: { viewTypeId: string; driverClass: string }): void {
+    return this.OnToolbarViewTypeSelected(event);
   }
 
   /**
@@ -578,8 +817,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * switcher's active highlight. Safe to read in the template — it reflects the viewer's own
    * resolved state rather than driving it.
    */
-  get activeViewTypeId(): string | null {
+  get ActiveViewTypeId(): string | null {
     return this.entityViewerRef?.ActiveViewTypeId ?? null;
+  }
+
+  /** @deprecated Use {@link ActiveViewTypeId}. */
+  get activeViewTypeId(): string | null {
+    return this.ActiveViewTypeId;
   }
 
   /**
@@ -587,8 +831,13 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * always forces `showViewModeToggle: false` so the view-type switcher appears only once — in the
    * workspace toolbar, not duplicated in the viewer's own header.
    */
-  get innerViewerConfig(): Partial<EntityViewerConfig> {
+  get InnerViewerConfig(): Partial<EntityViewerConfig> {
     return { ...(this.ViewerConfig ?? {}), showViewModeToggle: false };
+  }
+
+  /** @deprecated Use {@link InnerViewerConfig}. */
+  get innerViewerConfig(): Partial<EntityViewerConfig> {
+    return this.InnerViewerConfig;
   }
 
   // ========================================
@@ -599,15 +848,15 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * Handle a view selection from the selector dropdown. Applies the view's grid state and filter,
    * resets the modified flag, and notifies the host. (Generalized from DataExplorer.onViewSelected.)
    */
-  public onViewSelected(event: ViewSelectedEvent): void {
+  public OnViewSelected(event: ViewSelectedEvent): void {
     this.entityViewerRef?.EnsurePendingChangesSaved();
 
-    this.currentViewEntity = event.View;
-    this.selectedViewId = event.ViewID;
-    this.viewModified = false;
+    this.CurrentViewEntity = event.View;
+    this.SelectedViewId = event.ViewID;
+    this.ViewModified = false;
     this.filterText = '';
 
-    this.currentGridState = event.View
+    this.CurrentGridState = event.View
       ? this.parseViewGridState(event.View)
       : this.loadUserDefaultGridState();
 
@@ -616,21 +865,41 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnViewSelected}. */
+  public onViewSelected(event: ViewSelectedEvent): void {
+    return this.OnViewSelected(event);
+  }
+
   /** Handle filter text change from the viewer — re-emit so the host can sync its filter box / URL. */
-  public onFilterTextChanged(filterText: string): void {
+  public OnFilterTextChanged(filterText: string): void {
     this.filterText = filterText;
     this.FilterTextChanged.emit(filterText);
   }
 
+  /** @deprecated Use {@link OnFilterTextChanged}. */
+  public onFilterTextChanged(filterText: string): void {
+    return this.OnFilterTextChanged(filterText);
+  }
+
   /** Track loaded records so the config panel has sample data, and re-emit the full event. */
-  public onDataLoaded(event: DataLoadedEvent): void {
-    this.loadedRecords = event.records;
+  public OnDataLoaded(event: DataLoadedEvent): void {
+    this.LoadedRecords = event.records;
     this.DataLoaded.emit(event);
   }
 
+  /** @deprecated Use {@link OnDataLoaded}. */
+  public onDataLoaded(event: DataLoadedEvent): void {
+    return this.OnDataLoaded(event);
+  }
+
   /** Re-emit the inner viewer's filtered-count change for the host. */
-  public onFilteredCountChanged(event: FilteredCountChangedEvent): void {
+  public OnFilteredCountChanged(event: FilteredCountChangedEvent): void {
     this.FilteredCountChanged.emit(event);
+  }
+
+  /** @deprecated Use {@link OnFilteredCountChanged}. */
+  public onFilteredCountChanged(event: FilteredCountChangedEvent): void {
+    return this.OnFilteredCountChanged(event);
   }
 
   // ========================================
@@ -638,34 +907,54 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   // ========================================
 
   /** Handle a record single-click — track selection and re-emit for the host. */
-  public onRecordSelected(event: RecordSelectedEvent): void {
+  public OnRecordSelected(event: RecordSelectedEvent): void {
     this.selectedRecordId = event.compositeKey.ToConcatenatedString();
     this.RecordSelected.emit(event);
   }
 
+  /** @deprecated Use {@link OnRecordSelected}. */
+  public onRecordSelected(event: RecordSelectedEvent): void {
+    return this.OnRecordSelected(event);
+  }
+
   /** Handle a record open (double-click) — emit for the host to route to the record. */
-  public onRecordOpened(event: RecordOpenedEvent): void {
+  public OnRecordOpened(event: RecordOpenedEvent): void {
     if (event.record) {
       this.OpenRecordRequested.emit({ entity: event.entity, record: event.record });
     }
+  }
+
+  /** @deprecated Use {@link OnRecordOpened}. */
+  public onRecordOpened(event: RecordOpenedEvent): void {
+    return this.OnRecordOpened(event);
   }
 
   /**
    * Handle a plug-in renderer's request (via the inner viewer) to open a related record on a
    * (possibly different) entity — re-emit for the host to route.
    */
-  public onOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
+  public OnOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
     this.OpenRelatedRecordRequested.emit(nav);
+  }
+
+  /** @deprecated Use {@link OnOpenRelatedRecordRequested}. */
+  public onOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
+    return this.OnOpenRelatedRecordRequested(nav);
   }
 
   /**
    * Handle a plug-in renderer's request (via the inner viewer) to create a new record of the
    * current entity (e.g. a grid's "New" button) — re-emit for the host to open the form.
    */
-  public onCreateRecordRequested(): void {
+  public OnCreateRecordRequested(): void {
     if (this._entity) {
       this.CreateNewRecordRequested.emit(this._entity);
     }
+  }
+
+  /** @deprecated Use {@link OnCreateRecordRequested}. */
+  public onCreateRecordRequested(): void {
+    return this.OnCreateRecordRequested();
   }
 
   // ========================================
@@ -673,22 +962,37 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   // ========================================
 
   /** Handle the selector's "open in tab" request — emit for the host to route. */
-  public onOpenInTabRequested(viewId: string): void {
+  public OnOpenInTabRequested(viewId: string): void {
     this.OpenViewInTabRequested.emit(viewId);
   }
 
+  /** @deprecated Use {@link OnOpenInTabRequested}. */
+  public onOpenInTabRequested(viewId: string): void {
+    return this.OnOpenInTabRequested(viewId);
+  }
+
   /** Handle the selector's "create new record" request — emit for the host. */
-  public onCreateNewRecordRequested(): void {
+  public OnCreateNewRecordRequested(): void {
     if (this._entity) {
       this.CreateNewRecordRequested.emit(this._entity);
     }
   }
 
+  /** @deprecated Use {@link OnCreateNewRecordRequested}. */
+  public onCreateNewRecordRequested(): void {
+    return this.OnCreateNewRecordRequested();
+  }
+
   /** Handle the selector's "configure view" request — open the config panel. */
-  public onConfigureViewRequested(): void {
-    this.defaultSaveAsNew = false;
-    this.isConfigPanelOpen = true;
+  public OnConfigureViewRequested(): void {
+    this.DefaultSaveAsNew = false;
+    this.IsConfigPanelOpen = true;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnConfigureViewRequested}. */
+  public onConfigureViewRequested(): void {
+    return this.OnConfigureViewRequested();
   }
 
   // ========================================
@@ -759,10 +1063,15 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   }
 
   /** Handle the selector's "save view" request — open the config panel in the requested mode. */
-  public onSaveViewRequested(event: SaveViewRequestedEvent): void {
-    this.defaultSaveAsNew = event.SaveAsNew || false;
-    this.isConfigPanelOpen = true;
+  public OnSaveViewRequested(event: SaveViewRequestedEvent): void {
+    this.DefaultSaveAsNew = event.SaveAsNew || false;
+    this.IsConfigPanelOpen = true;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnSaveViewRequested}. */
+  public onSaveViewRequested(event: SaveViewRequestedEvent): void {
+    return this.OnSaveViewRequested(event);
   }
 
   // ========================================
@@ -770,41 +1079,61 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   // ========================================
 
   /** Close the config panel and clear any pending new-view carry-over state. */
-  public onCloseConfigPanel(): void {
-    this.isConfigPanelOpen = false;
+  public OnCloseConfigPanel(): void {
+    this.IsConfigPanelOpen = false;
     this.clearPendingNewViewState();
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnCloseConfigPanel}. */
+  public onCloseConfigPanel(): void {
+    return this.OnCloseConfigPanel();
+  }
+
   /** Reset the carry-over state used when continuing a new-view flow into the config panel. */
   private clearPendingNewViewState(): void {
-    this.pendingNewViewName = '';
-    this.pendingNewViewDescription = '';
-    this.pendingNewViewIsShared = false;
-    this.defaultSaveAsNew = false;
+    this.PendingNewViewName = '';
+    this.PendingNewViewDescription = '';
+    this.PendingNewViewIsShared = false;
+    this.DefaultSaveAsNew = false;
   }
 
   // ----- Filter dialog -----
 
   /** Open the full-width filter dialog from the config panel's request. */
-  public onOpenFilterDialogRequest(event: { filterState: CompositeFilterDescriptor; filterFields: FilterFieldInfo[] }): void {
-    this.filterDialogState = event.filterState;
-    this.filterDialogFields = event.filterFields;
-    this.isFilterDialogOpen = true;
+  public OnOpenFilterDialogRequest(event: { filterState: CompositeFilterDescriptor; filterFields: FilterFieldInfo[] }): void {
+    this.FilterDialogState = event.filterState;
+    this.FilterDialogFields = event.filterFields;
+    this.IsFilterDialogOpen = true;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnOpenFilterDialogRequest}. */
+  public onOpenFilterDialogRequest(event: { filterState: CompositeFilterDescriptor; filterFields: FilterFieldInfo[] }): void {
+    return this.OnOpenFilterDialogRequest(event);
   }
 
   /** Close the filter dialog. */
-  public onCloseFilterDialog(): void {
-    this.isFilterDialogOpen = false;
+  public OnCloseFilterDialog(): void {
+    this.IsFilterDialogOpen = false;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnCloseFilterDialog}. */
+  public onCloseFilterDialog(): void {
+    return this.OnCloseFilterDialog();
+  }
+
   /** Apply a filter from the dialog — the config panel picks it up via `externalFilterState`. */
-  public onFilterApplied(filter: CompositeFilterDescriptor): void {
-    this.filterDialogState = filter;
-    this.isFilterDialogOpen = false;
+  public OnFilterApplied(filter: CompositeFilterDescriptor): void {
+    this.FilterDialogState = filter;
+    this.IsFilterDialogOpen = false;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnFilterApplied}. */
+  public onFilterApplied(filter: CompositeFilterDescriptor): void {
+    return this.OnFilterApplied(filter);
   }
 
   // ========================================
@@ -816,37 +1145,42 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * (create-new or update) via the BaseEntity; otherwise emits {@link SaveViewRequested} for the host.
    * (Faithful generalization of DataExplorer.onSaveView, minus routing/state-service/notifications.)
    */
-  public async onSaveView(event: ViewSaveEvent): Promise<void> {
+  public async OnSaveView(event: ViewSaveEvent): Promise<void> {
     if (!this._entity) {
       return;
     }
 
     if (!this.AutoSaveView) {
       this.SaveViewRequested.emit(event);
-      this.isConfigPanelOpen = false;
+      this.IsConfigPanelOpen = false;
       this.clearPendingNewViewState();
       this.cdr.detectChanges();
       return;
     }
 
-    this.isSavingView = true;
+    this.IsSavingView = true;
     this.cdr.detectChanges();
 
-    const isNew = event.SaveAsNew || !this.currentViewEntity;
+    const isNew = event.SaveAsNew || !this.CurrentViewEntity;
     const success = isNew
       ? await this.persistNewView(event)
       : await this.persistExistingView(event);
 
     if (success) {
-      this.isConfigPanelOpen = false;
+      this.IsConfigPanelOpen = false;
       this.clearPendingNewViewState();
       // The view selector re-derives its lists reactively from UserViewEngine's cache
       // (BaseEntity save auto-invalidates the engine); we only need to reload the grid data.
       await this.entityViewerRef?.LoadData();
     }
 
-    this.isSavingView = false;
+    this.IsSavingView = false;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnSaveView}. */
+  public async onSaveView(event: ViewSaveEvent): Promise<void> {
+    return this.OnSaveView(event);
   }
 
   /**
@@ -887,10 +1221,10 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return false;
     }
 
-    this.currentViewEntity = newView;
-    this.selectedViewId = newView.ID;
-    this.viewModified = false;
-    this.currentGridState = this.parseViewGridState(newView);
+    this.CurrentViewEntity = newView;
+    this.SelectedViewId = newView.ID;
+    this.ViewModified = false;
+    this.CurrentGridState = this.parseViewGridState(newView);
     this.ViewSelected.emit(newView);
     this.SelectedViewChange.emit(newView);
     this.AfterViewSave.emit({ View: newView, IsNew: true });
@@ -902,7 +1236,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * {@link BeforeViewSave} before saving and {@link AfterViewSave} after success.
    */
   private async persistExistingView(event: ViewSaveEvent): Promise<boolean> {
-    const view = this.currentViewEntity!;
+    const view = this.CurrentViewEntity!;
     view.Name = event.Name;
     view.Description = event.Description;
     view.IsShared = event.IsShared;
@@ -931,8 +1265,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return false;
     }
 
-    this.viewModified = false;
-    this.currentGridState = this.parseViewGridState(view);
+    this.ViewModified = false;
+    this.CurrentGridState = this.parseViewGridState(view);
     this.AfterViewSave.emit({ View: view, IsNew: false });
     return true;
   }
@@ -942,19 +1276,19 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * persists to `UserInfoEngine`; otherwise emits {@link SaveDefaultsRequested}.
    * (Generalized from DataExplorer.onSaveDefaultViewSettings.)
    */
-  public async onSaveDefaultViewSettings(event: ViewSaveEvent): Promise<void> {
+  public async OnSaveDefaultViewSettings(event: ViewSaveEvent): Promise<void> {
     if (!this._entity) {
       return;
     }
 
     if (!this.AutoSaveView) {
       this.SaveDefaultsRequested.emit(event);
-      this.isConfigPanelOpen = false;
+      this.IsConfigPanelOpen = false;
       this.cdr.detectChanges();
       return;
     }
 
-    this.isSavingView = true;
+    this.IsSavingView = true;
     this.cdr.detectChanges();
 
     const gridState = this.buildGridState(event);
@@ -963,7 +1297,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       const settingKey = `default-view-setting/${this._entity.Name}`;
       const saved = await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridState));
       if (saved) {
-        this.currentGridState = {
+        this.CurrentGridState = {
           columnSettings: gridState.columnSettings as ViewGridState['columnSettings'],
           sortSettings: gridState.sortSettings as ViewGridState['sortSettings'],
           aggregates: gridState.aggregates
@@ -975,9 +1309,14 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       }
     }
 
-    this.isConfigPanelOpen = false;
-    this.isSavingView = false;
+    this.IsConfigPanelOpen = false;
+    this.IsSavingView = false;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnSaveDefaultViewSettings}. */
+  public async onSaveDefaultViewSettings(event: ViewSaveEvent): Promise<void> {
+    return this.OnSaveDefaultViewSettings(event);
   }
 
   // ========================================
@@ -989,19 +1328,19 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * (firing cancelable {@link BeforeViewDelete} / notification {@link AfterViewDelete}); otherwise
    * emits {@link DeleteViewRequested}. (Generalized from DataExplorer.onDeleteView.)
    */
-  public async onDeleteView(): Promise<void> {
-    if (!this.currentViewEntity) {
+  public async OnDeleteView(): Promise<void> {
+    if (!this.CurrentViewEntity) {
       return;
     }
 
     if (!this.AutoSaveView) {
-      this.DeleteViewRequested.emit(this.currentViewEntity);
-      this.isConfigPanelOpen = false;
+      this.DeleteViewRequested.emit(this.CurrentViewEntity);
+      this.IsConfigPanelOpen = false;
       this.cdr.detectChanges();
       return;
     }
 
-    const view = this.currentViewEntity;
+    const view = this.CurrentViewEntity;
     const viewId = view.ID;
     const viewName = view.Name;
 
@@ -1017,17 +1356,22 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       return;
     }
 
-    this.currentViewEntity = null;
-    this.selectedViewId = null;
-    this.viewModified = false;
-    this.isConfigPanelOpen = false;
-    this.currentGridState = this.loadUserDefaultGridState();
+    this.CurrentViewEntity = null;
+    this.SelectedViewId = null;
+    this.ViewModified = false;
+    this.IsConfigPanelOpen = false;
+    this.CurrentGridState = this.loadUserDefaultGridState();
     // The view selector re-derives its lists reactively from UserViewEngine's cache
     // (BaseEntity delete auto-invalidates the engine), so no explicit reload is needed here.
     this.ViewSelected.emit(null);
     this.SelectedViewChange.emit(null);
     this.AfterViewDelete.emit({ ViewID: viewId, ViewName: viewName });
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnDeleteView}. */
+  public async onDeleteView(): Promise<void> {
+    return this.OnDeleteView();
   }
 
   // ========================================
@@ -1038,28 +1382,38 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * Handle a quick-save request from the selector (F-001). Builds a summary from the config panel
    * and opens the quick-save dialog. (Generalized from DataExplorer.onQuickSaveRequested.)
    */
-  public onQuickSaveRequested(saveAsNew: boolean): void {
-    this.defaultSaveAsNew = saveAsNew;
-    this.quickSaveSummary = this.viewConfigPanelRef?.BuildSummary() ?? null;
-    this.showQuickSaveDialog = true;
+  public OnQuickSaveRequested(saveAsNew: boolean): void {
+    this.DefaultSaveAsNew = saveAsNew;
+    this.QuickSaveSummary = this.viewConfigPanelRef?.BuildSummary() ?? null;
+    this.ShowQuickSaveDialog = true;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnQuickSaveRequested}. */
+  public onQuickSaveRequested(saveAsNew: boolean): void {
+    return this.OnQuickSaveRequested(saveAsNew);
   }
 
   /**
    * Handle the quick-save dialog's save. Intercepts updates to a shared view with the shared-view
    * warning; otherwise executes the save. (Generalized from DataExplorer.onQuickSave.)
    */
-  public async onQuickSave(event: QuickSaveEvent): Promise<void> {
-    this.showQuickSaveDialog = false;
+  public async OnQuickSave(event: QuickSaveEvent): Promise<void> {
+    this.ShowQuickSaveDialog = false;
 
-    if (!event.SaveAsNew && this.currentViewEntity?.IsShared) {
+    if (!event.SaveAsNew && this.CurrentViewEntity?.IsShared) {
       this.pendingQuickSaveEvent = event;
-      this.showSharedViewWarning = true;
+      this.ShowSharedViewWarning = true;
       this.cdr.detectChanges();
       return;
     }
 
     await this.executeQuickSave(event);
+  }
+
+  /** @deprecated Use {@link OnQuickSave}. */
+  public async onQuickSave(event: QuickSaveEvent): Promise<void> {
+    return this.OnQuickSave(event);
   }
 
   /** Build a `ViewSaveEvent` from a `QuickSaveEvent` and delegate to {@link onSaveView}. */
@@ -1075,15 +1429,15 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       SortItems: [],
       SmartFilterEnabled: false,
       SmartFilterPrompt: '',
-      FilterState: this.filterDialogState ?? null,
+      FilterState: this.FilterDialogState ?? null,
       AggregatesConfig: null
     };
-    await this.onSaveView(viewSaveEvent);
+    await this.OnSaveView(viewSaveEvent);
   }
 
   /** Handle the shared-view warning action (update / save-as-copy / cancel). */
-  public async onSharedViewAction(action: SharedViewAction): Promise<void> {
-    this.showSharedViewWarning = false;
+  public async OnSharedViewAction(action: SharedViewAction): Promise<void> {
+    this.ShowSharedViewWarning = false;
     const event = this.pendingQuickSaveEvent;
     this.pendingQuickSaveEvent = null;
     if (!event) {
@@ -1098,28 +1452,48 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnSharedViewAction}. */
+  public async onSharedViewAction(action: SharedViewAction): Promise<void> {
+    return this.OnSharedViewAction(action);
+  }
+
   /** Handle the shared-view warning cancel. */
-  public onSharedViewWarningCancel(): void {
-    this.showSharedViewWarning = false;
+  public OnSharedViewWarningCancel(): void {
+    this.ShowSharedViewWarning = false;
     this.pendingQuickSaveEvent = null;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnSharedViewWarningCancel}. */
+  public onSharedViewWarningCancel(): void {
+    return this.OnSharedViewWarningCancel();
+  }
+
   /** Handle the quick-save dialog close. */
-  public onQuickSaveClose(): void {
-    this.showQuickSaveDialog = false;
+  public OnQuickSaveClose(): void {
+    this.ShowQuickSaveDialog = false;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnQuickSaveClose}. */
+  public onQuickSaveClose(): void {
+    return this.OnQuickSaveClose();
+  }
+
   /** Handle "open advanced" from the quick-save dialog — carry data into the config panel. */
-  public onQuickSaveOpenAdvanced(event: QuickSaveAdvancedEvent): void {
-    this.pendingNewViewName = event.Name;
-    this.pendingNewViewDescription = event.Description;
-    this.pendingNewViewIsShared = event.IsShared;
-    this.defaultSaveAsNew = true;
-    this.showQuickSaveDialog = false;
-    this.isConfigPanelOpen = true;
+  public OnQuickSaveOpenAdvanced(event: QuickSaveAdvancedEvent): void {
+    this.PendingNewViewName = event.Name;
+    this.PendingNewViewDescription = event.Description;
+    this.PendingNewViewIsShared = event.IsShared;
+    this.DefaultSaveAsNew = true;
+    this.ShowQuickSaveDialog = false;
+    this.IsConfigPanelOpen = true;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnQuickSaveOpenAdvanced}. */
+  public onQuickSaveOpenAdvanced(event: QuickSaveAdvancedEvent): void {
+    return this.OnQuickSaveOpenAdvanced(event);
   }
 
   // ========================================
@@ -1130,8 +1504,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * Handle a duplicate request (F-005). Opens the duplicate dialog so the user names the copy.
    * (Generalized from DataExplorer.onDuplicateView.)
    */
-  public onDuplicateViewRequested(viewId?: string): void {
-    const targetId = viewId || this.currentViewEntity?.ID;
+  public OnDuplicateViewRequested(viewId?: string): void {
+    const targetId = viewId || this.CurrentViewEntity?.ID;
     if (!targetId || !this._entity) {
       return;
     }
@@ -1139,10 +1513,15 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     const allViews = [...(this.viewSelectorRef?.MyViews ?? []), ...(this.viewSelectorRef?.SharedViews ?? [])];
     const viewItem = allViews.find(v => v.id === targetId);
     this.duplicateTargetViewId = targetId;
-    this.duplicateSourceViewName = viewItem?.name || this.currentViewEntity?.Name || 'View';
-    this.duplicateSummary = this.buildDuplicateSummary(viewItem?.entity ?? this.currentViewEntity);
-    this.showDuplicateDialog = true;
+    this.DuplicateSourceViewName = viewItem?.name || this.CurrentViewEntity?.Name || 'View';
+    this.DuplicateSummary = this.buildDuplicateSummary(viewItem?.entity ?? this.CurrentViewEntity);
+    this.ShowDuplicateDialog = true;
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnDuplicateViewRequested}. */
+  public onDuplicateViewRequested(viewId?: string): void {
+    return this.OnDuplicateViewRequested(viewId);
   }
 
   /** Build a {@link ViewConfigSummary} from a view entity for the duplicate dialog. */
@@ -1194,8 +1573,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * copies its config into a new personal view, and persists it; otherwise emits
    * {@link DuplicateViewRequested}. (Generalized from DataExplorer.onDuplicateConfirmed.)
    */
-  public async onDuplicateConfirmed(event: DuplicateViewEvent): Promise<void> {
-    this.showDuplicateDialog = false;
+  public async OnDuplicateConfirmed(event: DuplicateViewEvent): Promise<void> {
+    this.ShowDuplicateDialog = false;
     const targetId = this.duplicateTargetViewId;
     this.duplicateTargetViewId = null;
     if (!targetId || !this._entity) {
@@ -1208,6 +1587,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     }
 
     await this.persistDuplicate(targetId, event.Name);
+  }
+
+  /** @deprecated Use {@link OnDuplicateConfirmed}. */
+  public async onDuplicateConfirmed(event: DuplicateViewEvent): Promise<void> {
+    return this.OnDuplicateConfirmed(event);
   }
 
   /** Load the source view, copy its config into a new personal view, and persist it. */
@@ -1245,18 +1629,28 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   }
 
   /** Handle the duplicate dialog cancel. */
-  public onDuplicateCancel(): void {
-    this.showDuplicateDialog = false;
+  public OnDuplicateCancel(): void {
+    this.ShowDuplicateDialog = false;
     this.duplicateTargetViewId = null;
     this.cdr.detectChanges();
   }
 
+  /** @deprecated Use {@link OnDuplicateCancel}. */
+  public onDuplicateCancel(): void {
+    return this.OnDuplicateCancel();
+  }
+
   /** Handle duplicate triggered from the config panel — duplicate the selected view. */
-  public onDuplicateFromPanel(): void {
-    if (this.currentViewEntity?.ID) {
-      this.isConfigPanelOpen = false;
-      this.onDuplicateViewRequested(this.currentViewEntity.ID);
+  public OnDuplicateFromPanel(): void {
+    if (this.CurrentViewEntity?.ID) {
+      this.IsConfigPanelOpen = false;
+      this.OnDuplicateViewRequested(this.CurrentViewEntity.ID);
     }
+  }
+
+  /** @deprecated Use {@link OnDuplicateFromPanel}. */
+  public onDuplicateFromPanel(): void {
+    return this.OnDuplicateFromPanel();
   }
 
   // ========================================
@@ -1267,17 +1661,22 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * Handle a revert request (F-007). Re-parses the saved view's grid state, clears the modified
    * flag, and reloads. (Generalized from DataExplorer.onRevertView.)
    */
-  public async onRevertView(): Promise<void> {
-    if (!this.currentViewEntity) {
+  public async OnRevertView(): Promise<void> {
+    if (!this.CurrentViewEntity) {
       return;
     }
-    const gridState = this.parseViewGridState(this.currentViewEntity);
+    const gridState = this.parseViewGridState(this.CurrentViewEntity);
     if (gridState) {
-      this.currentGridState = gridState;
+      this.CurrentGridState = gridState;
     }
-    this.viewModified = false;
+    this.ViewModified = false;
     await this.entityViewerRef?.LoadData();
     this.cdr.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnRevertView}. */
+  public async onRevertView(): Promise<void> {
+    return this.OnRevertView();
   }
 
   // ========================================
@@ -1303,8 +1702,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
         orderIndex: idx,
         format: col.format
       }));
-    } else if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
-      columnSettings = this.currentGridState.columnSettings;
+    } else if (this.CurrentGridState?.columnSettings && this.CurrentGridState.columnSettings.length > 0) {
+      columnSettings = this.CurrentGridState.columnSettings;
     } else if (this._entity) {
       columnSettings = this._entity.Fields
         .filter(f => f.DefaultInView)
@@ -1325,8 +1724,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
     const sortSettings = this.buildGridSortSettings(event);
     let aggregates = event.AggregatesConfig ?? undefined;
-    if (!aggregates && this.currentGridState?.aggregates) {
-      aggregates = this.currentGridState.aggregates;
+    if (!aggregates && this.CurrentGridState?.aggregates) {
+      aggregates = this.CurrentGridState.aggregates;
     }
 
     return { columnSettings, sortSettings, aggregates };
@@ -1340,8 +1739,8 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     if (event.SortField) {
       return [{ field: event.SortField, dir: event.SortDirection }];
     }
-    if (this.currentGridState?.sortSettings && this.currentGridState.sortSettings.length > 0) {
-      return this.currentGridState.sortSettings;
+    if (this.CurrentGridState?.sortSettings && this.CurrentGridState.sortSettings.length > 0) {
+      return this.CurrentGridState.sortSettings;
     }
     return undefined;
   }

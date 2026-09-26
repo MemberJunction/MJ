@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
-import { loadSyncConfig } from '../config';
+import { LoadSyncConfig } from '../config';
 import { configManager } from '../lib/config-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 
@@ -30,17 +30,17 @@ export interface FileResetResult {
 }
 
 export interface FileStats {
-  primaryKeyCount: number;
-  syncCount: number;
+  primaryKeyCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  syncCount: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export class FileResetService {
   
-  async resetFiles(options: FileResetOptions = {}, callbacks?: FileResetCallbacks): Promise<FileResetResult> {
+  async ResetFiles(options: FileResetOptions = {}, callbacks?: FileResetCallbacks): Promise<FileResetResult> {
     const sections = options.sections || 'both';
     
     // Load sync config
-    const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
+    const syncConfig = await LoadSyncConfig(configManager.getOriginalCwd());
     if (!syncConfig) {
       throw new Error('No .mj-sync.json found in current directory');
     }
@@ -169,6 +169,11 @@ export class FileResetService {
       filesWithSync,
       backupsCreated
     };
+  }
+
+  /** @deprecated Use {@link ResetFiles}. */
+  async resetFiles(options: FileResetOptions = {}, callbacks?: FileResetCallbacks): Promise<FileResetResult> {
+    return this.ResetFiles(options, callbacks);
   }
   
   private countSections(data: any): FileStats {

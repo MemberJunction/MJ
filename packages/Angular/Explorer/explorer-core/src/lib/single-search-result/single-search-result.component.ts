@@ -14,9 +14,36 @@ type SearchState = 'loading' | 'no-results' | 'single-result' | 'viewer';
 })
 export class SingleSearchResultComponent extends BaseAngularComponent implements OnChanges {
   @Input() public entity: string = '';
-  @Input() public searchInput: string = '';
-  @Output() public loadComplete = new EventEmitter<boolean>();
-  @Output() public loadStarted = new EventEmitter<boolean>();
+  @Input() public SearchInput: string = '';
+
+  /** @deprecated Use {@link SearchInput}. */
+  @Input() public set searchInput(value: string) {
+    this.SearchInput = value;
+  }
+  /** @deprecated Use {@link SearchInput}. */
+  public get searchInput(): string {
+    return this.SearchInput;
+  }
+  @Output() public LoadComplete = new EventEmitter<boolean>();
+
+  /**
+   * @deprecated Use {@link LoadComplete}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (loadComplete) keeps working. Must stay AFTER LoadComplete: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public loadComplete = this.LoadComplete;
+  @Output() public LoadStarted = new EventEmitter<boolean>();
+
+  /**
+   * @deprecated Use {@link LoadStarted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (loadStarted) keeps working. Must stay AFTER LoadStarted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() public loadStarted = this.LoadStarted;
 
   public SearchState: SearchState = 'loading';
   public ResultCount = 0;
@@ -48,8 +75,8 @@ export class SingleSearchResultComponent extends BaseAngularComponent implements
     super();}
 
   ngOnChanges(changes: SimpleChanges): void {
-    if ((changes['entity'] || changes['searchInput']) && this.entity && this.searchInput) {
-      this.ExecuteSearch();
+    if ((changes['entity'] || changes['searchInput']) && this.entity && this.SearchInput) {
+      this.executeSearch();
     }
   }
 
@@ -57,10 +84,10 @@ export class SingleSearchResultComponent extends BaseAngularComponent implements
    * Runs a lightweight pre-query (MaxRows: 2, PK fields only) to determine result count,
    * then routes to the appropriate state: no-results, single-result auto-nav, or viewer.
    */
-  private async ExecuteSearch(): Promise<void> {
+  private async executeSearch(): Promise<void> {
     this.SearchState = 'loading';
     this.ResultCount = 0;
-    this.loadStarted.emit(true);
+    this.LoadStarted.emit(true);
 
     // Resolve EntityInfo early so the header can show icon + display name during loading
     const entityInfo = this.findEntityInfo();
@@ -101,7 +128,7 @@ export class SingleSearchResultComponent extends BaseAngularComponent implements
     return rv.RunView<Record<string, unknown>>({
       EntityName: this.entity,
       ExtraFilter: 'ID IS NOT NULL',
-      UserSearchString: this.searchInput,
+      UserSearchString: this.SearchInput,
       Fields: pkFields,
       ResultType: 'simple',
       MaxRows: 2,
@@ -111,7 +138,7 @@ export class SingleSearchResultComponent extends BaseAngularComponent implements
   private setNoResults(): void {
     this.SearchState = 'no-results';
     this.ResultCount = 0;
-    this.loadComplete.emit(true);
+    this.LoadComplete.emit(true);
     this.cdr.detectChanges();
   }
 
@@ -123,7 +150,7 @@ export class SingleSearchResultComponent extends BaseAngularComponent implements
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromEntityInfoAndRecord(entityInfo, record);
     this.navigationService.OpenEntityRecord(entityInfo.Name, compositeKey);
-    this.loadComplete.emit(true);
+    this.LoadComplete.emit(true);
   }
 
   // ── Header action handlers ──
@@ -138,7 +165,7 @@ export class SingleSearchResultComponent extends BaseAngularComponent implements
 
   public OnDataLoaded(event: DataLoadedEvent): void {
     this.ResultCount = event.totalRowCount;
-    this.loadComplete.emit(true);
+    this.LoadComplete.emit(true);
     this.cdr.detectChanges();
   }
 

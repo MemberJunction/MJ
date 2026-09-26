@@ -26,7 +26,7 @@ export interface BasicAuthRequest {
  * Builds the value for an HTTP Basic `Authorization` header: `Basic <base64(user:pass)>`.
  * Throws on a colon in the username (ambiguous per RFC 7617) or on an empty username.
  */
-export function buildBasicAuthHeaderValue(req: BasicAuthRequest): string {
+export function BuildBasicAuthHeaderValue(req: BasicAuthRequest): string {
     if (req.Username == null || req.Username.length === 0) {
         throw new Error('BasicAuthHeaderBuilder: Username (userid) is required and cannot be empty.');
     }
@@ -37,11 +37,21 @@ export function buildBasicAuthHeaderValue(req: BasicAuthRequest): string {
     return `Basic ${encoded}`;
 }
 
+/** @deprecated Use {@link BuildBasicAuthHeaderValue}. */
+export function buildBasicAuthHeaderValue(req: BasicAuthRequest): string {
+    return BuildBasicAuthHeaderValue(req);
+}
+
 /**
  * APIKeyHeaderBuilder — convenience over {@link buildBasicAuthHeaderValue} returning a
  * ready-to-spread header object. Useful when a connector wants the full `Authorization`
  * header pair rather than just the value.
  */
+export function BuildBasicAuthHeader(req: BasicAuthRequest): { Authorization: string } {
+    return { Authorization: BuildBasicAuthHeaderValue(req) };
+}
+
+/** @deprecated Use {@link BuildBasicAuthHeader}. */
 export function buildBasicAuthHeader(req: BasicAuthRequest): { Authorization: string } {
-    return { Authorization: buildBasicAuthHeaderValue(req) };
+    return BuildBasicAuthHeader(req);
 }

@@ -18,9 +18,9 @@ export class AIPromptManagementService {
   /**
    * Opens the template selector dialog for linking existing templates to AI prompts
    */
-  openTemplateSelectorDialog(config: TemplateSelectorConfig & { viewContainerRef?: ViewContainerRef }): Observable<TemplateSelectorResult | null> {
+  OpenTemplateSelectorDialog(config: TemplateSelectorConfig & { viewContainerRef?: ViewContainerRef }): Observable<TemplateSelectorResult | null> {
     const dialogRef: MJDialogRef = this.dialogService.open({
-      title: config.title,
+      title: config.Title,
       content: TemplateSelectorDialogComponent,
       width: 800,
       height: 600,
@@ -30,12 +30,12 @@ export class AIPromptManagementService {
     // Configure the dialog component
     const dialogComponent = dialogRef.Content!.instance as unknown as TemplateSelectorDialogComponent;
     dialogComponent.config = {
-      title: config.title,
-      showCreateNew: config.showCreateNew ?? true,
-      extraFilter: config.extraFilter,
-      multiSelect: config.multiSelect ?? false,
-      selectedTemplateIds: config.selectedTemplateIds,
-      showActiveOnly: config.showActiveOnly ?? true
+      Title: config.Title,
+      ShowCreateNew: config.ShowCreateNew ?? true,
+      ExtraFilter: config.ExtraFilter,
+      MultiSelect: config.MultiSelect ?? false,
+      SelectedTemplateIds: config.SelectedTemplateIds,
+      ShowActiveOnly: config.ShowActiveOnly ?? true
     };
 
     // Create a subject to handle the result
@@ -71,10 +71,15 @@ export class AIPromptManagementService {
     return resultSubject.asObservable();
   }
 
+  /** @deprecated Use {@link OpenTemplateSelectorDialog}. */
+  openTemplateSelectorDialog(config: TemplateSelectorConfig & { viewContainerRef?: ViewContainerRef }): Observable<TemplateSelectorResult | null> {
+    return this.OpenTemplateSelectorDialog(config);
+  }
+
   /**
    * Opens a template creation dialog and returns the created template
    */
-  openCreateTemplateDialog(config: {
+  OpenCreateTemplateDialog(config: {
     promptId?: string;
     promptName?: string;
     viewContainerRef?: ViewContainerRef;
@@ -90,5 +95,14 @@ export class AIPromptManagementService {
     }, 100);
 
     return resultSubject.asObservable();
+  }
+
+  /** @deprecated Use {@link OpenCreateTemplateDialog}. */
+  openCreateTemplateDialog(config: {
+    promptId?: string;
+    promptName?: string;
+    viewContainerRef?: ViewContainerRef;
+  }): Observable<MJTemplateEntity | null> {
+    return this.OpenCreateTemplateDialog(config);
   }
 }

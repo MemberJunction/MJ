@@ -107,7 +107,7 @@ export async function LoadRoomTranscript(
     const agentName = buildAgentNameLookup();
 
     const details = detailResult?.Success ? detailResult.Results : [];
-    return details.map((d) => attributeLine(d, participantNames, agentName));
+    return details.map((d) => AttributeLine(d, participantNames, agentName));
 }
 
 /** roomBridges → a map of `ExternalParticipantID → { name, isAgent }` for diarized-line attribution. */
@@ -169,7 +169,7 @@ function buildAgentNameLookup(): Map<string, string> {
  * @param participantNames `ExternalParticipantID(lower) → { name, isAgent }` from the room roster.
  * @param agentName `AgentID(lower) → agent name`.
  */
-export function attributeLine(
+export function AttributeLine(
     d: Record<string, unknown>,
     participantNames: Map<string, { name: string; isAgent: boolean }>,
     agentName: Map<string, string>,
@@ -194,4 +194,13 @@ export function attributeLine(
         return { ...base, Kind: participant.isAgent ? 'agent' : 'human', Speaker: participant.name };
     }
     return { ...base, Kind: 'human', Speaker: 'Participant' };
+}
+
+/** @deprecated Use {@link AttributeLine}. */
+export function attributeLine(
+    d: Record<string, unknown>,
+    participantNames: Map<string, { name: string; isAgent: boolean }>,
+    agentName: Map<string, string>,
+): TranscriptLine {
+    return AttributeLine(d, participantNames, agentName);
 }

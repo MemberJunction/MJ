@@ -3,34 +3,34 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { parseRerankerConfiguration, RerankerConfiguration } from '../config.types';
+import { ParseRerankerConfiguration, RerankerConfiguration } from '../config.types';
 
 describe('parseRerankerConfiguration', () => {
     describe('null/undefined/empty input', () => {
         it('should return null for null input', () => {
-            expect(parseRerankerConfiguration(null)).toBeNull();
+            expect(ParseRerankerConfiguration(null)).toBeNull();
         });
 
         it('should return null for undefined input', () => {
-            expect(parseRerankerConfiguration(undefined)).toBeNull();
+            expect(ParseRerankerConfiguration(undefined)).toBeNull();
         });
 
         it('should return null for empty string', () => {
-            expect(parseRerankerConfiguration('')).toBeNull();
+            expect(ParseRerankerConfiguration('')).toBeNull();
         });
 
         it('should return null for whitespace-only string', () => {
-            expect(parseRerankerConfiguration('   ')).toBeNull();
+            expect(ParseRerankerConfiguration('   ')).toBeNull();
         });
     });
 
     describe('invalid JSON', () => {
         it('should return null for malformed JSON', () => {
-            expect(parseRerankerConfiguration('not json')).toBeNull();
+            expect(ParseRerankerConfiguration('not json')).toBeNull();
         });
 
         it('should return null for partial JSON', () => {
-            expect(parseRerankerConfiguration('{"enabled": true')).toBeNull();
+            expect(ParseRerankerConfiguration('{"enabled": true')).toBeNull();
         });
     });
 
@@ -40,7 +40,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: false,
                 rerankerModelId: 'model-123'
             });
-            expect(parseRerankerConfiguration(config)).toBeNull();
+            expect(ParseRerankerConfiguration(config)).toBeNull();
         });
     });
 
@@ -49,7 +49,7 @@ describe('parseRerankerConfiguration', () => {
             const config = JSON.stringify({
                 enabled: true
             });
-            expect(parseRerankerConfiguration(config)).toBeNull();
+            expect(ParseRerankerConfiguration(config)).toBeNull();
         });
 
         it('should return null when rerankerModelId is empty string', () => {
@@ -57,7 +57,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: true,
                 rerankerModelId: ''
             });
-            expect(parseRerankerConfiguration(config)).toBeNull();
+            expect(ParseRerankerConfiguration(config)).toBeNull();
         });
     });
 
@@ -67,7 +67,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: true,
                 rerankerModelId: 'model-123'
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result).not.toBeNull();
             expect(result!.retrievalMultiplier).toBe(3);
         });
@@ -77,7 +77,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: true,
                 rerankerModelId: 'model-123'
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result!.minRelevanceThreshold).toBe(0.5);
         });
 
@@ -86,7 +86,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: true,
                 rerankerModelId: 'model-123'
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result!.fallbackOnError).toBe(true);
         });
 
@@ -95,7 +95,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: true,
                 rerankerModelId: 'model-123'
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result!.contextFields).toEqual([]);
         });
 
@@ -104,7 +104,7 @@ describe('parseRerankerConfiguration', () => {
                 enabled: true,
                 rerankerModelId: 'model-123'
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result!.rerankPromptID).toBeUndefined();
         });
     });
@@ -120,7 +120,7 @@ describe('parseRerankerConfiguration', () => {
                 contextFields: ['Keywords', 'Type'],
                 fallbackOnError: false
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
 
             expect(result).toEqual({
                 enabled: true,
@@ -138,7 +138,7 @@ describe('parseRerankerConfiguration', () => {
                 rerankerModelId: 'model-123'
                 // enabled not explicitly set
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result).not.toBeNull();
             expect(result!.enabled).toBe(true);
         });
@@ -151,7 +151,7 @@ describe('parseRerankerConfiguration', () => {
                 rerankerModelId: 'model-123',
                 retrievalMultiplier: 0
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             // 0 is falsy but nullish coalescing (??) treats 0 as non-null
             expect(result!.retrievalMultiplier).toBe(0);
         });
@@ -162,7 +162,7 @@ describe('parseRerankerConfiguration', () => {
                 rerankerModelId: 'model-123',
                 minRelevanceThreshold: 0
             });
-            const result = parseRerankerConfiguration(config);
+            const result = ParseRerankerConfiguration(config);
             expect(result!.minRelevanceThreshold).toBe(0);
         });
     });

@@ -137,7 +137,7 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
     public Messages: ConversationDetailRow[] = [];
 
     public ngOnInit(): void {
-        this.LoadConversationMessages();
+        this.loadConversationMessages();
     }
 
     public get UserMessageCount(): number {
@@ -152,7 +152,7 @@ export class ConversationOverviewPanel extends BaseFormPanel<MJConversationEntit
         return this.Messages.slice(0, 4);
     }
 
-    private async LoadConversationMessages(): Promise<void> {
+    private async loadConversationMessages(): Promise<void> {
         if (!this.Record?.ID) return;
         try {
             const rv = new RunView();

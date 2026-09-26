@@ -14,7 +14,7 @@
  *
  * Pure + clock-injectable, so it's deterministically testable. Reuses {@link inferColumnTypeFromSamples}.
  */
-import { inferColumnTypeFromStats, type InferredColumnType } from './CustomColumnPromotion.js';
+import { InferColumnTypeFromStats, type InferredColumnType } from './CustomColumnPromotion.js';
 
 export interface StreamDiscoveryOptions {
     /** Wall-clock budget; once exceeded, stop and use what was gathered. Default 30s. */
@@ -100,7 +100,7 @@ interface ColumnAcc {
  * until exhaustion or the time budget. Read-only; the caller supplies whatever read-only fetch
  * yields the records (no save, no ack happens here).
  */
-export async function discoverFromStream(
+export async function DiscoverFromStream(
     records: AsyncIterable<Record<string, unknown>> | Iterable<Record<string, unknown>>,
     opts: StreamDiscoveryOptions = {},
 ): Promise<StreamDiscoveryResult> {
@@ -144,9 +144,17 @@ export async function discoverFromStream(
         MaxObservedLength: e.maxLen,
         // Width from the TRUE observed max, not the capped sample — the rsuplan "largest string"
         // stat. A wide value in an unsampled row would otherwise silently under-size the column.
-        Inferred: inferColumnTypeFromStats(e.samples, e.maxLen),
+        Inferred: InferColumnTypeFromStats(e.samples, e.maxLen),
     }));
     return { Columns: columns, RowsScanned: totalRows, StoppedReason: stoppedReason, RowSamples: rowSamples };
+}
+
+/** @deprecated Use {@link DiscoverFromStream}. */
+export async function discoverFromStream(
+    records: AsyncIterable<Record<string, unknown>> | Iterable<Record<string, unknown>>,
+    opts: StreamDiscoveryOptions = {},
+): Promise<StreamDiscoveryResult> {
+    return DiscoverFromStream(records, opts);
 }
 
 /** Folds one record into the accumulator — O(columns), bounded memory. */
@@ -236,7 +244,7 @@ const SOFT_NEAR_UNIQUE_RATIO = 0.9;
  * all-distinct over a large N is not chance). Several candidates → naming breaks the tie if it can;
  * otherwise it's flagged ambiguous for the LLM tiebreaker. Zero candidates → no PK (no fabrication).
  */
-export function pickPrimaryKeyFromStats(
+export function PickPrimaryKeyFromStats(
     columns: DiscoveredColumnStat[],
     opts: PkPickOptions = {},
 ): PkStatVerdict {
@@ -289,6 +297,14 @@ export function pickPrimaryKeyFromStats(
     return { Field: null, UniqueCandidates: names, AmbiguousForLLM: true, Reason: `${candidates.length} equally-named unique columns — ambiguous; defer to the evidence-fed LLM tiebreaker.` };
 }
 
+/** @deprecated Use {@link PickPrimaryKeyFromStats}. */
+export function pickPrimaryKeyFromStats(
+    columns: DiscoveredColumnStat[],
+    opts: PkPickOptions = {},
+): PkStatVerdict {
+    return PickPrimaryKeyFromStats(columns, opts);
+}
+
 /** The composite-key verdict — a provable multi-column identity, or null when none exists in the sample. */
 export interface CompositePkVerdict {
     /** The composite key column set (≥2 columns), or null when no provable combination was found. */
@@ -311,7 +327,7 @@ export interface CompositePkVerdict {
  * globally-minimal one — minimality is a nice-to-have the identity path doesn't need. A significance
  * gate (MinRowsForSignificance) keeps a small-sample "uniqueness" from being a fluke.
  */
-export function pickCompositeKeyFromStats(
+export function PickCompositeKeyFromStats(
     columns: DiscoveredColumnStat[],
     rowSamples: Array<Record<string, string>>,
     opts: PkPickOptions = {},
@@ -346,6 +362,15 @@ export function pickCompositeKeyFromStats(
         }
     }
     return { Fields: null, Reason: `No combination of the ${candidates.length} non-null columns is unique over ${n} rows — genuinely keyless; use the content-hash identity floor.` };
+}
+
+/** @deprecated Use {@link PickCompositeKeyFromStats}. */
+export function pickCompositeKeyFromStats(
+    columns: DiscoveredColumnStat[],
+    rowSamples: Array<Record<string, string>>,
+    opts: PkPickOptions = {},
+): CompositePkVerdict {
+    return PickCompositeKeyFromStats(columns, rowSamples, opts);
 }
 
 /** The unified key verdict — the chosen identity columns (1 = single PK, ≥2 = composite), or null. */
@@ -393,7 +418,7 @@ function subsetKeyness(rowSamples: Array<Record<string, string>>, cols: string[]
  * ({@link subsetKeyness}) applied to the subset's combined tuple — no arbitrary distinct-ratio. If NO
  * size yields a provable key, returns null (the object is honestly keyless — never a fabricated key).
  */
-export function pickKeyFromStats(
+export function PickKeyFromStats(
     columns: DiscoveredColumnStat[],
     rowSamples: Array<Record<string, string>>,
     opts: PkPickOptions & { MaxKeyColumns?: number; MaxCandidates?: number } = {},
@@ -425,6 +450,15 @@ export function pickKeyFromStats(
         }
     }
     return { Fields: null, Reason: `No provable key at sizes 1..${Math.min(maxK, candidates.length)} over ${rowSamples.length} rows — every best contender's domain saturated (Chao1 D̂ ≤ n).` };
+}
+
+/** @deprecated Use {@link PickKeyFromStats}. */
+export function pickKeyFromStats(
+    columns: DiscoveredColumnStat[],
+    rowSamples: Array<Record<string, string>>,
+    opts: PkPickOptions & { MaxKeyColumns?: number; MaxCandidates?: number } = {},
+): KeyVerdict {
+    return PickKeyFromStats(columns, rowSamples, opts);
 }
 
 /** Stable string key for a value so distinct-counting is correct across primitives + objects. */

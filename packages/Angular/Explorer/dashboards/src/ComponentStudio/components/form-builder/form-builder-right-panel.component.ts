@@ -72,7 +72,7 @@ export class FormBuilderRightPanelComponent {
 
     private readonly cdr = inject(ChangeDetectorRef);
 
-    public get filteredFields(): CuratedFormField[] {
+    public get FilteredFields(): CuratedFormField[] {
         if (!this._schema) return [];
         const q = this.Search.trim().toLowerCase();
         if (!q) return this._schema.fields;
@@ -80,6 +80,11 @@ export class FormBuilderRightPanelComponent {
             f.name.toLowerCase().includes(q) ||
             (f.displayName?.toLowerCase().includes(q) ?? false),
         );
+    }
+
+    /** @deprecated Use {@link FilteredFields}. */
+    public get filteredFields(): CuratedFormField[] {
+        return this.FilteredFields;
     }
 
     public get SelectedElement(): FormCanvasElement | null {
@@ -102,8 +107,13 @@ export class FormBuilderRightPanelComponent {
         return this._schema?.fields.find(f => f.name === el.fieldName) ?? null;
     }
 
-    public isBound(fieldName: string): boolean {
+    public IsBound(fieldName: string): boolean {
         return this.boundFieldNames.has(fieldName);
+    }
+
+    /** @deprecated Use {@link IsBound}. */
+    public isBound(fieldName: string): boolean {
+        return this.IsBound(fieldName);
     }
 
     public OnSearchInput(event: Event): void {

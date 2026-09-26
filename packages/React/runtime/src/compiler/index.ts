@@ -9,7 +9,7 @@ export {
   DEFAULT_PLUGINS,
   PRODUCTION_CONFIG,
   DEVELOPMENT_CONFIG,
-  getBabelConfig,
-  validateBabelPresets,
-  getJSXConfig
+  GetBabelConfig, getBabelConfig,
+  ValidateBabelPresets, validateBabelPresets,
+  GetJSXConfig, getJSXConfig
 } from './babel-config';

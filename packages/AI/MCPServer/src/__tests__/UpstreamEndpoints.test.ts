@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { detectUpstreamFlavor, resolveUpstreamOAuthEndpoints } from '../auth/UpstreamEndpoints';
+import { DetectUpstreamFlavor, ResolveUpstreamOAuthEndpoints } from '../auth/UpstreamEndpoints';
 
 describe('detectUpstreamFlavor()', () => {
   it.each([
@@ -17,11 +17,11 @@ describe('detectUpstreamFlavor()', () => {
     ['https://my-tenant.us.auth0.com/', 'generic'],
     ['https://org.okta.com/oauth2/default', 'generic'],
   ])('classifies %s as %s', (issuer, expected) => {
-    expect(detectUpstreamFlavor(issuer)).toBe(expected);
+    expect(DetectUpstreamFlavor(issuer)).toBe(expected);
   });
 
   it('falls back to generic when the issuer is missing', () => {
-    expect(detectUpstreamFlavor(undefined)).toBe('generic');
+    expect(DetectUpstreamFlavor(undefined)).toBe('generic');
   });
 
   // The flavor decides which host the user's browser is sent to for login, so it is read from the
@@ -38,11 +38,11 @@ describe('detectUpstreamFlavor()', () => {
     ['https://evil.example@login.microsoftonline.com.attacker.test/tid'],
     ['not-a-url'],
   ])('classifies the hostile issuer %s as generic', (issuer) => {
-    expect(detectUpstreamFlavor(issuer)).toBe('generic');
+    expect(DetectUpstreamFlavor(issuer)).toBe('generic');
   });
 
   it('still accepts a legitimate subdomain of a provider domain', () => {
-    expect(detectUpstreamFlavor('https://login.partner.microsoftonline.com/tid/v2.0')).toBe('azure-ad');
+    expect(DetectUpstreamFlavor('https://login.partner.microsoftonline.com/tid/v2.0')).toBe('azure-ad');
   });
 });
 
@@ -53,7 +53,7 @@ describe('resolveUpstreamOAuthEndpoints() - Cognito', () => {
   };
 
   it('builds the hosted-UI endpoints, not the user-pool issuer', () => {
-    expect(resolveUpstreamOAuthEndpoints(cognito)).toEqual({
+    expect(ResolveUpstreamOAuthEndpoints(cognito)).toEqual({
       flavor: 'cognito',
       authorizationEndpoint: 'https://aidp-mj.auth.ca-central-1.amazoncognito.com/oauth2/authorize',
       tokenEndpoint: 'https://aidp-mj.auth.ca-central-1.amazoncognito.com/oauth2/token',
@@ -61,7 +61,7 @@ describe('resolveUpstreamOAuthEndpoints() - Cognito', () => {
   });
 
   it('never derives endpoints from the cognito-idp issuer host', () => {
-    const { authorizationEndpoint, tokenEndpoint } = resolveUpstreamOAuthEndpoints(cognito);
+    const { authorizationEndpoint, tokenEndpoint } = ResolveUpstreamOAuthEndpoints(cognito);
     expect(authorizationEndpoint).not.toContain('cognito-idp.');
     expect(tokenEndpoint).not.toContain('cognito-idp.');
   });
@@ -71,19 +71,19 @@ describe('resolveUpstreamOAuthEndpoints() - Cognito', () => {
     ['https://aidp-mj.auth.ca-central-1.amazoncognito.com/'],
     ['aidp-mj.auth.ca-central-1.amazoncognito.com/'],
   ])('normalizes a domain written as %s', (domain) => {
-    expect(resolveUpstreamOAuthEndpoints({ issuer: cognito.issuer, domain }).authorizationEndpoint).toBe(
+    expect(ResolveUpstreamOAuthEndpoints({ issuer: cognito.issuer, domain }).authorizationEndpoint).toBe(
       'https://aidp-mj.auth.ca-central-1.amazoncognito.com/oauth2/authorize',
     );
   });
 
   it('throws a domain-naming error rather than guessing when the domain is missing', () => {
-    expect(() => resolveUpstreamOAuthEndpoints({ issuer: cognito.issuer })).toThrow(/COGNITO_DOMAIN/);
+    expect(() => ResolveUpstreamOAuthEndpoints({ issuer: cognito.issuer })).toThrow(/COGNITO_DOMAIN/);
   });
 });
 
 describe('resolveUpstreamOAuthEndpoints() - Azure AD (pinned, unchanged)', () => {
   it('strips the /v2.0 suffix and uses the v2.0 endpoint paths', () => {
-    expect(resolveUpstreamOAuthEndpoints({ issuer: 'https://login.microsoftonline.com/my-tenant/v2.0' })).toEqual({
+    expect(ResolveUpstreamOAuthEndpoints({ issuer: 'https://login.microsoftonline.com/my-tenant/v2.0' })).toEqual({
       flavor: 'azure-ad',
       authorizationEndpoint: 'https://login.microsoftonline.com/my-tenant/oauth2/v2.0/authorize',
       tokenEndpoint: 'https://login.microsoftonline.com/my-tenant/oauth2/v2.0/token',
@@ -91,7 +91,7 @@ describe('resolveUpstreamOAuthEndpoints() - Azure AD (pinned, unchanged)', () =>
   });
 
   it('handles a trailing slash after /v2.0', () => {
-    expect(resolveUpstreamOAuthEndpoints({ issuer: 'https://login.microsoftonline.com/my-tenant/v2.0/' }).tokenEndpoint).toBe(
+    expect(ResolveUpstreamOAuthEndpoints({ issuer: 'https://login.microsoftonline.com/my-tenant/v2.0/' }).tokenEndpoint).toBe(
       'https://login.microsoftonline.com/my-tenant/oauth2/v2.0/token',
     );
   });
@@ -99,7 +99,7 @@ describe('resolveUpstreamOAuthEndpoints() - Azure AD (pinned, unchanged)', () =>
 
 describe('resolveUpstreamOAuthEndpoints() - generic OIDC (pinned, unchanged)', () => {
   it('uses the Auth0 shape for an Auth0 issuer', () => {
-    expect(resolveUpstreamOAuthEndpoints({ issuer: 'https://my-tenant.us.auth0.com/' })).toEqual({
+    expect(ResolveUpstreamOAuthEndpoints({ issuer: 'https://my-tenant.us.auth0.com/' })).toEqual({
       flavor: 'generic',
       authorizationEndpoint: 'https://my-tenant.us.auth0.com/authorize',
       tokenEndpoint: 'https://my-tenant.us.auth0.com/oauth/token',
@@ -107,7 +107,7 @@ describe('resolveUpstreamOAuthEndpoints() - generic OIDC (pinned, unchanged)', (
   });
 
   it('ignores a domain on a non-Cognito provider', () => {
-    expect(resolveUpstreamOAuthEndpoints({ issuer: 'https://my-tenant.us.auth0.com', domain: 'my-tenant.us.auth0.com' }).authorizationEndpoint).toBe(
+    expect(ResolveUpstreamOAuthEndpoints({ issuer: 'https://my-tenant.us.auth0.com', domain: 'my-tenant.us.auth0.com' }).authorizationEndpoint).toBe(
       'https://my-tenant.us.auth0.com/authorize',
     );
   });

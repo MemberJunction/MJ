@@ -265,7 +265,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
      * not separators. Until this was fixed only the FIRST name of a list was scoped and the rest
      * stayed distinct only because each item's save-call suffix happened to differ.
      */
-    public static scopeItemVariables(sql: string, index: number): string {
+    public static ScopeItemVariables(sql: string, index: number): string {
         const masked = SQLServerTransactionGroup.maskNonCode(sql);
         const declared = SQLServerTransactionGroup.collectDeclaredNames(masked);
         if (declared.size === 0) return sql;
@@ -306,6 +306,11 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
             cursor = e.end;
         }
         return out + sql.slice(cursor);
+    }
+
+    /** @deprecated Use {@link ScopeItemVariables}. */
+    public static scopeItemVariables(sql: string, index: number): string {
+        return this.ScopeItemVariables(sql, index);
     }
 
     /**

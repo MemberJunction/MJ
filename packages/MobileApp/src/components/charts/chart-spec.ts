@@ -12,13 +12,13 @@ import { Colors } from '@/theme/tokens';
 export type ChartKind = 'bar' | 'line' | 'pie';
 
 /** A single labeled data point. */
-export type ChartDatum = { label: string; value: number };
+export type ChartDatum = { label: string; value: number };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Normalized, render-ready chart description. */
 export type ChartSpec = {
-    kind: ChartKind;
-    title?: string;
-    data: ChartDatum[];
+    Kind: ChartKind;
+    title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+    Data: ChartDatum[];
 };
 
 /**
@@ -39,6 +39,11 @@ export const ChartPalette: readonly string[] = [
 /** Pick a palette color for the `index`-th series/slice (wraps around). */
 export function ChartColorAt(index: number): string {
     return ChartPalette[index % ChartPalette.length];
+}
+
+/** @deprecated Use {@link ChartColorAt}. */
+export function chartColorAt(index: number): string {
+    return ChartColorAt(index);
 }
 
 /** Type guard for a plain (non-array, non-null) object. */
@@ -156,5 +161,10 @@ export function ParseChartSpec(input: unknown): ChartSpec | null {
     if (data.length === 0) return null;
 
     const title = typeof input.title === 'string' ? input.title : undefined;
-    return { kind: kind ?? 'bar', title, data };
+    return { Kind: kind ?? 'bar', title, Data: data };
+}
+
+/** @deprecated Use {@link ParseChartSpec}. */
+export function parseChartSpec(input: unknown): ChartSpec | null {
+    return ParseChartSpec(input);
 }

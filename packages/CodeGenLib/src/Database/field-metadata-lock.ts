@@ -7,11 +7,11 @@
  */
 
 export interface FieldLockContext {
-   isNewEntity: boolean;
-   isNewField: boolean;
-   descriptionReopened: boolean;
-   typeReopened: boolean;
-   existingCategories: ReadonlySet<string>;
+   IsNewEntity: boolean;
+   IsNewField: boolean;
+   DescriptionReopened: boolean;
+   TypeReopened: boolean;
+   ExistingCategories: ReadonlySet<string>;
 }
 
 export interface FieldMetadataState {
@@ -29,10 +29,10 @@ export interface FieldMetadataState {
 }
 
 export interface FieldMetadataProposal {
-   category?: string | null;
-   displayName?: string | null;
-   extendedType?: string | null;
-   codeType?: string | null;
+   category?: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+   displayName?: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+   extendedType?: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+   codeType?: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 export type SkipReason = 'locked' | 'flag' | 'invalid' | 'unchanged' | 'blank-proposal';
@@ -43,10 +43,10 @@ export interface FieldMetadataUpdate {
    DisplayName?: string;
    ExtendedType?: string | null;
    CodeType?: string | null;
-   skipped: Array<{ column: string; reason: SkipReason }>;
+   Skipped: Array<{ column: string; reason: SkipReason }>;
 }
 
-export function computeFieldMetadataUpdate(
+export function ComputeFieldMetadataUpdate(
    field: FieldMetadataState,
    proposal: FieldMetadataProposal,
    ctx: FieldLockContext,
@@ -54,7 +54,7 @@ export function computeFieldMetadataUpdate(
    sanitizeCodeType: (v: string | null | undefined, fieldName?: string, entityName?: string) => string | null | undefined
 ): FieldMetadataUpdate {
    const update: FieldMetadataUpdate = {
-      skipped: [],
+      Skipped: [],
    };
 
    // ──────────────────────────────────────────────────────────────────────────
@@ -66,21 +66,21 @@ export function computeFieldMetadataUpdate(
       : proposal.category;
 
    if (!field.AutoUpdateCategory) {
-      update.skipped.push({ column: 'Category', reason: 'flag' });
+      update.Skipped.push({ column: 'Category', reason: 'flag' });
    } else {
       const isCurrentCategoryBlank = !field.Category || field.Category.trim() === '';
-      const isAllowedToCategorize = isCurrentCategoryBlank || ctx.isNewEntity;
+      const isAllowedToCategorize = isCurrentCategoryBlank || ctx.IsNewEntity;
 
       if (!isAllowedToCategorize) {
          // Existing non-blank category on an existing entity: locked, never moves even between existing categories
-         update.skipped.push({ column: 'Category', reason: 'locked' });
+         update.Skipped.push({ column: 'Category', reason: 'locked' });
       } else {
          if (!rawProposedCategory || rawProposedCategory.trim() === '') {
-            update.skipped.push({ column: 'Category', reason: 'blank-proposal' });
+            update.Skipped.push({ column: 'Category', reason: 'blank-proposal' });
          } else {
             const trimmedProposed = rawProposedCategory.trim();
             if (trimmedProposed === (field.Category ?? '').trim()) {
-               update.skipped.push({ column: 'Category', reason: 'unchanged' });
+               update.Skipped.push({ column: 'Category', reason: 'unchanged' });
             } else {
                update.Category = trimmedProposed;
                // GeneratedFormSection is only emitted when Category is emitted
@@ -96,18 +96,18 @@ export function computeFieldMetadataUpdate(
    // 2. DisplayName
    // ──────────────────────────────────────────────────────────────────────────
    if (!field.AutoUpdateDisplayName) {
-      update.skipped.push({ column: 'DisplayName', reason: 'flag' });
+      update.Skipped.push({ column: 'DisplayName', reason: 'flag' });
    } else {
-      const isAllowedDisplayName = ctx.isNewEntity || ctx.isNewField || ctx.descriptionReopened;
+      const isAllowedDisplayName = ctx.IsNewEntity || ctx.IsNewField || ctx.DescriptionReopened;
       if (!isAllowedDisplayName) {
-         update.skipped.push({ column: 'DisplayName', reason: 'locked' });
+         update.Skipped.push({ column: 'DisplayName', reason: 'locked' });
       } else {
          if (!proposal.displayName || proposal.displayName.trim() === '') {
-            update.skipped.push({ column: 'DisplayName', reason: 'blank-proposal' });
+            update.Skipped.push({ column: 'DisplayName', reason: 'blank-proposal' });
          } else {
             const trimmedProposal = proposal.displayName.trim();
             if (trimmedProposal === (field.DisplayName ?? '').trim()) {
-               update.skipped.push({ column: 'DisplayName', reason: 'unchanged' });
+               update.Skipped.push({ column: 'DisplayName', reason: 'unchanged' });
             } else {
                update.DisplayName = trimmedProposal;
             }
@@ -119,21 +119,21 @@ export function computeFieldMetadataUpdate(
    // 3. ExtendedType
    // ──────────────────────────────────────────────────────────────────────────
    if (!field.AutoUpdateExtendedType) {
-      update.skipped.push({ column: 'ExtendedType', reason: 'flag' });
+      update.Skipped.push({ column: 'ExtendedType', reason: 'flag' });
    } else {
-      const isAllowedExtendedType = ctx.isNewEntity || ctx.isNewField || ctx.typeReopened;
+      const isAllowedExtendedType = ctx.IsNewEntity || ctx.IsNewField || ctx.TypeReopened;
       if (!isAllowedExtendedType) {
-         update.skipped.push({ column: 'ExtendedType', reason: 'locked' });
+         update.Skipped.push({ column: 'ExtendedType', reason: 'locked' });
       } else {
          if (proposal.extendedType === undefined) {
-            update.skipped.push({ column: 'ExtendedType', reason: 'blank-proposal' });
+            update.Skipped.push({ column: 'ExtendedType', reason: 'blank-proposal' });
          } else if (
             proposal.extendedType === null ||
             proposal.extendedType.trim() === '' ||
             proposal.extendedType.trim().toLowerCase() === 'null'
          ) {
             if (field.ExtendedType === null) {
-               update.skipped.push({ column: 'ExtendedType', reason: 'unchanged' });
+               update.Skipped.push({ column: 'ExtendedType', reason: 'unchanged' });
             } else {
                update.ExtendedType = null;
             }
@@ -142,10 +142,10 @@ export function computeFieldMetadataUpdate(
             const normalizedValueListType = (field.ValueListType || '').trim().toLowerCase();
             const isValueList = normalizedValueListType !== '' && normalizedValueListType !== 'none';
             if (!valid || (valid === 'Code' && isValueList)) {
-               update.skipped.push({ column: 'ExtendedType', reason: 'invalid' });
+               update.Skipped.push({ column: 'ExtendedType', reason: 'invalid' });
             } else {
                if (valid === field.ExtendedType) {
-                  update.skipped.push({ column: 'ExtendedType', reason: 'unchanged' });
+                  update.Skipped.push({ column: 'ExtendedType', reason: 'unchanged' });
                } else {
                   update.ExtendedType = valid;
                }
@@ -158,11 +158,11 @@ export function computeFieldMetadataUpdate(
    // 4. CodeType (governed by AutoUpdateExtendedType; D6)
    // ──────────────────────────────────────────────────────────────────────────
    if (!field.AutoUpdateExtendedType) {
-      update.skipped.push({ column: 'CodeType', reason: 'flag' });
+      update.Skipped.push({ column: 'CodeType', reason: 'flag' });
    } else {
-      const isAllowedCodeType = ctx.isNewEntity || ctx.isNewField || ctx.typeReopened;
+      const isAllowedCodeType = ctx.IsNewEntity || ctx.IsNewField || ctx.TypeReopened;
       if (!isAllowedCodeType) {
-         update.skipped.push({ column: 'CodeType', reason: 'locked' });
+         update.Skipped.push({ column: 'CodeType', reason: 'locked' });
       } else {
          // Determine effective extended type after step 3
          const effectiveExtendedType =
@@ -171,18 +171,18 @@ export function computeFieldMetadataUpdate(
          if (effectiveExtendedType !== 'Code') {
             // CodeType MUST be null when ExtendedType is not Code
             if (field.CodeType === null) {
-               update.skipped.push({ column: 'CodeType', reason: 'unchanged' });
+               update.Skipped.push({ column: 'CodeType', reason: 'unchanged' });
             } else {
                update.CodeType = null;
             }
          } else {
             if (proposal.codeType === undefined) {
-               update.skipped.push({ column: 'CodeType', reason: 'blank-proposal' });
+               update.Skipped.push({ column: 'CodeType', reason: 'blank-proposal' });
             } else {
                const sanitized = sanitizeCodeType(proposal.codeType, field.Name);
                const resolvedCodeType = sanitized ?? null;
                if (resolvedCodeType === field.CodeType) {
-                  update.skipped.push({ column: 'CodeType', reason: 'unchanged' });
+                  update.Skipped.push({ column: 'CodeType', reason: 'unchanged' });
                } else {
                   update.CodeType = resolvedCodeType;
                }
@@ -192,4 +192,15 @@ export function computeFieldMetadataUpdate(
    }
 
    return update;
+}
+
+/** @deprecated Use {@link ComputeFieldMetadataUpdate}. */
+export function computeFieldMetadataUpdate(
+   field: FieldMetadataState,
+   proposal: FieldMetadataProposal,
+   ctx: FieldLockContext,
+   validateExtendedType: (v: string) => string | null,
+   sanitizeCodeType: (v: string | null | undefined, fieldName?: string, entityName?: string) => string | null | undefined
+): FieldMetadataUpdate {
+   return ComputeFieldMetadataUpdate(field, proposal, ctx, validateExtendedType, sanitizeCodeType);
 }

@@ -60,21 +60,21 @@ export interface IVonageClientBindings {
      * @param args Provider-specific options (event-webhook URL, websocket media URL, recording flags, …).
      * @returns The created call UUID.
      */
-    createCall(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string>;
+    createCall(toNumber: string, fromNumber: string, args?: Record<string, unknown>): Promise<string>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Accepts the websocket media leg for an inbound call already delivered by the answer webhook.
      *
      * @param callUuid The inbound call UUID from the webhook.
      */
-    acceptInbound(callUuid: string): Promise<void>;
+    acceptInbound(callUuid: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Ends the call (Voice API `PUT /v1/calls/:uuid` with `{ action: 'hangup' }`).
      *
      * @param callUuid The call UUID to hang up.
      */
-    hangupCall(callUuid: string): Promise<void>;
+    hangupCall(callUuid: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Pushes one outbound audio payload onto the call's websocket media leg (the agent's voice).
@@ -82,7 +82,7 @@ export interface IVonageClientBindings {
      * @param callUuid The call UUID whose media leg to write to.
      * @param pcm The audio bytes (the adapter encodes to the websocket media frame).
      */
-    pushWebsocketAudio(callUuid: string, pcm: ArrayBuffer): void;
+    pushWebsocketAudio(callUuid: string, pcm: ArrayBuffer): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers the inbound websocket audio callback for the call (what the agent hears).
@@ -90,7 +90,7 @@ export interface IVonageClientBindings {
      * @param callUuid The call UUID whose inbound media to subscribe to.
      * @param cb Invoked with each inbound PCM audio frame.
      */
-    onWebsocketAudio(callUuid: string, cb: (pcm: ArrayBuffer) => void): void;
+    onWebsocketAudio(callUuid: string, cb: (pcm: ArrayBuffer) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Sends DTMF digits on the call (Voice API `PUT /v1/calls/:uuid/dtmf` with `{ digits }`).
@@ -98,7 +98,7 @@ export interface IVonageClientBindings {
      * @param callUuid The call UUID.
      * @param digits The DTMF digit string.
      */
-    playDigits(callUuid: string, digits: string): Promise<void>;
+    playDigits(callUuid: string, digits: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers the inbound DTMF callback (NCCO `input`/`dtmf` results delivered to the event webhook).
@@ -106,7 +106,7 @@ export interface IVonageClientBindings {
      * @param callUuid The call UUID.
      * @param cb Invoked with each received DTMF digit string.
      */
-    onDigits(callUuid: string, cb: (digits: string) => void): void;
+    onDigits(callUuid: string, cb: (digits: string) => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Transfers the live call (Voice API `PUT /v1/calls/:uuid` with `{ action: 'transfer', destination:
@@ -115,7 +115,7 @@ export interface IVonageClientBindings {
      * @param callUuid The call UUID to redirect.
      * @param toNumber The transfer destination.
      */
-    transferCall(callUuid: string, toNumber: string): Promise<void>;
+    transferCall(callUuid: string, toNumber: string): Promise<void>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Registers the call-ended callback (event-webhook `completed`/`failed`/`rejected`/`cancelled` or the
@@ -124,7 +124,7 @@ export interface IVonageClientBindings {
      * @param callUuid The call UUID.
      * @param cb Invoked when the call ends.
      */
-    onCallStatus(callUuid: string, cb: () => void): void;
+    onCallStatus(callUuid: string, cb: () => void): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Discards the audio Vonage has QUEUED on the media leg (sends the `{"action":"clear"}` websocket
@@ -133,7 +133,7 @@ export interface IVonageClientBindings {
      *
      * @param callUuid The call UUID whose queued outbound audio to flush.
      */
-    flushOutbound(callUuid: string): void;
+    flushOutbound(callUuid: string): void;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** The default bindings used when none are supplied — every operation throws the bind-me error. */
