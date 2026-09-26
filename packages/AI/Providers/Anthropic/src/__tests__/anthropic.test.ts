@@ -47,6 +47,21 @@ vi.mock('@memberjunction/ai', () => {
     class BaseLLM extends BaseModel {
         protected _additionalSettings: Record<string, unknown> = {};
         public get SupportsStreaming(): boolean { return false; }
+        // The trailing volatile-state seam, mirroring @memberjunction/ai's BaseLLM: the base test is
+        // the metadata flag alone; AnthropicLLM's override adds its tag-literal fallback on top.
+        protected IsVolatileStateMessage(message?: { metadata?: { volatileState?: boolean } }): boolean {
+            return message?.metadata?.volatileState === true;
+        }
+        protected TrailingVolatileStateIndex(messages: Array<{ role: string; content: unknown }>): number {
+            const last = messages.length - 1;
+            if (last >= 1 && this.IsVolatileStateMessage(messages[last])) { return last; }
+            if (last >= 2 && messages[last].role === 'assistant' && this.IsVolatileStateMessage(messages[last - 1])) { return last - 1; }
+            return -1;
+        }
+        protected SplitTrailingVolatileState(messages: Array<{ role: string; content: unknown }>): { head: unknown[]; tail: unknown[] } | null {
+            const index = this.TrailingVolatileStateIndex(messages);
+            return index < 1 ? null : { head: messages.slice(0, index), tail: messages.slice(index) };
+        }
     }
     class ModelUsage {
         promptTokens: number;

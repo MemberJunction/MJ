@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
+    GetPromptCacheStrategy,
     ParseModelConfiguration,
     ResolveEffectiveModelConfiguration,
 } from '../generic/modelConfiguration';
@@ -225,5 +226,34 @@ describe('LLM control-flow knobs', () => {
             { LLM: { NativeControlFlow: null } }
         );
         expect(merged?.LLM?.NativeControlFlow).toBeNull();
+    });
+});
+
+describe('GetPromptCacheStrategy — the catalog answers "is this serving path a byte-prefix cache?"', () => {
+    it('returns null when no layer declares a strategy (callers treat null as block / replace-in-place)', () => {
+        expect(GetPromptCacheStrategy(null)).toBeNull();
+        expect(GetPromptCacheStrategy(undefined)).toBeNull();
+        expect(GetPromptCacheStrategy({})).toBeNull();
+        expect(GetPromptCacheStrategy({ LLM: {} })).toBeNull();
+        expect(GetPromptCacheStrategy({ LLM: { PromptCacheStrategy: null } })).toBeNull();
+    });
+
+    it('returns only the two known values; an unknown string in stored JSON is treated as absent', () => {
+        expect(GetPromptCacheStrategy({ LLM: { PromptCacheStrategy: 'prefix' } })).toBe('prefix');
+        expect(GetPromptCacheStrategy({ LLM: { PromptCacheStrategy: 'block' } })).toBe('block');
+        const stored = ParseModelConfiguration('{"LLM":{"PromptCacheStrategy":"sliding"}}');
+        expect(GetPromptCacheStrategy(stored)).toBeNull();
+    });
+
+    it("the model-vendor row's strategy wins over the model's, and the model's over the type's", () => {
+        const type: AIModelConfiguration = { LLM: { PromptCacheStrategy: 'block' } };
+        const model: AIModelConfiguration = { LLM: { PromptCacheStrategy: 'prefix', SupportsNativeToolCalling: true } };
+        const vendor: AIModelConfiguration = { LLM: { PromptCacheStrategy: 'block' } };
+
+        expect(GetPromptCacheStrategy(ResolveEffectiveModelConfiguration(type, model))).toBe('prefix');
+        const effective = ResolveEffectiveModelConfiguration(type, model, vendor);
+        expect(GetPromptCacheStrategy(effective)).toBe('block');
+        // ...without wiping the model's other knobs: this is a per-key merge, not a replace.
+        expect(effective?.LLM?.SupportsNativeToolCalling).toBe(true);
     });
 });

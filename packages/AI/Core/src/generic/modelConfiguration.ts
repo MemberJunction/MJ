@@ -231,6 +231,22 @@ export interface RealtimeToolingSettings {
  * incompatible. Unknown keys in stored JSON still round-trip fine at runtime — the parse is
  * tolerant; what is lost is only a compile-time affordance nothing needs.
  */
+/**
+ * How a provider's prompt cache decides whether a new request can reuse an earlier one.
+ *
+ * - `'prefix'` — the cache reuses a prior request only when that request's ENTIRE prompt is a byte
+ *   prefix of the new one (OpenAI's automatic cache, xAI). Anything the framework appends per
+ *   iteration must therefore be APPENDED, never replaced, or the reusable prefix ends at the system
+ *   prompt.
+ * - `'block'` — the cache works on block or segment boundaries inside the prompt (Anthropic's
+ *   explicit breakpoints, Gemini's implicit cache, Cerebras's sliding cache), so a trailing
+ *   per-iteration message can be replaced in place and the history before it still hits.
+ *
+ * Consumed by the loop agent's trailing runtime-state layout: see `TrailingStateMode` in
+ * `@memberjunction/ai-agents`.
+ */
+export type PromptCacheStrategy = 'prefix' | 'block';
+
 export interface LLMConfigurationSettings {
     /**
      * **Catalog layers only.** Whether this model — or this vendor's serving of it — supports native
@@ -272,6 +288,19 @@ export interface LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How this serving path's prompt cache matches a new request against an
+     * earlier one — see {@link PromptCacheStrategy}. Absent means `'block'`: the safe default, since a
+     * replace-in-place trailing message costs a block-cache provider nothing, whereas append-only on
+     * a block-cache provider only grows the context.
+     *
+     * Set `'prefix'` on the MODEL-VENDOR row of an inference provider whose cache is an exact
+     * byte-prefix match (OpenAI, xAI). Model Vendors win over Models and Model Types in the cascade,
+     * so a host that serves many models (Fireworks, Cerebras, Azure, Bedrock) can carry a per-model
+     * answer that differs from the developer's own serving of the same model.
+     */
+    PromptCacheStrategy?: PromptCacheStrategy | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -394,4 +423,14 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
             target[key] = incoming;
         }
     }
+}
+
+/**
+ * The {@link PromptCacheStrategy} an effective model configuration declares, or `null` when no
+ * catalog layer set one. Read through {@link ResolveEffectiveModelConfiguration} (or
+ * `AIEngineBase.GetEffectiveModelConfiguration`) so the model-vendor row's answer wins.
+ */
+export function GetPromptCacheStrategy(config: AIModelConfiguration | null | undefined): PromptCacheStrategy | null {
+    const value = config?.LLM?.PromptCacheStrategy;
+    return value === 'prefix' || value === 'block' ? value : null;
 }

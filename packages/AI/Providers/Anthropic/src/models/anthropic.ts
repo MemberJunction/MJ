@@ -340,14 +340,17 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * Checks if a message represents a trailing volatile runtime-state or agent-specialization fragment.
+     * Extends the framework's metadata-flag test with a text fallback: a message whose text opens with
+     * the runtime-state or agent-specialization tag literal is treated as the trailing fragment even
+     * when the caller passed plain `ChatMessage`s without metadata. Forged tags in history cannot
+     * reach here as an opening literal because the agent layer escapes them before sending.
      */
-    protected isTrailingStateFragment(message?: ChatMessage<{ volatileState?: boolean }>): boolean {
+    protected override IsVolatileStateMessage(message: ChatMessage | undefined): boolean {
+        if (super.IsVolatileStateMessage(message)) {
+            return true;
+        }
         if (!message) {
             return false;
-        }
-        if (message.metadata?.volatileState === true) {
-            return true;
         }
         if (typeof message.content === 'string') {
             return /^<mj-(runtime-state|agent-specialization)>/.test(message.content.trimStart());
@@ -362,22 +365,6 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
-     * Index of the trailing runtime-state fragment in an outgoing request: the last message, or the
-     * one before it when an assistant prefill has been appended after it. Returns -1 when there is no
-     * trailing fragment, or when nothing precedes it to carry the cache breakpoint.
-     */
-    protected trailingStateFragmentIndex(messages: ChatMessage[]): number {
-        const last = messages.length - 1;
-        if (last >= 1 && this.isTrailingStateFragment(messages[last])) {
-            return last;
-        }
-        if (last >= 2 && messages[last].role === ChatMessageRole.assistant && this.isTrailingStateFragment(messages[last - 1])) {
-            return last - 1;
-        }
-        return -1;
-    }
-
-    /**
      * Format messages for Anthropic API with caching support.
      * Handles both text and multi-modal content (images).
      * @param messages Messages to format
@@ -389,10 +376,10 @@ export class AnthropicLLM extends BaseLLM {
         // assistant prefill), place the ephemeral cache breakpoint on the last real history message
         // instead, so the next iteration's prefix still ends at a cached boundary. Otherwise the
         // volatile fragment would sit inside the cached prefix and miss on every iteration.
-        const fragmentIndex = enableCaching ? this.trailingStateFragmentIndex(messages) : -1;
-        if (fragmentIndex >= 1) {
-            const head = this.formatMessagesWithCaching(messages.slice(0, fragmentIndex), true);
-            const tail = this.formatMessagesWithCaching(messages.slice(fragmentIndex), false);
+        const split = enableCaching ? this.SplitTrailingVolatileState(messages) : null;
+        if (split) {
+            const head = this.formatMessagesWithCaching(split.head, true);
+            const tail = this.formatMessagesWithCaching(split.tail, false);
             if (head[head.length - 1]?.role === 'user' && tail[0]?.role === 'user') {
                 head.push({
                     role: 'assistant',

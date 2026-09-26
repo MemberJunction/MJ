@@ -17,29 +17,16 @@
  */
 import { DEFAULT_SYSTEM_PLACEHOLDERS } from '@memberjunction/ai-core-plus';
 import { SpecializationPlacement } from './agent-types/loop-agent-prompt-params';
+import { STABLE_TEMPORAL_PLACEHOLDERS, VOLATILE_AGENT_VARIABLES } from './constants';
 
 /** Where the specialization ends up for a run: one of the two concrete placements (never `'auto'`). */
 export type ResolvedSpecializationPlacement = Exclude<SpecializationPlacement, 'auto'>;
 
 /**
- * Temporal system placeholders that are stable for a run and therefore NOT volatile.
- * `_CURRENT_TIMEZONE` is in the "Date & Time" category but does not change between iterations.
- */
-const STABLE_TEMPORAL_PLACEHOLDERS: ReadonlySet<string> = new Set(['_CURRENT_TIMEZONE']);
-
-/** Agent-level template variables (not system placeholders) that change every iteration. */
-const VOLATILE_AGENT_VARIABLES: readonly string[] = [
-    '_CURRENT_PAYLOAD',
-    '_SCRATCHPAD_NOTES',
-    '_SCRATCHPAD_TASKS',
-    '_SCRATCHPAD_TASK_SUMMARY',
-];
-
-/**
  * Every template variable whose presence in a child prompt makes the rendered specialization
  * change between iterations. Derived from the system-placeholder registry's "Date & Time"
- * category (minus the stable timezone) plus the loop agent's own per-iteration variables, so a
- * new temporal placeholder is picked up automatically.
+ * category (minus the stable timezone) plus the loop agent's own per-iteration variables (both
+ * from `./constants`), so a new temporal placeholder is picked up automatically.
  */
 export const VOLATILE_PLACEHOLDER_NAMES: readonly string[] = [
     ...DEFAULT_SYSTEM_PLACEHOLDERS

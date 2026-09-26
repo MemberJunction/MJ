@@ -20,7 +20,7 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import nunjucks from 'nunjucks';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, LoopAgentTypePromptParams } from '../agent-types/loop-agent-prompt-params';
-import { RUNTIME_STATE_TAG, AGENT_SPECIALIZATION_TAG } from '../runtime-state-fragment';
+import { RUNTIME_STATE_TAG, AGENT_SPECIALIZATION_TAG } from '../constants';
 
 const __dirname_ = dirname(fileURLToPath(import.meta.url));
 // src/__tests__/ → repo root is 5 levels up (Agents → AI → packages → root).

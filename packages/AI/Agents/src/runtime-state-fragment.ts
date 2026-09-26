@@ -23,12 +23,13 @@
  * @module @memberjunction/ai-agents
  */
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, ChatToolCall } from '@memberjunction/ai';
-
-/** Tag wrapping the runtime-state blocks in the trailing fragment. */
-export const RUNTIME_STATE_TAG = 'mj-runtime-state';
-
-/** Tag wrapping a relocated agent specialization (child prompt) in the trailing fragment. */
-export const AGENT_SPECIALIZATION_TAG = 'mj-agent-specialization';
+import {
+    AGENT_SPECIALIZATION_TAG,
+    RUNTIME_STATE_DATETIME_HEADING,
+    RUNTIME_STATE_PAYLOAD_HEADING,
+    RUNTIME_STATE_SCRATCHPAD_HEADING,
+    RUNTIME_STATE_TAG,
+} from './constants';
 
 /** Resolved date/time strings, as the system placeholders render them. */
 export interface RuntimeStateDateTime {
@@ -111,7 +112,7 @@ export class RuntimeStateFragmentBuilder {
 
     private renderDateTime(dt: RuntimeStateDateTime): string {
         return [
-            '## Current Date/Time',
+            RUNTIME_STATE_DATETIME_HEADING,
             `- **Date**: ${dt.Date} (${dt.DayOfWeek})`,
             `- **Time**: ${dt.Time}`,
         ].join('\n');
@@ -119,7 +120,7 @@ export class RuntimeStateFragmentBuilder {
 
     private renderScratchpad(sp: RuntimeStateScratchpad): string {
         return [
-            '## Scratchpad State',
+            RUNTIME_STATE_SCRATCHPAD_HEADING,
             'Your private working memory. Manage via `scratchpad` in your response.',
             '',
             '### Notes',
@@ -134,7 +135,7 @@ export class RuntimeStateFragmentBuilder {
         // Mirrors the template's `{{ _CURRENT_PAYLOAD | dump | safe }}` — nunjucks `dump` is a compact JSON.stringify.
         const json = JSON.stringify(value ?? {});
         return [
-            '## Current State',
+            RUNTIME_STATE_PAYLOAD_HEADING,
             '**Payload:** Represents your work state. Request changes via `payloadChangeRequest`',
             '```json',
             json,

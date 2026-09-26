@@ -14,8 +14,41 @@ import type { ChatMessage } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 
 const templates = vi.hoisted(() => ({ byId: new Map<string, string>() }));
+
+/**
+ * A minimal model catalog for the mocked AIEngine: models, vendors and model-vendor rows, each row
+ * optionally carrying a ModelConfiguration bag, plus the cascade resolver the real engine exposes
+ * (type < model < model-vendor, deep-merged per key). Tests seed it per case.
+ */
+interface CatalogModel { ID: string; Name: string; ModelConfiguration?: string }
+interface CatalogVendor { ID: string; Name: string }
+interface CatalogModelVendor { ID: string; VendorID: string; TypeID: 'inference' | 'developer'; ModelConfiguration?: string }
+const catalog = vi.hoisted(() => ({
+    models: new Map<string, { ID: string; Name: string; ModelConfiguration?: string }>(),
+    vendors: new Map<string, { ID: string; Name: string }>(),
+    modelVendors: new Map<string, Array<{ ID: string; VendorID: string; TypeID: 'inference' | 'developer'; ModelConfiguration?: string }>>(),
+    reset(): void { this.models.clear(); this.vendors.clear(); this.modelVendors.clear(); },
+}));
 vi.mock('@memberjunction/aiengine', () => ({
-    AIEngine: { Instance: { get Skills(): unknown[] { return []; }, GetSkillsForAgent: (): unknown[] => [], GetAutoActivatableSkillsForAgent: (): unknown[] => [] } },
+    AIEngine: {
+        Instance: {
+            get Skills(): unknown[] { return []; },
+            GetSkillsForAgent: (): unknown[] => [],
+            GetAutoActivatableSkillsForAgent: (): unknown[] => [],
+            get ModelsByID() { return catalog.models; },
+            get VendorsByID() { return catalog.vendors; },
+            get ModelVendorsByModelID() { return catalog.modelVendors; },
+            IsInferenceProvider: (mv: { TypeID: string }) => mv.TypeID === 'inference',
+            GetEffectiveModelConfiguration: (modelID: string, modelVendorID?: string) => {
+                const model = catalog.models.get(modelID);
+                if (!model) { return null; }
+                const row = modelVendorID ? (catalog.modelVendors.get(modelID) ?? []).find(mv => mv.ID === modelVendorID) : undefined;
+                const layers = [model.ModelConfiguration, row?.ModelConfiguration].filter((j): j is string => typeof j === 'string').map(j => JSON.parse(j) as { LLM?: Record<string, unknown> });
+                if (layers.length === 0) { return null; }
+                return { LLM: Object.assign({}, ...layers.map(l => l.LLM ?? {})) };
+            },
+        },
+    },
 }));
 vi.mock('@memberjunction/templates', () => ({
     TemplateEngineServer: {
@@ -37,7 +70,7 @@ vi.mock('@memberjunction/templates', () => ({
 }));
 
 import { BaseAgent } from '../base-agent';
-import { AGENT_SPECIALIZATION_TAG, RUNTIME_STATE_TAG } from '../runtime-state-fragment';
+import { AGENT_SPECIALIZATION_TAG, RUNTIME_STATE_TAG, VOLATILE_TEMPLATE_MARKERS } from '../constants';
 
 type VolatileMessage = ChatMessage<{ volatileState?: boolean }>;
 interface Internals {
@@ -57,7 +90,6 @@ interface Internals {
 /** The two catalog collections a test may hang on the mocked AIEngine instance. */
 interface EngineCatalogMock {
     PromptModels?: Array<{ PromptID: string; ModelID: string }>;
-    Models?: Array<{ ID: string; Name: string }>;
 }
 
 const USER = { ID: 'u1', Name: 'Tester' } as unknown as UserInfo;
@@ -138,6 +170,32 @@ describe('BaseAgent.buildVolatileStateMessage', () => {
         const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, syncedSystemPrompt);
         expect(msg).not.toBeNull();
         expect(msg!.metadata?.volatileState).toBe(true);
+    });
+
+    it('template sync guard: the markers are an overridable extension point, defaulting to VOLATILE_TEMPLATE_MARKERS', async () => {
+        // A template that lays the state out under a heading the defaults do not know, but still carries the pointer.
+        const customLayout = `# System Prompt\n\n## Working Memory\n{{ notes }}\n\n## Runtime State\nDelivered in the FINAL message inside \`<${RUNTIME_STATE_TAG}>\` tags.`;
+        templates.byId.set('tmpl-custom', customLayout);
+        const customSystemPrompt = { ID: 'custom-1', Name: 'Custom System Prompt', TemplateID: 'tmpl-custom' } as unknown as MJAIPromptEntityExtended;
+
+        // Defaults: nothing in VOLATILE_TEMPLATE_MARKERS matches, so the fragment is delivered.
+        const stock = agentUnderTest();
+        const { params, promptParams } = makeInputs(TRAILING);
+        expect(await stock.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, customSystemPrompt)).not.toBeNull();
+        expect(VOLATILE_TEMPLATE_MARKERS).toContain('## Current Date/Time');
+
+        // A subclass declaring its own heading as a volatile marker suppresses the fragment for that template.
+        class CustomLayoutAgent extends BaseAgent {
+            protected override get VolatileTemplateMarkers(): readonly string[] {
+                return [...VOLATILE_TEMPLATE_MARKERS, '## Working Memory'];
+            }
+        }
+        const custom = new CustomLayoutAgent() as unknown as Internals;
+        custom._promptRunner = stock._promptRunner;
+        custom.logStatus = vi.fn();
+        custom.logError = vi.fn();
+        expect(await custom.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, customSystemPrompt)).toBeNull();
+        expect(custom.logStatus).toHaveBeenCalledWith(expect.stringContaining('database template unsynced'), true, params);
     });
 
     it('delivery gate: a system prompt with neither the pointer nor the old blocks (Harness, custom prompt) gets no fragment', async () => {
@@ -342,66 +400,121 @@ describe('BaseAgent.assembleOutgoingMessages', () => {
 });
 
 describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
+    beforeEach(() => catalog.reset());
+
+    /** Seeds one model with a developer row and an inference row for `vendor`, each optionally carrying a strategy. */
+    function seed(
+        modelID: string,
+        vendorID: string,
+        strategies: { model?: string | null; inferenceRow?: string | null; developerRow?: string | null } = {}
+    ): { model: CatalogModel; vendor: CatalogVendor } {
+        const bag = (strategy: string | null | undefined): string | undefined =>
+            strategy === undefined ? undefined : JSON.stringify({ LLM: { PromptCacheStrategy: strategy } });
+        const model: CatalogModel = { ID: modelID, Name: modelID, ModelConfiguration: bag(strategies.model) };
+        const vendor: CatalogVendor = { ID: vendorID, Name: vendorID };
+        const rows: CatalogModelVendor[] = [
+            { ID: `${modelID}:${vendorID}:developer`, VendorID: vendorID, TypeID: 'developer', ModelConfiguration: bag(strategies.developerRow) },
+            { ID: `${modelID}:${vendorID}:inference`, VendorID: vendorID, TypeID: 'inference', ModelConfiguration: bag(strategies.inferenceRow) },
+        ];
+        catalog.models.set(modelID, model);
+        catalog.vendors.set(vendorID, vendor);
+        catalog.modelVendors.set(modelID, rows);
+        return { model, vendor };
+    }
+
     it('returns true when trailingStateMode is explicitly appendOnly', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({ trailingStateMode: 'appendOnly' });
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
     });
 
-    it('returns false when trailingStateMode is explicitly replace', () => {
+    it('returns false when trailingStateMode is explicitly replace, whatever the catalog says', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({ trailingStateMode: 'replace' });
-        // Even if lastModelSelectionInfo was OpenAI, explicit replace wins
-        a._lastModelSelectionInfo = { vendorSelected: { Name: 'OpenAI', DriverClass: 'OpenAILLM' } };
+        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
+        a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
     });
 
-    it('auto-detects OpenAI from previous turn model selection info', () => {
+    it("append-only when the inference provider's model-vendor row declares PromptCacheStrategy 'prefix'", () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
-        a._lastModelSelectionInfo = { vendorSelected: { Name: 'OpenAI', DriverClass: 'OpenAILLM' } };
+        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
+        a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
     });
 
-    it('auto-detects xAI and Grok models from previous turn model selection info', () => {
+    it('replace-in-place when no catalog layer declares a strategy: names and driver classes are never consulted', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
-        a._lastModelSelectionInfo = { vendorSelected: { Name: 'x.ai', DriverClass: 'xAILLM' } };
-        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+        // A model whose NAME says GPT, served by a block-cache host with no strategy set: replace.
+        const { model, vendor } = seed('GPT-OSS-120B', 'cerebras');
+        a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
 
-        // Fresh decision for the Grok-by-model-name case (the first answer is frozen per run)
-        a._resolvedTrailingStateMode = undefined;
-        a._lastModelSelectionInfo = { modelSelected: { Name: 'Grok 4.7' } };
+        // ...and a vendor whose NAME says OpenAI, with nothing in the catalog, is still replace.
+        const b = agentUnderTest();
+        const openai = seed('some-model', 'OpenAI');
+        b._lastModelSelectionInfo = { ModelSelected: openai.model, vendorSelected: openai.vendor };
+        expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+    });
+
+    it("the inference provider's row wins over the model's own bag, in both directions", () => {
+        const { promptParams } = makeInputs({});
+
+        // The model developer's serving is a prefix cache; this host's serving of the same model is not.
+        const a = agentUnderTest();
+        const hosted = seed('gpt-oss', 'cerebras', { model: 'prefix', inferenceRow: 'block' });
+        a._lastModelSelectionInfo = { ModelSelected: hosted.model, vendorSelected: hosted.vendor };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+
+        // The reverse: model says block, this host says prefix.
+        const b = agentUnderTest();
+        const own = seed('gpt-oss', 'openai', { model: 'block', inferenceRow: 'prefix' });
+        b._lastModelSelectionInfo = { ModelSelected: own.model, vendorSelected: own.vendor };
+        expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+    });
+
+    it("a strategy on the vendor's DEVELOPER row is ignored: only the inference row serves requests", () => {
+        const a = agentUnderTest();
+        const { promptParams } = makeInputs({});
+        const { model, vendor } = seed('gpt-5', 'openai', { developerRow: 'prefix' });
+        a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+    });
+
+    it('falls back to the model and type layers when the selection carries no vendor', () => {
+        const a = agentUnderTest();
+        const { promptParams } = makeInputs({});
+        const { model } = seed('grok-4', 'xai', { model: 'prefix' });
+        a._lastModelSelectionInfo = { ModelSelected: model };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
     });
 
-    it('returns false for non-prefix-cache vendors (e.g. Anthropic, Cerebras)', () => {
-        const a = agentUnderTest();
+    it('a runtime model override answers immediately from the catalog; a vendor-only override defers to the first selection', () => {
         const { promptParams } = makeInputs({});
-        a._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
-        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
 
-        a._resolvedTrailingStateMode = undefined;
-        a._lastModelSelectionInfo = { vendorSelected: { Name: 'Cerebras', DriverClass: 'CerebrasLLM' } };
-        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+        const a = agentUnderTest();
+        promptParams.override = { modelId: model.ID, vendorId: vendor.ID };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+        expect(a._resolvedTrailingStateMode).toBeUndefined();
 
-        // Cerebras model with 'GPT' in the name should still return false (not treated as OpenAI)
-        a._resolvedTrailingStateMode = undefined;
-        a._lastModelSelectionInfo = {
-            vendorSelected: { Name: 'Cerebras', DriverClass: 'CerebrasLLM' },
-            modelSelected: { Name: 'GPT-OSS-120B' },
-        };
-        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+        const b = agentUnderTest();
+        promptParams.override = { vendorId: vendor.ID };
+        expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+        expect(b._resolvedTrailingStateMode).toBeUndefined();
+        promptParams.override = undefined;
     });
 
     it('turn 1 (no selection yet) is replace-in-place: the prompt\'s bound models are never consulted', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
-        // Even with an OpenAI model bound to the prompt, turn 1 must not guess append-only:
+        // Even with a prefix-cache model bound to the prompt, turn 1 must not guess append-only:
         // prompts bind several vendors for failover and the run may select any of them.
+        seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
         const engine = AIEngine.Instance as unknown as EngineCatalogMock;
-        engine.PromptModels = [{ PromptID: 'prompt-1', ModelID: 'model-openai' }];
-        engine.Models = [{ ID: 'model-openai', Name: 'gpt-4o' }];
+        engine.PromptModels = [{ PromptID: 'prompt-1', ModelID: 'gpt-5' }];
         promptParams.prompt = { ID: 'prompt-1' } as unknown as MJAIPromptEntityExtended;
 
         a._lastModelSelectionInfo = undefined;
@@ -410,24 +523,25 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         expect(a._resolvedTrailingStateMode).toBeUndefined();
 
         delete engine.PromptModels;
-        delete engine.Models;
     });
 
     it('freezes the mode at the first model selection: a later vendor change never flips it', () => {
         const { promptParams } = makeInputs({});
+        const prefix = seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
+        const block = seed('claude', 'anthropic');
 
-        // OpenAI first → append-only for the rest of the run, even after a failover to Anthropic
+        // Prefix first → append-only for the rest of the run, even after a failover to a block-cache host
         const a = agentUnderTest();
-        a._lastModelSelectionInfo = { vendorSelected: { Name: 'OpenAI', DriverClass: 'OpenAILLM' } };
+        a._lastModelSelectionInfo = { ModelSelected: prefix.model, vendorSelected: prefix.vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
-        a._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
+        a._lastModelSelectionInfo = { ModelSelected: block.model, vendorSelected: block.vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
 
-        // Anthropic first → replace-in-place for the rest of the run, even after a failover to OpenAI
+        // Block first → replace-in-place for the rest of the run, even after a failover to a prefix host
         const b = agentUnderTest();
-        b._lastModelSelectionInfo = { vendorSelected: { Name: 'Anthropic', DriverClass: 'AnthropicLLM' } };
+        b._lastModelSelectionInfo = { ModelSelected: block.model, vendorSelected: block.vendor };
         expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
-        b._lastModelSelectionInfo = { vendorSelected: { Name: 'OpenAI', DriverClass: 'OpenAILLM' } };
+        b._lastModelSelectionInfo = { ModelSelected: prefix.model, vendorSelected: prefix.vendor };
         expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
 
         // An explicit mode is not subject to freezing and still wins

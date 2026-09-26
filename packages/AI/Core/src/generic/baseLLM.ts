@@ -1,6 +1,6 @@
 import { SummarizeParams, SummarizeResult } from "./summarize.types";
 import { BaseModel, ModelUsage } from "./baseModel";
-import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
+import { ChatMessage, ChatMessageRole, ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 import { ErrorAnalyzer } from "./errorAnalyzer";
 
@@ -28,6 +28,26 @@ export interface FileCapabilities {
     MaxFilesPerRequest: number;
     /** Whether this driver has a separate file upload API (e.g. Gemini Files API) vs inline base64 */
     HasFileAPI: boolean;
+}
+
+/**
+ * The one piece of message metadata the framework and the providers agree on: `volatileState` marks
+ * a message the agent layer appended for THIS request only — per-iteration runtime state that is
+ * rebuilt every call and never persisted. Providers use it to keep such a message OUT of their
+ * cached prefix. The agent layer's fuller metadata type extends this shape; this is the narrow
+ * structural contract a driver may rely on without depending on the agents package.
+ */
+export interface VolatileStateMessageMetadata {
+    volatileState?: boolean;
+}
+
+/**
+ * An outgoing message list split around its trailing volatile-state message: `head` is the stable,
+ * cacheable history, `tail` is the volatile message and anything after it (an assistant prefill).
+ */
+export interface TrailingVolatileStateSplit {
+    head: ChatMessage[];
+    tail: ChatMessage[];
 }
 
 /**
@@ -219,6 +239,51 @@ export abstract class BaseLLM extends BaseModel {
      */
     public get SupportsPrefill(): boolean {
         return false;
+    }
+
+    /**
+     * Whether a message is framework-authored volatile state for this request only: the loop agent's
+     * trailing runtime-state fragment (date/time, scratchpad, payload, a relocated specialization),
+     * which is rebuilt every iteration and must never sit inside a provider's cached prefix.
+     *
+     * The base test is the {@link VolatileStateMessageMetadata.volatileState} flag the agent layer
+     * sets. A driver may override to recognise the message by other means (Anthropic also accepts
+     * the fragment's tag literal for callers that pass plain text), but should call `super` first.
+     */
+    protected IsVolatileStateMessage(message: ChatMessage | undefined): boolean {
+        const metadata = message?.metadata as VolatileStateMessageMetadata | undefined;
+        return metadata?.volatileState === true;
+    }
+
+    /**
+     * Index of the trailing volatile-state message in an outgoing request, or -1 when there is none.
+     * The fragment is the LAST message, or the one before it when an assistant prefill has been
+     * appended after it. -1 is also returned when nothing precedes the fragment, because then there
+     * is no stable history for a provider to cache ahead of it.
+     */
+    protected TrailingVolatileStateIndex(messages: ChatMessage[]): number {
+        const last = messages.length - 1;
+        if (last >= 1 && this.IsVolatileStateMessage(messages[last])) {
+            return last;
+        }
+        if (last >= 2 && messages[last].role === ChatMessageRole.assistant && this.IsVolatileStateMessage(messages[last - 1])) {
+            return last - 1;
+        }
+        return -1;
+    }
+
+    /**
+     * Splits an outgoing request around its trailing volatile-state message, so a driver can place
+     * its cache boundary on the last message of `head` and send `tail` uncached. Returns null when the
+     * request has no trailing volatile state, in which case the driver formats the whole list as usual.
+     * Neither array is a copy of the input's messages; only the list is new.
+     */
+    protected SplitTrailingVolatileState(messages: ChatMessage[]): TrailingVolatileStateSplit | null {
+        const index = this.TrailingVolatileStateIndex(messages);
+        if (index < 1) {
+            return null;
+        }
+        return { head: messages.slice(0, index), tail: messages.slice(index) };
     }
 
     /**

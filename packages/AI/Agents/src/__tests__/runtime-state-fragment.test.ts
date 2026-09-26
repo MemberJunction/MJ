@@ -15,11 +15,10 @@ import nunjucks from 'nunjucks';
 import {
     RuntimeStateFragmentBuilder,
     RuntimeStateFragmentInput,
-    RUNTIME_STATE_TAG,
-    AGENT_SPECIALIZATION_TAG,
     EscapeRuntimeStateTags,
     EscapeRuntimeStateTagsInMessage,
 } from '../runtime-state-fragment';
+import { RUNTIME_STATE_TAG, AGENT_SPECIALIZATION_TAG } from '../constants';
 import type { ChatMessage } from '@memberjunction/ai';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 

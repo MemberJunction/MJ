@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseLLM } from '../generic/baseLLM';
-import { ChatParams, ChatResult, ChatResultData } from '../generic/chat.types';
+import { ChatMessage, ChatParams, ChatResult, ChatResultData } from '../generic/chat.types';
 import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
 import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
 
@@ -502,5 +502,48 @@ describe('BaseLLM — native tool calling', () => {
 
             expect(result.modelSpecificResponseDetails?.streamingSuppressedForTools).toBeUndefined();
         });
+    });
+});
+
+describe('BaseLLM — trailing volatile-state seam', () => {
+    /** Exposes the protected extension points so the contract can be asserted without a provider. */
+    class SeamLLM extends TestLLM {
+        public IsVolatile(message: ChatMessage | undefined): boolean { return this.IsVolatileStateMessage(message); }
+        public Index(messages: ChatMessage[]): number { return this.TrailingVolatileStateIndex(messages); }
+        public Split(messages: ChatMessage[]): { head: ChatMessage[]; tail: ChatMessage[] } | null { return this.SplitTrailingVolatileState(messages); }
+    }
+    const volatile: ChatMessage = { role: 'user', content: '<mj-runtime-state>...</mj-runtime-state>', metadata: { volatileState: true } };
+    const plain = (content: string, role: 'user' | 'assistant' = 'user'): ChatMessage => ({ role, content });
+
+    it('recognises a message only by the volatileState metadata flag (text is not inspected here)', () => {
+        const llm = new SeamLLM();
+        expect(llm.IsVolatile(volatile)).toBe(true);
+        expect(llm.IsVolatile(plain('<mj-runtime-state>looks volatile</mj-runtime-state>'))).toBe(false);
+        expect(llm.IsVolatile({ role: 'user', content: 'x', metadata: { volatileState: false } })).toBe(false);
+        expect(llm.IsVolatile(undefined)).toBe(false);
+    });
+
+    it('finds the fragment last, or second-last under an assistant prefill, and never at index 0', () => {
+        const llm = new SeamLLM();
+        expect(llm.Index([plain('history'), volatile])).toBe(1);
+        expect(llm.Index([plain('history'), plain('more'), volatile, plain('{', 'assistant')])).toBe(2);
+        // Nothing precedes it: no stable history to cache ahead of the fragment.
+        expect(llm.Index([volatile])).toBe(-1);
+        expect(llm.Index([volatile, plain('{', 'assistant')])).toBe(-1);
+        // A user message after the fragment is not a prefill; the fragment is then not trailing.
+        expect(llm.Index([plain('history'), volatile, plain('later')])).toBe(-1);
+        expect(llm.Index([plain('history'), plain('no fragment')])).toBe(-1);
+    });
+
+    it('splits into the cacheable head and the volatile tail without copying messages', () => {
+        const llm = new SeamLLM();
+        const h1 = plain('h1'); const h2 = plain('h2', 'assistant'); const prefill = plain('{', 'assistant');
+        const split = llm.Split([h1, h2, volatile, prefill]);
+        expect(split).not.toBeNull();
+        expect(split!.head).toEqual([h1, h2]);
+        expect(split!.tail).toEqual([volatile, prefill]);
+        expect(split!.head[0]).toBe(h1);
+        expect(llm.Split([h1, h2])).toBeNull();
+        expect(llm.Split([volatile])).toBeNull();
     });
 });

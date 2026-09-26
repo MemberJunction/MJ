@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from './native-tools/action-tool-builder';
 import { BuildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
@@ -20,10 +20,10 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, GetPromptCacheStrategy, IRealtimeSession, JSONObject, PromptCacheStrategy, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -115,8 +115,18 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver, RunActionParams } from '@memberjunction/actions-base';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage, RUNTIME_STATE_TAG } from './runtime-state-fragment';
+import { RuntimeStateFragmentBuilder, RuntimeStateDateTime, RuntimeStateScratchpad, EscapeRuntimeStateTagsInMessage } from './runtime-state-fragment';
 import { ResolveSpecializationPlacement } from './volatile-child-prompt';
+import {
+    CURRENT_DATE_PLACEHOLDER,
+    CURRENT_DAY_OF_WEEK_PLACEHOLDER,
+    CURRENT_TIME_PLACEHOLDER,
+    RUNTIME_STATE_TAG,
+    SCRATCHPAD_NOTES_PLACEHOLDER,
+    SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER,
+    SCRATCHPAD_TASKS_PLACEHOLDER,
+    VOLATILE_TEMPLATE_MARKERS,
+} from './constants';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
@@ -4329,9 +4339,9 @@ export class BaseAgent {
             const agentTypePromptParams = promptParams.data.__agentTypePromptParams as Record<string, unknown> | undefined;
             const scratchpadEnabled = agentTypePromptParams?.includeScratchpadDocs !== false;
             if (scratchpadEnabled && this._scratchpadManager) {
-                promptParams.data['_SCRATCHPAD_NOTES'] = this._scratchpadManager.GetNotes() || '_(no notes yet)_';
-                promptParams.data['_SCRATCHPAD_TASKS'] = this._scratchpadManager.ToPromptString();
-                promptParams.data['_SCRATCHPAD_TASK_SUMMARY'] = this._scratchpadManager.GetTaskSummary();
+                promptParams.data[SCRATCHPAD_NOTES_PLACEHOLDER] = this._scratchpadManager.GetNotes() || '_(no notes yet)_';
+                promptParams.data[SCRATCHPAD_TASKS_PLACEHOLDER] = this._scratchpadManager.ToPromptString();
+                promptParams.data[SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER] = this._scratchpadManager.GetTaskSummary();
             }
 
             // Inject artifact tools template variables if enabled and artifacts are present.
@@ -4573,7 +4583,11 @@ export class BaseAgent {
      * achieving ~93% cache hit rate. Providers with block-level or sliding caching (Gemini, Cerebras)
      * use replace-in-place to keep context compact.
      *
-     * Decided ONCE per run. An explicit `trailingStateMode` or a runtime vendor/model override answers
+     * Which providers are which is METADATA, not code: the `PromptCacheStrategy` knob in the model
+     * catalog's `ModelConfiguration` cascade (Model Types < Models < Model Vendors), read through
+     * {@link ResolvePromptCacheStrategy}. `'prefix'` means append-only; anything else means replace.
+     *
+     * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
      * immediately. Otherwise the answer is frozen at the first model selection and reused for every
      * later turn, so a failover to another vendor cannot flip the layout mid-run — a flip after turn 2
      * would leave stale fragments in the history or, worse, restore the wrong turn's fragment. On turn 1,
@@ -4595,19 +4609,22 @@ export class BaseAgent {
             return false;
         }
 
-        if (promptParams.override?.vendorId || promptParams.override?.modelId) {
-            const vendor = promptParams.override?.vendorId ? AIEngine.Instance?.Vendors?.find(v => UUIDsEqual(v.ID, promptParams.override?.vendorId)) : undefined;
-            const model = promptParams.override?.modelId ? AIEngine.Instance?.Models?.find(m => UUIDsEqual(m.ID, promptParams.override?.modelId)) : undefined;
-            return this.isPrefixCacheTarget(model?.Name, vendor?.Name ?? model?.Vendor, model?.DriverClass);
+        // A model override pins the serving path for the whole run, so it answers now. A vendor-only
+        // override cannot: the strategy lives on the model-vendor row, which needs the model too, so
+        // that case is decided at the first selection like any other run.
+        if (promptParams.override?.modelId) {
+            const model = AIEngine.Instance?.ModelsByID?.get(NormalizeUUID(promptParams.override.modelId));
+            const vendor = promptParams.override.vendorId ? AIEngine.Instance?.VendorsByID?.get(NormalizeUUID(promptParams.override.vendorId)) : undefined;
+            return this.ResolvePromptCacheStrategy(model, vendor) === 'prefix';
         }
 
         if (this._resolvedTrailingStateMode !== undefined) {
             return this._resolvedTrailingStateMode;
         }
         if (this._lastModelSelectionInfo) {
-            const v = this._lastModelSelectionInfo.vendorSelected;
-            const m = this._lastModelSelectionInfo.modelSelected;
-            this._resolvedTrailingStateMode = this.isPrefixCacheTarget(m?.Name, v?.Name ?? m?.Vendor, m?.DriverClass);
+            const model = this._lastModelSelectionInfo.ModelSelected;
+            const vendor = this._lastModelSelectionInfo.vendorSelected;
+            this._resolvedTrailingStateMode = this.ResolvePromptCacheStrategy(model, vendor) === 'prefix';
             return this._resolvedTrailingStateMode;
         }
 
@@ -4616,24 +4633,25 @@ export class BaseAgent {
     }
 
     /**
-     * True when the vendor, model name or driver identifies a provider whose prompt cache is an exact
-     * byte-prefix match (OpenAI, xAI / Grok). Providers with block-level or sliding caches (Cerebras,
-     * Anthropic, Google / Gemini) are excluded first, so a model name like Cerebras's GPT-OSS-120B is
-     * never mistaken for an OpenAI target.
+     * The {@link PromptCacheStrategy} declared for a model as served by a vendor, read from the model
+     * catalog's `ModelConfiguration` cascade — `AIModelType < AIModel < AIModelVendor` — via
+     * `AIEngine.GetEffectiveModelConfiguration`. The most specific layer is the INFERENCE-PROVIDER
+     * model-vendor row for `vendor`; when the vendor is unknown, or has no inference row for this
+     * model, the model and type layers still answer. Returns null when no layer declares a strategy,
+     * which callers treat as `'block'` (replace-in-place).
+     *
+     * Extension point: a subclass with out-of-catalog knowledge (an OpenAI-compatible gateway whose
+     * rows carry no strategy, say) can override this rather than the mode decision above.
      */
-    protected isPrefixCacheTarget(name?: string | null, vendor?: string | null, driver?: string | null): boolean {
-        const n = name?.toLowerCase() ?? '';
-        const v = vendor?.toLowerCase() ?? '';
-        const d = driver?.toLowerCase() ?? '';
-
-        if (v.includes('cerebras') || v.includes('anthropic') || v.includes('google') || v.includes('gemini') ||
-            d.includes('cerebras') || d.includes('anthropic') || d.includes('gemini')) {
-            return false;
+    protected ResolvePromptCacheStrategy(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): PromptCacheStrategy | null {
+        if (!model) {
+            return null;
         }
-
-        return n.includes('gpt') || n.includes('openai') || n.includes('grok') ||
-               v.includes('openai') || v.includes('x.ai') || v.includes('xai') ||
-               d.includes('openai') || d.includes('xai');
+        const engine = AIEngine.Instance;
+        const modelVendor = vendor
+            ? (engine.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv))
+            : undefined;
+        return GetPromptCacheStrategy(engine.GetEffectiveModelConfiguration(model.ID, modelVendor?.ID));
     }
 
     /**
@@ -4770,18 +4788,22 @@ export class BaseAgent {
     }
 
     /**
-     * True when unrendered template text still renders the volatile state blocks itself
-     * (`## Current Date/Time`, `## Scratchpad State`, `## Current State`, or the temporal / payload
-     * placeholders) — the legacy Loop layout, or any template that embeds the payload.
+     * The strings whose presence in a system prompt's unrendered template text means the template
+     * still renders the volatile state itself, so the trailing fragment must be suppressed. Defaults
+     * to {@link VOLATILE_TEMPLATE_MARKERS}: the three block headings plus the date and payload
+     * placeholders. Extension point — an agent type whose template lays the state out under other
+     * headings overrides this to return its own markers.
+     */
+    protected get VolatileTemplateMarkers(): readonly string[] {
+        return VOLATILE_TEMPLATE_MARKERS;
+    }
+
+    /**
+     * True when unrendered template text contains any of {@link VolatileTemplateMarkers} — the legacy
+     * Loop layout, or any template that embeds the payload.
      */
     protected templateTextEmbedsVolatileState(templateText: string): boolean {
-        return (
-            templateText.includes('## Current Date/Time') ||
-            templateText.includes('## Scratchpad State') ||
-            templateText.includes('## Current State') ||
-            templateText.includes('_CURRENT_DATE') ||
-            templateText.includes('_CURRENT_PAYLOAD')
-        );
+        return this.VolatileTemplateMarkers.some(marker => templateText.includes(marker));
     }
 
     /**
@@ -4834,7 +4856,7 @@ export class BaseAgent {
                 return null;
             }
         };
-        const [date, dayOfWeek, time] = await Promise.all([resolve('_CURRENT_DATE'), resolve('_CURRENT_DAY_OF_WEEK'), resolve('_CURRENT_TIME')]);
+        const [date, dayOfWeek, time] = await Promise.all([resolve(CURRENT_DATE_PLACEHOLDER), resolve(CURRENT_DAY_OF_WEEK_PLACEHOLDER), resolve(CURRENT_TIME_PLACEHOLDER)]);
         if (!date || !dayOfWeek || !time) {
             return null;
         }
@@ -4846,7 +4868,7 @@ export class BaseAgent {
      * exactly what the template would have). Null when the scratchpad is disabled or absent.
      */
     protected readScratchpadFromTemplateData(data: Record<string, unknown>): RuntimeStateScratchpad | null {
-        const notes = data._SCRATCHPAD_NOTES, tasks = data._SCRATCHPAD_TASKS, summary = data._SCRATCHPAD_TASK_SUMMARY;
+        const notes = data[SCRATCHPAD_NOTES_PLACEHOLDER], tasks = data[SCRATCHPAD_TASKS_PLACEHOLDER], summary = data[SCRATCHPAD_TASK_SUMMARY_PLACEHOLDER];
         if (typeof notes !== 'string' || typeof tasks !== 'string' || typeof summary !== 'string') {
             return null;
         }
