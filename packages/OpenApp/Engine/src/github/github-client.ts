@@ -71,6 +71,28 @@ export interface MigrationDownloadResult {
 }
 
 /**
+ * Strips leading and trailing `/` from an in-repo path.
+ *
+ * DELIBERATELY NOT A REGEX. The obvious `replace(/^\/+|\/+$/g, '')` is quadratic in a run of
+ * slashes — the `\/+$` alternative is retried from every index and gives the run back one
+ * character at a time — and the strings reaching here come from a repository URL, which is
+ * caller-supplied. CodeQL flags exactly that shape. Index arithmetic is linear and says the same
+ * thing.
+ */
+function trimSlashes(value: string): string {
+    let start = 0;
+    let end = value.length;
+    while (start < end && value.charCodeAt(start) === 47 /* / */) start++;
+    while (end > start && value.charCodeAt(end - 1) === 47 /* / */) end--;
+    return value.slice(start, end);
+}
+
+/** `trimSlashes`, preserving `undefined` the way the optional chaining it replaces did. */
+function SubpathOrUndefined(value: string | undefined): string | undefined {
+    return value === undefined ? undefined : trimSlashes(value);
+}
+
+/**
  * Parses a GitHub repository URL into owner, repo, and an optional in-repo subpath.
  *
  * Supports two forms:
@@ -95,7 +117,7 @@ export function ParseGitHubUrl(repoUrl: string): { Owner: string; Repo: string; 
     }
     const owner = match[1];
     const repo = match[2].replace(/\.git$/, '');
-    const rawSubpath = (match[3] ?? '').replace(/^\/+|\/+$/g, '');
+    const rawSubpath = trimSlashes(match[3] ?? '');
     const subpath = rawSubpath.length > 0 ? rawSubpath : undefined;
     return { Owner: owner, Repo: repo, Subpath: subpath };
 }
@@ -219,8 +241,36 @@ async function ListDirectory(octokit: Octokit, owner: string, repo: string, path
  * own independent tag line (`CRM-HubSpot@1.2.0`). undefined for single-app repos (repo-wide `vX.Y.Z`).
  */
 function ScopedTagPrefix(subpath: string | undefined): string | undefined {
-    const s = subpath?.replace(/^\/+|\/+$/g, '');
+    const s = subpath === undefined ? undefined : trimSlashes(subpath);
     return s ? s.replace(/\//g, '-') : undefined;
+}
+
+/**
+ * Every tag prefix a subpath app might REALLY be tagged under.
+ *
+ * The directory an app lives in is not its identity, and deriving the tag name from the directory
+ * silently assumed it was. A monorepo that releases through changesets tags by PACKAGE name
+ * (`@memberjunction/connector-pheedloop@1.4.6`), not by folder (`Events-PheedLoop@1.4.6`) — so for
+ * every such app `GetLatestVersion` matched nothing, returned null, and `mj app upgrade` reported
+ * 'Could not determine target version'. Installs hid it because a version-less install resolves to
+ * HEAD and never consults a tag at all, which is why this only ever surfaced on the first upgrade.
+ *
+ * `appName` is the manifest's own `name` — the unscoped half of the published package — so the
+ * pattern below accepts an optional `@scope/` in front of it. The folder form is kept as a
+ * candidate so repos that genuinely tag that way are unaffected.
+ */
+function ScopedTagCandidates(subpath: string | undefined, appName?: string): string[] {
+    const out: string[] = [];
+    const folder = ScopedTagPrefix(subpath);
+    if (folder) out.push(folder);
+    const name = appName?.trim();
+    if (name && name !== folder) out.push(name);
+    return out;
+}
+
+/** Escapes a literal for embedding in a RegExp. */
+function EscapeForRegExp(v: string): string {
+    return v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -256,15 +306,21 @@ export async function FetchManifestFromGitHub(
     repoUrl: string,
     version: string | undefined,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<ManifestFetchResult> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
-    const ref = ResolveRef(version, effectiveSubpath);
+    const effectiveSubpath = SubpathOrUndefined(subpath ?? parsed.Subpath);
+    // Prefer the tag that EXISTS over one composed from the folder name; fall back to the composed
+    // form so single-app repos and repos that really do tag by folder are untouched.
+    const ref = version
+        ? (await FindVersionTagName(repoUrl, options, version, effectiveSubpath, appName))
+            ?? ResolveRef(version, effectiveSubpath)
+        : ResolveRef(version, effectiveSubpath);
     const manifestPath = ComposeRepoPath(effectiveSubpath, 'mj-app.json');
 
     try {
@@ -372,21 +428,36 @@ async function listSqlFilesRecursive(
     return out;
 }
 
+/**
+ * Downloads an app's `.sql` migrations from the repo at the ref its version is tagged under.
+ *
+ * `appName` is the manifest's own `name`, for the same reason the manifest fetch needs it: a
+ * package-tagged monorepo publishes `@memberjunction/connector-pheedloop@1.4.6`, never the folder
+ * form `Events-PheedLoop@1.4.6`, and unlike the manifest fetch this call ALWAYS has a version
+ * (`manifest.version` is required by the manifest schema) — so it never falls back to HEAD and the
+ * composed folder ref 404s on every install, upgrade and teardown of such an app.
+ */
 export async function DownloadMigrations(
     repoUrl: string,
     version: string | undefined,
     migrationsPath: string,
     localDir: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<MigrationDownloadResult> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
-    const ref = ResolveRef(version, effectiveSubpath);
+    const effectiveSubpath = SubpathOrUndefined(subpath ?? parsed.Subpath);
+    // Prefer the tag that EXISTS over one composed from the folder name; fall back to the composed
+    // form so single-app repos and repos that really do tag by folder are untouched.
+    const ref = version
+        ? (await FindVersionTagName(repoUrl, options, version, effectiveSubpath, appName))
+            ?? ResolveRef(version, effectiveSubpath)
+        : ResolveRef(version, effectiveSubpath);
     const cleanPath = ComposeRepoPath(effectiveSubpath, migrationsPath);
     const octokit = CreateOctokit(repoUrl, options);
 
@@ -444,11 +515,12 @@ export async function DownloadMigrations(
 export async function GetLatestVersion(
     repoUrl: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<string | null> {
     // For a multi-app (subpath) app, versions live in per-connector scoped tags, not repo-wide
     // releases — go straight to the scoped tag line.
-    if (!ScopedTagPrefix(subpath ?? ParseGitHubUrl(repoUrl)?.Subpath)) {
+    if (ScopedTagCandidates(subpath ?? ParseGitHubUrl(repoUrl)?.Subpath, appName).length === 0) {
         const releases = await ListGitHubReleases(repoUrl, options);
         // GitHub returns releases newest-CREATED first, which is not newest-VERSION first: a patch
         // backported to an older line after a major ships is the most recent release but the lower
@@ -484,7 +556,7 @@ export async function GetLatestVersion(
         }
     }
 
-    const tags = await ListGitHubTags(repoUrl, options, subpath);
+    const tags = await ListGitHubTags(repoUrl, options, subpath, appName);
     if (tags.length > 0) {
         // Same stable preference as the releases path above: never offer a prerelease as the version
         // an installed app should upgrade to, unless nothing stable is tagged at all.
@@ -516,25 +588,70 @@ export async function GetLatestVersion(
  * @param options - GitHub client options
  * @returns Sorted tag names (e.g., ['v1.0.7', 'v1.0.6', ...])
  */
+/**
+ * The tag name a given version is REALLY published under, or null if nothing matches.
+ *
+ * `ResolveRef` builds a ref by string-concatenation from the folder name, which is a guess. For a
+ * package-tagged monorepo that guess is wrong in the same way the version lookup was wrong, so
+ * fixing only the lookup would move the failure from "could not determine target version" to a 404
+ * on a ref that never existed. This asks the repo instead.
+ *
+ * Returns the FULL tag name (`@memberjunction/connector-pheedloop@1.4.6`), which is what the git
+ * ref actually is.
+ */
+export async function FindVersionTagName(
+    repoUrl: string,
+    options: GitHubClientOptions,
+    version: string,
+    subpath?: string,
+    appName?: string
+): Promise<string | null> {
+    const parsed = ParseGitHubUrl(repoUrl);
+    if (!parsed) return null;
+    const candidates = ScopedTagCandidates(subpath ?? parsed.Subpath, appName);
+    if (candidates.length === 0) return null;
+    const want = version.replace(/^v/, '');
+    const pattern = new RegExp(
+        `^(?:@[^/]+/)?(?:${candidates.map(EscapeForRegExp).join('|')})@(.+)$`
+    );
+    try {
+        for (const name of await FetchRepoTagNames(repoUrl, parsed, options)) {
+            const m = name.match(pattern);
+            if (m && m[1].replace(/^v/, '') === want) return name;
+        }
+        return null;
+    }
+    catch (error: unknown) {
+        // Same rule as the tag listing: a rate limit must not read as "no such tag".
+        ThrowIfRateLimitedOrForbidden(error, 'resolving version tag');
+        return null;
+    }
+}
+
 export async function ListGitHubTags(
     repoUrl: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<string[]> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return [];
     }
 
-    const prefix = ScopedTagPrefix(subpath ?? parsed.Subpath);
+    const candidates = ScopedTagCandidates(subpath ?? parsed.Subpath, appName);
+    const prefix = candidates.length > 0 ? candidates[0] : undefined;
     // Named to avoid shadowing the imported `semver` library below. Kept as a regex rather than
     // delegating to `semver.valid` because this also has to LOCATE the version inside a scoped tag
     // (`<prefix>@1.2.3`); `SemverCore` then normalizes whatever it captures.
     const SEMVER_PATTERN = '\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?';
     // Multi-app repo: match this connector's scoped tags `<prefix>@<semver>` and return the versions.
     // Single-app repo: match repo-wide `v<semver>` tags as before.
+    // `(?:@[^/]+/)?` tolerates the npm scope the real tag carries
+    // (`@memberjunction/connector-pheedloop@1.4.6`) without the caller having to know it — the
+    // scope is a publishing detail, the app's own name is the identity.
     const pattern = prefix
-        ? new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@(${SEMVER_PATTERN})$`)
+        ? new RegExp(`^(?:@[^/]+/)?(?:${candidates.map(EscapeForRegExp).join('|')})@(${SEMVER_PATTERN})$`)
         : new RegExp(`^(v?${SEMVER_PATTERN})$`);
 
     try {
@@ -704,7 +821,8 @@ export async function ValidateGitHubTag(
     repoUrl: string,
     version: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<{ Exists: boolean; ErrorMessage?: string }> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
@@ -712,7 +830,8 @@ export async function ValidateGitHubTag(
     }
 
     // Multi-app repo: scoped tag `<prefix>@<version>`; single-app repo: `v<version>`.
-    const tag = ResolveRef(version, subpath ?? parsed.Subpath);
+    const tag = (await FindVersionTagName(repoUrl, options, version, subpath ?? parsed.Subpath, appName))
+        ?? ResolveRef(version, subpath ?? parsed.Subpath);
 
     try {
         await CreateOctokit(repoUrl, options).git.getRef({ owner: parsed.Owner, repo: parsed.Repo, ref: `tags/${tag}` });
