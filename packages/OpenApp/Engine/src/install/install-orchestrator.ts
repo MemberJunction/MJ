@@ -952,15 +952,39 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     // `mj app enable` after a manual `npm install`. An upgraded app whose new packages never
     // resolved must not be advertised as healthy.
     const upgradeFinalStatus = npmInstallWarning ? 'Disabled' : 'Active';
+    // `SchemaName` is refreshed from the manifest alongside `ManifestJSON` — the manifest is the
+    // documented source of truth for the app's schema, so the denormalized column must not be
+    // allowed to drift from it across upgrades. Before this, `SchemaName` was written ONLY by
+    // install: an app whose manifest later corrected its schema name (most commonly its CASING,
+    // e.g. '__bcsaas' -> '__BCSaaS') kept the stale value forever, because every subsequent
+    // upgrade rewrote ManifestJSON around it. That stale value is not inert — CodeGen's
+    // `spUpdateSchemaInfoFromDatabase` backfills `SchemaInfo.CanonicalSchemaName` FROM this
+    // column, and `vwEntities` prefers CanonicalSchemaName when deriving entity ClassName/CodeName
+    // and the runtime GraphQL type names. A stale casing here therefore propagates into
+    // client-computed GraphQL operation names that no longer match the server's generated
+    // resolvers, failing every operation on the app's entities with GRAPHQL_VALIDATION_FAILED.
+    // Only written when the manifest declares a schema, so a schema-less app's column is left alone.
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Version: manifest.version,
       ManifestJSON: JSON.stringify(manifest),
       Status: upgradeFinalStatus,
+      ...(manifest.schema ? { SchemaName: manifest.schema.name } : {}),
     });
     if (upgradeFinalStatus !== 'Active') {
       // Array-agnostic by AppName — sweeps both the server and client arrays.
       ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false, context.ServerPackagePath);
     }
+
+    // Re-assert the canonical schema name on the app's SchemaInfo row, mirroring the install path
+    // (Steps 6-7). The backfill inside `spUpdateSchemaInfoFromDatabase` only ever FILLS NULLS, so
+    // a CanonicalSchemaName already frozen from a stale `OpenApp.SchemaName` is never corrected by
+    // codegen — only an upgrade that re-asserts it can heal the row. Runs after the record update
+    // above so both the column and the SchemaInfo row are set from the same manifest value.
+    // Best-effort by contract (warns, never fatal), and idempotent.
+    if (manifest.schema) {
+      await PersistCanonicalSchemaName(manifest, context);
+    }
+
     await SetAppStep(context.ContextUser, existingApp.ID, 'RecordUpdated', undefined, manifest.version);
 
     // Step 11: Execute hooks
