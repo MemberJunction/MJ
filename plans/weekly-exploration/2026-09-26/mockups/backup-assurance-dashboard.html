@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backup Assurance</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa; --mj-bg-surface: white; --mj-bg-surface-card: #f5f7fa; --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155; --mj-text-secondary: #64748b; --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF; --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0; --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a; --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c; --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626; --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7; --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px; }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .content { padding: 22px 28px 40px; }
+  .env-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 22px; }
+  .env-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; position: relative; overflow: hidden; }
+  .env-card::before { content:''; position:absolute; top:0; left:0; width:4px; height:100%; }
+  .env-card.pass::before { background: var(--mj-status-success); }
+  .env-card.warn::before { background: var(--mj-status-warning); }
+  .env-card.fail::before { background: var(--mj-status-error); }
+  .env-card .name { font-weight: 700; font-size: 14px; margin-bottom: 2px; padding-left: 8px; }
+  .env-card .last { font-size: 11.5px; color: var(--mj-text-secondary); margin-bottom: 12px; padding-left: 8px; }
+  .env-card .metrics { display: flex; gap: 18px; padding-left: 8px; }
+  .env-card .metric .k { font-size: 10.5px; color: var(--mj-text-muted); text-transform: uppercase; font-weight: 700; }
+  .env-card .metric .v { font-size: 18px; font-weight: 800; }
+  .status-pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; position:absolute; top: 14px; right: 14px; }
+  .status-pass { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .status-warn { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .status-fail { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+  .card-header .hint { font-size: 11.5px; color: var(--mj-text-muted); }
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; align-items: start; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 9px 18px; color: var(--mj-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--mj-border-default); }
+  td { padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  tr:last-child td { border-bottom: none; }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; }
+  .trend { display: flex; align-items: flex-end; gap: 8px; height: 110px; padding: 18px; }
+  .trend .col { display:flex; flex-direction: column; align-items: center; gap: 6px; flex:1; }
+  .trend .bar { width: 22px; border-radius: 4px 4px 0 0; background: var(--mj-status-success); }
+  .trend .bar.warn { background: var(--mj-status-warning); }
+  .trend .bar.fail { background: var(--mj-status-error); }
+  .trend .lbl { font-size: 10px; color: var(--mj-text-muted); }
+  .check-list { padding: 4px 18px 14px; }
+  .check-line { display: flex; gap: 10px; padding: 8px 0; font-size: 12.5px; border-bottom: 1px dashed var(--mj-border-subtle); align-items: center; }
+  .check-line:last-child { border-bottom: none; }
+  .check-line i { width: 15px; text-align: center; }
+  .check-line.pass i { color: var(--mj-status-success); }
+  .check-line.fail i { color: var(--mj-status-error); }
+  .check-line .name { flex: 1; font-weight: 600; }
+  .check-line .detail { color: var(--mj-text-muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+  <div class="nav-section">Admin</div>
+  <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Tenant Isolation</div>
+  <div class="nav-item"><i class="fa-solid fa-diagram-project"></i> Execution Trace</div>
+  <div class="nav-item"><i class="fa-solid fa-magnifying-glass-chart"></i> Search Quality</div>
+  <div class="nav-item active"><i class="fa-solid fa-database"></i> Backup Assurance</div>
+  <div class="nav-item"><i class="fa-solid fa-envelope-circle-check"></i> Content Assurance</div>
+  <div class="nav-section">Data</div>
+  <div class="nav-item"><i class="fa-solid fa-table"></i> Entities</div>
+  <div class="nav-item"><i class="fa-solid fa-users"></i> Contacts</div>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div>
+      <h1><i class="fa-solid fa-database"></i> Backup Assurance</h1>
+      <div class="sub">Is the backup actually restorable? Verified on a schedule, not assumed.</div>
+    </div>
+    <button class="btn btn-primary"><i class="fa-solid fa-rotate"></i> Run Verification Now</button>
+  </div>
+  <div class="content">
+    <div class="env-grid">
+      <div class="env-card pass">
+        <span class="status-pill status-pass"><i class="fa-solid fa-check"></i> Verified</span>
+        <div class="name">Production</div>
+        <div class="last">Last verified 6 hours ago</div>
+        <div class="metrics">
+          <div class="metric"><div class="k">RPO</div><div class="v">4.1h</div></div>
+          <div class="metric"><div class="k">RTO</div><div class="v">22m</div></div>
+          <div class="metric"><div class="k">Checks</div><div class="v">6/6</div></div>
+        </div>
+      </div>
+      <div class="env-card warn">
+        <span class="status-pill status-warn"><i class="fa-solid fa-triangle-exclamation"></i> RPO High</span>
+        <div class="name">Chapter DB — EU West</div>
+        <div class="last">Last verified 2 days ago</div>
+        <div class="metrics">
+          <div class="metric"><div class="k">RPO</div><div class="v" style="color:var(--mj-status-warning)">31h</div></div>
+          <div class="metric"><div class="k">RTO</div><div class="v">40m</div></div>
+          <div class="metric"><div class="k">Checks</div><div class="v">6/6</div></div>
+        </div>
+      </div>
+      <div class="env-card fail">
+        <span class="status-pill status-fail"><i class="fa-solid fa-xmark"></i> Failed</span>
+        <div class="name">Staging</div>
+        <div class="last">Last attempt 6 hours ago</div>
+        <div class="metrics">
+          <div class="metric"><div class="k">RPO</div><div class="v" style="color:var(--mj-status-error)">—</div></div>
+          <div class="metric"><div class="k">RTO</div><div class="v">—</div></div>
+          <div class="metric"><div class="k">Checks</div><div class="v" style="color:var(--mj-status-error)">3/6</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2><i class="fa-solid fa-chart-line"></i> RPO trend — Production</h2><div class="hint">Last 8 scheduled verification runs</div></div>
+      <div class="trend">
+        <div class="col"><div class="bar" style="height:28px"></div><div class="lbl">Aug 1</div></div>
+        <div class="col"><div class="bar" style="height:22px"></div><div class="lbl">Aug 8</div></div>
+        <div class="col"><div class="bar" style="height:26px"></div><div class="lbl">Aug 15</div></div>
+        <div class="col"><div class="bar warn" style="height:58px"></div><div class="lbl">Aug 22</div></div>
+        <div class="col"><div class="bar" style="height:24px"></div><div class="lbl">Aug 29</div></div>
+        <div class="col"><div class="bar" style="height:20px"></div><div class="lbl">Sep 5</div></div>
+        <div class="col"><div class="bar" style="height:18px"></div><div class="lbl">Sep 12</div></div>
+        <div class="col"><div class="bar" style="height:16px"></div><div class="lbl">Sep 19</div></div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-list-check"></i> Staging — last run breakdown</h2><div class="hint">2026-09-26 03:12 UTC</div></div>
+        <div class="check-list">
+          <div class="check-line pass"><i class="fa-solid fa-check"></i><span class="name">Backup artifact located</span><span class="detail">S3 · 2026-09-25 23:00 UTC</span></div>
+          <div class="check-line pass"><i class="fa-solid fa-check"></i><span class="name">Restore target provisioned (isolated)</span><span class="detail">18s</span></div>
+          <div class="check-line pass"><i class="fa-solid fa-check"></i><span class="name">Restore executed</span><span class="detail">4m 02s</span></div>
+          <div class="check-line fail"><i class="fa-solid fa-xmark"></i><span class="name">Schema fingerprint match</span><span class="detail">Mismatch — 2 entities missing</span></div>
+          <div class="check-line fail"><i class="fa-solid fa-xmark"></i><span class="name">Flyway migration head match</span><span class="detail">Restored copy is 3 migrations behind</span></div>
+          <div class="check-line fail"><i class="fa-solid fa-xmark"></i><span class="name">Row-count tolerance (core tables)</span><span class="detail">Skipped — schema check failed first</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-bell"></i> Alert sent</h2></div>
+        <div style="padding: 14px 18px; font-size: 12.5px; color: var(--mj-text-secondary);">
+          <p style="margin-bottom:10px;"><b style="color:var(--mj-text-primary)">Staging backup verification failed</b> — the restored copy is missing schema changes present in production. The nightly backup job likely ran before last night's migration deploy completed.</p>
+          <p>Routed to: <b>#ops-alerts</b> via NotificationEngine · Assigned: on-call</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
