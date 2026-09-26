@@ -832,8 +832,10 @@ export class AIPromptRunner {
           renderedPromptText = params.systemPromptOverride;
           this.logStatus(`   Using system prompt override for prompt "${prompt.Name}" (bypassing hierarchical template rendering)`, true, params);
         } else {
-          // Render all child prompt templates recursively
-          childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
+          // Render all child prompt templates recursively (or reuse pre-rendered templates)
+          childTemplateRenderingResult = params.PreRenderedChildTemplates
+            ? { renderedTemplates: params.PreRenderedChildTemplates }
+            : await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
           // Render the parent prompt with child templates embedded
           renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         }
@@ -1454,6 +1456,29 @@ export class AIPromptRunner {
    * @param cancellationToken - Cancellation token for aborting rendering
    * @returns Promise with rendered templates map
    */
+  /**
+   * Render a set of child prompt templates WITHOUT executing anything, returning the rendered text
+   * keyed by each child's parent placeholder — exactly what the hierarchical execution path embeds
+   * into the parent template.
+   *
+   * Exposed for callers that need a child's rendered text before the run: the loop agent uses it to
+   * relocate a volatile specialization into the trailing runtime-state message (see
+   * `ResolveSpecializationPlacement` in `@memberjunction/ai-agents`) while the system prompt renders a
+   * stub in its place. Rendering is deterministic for the same inputs, so a subsequent execution of
+   * the same params reproduces the same text.
+   *
+   * @param childPrompts The child prompt params, as they would be passed in `AIPromptParams.childPrompts`.
+   * @param params The parent params (context user, data, template data) the children render against.
+   * @param cancellationToken Optional abort signal.
+   */
+  public async RenderChildPromptTemplates(
+    childPrompts: ChildPromptParam[],
+    params: AIPromptParams,
+    cancellationToken?: AbortSignal
+  ): Promise<{ renderedTemplates: Record<string, string> }> {
+    return this.renderChildPromptTemplates(childPrompts, params, cancellationToken);
+  }
+
   private async renderChildPromptTemplates(
     childPrompts: ChildPromptParam[],
     params: AIPromptParams,

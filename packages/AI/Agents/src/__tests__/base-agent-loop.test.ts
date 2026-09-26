@@ -645,7 +645,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
         expect(contents.some((c) => c.includes(`You invoked the **${ACTION_NAME}** action`))).toBe(true);
         expect(contents.some((c) => c.startsWith('Action results:'))).toBe(true);
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // Prompt 2 received the conversation history with the trailing runtime state fragment appended
+        expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
+        expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
     });
 });
 
@@ -794,8 +796,9 @@ describe('BaseAgent.Execute — native tool results: call turn → tool turn, no
         // Neither the "[You invoked …]" recap nor the markdown "Action results:" message exists.
         expect(messages.some((m) => textOf(m).includes('You invoked'))).toBe(false);
         expect(messages.some((m) => textOf(m).startsWith('Action results:'))).toBe(false);
-        // Prompt 2 saw the same array.
-        expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+        // Prompt 2 saw the conversation messages with the trailing runtime state fragment appended.
+        expect(runner.Calls[1].conversationMessages.slice(0, -1)).toEqual(params.conversationMessages);
+        expect(runner.Calls[1].conversationMessages.at(-1)?.metadata?.volatileState).toBe(true);
     });
 
     it('keeps the recap and the markdown results when the catalog did not ask for native results', async () => {
@@ -940,13 +943,12 @@ describe('BaseAgent.Execute — failure finalization', () => {
         expect(result.success).toBe(true);
         expect(harness.run.Status).toBe('Completed');
 
-        // Surprising-but-real behavior: only actions that THROW count toward the
-        // "N of M action(s) failed" header — a returned Success=false still renders
-        // under the plain "Action results:" header (with its FAILED result code).
+        // When an action returns Success=false, it correctly counts toward the
+        // failed actions header and generates failure guidance for the model.
         const contents = params.conversationMessages.map((m) => (typeof m.content === 'string' ? m.content : ''));
-        const resultsMessage = contents.find((c) => c.includes('Action results:'));
+        const resultsMessage = contents.find((c) => c.includes('action(s) failed:'));
         expect(resultsMessage).toBeDefined();
-        expect(contents.some((c) => c.includes('action(s) failed'))).toBe(false);
+        expect(contents.some((c) => c.includes('Action Execution Failure Guidance'))).toBe(true);
     });
 });
 

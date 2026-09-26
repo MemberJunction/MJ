@@ -98,6 +98,18 @@
             "default": true,
             "description": "Include current date, time, and day of week in the prompt. Provides the LLM with accurate temporal context so it doesn't hallucinate dates or claim it doesn't know the current time. Disable for agents where temporal context is irrelevant."
           },
+          "specializationPlacement": {
+            "type": "string",
+            "enum": ["auto", "systemPrompt", "trailingMessage"],
+            "default": "auto",
+            "description": "Where the agent's child prompt (specialization) is placed. 'auto' relocates it into the trailing message only if its template references a volatile placeholder (_CURRENT_DATE*, _CURRENT_TIME*, _CURRENT_PAYLOAD, _SCRATCHPAD_*) — a volatile child prompt mutates the system prompt every iteration ahead of the catalogs and history, so the runtime-state relocation alone recovers nothing for it. 'systemPrompt' never relocates; 'trailingMessage' always does. Decided once per run."
+          },
+          "trailingStateMode": {
+            "type": "string",
+            "enum": ["auto", "appendOnly", "replace"],
+            "default": "auto",
+            "description": "How the trailing runtime-state message is carried across iterations. OpenAI's automatic prompt cache only reuses a request whose entire prompt is a byte prefix of the new one, so replacing the fragment each iteration caps caching at the system prompt; retaining prior fragments and appending the new one keeps each request a prefix extension of the last. 'auto' appends when the model catalog's ModelConfiguration.LLM.PromptCacheStrategy resolves to 'prefix' for the serving path (Model Types < Models < Model Vendors, the inference provider's row winning) and replaces otherwise; the answer is taken from the runtime model override or the first iteration's model selection and then frozen for the run, so a failover never flips the layout. 'appendOnly' forces append — use for a serving path whose catalog rows carry no strategy yet. 'replace' forces replace-in-place to keep context compact."
+          },
           "enableTaskGraphs": {
             "type": "boolean",
             "default": false,

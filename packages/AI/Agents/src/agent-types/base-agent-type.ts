@@ -12,6 +12,7 @@
  */
 
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
+import { CURRENT_PAYLOAD_PLACEHOLDER } from '../constants';
 import type { NativeToolBinding } from '../native-tools/control-tools';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -98,7 +99,7 @@ export abstract class BaseAgentType {
      * Common placeholder for current payload injection
      * @static
      */
-    public static readonly CURRENT_PAYLOAD_PLACEHOLDER = '_CURRENT_PAYLOAD';
+    public static readonly CURRENT_PAYLOAD_PLACEHOLDER = CURRENT_PAYLOAD_PLACEHOLDER;
 
     /**
      * This method allows each agent type to initialize its agent-run-specific state package as required. Not all agent

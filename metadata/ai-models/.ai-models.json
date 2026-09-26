@@ -52,7 +52,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "386BAA17-71D0-42D3-8B36-ABD9279AF319"
@@ -1592,7 +1597,12 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "29BC433E-F36B-1410-867F-007B559E242F"
@@ -1660,7 +1670,12 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "28BC433E-F36B-1410-867F-007B559E242F"
@@ -2301,7 +2316,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "2EBC433E-F36B-1410-867F-007B559E242F"
@@ -2448,7 +2468,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "2FBC433E-F36B-1410-867F-007B559E242F"
@@ -2595,7 +2620,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "33BC433E-F36B-1410-867F-007B559E242F"
@@ -3448,7 +3478,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "9A2CBBF7-C708-406A-90A3-1948A05639F1"
@@ -3619,7 +3654,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "36BC433E-F36B-1410-867F-007B559E242F"
@@ -3793,7 +3833,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "E18BA441-E941-4390-B68F-137C71A80EF5"
@@ -3964,7 +4009,12 @@
             "SupportedResponseFormats": "Any",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "34BC433E-F36B-1410-867F-007B559E242F"
@@ -4227,7 +4277,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "5066102E-2052-4790-9D75-CF100F6FF5F8"
@@ -4420,7 +4475,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "5DFECCBC-A74D-493A-BFC4-6BC6DE896D11"
@@ -4594,7 +4654,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "CFBA3339-A9B7-47AC-ADC7-1049F7D45F53"
@@ -4748,7 +4813,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "35BC433E-F36B-1410-867F-007B559E242F"
@@ -4918,7 +4988,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "2DBC433E-F36B-1410-867F-007B559E242F"
@@ -5089,7 +5164,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "30BC433E-F36B-1410-867F-007B559E242F"
@@ -5357,7 +5437,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "31BC433E-F36B-1410-867F-007B559E242F"
@@ -5528,7 +5613,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "32BC433E-F36B-1410-867F-007B559E242F"
@@ -7367,7 +7457,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "A3165BF4-2856-459F-9A4B-9E13798FB811"
@@ -7485,7 +7580,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "E1C7BC25-9F64-4D81-C2B6-6DCD0A7FBF89"
@@ -7584,7 +7684,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "73C58B9B-1470-470C-B2F1-F58662C9B583"
@@ -7683,7 +7788,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "EF3CDBAF-DBF4-4AE6-819D-F0E50A58FDA4"
@@ -7782,7 +7892,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "A3D5F812-9E64-4C71-B2A6-5CBD8F6FAE79"
@@ -8811,7 +8926,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "4BEA9075-D9EF-4256-B81B-6B22E96D93CA"
@@ -10287,7 +10407,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "945C1236-B7C2-4F6B-A535-0915BF861CC0"
@@ -10470,7 +10595,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "FC307EF5-EA02-4EBF-8553-8A81A436702B"
@@ -10786,7 +10916,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "6F6210A5-72F2-4D76-AD19-B2E49A9E2FA8"
@@ -11874,7 +12009,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "858475F5-DF0D-4248-B147-44EC2D4D1F7F"
@@ -13347,7 +13487,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "AF936DAC-F5E2-41F1-8C8F-37FC40ACE449"
@@ -14047,7 +14192,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "17BE09F8-EEB3-4046-9C4B-7D1340D39562"
@@ -14222,7 +14372,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "6C9C87B2-DAED-4907-8C73-34E3506243B4"
@@ -14397,7 +14552,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "3FB819E0-67BF-410A-8DAB-86B62C4AB7D1"
@@ -15706,7 +15866,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "47E05857-30C7-40B1-8A02-323A3DC6BA4F"
@@ -15881,7 +16046,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "9117FA4A-ED22-4934-BE56-5A81A9F7EB23"
@@ -16004,7 +16174,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "42DBADF5-E1E6-4D27-8CEF-E20771C0B48D"
@@ -16817,7 +16992,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "B12DF96C-C415-4D00-A634-2EBCA428E78C"
@@ -18661,7 +18841,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "2DEA41FA-A978-4812-86C8-1A9A26A8610A"
@@ -21025,7 +21210,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "6BAD9951-BE26-4933-9F91-E6B18033F178"
@@ -21149,7 +21339,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "CF744E6E-D1A7-4EF2-BC00-CEEDCA3B5660"
@@ -21272,7 +21467,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "7E8A9F69-805F-42C5-AB6E-5CD2AB71DBCC"
@@ -21440,7 +21640,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "1EC65405-8C90-412F-A0B9-DE3CA745F038"
@@ -23448,7 +23653,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "4D6A7DBA-3F3F-4ACD-B9E4-627FF4E78877"
@@ -24574,7 +24784,12 @@
             "SupportedResponseFormats": "Any, JSON",
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
-            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
+            "ModelConfiguration": {
+              "LLM": {
+                "PromptCacheStrategy": "prefix"
+              }
+            }
           },
           "primaryKey": {
             "ID": "FD069713-E6F0-490A-BAF6-7EDFBDA2FB08"

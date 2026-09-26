@@ -340,6 +340,31 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
+     * Extends the framework's metadata-flag test with a text fallback: a message whose text opens with
+     * the runtime-state or agent-specialization tag literal is treated as the trailing fragment even
+     * when the caller passed plain `ChatMessage`s without metadata. Forged tags in history cannot
+     * reach here as an opening literal because the agent layer escapes them before sending.
+     */
+    protected override IsVolatileStateMessage(message: ChatMessage | undefined): boolean {
+        if (super.IsVolatileStateMessage(message)) {
+            return true;
+        }
+        if (!message) {
+            return false;
+        }
+        if (typeof message.content === 'string') {
+            return /^<mj-(runtime-state|agent-specialization)>/.test(message.content.trimStart());
+        }
+        if (Array.isArray(message.content)) {
+            const first = message.content[0];
+            if (first && (first.type === 'text' || first.type === 'tool_result') && typeof first.content === 'string') {
+                return /^<mj-(runtime-state|agent-specialization)>/.test(first.content.trimStart());
+            }
+        }
+        return false;
+    }
+
+    /**
      * Format messages for Anthropic API with caching support.
      * Handles both text and multi-modal content (images).
      * @param messages Messages to format
@@ -347,6 +372,23 @@ export class AnthropicLLM extends BaseLLM {
      * @returns Formatted messages
      */
     protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
+        // When the request ends with a trailing runtime state fragment (optionally followed by an
+        // assistant prefill), place the ephemeral cache breakpoint on the last real history message
+        // instead, so the next iteration's prefix still ends at a cached boundary. Otherwise the
+        // volatile fragment would sit inside the cached prefix and miss on every iteration.
+        const split = enableCaching ? this.SplitTrailingVolatileState(messages) : null;
+        if (split) {
+            const head = this.formatMessagesWithCaching(split.head, true);
+            const tail = this.formatMessagesWithCaching(split.tail, false);
+            if (head[head.length - 1]?.role === 'user' && tail[0]?.role === 'user') {
+                head.push({
+                    role: 'assistant',
+                    content: [{ type: 'text', text: 'OK' }]
+                });
+            }
+            return [...head, ...tail];
+        }
+
         const result: any[] = [];
         // Compare ANTHROPIC roles, not MJ roles: `tool` and `user` both become `user` here, and it
         // is the wire role that has to alternate. For conversations without tool turns the two are

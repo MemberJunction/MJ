@@ -481,6 +481,13 @@ export class AIPromptParams {
   templateMessageRole?: TemplateMessageRole;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Optional pre-rendered child templates map (placeholder -> renderedText).
+   * When provided, `AIPromptRunner.ExecutePrompt` bypasses re-rendering `childPrompts`
+   * and uses these pre-rendered templates directly.
+   */
+  PreRenderedChildTemplates?: Record<string, string>;
+
+  /**
    * Optional cancellation token to abort the prompt execution
    * When this signal is aborted, the execution will be cancelled and any
    * running operations will be terminated as gracefully as possible
