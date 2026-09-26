@@ -6,7 +6,6 @@ import {
   HashToken,
   EvaluateInvite,
   BuildSessionClaims,
-  BuildConsumeInviteSQL,
   CanIssueInvites,
   IsRoleGrantable,
   UnionScopes,
@@ -165,116 +164,6 @@ describe('magic-link core', () => {
     it('handles an empty/undefined prior union', () => {
       expect(UnionScopes(undefined, a)).toEqual([a]);
       expect(UnionScopes([], a)).toEqual([a]);
-    });
-  });
-
-  describe('buildConsumeInviteSQL', () => {
-    const table = '[__mj].[MagicLinkInvite]';
-    const sql = BuildConsumeInviteSQL(table);
-
-    it('targets the supplied qualified table', () => {
-      expect(sql).toContain(`UPDATE ${table} `);
-    });
-
-    it('increments UseCount', () => {
-      expect(sql).toContain('UseCount = UseCount + 1');
-    });
-
-    it('stamps ConsumedAt only the first time (COALESCE preserves an existing value)', () => {
-      expect(sql).toContain('ConsumedAt = COALESCE(ConsumedAt, SYSUTCDATETIME())');
-    });
-
-    it('flips Status to Consumed exactly when the last use is taken', () => {
-      expect(sql).toContain("Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END");
-    });
-
-    it('returns the affected row via OUTPUT INTO a table var so the caller can detect a win (exactly one row)', () => {
-      // Must be OUTPUT ... INTO, not a bare OUTPUT: SQL Server forbids a bare
-      // OUTPUT clause on a table with enabled triggers, and CodeGen adds an
-      // __mj_UpdatedAt trigger to every MJ table. Regression guard for that bug.
-      expect(sql).toContain('OUTPUT INSERTED.ID INTO @consumed');
-      expect(sql).not.toMatch(/OUTPUT INSERTED\.ID(?!\s+INTO)/);
-      expect(sql).toContain('SELECT ID FROM @consumed');
-    });
-
-    it('guards atomically on Active + not-exhausted + not-expired — this IS the single-use gate', () => {
-      const where = sql.slice(sql.indexOf('WHERE'));
-      expect(where).toContain("Status = 'Active'");
-      expect(where).toContain('UseCount < MaxUses');
-      expect(where).toContain('ExpiresAt > SYSUTCDATETIME()');
-    });
-
-    it('binds the invite ID as a parameter, never interpolated (injection-safe)', () => {
-      expect(sql).toContain('ID = @p0');
-      // The id must not be string-interpolated with quotes around a value.
-      expect(sql).not.toMatch(/ID = '/);
-    });
-
-    it('is a self-contained batch: declare table var, update-with-output, select', () => {
-      // Intentionally a 3-statement batch (the OUTPUT-INTO requirement). The ID is
-      // still parameterized, so the batch carries no interpolated user input.
-      expect(sql).toContain('DECLARE @consumed TABLE (ID UNIQUEIDENTIFIER)');
-      expect(sql.match(/;/g)?.length).toBe(3);
-      expect(sql.trim().endsWith(';')).toBe(true);
-    });
-
-    it('rejects a non-whitelisted table identifier (defense-in-depth against injection)', () => {
-      // Only bracket-quoted [schema].[table] of word chars is accepted, even though
-      // the caller derives the table from EntityInfo and never from user input.
-      expect(() => BuildConsumeInviteSQL('__mj.MagicLinkInvite')).toThrow();
-      expect(() => BuildConsumeInviteSQL('[__mj].[MagicLinkInvite]; DROP TABLE x;--')).toThrow();
-      expect(() => BuildConsumeInviteSQL('[__mj].[Magic Link]')).toThrow();
-      expect(() => BuildConsumeInviteSQL(table)).not.toThrow();
-    });
-  });
-
-  describe('buildConsumeInviteSQL (postgresql dialect)', () => {
-    // PG uses `schema.table` (unquoted — PostgreSQLDataProvider.ExecuteSQL auto-quotes
-    // the PascalCase identifiers). SS uses the bracket-quoted `[schema].[table]` form.
-    const pgTable = '__mj.MagicLinkInvite';
-    const pgSql = BuildConsumeInviteSQL(pgTable, 'postgresql');
-
-    it('targets the supplied unquoted schema.table', () => {
-      expect(pgSql).toContain(`UPDATE ${pgTable} `);
-    });
-
-    it('uses UPDATE … RETURNING as the atomic single-use gate (no OUTPUT/DECLARE table var)', () => {
-      expect(pgSql).toContain('RETURNING ID;');
-      expect(pgSql).not.toContain('OUTPUT');
-      expect(pgSql).not.toContain('DECLARE');
-    });
-
-    it('binds the invite ID as PG positional param $1, not T-SQL @p0 (injection-safe)', () => {
-      expect(pgSql).toContain('ID = $1');
-      expect(pgSql).not.toContain('@p0');
-      expect(pgSql).not.toMatch(/@/); // no T-SQL @-anything survives on PG
-      expect(pgSql).not.toMatch(/ID = '/);
-    });
-
-    it('uses PG timestamp expressions, not T-SQL SYSUTCDATETIME()', () => {
-      expect(pgSql).not.toContain('SYSUTCDATETIME');
-      expect(pgSql).toContain("(now() AT TIME ZONE 'utc')");
-      expect(pgSql).toContain("ConsumedAt = COALESCE(ConsumedAt, (now() AT TIME ZONE 'utc'))");
-    });
-
-    it('guards atomically on Active + not-exhausted + not-expired (same predicate as SS)', () => {
-      const where = pgSql.slice(pgSql.indexOf('WHERE'));
-      expect(where).toContain("Status = 'Active'");
-      expect(where).toContain('UseCount < MaxUses');
-      expect(where).toContain("ExpiresAt > (now() AT TIME ZONE 'utc')");
-    });
-
-    it('increments UseCount and flips Status on the last use (same semantics as SS)', () => {
-      expect(pgSql).toContain('UseCount = UseCount + 1');
-      expect(pgSql).toContain("Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END");
-    });
-
-    it('rejects a non-whitelisted PG table identifier (defense-in-depth against injection)', () => {
-      // Bracket-quoted (SS) form is not a valid PG identifier here.
-      expect(() => BuildConsumeInviteSQL('[__mj].[MagicLinkInvite]', 'postgresql')).toThrow();
-      expect(() => BuildConsumeInviteSQL('__mj.MagicLinkInvite; DROP TABLE x;--', 'postgresql')).toThrow();
-      expect(() => BuildConsumeInviteSQL('__mj.Magic Link', 'postgresql')).toThrow();
-      expect(() => BuildConsumeInviteSQL(pgTable, 'postgresql')).not.toThrow();
     });
   });
 

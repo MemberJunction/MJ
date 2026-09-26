@@ -145,7 +145,7 @@ Read-only SELECTs vs `__mj` views + `sys.*`/`information_schema`. Zero fixtures/
 | SEC12 | RemoteOperation ShouldRegenerate + approval reset: regen resets `CodeApprovalStatus=Pending` (re-review gate) | MUT | P2 | MJRemoteOperationEntityServer:84 |
 | SEC13 | SQLExpressionValidator `\bXP_\b`/`\bSP_\b` boundary: does `xp_cmdshell` slip through? | DET | P1 | SQLExpressionValidator.ts:183 |
 | SEC14 | SQLExpressionValidator full_query trailing `;--comment` allowed but mid-`;` rejected | DET | P2 | SQLExpressionValidator.ts:308 |
-| SEC15 | Magic-link single-use CAS race: N concurrent `/redeem` of 1-use link → exactly one wins | MUT | P3 | magicLinkCore buildConsumeInviteSQL |
+| SEC15 | Magic-link single-use CAS race: N concurrent `/redeem` of 1-use link → exactly one wins | MUT | P3 | MagicLinkService.consumeInvite → spConsumeMagicLinkInvite |
 | SEC16 | Magic-link privilege confinement: guest can't mint invites, grant privileged role, or read outside scope | MUT | P3 | canIssueInvites:57 |
 | SEC17 | OAuth state cross-user 403: user B can't `/status`/`/exchange` A's state (no real IdP needed) | MUT | P3 | OAuthCallbackHandler:293,495 |
 
