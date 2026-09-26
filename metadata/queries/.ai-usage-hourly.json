@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageHourly",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is our hourly AI usage and cost broken down by model, agent, user, and scope?",
+      "Description": "Primary hourly aggregation of AI usage facts. Computes model-call counts, token volumes, latencies (P50/P95), cache reads, and spend (by currency) across all dimensional attributes.",
+      "SQL": "@file:SQL/ai-usage-hourly.sql",
+      "TechnicalDescription": "Live analytical query over [__mj].vwAIUsageFacts, one row per UTC hour x dimension set x CostCurrency. Optional start/end ({{ start | sqlDate }}, {{ end | sqlDate }}) select whole hours: every hour that overlaps [start, end) is returned complete, by rounding start down and end up to the hour and range-filtering the base RunAt column (sargable on IX_AIPromptRun_RunAt). The hour is derived from RunAt by truncation and exposed as HourBucket (DATETIME) plus BucketStartUTC / BucketEndUTC. Parallel parents are counted in ParallelParents and excluded from every other measure. Latency percentiles are PERCENTILE_CONT window functions collapsed with MAX (SQL Server 2019+).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "00B15E3C-A9F1-4E0A-A3D2-BC34FB585931"
+    }
+  }
+]

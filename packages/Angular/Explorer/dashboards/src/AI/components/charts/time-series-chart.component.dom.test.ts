@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
+import { MJClickableDirective } from '@memberjunction/ng-ui-components';
 import { TimeSeriesChartComponent } from './time-series-chart.component';
 import type { TrendData } from '../../services/ai-instrumentation.service';
 
@@ -17,6 +18,7 @@ const trend = (over: Partial<TrendData> = {}): TrendData =>
 
 const render = (inputs: Record<string, unknown>) =>
   renderComponentFixture(TimeSeriesChartComponent, {
+    imports: [MJClickableDirective],
     declarations: [TimeSeriesChartComponent],
     inputs: { data: [trend()], showLegend: true, ...inputs },
   });
@@ -48,6 +50,17 @@ describe('TimeSeriesChartComponent (DOM)', () => {
   it('omits the legend when showLegend is false', () => {
     const fixture = render({ title: 'T', showLegend: false });
     expect(query(fixture, '.chart-legend')).toBeNull();
+  });
+
+  it('sizes the shared count axis to the series still shown, so hiding Tokens rescales Executions', () => {
+    const fixture = render({ data: [trend({ executions: 120, tokens: 1_000_000 })] });
+    const chart = fixture.componentInstance as unknown as {
+      createMetricScales(): Record<string, { domain(): number[] }>;
+      ToggleMetric(metric: string): void;
+    };
+    expect(chart.createMetricScales()['executions'].domain()[1]).toBeGreaterThanOrEqual(1_000_000);
+    chart.ToggleMetric('tokens');
+    expect(chart.createMetricScales()['executions'].domain()[1]).toBeLessThan(1_000);
   });
 
   it('marks a metric legend item disabled after it is toggled off via click', () => {

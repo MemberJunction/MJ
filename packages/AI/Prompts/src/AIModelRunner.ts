@@ -2,7 +2,7 @@ import { BaseEntitySaveQueue, Metadata, UserInfo, LogError, LogStatus, IMetadata
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 
 /**
  * Result from an embedding execution via AIModelRunner.
@@ -37,7 +37,7 @@ export interface EmbeddingRunParams {
     ModelID?: string;
     /** The user context for permissions and audit */
     ContextUser: UserInfo;
-    /** Optional: parent run ID (e.g., agent run, classification run) for hierarchical tracking */
+    /** Optional: parent prompt run ID (e.g. parent parallel run) for hierarchical tracking */
     ParentRunID?: string;
     /** Optional: human-readable description for the AIPromptRun record */
     Description?: string;
@@ -306,6 +306,7 @@ export class AIModelRunner {
             if (params.ParentRunID) {
                 promptRun.ParentID = params.ParentRunID;
             }
+            promptRun.UserID = ResolvePromptRunUserID({ ContextUser: params.ContextUser });
 
             // Store description in Messages field as context
             if (params.Description) {

@@ -569,6 +569,16 @@ export class AIPromptParams {
   parentPromptRunId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Optional run type override for prompt execution tracking (e.g., 'ResultSelector', 'ParallelChild', 'Single').
+   */
+  RunType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single';
+
+  /**
+   * Optional execution order within a parallel execution group or sequence.
+   */
+  ExecutionOrder?: number;
+
+  /**
    * Additional model-specific parameters that will be passed through to the underlying model.
    * For chat/LLM models, this can include parameters like temperature, topP, topK, etc.
    * The AIPromptRunner will pass these through when building model-specific parameters.
@@ -879,6 +889,12 @@ export class AIPromptParams {
   agentId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Attribution only; never used for behaviour. The user on whose behalf this prompt
+   * was executed (`AIPromptRun.UserID`). If omitted, falls back to contextUser?.ID.
+   */
+  UserID?: string;
+
+  /**
    * Optional file artifacts that may be attached as native content blocks
    * when the resolved LLM driver supports the file's MIME type natively.
    *
@@ -890,9 +906,29 @@ export class AIPromptParams {
   nativeFileInputs?: NativeFileInput[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
+/**
+ * Inputs for resolving which user an `AIPromptRun` is attributed to.
+ *
+ * Only the USER is attributed on the prompt run. Which agent run a prompt run belongs to is owned by
+ * the agent layer — `AIAgentRunStep.TargetLogID` — and resolved at query time (see `vwAIUsageFacts`),
+ * so the prompt-execution layer carries no reference up into the agent layer.
+ */
+export interface ResolvePromptRunUserIDInput {
+  /** Explicit user override, if provided. */
+  UserID?: string | null;
+  /** The enclosing agent run, when there is one; its `UserID` is the next fallback. */
+  AgentRun?: { UserID?: string | null } | null;
+  /** The context user the operation runs as; the last fallback. */
+  ContextUser?: { ID?: string | null } | null;
+}
 
-
-
+/**
+ * Resolves `AIPromptRun.UserID`: explicit `UserID` > `AgentRun.UserID` > `ContextUser.ID` > null.
+ * An empty string counts as absent at every level.
+ */
+export function ResolvePromptRunUserID(input?: ResolvePromptRunUserIDInput | null): string | null {
+  return input?.UserID || input?.AgentRun?.UserID || input?.ContextUser?.ID || null;
+}
 
 /**
  * Callback function type for execution progress updates

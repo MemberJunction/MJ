@@ -19,9 +19,10 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       @if (executions.length > 0) {
         <div class="execution-list">
           @for (execution of executions.slice(0, maxVisible); track execution.id) {
-            <div 
+            <div
               class="execution-item"
               [class]="'execution-item--' + execution.status"
+              [mjClickable]="'Open ' + execution.type + ' ' + execution.name"
               (click)="onExecutionClick(execution)"
             >
           <div class="execution-icon">
@@ -79,20 +80,16 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
 
           @if (executions.length > maxVisible) {
             <div class="show-more">
-          <button 
-            class="show-more-btn"
-            (click)="toggleShowAll()"
-          >
+            <button mjButton variant="flat" size="sm" (click)="toggleShowAll()">
               {{ showAll ? 'Show Less' : 'Show All (' + executions.length + ')' }}
-              <i [class]="showAll ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
+              <i [class]="showAll ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'" aria-hidden="true"></i>
             </button>
             </div>
           }
         </div>
       } @else {
         <div class="no-executions">
-          <i class="fa-solid fa-circle-check"></i>
-          <p>No recent executions</p>
+          <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-circle-check" Title="No recent executions" />
         </div>
       }
     </div>
@@ -101,7 +98,7 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     .live-execution-widget {
       background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--mj-shadow-sm);
       height: 400px;
       display: flex;
       flex-direction: column;
@@ -169,6 +166,11 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       background: var(--mj-bg-surface-card);
     }
 
+    .execution-item:focus-visible {
+      outline: none;
+      box-shadow: var(--mj-focus-ring);
+    }
+
     .execution-item--running {
       border-left-color: var(--mj-brand-primary);
       background: color-mix(in srgb, var(--mj-brand-primary) 2%, var(--mj-bg-surface));
@@ -181,6 +183,14 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     .execution-item--failed {
       border-left-color: var(--mj-status-error);
       background: color-mix(in srgb, var(--mj-status-error) 2%, var(--mj-bg-surface));
+    }
+
+    .execution-item--paused {
+      border-left-color: var(--mj-status-warning);
+    }
+
+    .execution-item--cancelled {
+      border-left-color: var(--mj-border-strong);
     }
 
     .execution-icon {
@@ -207,6 +217,16 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
     .execution-item--failed .execution-icon {
       background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
       color: var(--mj-status-error);
+    }
+
+    .execution-item--paused .execution-icon {
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
+    }
+
+    .execution-item--cancelled .execution-icon {
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-muted);
     }
 
     .execution-info {
@@ -303,50 +323,28 @@ import { LiveExecution } from '../../services/ai-instrumentation.service';
       color: var(--mj-text-inverse);
     }
 
+    .status-indicator--paused {
+      background: var(--mj-status-warning);
+      color: var(--mj-text-inverse);
+    }
+
+    .status-indicator--cancelled {
+      background: var(--mj-text-muted);
+      color: var(--mj-text-inverse);
+    }
+
     .show-more {
       padding: 12px 20px;
       border-top: 1px solid var(--mj-border-default);
-    }
-
-    .show-more-btn {
-      width: 100%;
-      background: none;
-      border: none;
-      color: var(--mj-brand-primary);
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
       display: flex;
-      align-items: center;
       justify-content: center;
-      gap: 4px;
-      padding: 8px;
-      border-radius: 4px;
-      transition: background 0.2s ease;
-    }
-
-    .show-more-btn:hover {
-      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .no-executions {
       flex: 1;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: var(--mj-text-disabled);
-      gap: 12px;
-    }
-
-    .no-executions i {
-      font-size: 32px;
-      color: var(--mj-border-default);
-    }
-
-    .no-executions p {
-      margin: 0;
-      font-size: 14px;
     }
 
     @media (max-width: 768px) {
@@ -463,10 +461,14 @@ export class LiveExecutionWidgetComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'running':
         return 'fa-solid fa-play';
+      case 'paused':
+        return 'fa-solid fa-pause';
       case 'completed':
         return 'fa-solid fa-check';
       case 'failed':
         return 'fa-solid fa-times';
+      case 'cancelled':
+        return 'fa-solid fa-ban';
       default:
         return 'fa-solid fa-question';
     }

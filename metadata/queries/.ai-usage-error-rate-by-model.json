@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageErrorRateByModel",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is the error rate and failure frequency for each AI model and vendor?",
+      "Description": "Per vendor and model: succeeded, failed and abandoned model calls and the resulting error rate, with cancelled and in-flight runs reported separately.",
+      "SQL": "@file:SQL/ai-usage-error-rate-by-model.sql",
+      "TechnicalDescription": "Classifies each non-parent prompt run (no CompletedAt requirement) as Cancelled, InFlight (Pending/Running, started within the last hour), Abandoned (Pending/Running, older than an hour), Failed (Success = 0) or Succeeded, then aggregates by VendorID and ModelID. ErrorRatePct = (Failed + Abandoned) / (Succeeded + Failed + Abandoned). Optional start/end filter the base RunAt column.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F4A74E70-2CE9-4670-A219-62806FD178BE"
+    }
+  }
+]

@@ -11,7 +11,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, ChangeDetectorRef, inject
 } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
@@ -66,16 +66,19 @@ interface RecentSessionRow {
     Duration: string;
 }
 
+/** Channels are categorical series, so they take the categorical data-viz ramp (not status colours). */
 const DONUT_COLORS = [
-    'var(--mj-brand-primary)',
-    'var(--mj-status-success)',
-    'var(--mj-brand-accent)',
-    'var(--mj-status-warning)',
-    'var(--mj-text-disabled)'
+    'var(--mj-viz-1)',
+    'var(--mj-viz-2)',
+    'var(--mj-viz-3)',
+    'var(--mj-viz-4)',
+    'var(--mj-viz-5)',
+    'var(--mj-viz-6)'
 ];
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-realtime-overview',
     template: `
         @if (IsLoading) {
@@ -106,12 +109,12 @@ const DONUT_COLORS = [
                                 Title="No sessions in the selected period" />
                         } @else {
                             <div class="bars">
-                                @for (bucket of TimeBuckets; track bucket.Label) {
+                                @for (bucket of TimeBuckets; track bucket.Label; let i = $index, count = $count) {
                                     <div class="bcol" [title]="bucket.Label + ': ' + bucket.Count + ' session(s)'">
                                         <div class="bar"
                                              [class.bar--accent]="bucket.DelegatedHeavy"
                                              [style.height.%]="bucket.HeightPercent"></div>
-                                        <div class="blabel">{{ bucket.Label }}</div>
+                                        <div class="blabel" [class.blabel--skipped]="i % LabelStep(count) !== 0">{{ bucket.Label }}</div>
                                     </div>
                                 }
                             </div>
@@ -196,7 +199,9 @@ const DONUT_COLORS = [
                         </thead>
                         <tbody>
                             @if (RecentSessions.length === 0) {
-                                <tr><td colspan="8" class="empty-row">No sessions in the selected period</td></tr>
+                                <tr><td colspan="8" class="empty-cell">
+                                    <mj-empty-state Size="compact" Variant="empty" Title="No sessions in the selected period" />
+                                </td></tr>
                             }
                             @for (row of RecentSessions; track row.ID) {
                                 <tr class="session-row" (click)="OpenSession(row.ID)">
@@ -224,7 +229,7 @@ const DONUT_COLORS = [
                                     <td class="cell-numeric mono">{{ row.Cost }}</td>
                                     <td class="cell-numeric mono">{{ row.Duration }}</td>
                                     <td class="cell-action">
-                                        <button mjButton variant="icon" size="sm" title="Open session record"
+                                        <button mjButton variant="icon" size="sm" AriaLabel="Open session record" title="Open session record"
                                                 (click)="OpenSession(row.ID); $event.stopPropagation()">
                                             <i class="fa-solid fa-arrow-up-right-from-square"></i>
                                         </button>
@@ -340,14 +345,17 @@ const DONUT_COLORS = [
                 color-mix(in srgb, var(--mj-status-success) 55%, transparent));
         }
 
+        /* Centred on its bar and allowed to spill into the neighbours, whose labels LabelStep hides. */
         .blabel {
             margin-top: 6px;
             font-size: 10px;
             color: var(--mj-text-muted);
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
+            width: max-content;
+        }
+
+        .blabel--skipped {
+            visibility: hidden;
         }
 
         /* ── Donut ── */
@@ -363,8 +371,8 @@ const DONUT_COLORS = [
             height: 140px;
             border-radius: 50%;
             flex-shrink: 0;
-            -webkit-mask: radial-gradient(circle at center, transparent 42px, #000 43px);
-            mask: radial-gradient(circle at center, transparent 42px, #000 43px);
+            -webkit-mask: radial-gradient(circle at center, transparent 42px, #000 43px); /* token-exempt: alpha mask, colour irrelevant */
+            mask: radial-gradient(circle at center, transparent 42px, #000 43px); /* token-exempt: alpha mask, colour irrelevant */
         }
 
         .legend {
@@ -494,14 +502,12 @@ const DONUT_COLORS = [
         .cell-action { text-align: right; white-space: nowrap; }
 
         .mono {
-            font-family: var(--mj-font-mono, monospace);
+            font-family: var(--mj-font-family-mono);
             font-size: 12px;
         }
 
-        .empty-row {
-            text-align: center;
-            color: var(--mj-text-disabled);
-            padding: 24px;
+        .data-table td.empty-cell {
+            padding: 0;
         }
 
         /* ── Status pills ── */
@@ -685,9 +691,15 @@ export class AnalyticsRealtimeOverviewComponent extends BaseAngularComponent imp
         ];
     }
 
+    /** Show every Nth bar label so 24 hourly / 30 daily labels never run into each other. */
+    public LabelStep(count: number): number {
+        return Math.max(1, Math.ceil(count / 12));
+    }
+
     private buildTimeBuckets(): void {
         const ds = this.dataset;
-        if (!ds) { this.TimeBuckets = []; return; }
+        // No sessions in the window: an empty bucket list renders the empty state, not a row of blank bars.
+        if (!ds || this.windowSessions.length === 0) { this.TimeBuckets = []; return; }
 
         const hourly = this.TimeRange === '24h';
         const bucketMs = hourly ? 3_600_000 : 86_400_000;

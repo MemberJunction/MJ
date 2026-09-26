@@ -9,6 +9,7 @@ import {
   ChartData,
   ExecutionDetails
 } from '../services/ai-instrumentation.service';
+import { ComputeCoveragePercent } from '../services/ai-usage-analytics.compute';
 import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
@@ -1791,24 +1792,24 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   set performanceMatrix$(value: Observable<HeatmapData[]>) {
     this.PerformanceMatrix$ = value;
   }
-  CostData$: Observable<{ model: string; cost: number; tokens: number }[]>;
+  CostData$: Observable<{ model: string; cost: number | null; tokens: number }[]>;
 
   /** @deprecated Use {@link CostData$}. */
-  get costData$(): Observable<{ model: string; cost: number; tokens: number }[]> {
+  get costData$(): Observable<{ model: string; cost: number | null; tokens: number }[]> {
     return this.CostData$;
   }
   /** @deprecated Use {@link CostData$}. */
-  set costData$(value: Observable<{ model: string; cost: number; tokens: number }[]>) {
+  set costData$(value: Observable<{ model: string; cost: number | null; tokens: number }[]>) {
     this.CostData$ = value;
   }
-  TokenEfficiency$: Observable<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]>;
+  TokenEfficiency$: Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]>;
 
   /** @deprecated Use {@link TokenEfficiency$}. */
-  get tokenEfficiency$(): Observable<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]> {
+  get tokenEfficiency$(): Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]> {
     return this.TokenEfficiency$;
   }
   /** @deprecated Use {@link TokenEfficiency$}. */
-  set tokenEfficiency$(value: Observable<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]>) {
+  set tokenEfficiency$(value: Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]>) {
     this.TokenEfficiency$ = value;
   }
 
@@ -2051,6 +2052,11 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   }
 
   private createKPICards(kpis: DashboardKPIs): KPICardData[] {
+    const covPriced = kpis.Coverage?.PricedRuns ?? 0;
+    const covUnpriced = kpis.Coverage?.UnpricedRuns ?? 0;
+    const covTotal = covPriced + covUnpriced;
+    const coveragePct = Math.round(ComputeCoveragePercent(kpis.Coverage));
+
     return [
       {
         title: 'Total Executions',
@@ -2061,10 +2067,20 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       },
       {
         title: 'Total Cost',
-        value: `$${kpis.totalCost.toFixed(4)}`,
+        value: kpis.totalCost !== null
+          ? `${kpis.costCurrency === 'USD' ? '$' : kpis.costCurrency + ' '}${kpis.totalCost.toFixed(4)}`
+          : '\u2014',
         icon: 'fa-dollar-sign',
         color: 'warning',
-        subtitle: `${kpis.costCurrency} • $${kpis.dailyCostBurn.toFixed(2)}/day`
+        // Mixed currencies: the total is in one of them; the others are left out rather than added at 1:1.
+        subtitle: `covers ${coveragePct}% of runs` + (kpis.IsMixedCurrency ? ` \u00b7 ${kpis.costCurrency} only` : '')
+      },
+      {
+        title: 'Coverage',
+        value: `${coveragePct}%`,
+        icon: 'fa-shield-halved',
+        color: coveragePct >= 90 ? 'success' : coveragePct >= 70 ? 'warning' : 'danger',
+        subtitle: `${covPriced} of ${covTotal} runs priced`
       },
       {
         title: 'Success Rate',
@@ -2085,7 +2101,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         value: this.FormatTokens(kpis.totalTokens),
         icon: 'fa-coins',
         color: 'primary',
-        subtitle: `$${kpis.costPerToken.toFixed(6)}/token`
+        subtitle: kpis.costPerToken !== null ? `$${kpis.costPerToken.toFixed(6)}/token` : '\u2014'
       },
       {
         title: 'Top Model',
@@ -2207,25 +2223,28 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return this.OnChartTimeRangeChange(range);
   }
 
-  private getMetricValue(data: TrendData, metric: string): number {
+  private getMetricValue(data: TrendData, metric: string): number | null {
     switch (metric) {
       case 'executions': return data.executions;
       case 'cost': return data.cost;
       case 'tokens': return data.tokens;
       case 'avgTime': return data.avgTime;
       case 'errors': return data.errors;
-      default: return 0;
+      default: return null;
     }
   }
 
-  private formatMetricValue(metric: string, value: number): string {
+  private formatMetricValue(metric: string, value: number | null): string {
+    if (value === null || value === undefined) {
+      return '\u2014';
+    }
     switch (metric) {
       case 'executions': return value.toLocaleString();
       case 'cost': return `$${value.toFixed(4)}`;
       case 'tokens': return value.toLocaleString();
       case 'avgTime': return `${(value / 1000).toFixed(1)}s`;
       case 'errors': return value.toString();
-      default: return value.toString();
+      default: return String(value);
     }
   }
 
@@ -2297,12 +2316,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return this.TrackByCostModel(index, item);
   }
 
-  TrackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number }): string {
+  TrackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number | null }): string {
     return item.model;
   }
 
   /** @deprecated Use {@link TrackByEfficiencyModel}. */
-  trackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number }): string {
+  trackByEfficiencyModel(index: number, item: { model: string; inputTokens: number; outputTokens: number; cost: number | null }): string {
     return this.TrackByEfficiencyModel(index, item);
   }
 
@@ -2320,35 +2339,45 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return this.FormatTokens(tokens);
   }
 
-  formatCurrency(amount: number, decimals: number = 4): string {
+  formatCurrency(amount: number | null | undefined, decimals: number = 4): string {
+    if (amount === null || amount === undefined) {
+      return '\u2014';
+    }
     return `$${amount.toFixed(decimals)}`;
   }
 
-  FormatCostPerToken(cost: number, tokens: number): string {
-    const costPer1K = tokens > 0 ? (cost / tokens) * 1000 : 0;
+  FormatCostPerToken(cost: number | null | undefined, tokens: number): string {
+    if (cost === null || cost === undefined || tokens <= 0) {
+      return '\u2014';
+    }
+    const costPer1K = (cost / tokens) * 1000;
     return `$${costPer1K.toFixed(4)}/1K tokens`;
   }
 
   /** @deprecated Use {@link FormatCostPerToken}. */
-  formatCostPerToken(cost: number, tokens: number): string {
+  formatCostPerToken(cost: number | null | undefined, tokens: number): string {
     return this.FormatCostPerToken(cost, tokens);
   }
 
-  GetCostBarWidth(cost: number, maxCost: number): number {
-    return maxCost > 0 ? (cost / maxCost) * 100 : 0;
+  GetCostBarWidth(cost: number | null | undefined, maxCost: number): number {
+    if (cost === null || cost === undefined || maxCost <= 0) {
+      return 0;
+    }
+    return (cost / maxCost) * 100;
   }
 
   /** @deprecated Use {@link GetCostBarWidth}. */
-  getCostBarWidth(cost: number, maxCost: number): number {
+  getCostBarWidth(cost: number | null | undefined, maxCost: number): number {
     return this.GetCostBarWidth(cost, maxCost);
   }
 
-  GetMaxCost(costData: { cost: number }[]): number {
-    return Math.max(...costData.map(item => item.cost));
+  GetMaxCost(costData: { cost: number | null }[]): number {
+    const priced = costData.map(item => item.cost).filter((c): c is number => c !== null && c !== undefined);
+    return priced.length > 0 ? Math.max(...priced) : 0;
   }
 
   /** @deprecated Use {@link GetMaxCost}. */
-  getMaxCost(costData: { cost: number }[]): number {
+  getMaxCost(costData: { cost: number | null }[]): number {
     return this.GetMaxCost(costData);
   }
 
@@ -2527,12 +2556,14 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'RunAt DESC' 
+          OrderBy: 'RunAt DESC',
+          MaxRows: 500
         }),
         RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'StartedAt DESC' 
+          OrderBy: 'StartedAt DESC',
+          MaxRows: 500
         })
       ]);
       

@@ -2535,8 +2535,8 @@ export const MJAIAgentRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
-        * * Default Value: 0.000000
+        * * SQL Data Type: decimal(19, 8)
+        * * Default Value: 0.00000000
         * * Description: Total estimated cost for all AI model usage during this agent run`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -6407,7 +6407,7 @@ export const MJAIPromptRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.`),
     Success: z.boolean().describe(`
         * * Field Name: Success
@@ -6536,7 +6536,7 @@ export const MJAIPromptRunSchema = z.object({
     DescendantCost: z.number().nullable().describe(`
         * * Field Name: DescendantCost
         * * Display Name: Descendant Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     ValidationAttemptCount: z.number().nullable().describe(`
         * * Field Name: ValidationAttemptCount
@@ -6833,6 +6833,12 @@ export const MJAIPromptRunSchema = z.object({
     *   * NativeFallback
     *   * NativeImplicit
         * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -6881,6 +6887,10 @@ export const MJAIPromptRunSchema = z.object({
         * * Field Name: UsageType
         * * Display Name: Usage Type
         * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -42115,8 +42125,8 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
-    * * Default Value: 0.000000
+    * * SQL Data Type: decimal(19, 8)
+    * * Default Value: 0.00000000
     * * Description: Total estimated cost for all AI model usage during this agent run
     */
     get TotalCost(): number | null {
@@ -53914,7 +53924,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.
     */
     get TotalCost(): number | null {
@@ -54229,7 +54239,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: DescendantCost
     * * Display Name: Descendant Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.
     */
     get DescendantCost(): number | null {
@@ -54959,6 +54969,20 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -55064,6 +55088,15 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     */
     get UsageType(): string | null {
         return this.Get('UsageType');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 
     /**

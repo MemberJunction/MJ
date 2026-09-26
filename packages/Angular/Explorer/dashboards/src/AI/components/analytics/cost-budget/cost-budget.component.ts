@@ -6,57 +6,47 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RunView } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
-import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
-import { CacheRate, CacheTokenTotals, CacheHitRate, HasCacheActivity, NetCacheSavings } from '../../../services/cache-metrics';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
+import { CacheRate, CacheTokenTotals, CacheHitRate, HasCacheActivity, NetCacheSavings } from '../../../services/cache-metrics';
+import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
+import { ComputeTotalCost, ComputeCoveragePercent, ResolveCostCurrency, DEFAULT_COST_CURRENCY } from '../../../services/ai-usage-analytics.compute';
+import { AIUsageDailyRow } from '../../../services/ai-usage-analytics.types';
 
 // ── Interfaces ──
-
-interface PromptRunRecord {
-    ID: string;
-    RunAt: string;
-    Cost: number | null;
-    TotalCost: number | null;
-    TokensPrompt: number | null;
-    TokensCompletion: number | null;
-    TokensUsed: number | null;
-    TokensCacheRead: number | null;
-    TokensCacheWrite: number | null;
-    ModelID: string | null;
-    Model: string | null;
-    VendorID: string | null;
-    Vendor: string | null;
-    Success: boolean;
-}
 
 interface CostKpi {
     Label: string;
     Value: string;
+    Subtitle?: string;
     Delta: number | null;
     DeltaDirection: 'up' | 'down' | 'stable';
     Highlighted: boolean;
     Icon: string;
+    IsUnpriced?: boolean;
 }
 
 interface DailyBar {
     Date: string;
     Label: string;
-    Cost: number;
+    /** Null when every run that day was unpriced — distinct from a priced day that cost 0. */
+    Cost: number | null;
     HeightPercent: number;
     IsAnomaly: boolean;
+    IsUnpriced: boolean;
 }
 
 interface TreemapCell {
     Label: string;
-    Cost: number;
-    Percent: number;
+    /** Null when every run for the vendor was unpriced. */
+    Cost: number | null;
+    /** Share of the priced total; null for an unpriced vendor, which has no share to size by. */
+    Percent: number | null;
     Color: string;
     GridArea: string;
 }
@@ -71,46 +61,36 @@ interface CostByModelRow {
     CacheWriteTokens: number;
     CacheHitRate: number;
     CacheSavings: number;
-    InputCost: number;
-    OutputCost: number;
-    TotalCost: number;
-    PercentOfTotal: number;
-}
-
-const FIELDS = [
-    'ID', 'RunAt', 'Cost', 'TotalCost', 'TokensPrompt', 'TokensCompletion',
-    'TokensUsed', 'TokensCacheRead', 'TokensCacheWrite', 'ModelID', 'Model', 'VendorID', 'Vendor', 'Success'
-];
-
-interface ModelCostRow {
-    ModelID: string | null;
-    VendorID: string | null;
-    InputPricePerUnit: number | null;
-    OutputPricePerUnit: number | null;
-    CacheReadPricePerUnit: number | null;
-    CacheWritePricePerUnit: number | null;
-    UnitTypeID: string | null;
-}
-
-/** A price unit type, reduced to what the scale lookup needs. */
-interface PriceUnitTypeRow {
-    ID: string;
-    DriverClass: string | null;
+    InputCost: number | null;
+    OutputCost: number | null;
+    TotalCost: number | null;
+    PercentOfTotal: number | null;
 }
 
 const TIME_RANGE_OPTIONS = ['Today', '7d', '30d', 'MTD'];
 
+// Vendors are categories: the categorical --mj-viz palette, steps spread out (neighbouring steps are
+// close hues). Brand/status tokens were three blues. Each colour tints its tile rather than filling it
+// (see .treemap-cell), so the tile text keeps its contrast in both themes.
 const TREEMAP_COLORS = [
-    'var(--mj-brand-primary)',
-    'var(--mj-brand-accent, var(--mj-brand-primary-hover))',
-    'var(--mj-status-info)',
-    'var(--mj-status-success)',
-    'var(--mj-status-warning)',
-    'var(--mj-text-disabled)'
+    'var(--mj-viz-1)',
+    'var(--mj-viz-6)',
+    'var(--mj-viz-3)',
+    'var(--mj-viz-9)',
+    'var(--mj-viz-5)',
+    'var(--mj-viz-8)',
+    'var(--mj-viz-4)',
+    'var(--mj-viz-10)'
 ];
+
+/** The UTC day key ('YYYY-MM-DD') for an instant — the same bucketing the server applies. */
+function CostBudgetUTCDayKey(d: Date): string {
+    return d.toISOString().slice(0, 10);
+}
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-cost-budget',
     template: `
 
@@ -128,7 +108,15 @@ const TREEMAP_COLORS = [
                         </div>
                         <div class="kpi-content">
                             <div class="kpi-label">{{ kpi.Label }}</div>
-                            <div class="kpi-value">{{ kpi.Value }}</div>
+                            <div class="kpi-value-row">
+                                <div class="kpi-value">{{ kpi.Value }}</div>
+                                @if (kpi.IsUnpriced) {
+                                    <span class="unpriced-chip">unpriced</span>
+                                }
+                            </div>
+                            @if (kpi.Subtitle) {
+                                <div class="kpi-subtitle">{{ kpi.Subtitle }}</div>
+                            }
                             @if (kpi.Delta != null) {
                                 <div class="kpi-delta"
                                      [class.kpi-delta--up]="kpi.DeltaDirection === 'up'"
@@ -168,14 +156,15 @@ const TREEMAP_COLORS = [
                                             <span class="avg-label">avg</span>
                                         </div>
                                     }
-                                    @for (bar of DailyBars; track bar.Date) {
-                                        <div class="bar-col" [title]="bar.Label + ': ' + FormatCurrency(bar.Cost)">
+                                    @for (bar of DailyBars; track bar.Date; let i = $index) {
+                                        <div class="bar-col" [title]="bar.Label + ': ' + (bar.IsUnpriced ? 'unpriced — cost unknown' : FormatCurrency(bar.Cost))">
                                             <div
                                                 class="bar"
                                                 [class.bar--anomaly]="bar.IsAnomaly"
+                                                [class.bar--unpriced]="bar.IsUnpriced"
                                                 [style.height.%]="bar.HeightPercent"
                                             ></div>
-                                            <div class="bar-label">{{ bar.Label }}</div>
+                                            <div class="bar-label" [class.bar-label--skipped]="i % LabelStep !== 0">{{ bar.Label }}</div>
                                         </div>
                                     }
                                 </div>
@@ -201,12 +190,13 @@ const TREEMAP_COLORS = [
                                 @for (cell of TreemapCells; track cell.Label) {
                                     <div
                                         class="treemap-cell"
-                                        [style.background]="cell.Color"
-                                        [style.flex-basis.%]="cell.Percent"
-                                        [title]="cell.Label + ': ' + FormatCurrency(cell.Cost) + ' (' + (cell.Percent | number:'1.0-0') + '%)'">
+                                        [class.treemap-cell--unpriced]="cell.Percent === null"
+                                        [style.--tile-color]="cell.Color"
+                                        [style.flex-basis.%]="cell.Percent ?? 0"
+                                        [title]="cell.Label + ': ' + (cell.Percent === null ? 'unpriced — cost unknown' : FormatCurrency(cell.Cost) + ' (' + (cell.Percent | number:'1.0-0') + '%)')">
                                         <span class="treemap-label">{{ cell.Label }}</span>
                                         <span class="treemap-value">{{ FormatCurrency(cell.Cost) }}</span>
-                                        <span class="treemap-pct">{{ cell.Percent | number:'1.0-0' }}%</span>
+                                        <span class="treemap-pct">{{ cell.Percent === null ? 'unpriced' : (cell.Percent | number:'1.0-0') + '%' }}</span>
                                     </div>
                                 }
                             </div>
@@ -222,7 +212,7 @@ const TREEMAP_COLORS = [
                         <i class="fa-solid fa-table panel-header__icon"></i>
                         Cost by Model
                     </div>
-                    <button class="export-btn" (click)="ExportCSV()">
+                    <button mjButton variant="secondary" size="sm" class="export-btn" (click)="ExportCSV()">
                         <i class="fa-solid fa-download"></i>
                         Export CSV
                     </button>
@@ -246,7 +236,7 @@ const TREEMAP_COLORS = [
                         </thead>
                         <tbody>
                             @if (CostByModelRows.length === 0) {
-                                <tr><td colspan="11" class="empty-row">No data available</td></tr>
+                                <tr><td colspan="11" class="empty-row"><mj-empty-state Variant="no-results" Size="compact" Title="No cost data" Message="No AI usage was recorded in this period."></mj-empty-state></td></tr>
                             }
                             @for (row of CostByModelRows; track row.Model) {
                                 <tr>
@@ -260,7 +250,7 @@ const TREEMAP_COLORS = [
                                     <td class="cell-numeric">{{ FormatCurrency(row.OutputCost, 4) }}</td>
                                     <td class="cell-numeric cell-cost">{{ FormatCurrency(row.TotalCost) }}</td>
                                     <td class="cell-numeric">{{ row.CacheSavings > 0 ? FormatCurrency(row.CacheSavings, 4) : '—' }}</td>
-                                    <td class="cell-numeric">{{ row.PercentOfTotal | number:'1.1-1' }}%</td>
+                                    <td class="cell-numeric">{{ row.PercentOfTotal === null ? '—' : (row.PercentOfTotal | number:'1.1-1') + '%' }}</td>
                                 </tr>
                             }
                         </tbody>
@@ -333,12 +323,31 @@ const TREEMAP_COLORS = [
             letter-spacing: 0.5px;
         }
 
+        .kpi-value-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         .kpi-value {
             font-size: 22px;
             font-weight: 700;
             color: var(--mj-text-primary);
             margin: 2px 0;
             letter-spacing: -0.02em;
+        }
+
+        .unpriced-chip {
+            display: inline-flex;
+            align-items: center;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: 500;
+            text-transform: uppercase;
+            border-radius: 4px;
+            background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+            color: var(--mj-status-warning);
+            border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
         }
 
         .kpi-delta {
@@ -355,6 +364,12 @@ const TREEMAP_COLORS = [
 
         .kpi-delta--down {
             color: var(--mj-status-success);
+        }
+
+        .kpi-subtitle {
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
         }
 
         /* ── Two-Column Layout ── */
@@ -435,6 +450,9 @@ const TREEMAP_COLORS = [
 
         .bar-col {
             flex: 1;
+            /* Without min-width: 0 each column is at least as wide as its no-wrap date label, so a
+               30- or 90-day range overflowed and the most recent days were clipped off the card. */
+            min-width: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -455,11 +473,25 @@ const TREEMAP_COLORS = [
             background: var(--mj-status-error);
         }
 
+        /* A day on which nothing was priced: its cost is unknown, not zero, so it is drawn as an
+           outlined full-height column rather than a zero-height bar a reader would take for "free". */
+        .bar--unpriced {
+            background: transparent;
+            border: 1px dashed var(--mj-status-warning);
+            border-bottom: none;
+            opacity: 0.6;
+        }
+
         .bar-label {
             font-size: 10px;
             color: var(--mj-text-muted);
             margin-top: 4px;
             white-space: nowrap;
+        }
+
+        /* Thinned labels keep their line box so every bar keeps the same baseline. */
+        .bar-label--skipped {
+            visibility: hidden;
         }
 
         .avg-line {
@@ -501,12 +533,21 @@ const TREEMAP_COLORS = [
             min-width: 80px;
             min-height: 70px;
             flex-grow: 1;
-            color: var(--mj-text-inverse, white);
+            background: color-mix(in srgb, var(--tile-color) 20%, var(--mj-bg-surface));
+            border-left: 4px solid var(--tile-color);
+            color: var(--mj-text-primary);
             transition: opacity 0.2s;
         }
 
         .treemap-cell:hover {
             opacity: 0.85;
+        }
+
+        .treemap-cell--unpriced {
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-secondary);
+            border: 1px dashed var(--mj-status-warning);
+            flex-grow: 0;
         }
 
         .treemap-label {
@@ -648,12 +689,29 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     public CostKpis: CostKpi[] = [];
     public DailyBars: DailyBar[] = [];
+
+    /** Label every Nth day so the axis stays legible at 30/90-day ranges (about 12 labels max). */
+    public get LabelStep(): number {
+        return Math.max(1, Math.ceil(this.DailyBars.length / 12));
+    }
     public AvgLinePercent = 0;
     public TreemapCells: TreemapCell[] = [];
     public CostByModelRows: CostByModelRow[] = [];
 
-    private allRuns: PromptRunRecord[] = [];
-    private previousPeriodRuns: PromptRunRecord[] = [];
+    private instrumentation = inject(AIInstrumentationService);
+
+    private dailyRows: AIUsageDailyRow[] = [];
+    private prevDailyRows: AIUsageDailyRow[] = [];
+    /** The one currency every cost on this view is reported in (the period's primary currency). */
+    private costCurrency = DEFAULT_COST_CURRENCY;
+    /** True when some runs were priced in another currency and are therefore left out of the figures. */
+    public IsMixedCurrency = false;
+    private lookups: {
+        models: Map<string, string>;
+        modelVendors: Map<string, string>;
+        vendors: Map<string, string>;
+        agents: Map<string, string>;
+    } = { models: new Map(), modelVendors: new Map(), vendors: new Map(), agents: new Map() };
 
     // Per model+vendor cache pricing (rates already normalized to currency-per-token). Empty until
     // AIModelCost cache rates are configured — savings then stays 0 (surfaced as "Set rates").
@@ -661,6 +719,7 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
 
     ngOnInit(): void {
         this.initialized = true;
+        this.instrumentation.Provider = this.ProviderToUse;
         this.loadData();
     }
 
@@ -683,16 +742,20 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         this.loadData();
     }
 
-    public FormatCurrency(value: number, decimals = 2): string {
-        if (value === 0) return '$0.00';
+    public FormatCurrency(value: number | null | undefined, decimals = 2): string {
+        if (value === null || value === undefined) return '—';
+        const prefix = this.costCurrency === 'USD' ? '$' : this.costCurrency + ' ';
+        if (value === 0) return prefix + '0.00';
         if (value < 0.01 && decimals < 4) decimals = 4;
-        return '$' + value.toFixed(decimals);
+        return prefix + value.toFixed(decimals);
     }
 
     public ExportCSV(): void {
-        const header = 'Model,Vendor,Runs,Input Tokens,Output Tokens,Cache Read Tokens,Cache Write Tokens,Cache Hit Rate %,Input Cost,Output Cost,Total Cost,Cache Saved,% of Total';
+        const header = `Model,Vendor,Runs,Input Tokens,Output Tokens,Cache Read Tokens,Cache Write Tokens,Cache Hit Rate %,Input Cost (${this.costCurrency}),Output Cost (${this.costCurrency}),Total Cost (${this.costCurrency}),Cache Saved,% of Total`;
+        // Unpriced figures export as empty cells, never 0 — a spreadsheet sum must not read them as free.
+        const num = (v: number | null, digits: number) => (v === null ? '' : v.toFixed(digits));
         const rows = this.CostByModelRows.map(r =>
-            `"${r.Model}","${r.Vendor}",${r.Runs},${r.InputTokens},${r.OutputTokens},${r.CacheReadTokens},${r.CacheWriteTokens},${(r.CacheHitRate * 100).toFixed(1)},${r.InputCost.toFixed(6)},${r.OutputCost.toFixed(6)},${r.TotalCost.toFixed(6)},${r.CacheSavings.toFixed(6)},${r.PercentOfTotal.toFixed(1)}`
+            `"${r.Model}","${r.Vendor}",${r.Runs},${r.InputTokens},${r.OutputTokens},${r.CacheReadTokens},${r.CacheWriteTokens},${(r.CacheHitRate * 100).toFixed(1)},${num(r.InputCost, 6)},${num(r.OutputCost, 6)},${num(r.TotalCost, 6)},${r.CacheSavings.toFixed(6)},${num(r.PercentOfTotal, 1)}`
         );
         const csv = [header, ...rows].join('\n');
         this.downloadCSV(csv, 'cost-by-model.csv');
@@ -705,52 +768,25 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         this.cdr.detectChanges();
 
         try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            this.instrumentation.Provider = this.ProviderToUse;
             const { currentStart, previousStart } = this.getDateBounds();
             const now = new Date();
-            const modelFilter = this.buildModelFilter();
-            const currentFilter = this.combineDateAndModelFilter(currentStart, now, modelFilter);
-            const prevFilter = this.combineDateAndModelFilter(previousStart, currentStart, modelFilter);
 
-            const [currentResult, prevResult, rateResult, unitTypeResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: AI Prompt Runs',
-                    ExtraFilter: currentFilter,
-                    Fields: FIELDS,
-                    OrderBy: 'RunAt ASC',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Prompt Runs',
-                    ExtraFilter: prevFilter,
-                    Fields: FIELDS,
-                    OrderBy: 'RunAt ASC',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Model Costs',
-                    ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
-                    Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitTypeID'],
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Model Price Unit Types',
-                    Fields: ['ID', 'DriverClass'],
-                    ResultType: 'simple'
-                }
+            const [currentDaily, prevDaily, lookups, cacheRates] = await Promise.all([
+                this.instrumentation.GetUsageDaily(currentStart, now),
+                this.instrumentation.GetUsageDaily(previousStart, currentStart),
+                this.instrumentation.GetModelAndVendorLookups(),
+                this.instrumentation.GetCacheRates()
             ]);
 
-            this.allRuns = (currentResult?.Results ?? []) as PromptRunRecord[];
-            this.previousPeriodRuns = (prevResult?.Results ?? []) as PromptRunRecord[];
-            // A failed unit-type view is NOT the same as "these rows are unpriceable". Without the
-            // driver classes every rate row falls into the `continue` below, and cache savings
-            // render as a confident 0 instead of an error — the figure most likely to be believed.
-            // Say so rather than let the empty map speak for it.
-            if (unitTypeResult && !unitTypeResult.Success) {
-                console.error('Cost & Budget: price unit types failed to load; cache-savings figures will read 0. ' +
-                    unitTypeResult.ErrorMessage);
-            }
-            this.buildCacheRateMap(rateResult?.Results ?? [], unitTypeResult?.Results ?? []);
+            this.dailyRows = this.applyClientModelFilter(currentDaily);
+            this.prevDailyRows = this.applyClientModelFilter(prevDaily);
+            this.lookups = lookups;
+            this.cacheRates = cacheRates;
+
+            const currency = ResolveCostCurrency(this.dailyRows);
+            this.costCurrency = currency.Currency;
+            this.IsMixedCurrency = currency.IsMixed;
 
             this.computeKpis();
             this.computeDailyBars();
@@ -764,6 +800,14 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         }
     }
 
+    private applyClientModelFilter(rows: AIUsageDailyRow[]): AIUsageDailyRow[] {
+        if (!this.Filters.Models || this.Filters.Models.length === 0) {
+            return rows;
+        }
+        const set = new Set(this.Filters.Models.map(m => m.toLowerCase()));
+        return rows.filter(r => r.ModelID && set.has(r.ModelID.toLowerCase()));
+    }
+
     // ── Cache pricing ──
 
     /** Stable map key for a model+vendor pair (UUIDs normalized for case-insensitive matching). */
@@ -771,119 +815,131 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         return `${NormalizeUUID(modelID ?? '')}|${NormalizeUUID(vendorID ?? '')}`;
     }
 
-    /** The cache rate for a run's model+vendor, or undefined when no active cost row is configured. */
-    private rateFor(run: PromptRunRecord): CacheRate | undefined {
-        return this.cacheRates.get(this.rateKey(run.ModelID, run.VendorID));
-    }
-
-    /**
-     * Build the per-model+vendor rate lookup, normalizing each per-unit price to currency-per-token.
-     *
-     * The scale comes from the unit type's DriverClass, not its display name — the name is editable
-     * metadata (`Per 1M Tokens`) while the driver class is the contract the pricing drivers register
-     * under, so this cannot drift the way a hardcoded name table does.
-     */
-    private buildCacheRateMap(rows: ModelCostRow[], unitTypes: PriceUnitTypeRow[]): void {
-        this.cacheRates.clear();
-        const driverClassByUnitType = new Map<string, string>(
-            unitTypes.filter(u => u.DriverClass).map(u => [NormalizeUUID(u.ID), u.DriverClass!])
-        );
-        for (const row of rows) {
-            const driverClass = driverClassByUnitType.get(NormalizeUUID(row.UnitTypeID ?? ''));
-            const divisor = TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass ?? ''];
-            if (divisor === undefined) {
-                // A non-token unit type (per minute/hour/image), or one this build has no driver
-                // for. Defaulting to the per-1M-token divisor would divide an hourly audio rate by
-                // a million and report a savings figure that is pure noise; no rate at all is the
-                // honest answer.
-                continue;
-            }
-            const inputRate = (row.InputPricePerUnit ?? 0) / divisor;
-            // Cache read/write fall back to the input rate when no distinct rate is recorded — exactly
-            // as the server-side cost calculator does — which makes the corresponding savings term 0.
-            const cacheReadRate = (row.CacheReadPricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
-            const cacheWriteRate = (row.CacheWritePricePerUnit ?? row.InputPricePerUnit ?? 0) / divisor;
-            this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), { InputRate: inputRate, CacheReadRate: cacheReadRate, CacheWriteRate: cacheWriteRate });
+    /** Sum net cache savings across a set of rows using each row's model+vendor rate. */
+    private sumCacheSavings(rows: AIUsageDailyRow[]): number {
+        let totalSavings = 0;
+        for (const r of rows) {
+            const key = this.rateKey(r.ModelID, r.VendorID);
+            const rate = this.cacheRates.get(key);
+            if (!rate) continue;
+            const savings = NetCacheSavings(
+                {
+                    UncachedInputTokens: r.TokensPrompt ?? 0,
+                    CacheReadTokens: r.TokensCacheRead ?? 0,
+                    CacheWriteTokens: r.TokensCacheWrite ?? 0
+                },
+                rate
+            );
+            if (savings > 0) totalSavings += savings;
         }
-    }
-
-    /** Sum net cache savings across a set of runs using each run's model+vendor rate. */
-    private sumCacheSavings(runs: PromptRunRecord[]): number {
-        return runs.reduce((total, run) => total + NetCacheSavings({
-            UncachedInputTokens: 0,
-            CacheReadTokens: run.TokensCacheRead ?? 0,
-            CacheWriteTokens: run.TokensCacheWrite ?? 0
-        }, this.rateFor(run)), 0);
+        return totalSavings;
     }
 
     // ── Computations ──
 
     private computeKpis(): void {
         const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const weekStart = new Date(todayStart.getTime() - 6 * 86400000);
-        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const todaySpend = this.sumCostInRange(this.allRuns, todayStart, now);
-        const weekSpend = this.sumCostInRange(this.allRuns, weekStart, now);
-        const monthSpend = this.sumCostInRange(this.allRuns, monthStart, now);
+        // Bounds are UTC DAY KEYS, matching how DayBucket is bucketed server-side. Building them in
+        // LOCAL time and comparing against a UTC-parsed bucket drops a whole day for any viewer west
+        // of UTC: in US/Eastern, local midnight is 04:00Z, so today's bucket (00:00Z) sorts before it
+        // and "Today's Spend" rendered $0.00 every day. The same shift dropped the oldest day of the
+        // week and the 1st of the month.
+        const todayKey = CostBudgetUTCDayKey(now);
+        const weekKey = CostBudgetUTCDayKey(new Date(Date.UTC(
+            now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6)));
+        const monthKey = CostBudgetUTCDayKey(new Date(Date.UTC(
+            now.getUTCFullYear(), now.getUTCMonth(), 1)));
 
-        const prevTotalCost = this.previousPeriodRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
-        const currentTotalCost = this.allRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
+        const todaySpend = this.sumCostInRange(this.dailyRows, todayKey, todayKey);
+        const weekSpend = this.sumCostInRange(this.dailyRows, weekKey, todayKey);
+        const monthSpend = this.sumCostInRange(this.dailyRows, monthKey, todayKey);
 
-        // Project monthly cost based on current daily average
-        const daysIntoMonth = Math.max(1, now.getDate());
-        const projectedMonthly = (monthSpend / daysIntoMonth) * new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const prevTotalCost = ComputeTotalCost(this.prevDailyRows, this.costCurrency);
+        const currentTotalCost = ComputeTotalCost(this.dailyRows, this.costCurrency);
 
-        const delta = prevTotalCost > 0 ? ((currentTotalCost - prevTotalCost) / prevTotalCost) * 100 : null;
+        // Project monthly cost from the month-to-date average. monthSpend is summed over UTC days, so
+        // the day count is UTC too (a local count is a day short every evening west of UTC).
+        const daysIntoMonth = Math.max(1, now.getUTCDate());
+        const daysInMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).getUTCDate();
+        const projectedMonthly = monthSpend !== null ? (monthSpend / daysIntoMonth) * daysInMonth : null;
+
+        const delta = prevTotalCost !== null && prevTotalCost > 0 && currentTotalCost !== null
+            ? ((currentTotalCost - prevTotalCost) / prevTotalCost) * 100
+            : null;
+
+        let totalRuns = 0;
+        let pricedRuns = 0;
+        let unpricedRuns = 0;
+        for (const r of this.dailyRows) {
+            totalRuns += (r.Runs ?? 0);
+            pricedRuns += (r.PricedRuns ?? 0);
+            unpricedRuns += (r.UnpricedRuns ?? 0);
+        }
+        const covPct = ComputeCoveragePercent({ PricedRuns: pricedRuns, UnpricedRuns: unpricedRuns });
+        const covText = (totalRuns > 0 || (pricedRuns + unpricedRuns) > 0) ? `covers ${Math.round(covPct)}% of runs` : undefined;
+        // Mixed currencies: say which one the figures are in, since the others are left out of them.
+        const covSubtitle = this.IsMixedCurrency
+            ? [covText, `${this.costCurrency} only`].filter(Boolean).join(' · ')
+            : covText;
 
         this.CostKpis = [
             {
-                Label: "Today's Spend",
+                // Days are UTC (DayBucket), so "today" rolls over at UTC midnight — the label says so
+                // rather than letting a US viewer's figure reset to $0 in the early evening.
+                Label: 'Today (UTC)',
                 Value: this.FormatCurrency(todaySpend),
+                Subtitle: covSubtitle,
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: false,
-                Icon: 'fa-solid fa-calendar-day'
+                Icon: 'fa-solid fa-calendar-day',
+                IsUnpriced: todaySpend === null
             },
             {
                 Label: 'This Week',
                 Value: this.FormatCurrency(weekSpend),
+                Subtitle: covSubtitle,
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: false,
-                Icon: 'fa-solid fa-calendar-week'
+                Icon: 'fa-solid fa-calendar-week',
+                IsUnpriced: weekSpend === null
             },
             {
                 Label: 'This Month',
                 Value: this.FormatCurrency(monthSpend),
+                Subtitle: covSubtitle,
                 Delta: delta,
                 DeltaDirection: delta != null ? (delta > 0 ? 'up' : delta < 0 ? 'down' : 'stable') : 'stable',
                 Highlighted: false,
-                Icon: 'fa-solid fa-calendar'
+                Icon: 'fa-solid fa-calendar',
+                IsUnpriced: monthSpend === null
             },
             {
                 Label: 'Projected Monthly',
                 Value: this.FormatCurrency(projectedMonthly),
+                Subtitle: covSubtitle,
                 Delta: null,
                 DeltaDirection: 'stable',
                 Highlighted: true,
-                Icon: 'fa-solid fa-chart-line'
+                Icon: 'fa-solid fa-chart-line',
+                IsUnpriced: projectedMonthly === null
             }
         ];
 
         this.appendCacheKpis();
     }
 
-    /** Append the cache hit-rate and cache-savings KPIs (computed from the current-period runs). */
+    /** Append the cache hit-rate and cache-savings KPIs (computed from the current-period daily rows). */
     private appendCacheKpis(): void {
         const totals: CacheTokenTotals = { UncachedInputTokens: 0, CacheReadTokens: 0, CacheWriteTokens: 0 };
-        for (const r of this.allRuns) {
+        for (const r of this.dailyRows) {
             totals.UncachedInputTokens += r.TokensPrompt ?? 0;
             totals.CacheReadTokens += r.TokensCacheRead ?? 0;
             totals.CacheWriteTokens += r.TokensCacheWrite ?? 0;
         }
-        const savings = this.sumCacheSavings(this.allRuns);
+        const savings = this.sumCacheSavings(this.dailyRows);
         const activity = HasCacheActivity(totals);
 
         this.CostKpis.push({
@@ -895,8 +951,6 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
             Icon: 'fa-solid fa-bolt'
         });
 
-        // Savings requires cache rates on AIModelCost. When cache engaged but no savings computed,
-        // it means rates aren't configured yet — say so rather than implying $0 was saved.
         const savingsValue = savings > 0
             ? this.FormatCurrency(savings)
             : (activity ? 'Set rates' : '$0.00');
@@ -911,107 +965,138 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     }
 
     private computeDailyBars(): void {
-        const buckets = new Map<string, number>();
-        for (const run of this.allRuns) {
-            const date = new Date(run.RunAt);
-            const key = date.toISOString().slice(0, 10);
-            buckets.set(key, (buckets.get(key) ?? 0) + (run.Cost ?? run.TotalCost ?? 0));
+        const buckets = new Map<string, AIUsageDailyRow[]>();
+        for (const row of this.dailyRows) {
+            const key = row.DayBucket ? row.DayBucket.slice(0, 10) : '';
+            if (!key) continue;
+            if (!buckets.has(key)) buckets.set(key, []);
+            buckets.get(key)!.push(row);
         }
 
         const sortedKeys = Array.from(buckets.keys()).sort();
-        const values = sortedKeys.map(k => buckets.get(k) ?? 0);
-        const maxVal = Math.max(...values, 0.001);
+        // null = nothing priced that day. Kept as null end to end: it is drawn as an unpriced column,
+        // and it stays OUT of the anomaly baseline — folded in as 0 it dragged the mean down and made
+        // ordinary spending days read as anomalies.
+        const values: (number | null)[] = sortedKeys.map(k => ComputeTotalCost(buckets.get(k)!, this.costCurrency));
+        const priced = values.filter((v): v is number => v !== null);
+        const maxVal = Math.max(...priced, 0.001);
 
-        // Anomaly detection: > 2 standard deviations from mean
-        const mean = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : 0;
-        const variance = values.length > 1
-            ? values.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / values.length
+        // Anomaly detection: > 2 standard deviations from the mean of PRICED days
+        const mean = priced.length > 0 ? priced.reduce((s, v) => s + v, 0) / priced.length : 0;
+        const variance = priced.length > 1
+            ? priced.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / priced.length
             : 0;
         const stdDev = Math.sqrt(variance);
         const anomalyThreshold = mean + 2 * stdDev;
 
-        this.DailyBars = sortedKeys.map((key, i) => ({
-            Date: key,
-            Label: this.formatBarLabel(key),
-            Cost: values[i],
-            HeightPercent: maxVal > 0 ? (values[i] / maxVal) * 100 : 0,
-            IsAnomaly: stdDev > 0 && values[i] > anomalyThreshold
-        }));
+        this.DailyBars = sortedKeys.map((key, i) => {
+            const cost = values[i];
+            return {
+                Date: key,
+                Label: this.formatBarLabel(key),
+                Cost: cost,
+                HeightPercent: cost === null ? 100 : (maxVal > 0 ? (cost / maxVal) * 100 : 0),
+                IsAnomaly: cost !== null && stdDev > 0 && cost > anomalyThreshold,
+                IsUnpriced: cost === null
+            };
+        });
 
         this.AvgLinePercent = maxVal > 0 ? (mean / maxVal) * 100 : 0;
     }
 
     private computeTreemap(): void {
-        const vendorCosts = new Map<string, number>();
-        for (const run of this.allRuns) {
-            const vendor = run.Vendor ?? 'Other';
-            vendorCosts.set(vendor, (vendorCosts.get(vendor) ?? 0) + (run.Cost ?? run.TotalCost ?? 0));
+        const vendorGroups = new Map<string, AIUsageDailyRow[]>();
+        for (const run of this.dailyRows) {
+            const vendorName = (run.VendorID ? this.lookups.vendors.get(run.VendorID.toLowerCase()) : null) ?? 'Other';
+            if (!vendorGroups.has(vendorName)) vendorGroups.set(vendorName, []);
+            vendorGroups.get(vendorName)!.push(run);
         }
 
-        const total = Array.from(vendorCosts.values()).reduce((s, v) => s + v, 0);
-        const sorted = Array.from(vendorCosts.entries()).sort((a, b) => b[1] - a[1]);
+        const vendorCosts: Array<[string, number | null]> = [];
+        for (const [vendor, rows] of vendorGroups.entries()) {
+            vendorCosts.push([vendor, ComputeTotalCost(rows, this.costCurrency)]);
+        }
 
-        this.TreemapCells = sorted.map(([vendor, cost], i) => ({
+        // Shares are of the PRICED total. An unpriced vendor has no share to size by, so it is shown
+        // as an unpriced cell after the priced ones rather than as a 0% sliver of a total it isn't in.
+        const total = vendorCosts.reduce((s, [, c]) => s + (c !== null ? c : 0), 0);
+        const sorted = vendorCosts.sort((a, b) => (b[1] ?? -1) - (a[1] ?? -1));
+
+        let colorIndex = 0;
+        this.TreemapCells = sorted.map(([vendor, cost]) => ({
             Label: vendor,
             Cost: cost,
-            Percent: total > 0 ? (cost / total) * 100 : 0,
-            Color: TREEMAP_COLORS[i % TREEMAP_COLORS.length],
+            Percent: cost === null ? null : (total > 0 ? (cost / total) * 100 : 0),
+            Color: cost === null ? 'var(--mj-bg-surface-card)' : TREEMAP_COLORS[colorIndex++ % TREEMAP_COLORS.length],
             GridArea: ''
         }));
     }
 
     private computeCostByModel(): void {
-        const groups = new Map<string, PromptRunRecord[]>();
-        for (const run of this.allRuns) {
-            const key = run.ModelID ?? 'unknown';
+        const groups = new Map<string, AIUsageDailyRow[]>();
+        for (const row of this.dailyRows) {
+            const key = row.ModelID ?? 'unknown';
             if (!groups.has(key)) groups.set(key, []);
-            groups.get(key)!.push(run);
+            groups.get(key)!.push(row);
         }
 
-        const totalCost = this.allRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
+        // The % denominator is the priced total. When nothing is priced there is no total to take a
+        // share of, so every row's share is unknown (—), not 0%.
+        const totalCost = ComputeTotalCost(this.dailyRows, this.costCurrency);
 
         const rows: CostByModelRow[] = [];
-        for (const [, modelRuns] of groups) {
-            const inputTokens = modelRuns.reduce((s, r) => s + (r.TokensPrompt ?? 0), 0);
-            const outputTokens = modelRuns.reduce((s, r) => s + (r.TokensCompletion ?? 0), 0);
-            const cacheReadTokens = modelRuns.reduce((s, r) => s + (r.TokensCacheRead ?? 0), 0);
-            const cacheWriteTokens = modelRuns.reduce((s, r) => s + (r.TokensCacheWrite ?? 0), 0);
-            const cost = modelRuns.reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
+        for (const [modelId, modelDailyRows] of groups) {
+            const inputTokens = modelDailyRows.reduce((s, r) => s + (r.TokensPrompt ?? 0), 0);
+            const outputTokens = modelDailyRows.reduce((s, r) => s + (r.TokensCompletion ?? 0), 0);
+            const cacheReadTokens = modelDailyRows.reduce((s, r) => s + (r.TokensCacheRead ?? 0), 0);
+            const cacheWriteTokens = modelDailyRows.reduce((s, r) => s + (r.TokensCacheWrite ?? 0), 0);
+            const runsCount = modelDailyRows.reduce((s, r) => s + (r.Runs ?? 0), 0);
+            const cost = ComputeTotalCost(modelDailyRows, this.costCurrency);
 
-            // Approximate input/output cost split based on token ratio
+            // Approximate input/output cost split based on token ratio (unknown when the cost is)
             const totalTk = inputTokens + outputTokens;
-            const inputCost = totalTk > 0 ? cost * (inputTokens / totalTk) : 0;
-            const outputCost = totalTk > 0 ? cost * (outputTokens / totalTk) : 0;
+            const inputCost = cost === null ? null : (totalTk > 0 ? cost * (inputTokens / totalTk) : 0);
+            const outputCost = cost === null ? null : (totalTk > 0 ? cost * (outputTokens / totalTk) : 0);
+
+            const modelName = this.lookups.models.get(modelId.toLowerCase()) ?? 'Unknown';
+            const vendorId = modelDailyRows[0]?.VendorID ?? this.lookups.modelVendors.get(modelId.toLowerCase());
+            const vendorName = (vendorId ? this.lookups.vendors.get(vendorId.toLowerCase()) : null) ?? 'Unknown';
 
             rows.push({
-                Model: modelRuns[0].Model ?? 'Unknown',
-                Vendor: modelRuns[0].Vendor ?? 'Unknown',
-                Runs: modelRuns.length,
+                Model: modelName,
+                Vendor: vendorName,
+                Runs: runsCount,
                 InputTokens: inputTokens,
                 OutputTokens: outputTokens,
                 CacheReadTokens: cacheReadTokens,
                 CacheWriteTokens: cacheWriteTokens,
                 CacheHitRate: CacheHitRate({ UncachedInputTokens: inputTokens, CacheReadTokens: cacheReadTokens, CacheWriteTokens: cacheWriteTokens }),
-                CacheSavings: this.sumCacheSavings(modelRuns),
+                CacheSavings: this.sumCacheSavings(modelDailyRows),
                 InputCost: inputCost,
                 OutputCost: outputCost,
                 TotalCost: cost,
-                PercentOfTotal: totalCost > 0 ? (cost / totalCost) * 100 : 0
+                PercentOfTotal: cost !== null && totalCost !== null && totalCost > 0 ? (cost / totalCost) * 100 : null
             });
         }
 
-        this.CostByModelRows = rows.sort((a, b) => b.TotalCost - a.TotalCost);
+        // Highest cost first; unpriced models last.
+        this.CostByModelRows = rows.sort((a, b) => (b.TotalCost ?? -1) - (a.TotalCost ?? -1));
     }
 
     // ── Helpers ──
 
-    private sumCostInRange(runs: PromptRunRecord[], start: Date, end: Date): number {
-        return runs
-            .filter(r => {
-                const d = new Date(r.RunAt);
-                return d >= start && d <= end;
-            })
-            .reduce((s, r) => s + (r.Cost ?? r.TotalCost ?? 0), 0);
+    /**
+     * Sums cost over an inclusive range of UTC day keys ('YYYY-MM-DD'). Compared as strings, which
+     * for ISO dates is the same ordering as by date, and which keeps the viewer's timezone out of a
+     * figure derived from UTC-bucketed data entirely.
+     */
+    private sumCostInRange(rows: AIUsageDailyRow[], startKey: string, endKey: string): number | null {
+        const inRange = rows.filter(r => {
+            if (!r.DayBucket) return false;
+            const key = r.DayBucket.slice(0, 10);
+            return key >= startKey && key <= endKey;
+        });
+        return ComputeTotalCost(inRange, this.costCurrency);
     }
 
     private getDateBounds(): { currentStart: Date; previousStart: Date } {
@@ -1028,23 +1113,8 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
         return { currentStart, previousStart };
     }
 
-    private buildModelFilter(): string {
-        if (this.Filters.Models.length === 0) return '';
-        const ids = this.Filters.Models.map(id => `'${id}'`).join(',');
-        return `ModelID IN (${ids})`;
-    }
-
-    private combineDateAndModelFilter(start: Date, end: Date, modelFilter: string): string {
-        const parts = [
-            `RunAt >= '${start.toISOString()}'`,
-            `RunAt <= '${end.toISOString()}'`
-        ];
-        if (modelFilter) parts.push(modelFilter);
-        return parts.join(' AND ');
-    }
-
     private formatBarLabel(dateStr: string): string {
-        const d = new Date(dateStr + 'T00:00:00');
+        const d = new Date(dateStr.slice(0, 10) + 'T00:00:00');
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         return months[d.getMonth()] + ' ' + d.getDate();
     }

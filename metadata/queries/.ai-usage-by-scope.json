@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageByScope",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is our AI usage, tokens, and spend broken down by primary scope entity and record?",
+      "Description": "Aggregates AI usage facts by PrimaryScopeEntityID and PrimaryScopeRecordID. Supports optional filtering by scope entity, scope record, and date range.",
+      "SQL": "@file:SQL/ai-usage-by-scope.sql",
+      "TechnicalDescription": "Aggregates vwAIUsageFacts by PrimaryScopeEntityID, PrimaryScopeRecordID and CostCurrency. Runs and every measure count model calls only; parallel parents are counted separately in ParallelParents. Parameters scopeEntityId, scopeRecordId, start and end are optional (template conditionals); the window filters the base RunAt column. Latency percentiles are PERCENTILE_CONT window functions over non-parent runs, collapsed with MAX (SQL Server 2019+).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EBF9166E-DEA4-4CEE-8D1F-56A903D0D1E6"
+    }
+  }
+]

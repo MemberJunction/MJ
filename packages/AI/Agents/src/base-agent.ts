@@ -16,7 +16,7 @@ import { BuildActionToolSet, FilterDeclarableActions, SanitizeToolName } from '.
 import { BuildNativeToolSet, SUB_AGENT_TOOL_PREFIX, type NativeToolBinding } from './native-tools/control-tools';
 import { BuildAssistantToolCallTurn, BuildToolResultTurn, CompactToolResultContent, type NativeToolResult } from './native-tools/tool-result-turns';
 import { LooksLikeLoopEnvelope } from './native-tools/dual-channel';
-import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended, ResolvePromptRunUserID } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
@@ -2224,6 +2224,11 @@ export class BaseAgent {
             promptRun.ModelID = modelResolution.modelID;
             promptRun.VendorID = modelResolution.vendorID || null;
             promptRun.AgentID = params.agent.ID;
+            promptRun.UserID = ResolvePromptRunUserID({
+                UserID: params.userId,
+                AgentRun: this._agentRun,
+                ContextUser: params.contextUser,
+            });
             promptRun.Status = 'Running';
             promptRun.RunAt = new Date();
             promptRun.StreamingEnabled = true;
@@ -3957,6 +3962,11 @@ export class BaseAgent {
         // Attribute the resulting AIPromptRun to this agent. Agents share agent-type-level system
         // prompts, so without this a parent's inference and its sub-agent's are indistinguishable.
         promptParams.agentId = params.agent.ID;
+        promptParams.UserID = ResolvePromptRunUserID({
+            UserID: params.userId,
+            AgentRun: this._agentRun,
+            ContextUser: params.contextUser,
+        }) ?? undefined;
 
         // Handle case where systemPrompt is optional (e.g., Flow Agent Type)
         if (systemPrompt) {
@@ -5155,7 +5165,7 @@ export class BaseAgent {
         // Check absolute maximum iterations (safety net to prevent infinite loops)
         const absoluteMaxIterations = params.absoluteMaxIterations ?? BaseAgent.DEFAULT_ABSOLUTE_MAX_ITERATIONS;
 
-        if (agentRun.TotalPromptIterations && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
+        if (agentRun.TotalPromptIterations != null && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
             return {
                 exceeded: true,
                 type: 'iterations',
@@ -5166,7 +5176,7 @@ export class BaseAgent {
         }
 
         // Check cost limit
-        if (agent.MaxCostPerRun && agentRun.TotalCost) {
+        if (agent.MaxCostPerRun != null && agentRun.TotalCost != null) {
             if (agentRun.TotalCost >= agent.MaxCostPerRun) {
                 return {
                     exceeded: true,
@@ -5179,7 +5189,7 @@ export class BaseAgent {
         }
         
         // Check token limit
-        if (agent.MaxTokensPerRun && agentRun.TotalTokensUsed) {
+        if (agent.MaxTokensPerRun != null && agentRun.TotalTokensUsed != null) {
             if (agentRun.TotalTokensUsed >= agent.MaxTokensPerRun) {
                 return {
                     exceeded: true,
@@ -5192,7 +5202,7 @@ export class BaseAgent {
         }
         
         // Check iteration limit
-        if (agent.MaxIterationsPerRun && agentRun.TotalPromptIterations) {
+        if (agent.MaxIterationsPerRun != null && agentRun.TotalPromptIterations != null) {
             if (agentRun.TotalPromptIterations >= agent.MaxIterationsPerRun) {
                 return {
                     exceeded: true,
@@ -5205,7 +5215,7 @@ export class BaseAgent {
         }
         
         // Check time limit
-        if (agent.MaxTimePerRun && agentRun.StartedAt) {
+        if (agent.MaxTimePerRun != null && agentRun.StartedAt) {
             const elapsedSeconds = Math.floor((Date.now() - new Date(agentRun.StartedAt).getTime()) / 1000);
             if (elapsedSeconds >= agent.MaxTimePerRun) {
                 return {
@@ -6431,6 +6441,11 @@ The context is now within limits. Please retry your request with the recovered c
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
                 promptParams.agentId = params.agent.ID;
+                promptParams.UserID = ResolvePromptRunUserID({
+                    UserID: params.userId,
+                    AgentRun: this._agentRun,
+                    ContextUser: params.contextUser,
+                }) ?? undefined;
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
@@ -7742,6 +7757,7 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
+                companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
@@ -15199,6 +15215,11 @@ The context is now within limits. Please retry your request with the recovered c
                     };
                     promptParams.contextUser = params.contextUser;
                     promptParams.agentId = params.agent.ID;
+                    promptParams.UserID = ResolvePromptRunUserID({
+                        UserID: params.userId,
+                        AgentRun: this._agentRun,
+                        ContextUser: params.contextUser,
+                    }) ?? undefined;
 
                     const runner = new AIPromptRunner();
                     const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);

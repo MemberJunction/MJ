@@ -7,7 +7,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -39,13 +39,13 @@ interface ErrorGroup {
     PromptName: string;
     ModelName: string;
     Count: number;
-    LastErrorMessage: string;
     LastErrorTime: string;
+    LastErrorMessage: string;
     IsExpanded: boolean;
-    Errors: ErrorDetail[];
+    Errors: FailedRunDetail[];
 }
 
-interface ErrorDetail {
+interface FailedRunDetail {
     ID: string;
     Time: string;
     ErrorMessage: string;
@@ -59,6 +59,7 @@ const FIELDS = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-error-analysis',
     template: `
 
@@ -76,6 +77,7 @@ const FIELDS = [
                     <div class="summary-content">
                         <div class="summary-label">Total Errors</div>
                         <div class="summary-value">{{ Summary.TotalErrors | number }}</div>
+                        <div class="summary-subtitle">across {{ TotalRunCount | number }} total runs</div>
                     </div>
                 </div>
                 <div class="summary-card">
@@ -110,7 +112,7 @@ const FIELDS = [
             @for (group of ErrorGroups; track group.Source) {
                 <mj-accordion-panel Size="sm" [FlushBody]="true"
                     [Expanded]="group.IsExpanded"
-                    (ExpandedChange)="onGroupExpandedChange(group, $event)">
+                    (ExpandedChange)="OnGroupExpandedChange(group, $event)">
                     <ng-template mjAccordionTitle>
                         <div class="error-group__title-row">
                             <div class="error-group__source">
@@ -225,6 +227,12 @@ const FIELDS = [
             letter-spacing: -0.02em;
         }
 
+        .summary-subtitle {
+            font-size: 11px;
+            color: var(--mj-text-muted);
+            margin-top: 2px;
+        }
+
         .summary-value--text {
             font-size: 13px;
             font-weight: 500;
@@ -294,7 +302,7 @@ const FIELDS = [
 
         .last-error-time {
             font-size: 12px;
-            color: var(--mj-text-disabled);
+            color: var(--mj-text-muted);
             white-space: nowrap;
         }
 
@@ -310,7 +318,7 @@ const FIELDS = [
         }
 
         .preview-label {
-            color: var(--mj-text-disabled);
+            color: var(--mj-text-muted);
             margin-right: 4px;
         }
 
@@ -345,7 +353,7 @@ const FIELDS = [
 
         .error-detail__duration {
             font-size: 11px;
-            color: var(--mj-text-disabled);
+            color: var(--mj-text-muted);
             font-variant-numeric: tabular-nums;
         }
 
@@ -413,7 +421,8 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     public ErrorGroups: ErrorGroup[] = [];
 
     private failedRuns: FailedRunRecord[] = [];
-    private totalRunCount = 0;
+    public TotalRunCount = 0;
+    public TotalErrorCount = 0;
 
     ngOnInit(): void {
         this.initialized = true;
@@ -469,18 +478,19 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
                     ExtraFilter: errorFilter,
                     Fields: FIELDS,
                     OrderBy: 'RunAt DESC',
+                    MaxRows: 500,
                     ResultType: 'simple'
                 },
                 {
                     EntityName: 'MJ: AI Prompt Runs',
                     ExtraFilter: baseFilter,
-                    Fields: ['ID'],
-                    ResultType: 'simple'
+                    ResultType: 'count_only'
                 }
             ]);
 
             this.failedRuns = (errorResult?.Results ?? []) as FailedRunRecord[];
-            this.totalRunCount = totalResult?.Results?.length ?? 0;
+            this.TotalErrorCount = errorResult?.TotalRowCount ?? this.failedRuns.length;
+            this.TotalRunCount = totalResult?.TotalRowCount ?? totalResult?.RowCount ?? (totalResult?.Results?.length ?? 0);
 
             this.computeSummary();
             this.buildErrorGroups();
@@ -495,8 +505,8 @@ export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implem
     // ── Computations ──
 
     private computeSummary(): void {
-        const errorCount = this.failedRuns.length;
-        const errorRate = this.totalRunCount > 0 ? (errorCount / this.totalRunCount) * 100 : 0;
+        const errorCount = this.TotalErrorCount;
+        const errorRate = this.TotalRunCount > 0 ? (errorCount / this.TotalRunCount) * 100 : 0;
 
         // Find most common error by grouping error messages
         const messageCounts = new Map<string, number>();

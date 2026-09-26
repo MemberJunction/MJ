@@ -1,5 +1,5 @@
 import {
-  Component, Input, Output, EventEmitter, OnInit, OnDestroy,
+  Component, ChangeDetectionStrategy, Input, Output, EventEmitter, OnInit, OnDestroy,
   ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
@@ -10,6 +10,7 @@ import {
   TrendData,
   ChartData
 } from '../../../services/ai-instrumentation.service';
+import { ComputeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 import { TimeSeriesConfig } from '../../charts/time-series-chart.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -19,7 +20,9 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 interface KpiDisplayCard {
   Label: string;
   Value: string;
-  SparklineData: number[];
+  Subtitle?: string;
+  /** Bar heights (0–100). A null point is an unknown value (e.g. an unpriced bucket), drawn distinctly. */
+  SparklineData: (number | null)[];
   DeltaPercent: number;
   DeltaDirection: 'up' | 'down' | 'stable';
   IsImprovement: boolean;
@@ -28,9 +31,9 @@ interface KpiDisplayCard {
 
 interface TopConsumer {
   Rank: number;
-  Type: 'agent' | 'prompt';
+  Type: 'agent' | 'model';
   Name: string;
-  Cost: number;
+  Cost: number | null;
   Proportion: number;
 }
 
@@ -44,6 +47,7 @@ interface ErrorHotspot {
 
 @Component({
   standalone: false,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'app-analytics-executive-summary',
   template: `
     @if (IsLoading && KpiCards.length === 0) {
@@ -58,13 +62,20 @@ interface ErrorHotspot {
         <div class="kpi-card" [style.border-left-color]="card.BorderColor">
           <div class="kpi-label">{{ card.Label }}</div>
           <div class="kpi-value">{{ card.Value }}</div>
+          @if (card.Subtitle) {
+            <div class="kpi-subtitle">{{ card.Subtitle }}</div>
+          }
           <div class="kpi-sparkline">
             @for (bar of card.SparklineData; track $index) {
-              <div
-                class="spark-bar"
-                [style.height.%]="bar"
-                [style.background]="card.BorderColor"
-              ></div>
+              @if (bar === null) {
+                <div class="spark-bar spark-bar--unknown" title="unpriced — cost unknown"></div>
+              } @else {
+                <div
+                  class="spark-bar"
+                  [style.height.%]="bar"
+                  [style.background]="card.BorderColor"
+                ></div>
+              }
             }
           </div>
           @if (ComparisonEnabled && card.DeltaDirection !== 'stable') {
@@ -106,10 +117,8 @@ interface ErrorHotspot {
           @for (item of TopConsumers; track item.Name) {
             <div
               class="consumer-item"
+              [mjClickable]="'Open ' + item.Name"
               (click)="OnConsumerClick(item)"
-              role="button"
-              tabindex="0"
-              (keydown.enter)="OnConsumerClick(item)"
             >
               <div
                 class="consumer-rank"
@@ -120,7 +129,7 @@ interface ErrorHotspot {
                 [class.consumer-type-pill--agent]="item.Type === 'agent'"
               >{{ item.Type }}</div>
               <div class="consumer-name" [title]="item.Name">{{ item.Name }}</div>
-              <div class="consumer-cost">\${{ FormatCost(item.Cost) }}</div>
+              <div class="consumer-cost">{{ item.Cost !== null ? CostPrefix + FormatCost(item.Cost) : '\u2014' }}</div>
               <div class="consumer-bar-container">
                 <div
                   class="consumer-bar"
@@ -161,7 +170,7 @@ interface ErrorHotspot {
             </div>
           }
           @if (ErrorHotspots.length > 0) {
-            <button class="view-all-link" (click)="SectionNavigate.emit('error-analysis')">
+            <button mjButton variant="flat" size="sm" (click)="SectionNavigate.emit('error-analysis')">
               View All Errors <i class="fa-solid fa-arrow-right"></i>
             </button>
           }
@@ -223,6 +232,13 @@ interface ErrorHotspot {
     }
 
     /* ─── Sparkline ───────────────────────────────────────────── */
+    .kpi-subtitle {
+      margin-top: var(--mj-space-1);
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      line-height: var(--mj-leading-snug);
+    }
+
     .kpi-sparkline {
       display: flex;
       align-items: flex-end;
@@ -240,6 +256,12 @@ interface ErrorHotspot {
     }
     .kpi-card:hover .spark-bar {
       opacity: 0.55;
+    }
+    /* An unknown point (an unpriced bucket) — outlined full height, never a zero-height bar. */
+    .spark-bar--unknown {
+      height: 100%;
+      background: transparent;
+      border: 1px dashed var(--mj-status-warning);
     }
 
     /* ─── Delta Badge ─────────────────────────────────────────── */
@@ -319,6 +341,11 @@ interface ErrorHotspot {
       padding: 10px 18px;
       cursor: pointer;
       transition: background 0.15s ease;
+    }
+
+    .consumer-item:focus-visible {
+      outline: none;
+      box-shadow: var(--mj-focus-ring);
     }
     .consumer-item:hover {
       background: var(--mj-bg-surface-hover);
@@ -547,19 +574,25 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   }
 
   OnRefresh(): void {
-    this.instrumentationService.refresh();
+    this.instrumentationService.Refresh();
     if (this.ComparisonEnabled) {
       this.loadComparisonData();
     }
   }
 
   OnConsumerClick(item: TopConsumer): void {
-    this.SectionNavigate.emit(item.Type === 'agent' ? 'agent-runs' : 'prompt-runs');
+    this.SectionNavigate.emit(item.Type === 'agent' ? 'agent-runs' : 'model-performance');
   }
 
   // ─── Formatting Helpers ──────────────────────────────────────────
 
-  FormatCost(cost: number): string {
+  /** Prefix for every amount on this view: '$' for USD, else the ISO code — all figures share one currency. */
+  public CostPrefix = '$';
+
+  FormatCost(cost: number | null): string {
+    if (cost === null || cost === undefined) {
+      return '\u2014';
+    }
     if (cost >= 1000) {
       return (cost / 1000).toFixed(1) + 'K';
     }
@@ -574,14 +607,14 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   private latestKpis: DashboardKPIs | null = null;
 
   private subscribeToStreams(): void {
-    this.instrumentationService.isLoading$
+    this.instrumentationService.IsLoading$
       .pipe(takeUntil(this.destroy$))
       .subscribe(loading => {
         this.IsLoading = loading;
         this.cdr.markForCheck();
       });
 
-    this.instrumentationService.kpis$
+    this.instrumentationService.Kpis$
       .pipe(takeUntil(this.destroy$))
       .subscribe(kpis => {
         this.latestKpis = kpis;
@@ -589,14 +622,14 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
         this.cdr.markForCheck();
       });
 
-    this.instrumentationService.trends$
+    this.instrumentationService.Trends$
       .pipe(takeUntil(this.destroy$))
       .subscribe(trends => {
         this.TrendsData = trends;
         this.cdr.markForCheck();
       });
 
-    this.instrumentationService.chartData$
+    this.instrumentationService.ChartData$
       .pipe(takeUntil(this.destroy$))
       .subscribe(chartData => {
         this.TopConsumers = this.buildTopConsumers(chartData);
@@ -610,9 +643,9 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   private applyDateRange(): void {
     const { start, end } = this.computeDateRange(this.TimeRange);
     this.PeriodLabel = this.getPeriodLabel(this.TimeRange);
-    this.instrumentationService.setDateRange(start, end);
+    this.instrumentationService.SetDateRange(start, end);
     // Explicitly refresh to ensure data loads on first visit
-    this.instrumentationService.refresh();
+    this.instrumentationService.Refresh();
   }
 
   private computeDateRange(range: string): { start: Date; end: Date } {
@@ -662,10 +695,10 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     // Temporarily set date range to previous period, capture KPIs, then restore
     const previousService = new AIInstrumentationService();
     previousService.Provider = this.ProviderToUse;
-    previousService.setDateRange(prevStart, prevEnd);
+    previousService.SetDateRange(prevStart, prevEnd);
 
     // We subscribe to the previousService's kpis$ once
-    const sub: Subscription = previousService.kpis$
+    const sub: Subscription = previousService.Kpis$
       .pipe(takeUntil(this.destroy$))
       .subscribe(kpis => {
         this.previousKpis = kpis;
@@ -683,6 +716,15 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
       return;
     }
 
+    const coveragePct = ComputeCoveragePercent(kpis.Coverage);
+    const prevCoveragePct = this.previousKpis?.Coverage ? ComputeCoveragePercent(this.previousKpis.Coverage) : null;
+    const currency = kpis.costCurrency ? kpis.costCurrency : 'USD';
+    this.CostPrefix = currency === 'USD' ? '$' : currency + ' ';
+    // Mixed currencies: the figures are in one of them and the rest are left out — say which.
+    const costSubtitle = `covers ${Math.round(coveragePct)}% of runs` + (kpis.IsMixedCurrency ? ` \u00b7 ${currency} only` : '');
+    // A period comparison across different currencies would compare unlike units.
+    const prevTotalCost = this.previousKpis && this.previousKpis.costCurrency === kpis.costCurrency ? this.previousKpis.totalCost : null;
+
     const trends = this.TrendsData;
     this.KpiCards = [
       this.buildKpiCard(
@@ -692,10 +734,17 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
         'up-is-neutral', 'var(--mj-brand-primary)'
       ),
       this.buildKpiCard(
-        'Total Cost', '$' + this.FormatCost(kpis.totalCost),
+        'Total Cost', kpis.totalCost !== null ? this.CostPrefix + this.FormatCost(kpis.totalCost) : '\u2014',
         this.extractSparkline(trends, 'cost'),
-        kpis.totalCost, this.previousKpis?.totalCost ?? null,
-        'down-is-good', 'var(--mj-status-warning)'
+        kpis.totalCost, prevTotalCost,
+        'down-is-good', 'var(--mj-status-warning)',
+        costSubtitle
+      ),
+      this.buildKpiCard(
+        'Coverage', coveragePct.toFixed(1) + '%',
+        [],
+        coveragePct, prevCoveragePct,
+        'up-is-good', 'var(--mj-status-success)'
       ),
       this.buildKpiCard(
         'Success Rate', (kpis.successRate * 100).toFixed(1) + '%',
@@ -733,11 +782,12 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   private buildKpiCard(
     label: string,
     value: string,
-    sparkline: number[],
-    current: number,
+    sparkline: (number | null)[],
+    current: number | null,
     previous: number | null,
     goodDirection: 'up-is-good' | 'down-is-good' | 'up-is-neutral',
-    borderColor: string
+    borderColor: string,
+    subtitle?: string
   ): KpiDisplayCard {
     const { percent, direction } = this.computeDelta(current, previous);
     const isImprovement = this.isDirectionGood(direction, goodDirection);
@@ -745,6 +795,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     return {
       Label: label,
       Value: value,
+      Subtitle: subtitle,
       SparklineData: sparkline,
       DeltaPercent: percent,
       DeltaDirection: direction,
@@ -753,8 +804,8 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     };
   }
 
-  private computeDelta(current: number, previous: number | null): { percent: number; direction: 'up' | 'down' | 'stable' } {
-    if (previous == null || previous === 0) {
+  private computeDelta(current: number | null, previous: number | null): { percent: number; direction: 'up' | 'down' | 'stable' } {
+    if (current == null || previous == null || previous === 0) {
       return { percent: 0, direction: 'stable' };
     }
     const change = ((current - previous) / previous) * 100;
@@ -776,24 +827,26 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
 
   // ─── Private: Sparkline ──────────────────────────────────────────
 
-  private extractSparkline(trends: TrendData[], metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): number[] {
+  private extractSparkline(trends: TrendData[], metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): (number | null)[] {
     if (!trends || trends.length === 0) {
       return [20, 40, 30, 60, 50, 70, 45]; // placeholder
     }
 
-    // Sample up to 7 evenly-spaced points
+    // Sample up to 7 evenly-spaced points. A null value (an unpriced cost bucket) stays null — drawn
+    // as an unknown point, not as a zero bar that reads as "nothing was spent".
     const step = Math.max(1, Math.floor(trends.length / 7));
-    const sampled: number[] = [];
+    const sampled: (number | null)[] = [];
     for (let i = 0; i < trends.length && sampled.length < 7; i += step) {
       sampled.push(this.getMetricFromTrend(trends[i], metric));
     }
 
-    // Normalize to 0-100 percentage
-    const maxVal = Math.max(...sampled, 1);
-    return sampled.map(v => Math.max(5, (v / maxVal) * 100));
+    // Normalize the known points to 0-100 percentage
+    const known = sampled.filter((v): v is number => v !== null);
+    const maxVal = Math.max(...known, 1);
+    return sampled.map(v => (v === null ? null : Math.max(5, (v / maxVal) * 100)));
   }
 
-  private getMetricFromTrend(trend: TrendData, metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): number {
+  private getMetricFromTrend(trend: TrendData, metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): number | null {
     switch (metric) {
       case 'executions': return trend.executions;
       case 'cost': return trend.cost;
@@ -807,46 +860,43 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
 
   private buildTopConsumers(chartData: ChartData): TopConsumer[] {
     const consumers: TopConsumer[] = [];
-    const maxCost = Math.max(
-      ...chartData.costByModel.map(m => m.cost),
-      ...chartData.performanceMatrix.map(p => 1), // agents don't have cost here directly
-      1
-    );
 
-    // Add model-based consumers (from prompt runs)
+    // Model consumers (own prompt-run cost per model)
     for (const model of chartData.costByModel.slice(0, 5)) {
       consumers.push({
         Rank: 0,
-        Type: 'prompt',
+        Type: 'model',
         Name: model.model,
         Cost: model.cost,
         Proportion: 0
       });
     }
 
-    // Sort by cost descending, assign ranks
-    consumers.sort((a, b) => b.Cost - a.Cost);
-    const topCost = consumers.length > 0 ? consumers[0].Cost : 1;
+    // Sort by cost descending with nulls last, assign ranks
+    consumers.sort((a, b) => {
+      if (a.Cost === null && b.Cost === null) return 0;
+      if (a.Cost === null) return 1;
+      if (b.Cost === null) return -1;
+      return b.Cost - a.Cost;
+    });
+    const topCost = consumers.length > 0 && consumers[0].Cost !== null ? consumers[0].Cost : 1;
     return consumers.slice(0, 5).map((c, i) => ({
       ...c,
       Rank: i + 1,
-      Proportion: topCost > 0 ? c.Cost / topCost : 0
+      Proportion: c.Cost !== null && topCost > 0 ? c.Cost / topCost : 0
     }));
   }
 
   // ─── Private: Error Hotspots ─────────────────────────────────────
-  // Error hotspots are computed reactively when KPIs change.
-  // Since rawData$ is private on the service, we compute from the
-  // kpis errorRate + totalExecutions, and rely on chartData for names.
-  // For a richer implementation, the service could expose an errors$ stream.
-  // For now, we derive from chartData.performanceMatrix entries with low successRate.
+  // Agent × model pairs ranked by their actual failed-run count for the period (a rate alone would
+  // rank one failure in two runs above forty in a thousand).
 
   private buildErrorHotspots(chartData: ChartData): ErrorHotspot[] {
     const hotspots: ErrorHotspot[] = [];
 
     for (const entry of chartData.performanceMatrix) {
-      if (entry.successRate < 1.0) {
-        const errorCount = Math.round((1 - entry.successRate) * 10); // approximate
+      if (entry.FailedRuns > 0) {
+        const errorCount = entry.FailedRuns;
         hotspots.push({
           Source: `${entry.agent} / ${entry.model}`,
           ErrorMessage: `${((1 - entry.successRate) * 100).toFixed(0)}% failure rate (avg ${(entry.avgTime / 1000).toFixed(1)}s)`,
