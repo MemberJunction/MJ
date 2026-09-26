@@ -10,7 +10,7 @@ import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
+import { EscapeSQLString, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -1456,9 +1456,22 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         let where = '';
         for (const pkv of compositeKey.KeyValuePairs) {
             const pk = e.PrimaryKeys.find((pk) => pk.Name === pkv.FieldName);
-            const quotes = pk && pk.NeedsQuotes ? "'" : '';
             if (where.length > 0) where += ' AND ';
-            where += this.QuoteIdentifier(pkv.FieldName) + '=' + quotes + pkv.Value + quotes;
+            if (pk && pk.NeedsQuotes) {
+                // Key values arrive from remote callers — escape so a quote in the value cannot
+                // break out of the literal (same discipline as CompositeKey.ToWhereClause).
+                where += this.QuoteIdentifier(pkv.FieldName) + "='" + EscapeSQLString(String(pkv.Value)) + "'";
+            }
+            else {
+                // Unquoted (numeric) key column: the value is spliced in bare, so refuse anything
+                // that is not a plain number rather than letting it reach the SQL text.
+                const raw = String(pkv.Value);
+                if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+                    LogError(`BuildEntityRecordNameSQL: non-numeric value provided for numeric key field ${pkv.FieldName} on entity ${entityName}`);
+                    return null;
+                }
+                where += this.QuoteIdentifier(pkv.FieldName) + '=' + raw;
+            }
         }
 
         // SELECT all name fields so InternalGetEntityRecordName can concatenate them

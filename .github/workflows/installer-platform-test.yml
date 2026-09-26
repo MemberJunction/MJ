@@ -13,6 +13,10 @@ on:
       - '.github/workflows/installer-platform-test.yml'
   workflow_dispatch:
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: MJInstaller (${{ matrix.os }})

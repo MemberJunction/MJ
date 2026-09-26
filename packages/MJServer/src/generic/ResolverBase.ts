@@ -923,6 +923,7 @@ export class ResolverBase {
     clause: string | undefined | null,
     label: string,
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
     if (!clause?.trim()) return;
 
@@ -951,13 +952,64 @@ export class ResolverBase {
       const table = this.stripSqlIdent(t.TableName);
       const schema = this.stripSqlIdent(t.SchemaName);
       if (table.toLowerCase() === '__mj_clause_screen') continue;
-      const qualified = `${schema}.${table}`.toLowerCase();
-      const bare = table.toLowerCase();
-      if (allowed.qualified.has(qualified) || allowed.bare.has(bare)) continue;
-      throw new Error(
-        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
-      );
+      this.assertTableRefReadable(allowed, schema, table, label, user);
     }
+  }
+
+  /**
+   * SECURITY — screen for a FULL client-supplied SQL statement (ad-hoc query path). In addition
+   * to the SELECT-only validation the caller performs, every table reference must resolve to an
+   * entity BaseView the acting user holds CanRead on. CTE names defined by the statement itself
+   * are excluded from the check. Fails closed: no user, or an unresolvable reference, refuses.
+   */
+  protected assertFullQueryUsesReadableEntityViews(
+    sqlText: string,
+    provider: IMetadataProvider | undefined,
+    user: UserInfo | undefined,
+    label = 'SQL',
+  ): void {
+    if (!user) {
+      throw new Error(`Invalid ${label}: no acting user resolved for ad-hoc SQL — refusing`);
+    }
+    const dialect = this.dialectForProvider(provider);
+    const parser = new SQLParser(sqlText, dialect);
+    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+      throw new Error(`Invalid ${label}: not a safe read-only statement — refusing under uncertainty`);
+    }
+    if (this.astContainsWriteNode(parser.AST)) {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+    const cteNames = new Set<string>();
+    this.collectCTENames(parser.AST, cteNames);
+    const allowed = this.entityBaseViewAllowList(provider);
+    const tables = SQLParser.ExtractTableRefs(sqlText, dialect);
+    for (const t of tables) {
+      const table = this.stripSqlIdent(t.TableName);
+      const schema = this.stripSqlIdent(t.SchemaName);
+      if (!schema && cteNames.has(table.toLowerCase())) continue;
+      this.assertTableRefReadable(allowed, schema, table, label, user);
+    }
+  }
+
+  /** Walks a parsed AST collecting the names of CTEs the statement itself defines. */
+  private collectCTENames(node: unknown, names: Set<string>): void {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (const n of node) this.collectCTENames(n, names);
+      return;
+    }
+    const obj = node as Record<string, unknown>;
+    const withClause = obj.with;
+    if (Array.isArray(withClause)) {
+      for (const cte of withClause) {
+        const name = (cte as Record<string, unknown>)?.name;
+        if (typeof name === 'string') names.add(name.toLowerCase());
+        else if (name && typeof name === 'object' && typeof (name as Record<string, unknown>).value === 'string') {
+          names.add(((name as Record<string, unknown>).value as string).toLowerCase());
+        }
+      }
+    }
+    for (const v of Object.values(obj)) this.collectCTENames(v, names);
   }
 
   /**
@@ -990,10 +1042,11 @@ export class ResolverBase {
       overrideExcludeFilter?: string | null;
     },
     provider?: IMetadataProvider,
+    user?: UserInfo,
   ): void {
-    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider, user);
+    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider, user);
   }
 
   /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
@@ -1025,20 +1078,52 @@ export class ResolverBase {
   }
 
   private entityBaseViewAllowList(provider?: IMetadataProvider): {
-    qualified: Set<string>;
-    bare: Set<string>;
+    qualified: Map<string, EntityInfo>;
+    bare: Map<string, EntityInfo>;
   } {
-    const qualified = new Set<string>();
-    const bare = new Set<string>();
+    const qualified = new Map<string, EntityInfo>();
+    const bare = new Map<string, EntityInfo>();
     const entities = provider?.Entities ?? [];
     for (const e of entities) {
       const view = this.stripSqlIdent(e.BaseView);
       if (!view) continue;
       const schema = this.stripSqlIdent(e.SchemaName);
-      bare.add(view.toLowerCase());
-      if (schema) qualified.add(`${schema}.${view}`.toLowerCase());
+      bare.set(view.toLowerCase(), e);
+      if (schema) qualified.set(`${schema}.${view}`.toLowerCase(), e);
     }
     return { qualified, bare };
+  }
+
+  /**
+   * SECURITY — resolves a table reference against the entity BaseView allow-list and, when an
+   * acting user is supplied, additionally requires that user to hold CanRead on the referenced
+   * entity. Base views do not embed RLS and entity permissions are otherwise checked only on
+   * the TOP entity of a request, so without this check a subquery (or ad-hoc query) could read
+   * entities the caller has no read grant on.
+   */
+  private assertTableRefReadable(
+    allowed: { qualified: Map<string, EntityInfo>; bare: Map<string, EntityInfo> },
+    schema: string,
+    table: string,
+    label: string,
+    user?: UserInfo,
+  ): void {
+    const qualifiedKey = `${schema}.${table}`.toLowerCase();
+    const bareKey = table.toLowerCase();
+    const entity = allowed.qualified.get(qualifiedKey) ?? (schema ? undefined : allowed.bare.get(bareKey)) ?? allowed.bare.get(bareKey);
+    if (!entity) {
+      throw new Error(
+        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
+      );
+    }
+    if (user) {
+      const perms = entity.GetUserPermisions(user);
+      if (!perms.CanRead) {
+        throw new Error(
+          `Invalid ${label}: you do not have read permission on entity '${entity.Name}' referenced by '${schema ? schema + '.' : ''}${table}'`,
+        );
+      }
+    }
   }
 
   /**
@@ -1072,17 +1157,6 @@ export class ResolverBase {
     try {
       if (!viewInfo || !userPayload) return null;
 
-      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
-      // Screen at this boundary: parse, reject writes, allow only entity BaseViews.
-      this.screenClientViewClauses(
-        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
-        provider as unknown as IMetadataProvider,
-      );
-
-      // Check API key scope authorization for view operations
-      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
-
-      const md = provider
       // Prefer the authenticated session's payload user — it is the authoritative per-request
       // identity and (for magic-link sessions) carries the per-session resource scope / synthesized
       // roles that drive RLS. The cached lookup is a fallback for paths where the payload user
@@ -1090,6 +1164,20 @@ export class ResolverBase {
       const user = this.GetUserFromPayload(userPayload)
         ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
+
+      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
+      // Screen at this boundary: parse, reject writes, allow only entity BaseViews the
+      // acting user can read (subqueries do not inherit the top entity's permission check).
+      this.screenClientViewClauses(
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        provider as unknown as IMetadataProvider,
+        user,
+      );
+
+      // Check API key scope authorization for view operations
+      await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
+
+      const md = provider
 
       const entityInfo = md.Entities.find((e) => e.Name === viewInfo.Entity);
       if (!entityInfo) throw new Error(`Entity ${viewInfo.Entity} not found in metadata`);
@@ -1249,6 +1337,7 @@ export class ResolverBase {
             overrideExcludeFilter: param.overrideExcludeFilter,
           },
           md,
+          contextUser ?? undefined,
         );
 
         if (param.viewInfo) {

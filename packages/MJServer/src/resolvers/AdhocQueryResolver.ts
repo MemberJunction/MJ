@@ -1,5 +1,5 @@
 import { Arg, Ctx, Query, Resolver, Field, Int, InputType } from 'type-graphql';
-import { DatabasePlatform, LogError } from '@memberjunction/core';
+import { DatabasePlatform, IMetadataProvider, LogError } from '@memberjunction/core';
 import { SQLExpressionValidator } from '@memberjunction/global';
 import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
@@ -69,6 +69,24 @@ export class AdhocQueryResolver extends ResolverBase {
             const validation = validator.validateFullQuery(input.SQL);
             if (!validation.valid) {
                 return this.buildErrorResult(validation.error || 'SQL validation failed');
+            }
+
+            // 2b. SECURITY: authorize the READ itself. validateFullQuery guarantees a
+            // read-only statement but places no restriction on WHAT is read — without this
+            // check any authenticated user could SELECT from any table in the database,
+            // bypassing entity permissions entirely. Require every table reference to be an
+            // entity base view the acting user holds CanRead on (CTEs the statement defines
+            // are exempt). Fails closed.
+            try {
+                let mdProvider: IMetadataProvider | undefined;
+                try {
+                    mdProvider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+                } catch {
+                    mdProvider = undefined;
+                }
+                this.assertFullQueryUsesReadableEntityViews(input.SQL, mdProvider, context.userPayload?.userRecord, 'ad-hoc SQL');
+            } catch (authErr) {
+                return this.buildErrorResult(authErr instanceof Error ? authErr.message : String(authErr));
             }
 
             // 3. Get READ-ONLY data source (no fallback to read-write)

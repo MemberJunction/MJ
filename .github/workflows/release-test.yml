@@ -43,6 +43,10 @@ on:
   schedule:
     - cron: '30 8 * * *'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   unit-tests:
     name: Unit Tests (Vitest)

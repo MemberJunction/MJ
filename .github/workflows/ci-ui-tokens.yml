@@ -13,6 +13,10 @@ on:
       - '.github/scripts/ci/hex-allowlist.txt'
       - '.github/workflows/ci-ui-tokens.yml'
 
+# Least-privilege token: nothing in this workflow writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   check-hex-tokens:
     name: Check changed CSS/SCSS/TS for token misuse
