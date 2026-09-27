@@ -83,6 +83,11 @@ interface Internals {
     shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
     restoreTurn1VolatileStateIfNeeded(params: ExecuteAgentParams, isAppendOnly: boolean): void;
     prepareSubAgentMessages(params: ExecuteAgentParams, subAgentRequest: { message?: string }, subAgent: { ID: string; MessageMode: string; MaxMessages: number | null }, contextMessage?: ChatMessage): ChatMessage[];
+    recoveryStrategy_DropStaleVolatileState(params: ExecuteAgentParams, tokensToSave: number, currentStepCount: number): { tokensSaved: number; strategyName: string };
+    recoveryStrategy_TrimLastUserMessage(params: ExecuteAgentParams, tokensToSave: number): { tokensSaved: number; strategyName: string };
+    attemptContextRecovery<P>(params: ExecuteAgentParams, payload: P, errorMessage: string): Promise<{ step: string; retryInstructions?: string }>;
+    getModelContextLimit(): number;
+    _promptTurnCount: number;
     _turn1InsertionIndex: number;
     _lastModelSelectionInfo?: any;
     _lastVolatileStateMessage?: any;
@@ -699,5 +704,99 @@ describe('BaseAgent.prepareSubAgentMessages — the parent\'s runtime state neve
         const before = JSON.stringify(params.conversationMessages);
         agentUnderTest().prepareSubAgentMessages(params, { message: 'task' }, sub('Latest', 2));
         expect(JSON.stringify(params.conversationMessages)).toBe(before);
+    });
+});
+
+describe('BaseAgent context recovery under append-only retention', () => {
+    const big = (label: string): string => `<${RUNTIME_STATE_TAG}>\n## Current State\n${label} ${'payload '.repeat(400)}\n</${RUNTIME_STATE_TAG}>`;
+    const fragment = (turn: number): VolatileMessage => ({ role: 'user', content: big(`turn ${turn}`), metadata: { volatileState: true, turnAdded: turn } });
+    const request = 'Please compare the five largest cloud vector databases on price, latency and ecosystem. ' + 'Detail. '.repeat(200);
+    function appendOnlyHistory(): ExecuteAgentParams {
+        return {
+            agent: { ID: 'a-1', Name: 'Sage' },
+            contextUser: USER,
+            conversationMessages: [
+                { role: 'user', content: request },
+                fragment(1),
+                { role: 'assistant', content: 'reply 1' },
+                { role: 'user', content: 'tool results 1' },
+                fragment(2),
+                { role: 'assistant', content: 'reply 2' },
+                { role: 'user', content: 'tool results 2' },
+                fragment(3),
+            ],
+        } as unknown as ExecuteAgentParams;
+    }
+    const fragmentsIn = (msgs: ChatMessage[]): number => msgs.filter(m => (m as VolatileMessage).metadata?.volatileState === true).length;
+
+    it('the fragment carries turnAdded so the lifecycle can see its age', async () => {
+        templates.byId.set('tmpl-parent', `# System Prompt\n\n## Runtime State\nDelivered inside \`<${RUNTIME_STATE_TAG}>\` tags.`);
+        const systemPrompt = { ID: 'parent-1', Name: 'Loop', TemplateID: 'tmpl-parent' } as unknown as MJAIPromptEntityExtended;
+        const a = agentUnderTest();
+        a._promptTurnCount = 7;
+        const { params, promptParams } = makeInputs(TRAILING);
+        const msg = await a.buildVolatileStateMessage(params, promptParams, { step: 1 }, CHILD, AGENT_TYPE, systemPrompt);
+        expect((msg!.metadata as { turnAdded?: number }).turnAdded).toBe(7);
+    });
+
+    it('DropStaleVolatileState removes all but the newest fragment, oldest first, and reports the tokens', () => {
+        const a = agentUnderTest();
+        const params = appendOnlyHistory();
+        const result = a.recoveryStrategy_DropStaleVolatileState(params, 1_000_000, 4);
+        expect(result.tokensSaved).toBeGreaterThan(0);
+        expect(fragmentsIn(params.conversationMessages)).toBe(1);
+        expect(String(params.conversationMessages[params.conversationMessages.length - 1].content)).toContain('turn 3');
+        expect(params.conversationMessages.map(m => String(m.content).slice(0, 14))).toEqual([
+            request.slice(0, 14), 'reply 1', 'tool results 1', 'reply 2', 'tool results 2', big('turn 3').slice(0, 14)
+        ]);
+    });
+
+    it('DropStaleVolatileState stops once the target is met and is a no-op without fragments', () => {
+        const a = agentUnderTest();
+        const params = appendOnlyHistory();
+        // A tiny target: the first (oldest) stale fragment alone satisfies it.
+        const result = a.recoveryStrategy_DropStaleVolatileState(params, 1, 4);
+        expect(result.tokensSaved).toBeGreaterThan(0);
+        expect(fragmentsIn(params.conversationMessages)).toBe(2);
+        const texts = params.conversationMessages.map(m => String(m.content));
+        expect(texts.some(c => c.includes('turn 1'))).toBe(false);
+        expect(texts.some(c => c.includes('turn 2')) && texts.some(c => c.includes('turn 3'))).toBe(true);
+
+        const clean = { ...appendOnlyHistory(), conversationMessages: [{ role: 'user', content: request }] } as unknown as ExecuteAgentParams;
+        expect(a.recoveryStrategy_DropStaleVolatileState(clean, 1_000_000, 4)).toEqual({ tokensSaved: 0, strategyName: 'No stale runtime-state fragments to drop' });
+    });
+
+    it('TrimLastUserMessage skips the trailing fragment and trims the actual user request', () => {
+        const a = agentUnderTest();
+        // The last user-role message is the retained fragment; the last REAL user message is the long request.
+        const params = {
+            agent: { ID: 'a-1', Name: 'Sage' },
+            contextUser: USER,
+            conversationMessages: [
+                { role: 'assistant', content: 'earlier reply' },
+                { role: 'user', content: request },
+                fragment(3),
+            ],
+        } as unknown as ExecuteAgentParams;
+        const result = a.recoveryStrategy_TrimLastUserMessage(params, 1_000_000);
+        expect(result.tokensSaved).toBeGreaterThan(0);
+        const last = params.conversationMessages[2];
+        expect((last as VolatileMessage).metadata?.volatileState).toBe(true);
+        expect(String(last.content)).toBe(big('turn 3'));
+        expect(String(params.conversationMessages[1].content)).toContain('CONTEXT_LIMIT_REACHED');
+        expect(String(params.conversationMessages[1].content).startsWith('Please compare the five largest')).toBe(true);
+    });
+
+    it('the recovery ladder frees fragments before it touches tool results or the user request', async () => {
+        const a = agentUnderTest();
+        const params = appendOnlyHistory();
+        const before = JSON.stringify(params.conversationMessages.filter(m => (m as VolatileMessage).metadata?.volatileState !== true));
+        a.getModelContextLimit = () => 1500; // the two stale fragments alone exceed this
+        const outcome = await a.attemptContextRecovery(params, { step: 1 }, 'context length exceeded');
+        expect(outcome.step).toBe('Retry');
+        expect(outcome.retryInstructions).toContain('stale runtime-state fragment');
+        expect(fragmentsIn(params.conversationMessages)).toBe(1);
+        // Nothing else was removed, stubbed or trimmed.
+        expect(JSON.stringify(params.conversationMessages.filter(m => (m as VolatileMessage).metadata?.volatileState !== true))).toBe(before);
     });
 });

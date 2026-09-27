@@ -4760,7 +4760,7 @@ export class BaseAgent {
             return null;
         }
         this.logStatus(`📦 Volatile state → trailing message (${fragment.length} chars${specialization ? ', specialization relocated' : ''})`, true, params);
-        return { role: 'user', content: fragment, metadata: { volatileState: true } };
+        return { role: 'user', content: fragment, metadata: { volatileState: true, turnAdded: this._promptTurnCount } };
     }
 
     /**
@@ -6341,6 +6341,71 @@ export class BaseAgent {
     }
 
     /**
+     * Recovery Strategy 0: drop stale runtime-state fragments.
+     *
+     * Under append-only trailing-state retention (prefix-cache providers: OpenAI, xAI) every
+     * iteration leaves its `<mj-runtime-state>` message in the history so the next request is an
+     * exact prefix extension of the last. Those copies are cached tokens on the wire, but they are
+     * context all the same, and they carry nothing the model needs: the CURRENT state always rides
+     * as the fresh fragment appended to the outgoing request. So when the context overflows they
+     * are the first thing to go, oldest first, all but the most recent. Keeping the newest one
+     * matters for two reasons: it is the history's only fragment after this pass, so
+     * {@link restoreTurn1VolatileStateIfNeeded} does not splice a turn-1 copy back in, and it
+     * keeps the prefix intact from that point forward. The cost is one cache miss on the next call;
+     * the alternative was a failed run.
+     *
+     * A no-op under replace-in-place retention, where the history never holds a fragment.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @param currentStepCount - Current turn number, for the lifecycle event
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected recoveryStrategy_DropStaleVolatileState(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number
+    ): { tokensSaved: number; strategyName: string } {
+        const fragmentIndices = params.conversationMessages
+            .map((msg, index) => ((msg as AgentChatMessage).metadata?.volatileState === true ? index : -1))
+            .filter(index => index >= 0);
+        // All but the most recent, oldest first.
+        const stale = fragmentIndices.slice(0, -1);
+        if (stale.length === 0) {
+            return { tokensSaved: 0, strategyName: 'No stale runtime-state fragments to drop' };
+        }
+
+        let tokensSaved = 0;
+        const removedIndices: number[] = [];
+        for (const index of stale) {
+            if (tokensSaved >= tokensToSave) break;
+            removedIndices.push(index);
+            tokensSaved += this.estimateTokens(params.conversationMessages[index].content);
+        }
+
+        // Remove in reverse order to keep the remaining indices valid.
+        removedIndices.sort((a, b) => b - a).forEach(index => {
+            const removed = params.conversationMessages.splice(index, 1)[0];
+            this.emitMessageLifecycleEvent({
+                type: 'message-removed',
+                turn: currentStepCount,
+                messageIndex: index,
+                message: removed as AgentChatMessage,
+                reason: 'Context recovery - stale runtime-state fragment (append-only retention)',
+                tokensSaved: this.estimateTokens(removed.content)
+            });
+        });
+
+        this.logStatus(
+            `Dropped ${removedIndices.length} stale runtime-state fragment(s) (${tokensSaved} tokens); ${fragmentIndices.length - removedIndices.length} retained`,
+            true,
+            params
+        );
+        return { tokensSaved, strategyName: `Dropped ${removedIndices.length} stale runtime-state fragment(s) retained for prefix caching` };
+    }
+
+    /**
      * Recovery Strategy 1: Remove oldest tool-result messages.
      * Targets messages older than minAge turns for removal.
      *
@@ -6615,10 +6680,13 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         tokensToSave: number
     ): { tokensSaved: number; strategyName: string } {
-        // Find the last user message (reverse search for compatibility)
+        // Find the last user message (reverse search for compatibility). A retained runtime-state
+        // fragment is user-role but is framework state, not the user's request: trimming it would
+        // leave a damaged copy in the history and spare the message this strategy is meant to trim.
         let lastUserMessageIndex = -1;
         for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
-            if (params.conversationMessages[i].role === 'user') {
+            const candidate = params.conversationMessages[i] as AgentChatMessage;
+            if (candidate.role === 'user' && candidate.metadata?.volatileState !== true) {
                 lastUserMessageIndex = i;
                 break;
             }
@@ -6720,6 +6788,9 @@ export class BaseAgent {
 
         // Try multiple recovery strategies in order
         const strategies = [
+            // Retained runtime-state fragments (append-only mode) are pure cache filler: stale copies of
+            // state the next request re-sends anyway. Freeing them costs one cache miss, never content.
+            () => this.recoveryStrategy_DropStaleVolatileState(params, tokensToSave, currentPromptTurn),
             () => this.recoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 5),
             () => this.recoveryStrategy_CompactOldToolResults(params, tokensToSave, currentPromptTurn, 3),
             () => this.recoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 2),
