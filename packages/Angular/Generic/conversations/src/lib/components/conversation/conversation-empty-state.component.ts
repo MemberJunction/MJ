@@ -1,5 +1,6 @@
-import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, TemplateRef, ViewChild } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
+import type { MentionPerson } from '@memberjunction/conversations-runtime';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MessageInputComponent } from '../message/message-input.component';
 
@@ -166,6 +167,18 @@ export class ConversationEmptyStateComponent {
   @Input() set overlayMode(value: boolean) {
     this.OverlayMode = value;
   }
+
+  /** The agents the composer's '@' list may offer (see `MessageInputComponent.AllowedAgentIDs`). */
+  @Input() AllowedAgentIDs: readonly string[] | null = null;
+
+  /** The people the composer's '@' list offers (see `MessageInputComponent.MentionPeople`). */
+  @Input() MentionPeople: readonly MentionPerson[] | null = null;
+
+  /**
+   * The chat area's `composerExtra` slot template, rendered directly above this composer with an
+   * `IMJChatComposerExtraContext` (no conversation exists yet). Null renders nothing there.
+   */
+  @Input() ComposerExtraTemplate: TemplateRef<unknown> | null = null;
 
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 
