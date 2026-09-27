@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { BaseAgent, CircuitBreakerActionResult } from '../base-agent';
-import '../agent-types/loop-agent-type';
+import { LoopAgentType } from '../agent-types/loop-agent-type';
 import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
@@ -788,6 +788,44 @@ describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () =
             await agent2.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'X' } }, actionEntity);
             const identical = await agent2.ExecuteSingleAction(params, { name: ACTION_NAME, params: { q: 'X' } }, actionEntity);
             expect((identical as CircuitBreakerActionResult).Reason).toBe('identical-arguments');
+        });
+    });
+
+    describe('Agent-type gate (BaseAgentType.UsesActionCircuitBreaker)', () => {
+        it('the Loop type uses the breaker; an opted-out type (Flow) dispatches every retry and gets no directive', async () => {
+            expect(new LoopAgentType().UsesActionCircuitBreaker).toBe(true);
+
+            // Same fatal scenario as the ACTION_UNAVAILABLE case below, but the type opts out.
+            const optOut = vi.spyOn(LoopAgentType.prototype, 'UsesActionCircuitBreaker', 'get').mockReturnValue(false);
+            try {
+                harness.runAction = () => {
+                    harness.runActionCallCount++;
+                    const ar = new ActionResult();
+                    ar.Success = false;
+                    ar.Message = 'Perplexity API key not found. Set PERPLEXITY_API_KEY';
+                    ar.Params = [];
+                    ar.Result = { ResultCode: 'ERROR' } as unknown as import('@memberjunction/core-entities').MJActionResultCodeEntity;
+                    return ar;
+                };
+                const { agent } = makeAgent([
+                    () => llmEnvelope(actionsEnvelope()),
+                    () => llmEnvelope(actionsEnvelope()),
+                    () => llmEnvelope(successEnvelope()),
+                ]);
+                const params = makeParams();
+                const result = await agent.Execute(params);
+                expect(result.success).toBe(true);
+
+                // Under the breaker the second identical call would have been a fatal lockout; here both dispatch.
+                expect(harness.runActionCallCount).toBe(2);
+                const contents = params.conversationMessages.map(m => typeof m.content === 'string' ? m.content : '');
+                expect(contents.some(c => c.includes('[CRITICAL/'))).toBe(false);
+                expect(contents.some(c => c.includes('Action Execution Failure Guidance'))).toBe(false);
+                // The action's own failure still reaches the history as an ordinary result.
+                expect(contents.some(c => c.includes('API key not found'))).toBe(true);
+            } finally {
+                optOut.mockRestore();
+            }
         });
     });
 

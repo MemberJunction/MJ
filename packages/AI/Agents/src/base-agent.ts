@@ -10067,7 +10067,7 @@ The context is now within limits. Please retry your request with the recovered c
                 await this.recordFoldedTaskGraph(params, previousDecision);
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
-                return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
+                return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount, this.ActionOptionsForAgentType());
             // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
             // union (non-terminal, like 'ClientTools') — LoopAgentType.DetermineNextStep() emits it
             // when the LLM chooses to activate a skill.
@@ -12392,6 +12392,16 @@ The context is now within limits. Please retry your request with the recovered c
      *
 
     /**
+     * The {@link ExecuteSingleActionOptions} the main loop passes for this run's agent type: the
+     * circuit-breaker exemption when the type has opted out (`BaseAgentType.UsesActionCircuitBreaker`
+     * is false — Flow), otherwise none. Kept as a seam so a subclass can widen or narrow the
+     * exemption without touching the loop.
+     */
+    protected ActionOptionsForAgentType(): ExecuteSingleActionOptions | undefined {
+        return this.AgentTypeInstance?.UsesActionCircuitBreaker === false ? { skipCircuitBreaker: true } : undefined;
+    }
+
+    /**
      * Executes actions step and tracks it.
      * 
      * @private
@@ -12729,8 +12739,10 @@ The context is now within limits. Please retry your request with the recovered c
                     });
                 }
 
-                // Surface failure guidance for failed actions so the model does not repeatedly loop on broken tools
-                if (failedActions.length > 0) {
+                // Surface failure guidance for failed actions so the model does not repeatedly loop on broken
+                // tools. Not when the breaker is bypassed for this step: there is then no model in the loop to
+                // act on it (Flow, ForEach, While, pipeline), and the directive would only pollute the history.
+                if (failedActions.length > 0 && actionOptions?.skipCircuitBreaker !== true) {
                     const failureText = failedActions.map(f => this.formatActionFailureDirective(f)).join('\n\n');
 
                     params.conversationMessages.push({

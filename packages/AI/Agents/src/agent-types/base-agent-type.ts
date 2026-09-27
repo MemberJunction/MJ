@@ -570,6 +570,25 @@ export abstract class BaseAgentType {
     }
 
     /**
+     * Whether action calls made under this agent type go through BaseAgent's run-scoped action
+     * circuit breaker (fatal lockout, identical-arguments rule, attempt budget) and receive its
+     * failure directives.
+     *
+     * The breaker exists for MODEL-DRIVEN retries: a model that keeps calling a broken tool needs
+     * to be stopped and told why. An agent type whose action steps are chosen programmatically —
+     * Flow, whose graph carries its own failure paths and may legitimately re-run a node with the
+     * same mapped inputs — has no model in that loop to act on the guidance, so the rules would
+     * only block its retries and the directive would be appended to a history nothing reads.
+     * Such a type returns false and BaseAgent passes `skipCircuitBreaker` for its action steps,
+     * the same exemption the ForEach / While operators and the pipeline registry use.
+     *
+     * Default: true.
+     */
+    public get UsesActionCircuitBreaker(): boolean {
+        return true;
+    }
+
+    /**
      * Provides agent-type-specific guidance for configuration errors related to missing prompts.
      * This allows each agent type to give contextual help based on its architecture.
      *
