@@ -33,6 +33,7 @@ vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         Instance: {
             get Skills(): unknown[] { return []; },
+            get AgentRelationships(): unknown[] { return []; },
             GetSkillsForAgent: (): unknown[] => [],
             GetAutoActivatableSkillsForAgent: (): unknown[] => [],
             get ModelsByID() { return catalog.models; },
@@ -81,6 +82,7 @@ interface Internals {
     assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage, isAppendOnly?: boolean): ChatMessage[];
     shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
     restoreTurn1VolatileStateIfNeeded(params: ExecuteAgentParams, isAppendOnly: boolean): void;
+    prepareSubAgentMessages(params: ExecuteAgentParams, subAgentRequest: { message?: string }, subAgent: { ID: string; MessageMode: string; MaxMessages: number | null }, contextMessage?: ChatMessage): ChatMessage[];
     _turn1InsertionIndex: number;
     _lastModelSelectionInfo?: any;
     _lastVolatileStateMessage?: any;
@@ -644,3 +646,58 @@ describe('BaseAgent.restoreTurn1VolatileStateIfNeeded', () => {
     });
 });
 
+
+describe('BaseAgent.prepareSubAgentMessages — the parent\'s runtime state never crosses the sub-agent boundary', () => {
+    const fragment = (turn: number): VolatileMessage => ({ role: 'user', content: `<${RUNTIME_STATE_TAG}>turn ${turn}</${RUNTIME_STATE_TAG}>`, metadata: { volatileState: true } });
+    /** An append-only parent history: two fragments retained among six real messages. */
+    function parentParams(): ExecuteAgentParams {
+        return {
+            agent: { ID: 'parent-1', Name: 'Parent' },
+            contextUser: USER,
+            conversationMessages: [
+                { role: 'user', content: 'r1 user request' },
+                fragment(1),
+                { role: 'assistant', content: 'r2 reply 1' },
+                { role: 'user', content: 'r3 tool results 1' },
+                fragment(2),
+                { role: 'assistant', content: 'r4 reply 2' },
+                { role: 'user', content: 'r5 tool results 2' },
+                { role: 'assistant', content: 'r6 reply 3' },
+            ],
+        } as unknown as ExecuteAgentParams;
+    }
+    const sub = (MessageMode: string, MaxMessages: number | null = null) => ({ ID: 'sub-1', MessageMode, MaxMessages });
+    const hasFragment = (msgs: ChatMessage[]): boolean => msgs.some(m => (m as VolatileMessage).metadata?.volatileState === true || String(m.content).includes(`<${RUNTIME_STATE_TAG}>`));
+
+    it("'All' passes every real message and no fragment", () => {
+        const out = agentUnderTest().prepareSubAgentMessages(parentParams(), { message: 'task' }, sub('All'));
+        expect(hasFragment(out)).toBe(false);
+        expect(out.map(m => String(m.content))).toEqual(['r1 user request', 'r2 reply 1', 'r3 tool results 1', 'r4 reply 2', 'r5 tool results 2', 'r6 reply 3', 'task']);
+    });
+
+    it("'Latest' spends its MaxMessages slots on real turns, not on fragments", () => {
+        // Naively slicing the raw history (-3) would yield [fragment 2, r4, r5]: one slot wasted on state.
+        const out = agentUnderTest().prepareSubAgentMessages(parentParams(), { message: 'task' }, sub('Latest', 3));
+        expect(hasFragment(out)).toBe(false);
+        expect(out.map(m => String(m.content))).toEqual(['r4 reply 2', 'r5 tool results 2', 'r6 reply 3', 'task']);
+    });
+
+    it("'Bookend' counts and slices the real history only", () => {
+        // 6 real messages, MaxMessages 4 → first 2 + omitted(2) + last 2; the raw history (8) would have omitted 4.
+        const out = agentUnderTest().prepareSubAgentMessages(parentParams(), { message: 'task' }, sub('Bookend', 4));
+        expect(hasFragment(out)).toBe(false);
+        expect(out.map(m => String(m.content))).toEqual(['r1 user request', 'r2 reply 1', '[2 messages omitted for context management]', 'r5 tool results 2', 'r6 reply 3', 'task']);
+    });
+
+    it("'None' still passes nothing but the task and context", () => {
+        const out = agentUnderTest().prepareSubAgentMessages(parentParams(), { message: 'task' }, sub('None'), { role: 'user', content: 'context' });
+        expect(out.map(m => String(m.content))).toEqual(['context', 'task']);
+    });
+
+    it('the parent history itself is not mutated', () => {
+        const params = parentParams();
+        const before = JSON.stringify(params.conversationMessages);
+        agentUnderTest().prepareSubAgentMessages(params, { message: 'task' }, sub('Latest', 2));
+        expect(JSON.stringify(params.conversationMessages)).toBe(before);
+    });
+});

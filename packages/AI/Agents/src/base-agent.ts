@@ -8317,6 +8317,13 @@ The context is now within limits. Please retry your request with the recovered c
      * **Priority:** AIAgentRelationship.MessageMode takes precedence over AIAgent.MessageMode
      * to allow different parent agents to pass messages differently to the same sub-agent.
      *
+     * **Runtime state never crosses the boundary.** The parent's trailing runtime-state messages
+     * (`metadata.volatileState` — its payload, scratchpad and, when relocated, its specialization;
+     * retained in the history under append-only mode) are dropped BEFORE any mode slices the
+     * history, so a sub-agent never sees the parent's state, never has it counted against
+     * `MaxMessages`, and never receives it unescaped when it builds no fragment of its own. The
+     * sub-agent builds its own fragment at its prompt step.
+     *
      * Subclasses can override this method to implement custom message preparation logic
      * specific to their domain (e.g., Skip agents adding special context).
      *
@@ -8346,6 +8353,10 @@ The context is now within limits. Please retry your request with the recovered c
         let messageMode = relationship?.MessageMode || subAgent.MessageMode || 'None';
         let maxMessages = relationship?.MaxMessages || subAgent.MaxMessages || null;
 
+        // The parent's history minus its runtime-state messages (see the doc comment): every mode
+        // slices THIS, so no fragment reaches the sub-agent and none spends a MaxMessages slot.
+        const history = params.conversationMessages.filter(m => (m as AgentChatMessage).metadata?.volatileState !== true);
+
         // Apply message mode
         switch (messageMode) {
             case 'None':
@@ -8355,24 +8366,24 @@ The context is now within limits. Please retry your request with the recovered c
 
             case 'All':
                 // Pass all parent conversation history
-                messages = [...params.conversationMessages];
+                messages = [...history];
                 break;
 
             case 'Latest':
                 // Pass most recent N messages
                 if (maxMessages && maxMessages > 0) {
-                    messages = this.makeToolTurnsSelfConsistent(params.conversationMessages.slice(-maxMessages));
+                    messages = this.makeToolTurnsSelfConsistent(history.slice(-maxMessages));
                 } else {
-                    messages = [...params.conversationMessages];
+                    messages = [...history];
                 }
                 break;
 
             case 'Bookend':
                 // Pass first 2 + most recent (N-2) with indicator message between
-                if (maxMessages && maxMessages > 2 && params.conversationMessages.length > maxMessages) {
-                    const firstTwo = params.conversationMessages.slice(0, 2);
-                    const remaining = params.conversationMessages.slice(-(maxMessages - 2));
-                    const omittedCount = params.conversationMessages.length - maxMessages;
+                if (maxMessages && maxMessages > 2 && history.length > maxMessages) {
+                    const firstTwo = history.slice(0, 2);
+                    const remaining = history.slice(-(maxMessages - 2));
+                    const omittedCount = history.length - maxMessages;
 
                     messages = this.makeToolTurnsSelfConsistent([
                         ...firstTwo,
@@ -8383,7 +8394,7 @@ The context is now within limits. Please retry your request with the recovered c
                         ...remaining
                     ]);
                 } else {
-                    messages = [...params.conversationMessages];
+                    messages = [...history];
                 }
                 break;
 
