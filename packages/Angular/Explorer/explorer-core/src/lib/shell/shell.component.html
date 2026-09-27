@@ -388,7 +388,10 @@
 </mj-app-access-dialog>
 
 <!-- Command Palette -->
-<mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>
+<mj-command-palette
+  [ShowSearch]="ShowSearchBar"
+  (AppSelected)="onAppSwitch($event)"
+  (KnowledgeSearchRequested)="OnCommandPaletteSearch($event)"></mj-command-palette>
 
 <!-- Unified command palette (Shell.Omnibar.Enabled). Rendered only while the search bar is:
      when Instance Config or the host's chrome policy hides search, the palette must not

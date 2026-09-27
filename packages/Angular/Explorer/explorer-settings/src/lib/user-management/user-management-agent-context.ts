@@ -23,13 +23,23 @@ export type UserStatusFilter = (typeof VALID_USER_STATUS_FILTERS)[number];
 export const USER_AGENT_CONTEXT_NAME_LIST_CAP = 25;
 
 /** Type-guard for a user-status filter string. Keeps the SwitchUserStatusFilter tool tolerant. */
-export function isValidUserStatusFilter(value: unknown): value is UserStatusFilter {
+export function IsValidUserStatusFilter(value: unknown): value is UserStatusFilter {
     return typeof value === 'string' && (VALID_USER_STATUS_FILTERS as readonly string[]).includes(value);
 }
 
+/** @deprecated Use {@link IsValidUserStatusFilter}. */
+export function isValidUserStatusFilter(value: unknown): value is UserStatusFilter {
+    return IsValidUserStatusFilter(value);
+}
+
 /** Cap a list of names to {@link USER_AGENT_CONTEXT_NAME_LIST_CAP}. Pure + deterministic. */
-export function capUserNames(names: readonly string[]): string[] {
+export function CapUserNames(names: readonly string[]): string[] {
     return names.slice(0, USER_AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/** @deprecated Use {@link CapUserNames}. */
+export function capUserNames(names: readonly string[]): string[] {
+    return CapUserNames(names);
 }
 
 /**
@@ -53,8 +63,8 @@ export interface RoleNameCandidate {
 
 /** Outcome of a tolerant id→name→contains resolution. */
 export type NamedLookupResult<T> =
-    | { ok: true; match: T }
-    | { ok: false; error: string };
+    | { ok: true; match: T }  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    | { ok: false; error: string };  // case-violation-ok-legacy-back-compat: the PascalCase name is already declared on this type
 
 /**
  * Resolve an agent-supplied user reference against the loaded users, tolerantly:
@@ -65,7 +75,7 @@ export type NamedLookupResult<T> =
  * Pure + deterministic over the supplied candidate list. On a miss, returns a clear error
  * listing a sample of available names so the agent can correct itself.
  */
-export function resolveUserByIDOrName(input: string, candidates: readonly UserNameCandidate[]): NamedLookupResult<UserNameCandidate> {
+export function ResolveUserByIDOrName(input: string, candidates: readonly UserNameCandidate[]): NamedLookupResult<UserNameCandidate> {
     const needle = input.trim().toLowerCase();
     if (!needle) {
         return { ok: false, error: 'Provide a user ID or name to select.' };
@@ -86,12 +96,17 @@ export function resolveUserByIDOrName(input: string, candidates: readonly UserNa
     return { ok: false, error: `No user matches "${input}". Available users include: ${sample || '(none loaded)'}.` };
 }
 
+/** @deprecated Use {@link ResolveUserByIDOrName}. */
+export function resolveUserByIDOrName(input: string, candidates: readonly UserNameCandidate[]): NamedLookupResult<UserNameCandidate> {
+    return ResolveUserByIDOrName(input, candidates);
+}
+
 /**
  * Resolve an agent-supplied role reference (id or display name) against the loaded roles,
  * tolerantly: exact ID → exact name → first contains. Backs FilterUsersByRole so the agent
  * can say either the role name or the role id.
  */
-export function resolveRoleByIDOrName(input: string, candidates: readonly RoleNameCandidate[]): NamedLookupResult<RoleNameCandidate> {
+export function ResolveRoleByIDOrName(input: string, candidates: readonly RoleNameCandidate[]): NamedLookupResult<RoleNameCandidate> {
     const needle = input.trim().toLowerCase();
     if (!needle) {
         return { ok: false, error: 'Provide a role ID or name.' };
@@ -110,6 +125,11 @@ export function resolveRoleByIDOrName(input: string, candidates: readonly RoleNa
     }
     const sample = candidates.slice(0, 8).map(c => c.Name).join(', ');
     return { ok: false, error: `No role matches "${input}". Available roles: ${sample || '(none loaded)'}.` };
+}
+
+/** @deprecated Use {@link ResolveRoleByIDOrName}. */
+export function resolveRoleByIDOrName(input: string, candidates: readonly RoleNameCandidate[]): NamedLookupResult<RoleNameCandidate> {
+    return ResolveRoleByIDOrName(input, candidates);
 }
 
 /** The lowercased forms a user can be matched against (display name, email, "First Last"). */
@@ -168,7 +188,7 @@ export interface UserManagementAgentContextInput {
  * stays unit-testable and decoupled from change-detection timing. Bounds every name list and
  * emits a companion total-count when truncated.
  */
-export function buildUserManagementAgentContext(input: UserManagementAgentContextInput): Record<string, unknown> {
+export function BuildUserManagementAgentContext(input: UserManagementAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         TotalUserCount: input.TotalUserCount,
         FilteredUserCount: input.FilteredUserCount,
@@ -190,12 +210,17 @@ export function buildUserManagementAgentContext(input: UserManagementAgentContex
     return context;
 }
 
+/** @deprecated Use {@link BuildUserManagementAgentContext}. */
+export function buildUserManagementAgentContext(input: UserManagementAgentContextInput): Record<string, unknown> {
+    return BuildUserManagementAgentContext(input);
+}
+
 /** Add a capped name list under `listKey`, plus a `countKey` total when the source was truncated. */
 function appendBoundedList(target: Record<string, unknown>, listKey: string, countKey: string, source: readonly string[]): void {
     if (source.length === 0) {
         return;
     }
-    target[listKey] = capUserNames(source);
+    target[listKey] = CapUserNames(source);
     if (source.length > USER_AGENT_CONTEXT_NAME_LIST_CAP) {
         target[countKey] = source.length;
     }

@@ -267,9 +267,30 @@ export class QueryPagingEngine {
 
     /**
      * Determines whether the given params indicate paging should be applied.
+     *
+     * A `MaxRows` on its own is enough — a caller asking only to cap a result, rather than
+     * to walk pages, still gets the ceiling applied in SQL. Without that, such a call falls
+     * through to the provider's full-fetch-then-slice path, where the database returns every
+     * row and the whole set crosses the network before being trimmed.
+     *
+     * Matches how RunView decides the same question (`BuildTotalRowCountSQL` treats rows as
+     * limited when `usingPagination || maxRowsForQuery > 0`).
+     *
+     * An absent `StartRow` means page zero; see {@link ResolveStartRow}. A negative one is
+     * rejected.
      */
     static ShouldPage(startRow: number | undefined, maxRows: number | undefined): boolean {
-        return maxRows != null && maxRows > 0 && startRow != null && startRow >= 0;
+        return maxRows != null && maxRows > 0 && (startRow == null || startRow >= 0);
+    }
+
+    /**
+     * The offset to page from: the caller's `StartRow`, or 0 when they named none.
+     *
+     * Kept beside {@link ShouldPage} so the two cannot drift — every site acting on a true
+     * `ShouldPage` needs a concrete offset, and `StartRow` is not guaranteed to be set.
+     */
+    static ResolveStartRow(startRow: number | undefined): number {
+        return startRow != null && startRow >= 0 ? startRow : 0;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -384,7 +405,7 @@ export class QueryPagingEngine {
      *
      * Preserves the public static API for existing callers and tests.
      */
-    static extractOrderBy(
+    static ExtractOrderBy(
         sql: string,
         dialect: SQLDialect | string = new SQLServerDialect()
     ): { sqlWithoutOrder: string; orderByClause: string | null } {
@@ -398,14 +419,27 @@ export class QueryPagingEngine {
         };
     }
 
+    /** @deprecated Use {@link ExtractOrderBy}. */
+    static extractOrderBy(
+        sql: string,
+        dialect: SQLDialect | string = new SQLServerDialect()
+    ): { sqlWithoutOrder: string; orderByClause: string | null } {
+        return this.ExtractOrderBy(sql, dialect);
+    }
+
     /**
      * Strips a TOP N or TOP (N) clause from the beginning of a SELECT statement.
      */
-    static stripTopClause(sql: string): { sql: string; topRemoved: boolean } {
+    static StripTopClause(sql: string): { sql: string; topRemoved: boolean } {
         const topRegex = /^(SELECT\s+(?:DISTINCT\s+)?)TOP\s+(?:\(\s*\d+\s*\)|\d+)\s+/i;
         const match = sql.match(topRegex);
         if (!match) return { sql, topRemoved: false };
         return { sql: match[1] + sql.substring(match[0].length), topRemoved: true };
+    }
+
+    /** @deprecated Use {@link StripTopClause}. */
+    static stripTopClause(sql: string): { sql: string; topRemoved: boolean } {
+        return this.StripTopClause(sql);
     }
 
     /**

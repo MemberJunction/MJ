@@ -33,11 +33,11 @@ export const PUSH_TOKEN_SETTING_KEY = 'mobile.pushDeviceToken';
 /** One device's registration. */
 export type StoredPushToken = {
     /** The Expo push token to send to. */
-    token: string;
+    token: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Platform the token belongs to, for diagnostics and per-platform payload shaping. */
-    platform: string;
+    platform: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** ISO timestamp of the last registration, so stale entries are identifiable. */
-    updatedAt: string;
+    updatedAt: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /** Every device a user has registered, keyed by a stable per-installation id. */

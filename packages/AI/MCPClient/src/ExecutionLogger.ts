@@ -54,7 +54,7 @@ export class ExecutionLogger {
      * @param contextUser - User context
      * @returns Log entry ID for later completion
      */
-    async startLog(
+    async StartLog(
         connectionId: string,
         toolId: string | undefined,
         toolName: string,
@@ -114,6 +114,19 @@ export class ExecutionLogger {
         }
     }
 
+    /** @deprecated Use {@link StartLog}. */
+    async startLog(
+        connectionId: string,
+        toolId: string | undefined,
+        toolName: string,
+        inputParams: Record<string, unknown>,
+        config: MCPLoggingConfig,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<string | null> {
+        return this.StartLog(connectionId, toolId, toolName, inputParams, config, contextUser, provider);
+    }
+
     /**
      * Completes a log entry after tool execution
      *
@@ -122,7 +135,7 @@ export class ExecutionLogger {
      * @param config - Logging configuration
      * @param contextUser - User context
      */
-    async completeLog(
+    async CompleteLog(
         logId: string | null,
         result: MCPToolCallResult,
         config: MCPLoggingConfig,
@@ -187,6 +200,17 @@ export class ExecutionLogger {
         }
     }
 
+    /** @deprecated Use {@link CompleteLog}. */
+    async completeLog(
+        logId: string | null,
+        result: MCPToolCallResult,
+        config: MCPLoggingConfig,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<void> {
+        return this.CompleteLog(logId, result, config, contextUser, provider);
+    }
+
     /**
      * Marks a log entry as failed due to an error
      *
@@ -195,7 +219,7 @@ export class ExecutionLogger {
      * @param durationMs - Duration before failure
      * @param contextUser - User context
      */
-    async failLog(
+    async FailLog(
         logId: string | null,
         error: Error | string,
         durationMs: number,
@@ -231,6 +255,17 @@ export class ExecutionLogger {
         }
     }
 
+    /** @deprecated Use {@link FailLog}. */
+    async failLog(
+        logId: string | null,
+        error: Error | string,
+        durationMs: number,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<void> {
+        return this.FailLog(logId, error, durationMs, contextUser, provider);
+    }
+
     /**
      * Gets recent execution logs for a connection
      *
@@ -239,7 +274,7 @@ export class ExecutionLogger {
      * @param contextUser - User context
      * @returns Recent log entries
      */
-    async getRecentLogs(
+    async GetRecentLogs(
         connectionId: string,
         limit: number,
         contextUser: UserInfo
@@ -267,6 +302,15 @@ export class ExecutionLogger {
         }
     }
 
+    /** @deprecated Use {@link GetRecentLogs}. */
+    async getRecentLogs(
+        connectionId: string,
+        limit: number,
+        contextUser: UserInfo
+    ): Promise<MCPExecutionLogSummary[]> {
+        return this.GetRecentLogs(connectionId, limit, contextUser);
+    }
+
     /**
      * Gets execution statistics for a connection
      *
@@ -275,7 +319,7 @@ export class ExecutionLogger {
      * @param contextUser - User context
      * @returns Execution statistics
      */
-    async getStats(
+    async GetStats(
         connectionId: string,
         sinceDays: number,
         contextUser: UserInfo
@@ -363,6 +407,15 @@ export class ExecutionLogger {
         }
     }
 
+    /** @deprecated Use {@link GetStats}. */
+    async getStats(
+        connectionId: string,
+        sinceDays: number,
+        contextUser: UserInfo
+    ): Promise<MCPExecutionStats> {
+        return this.GetStats(connectionId, sinceDays, contextUser);
+    }
+
     /**
      * Cleans up old log entries
      *
@@ -371,7 +424,7 @@ export class ExecutionLogger {
      * @param contextUser - User context
      * @returns Number of deleted entries
      */
-    async cleanup(
+    async Cleanup(
         connectionId: string | undefined,
         olderThanDays: number,
         contextUser: UserInfo,
@@ -425,6 +478,16 @@ export class ExecutionLogger {
             console.error('[MCPClient] Error cleaning up logs:', error);
             return 0;
         }
+    }
+
+    /** @deprecated Use {@link Cleanup}. */
+    async cleanup(
+        connectionId: string | undefined,
+        olderThanDays: number,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<number> {
+        return this.Cleanup(connectionId, olderThanDays, contextUser, provider);
     }
 }
 

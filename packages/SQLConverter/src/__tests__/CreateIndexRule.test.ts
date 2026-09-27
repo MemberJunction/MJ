@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { CreateIndexRule } from '../rules/CreateIndexRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 
 const rule = new CreateIndexRule();
-const context = createConversionContext('tsql', 'postgres');
+const context = CreateConversionContext('tsql', 'postgres');
 
 function convert(sql: string): string {
   return rule.PostProcess!(sql, sql, context);

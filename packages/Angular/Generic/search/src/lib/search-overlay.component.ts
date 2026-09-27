@@ -65,7 +65,16 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     private destroy$ = new Subject<void>();
     private searchInput$ = new Subject<string>();
 
-    @ViewChild('searchInput') searchInputRef!: ElementRef<HTMLInputElement>;
+    @ViewChild('searchInput') SearchInputRef!: ElementRef<HTMLInputElement>;
+
+    /** @deprecated Use {@link SearchInputRef}. */
+    get searchInputRef(): ElementRef<HTMLInputElement> {
+        return this.SearchInputRef;
+    }
+    /** @deprecated Use {@link SearchInputRef}. */
+    set searchInputRef(value: ElementRef<HTMLInputElement>) {
+        this.SearchInputRef = value;
+    }
 
     // --- Configuration Inputs ---
 
@@ -82,12 +91,12 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     @Input() MaxResults = 8;
 
     /** Whether the overlay is currently visible */
-    private _IsOpen = false;
+    private _isOpen = false;
 
     @Input()
     set IsOpen(value: boolean) {
-        const prev = this._IsOpen;
-        this._IsOpen = value;
+        const prev = this._isOpen;
+        this._isOpen = value;
         if (value && !prev) {
             this.onOverlayOpened();
         }
@@ -96,7 +105,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         }
     }
     get IsOpen(): boolean {
-        return this._IsOpen;
+        return this._isOpen;
     }
 
     /** Debounce time in ms before search fires */
@@ -223,20 +232,20 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
             this.ToggleOverlay();
             return;
         }
-        if (this._IsOpen) {
+        if (this._isOpen) {
             this.handleOverlayKeydown(event);
         }
     }
 
     /** Toggle the overlay open/closed */
     public ToggleOverlay(): void {
-        this.IsOpen = !this._IsOpen;
-        this.IsOpenChange.emit(this._IsOpen);
+        this.IsOpen = !this._isOpen;
+        this.IsOpenChange.emit(this._isOpen);
     }
 
     /** Open the overlay */
     public Open(): void {
-        if (!this._IsOpen) {
+        if (!this._isOpen) {
             this.IsOpen = true;
             this.IsOpenChange.emit(true);
         }
@@ -244,7 +253,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
 
     /** Close the overlay */
     public Close(): void {
-        if (this._IsOpen) {
+        if (this._isOpen) {
             this.IsOpen = false;
             this.IsOpenChange.emit(false);
         }
@@ -373,7 +382,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
                 // activation — preventDefault here at document level would
                 // silently swallow it, or worse, open the highlighted result.
                 const active = document.activeElement as HTMLElement | null;
-                const inCombobox = active === this.searchInputRef?.nativeElement
+                const inCombobox = active === this.SearchInputRef?.nativeElement
                     || (active?.classList.contains('result-item') ?? false);
                 if (!inCombobox) {
                     return;
@@ -467,7 +476,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
      */
     public OnRecentSelect(query: string): void {
         this.OnQueryInput(query);
-        this.searchInputRef?.nativeElement?.focus();
+        this.SearchInputRef?.nativeElement?.focus();
     }
 
     /** Recent-search rows are keyboard-activatable (Enter/Space = click). */
@@ -640,7 +649,7 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         this.previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         // Focus input after view updates
         Promise.resolve().then(() => {
-            this.searchInputRef?.nativeElement?.focus();
+            this.SearchInputRef?.nativeElement?.focus();
             this.cdr.detectChanges();
         });
     }
@@ -654,18 +663,33 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     }
 
     /** Check if any filters are active (used by template) */
-    public hasActiveFilters(): boolean {
+    public HasActiveFilters(): boolean {
         return Object.values(this.ActiveFilters).some(v => v.length > 0);
     }
 
+    /** @deprecated Use {@link HasActiveFilters}. */
+    public hasActiveFilters(): boolean {
+        return this.HasActiveFilters();
+    }
+
     /** Check if a result is currently keyboard-highlighted */
-    public isResultHighlighted(result: SearchResultItem): boolean {
-        const flatIndex = this.getFlatIndex(result);
+    public IsResultHighlighted(result: SearchResultItem): boolean {
+        const flatIndex = this.GetFlatIndex(result);
         return flatIndex === this.HighlightedIndex;
     }
 
+    /** @deprecated Use {@link IsResultHighlighted}. */
+    public isResultHighlighted(result: SearchResultItem): boolean {
+        return this.IsResultHighlighted(result);
+    }
+
     /** Get the flat index of a result for keyboard navigation */
-    public getFlatIndex(result: SearchResultItem): number {
+    public GetFlatIndex(result: SearchResultItem): number {
         return this.FlatResults.indexOf(result);
+    }
+
+    /** @deprecated Use {@link GetFlatIndex}. */
+    public getFlatIndex(result: SearchResultItem): number {
+        return this.GetFlatIndex(result);
     }
 }

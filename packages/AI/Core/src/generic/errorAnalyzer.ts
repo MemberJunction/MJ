@@ -37,7 +37,7 @@ export class ErrorAnalyzer {
      * console.log(`Can retry: ${errorInfo.severity !== 'Fatal'}`);
      * ```
      */
-    static analyzeError(error: any, providerName?: string): AIErrorInfo {
+    static AnalyzeError(error: any, providerName?: string): AIErrorInfo {
         // Extract HTTP status code if available
         const httpStatusCode = this.extractHttpStatusCode(error);
         
@@ -88,6 +88,11 @@ export class ErrorAnalyzer {
                 errorConstructor: error?.constructor?.name
             }
         };
+    }
+
+    /** @deprecated Use {@link AnalyzeError}. */
+    static analyzeError(error: any, providerName?: string): AIErrorInfo {
+        return this.AnalyzeError(error, providerName);
     }
     
     /**

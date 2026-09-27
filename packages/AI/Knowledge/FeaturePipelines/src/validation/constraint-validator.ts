@@ -22,7 +22,7 @@ export interface ValidationOptions {
 /**
  * Validates a single computed output value against its constraint and applies the declared violation policy.
  */
-export function validateOutputValue(
+export function ValidateOutputValue(
   rawValue: unknown,
   constraint: ValueConstraint,
   options?: ValidationOptions
@@ -62,6 +62,15 @@ export function validateOutputValue(
     default:
       return { valid: true, value: rawValue };
   }
+}
+
+/** @deprecated Use {@link ValidateOutputValue}. */
+export function validateOutputValue(
+  rawValue: unknown,
+  constraint: ValueConstraint,
+  options?: ValidationOptions
+): OutputValidationResult {
+  return ValidateOutputValue(rawValue, constraint, options);
 }
 
 function applyPolicy(

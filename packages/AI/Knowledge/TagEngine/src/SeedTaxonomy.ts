@@ -75,7 +75,7 @@ const FALLBACK_SAMPLE_TEXT_CHARS = 600;
  * @param contextUser User context (required server-side).
  * @param provider    Optional metadata provider override.
  */
-export async function generateSeedTaxonomy(
+export async function GenerateSeedTaxonomy(
     sourceID: string,
     sampleSize: number,
     contextUser?: UserInfo,
@@ -109,6 +109,16 @@ export async function generateSeedTaxonomy(
         SampleSize: items.length,
         Message: vectors.length < 2 ? 'Vectors unavailable; used AI prompt over sampled content.' : undefined,
     };
+}
+
+/** @deprecated Use {@link GenerateSeedTaxonomy}. */
+export async function generateSeedTaxonomy(
+    sourceID: string,
+    sampleSize: number,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+): Promise<SeedTaxonomyResult> {
+    return GenerateSeedTaxonomy(sourceID, sampleSize, contextUser, provider);
 }
 
 /** Load up to `sampleSize` content items (with text) for the source. */

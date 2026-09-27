@@ -7,7 +7,7 @@ import { trustDots, trustEvidenceLine } from '@memberjunction/predictive-studio-
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { buildBusinessCatalog, type BusinessPredictionCard } from '../business-predictions.view-models';
-import { parseAtRiskRows, topGlobalDrivers, labelFromRecord, type AtRiskRow } from '../at-risk.view-models';
+import { ParseAtRiskRows, TopGlobalDrivers, LabelFromRecord, type AtRiskRow } from '../at-risk.view-models';
 import { buildPredictionsAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
 import { BuildRecordIdFilter } from '../../shared/record-id-filter';
@@ -290,10 +290,46 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   private readonly cdrLocal = inject(ChangeDetectorRef);
 
   /** catalog (the home grid) ↔ workspace (a selected prediction). */
-  public view: 'catalog' | 'workspace' = 'catalog';
-  public selected: BusinessPredictionCard | null = null;
-  public chatOpen = false;
-  public pendingPrompt: string | null = null;
+  public View: 'catalog' | 'workspace' = 'catalog';
+
+  /** @deprecated Use {@link View}. */
+  public get view(): 'catalog' | 'workspace' {
+    return this.View;
+  }
+  /** @deprecated Use {@link View}. */
+  public set view(value: 'catalog' | 'workspace') {
+    this.View = value;
+  }
+  public Selected: BusinessPredictionCard | null = null;
+
+  /** @deprecated Use {@link Selected}. */
+  public get selected(): BusinessPredictionCard | null {
+    return this.Selected;
+  }
+  /** @deprecated Use {@link Selected}. */
+  public set selected(value: BusinessPredictionCard | null) {
+    this.Selected = value;
+  }
+  public ChatOpen = false;
+
+  /** @deprecated Use {@link ChatOpen}. */
+  public get chatOpen() {
+    return this.ChatOpen;
+  }
+  /** @deprecated Use {@link ChatOpen}. */
+  public set chatOpen(value) {
+    this.ChatOpen = value;
+  }
+  public PendingPrompt: string | null = null;
+
+  /** @deprecated Use {@link PendingPrompt}. */
+  public get pendingPrompt(): string | null {
+    return this.PendingPrompt;
+  }
+  /** @deprecated Use {@link PendingPrompt}. */
+  public set pendingPrompt(value: string | null) {
+    this.PendingPrompt = value;
+  }
   private _modelDevAgentId: string | null = null;
 
   /**
@@ -303,23 +339,73 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    * wiring the suppressed empty-state input has no valid conversation to write into and the first send
    * silently no-ops (matches the proven Form Builder co-pilot pattern).
    */
-  public chatConversation: MJConversationEntity | null = null;
-  public chatConversationId: string | null = null;
-  public chatIsNewConversation = true;
-  public mainSizePct = 68;
-  public copilotSizePct = 32;
+  public ChatConversation: MJConversationEntity | null = null;
+
+  /** @deprecated Use {@link ChatConversation}. */
+  public get chatConversation(): MJConversationEntity | null {
+    return this.ChatConversation;
+  }
+  /** @deprecated Use {@link ChatConversation}. */
+  public set chatConversation(value: MJConversationEntity | null) {
+    this.ChatConversation = value;
+  }
+  public ChatConversationId: string | null = null;
+
+  /** @deprecated Use {@link ChatConversationId}. */
+  public get chatConversationId(): string | null {
+    return this.ChatConversationId;
+  }
+  /** @deprecated Use {@link ChatConversationId}. */
+  public set chatConversationId(value: string | null) {
+    this.ChatConversationId = value;
+  }
+  public ChatIsNewConversation = true;
+
+  /** @deprecated Use {@link ChatIsNewConversation}. */
+  public get chatIsNewConversation() {
+    return this.ChatIsNewConversation;
+  }
+  /** @deprecated Use {@link ChatIsNewConversation}. */
+  public set chatIsNewConversation(value) {
+    this.ChatIsNewConversation = value;
+  }
+  public MainSizePct = 68;
+
+  /** @deprecated Use {@link MainSizePct}. */
+  public get mainSizePct() {
+    return this.MainSizePct;
+  }
+  /** @deprecated Use {@link MainSizePct}. */
+  public set mainSizePct(value) {
+    this.MainSizePct = value;
+  }
+  public CopilotSizePct = 32;
+
+  /** @deprecated Use {@link CopilotSizePct}. */
+  public get copilotSizePct() {
+    return this.CopilotSizePct;
+  }
+  /** @deprecated Use {@link CopilotSizePct}. */
+  public set copilotSizePct(value) {
+    this.CopilotSizePct = value;
+  }
 
   override ngOnInit(): void {
     super.ngOnInit();
     this.loadLayoutPrefs();
   }
 
-  public onCopilotSplitDragEnd(sizes: readonly (number | '*')[]): void {
+  public OnCopilotSplitDragEnd(sizes: readonly (number | '*')[]): void {
     if (Array.isArray(sizes) && sizes.length === 2 && typeof sizes[0] === 'number' && typeof sizes[1] === 'number') {
-      this.mainSizePct = Math.round(sizes[0]);
-      this.copilotSizePct = Math.round(sizes[1]);
+      this.MainSizePct = Math.round(sizes[0]);
+      this.CopilotSizePct = Math.round(sizes[1]);
       this.saveLayoutPrefs();
     }
+  }
+
+  /** @deprecated Use {@link OnCopilotSplitDragEnd}. */
+  public onCopilotSplitDragEnd(sizes: readonly (number | '*')[]): void {
+    return this.OnCopilotSplitDragEnd(sizes);
   }
 
   private loadLayoutPrefs(): void {
@@ -328,8 +414,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       try {
         const parsed = JSON.parse(saved);
         if (typeof parsed.copilotSizePct === 'number' && parsed.copilotSizePct >= 20 && parsed.copilotSizePct <= 60) {
-          this.copilotSizePct = parsed.copilotSizePct;
-          this.mainSizePct = 100 - this.copilotSizePct;
+          this.CopilotSizePct = parsed.copilotSizePct;
+          this.MainSizePct = 100 - this.CopilotSizePct;
         }
       } catch {}
     }
@@ -337,30 +423,98 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
 
   private saveLayoutPrefs(): void {
     const prefs = {
-      copilotSizePct: this.copilotSizePct,
-      mainSizePct: this.mainSizePct,
+      copilotSizePct: this.CopilotSizePct,
+      mainSizePct: this.MainSizePct,
     };
     UserInfoEngine.Instance.SetSettingDebounced('mj.predictiveStudio.predictions.layout', JSON.stringify(prefs));
   }
 
   /** The ranked at-risk rows for the open prediction's latest run (empty until loaded / when no run yet). */
-  public atRiskRows: AtRiskRow[] = [];
+  public AtRiskRows: AtRiskRow[] = [];
+
+  /** @deprecated Use {@link AtRiskRows}. */
+  public get atRiskRows(): AtRiskRow[] {
+    return this.AtRiskRows;
+  }
+  /** @deprecated Use {@link AtRiskRows}. */
+  public set atRiskRows(value: AtRiskRow[]) {
+    this.AtRiskRows = value;
+  }
   /** Plain-language "what's driving this" drivers for the open prediction (global feature importance). */
-  public drivers: string[] = [];
+  public Drivers: string[] = [];
+
+  /** @deprecated Use {@link Drivers}. */
+  public get drivers(): string[] {
+    return this.Drivers;
+  }
+  /** @deprecated Use {@link Drivers}. */
+  public set drivers(value: string[]) {
+    this.Drivers = value;
+  }
   /** Whether the at-risk list is loading for the open prediction. */
-  public atRiskLoading = false;
+  public AtRiskLoading = false;
+
+  /** @deprecated Use {@link AtRiskLoading}. */
+  public get atRiskLoading() {
+    return this.AtRiskLoading;
+  }
+  /** @deprecated Use {@link AtRiskLoading}. */
+  public set atRiskLoading(value) {
+    this.AtRiskLoading = value;
+  }
   /** Set when the at-risk load fails — the workspace shows a "couldn't load" banner with retry instead of the misleading no-results empty state. */
-  public atRiskError: string | null = null;
+  public AtRiskError: string | null = null;
+
+  /** @deprecated Use {@link AtRiskError}. */
+  public get atRiskError(): string | null {
+    return this.AtRiskError;
+  }
+  /** @deprecated Use {@link AtRiskError}. */
+  public set atRiskError(value: string | null) {
+    this.AtRiskError = value;
+  }
   /** "Send to a list" in-flight guard + last-result message (P1 #4). */
-  public creatingList = false;
-  public listResult: string | null = null;
-  public latestRunId: string | null = null;
+  public CreatingList = false;
+
+  /** @deprecated Use {@link CreatingList}. */
+  public get creatingList() {
+    return this.CreatingList;
+  }
+  /** @deprecated Use {@link CreatingList}. */
+  public set creatingList(value) {
+    this.CreatingList = value;
+  }
+  public ListResult: string | null = null;
+
+  /** @deprecated Use {@link ListResult}. */
+  public get listResult(): string | null {
+    return this.ListResult;
+  }
+  /** @deprecated Use {@link ListResult}. */
+  public set listResult(value: string | null) {
+    this.ListResult = value;
+  }
+  public LatestRunId: string | null = null;
+
+  /** @deprecated Use {@link LatestRunId}. */
+  public get latestRunId(): string | null {
+    return this.LatestRunId;
+  }
+  /** @deprecated Use {@link LatestRunId}. */
+  public set latestRunId(value: string | null) {
+    this.LatestRunId = value;
+  }
 
   /** Capability cards for the first-run intro (what PS can do), shown when the catalog is empty. */
-  public readonly capabilityCards: readonly PSCapabilityCard[] = PS_CAPABILITY_CARDS;
+  public readonly CapabilityCards: readonly PSCapabilityCard[] = PS_CAPABILITY_CARDS;
+
+  /** @deprecated Use {@link CapabilityCards}. */
+  public get capabilityCards(): readonly PSCapabilityCard[] {
+    return this.CapabilityCards;
+  }
 
   /** The business catalog cards, most-trustworthy first, derived from the engine's published models. */
-  public get cards(): BusinessPredictionCard[] {
+  public get Cards(): BusinessPredictionCard[] {
     return buildBusinessCatalog(
       this.engine.PublishedModels.map((m: MJMLModelEntity) => ({
         modelId: m.ID,
@@ -373,25 +527,40 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     );
   }
 
-  public dots(c: BusinessPredictionCard): number { return trustDots(c.trust.grade); }
-  public evidence(): string { return trustEvidenceLine({ noun: 'records' }); }
+  /** @deprecated Use {@link Cards}. */
+  public get cards(): BusinessPredictionCard[] {
+    return this.Cards;
+  }
+
+  public Dots(c: BusinessPredictionCard): number { return trustDots(c.trust.grade); }
+
+  /** @deprecated Use {@link Dots}. */
+  public dots(c: BusinessPredictionCard): number {
+    return this.Dots(c);
+  }
+  public Evidence(): string { return trustEvidenceLine({ noun: 'records' }); }
+
+  /** @deprecated Use {@link Evidence}. */
+  public evidence(): string {
+    return this.Evidence();
+  }
 
   /** Deep agent context for the Predictions door: catalog counts + names, and (in workspace) the selection + at-risk breakdown. */
   protected override extraAgentContext(): Record<string, unknown> {
-    const cards = this.cards;
+    const cards = this.Cards;
     return buildPredictionsAgentContext({
-      View: this.view,
+      View: this.View,
       PredictionCount: cards.length,
       ReadyPredictionCount: cards.filter((c) => c.canOpen).length,
       VisiblePredictionNames: cards.map((c) => c.title),
-      ChatOpen: this.chatOpen,
-      Selected: this.selected ? { Name: this.selected.title, TrustGrade: this.selected.trust.grade, CanOpen: this.selected.canOpen } : null,
-      AtRiskLoaded: this.view === 'workspace' && !this.atRiskLoading && !this.atRiskError,
-      AtRiskCount: this.atRiskRows.length,
-      HighRiskCount: this.atRiskRows.filter((r) => r.band === 'high').length,
-      MediumRiskCount: this.atRiskRows.filter((r) => r.band === 'medium').length,
-      LowRiskCount: this.atRiskRows.filter((r) => r.band === 'low').length,
-      Drivers: this.drivers,
+      ChatOpen: this.ChatOpen,
+      Selected: this.Selected ? { Name: this.Selected.title, TrustGrade: this.Selected.trust.grade, CanOpen: this.Selected.canOpen } : null,
+      AtRiskLoaded: this.View === 'workspace' && !this.AtRiskLoading && !this.AtRiskError,
+      AtRiskCount: this.AtRiskRows.length,
+      HighRiskCount: this.AtRiskRows.filter((r) => r.band === 'high').length,
+      MediumRiskCount: this.AtRiskRows.filter((r) => r.band === 'medium').length,
+      LowRiskCount: this.AtRiskRows.filter((r) => r.band === 'low').length,
+      Drivers: this.Drivers,
     });
   }
 
@@ -412,15 +581,15 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         Handler: async (params: Record<string, unknown>) => {
           const check = validateStringParam(params['prediction'], 'prediction');
           if (!check.ok) return check.result;
-          const candidates = this.cards.map((c) => ({ ID: c.modelId, Name: c.title }));
+          const candidates = this.Cards.map((c) => ({ ID: c.modelId, Name: c.title }));
           const match = resolvePSRecord(check.value, candidates);
           if (!match) return { Success: false, ErrorMessage: buildPSNotFoundError(check.value, candidates, 'prediction') };
-          const card = this.cards.find((c) => UUIDsEqual(c.modelId, match.ID));
+          const card = this.Cards.find((c) => UUIDsEqual(c.modelId, match.ID));
           if (!card) return { Success: false, ErrorMessage: buildPSNotFoundError(check.value, candidates, 'prediction') };
           if (!card.canOpen) {
             return { Success: false, ErrorMessage: `"${card.title}" isn't ready to open: ${card.blockedReason ?? card.trust.gateReason ?? 'it needs an analyst first.'}` };
           }
-          this.open(card);
+          this.Open(card);
           return { Success: true, Data: { opened: card.title, trust: card.trust.grade } };
         },
       },
@@ -429,7 +598,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         Description: 'Return from a prediction workspace to the catalog (the grid of all predictions).',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.backToCatalog();
+          this.BackToCatalog();
           this.publishAgentContext();
           return { Success: true, Data: { view: 'catalog' } };
         },
@@ -439,8 +608,8 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         Description: 'Scroll the open prediction workspace to its ranked at-risk "call list". Only meaningful when a prediction is open.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          if (this.view !== 'workspace' || !this.selected) return { Success: false, ErrorMessage: 'No prediction is open. Use OpenPrediction first.' };
-          this.scrollToList();
+          if (this.View !== 'workspace' || !this.Selected) return { Success: false, ErrorMessage: 'No prediction is open. Use OpenPrediction first.' };
+          this.ScrollToList();
           return { Success: true };
         },
       },
@@ -449,9 +618,9 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         Description: 'Download the open prediction\'s at-risk list as a CSV (read-only export). Only works when a prediction is open and its list has loaded.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          if (this.view !== 'workspace' || this.atRiskRows.length === 0) return { Success: false, ErrorMessage: 'No at-risk list is loaded to export. Open a prediction with results first.' };
-          this.exportList();
-          return { Success: true, Data: { rows: this.atRiskRows.length } };
+          if (this.View !== 'workspace' || this.AtRiskRows.length === 0) return { Success: false, ErrorMessage: 'No at-risk list is loaded to export. Open a prediction with results first.' };
+          this.ExportList();
+          return { Success: true, Data: { rows: this.AtRiskRows.length } };
         },
       },
       {
@@ -459,65 +628,75 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         Description: 'Open the "+ New prediction" Model Development Agent co-pilot (does not send a message — the user drives the conversation). Use when the user wants to build a new prediction.',
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => {
-          this.openNewPredictionCopilot();
+          this.OpenNewPredictionCopilot();
           return { Success: true, Data: { chatOpen: true } };
         },
       },
     ]);
   }
 
-  public open(c: BusinessPredictionCard): void {
+  public Open(c: BusinessPredictionCard): void {
     if (!c.canOpen) return;
-    this.selected = c;
-    this.view = 'workspace';
-    this.atRiskRows = [];
-    this.drivers = [];
-    this.atRiskError = null;
-    this.listResult = null;
+    this.Selected = c;
+    this.View = 'workspace';
+    this.AtRiskRows = [];
+    this.Drivers = [];
+    this.AtRiskError = null;
+    this.ListResult = null;
     // Mark loading BEFORE the publish below: otherwise AtRiskLoaded computes true for one publish with
     // atRiskRows still [], fabricating "0 at risk" to the agent for a list that hasn't been fetched yet.
-    this.atRiskLoading = true;
+    this.AtRiskLoading = true;
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
     void this.loadAtRisk(c);
   }
 
+  /** @deprecated Use {@link Open}. */
+  public open(c: BusinessPredictionCard): void {
+    return this.Open(c);
+  }
+
   /** Load the open prediction's plain-language drivers + its latest run's ranked at-risk rows. */
   private async loadAtRisk(c: BusinessPredictionCard): Promise<void> {
     const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, c.modelId));
-    this.drivers = topGlobalDrivers(model?.FeatureImportance ?? null, 3);
-    this.atRiskLoading = true;
-    this.atRiskError = null;
+    this.Drivers = TopGlobalDrivers(model?.FeatureImportance ?? null, 3);
+    this.AtRiskLoading = true;
+    this.AtRiskError = null;
     this.cdrLocal.detectChanges();
     try {
       const provider = this.ProviderToUse;
       const user = provider.CurrentUser ?? undefined;
       const runs = await this.engine.LoadRecentRunsForModel(c.modelId, provider, user, { maxRows: 1 });
       const latest = runs[0];
-      this.latestRunId = latest?.ID ?? null;
+      this.LatestRunId = latest?.ID ?? null;
       if (latest?.ID) {
         const res = await RunView.FromMetadataProvider(provider).RunView<MJProcessRunDetailEntity>(
           { EntityName: 'MJ: Process Run Details', ExtraFilter: `ProcessRunID='${latest.ID}'`, MaxRows: 2137, ResultType: 'entity_object' },
           user,
         );
-        if (res.Success && this.selected?.modelId === c.modelId) {
-          this.atRiskRows = parseAtRiskRows((res.Results ?? []).map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })));
+        if (res.Success && this.Selected?.modelId === c.modelId) {
+          this.AtRiskRows = ParseAtRiskRows((res.Results ?? []).map((d) => ({ recordId: d.RecordID, ResultPayload: d.ResultPayload })));
           await this.resolveAtRiskLabels(model);
         }
       }
     } catch (err) {
-      this.atRiskError = err instanceof Error ? err.message : String(err);
-      LogError(`PSPredictionsResource.loadAtRisk: ${this.atRiskError}`);
+      this.AtRiskError = err instanceof Error ? err.message : String(err);
+      LogError(`PSPredictionsResource.loadAtRisk: ${this.AtRiskError}`);
     } finally {
-      this.atRiskLoading = false;
+      this.AtRiskLoading = false;
       this.publishAgentContext();
       this.cdrLocal.detectChanges();
     }
   }
 
   /** Retry loading the open prediction's at-risk list after a failure — bound to the at-risk error banner. */
+  public RetryAtRisk(): void {
+    if (this.Selected) void this.loadAtRisk(this.Selected);
+  }
+
+  /** @deprecated Use {@link RetryAtRisk}. */
   public retryAtRisk(): void {
-    if (this.selected) void this.loadAtRisk(this.selected);
+    return this.RetryAtRisk();
   }
 
   /**
@@ -525,16 +704,26 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    * model's target entity, so the list reads like a call sheet instead of a column of UUIDs. Resolves the
    * top-risk rows (capped) to keep the lookup light; unresolved rows fall back to their id in the template.
    */
-  public get selectedTargetEntityName(): string | null {
-    if (!this.selected) return null;
-    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.selected?.modelId));
+  public get SelectedTargetEntityName(): string | null {
+    if (!this.Selected) return null;
+    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.Selected?.modelId));
     return this.targetEntityForModel(model)?.name ?? null;
   }
 
-  public get selectedProblemType(): string | null {
-    if (!this.selected) return null;
-    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.selected?.modelId));
+  /** @deprecated Use {@link SelectedTargetEntityName}. */
+  public get selectedTargetEntityName(): string | null {
+    return this.SelectedTargetEntityName;
+  }
+
+  public get SelectedProblemType(): string | null {
+    if (!this.Selected) return null;
+    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.Selected?.modelId));
     return model?.ProblemType ?? null;
+  }
+
+  /** @deprecated Use {@link SelectedProblemType}. */
+  public get selectedProblemType(): string | null {
+    return this.SelectedProblemType;
   }
 
   private targetEntityForModel(model: MJMLModelEntity | undefined): { id: string; name: string } | null {
@@ -550,12 +739,12 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
     // "couldn't load who's at risk" error that hides a perfectly good list.
     try {
       const target = this.targetEntityForModel(model);
-      if (!target || this.atRiskRows.length === 0) return;
+      if (!target || this.AtRiskRows.length === 0) return;
       const entity = this.ProviderToUse.EntityByName(target.name);
       if (!entity) return;
       // The target entity is arbitrary — its key can have any column name(s), including a composite key.
       const pkNames = entity.PrimaryKeys.map((pk) => pk.Name);
-      const targets = this.atRiskRows.slice(0, 200); // the rows a user actually acts on
+      const targets = this.AtRiskRows.slice(0, 200); // the rows a user actually acts on
       const ids = targets.map((r) => r.recordId);
       // Only fetch the columns labelFromRecord can actually use — a broad no-Fields fetch pulls every
       // column (incl. large text/JSON) of an arbitrary entity just to render a display name. Fall back
@@ -575,37 +764,52 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       if (!res.Success) return;
       const byId = new Map<string, Record<string, unknown>>();
       for (const row of res.Results ?? []) byId.set(NormalizeUUID(CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment()), row);
-      for (const r of this.atRiskRows) {
+      for (const r of this.AtRiskRows) {
         const rec = byId.get(NormalizeUUID(r.recordId));
-        if (rec) r.label = labelFromRecord(rec);
+        if (rec) r.label = LabelFromRecord(rec);
       }
     } catch (err) {
       LogError(`PSPredictionsResource.resolveAtRiskLabels (cosmetic — list keeps ids): ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
-  public backToCatalog(): void {
-    this.view = 'catalog';
-    this.selected = null;
-    this.latestRunId = null;
-    this.atRiskRows = [];
-    this.drivers = [];
-    this.atRiskError = null;
+  public BackToCatalog(): void {
+    this.View = 'catalog';
+    this.Selected = null;
+    this.LatestRunId = null;
+    this.AtRiskRows = [];
+    this.Drivers = [];
+    this.AtRiskError = null;
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
   }
 
+  /** @deprecated Use {@link BackToCatalog}. */
+  public backToCatalog(): void {
+    return this.BackToCatalog();
+  }
+
   /** "Review the call list" — scroll the ranked at-risk list into view. */
-  public scrollToList(): void {
+  public ScrollToList(): void {
     document.querySelector('[data-testid="ps-atrisk-list"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
+  /** @deprecated Use {@link ScrollToList}. */
+  public scrollToList(): void {
+    return this.ScrollToList();
+  }
+
   /** "Save scores" — still routed conversationally through the co-pilot (needs a designated write-back column). */
-  public askAgentTo(prompt: string): void {
-    this.pendingPrompt = prompt;
-    this.chatOpen = true;
+  public AskAgentTo(prompt: string): void {
+    this.PendingPrompt = prompt;
+    this.ChatOpen = true;
     void this.ensureModelDevAgentResolved();
     this.cdrLocal.detectChanges();
+  }
+
+  /** @deprecated Use {@link AskAgentTo}. */
+  public askAgentTo(prompt: string): void {
+    return this.AskAgentTo(prompt);
   }
 
   /**
@@ -613,30 +817,30 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    * over the model's target entity and add the at-risk members (high/medium band, capped) so a team can
    * act on it immediately (outreach campaign, tasks, etc.).
    */
-  public async sendToList(): Promise<void> {
-    if (this.creatingList || this.atRiskRows.length === 0 || !this.selected) return;
-    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.selected!.modelId));
+  public async SendToList(): Promise<void> {
+    if (this.CreatingList || this.AtRiskRows.length === 0 || !this.Selected) return;
+    const model = this.engine.PublishedModels.find((m) => UUIDsEqual(m.ID, this.Selected!.modelId));
     const target = this.targetEntityForModel(model);
     const entityId = target?.id;
     if (!entityId) return;
-    this.creatingList = true;
-    this.listResult = null;
+    this.CreatingList = true;
+    this.ListResult = null;
     this.cdrLocal.detectChanges();
     try {
       const p = this.ProviderToUse;
       const user = p.CurrentUser ?? undefined;
       const list = await p.GetEntityObject<MJListEntity>('MJ: Lists', user);
       // Minute-resolution timestamp so two sends on the same day don't produce identical-named lists.
-      list.Name = `At-Risk: ${this.selected.title} (${new Date().toISOString().slice(0, 16).replace('T', ' ')})`;
+      list.Name = `At-Risk: ${this.Selected.title} (${new Date().toISOString().slice(0, 16).replace('T', ' ')})`;
       list.EntityID = entityId;
       if (user?.ID) list.UserID = user.ID;
       list.RefreshMode = 'Additive';
       list.UseSnapshot = false;
       if (!(await list.Save())) {
-        this.listResult = `Couldn't create the list: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+        this.ListResult = `Couldn't create the list: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`;
         return;
       }
-      const members = this.atRiskRows.filter((r) => r.band !== 'low').slice(0, 200);
+      const members = this.AtRiskRows.filter((r) => r.band !== 'low').slice(0, 200);
       let seq = 0;
       let added = 0;
       let firstFailure: string | null = null;
@@ -653,18 +857,23 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
         }
       }
       const failed = members.length - added;
-      this.listResult =
+      this.ListResult =
         failed === 0
           ? `Added ${added} at-risk record${added === 1 ? '' : 's'} to “${list.Name}”.`
           : `Added ${added} of ${members.length} records to “${list.Name}” — ${failed} failed to add (first error: ${firstFailure}).`;
       if (failed > 0) LogError(`PSPredictionsResource.sendToList: ${failed}/${members.length} adds failed. First: ${firstFailure}`);
     } catch (err) {
-      this.listResult = `Couldn't create the list: ${err instanceof Error ? err.message : String(err)}`;
+      this.ListResult = `Couldn't create the list: ${err instanceof Error ? err.message : String(err)}`;
       LogError(`PSPredictionsResource.sendToList: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      this.creatingList = false;
+      this.CreatingList = false;
       this.cdrLocal.detectChanges();
     }
+  }
+
+  /** @deprecated Use {@link SendToList}. */
+  public async sendToList(): Promise<void> {
+    return this.SendToList();
   }
 
   /**
@@ -678,27 +887,37 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
   }
 
   /** "Share / export" — download the at-risk list as a CSV (dependency-free). */
-  public exportList(): void {
-    if (this.atRiskRows.length === 0) return;
+  public ExportList(): void {
+    if (this.AtRiskRows.length === 0) return;
     const csv = [
       'Record,Likelihood %,Predicted',
-      ...this.atRiskRows.map((r) => `${this.csvCell(r.label ?? r.recordId)},${r.riskPct},${this.csvCell(r.class ?? '')}`),
+      ...this.AtRiskRows.map((r) => `${this.csvCell(r.label ?? r.recordId)},${r.riskPct},${this.csvCell(r.class ?? '')}`),
     ].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(this.selected?.title ?? 'prediction').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-at-risk.csv`;
+    a.download = `${(this.Selected?.title ?? 'prediction').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-at-risk.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
+  /** @deprecated Use {@link ExportList}. */
+  public exportList(): void {
+    return this.ExportList();
+  }
+
   /** "+ New prediction" — open the co-pilot to a clean chat (Sonar-style); the user describes their goal and the agent drives the build. */
-  public newPrediction(): void {
-    this.pendingPrompt = null;
-    this.chatOpen = true;
+  public NewPrediction(): void {
+    this.PendingPrompt = null;
+    this.ChatOpen = true;
     void this.ensureModelDevAgentResolved();
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
+  }
+
+  /** @deprecated Use {@link NewPrediction}. */
+  public newPrediction(): void {
+    return this.NewPrediction();
   }
 
   /**
@@ -706,32 +925,47 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    * step by opening the co-pilot seeded with the model's name + why it's held, so the agent proposes concrete
    * ways to make it reliable and can rebuild it.
    */
-  public improvePrediction(c: BusinessPredictionCard): void {
-    this.pendingPrompt = buildImprovePrompt({
-      name: c.title,
-      trustGrade: c.trust.grade,
-      reason: c.blockedReason ?? c.trust.gateReason ?? null,
+  public ImprovePrediction(c: BusinessPredictionCard): void {
+    this.PendingPrompt = buildImprovePrompt({
+      Name: c.title,
+      TrustGrade: c.trust.grade,
+      Reason: c.blockedReason ?? c.trust.gateReason ?? null,
     });
-    this.chatOpen = true;
+    this.ChatOpen = true;
     void this.ensureModelDevAgentResolved();
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
+  }
+
+  /** @deprecated Use {@link ImprovePrediction}. */
+  public improvePrediction(c: BusinessPredictionCard): void {
+    return this.ImprovePrediction(c);
   }
 
   /** Open the "+ New prediction" co-pilot (clean chat) — used by the read-only `OpenNewPredictionCopilot` agent tool. */
-  public openNewPredictionCopilot(): void {
-    this.pendingPrompt = null;
-    this.chatOpen = true;
+  public OpenNewPredictionCopilot(): void {
+    this.PendingPrompt = null;
+    this.ChatOpen = true;
     void this.ensureModelDevAgentResolved();
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
   }
 
-  public closeChat(): void {
-    this.chatOpen = false;
-    this.pendingPrompt = null;
+  /** @deprecated Use {@link OpenNewPredictionCopilot}. */
+  public openNewPredictionCopilot(): void {
+    return this.OpenNewPredictionCopilot();
+  }
+
+  public CloseChat(): void {
+    this.ChatOpen = false;
+    this.PendingPrompt = null;
     this.publishAgentContext();
     this.cdrLocal.detectChanges();
+  }
+
+  /** @deprecated Use {@link CloseChat}. */
+  public closeChat(): void {
+    return this.CloseChat();
   }
 
   /**
@@ -739,28 +973,58 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
    * conversation, re-feed the pending message in the same change-detection cycle, and leave new-mode so
    * the thread renders (mirrors the Form Builder co-pilot's atomic state-flip).
    */
-  public onChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
-    this.pendingPrompt = event.pendingMessage ?? null;
-    this.chatConversation = event.conversation;
-    this.chatConversationId = event.conversation.ID;
-    this.chatIsNewConversation = false;
+  public OnChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
+    this.PendingPrompt = event.pendingMessage ?? null;
+    this.ChatConversation = event.conversation;
+    this.ChatConversationId = event.conversation.ID;
+    this.ChatIsNewConversation = false;
     this.cdrLocal.detectChanges();
+  }
+
+  /** @deprecated Use {@link OnChatConversationCreated}. */
+  public onChatConversationCreated(event: { conversation: MJConversationEntity; pendingMessage?: string }): void {
+    return this.OnChatConversationCreated(event);
   }
 
   /** The chat-area delivered the seeded prompt — clear the buffer so a re-render doesn't resend it. */
-  public onChatPendingMessageConsumed(): void {
-    this.pendingPrompt = null;
+  public OnChatPendingMessageConsumed(): void {
+    this.PendingPrompt = null;
     this.cdrLocal.detectChanges();
   }
 
-  public get currentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser ?? null; }
-  public get chatEnvironmentId(): string {
+  /** @deprecated Use {@link OnChatPendingMessageConsumed}. */
+  public onChatPendingMessageConsumed(): void {
+    return this.OnChatPendingMessageConsumed();
+  }
+
+  public get CurrentUser(): UserInfo | null { return this.ProviderToUse.CurrentUser ?? null; }
+
+  /** @deprecated Use {@link CurrentUser}. */
+  public get currentUser(): UserInfo | null {
+    return this.CurrentUser;
+  }
+  public get ChatEnvironmentId(): string {
     return (this.Data?.Configuration?.['environmentId'] as string | undefined) || MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
+
+  /** @deprecated Use {@link ChatEnvironmentId}. */
+  public get chatEnvironmentId(): string {
+    return this.ChatEnvironmentId;
+  }
   public get applicationId(): string | null { return (this.Data?.Configuration?.['applicationId'] as string | undefined) ?? null; }
-  public get modelDevAgentId(): string | null { return this._modelDevAgentId; }
-  public get chatAppContext(): Record<string, unknown> {
+  public get ModelDevAgentId(): string | null { return this._modelDevAgentId; }
+
+  /** @deprecated Use {@link ModelDevAgentId}. */
+  public get modelDevAgentId(): string | null {
+    return this.ModelDevAgentId;
+  }
+  public get ChatAppContext(): Record<string, unknown> {
     return { app: 'Predictive Studio', section: 'predictions', publishedModels: this.engine.PublishedModels.length };
+  }
+
+  /** @deprecated Use {@link ChatAppContext}. */
+  public get chatAppContext(): Record<string, unknown> {
+    return this.ChatAppContext;
   }
 
   private async ensureModelDevAgentResolved(): Promise<void> {

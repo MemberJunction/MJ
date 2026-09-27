@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs-extra';
 import * as os from 'os';
 import * as path from 'path';
-import { findExistingRecordFiles } from '../lib/existing-record-files.js';
+import { FindExistingRecordFiles } from '../lib/existing-record-files.js';
 
 /**
  * Pull matches a database record to the file that already represents it, and uses that
@@ -29,7 +29,7 @@ describe('findExistingRecordFiles', () => {
         await fs.writeFile(path.join(dir, '.T001-login.json'), '{}');
         await fs.writeFile(path.join(dir, 'not-a-record.json'), '{}');
 
-        const found = await findExistingRecordFiles(dir, '.*.json');
+        const found = await FindExistingRecordFiles(dir, '.*.json');
 
         expect(found.map((f) => path.basename(f))).toEqual(['.T001-login.json']);
     });
@@ -39,7 +39,7 @@ describe('findExistingRecordFiles', () => {
         await fs.writeFile(path.join(dir, 'regression', '.T001-login.json'), '{}');
         await fs.writeFile(path.join(dir, 'regression', '.T002-grid.json'), '{}');
 
-        const found = await findExistingRecordFiles(dir, '**/.*.json');
+        const found = await FindExistingRecordFiles(dir, '**/.*.json');
 
         expect(found.map((f) => path.basename(f)).sort()).toEqual(['.T001-login.json', '.T002-grid.json']);
     });
@@ -49,7 +49,7 @@ describe('findExistingRecordFiles', () => {
         await fs.ensureDir(path.join(dir, 'nested'));
         await fs.writeFile(path.join(dir, 'nested', '.deep.json'), '{}');
 
-        const found = await findExistingRecordFiles(dir, '.*.json');
+        const found = await FindExistingRecordFiles(dir, '.*.json');
 
         expect(found.map((f) => path.basename(f))).toEqual(['.top.json']);
     });
@@ -60,7 +60,7 @@ describe('findExistingRecordFiles', () => {
         // an externalized replay script — a .json file, but not a record
         await fs.writeFile(path.join(dir, 'regression', 'scripts', '.t001-login.json'), '{}');
 
-        const found = await findExistingRecordFiles(dir, '**/.*.json', ['regression/scripts']);
+        const found = await FindExistingRecordFiles(dir, '**/.*.json', ['regression/scripts']);
 
         expect(found.map((f) => path.basename(f))).toEqual(['.T001-login.json']);
     });
@@ -70,21 +70,21 @@ describe('findExistingRecordFiles', () => {
         await fs.writeFile(path.join(dir, '.backups', '.T001-login.json'), '{}');
         await fs.writeFile(path.join(dir, '.T001-login.json'), '{}');
 
-        const found = await findExistingRecordFiles(dir, '**/.*.json');
+        const found = await FindExistingRecordFiles(dir, '**/.*.json');
 
         expect(found).toHaveLength(1);
         expect(path.dirname(found[0])).toBe(dir);
     });
 
     it('returns an empty list for a directory that does not exist', async () => {
-        expect(await findExistingRecordFiles(path.join(dir, 'nope'), '**/.*.json')).toEqual([]);
+        expect(await FindExistingRecordFiles(path.join(dir, 'nope'), '**/.*.json')).toEqual([]);
     });
 
     it('matches a plain *.json pattern', async () => {
         await fs.writeFile(path.join(dir, 'record.json'), '{}');
         await fs.writeFile(path.join(dir, '.dotted.json'), '{}');
 
-        const found = await findExistingRecordFiles(dir, '*.json');
+        const found = await FindExistingRecordFiles(dir, '*.json');
 
         expect(found.map((f) => path.basename(f))).toEqual(['record.json']);
     });

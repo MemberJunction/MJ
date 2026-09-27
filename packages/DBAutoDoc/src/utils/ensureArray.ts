@@ -9,7 +9,7 @@
  * 
  * This normalizes all cases to an array, logging warnings for non-standard shapes.
  */
-export function ensureArray<T>(value: T | T[] | Record<string, unknown> | null | undefined, context?: string): T[] {
+export function EnsureArray<T>(value: T | T[] | Record<string, unknown> | null | undefined, context?: string): T[] {
   if (Array.isArray(value)) return value;
   
   if (value == null) {
@@ -40,4 +40,9 @@ export function ensureArray<T>(value: T | T[] | Record<string, unknown> | null |
 
   console.log(`[ensureArray]${context ? ` (${context})` : ""} Unexpected type "${typeof value}", returning empty array`);
   return [];
+}
+
+/** @deprecated Use {@link EnsureArray}. */
+export function ensureArray<T>(value: T | T[] | Record<string, unknown> | null | undefined, context?: string): T[] {
+  return EnsureArray(value, context);
 }

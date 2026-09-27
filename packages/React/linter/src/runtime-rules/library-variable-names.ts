@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -39,7 +39,7 @@ export class LibraryVariableNamesRule extends BaseLintRule {
       }
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         // Check for destructuring from a variable (library global)
         if (t.isObjectPattern(path.node.id) && t.isIdentifier(path.node.init)) {

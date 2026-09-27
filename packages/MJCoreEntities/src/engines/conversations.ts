@@ -15,6 +15,7 @@ import {
     MJUserEntityType,
     MJProjectEntity
 } from "../generated/entity_subclasses";
+import type { MJResourcePermissionEntity } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
 import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
 
@@ -116,6 +117,12 @@ export interface ConversationWindowSourceRow {
     Role: string | null;
     Message: string | null;
     SummaryOfEarlierConversation: string | null;
+    /**
+     * When the row was written. Read only by an assembly with a history floor
+     * (`historyFrom`), which drops rows written before it; optional so callers that build
+     * rows by hand for an unfloored assembly need not supply it.
+     */
+    __mj_CreatedAt?: Date | string | null;
 }
 
 /**
@@ -124,7 +131,7 @@ export interface ConversationWindowSourceRow {
  * from the assembler's requirements.
  */
 export const ConversationWindowFields: readonly (keyof ConversationWindowSourceRow)[] =
-    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation'];
+    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt'];
 
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
@@ -133,6 +140,18 @@ export interface SharedByInfo {
     Email: string | null;
     /** Level the current user was granted on this conversation. */
     Level: 'View' | 'Edit' | 'Owner';
+}
+
+/** Per-item outcome of a bulk conversation operation. */
+export interface ConversationBulkResult {
+    Successful: string[];
+    Failed: Array<{ ID: string; Name: string; Error: string }>;
+}
+
+/** Fields a bulk conversation update may write. */
+export interface ConversationBulkUpdate {
+    ProjectID?: MJConversationEntity['ProjectID'];
+    IsPinned?: MJConversationEntity['IsPinned'];
 }
 
 // ========================================================================
@@ -192,7 +211,7 @@ export interface ConversationDetailParsed extends MJConversationDetailEntityType
 /**
  * Helper: parse a raw ConversationDetailComplete row into typed arrays.
  */
-export function parseConversationDetailComplete(
+export function ParseConversationDetailComplete(
     queryResult: ConversationDetailComplete
 ): ConversationDetailParsed {
     return {
@@ -207,6 +226,13 @@ export function parseConversationDetailComplete(
             ? JSON.parse(queryResult.RatingsJSON) as RatingJSON[]
             : []
     };
+}
+
+/** @deprecated Use {@link ParseConversationDetailComplete}. */
+export function parseConversationDetailComplete(
+    queryResult: ConversationDetailComplete
+): ConversationDetailParsed {
+    return ParseConversationDetailComplete(queryResult);
 }
 
 /** User avatar info extracted from the query */
@@ -583,6 +609,31 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * True when the user may grant others access to the conversation: they own it,
+     * or hold an Owner-level grant on it. Mirrors the server's share gate in
+     * `MJResourcePermissionEntityExtended`, so the UI never offers a share the save
+     * would refuse.
+     */
+    public CanShareConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        return this.GetSharedByInfo(conversation.ID)?.Level === 'Owner';
+    }
+
+    /**
+     * True when the user may change the conversation's folder and pin: they own
+     * it, or hold an Edit or Owner grant on it. A View grant is read-only.
+     */
+    public CanEditConversation(conversation: MJConversationEntity, userId: string): boolean {
+        if (conversation.UserID && UUIDsEqual(conversation.UserID, userId)) {
+            return true;
+        }
+        const level = this.GetSharedByInfo(conversation.ID)?.Level;
+        return level === 'Edit' || level === 'Owner';
+    }
+
+    /**
      * Guard flag: set true while the engine itself is performing a mutation.
      * Prevents the entity event handler from re-processing our own saves/deletes,
      * which would cause redundant cache updates or infinite loops.
@@ -644,31 +695,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // the newest one — see _conversationsLoadGeneration.
         const generation = ++this._conversationsLoadGeneration;
 
-        // Include conversations the user has been granted access to via
-        // `MJ: Resource Permissions`. ResourcePermissionEngine caches the full
-        // permission table; GetUserAvailableResources filters it to approved
-        // grants (direct + role-inherited) for this user + resource type.
-        await ResourcePermissionEngine.Instance.Config(false, contextUser);
-        const sharedPermissions = ResourcePermissionEngine.Instance
-            .GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
-        const sharedConversationIds = sharedPermissions.map((p) => p.ResourceRecordID);
+        const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        const filter = this.buildVisibleConversationsFilter(
+            environmentId,
+            contextUser.ID,
+            sharedPermissions.map((p) => p.ResourceRecordID),
+            options
+        );
 
         const rv = new RunView();
-        const ownershipClause = `UserID='${contextUser.ID}'`;
-        const sharedClause =
-            sharedConversationIds.length > 0
-                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
-                : '';
-        // Default main-chat view shows Global + Both. App-scoped
-        // conversations live inside their owning Application's embedded
-        // surface and are filtered out here. Callers that want to surface
-        // them (e.g. an "Include app conversations" toggle) pass
-        // includeApplicationScoped=true to drop the scope predicate.
-        const scopeClause = options?.includeApplicationScoped
-            ? ''
-            : ` AND ApplicationScope IN ('Global', 'Both')`;
-        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
-
         const result = await rv.RunView<MJConversationEntity>(
             {
                 EntityName: 'MJ: Conversations',
@@ -723,6 +758,60 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         // delayed) and after the early-return guard above; LoadProjects has its
         // own per-environment guard to avoid redundant reloads.
         await this.LoadProjects(environmentId, contextUser, forceRefresh);
+    }
+
+    /**
+     * Returns an `ExtraFilter` for `MJ: Conversations` that matches exactly the conversations
+     * {@link LoadConversations} shows the user: owned by the user or shared with them, not
+     * archived, and (unless `includeApplicationScoped`) Global or Both scope.
+     *
+     * Use it anywhere that reads conversations for display (search, pickers) so those reads
+     * cannot show more than the conversation list does. It is not capped, unlike the list load.
+     *
+     * @param environmentId - The environment to filter conversations by
+     * @param contextUser - The user whose conversations to match
+     * @param options - `includeApplicationScoped` also matches app-scoped conversations
+     */
+    public async GetVisibleConversationsFilter(
+        environmentId: string,
+        contextUser: UserInfo,
+        options?: { includeApplicationScoped?: boolean }
+    ): Promise<string> {
+        const sharedPermissions = await this.getSharedConversationPermissions(contextUser);
+        return this.buildVisibleConversationsFilter(
+            environmentId,
+            contextUser.ID,
+            sharedPermissions.map((p) => p.ResourceRecordID),
+            options
+        );
+    }
+
+    /**
+     * Approved conversation grants (direct and role-inherited) for the user, from
+     * `MJ: Resource Permissions`. ResourcePermissionEngine caches the full permission table.
+     */
+    private async getSharedConversationPermissions(contextUser: UserInfo): Promise<MJResourcePermissionEntity[]> {
+        await ResourcePermissionEngine.Instance.Config(false, contextUser);
+        return ResourcePermissionEngine.Instance.GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
+    }
+
+    private buildVisibleConversationsFilter(
+        environmentId: string,
+        userId: string,
+        sharedConversationIds: string[],
+        options?: { includeApplicationScoped?: boolean }
+    ): string {
+        const ownershipClause = `UserID='${userId}'`;
+        const sharedClause =
+            sharedConversationIds.length > 0
+                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
+                : '';
+        // The main chat view shows Global and Both. App-scoped conversations live inside
+        // their owning Application's embedded surface.
+        const scopeClause = options?.includeApplicationScoped
+            ? ''
+            : ` AND ApplicationScope IN ('Global', 'Both')`;
+        return `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
     }
 
     /**
@@ -1332,6 +1421,122 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         return { Successful: successful, Failed: failed };
     }
 
+    /**
+     * Moves multiple conversations into a folder (project), or out of every folder
+     * when projectId is null. Emits the updated list once for the whole batch.
+     *
+     * @param ids - Conversation IDs to move
+     * @param projectId - Target folder ID, or null for no folder
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async MoveMultipleConversationsToProject(
+        ids: string[],
+        projectId: string | null,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { ProjectID: projectId }, contextUser);
+    }
+
+    /**
+     * Pins or unpins multiple conversations. Emits the re-sorted list once for the
+     * whole batch, so pinned conversations move to the top in a single UI update.
+     *
+     * @param ids - Conversation IDs to pin or unpin
+     * @param isPinned - True to pin, false to unpin
+     * @param contextUser - The current user context
+     * @returns Per-item successful and failed outcomes
+     */
+    public async PinMultipleConversations(
+        ids: string[],
+        isPinned: boolean,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        return this.saveMultipleConversations(ids, { IsPinned: isPinned }, contextUser);
+    }
+
+    /**
+     * Applies the same field updates to several conversations, one save at a time so
+     * a single rejection cannot fail the batch, then re-emits the list once.
+     * A conversation whose save fails keeps its previous field values in memory.
+     * Conversations the user holds only View access to are refused without a save.
+     */
+    private async saveMultipleConversations(
+        ids: string[],
+        updates: ConversationBulkUpdate,
+        contextUser: UserInfo
+    ): Promise<ConversationBulkResult> {
+        const successful: string[] = [];
+        const failed: Array<{ ID: string; Name: string; Error: string }> = [];
+        if (ids.length === 0) {
+            return { Successful: successful, Failed: failed };
+        }
+
+        const md = this.ProviderToUse;
+        this._selfMutating = true;
+        try {
+            for (const id of ids) {
+                let conversation = this.GetConversation(id);
+                try {
+                    if (!conversation) {
+                        const entity = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+                        const loaded = await entity.Load(id);
+                        if (!loaded) {
+                            failed.push({ ID: id, Name: 'Unknown', Error: 'Conversation not found' });
+                            continue;
+                        }
+                        conversation = entity;
+                    }
+
+                    if (!this.CanEditConversation(conversation, contextUser.ID)) {
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: 'You have View access only'
+                        });
+                        continue;
+                    }
+
+                    const previous: ConversationBulkUpdate = {
+                        ProjectID: conversation.ProjectID,
+                        IsPinned: conversation.IsPinned
+                    };
+                    this.applyBulkUpdate(conversation, updates);
+
+                    const saved = await conversation.Save();
+                    if (saved) {
+                        successful.push(conversation.ID);
+                    } else {
+                        this.applyBulkUpdate(conversation, previous);
+                        failed.push({
+                            ID: id,
+                            Name: conversation.Name || 'Unknown',
+                            Error: conversation.LatestResult?.Message || 'Failed to update conversation'
+                        });
+                    }
+                } catch (error) {
+                    failed.push({
+                        ID: id,
+                        Name: conversation?.Name || 'Unknown',
+                        Error: error instanceof Error ? error.message : 'Unknown error'
+                    });
+                }
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        if (successful.length > 0) {
+            this._conversations$.next(this.sortConversations(this._conversations$.value));
+        }
+        return { Successful: successful, Failed: failed };
+    }
+
+    private applyBulkUpdate(conversation: MJConversationEntity, updates: ConversationBulkUpdate): void {
+        if (updates.ProjectID !== undefined) conversation.ProjectID = updates.ProjectID;
+        if (updates.IsPinned !== undefined) conversation.IsPinned = updates.IsPinned;
+    }
+
     // ========================================================================
     // CONVERSATION DETAILS (Messages)
     // ========================================================================
@@ -1631,7 +1836,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         for (const row of rawData) {
             if (!row.ID) continue;
 
-            const parsed = parseConversationDetailComplete(row);
+            const parsed = ParseConversationDetailComplete(row);
 
             // Agent runs
             if (parsed.agentRuns.length > 0) {
@@ -1886,7 +2091,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 existing.Details.push(newDetail);
             }
 
-            const parsed = parseConversationDetailComplete(row);
+            const parsed = ParseConversationDetailComplete(row);
 
             // Merge agent runs: update in-place or add.
             //
@@ -2012,6 +2217,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   the most recent N messages. Ignored when a boundary exists — the summary already
      *   covers everything before it, and cutting into the post-boundary tail would create
      *   a coverage gap.
+     * @param options.historyFrom - A history floor: see {@link AssembleContextWindow}.
      * @returns Messages in chronological order, each stamped with
      *   {@link ConversationContextMetadata}
      */
@@ -2021,6 +2227,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         options?: {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
+            historyFrom?: Date | null;
         }
     ): Promise<ConversationContextMessage[]> {
         await this.Config(false, contextUser);
@@ -2040,18 +2247,26 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param conversationId - The conversation whose detail rows to load
      * @param contextUser - The requesting user (entity RLS is applied under this user)
      * @param provider - Optional per-request metadata provider; falls back to the global default
+     * @param historyFrom - Optional history floor: only rows written at or after it are loaded,
+     *   so nothing before it leaves the database. Pair it with the same `historyFrom` on
+     *   {@link AssembleContextWindow}, which also drops the summary of earlier messages.
      * @returns The conversation's rows in Sequence order, shaped for {@link AssembleContextWindow}
-     * @throws When the underlying RunView reports failure (never returns a silent empty set)
+     * @throws When the underlying RunView reports failure (never returns a silent empty set),
+     *   or when `historyFrom` is an invalid date
      */
     public static async LoadWindowRowsFresh(
         conversationId: string,
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        historyFrom?: Date | null
     ): Promise<ConversationWindowSourceRow[]> {
         const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const conversationFilter = `ConversationID='${conversationId}'`;
         const rows = await rv.RunView<ConversationWindowSourceRow>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}'`,
+            ExtraFilter: historyFrom
+                ? `${conversationFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
+                : conversationFilter,
             OrderBy: 'Sequence ASC',
             Fields: [...ConversationWindowFields],
             ResultType: 'simple',
@@ -2073,20 +2288,30 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *
      * Accepts the minimal {@link ConversationWindowSourceRow} shape, satisfied by full
      * entities AND `ResultType: 'simple'` rows selecting {@link ConversationWindowFields}.
+     *
+     * **History floor.** With `options.historyFrom` set, the window starts there: rows written
+     * before it are dropped, and so is any persisted summary. A summary folds in the
+     * conversation from its first message — exactly what the floor excludes — so under a
+     * floor none is used, and the window is the most recent `maxTailMessages` rows at or
+     * after the floor. A row whose `__mj_CreatedAt` is missing or unreadable can't be shown
+     * to be after the floor, so it is dropped too.
      */
     public static AssembleContextWindow(
         details: ReadonlyArray<ConversationWindowSourceRow>,
         options?: {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
+            historyFrom?: Date | null;
         }
     ): ConversationContextMessage[] {
         const excluded = new Set((options?.excludeDetailIds || []).map(id => NormalizeUUID(id)));
+        const floor = options?.historyFrom ?? null;
         const ordered = details
             .filter(d => !excluded.has(NormalizeUUID(d.ID)))
+            .filter(d => !floor || ConversationEngine.isAtOrAfter(d.__mj_CreatedAt, floor))
             .sort((a, b) => a.Sequence - b.Sequence);
 
-        const boundary = ConversationEngine.findSummaryBoundary(ordered);
+        const boundary = floor ? undefined : ConversationEngine.findSummaryBoundary(ordered);
         if (boundary) {
             const tail = ordered.filter(d => d.Sequence >= boundary.Sequence);
             return [ConversationEngine.buildSummaryMessage(boundary), ...tail.map(d => ConversationEngine.detailToContextMessage(d))];
@@ -2095,6 +2320,29 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const all = ordered.map(d => ConversationEngine.detailToContextMessage(d));
         const cap = options?.maxTailMessages;
         return cap && all.length > cap ? all.slice(-cap) : all;
+    }
+
+    /**
+     * The `ExtraFilter` predicate for a history floor: rows written at or after `historyFrom`.
+     * Shared by every reader that honours a floor, so they agree on what it means.
+     *
+     * @param historyFrom The first moment that may be read.
+     * @param column The timestamp column to compare, when the predicate runs against a view
+     *   or subquery that names it differently.
+     * @throws RangeError when `historyFrom` is an invalid date — a floor that can't be written
+     *   down must fail rather than silently read everything.
+     */
+    public static HistoryFromFilter(historyFrom: Date, column: string = '__mj_CreatedAt'): string {
+        return `${column} >= '${historyFrom.toISOString()}'`;
+    }
+
+    /** True when a row's timestamp is at or after the floor; false when it is missing or unreadable. */
+    private static isAtOrAfter(createdAt: Date | string | null | undefined, floor: Date): boolean {
+        if (createdAt == null) {
+            return false;
+        }
+        const time = createdAt instanceof Date ? createdAt.getTime() : Date.parse(createdAt);
+        return !Number.isNaN(time) && time >= floor.getTime();
     }
 
     /**

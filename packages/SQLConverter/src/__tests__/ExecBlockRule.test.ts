@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { ExecBlockRule } from '../rules/ExecBlockRule.js';
-import { createConversionContext } from '../rules/types.js';
+import { CreateConversionContext } from '../rules/types.js';
 import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from '../rules/ProcedureToFunctionRule.js';
 
 const rule = new ExecBlockRule();
 
 function convert(sql: string): string {
-  const context = createConversionContext('tsql', 'postgres');
+  const context = CreateConversionContext('tsql', 'postgres');
   return rule.PostProcess!(sql, sql, context);
 }
 

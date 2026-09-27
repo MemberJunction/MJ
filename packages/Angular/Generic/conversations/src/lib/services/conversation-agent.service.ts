@@ -5,6 +5,7 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
+  ConversationEngine,
   MJConversationDetailEntity,
   MJArtifactVersionEntity,
   MJArtifactEntity
@@ -110,7 +111,12 @@ export class ConversationAgentService {
   private _sessionIds: Map<string, string> = new Map();
 
   /** Observable indicating if the ambient agent is currently processing — delegated to the runtime's AgentRunner. */
-  public readonly isProcessing$: Observable<boolean>;
+  public readonly IsProcessing$: Observable<boolean>;
+
+  /** @deprecated Use {@link IsProcessing$}. */
+  public get isProcessing$(): Observable<boolean> {
+    return this.IsProcessing$;
+  }
 
   private _provider: IMetadataProvider | null = null;
 
@@ -121,7 +127,7 @@ export class ConversationAgentService {
   ) {
     // Injecting `_bootstrap` forces the runtime's INotificationAdapter +
     // IActiveTaskTracker adapters to register before any shim method runs.
-    this.isProcessing$ = ConversationsRuntime.Instance.AgentRunner.isProcessing$;
+    this.IsProcessing$ = ConversationsRuntime.Instance.AgentRunner.isProcessing$;
     this.initializeAIClient();
   }
 
@@ -167,7 +173,7 @@ export class ConversationAgentService {
    * preserve that shape (returning null on failure rather than throwing)
    * so the call sites don't need to change.
    */
-  public async getConversationManagerAgent(): Promise<MJAIAgentEntityExtended | null> {
+  public async GetConversationManagerAgent(): Promise<MJAIAgentEntityExtended | null> {
     if (this._conversationManagerAgent) {
       return this._conversationManagerAgent;
     }
@@ -186,6 +192,11 @@ export class ConversationAgentService {
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       return null;
     }
+  }
+
+  /** @deprecated Use {@link GetConversationManagerAgent}. */
+  public async getConversationManagerAgent(): Promise<MJAIAgentEntityExtended | null> {
+    return this.GetConversationManagerAgent();
   }
 
   /**
@@ -220,7 +231,7 @@ export class ConversationAgentService {
    * documented as "kept for backwards compatibility but not used" in the
    * original).
    */
-  async processMessage(
+  async ProcessMessage(
     conversationId: string,
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
@@ -228,12 +239,16 @@ export class ConversationAgentService {
     onProgress?: AgentExecutionProgressCallback,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
-    requestedSkillIDs?: string[]
+    requestedSkillIDs?: string[],
+    /** The agents the conversation manager may delegate to. Null or omitted allows every agent. */
+    allowedAgentIDs?: readonly string[] | null,
+    /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
+    agentHistoryFrom?: Date | null
   ): Promise<ExecuteAgentResult | null> {
     // Warm the cached default-agent name for any synchronous consumers
     // before the runtime resolves on its own.
     if (!this._conversationManagerAgent) {
-      await this.getConversationManagerAgent();
+      await this.GetConversationManagerAgent();
     }
     return ConversationsRuntime.Instance.AgentRunner.processMessage({
       conversationId,
@@ -243,7 +258,25 @@ export class ConversationAgentService {
       onProgress,
       ...(planMode ? { planMode: true } : {}),
       ...(requestedSkillIDs?.length ? { requestedSkillIDs } : {}),
+      ...(allowedAgentIDs != null ? { AllowedAgentIDs: allowedAgentIDs } : {}),
+      ...(agentHistoryFrom ? { AgentHistoryFrom: agentHistoryFrom } : {}),
     });
+  }
+
+  /** @deprecated Use {@link ProcessMessage}. */
+  async processMessage(
+    conversationId: string,
+    message: MJConversationDetailEntity,
+    conversationHistory: MJConversationDetailEntity[],
+    conversationDetailId: string,
+    onProgress?: AgentExecutionProgressCallback,
+    appContext?: Record<string, unknown> | null,
+    planMode?: boolean,
+    requestedSkillIDs?: string[],
+    allowedAgentIDs?: readonly string[] | null,
+    agentHistoryFrom?: Date | null
+  ): Promise<ExecuteAgentResult | null> {
+    return this.ProcessMessage(conversationId, message, conversationHistory, conversationDetailId, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom);
   }
 
   /**
@@ -309,8 +342,13 @@ export class ConversationAgentService {
   /**
    * Clear the session for a conversation (useful when starting a new topic)
    */
-  clearSession(conversationId: string): void {
+  ClearSession(conversationId: string): void {
     this._sessionIds.delete(conversationId);
+  }
+
+  /** @deprecated Use {@link ClearSession}. */
+  clearSession(conversationId: string): void {
+    return this.ClearSession(conversationId);
   }
 
   /**
@@ -343,7 +381,7 @@ export class ConversationAgentService {
    * Stays on the Angular shim because it directly uses AgentClientService.
    * Could move to the runtime in a follow-up if needed.
    */
-  async invokeSubAgent(
+  async InvokeSubAgent(
     agentName: string,
     conversationId: string,
     message: MJConversationDetailEntity,
@@ -357,7 +395,9 @@ export class ConversationAgentService {
     agentConfigurationPresetId?: string,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
-    requestedSkillIDs?: string[]
+    requestedSkillIDs?: string[],
+    /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
+    agentHistoryFrom?: Date | null
   ): Promise<ExecuteAgentResult | null> {
     try {
       // Ensure AIEngineBase is configured
@@ -407,6 +447,7 @@ export class ConversationAgentService {
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
         ...(planMode ? { PlanMode: true } : {}),
         ...(requestedSkillIDs?.length ? { RequestedSkillIDs: requestedSkillIDs } : {}),
+        ...(agentHistoryFrom ? { AgentHistoryFrom: agentHistoryFrom } : {}),
         CreateArtifacts: true,
         CreateNotification: true,
         SourceArtifactId: sourceArtifactId,
@@ -443,6 +484,27 @@ export class ConversationAgentService {
     }
   }
 
+  /** @deprecated Use {@link InvokeSubAgent}. */
+  async invokeSubAgent(
+    agentName: string,
+    conversationId: string,
+    message: MJConversationDetailEntity,
+    conversationHistory: MJConversationDetailEntity[],
+    reasoning: string,
+    conversationDetailId: string,
+    payload?: Record<string, unknown> | null,
+    onProgress?: AgentExecutionProgressCallback,
+    sourceArtifactId?: string,
+    sourceArtifactVersionId?: string,
+    agentConfigurationPresetId?: string,
+    appContext?: Record<string, unknown> | null,
+    planMode?: boolean,
+    requestedSkillIDs?: string[],
+    agentHistoryFrom?: Date | null
+  ): Promise<ExecuteAgentResult | null> {
+    return this.InvokeSubAgent(agentName, conversationId, message, conversationHistory, reasoning, conversationDetailId, payload, onProgress, sourceArtifactId, sourceArtifactVersionId, agentConfigurationPresetId, appContext, planMode, requestedSkillIDs, agentHistoryFrom);
+  }
+
   /**
    * Check if user's latest message should continue with the previous agent or route through Sage.
    * Uses fast inference (<500ms) to determine intent and avoid unnecessary Sage overhead.
@@ -450,7 +512,7 @@ export class ConversationAgentService {
    * Stays on the Angular shim because it directly uses GraphQLAIClient.
    * Could move to the runtime in a follow-up.
    */
-  async checkAgentContinuityIntent(
+  async CheckAgentContinuityIntent(
     conversationId: string,
     agentId: string,
     latestMessage: string,
@@ -491,12 +553,12 @@ export class ConversationAgentService {
       if (agentArtifacts.length > 0) {
         artifactContext = '\n\n**Prior Artifacts Created by This Agent**:\n';
         agentArtifacts.forEach((artifact, idx) => {
-          artifactContext += `${idx + 1}. ${artifact.artifactName} (${artifact.artifactType})\n`;
-          artifactContext += `   - Versions: ${artifact.versions.length}\n`;
-          if (artifact.versions.length > 0) {
-            artifactContext += `   - Latest: v${artifact.versions[0].versionNumber}`;
-            if (artifact.versions[0].versionName) {
-              artifactContext += ` - ${artifact.versions[0].versionName}`;
+          artifactContext += `${idx + 1}. ${artifact.artifactName} (${artifact.ArtifactType})\n`;
+          artifactContext += `   - Versions: ${artifact.Versions.length}\n`;
+          if (artifact.Versions.length > 0) {
+            artifactContext += `   - Latest: v${artifact.Versions[0].versionNumber}`;
+            if (artifact.Versions[0].versionName) {
+              artifactContext += ` - ${artifact.Versions[0].versionName}`;
             }
             artifactContext += '\n';
           }
@@ -559,6 +621,16 @@ ${compactHistory}${artifactContext}
         reasoning: `Error during intent check: ${error instanceof Error ? error.message : String(error)}`
       };
     }
+  }
+
+  /** @deprecated Use {@link CheckAgentContinuityIntent}. */
+  async checkAgentContinuityIntent(
+    conversationId: string,
+    agentId: string,
+    latestMessage: string,
+    conversationHistory: MJConversationDetailEntity[]
+  ): Promise<IntentCheckResult> {
+    return this.CheckAgentContinuityIntent(conversationId, agentId, latestMessage, conversationHistory);
   }
 
   /**
@@ -644,13 +716,18 @@ ${compactHistory}${artifactContext}
    *
    * One round trip. The subquery walks details -> Output junctions, and versions carry
    * `__mj_CreatedAt`, so "newest" is expressible without joining back for `Sequence`.
+   *
+   * @param historyFrom The chat's history floor. When set, only artifacts on replies written at
+   *   or after it count: a run that may not read earlier messages must not pick up their work
+   *   as its payload either.
    */
   public async FindLatestAgentOutputVersion(
     conversationId: string,
-    agentId: string
+    agentId: string,
+    historyFrom?: Date | null
   ): Promise<AgentPayloadSource | null> {
     return this.runPayloadSourceQuery(
-      this.agentOutputVersionFilter(conversationId, agentId), '__mj_CreatedAt DESC'
+      this.agentOutputVersionFilter(conversationId, agentId, historyFrom), '__mj_CreatedAt DESC'
     );
   }
 
@@ -665,13 +742,14 @@ ${compactHistory}${artifactContext}
    * run would mean joining back to `MJ: AI Agent Runs` purely to restate a condition the
    * detail already carries.
    */
-  private agentOutputVersionFilter(conversationId: string, agentId: string): string {
+  private agentOutputVersionFilter(conversationId: string, agentId: string, historyFrom?: Date | null): string {
+    const floor = historyFrom ? ` AND ${ConversationEngine.HistoryFromFilter(historyFrom)}` : '';
     return `ID IN (
         SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
         WHERE Direction='Output' AND ConversationDetailID IN (
           SELECT ID FROM [__mj].[vwConversationDetails]
           WHERE ConversationID='${conversationId}' AND AgentID='${agentId}'
-            AND Role='AI' AND Status <> 'Error'
+            AND Role='AI' AND Status <> 'Error'${floor}
         )
       )`;
   }

@@ -98,7 +98,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             // and UserFeedback represent the owner's evaluation of an AI
             // message and there is no per-user storage to overwrite.
             if (this.dirtyRatingFieldNames().length > 0) {
-                this.RecordDenied(
+                this.recordDenied(
                     'Only the conversation owner can set or change the rating and feedback on this message.'
                 );
                 return false;
@@ -115,7 +115,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
                 .find((p: MJResourcePermissionEntity) => UUIDsEqual(p.ResourceRecordID, this.ConversationID));
 
             if (!grant) {
-                this.RecordDenied('You do not have access to this conversation.');
+                this.recordDenied('You do not have access to this conversation.');
                 return false;
             }
             if (grant.PermissionLevel === 'Edit' || grant.PermissionLevel === 'Owner') {
@@ -123,7 +123,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             }
 
             // Only View — block writes.
-            this.RecordDenied('You have view-only access to this conversation.');
+            this.recordDenied('You have view-only access to this conversation.');
             return false;
         } catch (error) {
             LogError(
@@ -132,7 +132,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
                 }`
             );
             // Fail closed — safer to deny than silently allow a compromised write.
-            this.RecordDenied('Unable to verify conversation permissions.');
+            this.recordDenied('Unable to verify conversation permissions.');
             return false;
         }
     }
@@ -155,7 +155,7 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
      * Populate `LatestResult.Message` so callers that inspect the save result
      * see why the write was refused rather than a generic failure.
      */
-    private RecordDenied(message: string): void {
+    private recordDenied(message: string): void {
         const result = this.LatestResult as unknown as { Success: boolean; Message?: string } | undefined;
         if (result) {
             result.Success = false;

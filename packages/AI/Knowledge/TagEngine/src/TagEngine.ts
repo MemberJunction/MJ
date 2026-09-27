@@ -601,13 +601,23 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * @param provider    Optional metadata provider override.
      * @returns The proposed taxonomy tree + provenance metadata (nothing is saved).
      */
-    public async generateSeedTaxonomy(
+    public async GenerateSeedTaxonomy(
         sourceID: string,
         sampleSize: number,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
     ): Promise<SeedTaxonomyResult> {
         return generateSeedTaxonomyImpl(sourceID, sampleSize, contextUser, provider);
+    }
+
+    /** @deprecated Use {@link GenerateSeedTaxonomy}. */
+    public async generateSeedTaxonomy(
+        sourceID: string,
+        sampleSize: number,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<SeedTaxonomyResult> {
+        return this.GenerateSeedTaxonomy(sourceID, sampleSize, contextUser, provider);
     }
 
     // ========================================================================

@@ -62,8 +62,13 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
  * This ensures MSAL can process OAuth redirect responses before Angular's router
  * consumes the URL hash
  */
-export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
+export function InitializeAuth(authService: MJAuthBase): () => Promise<void> {
   return () => authService.initialize();
+}
+
+/** @deprecated Use {@link InitializeAuth}. */
+export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
+  return InitializeAuth(authService);
 }
 
 @NgModule({
@@ -96,7 +101,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     provideHttpClient(withInterceptorsFromDi()),
     {
       provide: APP_INITIALIZER,
-      useFactory: initializeAuth,
+      useFactory: InitializeAuth,
       deps: [MJAuthBase],
       multi: true
     },

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { classifyTurboFailures } from '../util/turboOutput.js';
+import { ClassifyTurboFailures } from '../util/turboOutput.js';
 
 /** Tolerated set used by DependencyPhase. */
 const DEPENDENCY_TOLERATED = [
@@ -32,7 +32,7 @@ describe('classifyTurboFailures', () => {
       'Failed:    mj_generatedactions#build, mj_generatedentities#build, mj_api#build',
     ].join('\n');
 
-    const verdict = classifyTurboFailures(output, DEPENDENCY_TOLERATED);
+    const verdict = ClassifyTurboFailures(output, DEPENDENCY_TOLERATED);
 
     expect(verdict.FailedPackages).toEqual(['mj_generatedactions', 'mj_generatedentities', 'mj_api']);
   });
@@ -40,15 +40,15 @@ describe('classifyTurboFailures', () => {
   it('does not tolerate a real failure riding behind a codegen-managed one', () => {
     // Regression guard for #4562: the old regex captured only the first name,
     // so mj_api's failure was swallowed and the install reported success.
-    const verdict = classifyTurboFailures('Failed:    mj_generatedactions#build, mj_api#build', DEPENDENCY_TOLERATED);
+    const verdict = ClassifyTurboFailures('Failed:    mj_generatedactions#build, mj_api#build', DEPENDENCY_TOLERATED);
 
     expect(verdict.Attributable).toBe(true);
     expect(verdict.ToleratedOnly).toBe(false);
   });
 
   it('reaches the same verdict regardless of the order turbo lists failures', () => {
-    const forward = classifyTurboFailures('Failed:    mj_generatedactions#build, mj_api#build', DEPENDENCY_TOLERATED);
-    const reverse = classifyTurboFailures('Failed:    mj_api#build, mj_generatedactions#build', DEPENDENCY_TOLERATED);
+    const forward = ClassifyTurboFailures('Failed:    mj_generatedactions#build, mj_api#build', DEPENDENCY_TOLERATED);
+    const reverse = ClassifyTurboFailures('Failed:    mj_api#build, mj_generatedactions#build', DEPENDENCY_TOLERATED);
 
     expect(forward.ToleratedOnly).toBe(reverse.ToleratedOnly);
     expect([...forward.FailedPackages].sort()).toEqual([...reverse.FailedPackages].sort());
@@ -61,7 +61,7 @@ describe('classifyTurboFailures', () => {
       `${ESC}[2m    ${ESC}[1mFailed:    ${ESC}[31m${ESC}[1mmj_generatedactions#build${ESC}[0m, ` +
       `${ESC}[31m${ESC}[1mmj_generatedentities#build${ESC}[0m${ESC}[0m${ESC}[22m`;
 
-    const verdict = classifyTurboFailures(output, DEPENDENCY_TOLERATED);
+    const verdict = ClassifyTurboFailures(output, DEPENDENCY_TOLERATED);
 
     expect(verdict.FailedPackages).toEqual(['mj_generatedactions', 'mj_generatedentities']);
     expect(verdict.ToleratedOnly).toBe(true);
@@ -70,7 +70,7 @@ describe('classifyTurboFailures', () => {
   it('handles scoped package names', () => {
     const output = 'Failed:    @memberjunction/ng-core-entity-forms#build, @memberjunction/server-bootstrap#build';
 
-    const verdict = classifyTurboFailures(output, DEPENDENCY_TOLERATED);
+    const verdict = ClassifyTurboFailures(output, DEPENDENCY_TOLERATED);
 
     expect(verdict.FailedPackages).toEqual([
       '@memberjunction/ng-core-entity-forms',
@@ -80,7 +80,7 @@ describe('classifyTurboFailures', () => {
   });
 
   it('handles CRLF line endings', () => {
-    const verdict = classifyTurboFailures(
+    const verdict = ClassifyTurboFailures(
       'Failed:    mj_generatedactions#build, mj_generatedentities#build\r\n',
       DEPENDENCY_TOLERATED
     );
@@ -91,11 +91,11 @@ describe('classifyTurboFailures', () => {
   it('deduplicates a package named on more than one summary line', () => {
     const output = ['Failed:    mj_generatedactions#build', 'Failed:    mj_generatedactions#build'].join('\n');
 
-    expect(classifyTurboFailures(output, DEPENDENCY_TOLERATED).FailedPackages).toEqual(['mj_generatedactions']);
+    expect(ClassifyTurboFailures(output, DEPENDENCY_TOLERATED).FailedPackages).toEqual(['mj_generatedactions']);
   });
 
   it('reports a failure it cannot attribute rather than tolerating it', () => {
-    const verdict = classifyTurboFailures(' ERROR  run failed: command  exited (2)', DEPENDENCY_TOLERATED);
+    const verdict = ClassifyTurboFailures(' ERROR  run failed: command  exited (2)', DEPENDENCY_TOLERATED);
 
     expect(verdict.FailedPackages).toEqual([]);
     expect(verdict.Attributable).toBe(false);
@@ -105,7 +105,7 @@ describe('classifyTurboFailures', () => {
   it('refuses to tolerate when a listed entry cannot be parsed', () => {
     // A tolerated package beside an entry we cannot name must not come back
     // "all failures are tolerated" — that is defect #4562 all over again.
-    const verdict = classifyTurboFailures(
+    const verdict = ClassifyTurboFailures(
       'Failed:    mj_generatedactions#build, <something unparseable>',
       DEPENDENCY_TOLERATED
     );
@@ -118,8 +118,8 @@ describe('classifyTurboFailures', () => {
     // CodeGenPhase's rebuild does not tolerate the generated packages.
     const output = 'Failed:    mj_generatedactions#build';
 
-    expect(classifyTurboFailures(output, DEPENDENCY_TOLERATED).ToleratedOnly).toBe(true);
-    expect(classifyTurboFailures(output, CODEGEN_TOLERATED).ToleratedOnly).toBe(false);
+    expect(ClassifyTurboFailures(output, DEPENDENCY_TOLERATED).ToleratedOnly).toBe(true);
+    expect(ClassifyTurboFailures(output, CODEGEN_TOLERATED).ToleratedOnly).toBe(false);
   });
 });
 

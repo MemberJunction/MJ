@@ -31,7 +31,16 @@ export class MJListenerDemo implements OnInit {
    * When used as a web component, this property can be set directly:
    * document.querySelector('mj-listener-demo').displayString = 'Hello!';
    */
-  @Input() displayString: string = '';
+  @Input() DisplayString: string = '';
+
+  /** @deprecated Use {@link DisplayString}. */
+  @Input() set displayString(value: string) {
+    this.DisplayString = value;
+  }
+  /** @deprecated Use {@link DisplayString}. */
+  get displayString(): string {
+    return this.DisplayString;
+  }
 
   /**
    * Initializes the component and sets up the event listener.

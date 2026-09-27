@@ -19,8 +19,8 @@ export class ClassifyTag {
         this.tag = tag;
         this.confidence = confidence;
     }
-    tag: string
-    confidence: number
+    tag: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    confidence: number  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -28,8 +28,8 @@ export class ClassifyTag {
  * major version.
  */
 export class ClassifyResult extends BaseResult {
-    inputText: string
+    inputText: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     tags: ClassifyTag[]
-    statusMessage: string
+    statusMessage: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
  

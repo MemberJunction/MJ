@@ -24,6 +24,7 @@ import { GetDefaultAgentId } from '@/data/preferences';
 import { MentionsToPlainText } from '@/data/mention-display';
 import { MJRealtimeSessionCard } from '@/chat/realtime/RealtimeSessionCard';
 import { ArtifactMessageCard } from '@/chat/artifacts/ArtifactMessageCard';
+import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJConversationArtifactEntity } from '@memberjunction/core-entities';
 import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
@@ -92,7 +93,7 @@ export default function ChatThreadScreen() {
         setSendError(null);
         setStalled(false);
         setPendingUserText(text.trim());
-        setProgress({ currentStep: 'starting', message: 'Sending…' });
+        setProgress({ CurrentStep: 'starting', message: 'Sending…' });
         try {
             let attachmentWarning: string | null = null;
             const send = SendMessage({
@@ -162,8 +163,8 @@ export default function ChatThreadScreen() {
             // helper awaits the push-status WebSocket, which delivers reliably on this client
             // under Expo SDK 54 (verified: "Completion event received"). The 2.5s x 24 polling
             // loop this replaces existed because that WebSocket used to be unreliable here.
-            if (result.aiMessageId) {
-                const status = await GetConversationDetailStatus(result.aiMessageId).catch(() => null);
+            if (result.AiMessageId) {
+                const status = await GetConversationDetailStatus(result.AiMessageId).catch(() => null);
                 if (status === 'Error') setSendError('The agent could not complete this request.');
                 await refresh();
                 void refreshList();
@@ -283,10 +284,11 @@ export default function ChatThreadScreen() {
                                     />
                                 ) : (
                                     <MJRealtimeSessionCard
-                                        key={`session:${item.group.SessionID}`}
-                                        Group={item.group}
-                                        Meta={item.meta}
-                                        Turns={item.turns}
+                                        key={`session:${item.Group.SessionID}`}
+                                        Group={item.Group}
+                                        Meta={item.Meta}
+                                        Turns={item.Turns}
+                                        CurrentUserID={Metadata.Provider?.CurrentUser?.ID ?? null}
                                     />
                                 ),
                             )}
@@ -450,16 +452,16 @@ function MessageRenderer({
     return (
         <View style={styles.agentMsg}>
             <View style={styles.agentLine}>
-                <View style={[styles.agentAv, { backgroundColor: message.agent.color }]}>
-                    <Text style={styles.agentAvText}>{message.agent.initial}</Text>
+                <View style={[styles.agentAv, { backgroundColor: message.Agent.color }]}>
+                    <Text style={styles.agentAvText}>{message.Agent.initial}</Text>
                 </View>
-                <Text style={styles.agentName}>{message.agent.name}</Text>
+                <Text style={styles.agentName}>{message.Agent.name}</Text>
                 <Text style={styles.agentMeta}>
-                    · {message.completionMs ? `${(message.completionMs / 1000).toFixed(1)}s` : message.status}
+                    · {message.CompletionMs ? `${(message.CompletionMs / 1000).toFixed(1)}s` : message.Status}
                 </Text>
             </View>
-            <MarkdownView value={message.body} style={styles.msgBodyWrap} />
-            {message.status === 'In-Progress' ? (
+            <MarkdownView value={message.Body} style={styles.msgBodyWrap} />
+            {message.Status === 'In-Progress' ? (
                 <View style={styles.stepRow}>
                     <ActivityIndicator size="small" color={Colors.brand} />
                     <Text style={styles.stepText}>Working…</Text>
@@ -477,9 +479,9 @@ function MessageRenderer({
                     TypeName={ArtifactTypeFor(artifacts, message.artifactId)}
                 />
             ) : null}
-            {message.suggestedResponses.length > 0 ? (
+            {message.SuggestedResponses.length > 0 ? (
                 <View style={styles.chips}>
-                    {message.suggestedResponses.map((action) => (
+                    {message.SuggestedResponses.map((action) => (
                         <Pressable key={action} style={styles.actionChip}>
                             <Text style={styles.actionChipText}>{action}</Text>
                         </Pressable>

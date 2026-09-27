@@ -59,10 +59,28 @@ export class MJClickableDirective implements AfterContentInit {
   @Input() role: MjClickableRole = 'button';
 
   /** Optional stable automation/test hook emitted as `data-testid` (no convention enforced here). */
-  @Input() testId?: string;
+  @Input() TestId?: string;
+
+  /** @deprecated Use {@link TestId}. */
+  @Input() set testId(value: string | undefined) {
+    this.TestId = value;
+  }
+  /** @deprecated Use {@link TestId}. */
+  get testId(): string | undefined {
+    return this.TestId;
+  }
 
   /** Set `false` to skip making the element keyboard-focusable (rare; e.g. focus handled elsewhere). */
-  @Input() focusable = true;
+  @Input() Focusable = true;
+
+  /** @deprecated Use {@link Focusable}. */
+  @Input() set focusable(value: MJClickableDirective['Focusable']) {
+    this.Focusable = value;
+  }
+  /** @deprecated Use {@link Focusable}. */
+  get focusable(): MJClickableDirective['Focusable'] {
+    return this.Focusable;
+  }
 
   // Constructor injection (not inject()) so the directive can be unit-tested via direct
   // instantiation with a stub ElementRef — the established pattern in this package's specs.
@@ -72,13 +90,13 @@ export class MJClickableDirective implements AfterContentInit {
     return this.role;
   }
   @HostBinding('attr.tabindex') get tabIndexAttr(): string | null {
-    return this.focusable ? '0' : null;
+    return this.Focusable ? '0' : null;
   }
   @HostBinding('attr.aria-label') get ariaLabelAttr(): string | null {
     return this.label?.trim() ? this.label.trim() : null;
   }
   @HostBinding('attr.data-testid') get testIdAttr(): string | null {
-    return this.testId ?? null;
+    return this.TestId ?? null;
   }
 
   /**

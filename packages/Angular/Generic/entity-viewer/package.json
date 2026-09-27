@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@memberjunction/actions-base": "6.2.0-edge.0",
+    "@memberjunction/communication-types": "6.2.0-edge.0",
     "@memberjunction/core": "6.2.0-edge.0",
     "@memberjunction/core-entities": "6.2.0-edge.0",
     "@memberjunction/export-engine": "6.2.0-edge.0",

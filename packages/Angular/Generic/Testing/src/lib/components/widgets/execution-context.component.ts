@@ -376,22 +376,76 @@ import { RunContextDetails } from '@memberjunction/testing-engine-base';
 })
 export class ExecutionContextComponent implements OnChanges {
   /** Machine hostname */
-  @Input() machineName: string | null = null;
+  @Input() MachineName: string | null = null;
+
+  /** @deprecated Use {@link MachineName}. */
+  @Input() set machineName(value: string | null) {
+    this.MachineName = value;
+  }
+  /** @deprecated Use {@link MachineName}. */
+  get machineName(): string | null {
+    return this.MachineName;
+  }
 
   /** Machine ID (MAC address) */
-  @Input() machineId: string | null = null;
+  @Input() MachineId: string | null = null;
+
+  /** @deprecated Use {@link MachineId}. */
+  @Input() set machineId(value: string | null) {
+    this.MachineId = value;
+  }
+  /** @deprecated Use {@link MachineId}. */
+  get machineId(): string | null {
+    return this.MachineId;
+  }
 
   /** User name who ran the test */
-  @Input() runByUserName: string | null = null;
+  @Input() RunByUserName: string | null = null;
+
+  /** @deprecated Use {@link RunByUserName}. */
+  @Input() set runByUserName(value: string | null) {
+    this.RunByUserName = value;
+  }
+  /** @deprecated Use {@link RunByUserName}. */
+  get runByUserName(): string | null {
+    return this.RunByUserName;
+  }
 
   /** User email who ran the test */
-  @Input() runByUserEmail: string | null = null;
+  @Input() RunByUserEmail: string | null = null;
+
+  /** @deprecated Use {@link RunByUserEmail}. */
+  @Input() set runByUserEmail(value: string | null) {
+    this.RunByUserEmail = value;
+  }
+  /** @deprecated Use {@link RunByUserEmail}. */
+  get runByUserEmail(): string | null {
+    return this.RunByUserEmail;
+  }
 
   /** JSON string of RunContextDetails */
-  @Input() runContextDetailsJson: string | null = null;
+  @Input() RunContextDetailsJson: string | null = null;
+
+  /** @deprecated Use {@link RunContextDetailsJson}. */
+  @Input() set runContextDetailsJson(value: string | null) {
+    this.RunContextDetailsJson = value;
+  }
+  /** @deprecated Use {@link RunContextDetailsJson}. */
+  get runContextDetailsJson(): string | null {
+    return this.RunContextDetailsJson;
+  }
 
   /** Parsed context details */
-  contextDetails: RunContextDetails | null = null;
+  ContextDetails: RunContextDetails | null = null;
+
+  /** @deprecated Use {@link ContextDetails}. */
+  get contextDetails(): RunContextDetails | null {
+    return this.ContextDetails;
+  }
+  /** @deprecated Use {@link ContextDetails}. */
+  set contextDetails(value: RunContextDetails | null) {
+    this.ContextDetails = value;
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['runContextDetailsJson']) {
@@ -400,55 +454,75 @@ export class ExecutionContextComponent implements OnChanges {
   }
 
   private parseContextDetails(): void {
-    if (this.runContextDetailsJson) {
+    if (this.RunContextDetailsJson) {
       try {
-        this.contextDetails = JSON.parse(this.runContextDetailsJson) as RunContextDetails;
+        this.ContextDetails = JSON.parse(this.RunContextDetailsJson) as RunContextDetails;
       } catch {
-        this.contextDetails = null;
+        this.ContextDetails = null;
       }
     } else {
-      this.contextDetails = null;
+      this.ContextDetails = null;
     }
   }
 
+  HasAnyData(): boolean {
+    return !!(
+      this.MachineName ||
+      this.MachineId ||
+      this.RunByUserName ||
+      this.RunByUserEmail ||
+      this.ContextDetails
+    );
+  }
+
+  /** @deprecated Use {@link HasAnyData}. */
   hasAnyData(): boolean {
+    return this.HasAnyData();
+  }
+
+  HasCIInfo(): boolean {
     return !!(
-      this.machineName ||
-      this.machineId ||
-      this.runByUserName ||
-      this.runByUserEmail ||
-      this.contextDetails
+      this.ContextDetails?.ciProvider ||
+      this.ContextDetails?.pipelineId ||
+      this.ContextDetails?.buildNumber ||
+      this.ContextDetails?.branch ||
+      this.ContextDetails?.prNumber
     );
   }
 
+  /** @deprecated Use {@link HasCIInfo}. */
   hasCIInfo(): boolean {
-    return !!(
-      this.contextDetails?.ciProvider ||
-      this.contextDetails?.pipelineId ||
-      this.contextDetails?.buildNumber ||
-      this.contextDetails?.branch ||
-      this.contextDetails?.prNumber
-    );
+    return this.HasCIInfo();
   }
 
-  getOSIcon(): string {
-    const osType = this.contextDetails?.osType?.toLowerCase();
+  GetOSIcon(): string {
+    const osType = this.ContextDetails?.osType?.toLowerCase();
     if (osType === 'darwin') return 'fa-apple';
     if (osType === 'linux') return 'fa-linux';
     if (osType === 'win32' || osType === 'windows') return 'fa-windows';
     return 'fa-desktop';
   }
 
-  getOSDisplayName(): string {
-    const osType = this.contextDetails?.osType?.toLowerCase();
+  /** @deprecated Use {@link GetOSIcon}. */
+  getOSIcon(): string {
+    return this.GetOSIcon();
+  }
+
+  GetOSDisplayName(): string {
+    const osType = this.ContextDetails?.osType?.toLowerCase();
     if (osType === 'darwin') return 'macOS';
     if (osType === 'linux') return 'Linux';
     if (osType === 'win32' || osType === 'windows') return 'Windows';
-    return this.contextDetails?.osType || 'Unknown';
+    return this.ContextDetails?.osType || 'Unknown';
   }
 
-  getCIProviderClass(): string {
-    const provider = this.contextDetails?.ciProvider?.toLowerCase() || '';
+  /** @deprecated Use {@link GetOSDisplayName}. */
+  getOSDisplayName(): string {
+    return this.GetOSDisplayName();
+  }
+
+  GetCIProviderClass(): string {
+    const provider = this.ContextDetails?.ciProvider?.toLowerCase() || '';
     if (provider.includes('github')) return 'github';
     if (provider.includes('azure')) return 'azure';
     if (provider.includes('jenkins')) return 'jenkins';
@@ -458,8 +532,13 @@ export class ExecutionContextComponent implements OnChanges {
     return '';
   }
 
-  getCIProviderIcon(): string {
-    const provider = this.contextDetails?.ciProvider?.toLowerCase() || '';
+  /** @deprecated Use {@link GetCIProviderClass}. */
+  getCIProviderClass(): string {
+    return this.GetCIProviderClass();
+  }
+
+  GetCIProviderIcon(): string {
+    const provider = this.ContextDetails?.ciProvider?.toLowerCase() || '';
     if (provider.includes('github')) return 'fa-github';
     if (provider.includes('azure')) return 'fa-microsoft';
     if (provider.includes('jenkins')) return 'fa-jenkins';
@@ -467,5 +546,10 @@ export class ExecutionContextComponent implements OnChanges {
     if (provider.includes('gitlab')) return 'fa-gitlab';
     if (provider.includes('travis')) return 'fa-travis';
     return 'fa-rocket';
+  }
+
+  /** @deprecated Use {@link GetCIProviderIcon}. */
+  getCIProviderIcon(): string {
+    return this.GetCIProviderIcon();
   }
 }
