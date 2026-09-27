@@ -517,33 +517,76 @@ export class BaseAgent {
     }> = new Map();
 
     /**
-     * Normalizes action parameters into a deterministic, key-sorted JSON string
-     * to accurately detect identical repeat calls regardless of object key order.
+     * The identity of one action call's arguments, for the circuit breaker's identical-arguments
+     * rule: two calls with the same normalized string are "the same call", whatever order the model
+     * wrote the keys in.
+     *
+     * Algorithm, top to bottom:
+     * 1. Null, undefined or a non-object yields `''` (a call with no arguments).
+     * 2. The top-level keys are sorted, and each `(key, value)` pair passes through
+     *    {@link NormalizeActionParamEntry}, which may rename it, rewrite its value, or drop it.
+     * 3. Every value passes through {@link NormalizeActionParamValue}: plain objects are rebuilt with
+     *    sorted keys at EVERY depth, arrays keep their order but normalize each element, and
+     *    anything else (strings, numbers, booleans, null, Dates, entity instances) is kept as is.
+     * 4. The result is serialized with `JSON.stringify`. Should that throw (a circular reference,
+     *    a BigInt), the fallback is a sorted list of the top-level keys — still deterministic, still
+     *    distinguishes differently-shaped calls, and never throws.
+     *
+     * Three protected layers so a subclass can change one part without re-implementing the rest:
+     * override {@link NormalizeActionParamEntry} to ignore a key (a trace id, a timestamp the model
+     * regenerates on every call), or {@link NormalizeActionParamValue} to canonicalize values
+     * (case-fold a search query, trim whitespace) so near-identical retries count as identical.
      */
-    protected normalizeActionParams(params: Record<string, unknown> | null | undefined): string {
+    protected NormalizeActionParams(params: Record<string, unknown> | null | undefined): string {
         if (!params || typeof params !== 'object') {
             return '';
         }
         try {
-            const sortedKeys = Object.keys(params).sort();
-            const normalizedObj: Record<string, unknown> = {};
-            for (const key of sortedKeys) {
-                const val = params[key];
-                if (val && typeof val === 'object' && !Array.isArray(val)) {
-                    const innerKeys = Object.keys(val as Record<string, unknown>).sort();
-                    const innerObj: Record<string, unknown> = {};
-                    for (const ik of innerKeys) {
-                        innerObj[ik] = (val as Record<string, unknown>)[ik];
-                    }
-                    normalizedObj[key] = innerObj;
-                } else {
-                    normalizedObj[key] = val;
+            const normalized: Record<string, unknown> = {};
+            for (const key of Object.keys(params).sort()) {
+                const entry = this.NormalizeActionParamEntry(key, params[key]);
+                if (entry) {
+                    normalized[entry.key] = entry.value;
                 }
             }
-            return JSON.stringify(normalizedObj);
+            return JSON.stringify(normalized);
         } catch {
-            return JSON.stringify(params);
+            return `[unserializable:${Object.keys(params).sort().join(',')}]`;
         }
+    }
+
+    /**
+     * Normalizes one top-level `(key, value)` pair of an action's arguments. The default keeps the
+     * key and normalizes the value through {@link NormalizeActionParamValue}. Return `null` to drop
+     * the pair from the call's identity — the seam for ignoring arguments that legitimately differ
+     * between otherwise identical retries.
+     */
+    protected NormalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null {
+        return { key, value: this.NormalizeActionParamValue(value) };
+    }
+
+    /**
+     * Normalizes one value, recursively: a plain object is rebuilt with its keys sorted, an array
+     * keeps its order with each element normalized, and any other value is returned unchanged. The
+     * seam for canonicalizing values before they are compared.
+     *
+     * "Plain" here is by prototype (`Object.prototype` or none), not the structural
+     * `IsPlainObject` from `@memberjunction/global`: a Date, Map or entity instance must pass through
+     * as an opaque leaf and serialize as itself, not be rebuilt as an empty bag of sorted keys.
+     */
+    protected NormalizeActionParamValue(value: unknown): unknown {
+        if (Array.isArray(value)) {
+            return value.map(item => this.NormalizeActionParamValue(item));
+        }
+        if (value !== null && typeof value === 'object' && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)) {
+            const source = value as Record<string, unknown>;
+            const sorted: Record<string, unknown> = {};
+            for (const key of Object.keys(source).sort()) {
+                sorted[key] = this.NormalizeActionParamValue(source[key]);
+            }
+            return sorted;
+        }
+        return value;
     }
 
     /**
@@ -8122,7 +8165,7 @@ The context is now within limits. Please retry your request with the recovered c
         contextUser?: UserInfo, options?: ExecuteSingleActionOptions): Promise<ActionResult> {
         
         const skipBreaker = options?.skipCircuitBreaker === true;
-        const normalizedParams = this.normalizeActionParams(action.params);
+        const normalizedParams = this.NormalizeActionParams(action.params);
 
         // Run-scoped circuit breaker: each rule short-circuits in 0ms with a result that carries the
         // rule that fired, so the failure directive can name it without consulting the history.
