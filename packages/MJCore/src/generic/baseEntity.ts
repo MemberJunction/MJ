@@ -963,6 +963,18 @@ export class BaseEntityEvent {
 }
 
 /**
+ * What came of loading the child that an entity's subtype rule named for a loaded record:
+ * `'Linked'` (its row loaded and it is linked), `'NotFound'` (its load came back empty), or
+ * `'NotTried'` (there was no hint, the user can't read that child, or its load threw).
+ */
+type SubtypeLoadHintOutcome = 'Linked' | 'NotFound' | 'NotTried';
+
+/** Entity names compare the way metadata lookups do: trimmed and case-insensitive. */
+function sameEntityName(a: string, b: string): boolean {
+    return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
 /** In-memory baseline captured before a graph runs so a rollback can be retried. */
@@ -1476,6 +1488,10 @@ export abstract class BaseEntity<T = unknown> {
      * This ensures that Save/Delete operations always delegate to the leaf entity,
      * running the full validation and event chain at every level.
      *
+     * For a disjoint parent, the entity's subtype rule is asked first (see
+     * {@link resolveSubtypeLoadHint}); when it names a child, that child's load, which
+     * happens anyway, checks the answer, and the discovery query runs only on a miss.
+     *
      * Must be called AFTER a record is loaded (PK must be available).
      * Skipped for entities that are not parent types or have already been discovered.
      */
@@ -1489,12 +1505,39 @@ export abstract class BaseEntity<T = unknown> {
             // Overlapping: discover all children, store as list, don't auto-chain
             await this.discoverOverlappingChildren();
         } else {
-            // Disjoint: discover single child, auto-chain (current behavior)
-            const childEntityName = await this.discoverChildEntityName();
-            if (!childEntityName) return;
-
-            await this.createAndLinkChildEntity(childEntityName);
+            // Disjoint: discover the single child and auto-chain it
+            await this.initializeDisjointChildEntity();
         }
+    }
+
+    /**
+     * Finds and links the one child of a loaded disjoint parent.
+     *
+     * Without a hint this is one discovery query plus the child's load. With a hint from the
+     * entity's subtype rule, the child's load checks the hint, and the discovery query runs
+     * only when that load comes back empty or wasn't tried. The outcome is always the one the
+     * discovery query alone would give: a hint changes the number of round trips, never which
+     * child is linked.
+     */
+    private async initializeDisjointChildEntity(): Promise<void> {
+        const hintedName = await this.resolveSubtypeLoadHint();
+        const hintOutcome: SubtypeLoadHintOutcome = hintedName
+            ? await this.tryLinkHintedChildEntity(hintedName)
+            : 'NotTried';
+        if (hintOutcome === 'Linked') return;
+
+        const childEntityName = await this.discoverChildEntityName();
+        if (hintedName && hintOutcome === 'NotFound') {
+            if (childEntityName && sameEntityName(childEntityName, hintedName)) {
+                // The row exists but its load just came back empty (for example, a row filter hides
+                // it). Loading it again would too, and the discovery-only path unlinks it the same way.
+                return;
+            }
+            this.logSubtypeLoadHintMiss(hintedName, childEntityName);
+        }
+        if (!childEntityName) return;
+
+        await this.createAndLinkChildEntity(childEntityName);
     }
 
     /**
@@ -1538,16 +1581,34 @@ export abstract class BaseEntity<T = unknown> {
      * Creates the child entity instance, wires up the shared instance chain
      * (child._parentEntity = this, this._childEntity = child), loads the
      * child's data, and recursively discovers further children.
+     *
+     * @returns true when the child's row loaded and the child is linked; false when the load
+     *   came back empty, in which case the link is undone.
      */
-    private async createAndLinkChildEntity(childEntityName: string): Promise<void> {
-        // Create child via this entity's provider so the child shares the same connection
-        // (correct in multi-provider scenarios — never the global default).
+    private async createAndLinkChildEntity(childEntityName: string): Promise<boolean> {
+        const childEntity = await this.createChildEntityObject(childEntityName);
+        return this.linkAndLoadChildEntity(childEntity);
+    }
+
+    /**
+     * Creates an unlinked child entity instance through this entity's provider, so the child
+     * shares the same connection (correct in multi-provider scenarios — never the global default).
+     */
+    private async createChildEntityObject(childEntityName: string): Promise<BaseEntity> {
         const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
-        const childEntity = await childProvider.GetEntityObject<BaseEntity>(
+        return childProvider.GetEntityObject<BaseEntity>(
             childEntityName,
             this._contextCurrentUser
         );
+    }
 
+    /**
+     * Links `childEntity` into this entity's chain and loads its row under the shared key.
+     *
+     * @returns true when the row loaded and the child is linked; false when the load came back
+     *   empty, in which case the link is undone.
+     */
+    private async linkAndLoadChildEntity(childEntity: BaseEntity): Promise<boolean> {
         // Wire up the shared instance chain: child's parent IS this entity (same object)
         // We need to replace the child's auto-initialized parent with our existing instance
         this.replaceChildParentChain(childEntity);
@@ -1562,7 +1623,7 @@ export abstract class BaseEntity<T = unknown> {
         if (!loaded) {
             // Load failed — clean up the link
             this._childEntity = null;
-            return;
+            return false;
         }
 
         // Re-apply any pending modifications so child hydration does not overwrite unsaved in-memory edits
@@ -1571,6 +1632,150 @@ export abstract class BaseEntity<T = unknown> {
         // Recursively discover grandchildren (child may also be a parent type)
         // InitializeChildEntity is idempotent via _childEntityDiscoveryDone flag
         await childEntity.InitializeChildEntity();
+        return true;
+    }
+
+    /**
+     * Tries to link the child that the subtype rule named, by loading its row directly. That
+     * load is the check on the hint.
+     *
+     * The hint is not tried when the user can't read the child entity: the discovery-only path
+     * decides that case, so a hint can neither expose a child nor fail a load that works without
+     * it. A load that throws is logged and treated the same way: the discovery path runs, and
+     * repeats the load only if the discovery query finds the row.
+     *
+     * @returns `'Linked'` when the hinted child loaded and is linked, `'NotFound'` when its load
+     *   came back empty, and `'NotTried'` when it wasn't loaded or its load threw.
+     */
+    private async tryLinkHintedChildEntity(hintedName: string): Promise<SubtypeLoadHintOutcome> {
+        try {
+            const childEntity = await this.createChildEntityObject(hintedName);
+            if (!childEntity.CheckPermissions(EntityPermissionType.Read, false)) {
+                return 'NotTried';
+            }
+            return (await this.linkAndLoadChildEntity(childEntity)) ? 'Linked' : 'NotFound';
+        }
+        catch (e) {
+            this._childEntity = null;
+            LogError(`IS-A load hint: loading '${hintedName}' for '${this.EntityInfo.Name}' record ${this.PrimaryKey.ToString()} failed (${e instanceof Error ? e.message : String(e)}); finding the subtype with the discovery query instead.`);
+            return 'NotTried';
+        }
+    }
+
+    /**
+     * Asks the entity's subtype rule which child a LOADED record has, without running a query.
+     *
+     * - A registered {@link EntitySubtypeResolver} owns the rule, and is asked only when it sets
+     *   {@link EntitySubtypeResolver.UseForLoadedRecords}. The `SubtypeSelector` isn't consulted in
+     *   its place: at create time the resolver overrides the selector, so the selector may not
+     *   describe the same rule.
+     * - Otherwise the `SubtypeSelector` path is walked through rows that loaded `BaseEngine` caches
+     *   already hold. A hop that isn't cached gives no hint rather than a query.
+     * - An entity with no rule gets no hint. The single-child fallback of
+     *   {@link ResolveSubtypeEntityName} is a default for new records, not a rule about existing ones.
+     *
+     * An answer of "no subtype" also gives no hint: only the discovery query can tell whether an
+     * older record still has a child row.
+     *
+     * @returns A declared IsA child's entity name, or null when there is no usable hint. Never throws.
+     */
+    private async resolveSubtypeLoadHint(): Promise<string | null> {
+        const resolverRegistration = MJGlobal.Instance.ClassFactory.GetRegistration(EntitySubtypeResolver, this.EntityInfo.Name);
+        if (resolverRegistration) {
+            return this.askResolverForLoadHint();
+        }
+        const selectorPath = this.EntityInfo.SubtypeSelectorConfig?.Path?.trim();
+        if (selectorPath) {
+            return this.evaluateSelectorForLoadHint(selectorPath);
+        }
+        return null;
+    }
+
+    /**
+     * Asks the registered resolver for a load hint, when it opts in. Its failures are logged and
+     * give no hint.
+     */
+    private async askResolverForLoadHint(): Promise<string | null> {
+        try {
+            const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<EntitySubtypeResolver>(
+                EntitySubtypeResolver,
+                this.EntityInfo.Name
+            );
+            const resolver = resolution.Resolved ? resolution.Instance : null;
+            if (!resolver?.UseForLoadedRecords) {
+                return null;
+            }
+            // A synchronous answer is used as-is, with no extra microtask per record.
+            const raw = resolver.Resolve(this);
+            const candidate = raw instanceof Promise ? await raw : raw;
+            return this.declaredChildForLoadHint(candidate, `EntitySubtypeResolver for '${this.EntityInfo.Name}'`);
+        }
+        catch (e) {
+            LogError(`IS-A load hint: EntitySubtypeResolver for '${this.EntityInfo.Name}' failed on record ${this.PrimaryKey.ToString()} (${e instanceof Error ? e.message : String(e)}); loading the record without a hint.`);
+            return null;
+        }
+    }
+
+    /**
+     * Walks the `SubtypeSelector` path through engine caches only. A path that isn't valid for
+     * this entity's metadata is logged once and gives no hint; the create path throws on it instead.
+     */
+    private async evaluateSelectorForLoadHint(path: string): Promise<string | null> {
+        try {
+            const pathResult = await this.evaluateSubtypeSelectorPath(
+                path,
+                (entityName, pkValue) => BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue)
+            );
+            return this.declaredChildForLoadHint(pathResult, `SubtypeSelector path '${path}' on '${this.EntityInfo.Name}'`);
+        }
+        catch (e) {
+            BaseEntity.logSubtypeLoadHintProblemOnce(
+                `${this.EntityInfo.Name}|${path}`,
+                `IS-A load hint: ${e instanceof Error ? e.message : String(e)} Loading '${this.EntityInfo.Name}' records without a hint.`
+            );
+            return null;
+        }
+    }
+
+    /**
+     * Turns a rule's answer into a declared child's canonical entity name. Empty means no subtype,
+     * which gives no hint. A name that isn't a declared IsA child is logged once and gives no hint.
+     */
+    private declaredChildForLoadHint(candidate: string | null | undefined, source: string): string | null {
+        const trimmed = candidate?.trim();
+        if (!trimmed) {
+            return null;
+        }
+        const match = this.EntityInfo.ChildEntities.find(c => sameEntityName(c.Name, trimmed));
+        if (!match) {
+            BaseEntity.logSubtypeLoadHintProblemOnce(
+                `${this.EntityInfo.Name}|undeclared|${trimmed.toLowerCase()}`,
+                `IS-A load hint: ${source} named '${trimmed}', which is not a declared IsA child entity of '${this.EntityInfo.Name}'. Loading the record without a hint.`
+            );
+            return null;
+        }
+        return match.Name;
+    }
+
+    /**
+     * Reports a hint that the data didn't bear out. It usually means the rule and the data
+     * disagree, for example a record whose type changed after its subtype row was written, and
+     * each load of such a record costs an extra round trip until one of them is fixed.
+     */
+    private logSubtypeLoadHintMiss(hintedName: string, discoveredName: string | null): void {
+        const found = discoveredName ? `its subtype row is in '${discoveredName}'` : 'it has no subtype row';
+        LogError(`IS-A load hint: the subtype rule for '${this.EntityInfo.Name}' record ${this.PrimaryKey.ToString()} names '${hintedName}', but no '${hintedName}' row loaded; ${found}. The rule and the data disagree.`);
+    }
+
+    /** Keys of load-hint configuration problems already logged, so a bad rule logs once, not per record. */
+    private static _loggedSubtypeLoadHintProblems = new Set<string>();
+
+    private static logSubtypeLoadHintProblemOnce(key: string, message: string): void {
+        if (BaseEntity._loggedSubtypeLoadHintProblems.has(key)) {
+            return;
+        }
+        BaseEntity._loggedSubtypeLoadHintProblems.add(key);
+        LogError(message);
     }
 
     private static _subtypeLookupCache = new Map<string, BaseEntity | null>();
@@ -1589,6 +1794,11 @@ export abstract class BaseEntity<T = unknown> {
      * 2. Entity.SubtypeSelector declarative FK traversal path
      * 3. Unconditional single-child IsA fallback (ChildEntities.length === 1)
      * 4. Otherwise null (no subtype)
+     *
+     * This is the create-time ladder, and steps 1 and 2 may query. When a record is loaded,
+     * BaseEntity asks a narrower, query-free version of it for a hint instead: the resolver only
+     * when it sets `EntitySubtypeResolver.UseForLoadedRecords`, the selector only through rows
+     * that loaded `BaseEngine` caches hold, and never step 3.
      *
      * @see plans/sync-composition-axes.md
      */
@@ -1626,7 +1836,10 @@ export abstract class BaseEntity<T = unknown> {
         // 2. Entity.SubtypeSelector declarative path
         const selectorConfig = this.EntityInfo.SubtypeSelectorConfig;
         if (selectorConfig && selectorConfig.Path && selectorConfig.Path.trim() !== '') {
-            const pathResult = await this.evaluateSubtypeSelectorPath(selectorConfig.Path.trim());
+            const pathResult = await this.evaluateSubtypeSelectorPath(
+                selectorConfig.Path.trim(),
+                (entityName, pkValue) => this.getSubtypePathTargetEntity(entityName, pkValue)
+            );
             if (pathResult != null && pathResult.trim() !== '') {
                 const trimmed = pathResult.trim();
                 const match = this.EntityInfo.ChildEntities.find(
@@ -1764,7 +1977,22 @@ export abstract class BaseEntity<T = unknown> {
         }
     }
 
-    private async evaluateSubtypeSelectorPath(path: string): Promise<string | null> {
+    /**
+     * Walks a `SubtypeSelector` path from this record to the column holding the subtype's entity
+     * name, and returns that column's value, or null when a hop's foreign key is empty, a target
+     * isn't found, or the terminal value is empty.
+     *
+     * @param path The dotted path, e.g. `ProductTypeID.ProductExtensionEntity`.
+     * @param findTarget Finds the record a foreign key points at. Create time passes a finder that
+     *   may query; load time passes one that reads engine caches only, so a hop missing from them
+     *   ends the walk with null instead of a query.
+     * @throws When the path doesn't fit this entity's metadata (a field isn't found, or a hop isn't
+     *   a foreign key).
+     */
+    private async evaluateSubtypeSelectorPath(
+        path: string,
+        findTarget: (entityName: string, pkValue: unknown) => BaseEntity | null | Promise<BaseEntity | null>
+    ): Promise<string | null> {
         const segments = path.split('.').map(s => s.trim()).filter(Boolean);
         if (segments.length === 0) return null;
 
@@ -1794,7 +2022,7 @@ export abstract class BaseEntity<T = unknown> {
                 );
             }
 
-            const targetEntity = await this.getSubtypePathTargetEntity(relatedEntityName, fkValue);
+            const targetEntity = await findTarget(relatedEntityName, fkValue);
             if (!targetEntity) {
                 return null;
             }
@@ -1828,21 +2056,10 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         // 1. Check BaseEngineRegistry for loaded cached entities
-        const cachedMatches = BaseEngineRegistry.Instance.FindCachedEntity(entityName);
-        if (cachedMatches && cachedMatches.length > 0) {
-            for (const match of cachedMatches) {
-                const found = match.records.find(r => {
-                    const firstPK = r.FirstPrimaryKey; // first-pk-ok: FK target — pkValue is one SubtypeSelector FK column's value
-                    if (firstPK) {
-                        return String(firstPK.Value).trim().toLowerCase() === String(pkValue).trim().toLowerCase();
-                    }
-                    return false;
-                });
-                if (found) {
-                    BaseEntity._subtypeLookupCache.set(cacheKey, found);
-                    return found;
-                }
-            }
+        const cached = BaseEntity.findSubtypePathTargetInEngineCache(entityName, pkValue);
+        if (cached) {
+            BaseEntity._subtypeLookupCache.set(cacheKey, cached);
+            return cached;
         }
 
         // 2. Fall back to loading via provider
@@ -1878,6 +2095,27 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         BaseEntity._subtypeLookupCache.set(cacheKey, null);
+        return null;
+    }
+
+    /**
+     * Finds the record a `SubtypeSelector` hop points at among the entity objects that loaded
+     * `BaseEngine` caches already hold. Never queries, and never reads the create path's memo, whose
+     * entries can outlive a change to the row: engine caches are kept current by entity events.
+     *
+     * @returns The cached record, or null when no loaded engine holds it as an entity object.
+     */
+    private static findSubtypePathTargetInEngineCache(entityName: string, pkValue: unknown): BaseEntity | null {
+        const target = String(pkValue);
+        for (const match of BaseEngineRegistry.Instance.FindCachedEntity(entityName)) {
+            const found = match.records.find(r => {
+                const firstPK = r.FirstPrimaryKey; // first-pk-ok: FK target — pkValue is one SubtypeSelector FK column's value
+                return firstPK ? UUIDsEqual(String(firstPK.Value), target) : false;
+            });
+            if (found) {
+                return found;
+            }
+        }
         return null;
     }
 
