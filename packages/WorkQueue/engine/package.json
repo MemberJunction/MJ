@@ -13,6 +13,10 @@
     "./aws": {
       "types": "./dist/aws/index.d.ts",
       "default": "./dist/aws/index.js"
+    },
+    "./azure": {
+      "types": "./dist/azure/index.d.ts",
+      "default": "./dist/azure/index.js"
     }
   },
   "files": [
@@ -34,6 +38,7 @@
     "@memberjunction/global": "6.1.0",
     "@memberjunction/sql-dialect": "6.1.0",
     "@memberjunction/work-queue-aws": "6.1.0",
+    "@memberjunction/work-queue-azure": "6.1.0",
     "@memberjunction/work-queue-base": "6.1.0",
     "@memberjunction/work-queue-core": "6.1.0"
   },

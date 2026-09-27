@@ -1,8 +1,9 @@
 import { readFile } from 'node:fs/promises';
 import { Args, Command, Flags } from '@oclif/core';
 import { WorkQueueEngine } from '@memberjunction/work-queue-engine';
-// Registers the 'AWS' transport driver factory and manifest enricher for this command only (work-queue 03 §0).
+// Registers the 'AWS' and 'Azure' transport driver factories and manifest enrichers for this command only (work-queue 03 §0).
 import '@memberjunction/work-queue-engine/aws';
+import '@memberjunction/work-queue-engine/azure';
 import { FormatBindingIssues, HasBindingErrors, ParseBindingImport } from '../../lib/work-queue/queue-format.js';
 import { OpenWorkQueueSession } from '../../lib/work-queue/queue-session.js';
 

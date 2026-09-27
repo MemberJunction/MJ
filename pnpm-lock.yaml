@@ -15444,6 +15444,9 @@ importers:
       '@memberjunction/work-queue-aws':
         specifier: 6.1.0
         version: link:../aws
+      '@memberjunction/work-queue-azure':
+        specifier: 6.1.0
+        version: link:../azure
       '@memberjunction/work-queue-base':
         specifier: 6.1.0
         version: link:../base

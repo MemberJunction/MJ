@@ -2,8 +2,9 @@ import { Command, Flags } from '@oclif/core';
 import { WorkQueueValidateBindingsOperation } from '@memberjunction/core-entities';
 import { FormatBindingIssues, HasBindingErrors, RequireOperationOutput } from '../../lib/work-queue/queue-format.js';
 import { OpenWorkQueueSession } from '../../lib/work-queue/queue-session.js';
-// Registers the 'AWS' transport driver factory and manifest enricher for this command only (work-queue 03 §0).
+// Registers the 'AWS' and 'Azure' transport driver factories and manifest enrichers for this command only (work-queue 03 §0).
 import '@memberjunction/work-queue-engine/aws';
+import '@memberjunction/work-queue-engine/azure';
 
 export default class QueueValidateBindings extends Command {
   static description = 'Validate work-queue topology and cloud bindings; exits 1 on any error';

@@ -14,6 +14,7 @@ Design and contract: `plans/work-queue-1/02-implementation-overview.md` and `03-
 | --- | --- |
 | Engine | `WorkQueueEngine` (facade over `WorkQueueEngineBase.Instance`; drivers, `Publish`/`PublishAs`, `GetDriver`, `OnDeadLettered`) |
 | Database transport | `DatabaseTransportDriverFactory`, `DatabaseTransportDriver`, `DatabaseTransportConsumer`, `DatabaseTransportOperator`, `DATABASE_TRANSPORT_CAPABILITIES` |
+| Cloud transports | `./aws` subpath: `AWSTransportDriverFactory`, `EnrichAwsManifest`, `ResolveAwsCredentials`; `./azure` subpath: `AzureTransportDriverFactory`, `EnrichAzureManifest`, `ResolveAzureCredential`. Imported only by server bootstraps and the cloud `mj queue` commands (03 §0, F12) |
 | SQL | `WorkQueuePublishSql`, `WorkQueueConsumeSql`, `WorkQueueOperatorSql` (one builder set for SQL Server and PostgreSQL, rendering calls to the `spWorkQueue*` procedures), `RunInWorkQueueTransaction`, `TryAcquireSweepLock` |
 | Publishing | `WorkQueuePublishCoordinator`, `DeduplicationLedger` |
 | Runtime | `WorkQueueHost`, `WorkQueueSweeper`, `BaseWorkHandler`, `ResolveWorkHandler`, `SharedProviderSource` |
