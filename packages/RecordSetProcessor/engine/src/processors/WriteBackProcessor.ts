@@ -12,7 +12,7 @@ import {
     RecordRef,
     RecordResult,
 } from '@memberjunction/record-set-processor-base';
-import { OutputMappingConfig, RunProvenance, applyOutputMapping } from '../writeBack';
+import { OutputMappingConfig, RunProvenance, ApplyOutputMapping } from '../writeBack';
 
 /** Wraps a processor and applies output-mapping write-back to each successful result. */
 export class WriteBackProcessor implements IRecordProcessor {
@@ -37,8 +37,13 @@ export class WriteBackProcessor implements IRecordProcessor {
         return this.outputMapping;
     }
 
-    public getWriteBackFields(): string[] {
+    public GetWriteBackFields(): string[] {
         return Object.keys(this.outputMapping.fields ?? {});
+    }
+
+    /** @deprecated Use {@link GetWriteBackFields}. */
+    public getWriteBackFields(): string[] {
+        return this.GetWriteBackFields();
     }
 
     public async ProcessRecord(record: RecordRef, context: RecordProcessorContext): Promise<RecordResult> {
@@ -63,7 +68,7 @@ export class WriteBackProcessor implements IRecordProcessor {
                     context
                 );
             }
-            const writeBack = await applyOutputMapping({
+            const writeBack = await ApplyOutputMapping({
                 outputMapping: this.outputMapping,
                 result: result.ResultPayload,
                 record,
@@ -124,7 +129,7 @@ export class WriteBackProcessor implements IRecordProcessor {
                             context
                         );
                     }
-                    const writeBack = await applyOutputMapping({
+                    const writeBack = await ApplyOutputMapping({
                         outputMapping: this.outputMapping,
                         result: res.ResultPayload,
                         record,

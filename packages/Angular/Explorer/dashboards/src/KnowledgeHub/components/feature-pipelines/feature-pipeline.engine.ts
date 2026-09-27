@@ -90,8 +90,8 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     return super.getInstance<FeaturePipelineEngine>();
   }
 
-  private _RecordProcesses: MJRecordProcessEntity[] = [];
-  private _ProcessRuns: MJProcessRunEntity[] = [];
+  private _recordProcesses: MJRecordProcessEntity[] = [];
+  private _processRuns: MJProcessRunEntity[] = [];
 
   /**
    * Lazy-load the Record Process + recent Process Run caches. Safe to call from
@@ -105,8 +105,8 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     provider?: IMetadataProvider,
   ): Promise<void> {
     const c: Partial<BaseEnginePropertyConfig>[] = [
-      { Type: 'entity', EntityName: 'MJ: Record Processes', PropertyName: '_RecordProcesses', OrderBy: 'Name' },
-      { Type: 'entity', EntityName: 'MJ: Process Runs', PropertyName: '_ProcessRuns', OrderBy: '__mj_CreatedAt DESC' },
+      { Type: 'entity', EntityName: 'MJ: Record Processes', PropertyName: '_recordProcesses', OrderBy: 'Name' },
+      { Type: 'entity', EntityName: 'MJ: Process Runs', PropertyName: '_processRuns', OrderBy: '__mj_CreatedAt DESC' },
     ];
     await super.Load(c, provider ?? Metadata.Provider, forceRefresh, contextUser);
   }
@@ -115,22 +115,22 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
 
   /** Every cached Record Process categorized as a Feature Pipeline. */
   public get Pipelines(): MJRecordProcessEntity[] {
-    return (this._RecordProcesses ?? []).filter((rp) => FeaturePipelineEngine.isFeaturePipeline(rp));
+    return (this._recordProcesses ?? []).filter((rp) => FeaturePipelineEngine.isFeaturePipeline(rp));
   }
 
   /** All cached Process Run headers (newest first; all entities — callers filter). */
   public get Runs(): MJProcessRunEntity[] {
-    return this._ProcessRuns ?? [];
+    return this._processRuns ?? [];
   }
 
   /** Reactive stream of the raw Record Processes — re-emits on any save/delete/remote-invalidate. */
   public get Pipelines$(): Observable<MJRecordProcessEntity[]> {
-    return this.ObserveProperty<MJRecordProcessEntity>('_RecordProcesses');
+    return this.ObserveProperty<MJRecordProcessEntity>('_recordProcesses');
   }
 
   /** Reactive stream of the Process Run headers. */
   public get Runs$(): Observable<MJProcessRunEntity[]> {
-    return this.ObserveProperty<MJProcessRunEntity>('_ProcessRuns');
+    return this.ObserveProperty<MJProcessRunEntity>('_processRuns');
   }
 
   // ---- Projection ----

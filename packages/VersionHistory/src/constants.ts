@@ -36,8 +36,13 @@ export const escapeSqlString = (value: string | null | undefined): string => Esc
 /**
  * Build a safe SQL equality filter: FieldName = 'escapedValue'
  */
-export function sqlEquals(fieldName: string, value: string): string {
+export function SqlEquals(fieldName: string, value: string): string {
     return `${fieldName} = '${EscapeSQLString(value)}'`;
+}
+
+/** @deprecated Use {@link SqlEquals}. */
+export function sqlEquals(fieldName: string, value: string): string {
+    return SqlEquals(fieldName, value);
 }
 
 /**
@@ -49,24 +54,39 @@ export function sqlEquals(fieldName: string, value: string): string {
  * match, escape the metacharacters and add `ESCAPE '\'` (see `escapeLikeValue()` in
  * `@memberjunction/core`, `generic/runQuerySQLFilterImplementations.ts`).
  */
-export function sqlContains(fieldName: string, value: string): string {
+export function SqlContains(fieldName: string, value: string): string {
     return `${fieldName} LIKE '%${EscapeSQLString(value)}%'`;
+}
+
+/** @deprecated Use {@link SqlContains}. */
+export function sqlContains(fieldName: string, value: string): string {
+    return SqlContains(fieldName, value);
 }
 
 /**
  * Build a safe SQL IN filter: FieldName IN ('a','b','c')
  */
-export function sqlIn(fieldName: string, values: string[]): string {
+export function SqlIn(fieldName: string, values: string[]): string {
     const escaped = values.map(v => `'${EscapeSQLString(v)}'`).join(', ');
     return `${fieldName} IN (${escaped})`;
+}
+
+/** @deprecated Use {@link SqlIn}. */
+export function sqlIn(fieldName: string, values: string[]): string {
+    return SqlIn(fieldName, values);
 }
 
 /**
  * Build a safe SQL NOT IN filter: FieldName NOT IN ('a','b','c')
  */
-export function sqlNotIn(fieldName: string, values: string[]): string {
+export function SqlNotIn(fieldName: string, values: string[]): string {
     const escaped = values.map(v => `'${EscapeSQLString(v)}'`).join(', ');
     return `${fieldName} NOT IN (${escaped})`;
+}
+
+/** @deprecated Use {@link SqlNotIn}. */
+export function sqlNotIn(fieldName: string, values: string[]): string {
+    return SqlNotIn(fieldName, values);
 }
 
 // ---------------------------------------------------------------------------
@@ -79,11 +99,19 @@ import { CompositeKey, EntityInfo } from '@memberjunction/core';
  * Build a CompositeKey from entity metadata and a record data object.
  * Shared utility to avoid duplication across Walker and SnapshotBuilder.
  */
-export function buildCompositeKeyFromRecord(
+export function BuildCompositeKeyFromRecord(
     entityInfo: EntityInfo,
     record: Record<string, unknown>
 ): CompositeKey {
     return CompositeKey.FromEntityRecord(entityInfo, record);
+}
+
+/** @deprecated Use {@link BuildCompositeKeyFromRecord}. */
+export function buildCompositeKeyFromRecord(
+    entityInfo: EntityInfo,
+    record: Record<string, unknown>
+): CompositeKey {
+    return BuildCompositeKeyFromRecord(entityInfo, record);
 }
 
 /**
@@ -91,11 +119,19 @@ export function buildCompositeKeyFromRecord(
  * single-column key (any column name) or the `Field1|Value1||Field2|Value2` segment Record
  * Changes / Version Label Items persist, so composite keys load too.
  */
-export function buildPrimaryKeyForLoad(
+export function BuildPrimaryKeyForLoad(
     entityInfo: EntityInfo,
     value: string
 ): CompositeKey {
     return CompositeKey.FromURLSegment(entityInfo, value);
+}
+
+/** @deprecated Use {@link BuildPrimaryKeyForLoad}. */
+export function buildPrimaryKeyForLoad(
+    entityInfo: EntityInfo,
+    value: string
+): CompositeKey {
+    return BuildPrimaryKeyForLoad(entityInfo, value);
 }
 
 /**
@@ -103,8 +139,13 @@ export function buildPrimaryKeyForLoad(
  * Only for MJ system entities (VersionLabel, VersionLabelItem, etc.)
  * where we control the schema and know the PK is always 'ID'.
  */
-export function buildIdKey(id: string): CompositeKey {
+export function BuildIdKey(id: string): CompositeKey {
     return CompositeKey.FromID(id); // first-pk-ok: documented for MJ system entities only (Version Labels / Label Items / Restores / Record Changes), whose key is ID
+}
+
+/** @deprecated Use {@link BuildIdKey}. */
+export function buildIdKey(id: string): CompositeKey {
+    return BuildIdKey(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -118,14 +159,14 @@ import { BaseEntity, IMetadataProvider, Metadata, RunView, UserInfo, LogError } 
  * Returns parsed JSON or null on failure.
  * Shared by DiffEngine and RestoreEngine.
  */
-export async function loadRecordChangeSnapshot(
+export async function LoadRecordChangeSnapshot(
     recordChangeId: string,
     contextUser: UserInfo
 ): Promise<Record<string, unknown> | null> {
     const rv = new RunView();
     const result = await rv.RunView<Record<string, unknown>>({
         EntityName: ENTITY_RECORD_CHANGES,
-        ExtraFilter: sqlEquals('ID', recordChangeId),
+        ExtraFilter: SqlEquals('ID', recordChangeId),
         // 'EntityID' is required, not decorative: field-level security projects a Record Change's
         // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot be
         // resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
@@ -158,11 +199,19 @@ export async function loadRecordChangeSnapshot(
     }
 }
 
+/** @deprecated Use {@link LoadRecordChangeSnapshot}. */
+export async function loadRecordChangeSnapshot(
+    recordChangeId: string,
+    contextUser: UserInfo
+): Promise<Record<string, unknown> | null> {
+    return LoadRecordChangeSnapshot(recordChangeId, contextUser);
+}
+
 /**
  * Load a strongly-typed entity by its ID using InnerLoad with the entity's actual PK name.
  * Returns null if not found or on error.
  */
-export async function loadEntityById<T extends BaseEntity = BaseEntity>(
+export async function LoadEntityById<T extends BaseEntity = BaseEntity>(
     entityName: string,
     id: string,
     contextUser: UserInfo,
@@ -176,8 +225,18 @@ export async function loadEntityById<T extends BaseEntity = BaseEntity>(
     }
 
     const entity = await md.GetEntityObject<T>(entityName, contextUser);
-    const key = buildPrimaryKeyForLoad(entityInfo, id);
+    const key = BuildPrimaryKeyForLoad(entityInfo, id);
     const loaded = await entity.InnerLoad(key);
     if (!loaded) return null;
     return entity;
+}
+
+/** @deprecated Use {@link LoadEntityById}. */
+export async function loadEntityById<T extends BaseEntity = BaseEntity>(
+    entityName: string,
+    id: string,
+    contextUser: UserInfo,
+    provider?: IMetadataProvider
+): Promise<T | null> {
+    return LoadEntityById(entityName, id, contextUser, provider);
 }

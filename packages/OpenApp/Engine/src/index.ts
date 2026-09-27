@@ -7,7 +7,7 @@
  */
 
 // Manifest schema and validation
-export { mjAppManifestSchema } from './manifest/manifest-schema.js';
+export { MjAppManifestSchema, mjAppManifestSchema } from './manifest/manifest-schema.js';
 export type { MJAppManifest, ManifestPackageEntry, PackageRole } from './manifest/manifest-schema.js';
 export { LoadManifestFromFile, ParseAndValidateManifest, ValidateManifestObject } from './manifest/manifest-loader.js';
 export type { ManifestLoadResult } from './manifest/manifest-loader.js';
@@ -77,17 +77,17 @@ export type { SchemaOperationResult, SchemaNameValidation, SchemaNameRule } from
 
 export { RunAppMigrations } from './install/migration-runner.js';
 export {
-    buildFieldProcExcludedSchemaNames,
-    buildOpenAppRefreshMetadataSQL,
-    buildOtherEntitySchemasQuery,
-    executeOpenAppMetadataRefresh,
-    isOpenAppSchema,
-    normalizeSchema,
+    BuildFieldProcExcludedSchemaNames, buildFieldProcExcludedSchemaNames,
+    BuildOpenAppRefreshMetadataSQL, buildOpenAppRefreshMetadataSQL,
+    BuildOtherEntitySchemasQuery, buildOtherEntitySchemasQuery,
+    ExecuteOpenAppMetadataRefresh, executeOpenAppMetadataRefresh,
+    IsOpenAppSchema, isOpenAppSchema,
+    NormalizeSchema, normalizeSchema,
 } from './install/open-app-metadata-refresh.js';
 export type { RefreshDatabaseConfig } from './install/open-app-metadata-refresh.js';
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
-export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, BumpPrefixedDependencies, detectPackageManager, hasPnpmCatalog } from './install/package-manager.js';
+export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
 export type { PackageManagerOptions, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
 
 export {
@@ -127,11 +127,11 @@ export type { OrchestratorContext } from './install/install-orchestrator.js';
 
 // FK-graph teardown (Solution 1) + migration-declared Application extraction (Solution 2)
 export {
-    buildEntityTeardownPlan,
+    BuildEntityTeardownPlan, buildEntityTeardownPlan,
     EnumerateMjEntityFkGraph,
     ReportTeardownPlan,
     ExecTeardownBatch,
     RunFkGraphTeardown
 } from './install/entity-teardown.js';
 export type { FkEdge, TeardownPlanItem, TeardownPlan } from './install/entity-teardown.js';
-export { extractApplicationIds } from './install/migration-application-ids.js';
+export { ExtractApplicationIds, extractApplicationIds } from './install/migration-application-ids.js';

@@ -71,7 +71,13 @@ function createHarness(): Harness {
   open['windowStore'] = windowStore;
   open['currentUser'] = { ID: 'USER-1' };
   open['cdr'] = { detectChanges: vi.fn() };
-  open['realtimeConversationReady'] = { emit: realtimeConversationReadyEmit };
+  // One stub under both names, matching the component's own shape: the deprecated
+  // `realtimeConversationReady` @Output is the SAME EventEmitter as the canonical
+  // `RealtimeConversationReady`, and only the canonical one is ever emitted on. Object.create
+  // skips the field initialisers, so the alias has to be wired here rather than inherited.
+  const readyEmitter = { emit: realtimeConversationReadyEmit };
+  open['RealtimeConversationReady'] = readyEmitter;
+  open['realtimeConversationReady'] = readyEmitter;
   // Stub the private peripheral-data reload so the timeline-refresh test stays focused.
   open['loadPeripheralData'] = loadPeripheralData;
   open['lastLoadedConversationId'] = 'STALE';
@@ -128,7 +134,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
   it('reloads the active conversation details so the just-recorded session appears', async () => {
     (h.component as unknown as Record<string, unknown>)['_conversationId'] = 'CONV-ACTIVE';
     // conversationId getter reads _conversationId
-    Object.defineProperty(h.component, 'conversationId', {
+    Object.defineProperty(h.component, 'ConversationId', {
       get() {
         return 'CONV-ACTIVE';
       },
@@ -145,7 +151,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
   });
 
   it('is a safe no-op when no conversation is open', async () => {
-    Object.defineProperty(h.component, 'conversationId', {
+    Object.defineProperty(h.component, 'ConversationId', {
       get() {
         return null;
       },
@@ -159,7 +165,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
   });
 
   it('onRealtimeSessionEnded reloads the timeline AND emits ready for a session-created conversation', () => {
-    Object.defineProperty(h.component, 'conversationId', {
+    Object.defineProperty(h.component, 'ConversationId', {
       get() {
         return 'CONV-ACTIVE';
       },
@@ -176,7 +182,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
   });
 
   it('onRealtimeSessionEnded still refreshes the timeline when NO conversation was created (existing-conversation call)', () => {
-    Object.defineProperty(h.component, 'conversationId', {
+    Object.defineProperty(h.component, 'ConversationId', {
       get() {
         return 'CONV-ACTIVE';
       },

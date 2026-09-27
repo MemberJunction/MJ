@@ -3,7 +3,7 @@ export { SQLParser } from './sql-parser.js';
 // Re-export SQLParserDialect so consumers can import from either sql-parser or sql-dialect
 export type { SQLParserDialect } from '@memberjunction/sql-dialect';
 // ORDER BY analysis (shared between composition and paging engines)
-export { AnalyzeTopLevelOrderBy, HasTopLevelOrderBy, ExtractOrderBy, findOrderByStatement, isOrderByLegalInCTE } from './orderByAnalyzer.js';
+export { AnalyzeTopLevelOrderBy, HasTopLevelOrderBy, ExtractOrderBy, FindOrderByStatement, findOrderByStatement, IsOrderByLegalInCTE, isOrderByLegalInCTE } from './orderByAnalyzer.js';
 export type { OrderByAnalysis } from './orderByAnalyzer.js';
 // Structural parser and composition IR
 export { ParseToIR, RenderIR } from './structuralParser.js';

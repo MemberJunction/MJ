@@ -9,12 +9,12 @@ export class SummarizeParams extends ChatParams {
 }
 
 export class SummarizeResult extends BaseResult {
-    public get text(): string {
+    public get text(): string {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
         return this._text;
     }
     private _text: string;
 
-    summaryText: string
+    summaryText: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
     constructor (text: ChatMessageContent, summaryText: string, success: boolean, startTime: Date, endTime: Date) {
         super(success, startTime, endTime);
 

@@ -19,7 +19,7 @@
  * where there is no DOM (server-side rendering, unit tests on the node preset),
  * so callers never have to guard.
  */
-export function setReadinessBeacon(ready: boolean, root?: HTMLElement): void {
+export function SetReadinessBeacon(ready: boolean, root?: HTMLElement): void {
     const el = root ?? (typeof document === 'undefined' ? undefined : document.documentElement);
     if (!el) {
         return;
@@ -32,4 +32,9 @@ export function setReadinessBeacon(ready: boolean, root?: HTMLElement): void {
         // `[data-mj-ready]`.
         delete el.dataset.mjReady;
     }
+}
+
+/** @deprecated Use {@link SetReadinessBeacon}. */
+export function setReadinessBeacon(ready: boolean, root?: HTMLElement): void {
+    return SetReadinessBeacon(ready, root);
 }

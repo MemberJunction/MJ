@@ -39,13 +39,13 @@ import { type UserInfo, type IMetadataProvider, Metadata } from '@memberjunction
 import type { MJRecordProcessEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import {
   ML_MODEL_WORK_TYPE,
-  applyScope,
-  modelConfiguration,
-  writeBackOutputMapping,
-  createScoringBinding,
-  countScopeSelectors,
-  resolveTargetEntityID,
-  isNonEmpty,
+  ApplyScope,
+  ModelConfiguration,
+  WriteBackOutputMapping,
+  CreateScoringBinding,
+  CountScopeSelectors,
+  ResolveTargetEntityID,
+  IsNonEmpty,
   type ScoringValueKind,
   type ScoringScope,
 } from './scoring-process-shared';
@@ -142,13 +142,13 @@ const HELPER_NAME = 'createScoringProcess';
  *   the cause). The binding save is intentionally fail-loud (not swallowed): a saved RP
  *   without a binding would run invisibly to the lineage UX, so we surface the inconsistency.
  */
-export async function createScoringProcess(
+export async function CreateScoringProcess(
   opts: CreateScoringProcessOptions,
 ): Promise<CreateScoringProcessResult> {
   validateOptions(opts);
 
   const provider = opts.provider ?? Metadata.Provider;
-  const entityID = resolveTargetEntityID(opts.targetEntityName, provider, HELPER_NAME);
+  const entityID = ResolveTargetEntityID(opts.targetEntityName, provider, HELPER_NAME);
 
   const rp = await provider.GetEntityObject<MJRecordProcessEntity>('MJ: Record Processes', opts.contextUser);
   rp.NewRecord();
@@ -162,8 +162,8 @@ export async function createScoringProcess(
   }
 
   // Lineage binding only in write-back mode — generic output has no column to bind.
-  const binding = isNonEmpty(opts.outputField)
-    ? await createScoringBinding(
+  const binding = IsNonEmpty(opts.outputField)
+    ? await CreateScoringBinding(
         opts.modelId,
         opts.outputField,
         rp.ID,
@@ -175,6 +175,13 @@ export async function createScoringProcess(
       )
     : null;
   return { recordProcess: rp, binding };
+}
+
+/** @deprecated Use {@link CreateScoringProcess}. */
+export async function createScoringProcess(
+  opts: CreateScoringProcessOptions,
+): Promise<CreateScoringProcessResult> {
+  return CreateScoringProcess(opts);
 }
 
 // ----- field population --------------------------------------------------------
@@ -202,13 +209,13 @@ function applyRecordProcessFields(
   // it, so Set() is the legitimate, documented exception (same as PS2-1's path).
   rp.Set('WorkType', ML_MODEL_WORK_TYPE);
 
-  applyScope(rp, opts.scope);
+  ApplyScope(rp, opts.scope);
 
-  rp.Configuration = modelConfiguration(opts.modelId, opts.primaryKeyField);
+  rp.Configuration = ModelConfiguration(opts.modelId, opts.primaryKeyField);
   // Write-back mode only: map the prediction into the target column. Generic mode
   // (no outputField) leaves OutputMapping unset — predictions land in run history only.
-  if (isNonEmpty(opts.outputField)) {
-    rp.OutputMapping = writeBackOutputMapping(opts.outputField, opts.valueKind);
+  if (IsNonEmpty(opts.outputField)) {
+    rp.OutputMapping = WriteBackOutputMapping(opts.outputField, opts.valueKind);
   }
 
   // On-demand only: enable run-now, leave the schedule off (no cron → no owned job).
@@ -226,7 +233,7 @@ function applyRecordProcessFields(
  * `Score Memberships with model <id> → RenewalScore (On Demand)`).
  */
 function defaultName(opts: CreateScoringProcessOptions): string {
-  const writeBack = isNonEmpty(opts.outputField) ? ` → ${opts.outputField}` : '';
+  const writeBack = IsNonEmpty(opts.outputField) ? ` → ${opts.outputField}` : '';
   return `Score ${opts.targetEntityName} with model ${opts.modelId}${writeBack} (On Demand)`;
 }
 
@@ -238,13 +245,13 @@ function defaultName(opts: CreateScoringProcessOptions): string {
  * (predictions recorded in run history only; see {@link createScoringProcess}).
  */
 function validateOptions(opts: CreateScoringProcessOptions): void {
-  if (!isNonEmpty(opts.modelId)) {
+  if (!IsNonEmpty(opts.modelId)) {
     throw new Error(`${HELPER_NAME}: \`modelId\` is required.`);
   }
-  if (!isNonEmpty(opts.targetEntityName)) {
+  if (!IsNonEmpty(opts.targetEntityName)) {
     throw new Error(`${HELPER_NAME}: \`targetEntityName\` is required.`);
   }
-  if (countScopeSelectors(opts.scope) !== 1) {
+  if (CountScopeSelectors(opts.scope) !== 1) {
     throw new Error(
       `${HELPER_NAME}: \`scope\` must populate exactly one of: filter, viewId, listId, all.`,
     );

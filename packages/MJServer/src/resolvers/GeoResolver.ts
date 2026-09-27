@@ -98,7 +98,7 @@ export class GeoResolver extends ResolverBase {
     /**
      * Lazily load all countries into memory (~250 records).
      */
-    private async GetCountries(contextUser: UserInfo | undefined): Promise<MJCountryEntity[]> {
+    private async getCountries(contextUser: UserInfo | undefined): Promise<MJCountryEntity[]> {
         if (this._countries) return this._countries;
         const rv = new RunView();
         const result = await rv.RunView<MJCountryEntity>({
@@ -114,7 +114,7 @@ export class GeoResolver extends ResolverBase {
     /**
      * Lazily load all state/provinces into memory (~5000 records).
      */
-    private async GetStates(contextUser: UserInfo | undefined): Promise<MJStateProvinceEntity[]> {
+    private async getStates(contextUser: UserInfo | undefined): Promise<MJStateProvinceEntity[]> {
         if (this._states) return this._states;
         const rv = new RunView();
         const result = await rv.RunView<MJStateProvinceEntity>({
@@ -138,7 +138,7 @@ export class GeoResolver extends ResolverBase {
     ): Promise<GeoResolveResult> {
         try {
             const user = this.GetUserFromPayload(userPayload);
-            const countries = await this.GetCountries(user);
+            const countries = await this.getCountries(user);
             const normalized = input.trim().toLowerCase();
 
             // 1. Exact match on Name, ISO2, ISO3
@@ -204,7 +204,7 @@ export class GeoResolver extends ResolverBase {
                 return { Success: false, ErrorMessage: `Could not resolve country "${countryInput}"` };
             }
 
-            const states = await this.GetStates(user);
+            const states = await this.getStates(user);
             const countryStates = states.filter(s => s.CountryID === countryResult.CountryID);
             const normalized = stateInput.trim().toLowerCase();
 

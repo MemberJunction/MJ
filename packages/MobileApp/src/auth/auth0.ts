@@ -31,10 +31,10 @@ const STORE_KEY = 'mj-auth0-tokens';
 
 /** Persisted Auth0 token bundle. `expiresAt` is epoch-ms of the idToken's `exp` (0 if unknown). */
 export type Auth0Tokens = {
-    idToken: string;
-    accessToken: string;
-    refreshToken?: string;
-    expiresAt: number;
+    idToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    accessToken: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    refreshToken?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+    expiresAt: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 };
 
 /**
@@ -43,6 +43,11 @@ export type Auth0Tokens = {
  */
 export function GetAuth0RedirectUri(): string {
     return makeRedirectUri({ scheme: 'mjmobile', path: 'auth' });
+}
+
+/** @deprecated Use {@link GetAuth0RedirectUri}. */
+export function getAuth0RedirectUri(): string {
+    return GetAuth0RedirectUri();
 }
 
 /**
@@ -56,6 +61,11 @@ export function GetAuth0Discovery(): DiscoveryDocument {
         tokenEndpoint: `https://${domain}/oauth/token`,
         endSessionEndpoint: `https://${domain}/v2/logout`,
     };
+}
+
+/** @deprecated Use {@link GetAuth0Discovery}. */
+export function getAuth0Discovery(): DiscoveryDocument {
+    return GetAuth0Discovery();
 }
 
 /**
@@ -113,9 +123,19 @@ export async function ExchangeAuth0Code(code: string, codeVerifier: string): Pro
     return tokens;
 }
 
+/** @deprecated Use {@link ExchangeAuth0Code}. */
+export async function exchangeAuth0Code(code: string, codeVerifier: string): Promise<Auth0Tokens> {
+    return ExchangeAuth0Code(code, codeVerifier);
+}
+
 /** Persist the token bundle to expo-secure-store (keychain on iOS). */
 export async function PersistAuth0Tokens(tokens: Auth0Tokens): Promise<void> {
     await SecureStore.setItemAsync(STORE_KEY, JSON.stringify(tokens));
+}
+
+/** @deprecated Use {@link PersistAuth0Tokens}. */
+export async function persistAuth0Tokens(tokens: Auth0Tokens): Promise<void> {
+    return PersistAuth0Tokens(tokens);
 }
 
 /**
@@ -131,9 +151,19 @@ export async function LoadAuth0Tokens(): Promise<Auth0Tokens | null> {
     }
 }
 
+/** @deprecated Use {@link LoadAuth0Tokens}. */
+export async function loadAuth0Tokens(): Promise<Auth0Tokens | null> {
+    return LoadAuth0Tokens();
+}
+
 /** Delete the persisted token bundle from secure-store (best-effort; swallows errors). */
 export async function ClearAuth0Tokens(): Promise<void> {
     await SecureStore.deleteItemAsync(STORE_KEY).catch(() => undefined);
+}
+
+/** @deprecated Use {@link ClearAuth0Tokens}. */
+export async function clearAuth0Tokens(): Promise<void> {
+    return ClearAuth0Tokens();
 }
 
 /**
@@ -160,6 +190,11 @@ export async function RefreshAuth0Tokens(): Promise<Auth0Tokens> {
     return tokens;
 }
 
+/** @deprecated Use {@link RefreshAuth0Tokens}. */
+export async function refreshAuth0Tokens(): Promise<Auth0Tokens> {
+    return RefreshAuth0Tokens();
+}
+
 /**
  * Return a currently-valid Auth0 idToken, transparently refreshing if the
  * stored token is expired or within 60s of expiry. This is the function wired
@@ -178,6 +213,11 @@ export async function GetValidAuth0IdToken(): Promise<string> {
     return current.idToken;
 }
 
+/** @deprecated Use {@link GetValidAuth0IdToken}. */
+export async function getValidAuth0IdToken(): Promise<string> {
+    return GetValidAuth0IdToken();
+}
+
 /**
  * Whether a bundle should be treated as expired (missing, or within 60s of
  * `expiresAt`). Unknown expiry (`expiresAt === 0`) is treated as NOT expired —
@@ -189,4 +229,9 @@ export function IsAuth0Expired(tokens: Auth0Tokens | null): boolean {
     if (!tokens) return true;
     if (!tokens.expiresAt) return false;
     return tokens.expiresAt - Date.now() < 60_000;
+}
+
+/** @deprecated Use {@link IsAuth0Expired}. */
+export function isAuth0Expired(tokens: Auth0Tokens | null): boolean {
+    return IsAuth0Expired(tokens);
 }

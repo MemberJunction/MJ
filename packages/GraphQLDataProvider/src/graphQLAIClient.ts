@@ -528,7 +528,7 @@ export class GraphQLAIClient {
     ): Promise<ExecuteAgentResult> {
         let requestAcknowledged = false;
         try {
-            const mutation = this.buildConversationDetailMutation();
+            const mutation = this.buildConversationDetailMutation(params.agentHistoryFrom != null);
             const variables = this.prepareConversationDetailVariables(params);
 
             return await FireAndForgetHelper.Execute<ExecuteAgentResult>({
@@ -566,8 +566,15 @@ export class GraphQLAIClient {
 
     /**
      * Build the RunAIAgentFromConversationDetail mutation document.
+     *
+     * @param includeAgentHistoryFrom Whether to declare and pass `agentHistoryFrom`. It is left out
+     * of the document unless the caller set it: GraphQL validates every argument a document names,
+     * so a server that predates the argument would reject the whole mutation even with the
+     * variable unset.
      */
-    private buildConversationDetailMutation(): string {
+    private buildConversationDetailMutation(includeAgentHistoryFrom: boolean): string {
+        const historyFromVariable = includeAgentHistoryFrom ? ',\n                $agentHistoryFrom: String' : '';
+        const historyFromArgument = includeAgentHistoryFrom ? ',\n                    agentHistoryFrom: $agentHistoryFrom' : '';
         return gql`
             mutation RunAIAgentFromConversationDetail(
                 $conversationDetailId: String!,
@@ -585,7 +592,7 @@ export class GraphQLAIClient {
                 $createNotification: Boolean,
                 $sourceArtifactId: String,
                 $sourceArtifactVersionId: String,
-                $fireAndForget: Boolean
+                $fireAndForget: Boolean${historyFromVariable}
             ) {
                 RunAIAgentFromConversationDetail(
                     conversationDetailId: $conversationDetailId,
@@ -603,7 +610,7 @@ export class GraphQLAIClient {
                     createNotification: $createNotification,
                     sourceArtifactId: $sourceArtifactId,
                     sourceArtifactVersionId: $sourceArtifactVersionId,
-                    fireAndForget: $fireAndForget
+                    fireAndForget: $fireAndForget${historyFromArgument}
                 ) {
                     success
                     errorMessage
@@ -643,6 +650,7 @@ export class GraphQLAIClient {
         if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
         if (params.sourceArtifactId !== undefined) variables.sourceArtifactId = params.sourceArtifactId;
         if (params.sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = params.sourceArtifactVersionId;
+        if (params.agentHistoryFrom != null) variables.agentHistoryFrom = params.agentHistoryFrom.toISOString();
 
         return variables;
     }
@@ -1490,11 +1498,11 @@ export interface VectorizeEntityResult {
 /** Parameters for FetchEntityVectors */
 export interface FetchEntityVectorsParams {
     /** The ID of the EntityDocument whose vectors to fetch */
-    entityDocumentID: string;
+    entityDocumentID: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Maximum number of vectors to return (default 1000) */
-    maxRecords?: number;
+    maxRecords?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
     /** Optional additional filter string */
-    filter?: string;
+    filter?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** A single vector record with its embedding and metadata */
@@ -1861,6 +1869,15 @@ export interface RunAIAgentFromConversationDetailParams {
      * Source artifact version ID for versioning
      */
     sourceArtifactVersionId?: string;
+
+    /**
+     * The first moment of the conversation this run may read. When set, the server loads the
+     * agent's history from there and skips its summary of earlier messages.
+     *
+     * Sent only when set: the argument is left out of the mutation document entirely otherwise,
+     * so a server that predates it (and would reject an unknown argument) keeps working.
+     */
+    agentHistoryFrom?: Date | null; // case-violation-ok-legacy-back-compat: mirrors the mutation's `agentHistoryFrom` argument, like every other member of this interface
 
     /**
      * Optional callback for progress updates

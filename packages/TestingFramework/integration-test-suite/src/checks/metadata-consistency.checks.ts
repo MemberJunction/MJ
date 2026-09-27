@@ -40,7 +40,7 @@ import type sql from 'mssql';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { hasFullCatalogVisibility } from './catalog-visibility';
+import { HasFullCatalogVisibility } from './catalog-visibility';
 
 /**
  * MC6 ratchet ceiling — the number of core-schema columns that today carry no MS_Description.
@@ -107,7 +107,7 @@ async function poolOrSkip(ctx: IntegrationCheckContext, checkId: string): Promis
         console.log(`      → ${checkId} skipped: no mssql pool on this transport (PostgreSQL / client bootstrap)`);
         return null;
     }
-    if (!(await hasFullCatalogVisibility(ctx.Pool))) {
+    if (!(await HasFullCatalogVisibility(ctx.Pool))) {
         console.log(`      → ${checkId} skipped: the login lacks VIEW DEFINITION — catalog audit needs a privileged (db_owner/sa) connection`);
         return null;
     }

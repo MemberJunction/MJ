@@ -22,14 +22,14 @@ import { ComputerUseTrace } from '@memberjunction/computer-use';
 
 /** Outcome of a {@link saveScript} call. */
 export interface ScriptSaveResult {
-    saved: boolean;
+    Saved: boolean;
     /**
      * Which slot the script landed in. `pending` means it is waiting for review
      * and replay is still using the previously promoted script.
      */
-    slot?: 'promoted' | 'pending';
+    Slot?: 'promoted' | 'pending';
     /** Why the save failed, when it did — from `LatestResult.CompleteMessage`. */
-    error?: string;
+    error?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
 /**
@@ -39,7 +39,7 @@ export interface ScriptSaveResult {
  * The return needs no cast: `MJTestEntity_IReplayScript` and `ComputerUseTrace`
  * are held to one shape by `__tests__/script-store.test-d.ts`.
  */
-export function loadScript(test: MJTestEntity): ComputerUseTrace | null {
+export function LoadScript(test: MJTestEntity): ComputerUseTrace | null {
     const script = readConfiguration(test)?.ReplayScript;
     if (!script || typeof script.TestId !== 'string' || !Array.isArray(script.Steps)) {
         return null;
@@ -53,13 +53,23 @@ export function loadScript(test: MJTestEntity): ComputerUseTrace | null {
     return structuredClone(script);
 }
 
+/** @deprecated Use {@link LoadScript}. */
+export function loadScript(test: MJTestEntity): ComputerUseTrace | null {
+    return LoadScript(test);
+}
+
 /**
  * Whether this test lets a failed replay re-derive the goal with the model and
  * overwrite its script. Defaults to true, so a test that says nothing behaves as
  * it always has; `false` makes the divergence the result instead.
  */
-export function allowsLLMFallback(test: MJTestEntity): boolean {
+export function AllowsLLMFallback(test: MJTestEntity): boolean {
     return readConfiguration(test)?.AllowLLMFallback !== false;
+}
+
+/** @deprecated Use {@link AllowsLLMFallback}. */
+export function allowsLLMFallback(test: MJTestEntity): boolean {
+    return AllowsLLMFallback(test);
 }
 
 /**
@@ -71,7 +81,7 @@ export function allowsLLMFallback(test: MJTestEntity): boolean {
  * Reports the failure rather than throwing it — a script that fails to save costs
  * the next run a re-record, which is not worth failing a green test over.
  */
-export async function saveScript(test: MJTestEntity, script: ComputerUseTrace): Promise<ScriptSaveResult> {
+export async function SaveScript(test: MJTestEntity, script: ComputerUseTrace): Promise<ScriptSaveResult> {
     // The raw column as it stands, so a failed save can put it back. The entity is
     // cached and reused by the next run in this process, so leaving the unsaved
     // script on it means replaying a script that never reached the database.
@@ -85,14 +95,19 @@ export async function saveScript(test: MJTestEntity, script: ComputerUseTrace): 
             ? { ...current, PendingReplayScript: script }
             : { ...current, ReplayScript: script };
         if (await test.Save()) {
-            return { saved: true, slot };
+            return { Saved: true, Slot: slot };
         }
         restore();
-        return { saved: false, error: test.LatestResult?.CompleteMessage ?? 'Save() returned false with no result detail' };
+        return { Saved: false, error: test.LatestResult?.CompleteMessage ?? 'Save() returned false with no result detail' };
     } catch (e) {
         restore();
-        return { saved: false, error: e instanceof Error ? e.message : String(e) };
+        return { Saved: false, error: e instanceof Error ? e.message : String(e) };
     }
+}
+
+/** @deprecated Use {@link SaveScript}. */
+export async function saveScript(test: MJTestEntity, script: ComputerUseTrace): Promise<ScriptSaveResult> {
+    return SaveScript(test, script);
 }
 
 /**

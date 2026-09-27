@@ -5,7 +5,7 @@ import { MJGlobal, MJEventType } from "@memberjunction/global";
 /**
  * Setup the GraphQL client for the project using the provided configuration data.
  */
-export async function setupGraphQLClient(config: GraphQLProviderConfigData): Promise<GraphQLDataProvider> {
+export async function SetupGraphQLClient(config: GraphQLProviderConfigData): Promise<GraphQLDataProvider> {
     // Set the provider for all entities to be GraphQL in this project, can use a different provider in other situations....
     const provider = new GraphQLDataProvider()
 
@@ -35,4 +35,9 @@ export async function setupGraphQLClient(config: GraphQLProviderConfigData): Pro
     await StartupManager.Instance.Startup();
 
     return provider;
+}
+
+/** @deprecated Use {@link SetupGraphQLClient}. */
+export async function setupGraphQLClient(config: GraphQLProviderConfigData): Promise<GraphQLDataProvider> {
+    return SetupGraphQLClient(config);
 }

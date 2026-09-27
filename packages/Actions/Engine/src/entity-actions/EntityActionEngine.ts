@@ -20,7 +20,7 @@ export class EntityActionEngineServer extends BaseSingleton<EntityActionEngineSe
      * but it was order-dependent and fragile — the shared instance's concrete type depended on which accessor
      * was touched first. Explicit composition removes that footgun.
      */
-    private get Base(): EntityActionEngineBase {
+    private get base(): EntityActionEngineBase {
         return EntityActionEngineBase.Instance;
     }
 
@@ -35,31 +35,31 @@ export class EntityActionEngineServer extends BaseSingleton<EntityActionEngineSe
         if (contextUser) {
             this._contextUser = contextUser;
         }
-        await this.Base.Config(forceRefresh, contextUser, provider);
+        await this.base.Config(forceRefresh, contextUser, provider);
     }
 
     /** True once the underlying EntityActionEngineBase cache has loaded. */
-    public get Loaded(): boolean { return this.Base.Loaded; }
+    public get Loaded(): boolean { return this.base.Loaded; }
 
-    public get ContextUser(): UserInfo { return this._contextUser ?? this.Base.ContextUser; }
+    public get ContextUser(): UserInfo { return this._contextUser ?? this.base.ContextUser; }
     public set ContextUser(value: UserInfo) { this._contextUser = value; }
 
     // ── Proxied cached collections (single source of truth: EntityActionEngineBase.Instance) ──
-    public get InvocationTypes(): MJEntityActionInvocationTypeEntity[] { return this.Base.InvocationTypes; }
-    public get Filters(): MJEntityActionFilterEntity[] { return this.Base.Filters; }
-    public get Invocations(): MJEntityActionInvocationEntity[] { return this.Base.Invocations; }
-    public get EntityActions(): MJEntityActionEntityExtended[] { return this.Base.EntityActions; }
-    public get Params(): MJEntityActionParamEntity[] { return this.Base.Params; }
+    public get InvocationTypes(): MJEntityActionInvocationTypeEntity[] { return this.base.InvocationTypes; }
+    public get Filters(): MJEntityActionFilterEntity[] { return this.base.Filters; }
+    public get Invocations(): MJEntityActionInvocationEntity[] { return this.base.Invocations; }
+    public get EntityActions(): MJEntityActionEntityExtended[] { return this.base.EntityActions; }
+    public get Params(): MJEntityActionParamEntity[] { return this.base.Params; }
 
     // ── Proxied lookups ──
     public GetActionsByEntityName(entityName: string, status?: 'Active' | 'Pending' | 'Disabled'): MJEntityActionEntityExtended[] {
-        return this.Base.GetActionsByEntityName(entityName, status);
+        return this.base.GetActionsByEntityName(entityName, status);
     }
     public GetActionsByEntityID(entityID: string): MJEntityActionEntityExtended[] {
-        return this.Base.GetActionsByEntityID(entityID);
+        return this.base.GetActionsByEntityID(entityID);
     }
     public GetActionsByEntityNameAndInvocationType(entityName: string, invocationType: string, status?: 'Active' | 'Pending' | 'Disabled'): MJEntityActionEntityExtended[] {
-        return this.Base.GetActionsByEntityNameAndInvocationType(entityName, invocationType, status);
+        return this.base.GetActionsByEntityNameAndInvocationType(entityName, invocationType, status);
     }
 
 

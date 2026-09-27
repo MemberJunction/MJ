@@ -6,6 +6,14 @@ import type { IMetadataProvider } from '@memberjunction/core';
 import { EntityDataGridComponent } from './entity-data-grid.component';
 import { ExportService } from '@memberjunction/ng-export-service';
 
+// The grid checks, per entity, whether Send Message applies. These specs cover toolbar chrome with a
+// stub provider that has no RunViews, so the communication engine is stubbed to "no message types".
+vi.mock('@memberjunction/communication-types', () => ({
+  CommunicationEngineBase: {
+    GetProviderInstance: () => ({ Config: async () => {}, Metadata: { EntityCommunicationMessageTypes: [] } }),
+  },
+}));
+
 /**
  * DOM coverage for <mj-entity-data-grid> — the AG-Grid-backed entity grid (~10×, the largest Generic
  * component). The grid body (AG-Grid) is out of scope for a DOM unit, so the specs cover the toolbar

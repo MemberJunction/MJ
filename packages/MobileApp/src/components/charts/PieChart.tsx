@@ -13,11 +13,11 @@ import { ChartColorAt, type ChartDatum } from './chart-spec';
 /** Props for {@link PieChart}. */
 export type PieChartProps = {
     /** Slices; each value contributes proportionally to the whole. */
-    data: ChartDatum[];
+    Data: ChartDatum[];
     /** Available container width in px (donut + legend share this). */
-    width: number;
+    Width: number;
     /** Optional heading rendered above the chart. */
-    title?: string;
+    title?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 };
 
 /** Outer diameter (px) of the donut SVG. */
@@ -36,7 +36,7 @@ const INNER_RATIO = 0.58;
  * @param props See {@link PieChartProps} — data, container width, optional title.
  * @returns A `<View>` with the title, the `react-native-svg` donut, and the legend.
  */
-export function PieChart({ data, width, title }: PieChartProps) {
+export function PieChart({ Data: data, Width: width, title }: PieChartProps) {
     const total = data.reduce((sum, d) => sum + Math.max(0, d.value), 0);
     const radius = DIAMETER / 2;
     const inner = radius * INNER_RATIO;

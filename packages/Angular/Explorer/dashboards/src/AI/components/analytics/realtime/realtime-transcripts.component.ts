@@ -118,10 +118,10 @@ export class AnalyticsRealtimeTranscriptsComponent extends BaseAngularComponent 
     public Lines: TranscriptLine[] = [];
 
     async ngOnInit(): Promise<void> {
-        await this.reload();
+        await this.Reload();
     }
 
-    public async reload(): Promise<void> {
+    public async Reload(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
         await AIEngineBase.Instance.EnsureLoaded(); // agents cache, for AI-line attribution
@@ -130,7 +130,12 @@ export class AnalyticsRealtimeTranscriptsComponent extends BaseAngularComponent 
         this.cdr.detectChanges();
     }
 
-    public async selectRoom(room: MeetingRoomSummary): Promise<void> {
+    /** @deprecated Use {@link Reload}. */
+    public async reload(): Promise<void> {
+        return this.Reload();
+    }
+
+    public async SelectRoom(room: MeetingRoomSummary): Promise<void> {
         this.SelectedRoom = room;
         this.Lines = [];
         this.IsLoadingTranscript = true;
@@ -138,6 +143,11 @@ export class AnalyticsRealtimeTranscriptsComponent extends BaseAngularComponent 
         this.Lines = await LoadRoomTranscript(this.ProviderToUse, room.ConversationID, room.RoomKey);
         this.IsLoadingTranscript = false;
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link SelectRoom}. */
+    public async selectRoom(room: MeetingRoomSummary): Promise<void> {
+        return this.SelectRoom(room);
     }
 }
 

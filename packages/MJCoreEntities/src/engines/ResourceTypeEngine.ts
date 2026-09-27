@@ -31,7 +31,7 @@ export class ResourceTypeEngine extends BaseEngine<ResourceTypeEngine> {
             {
                 Type: 'entity',
                 EntityName: 'MJ: Resource Types',
-                PropertyName: '_ResourceTypes',
+                PropertyName: '_resourceTypes',
                 CacheLocal: true,
             },
         ];
@@ -39,9 +39,9 @@ export class ResourceTypeEngine extends BaseEngine<ResourceTypeEngine> {
     }
 
     public get ResourceTypes(): MJResourceTypeEntity[] {
-        return this.GetConfigData<MJResourceTypeEntity>('_ResourceTypes');
+        return this.GetConfigData<MJResourceTypeEntity>('_resourceTypes');
     }
-    private _ResourceTypes: MJResourceTypeEntity[] = [];
+    private _resourceTypes: MJResourceTypeEntity[] = [];
 
     /**
      * Look up a row by exact `Name`. Returns `undefined` if the engine
@@ -50,6 +50,6 @@ export class ResourceTypeEngine extends BaseEngine<ResourceTypeEngine> {
      * persist rows with an undefined `ResourceTypeID`.
      */
     public ByName(name: string): MJResourceTypeEntity | undefined {
-        return this._ResourceTypes.find(rt => rt.Name === name);
+        return this._resourceTypes.find(rt => rt.Name === name);
     }
 }
