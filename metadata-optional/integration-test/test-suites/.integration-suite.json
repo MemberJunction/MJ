@@ -1161,6 +1161,14 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT95 - Trailing Runtime State",
+            "Sequence": 71,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT89 - Role Privilege Elevation Guard",
             "Sequence": 48,
             "Status": "Active"
