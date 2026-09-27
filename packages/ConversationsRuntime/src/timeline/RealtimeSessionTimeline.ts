@@ -21,7 +21,7 @@
  * `ng-conversations` re-exports it, so its own consumers are unaffected.
  */
 
-import { NormalizeUUID } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 /** The minimal detail-row shape the grouping pass reads (satisfied by `MJConversationDetailEntity`). */
 export interface RealtimeTimelineSourceDetail {
@@ -71,6 +71,16 @@ export interface RealtimeSessionTimelineMeta {
   /** Why the session closed (`Error` | `Explicit` | `Janitor` | `Shutdown`), when closed. */
   CloseReason: string | null;
   ClosedAt: Date | null;
+  /**
+   * When the session row was created, which is when the call started. That is earlier than the
+   * first caption, so it measures the call better than the transcript does. Optional, so meta built
+   * before this field existed still type-checks.
+   */
+  StartedAt?: Date | null;
+  /** The user whose call it was (`MJ: AI Agent Sessions.UserID`). */
+  UserID?: string | null;
+  /** That user's display name (the session view's denormalized `User`). */
+  UserName?: string | null;
 }
 
 /** One renderable timeline entry: a normal chat message OR a collapsed session block. */
@@ -192,13 +202,15 @@ export interface RealtimeSessionStatusChip {
 }
 
 /**
- * The card's title: the agent's name when the session lookup supplied one, else the generic label.
+ * The card's title, in the words the rest of the product uses for a realtime session ("Start a
+ * voice call with…", "End call"): "Voice call with Sage", or "Voice call" when the lookup did not
+ * name the agent.
  *
  * @param meta The session-row enrichment, or null when the lookup was unavailable.
  */
 export function SessionCardTitle(meta: RealtimeSessionTimelineMeta | null | undefined): string {
   const agent = meta?.AgentName?.trim();
-  return agent ? `Realtime session · ${agent}` : 'Realtime session';
+  return agent ? `Voice call with ${agent}` : 'Voice call';
 }
 
 /**
@@ -242,6 +254,116 @@ export function SessionCardIsSameDayRange(group: RealtimeSessionTimelineGroup | 
   return start.toDateString() === end.toDateString();
 }
 
+/**
+ * When the call started: the session row's creation time when the lookup supplied it, else the
+ * first caption's. The row is the better answer, because the transcript only begins once somebody
+ * speaks.
+ *
+ * @param group The collapsed session block.
+ * @param meta The session-row enrichment, or null when the lookup was unavailable.
+ */
+export function SessionCardStartedAt(
+  group: RealtimeSessionTimelineGroup | null | undefined,
+  meta: RealtimeSessionTimelineMeta | null | undefined
+): Date | null {
+  return meta?.StartedAt ?? group?.StartedAt ?? null;
+}
+
+/**
+ * How long the call lasted, as a person would say it: "Under a minute", "12 min", "1 hr 5 min".
+ *
+ * Measured from the session row's start and close when the lookup supplied them, since the
+ * transcript runs from the first thing said to the last and so comes up short. Otherwise it falls
+ * back to the transcript's own span.
+ *
+ * `null` while the call is still going (Active or Idle), and whenever there is no span to measure.
+ * A single caption says nothing about how long a call ran, so it gets no duration rather than a
+ * confident "Under a minute".
+ *
+ * @param group The collapsed session block.
+ * @param meta The session-row enrichment, or null when the lookup was unavailable.
+ */
+export function SessionCardDurationLabel(
+  group: RealtimeSessionTimelineGroup | null | undefined,
+  meta: RealtimeSessionTimelineMeta | null | undefined
+): string | null {
+  if (meta?.Status === 'Active' || meta?.Status === 'Idle') {
+    return null;
+  }
+  const start = SessionCardStartedAt(group, meta);
+  const end = meta?.ClosedAt ?? group?.EndedAt ?? null;
+  if (!start || !end) {
+    return null;
+  }
+  const elapsedMs = end.getTime() - start.getTime();
+  // `> 0` rather than `<= 0` so a NaN from a bad date falls through to "no duration" too.
+  return elapsedMs > 0 ? formatCallDuration(elapsedMs) : null;
+}
+
+/**
+ * The card's message count: "No messages", "1 message", "12 messages".
+ *
+ * Counts the same visible turns review mode lists ({@link IsVisibleRealtimeTurn}), so the card and
+ * the transcript it opens agree.
+ *
+ * @param group The collapsed session block.
+ */
+export function SessionCardMessageCountLabel(group: RealtimeSessionTimelineGroup | null | undefined): string {
+  const count = group?.TurnCount ?? 0;
+  if (count === 0) {
+    return 'No messages';
+  }
+  return count === 1 ? '1 message' : `${count} messages`;
+}
+
+/**
+ * Who said the card's quoted line.
+ *
+ * An agent turn is labeled with the agent's name, or "Agent" when the lookup did not supply one.
+ * For a user turn, "You" or another person's name is used only when both the session row and the
+ * caller identify the user. That way a shared conversation never labels someone else's call as
+ * yours. When either is missing, the label is `fallbackUserName`.
+ *
+ * @param role Who spoke the line (`RealtimeSessionTimelineGroup.LastTurnRole`).
+ * @param meta The session-row enrichment, or null when the lookup was unavailable.
+ * @param viewerUserID The signed-in user's id, or null when the caller does not know it.
+ * @param fallbackUserName Label for a user turn when whose call it was cannot be established.
+ */
+export function SessionCardSpeakerLabel(
+  role: RealtimeSessionTimelineGroup['LastTurnRole'],
+  meta: RealtimeSessionTimelineMeta | null | undefined,
+  viewerUserID: string | null | undefined,
+  fallbackUserName = 'You'
+): string {
+  if (role === 'Assistant') {
+    return meta?.AgentName?.trim() || 'Agent';
+  }
+  const ownerID = meta?.UserID?.trim();
+  const viewerID = viewerUserID?.trim();
+  if (!ownerID || !viewerID) {
+    return fallbackUserName;
+  }
+  if (UUIDsEqual(ownerID, viewerID)) {
+    return 'You';
+  }
+  // Someone else's call. Their name if the row carried it; otherwise a neutral label, never "You".
+  return meta?.UserName?.trim() || 'Caller';
+}
+
+/** Formats a positive span in milliseconds for {@link SessionCardDurationLabel}. */
+function formatCallDuration(elapsedMs: number): string {
+  if (elapsedMs < 60_000) {
+    return 'Under a minute';
+  }
+  const totalMinutes = Math.round(elapsedMs / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) {
+    return `${minutes} min`;
+  }
+  return minutes === 0 ? `${hours} hr` : `${hours} hr ${minutes} min`;
+}
+
 /** Maps a close reason to its chip. `Error` is the only one that reads as a failure. */
 function closeReasonChip(reason: string | null): RealtimeSessionStatusChip {
   switch (reason) {
@@ -252,7 +374,8 @@ function closeReasonChip(reason: string | null): RealtimeSessionStatusChip {
     case 'Janitor':
       return { Label: 'Timed out', Tone: 'neutral' };
     case 'Shutdown':
-      return { Label: 'Server shutdown', Tone: 'neutral' };
+      // The server restarted under the call. Worded for the person on it, who never saw a server.
+      return { Label: 'Interrupted', Tone: 'neutral' };
     default:
       return { Label: 'Closed', Tone: 'neutral' };
   }
@@ -271,6 +394,12 @@ export interface RealtimeSessionMetaRow {
   Status?: 'Active' | 'Closed' | 'Idle' | null;
   CloseReason?: string | null;
   ClosedAt?: Date | string | null;
+  /** The user whose call it was. */
+  UserID?: string | null;
+  /** Denormalized display name of that user from the session view. */
+  User?: string | null;
+  /** When the row was created, which is when the call started. */
+  __mj_CreatedAt?: Date | string | null;
 }
 
 /**
@@ -279,7 +408,16 @@ export interface RealtimeSessionMetaRow {
  * A host that trims this list gets cards missing their chips on that host only — the kind of
  * divergence that is invisible until someone compares two screenshots.
  */
-export const REALTIME_SESSION_META_FIELDS: readonly string[] = ['ID', 'Agent', 'Status', 'CloseReason', 'ClosedAt'];
+export const REALTIME_SESSION_META_FIELDS: readonly string[] = [
+  'ID',
+  'Agent',
+  'Status',
+  'CloseReason',
+  'ClosedAt',
+  'UserID',
+  'User',
+  '__mj_CreatedAt'
+];
 
 /**
  * The DISTINCT session ids stamped across `details`, in first-seen order.
@@ -311,8 +449,8 @@ export function CollectRealtimeSessionIDs(details: readonly RealtimeTimelineSour
  * Maps session rows to the card's meta, keyed by {@link NormalizeUUID} so lookups match however
  * the database cased the id.
  *
- * Tolerant: an unparseable `ClosedAt` becomes `null` rather than an Invalid Date, which would
- * otherwise render as "Invalid Date" on the card.
+ * Tolerant: an unparseable `ClosedAt` or `__mj_CreatedAt` becomes `null` rather than an Invalid
+ * Date, which would otherwise render as "Invalid Date" on the card.
  *
  * @param rows Rows from `MJ: AI Agent Sessions` (see {@link REALTIME_SESSION_META_FIELDS}).
  */
@@ -321,13 +459,15 @@ export function MapRealtimeSessionMeta(
 ): Map<string, RealtimeSessionTimelineMeta> {
   const map = new Map<string, RealtimeSessionTimelineMeta>();
   for (const row of rows ?? []) {
-    const closedAt = toDate(row.ClosedAt);
     map.set(NormalizeUUID(row.ID), {
       SessionID: row.ID,
       AgentName: row.Agent ?? null,
       Status: row.Status ?? null,
       CloseReason: row.CloseReason ?? null,
-      ClosedAt: closedAt
+      ClosedAt: toDate(row.ClosedAt),
+      StartedAt: toDate(row.__mj_CreatedAt),
+      UserID: row.UserID ?? null,
+      UserName: row.User ?? null
     });
   }
   return map;

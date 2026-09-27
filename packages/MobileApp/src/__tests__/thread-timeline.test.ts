@@ -138,7 +138,7 @@ describe('BuildRealtimeSessionCardView', () => {
 
     it('names the agent and humanizes the close reason', () => {
         const view = BuildRealtimeSessionCardView(group(), meta({ AgentName: 'Sage', Status: 'Closed', CloseReason: 'Janitor' }), 2, 'You');
-        expect(view.Title).toBe('Realtime session · Sage');
+        expect(view.Title).toBe('Voice call with Sage');
         expect(view.Chip).toEqual({ Label: 'Timed out', Tone: 'neutral' });
     });
 
@@ -151,7 +151,7 @@ describe('BuildRealtimeSessionCardView', () => {
         const view = BuildRealtimeSessionCardView(group(), null, 2, 'You');
         expect(view.Range).toContain('→');
         expect(view.Range?.match(/Sep 14/g) ?? []).toHaveLength(1);
-        expect(view.MetaLine).toContain('2 turns');
+        expect(view.MetaLine).toContain('2 messages');
     });
 
     it('repeats the date when the session crosses midnight', () => {
@@ -163,11 +163,11 @@ describe('BuildRealtimeSessionCardView', () => {
     it('drops the range entirely rather than printing a half one', () => {
         const view = BuildRealtimeSessionCardView(group({ StartedAt: null, EndedAt: null }), null, 0, 'You');
         expect(view.Range).toBeNull();
-        expect(view.MetaLine).toBe('2 turns');
+        expect(view.MetaLine).toBe('2 messages');
     });
 
-    it('singularizes a one-turn session', () => {
-        expect(BuildRealtimeSessionCardView(group({ TurnCount: 1 }), null, 1, 'You').TurnLabel).toBe('1 turn');
+    it('singularizes a one-message session', () => {
+        expect(BuildRealtimeSessionCardView(group({ TurnCount: 1 }), null, 1, 'You').MessageCountLabel).toBe('1 message');
     });
 
     it('names the user on their own last turn', () => {
@@ -175,8 +175,17 @@ describe('BuildRealtimeSessionCardView', () => {
         expect(view.Preview?.Role).toBe('Amith');
     });
 
-    it('labels an agent turn generically, as the web card does', () => {
+    it('labels an agent turn generically when the lookup did not name the agent, as the web card does', () => {
         expect(BuildRealtimeSessionCardView(group(), null, 2, 'Amith').Preview?.Role).toBe('Agent');
+    });
+
+    it('names the agent on its own line when the lookup did', () => {
+        expect(BuildRealtimeSessionCardView(group(), meta({ AgentName: 'Sage' }), 2, 'Amith').Preview?.Role).toBe('Sage');
+    });
+
+    it('keeps the supplied label on a user line until this screen passes the viewer, so it never guesses a name', () => {
+        const theirs = meta({ UserID: 'OTHER-USER', UserName: 'Dana Lee' });
+        expect(BuildRealtimeSessionCardView(group({ LastTurnRole: 'User' }), theirs, 2, 'You').Preview?.Role).toBe('You');
     });
 
     it('does not offer to expand a session with no visible turns', () => {

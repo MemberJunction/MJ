@@ -1,5 +1,7 @@
 import {
     SessionCardIsSameDayRange,
+    SessionCardMessageCountLabel,
+    SessionCardSpeakerLabel,
     SessionCardStatusChip,
     SessionCardTitle,
     type RealtimeSessionStatusChip,
@@ -18,14 +20,14 @@ import {
 
 /** Everything the card displays, resolved from the block and its meta. */
 export type RealtimeSessionCardView = {
-    /** "Realtime session · Sage", or the generic label. */
+    /** "Voice call with Sage", or "Voice call". */
     Title: string;
     /** The status chip, or null when the session row could not be read. */
     Chip: RealtimeSessionStatusChip | null;
     /** The formatted time range, or null when the session has no start. */
     Range: string | null;
-    /** "3 turns" / "1 turn". */
-    TurnLabel: string;
+    /** "3 messages" / "1 message" / "No messages". */
+    MessageCountLabel: string;
     /** The meta line under the title. */
     MetaLine: string;
     /** Speaker label and text for the collapsed one-line preview, or null when there is none. */
@@ -43,7 +45,8 @@ export type RealtimeSessionCardView = {
  * @param group The collapsed session block.
  * @param meta Session-row enrichment, or null when the lookup was unavailable.
  * @param turnCount How many visible turns the expansion has to show.
- * @param userName Display name for the user's own turns.
+ * @param userName Label for the user's lines. This screen does not yet pass the viewer's id, so the
+ *   shared speaker rule can only fall back to it and never names anyone else.
  */
 export function BuildRealtimeSessionCardView(
     group: RealtimeSessionTimelineGroup,
@@ -51,16 +54,16 @@ export function BuildRealtimeSessionCardView(
     turnCount: number,
     userName: string,
 ): RealtimeSessionCardView {
-    const turnLabel = `${group.TurnCount} ${group.TurnCount === 1 ? 'turn' : 'turns'}`;
+    const countLabel = SessionCardMessageCountLabel(group);
     const range = FormatRange(group);
     return {
         Title: SessionCardTitle(meta),
         Chip: SessionCardStatusChip(meta),
         Range: range,
-        TurnLabel: turnLabel,
-        MetaLine: range ? `${range} · ${turnLabel}` : turnLabel,
+        MessageCountLabel: countLabel,
+        MetaLine: range ? `${range} · ${countLabel}` : countLabel,
         Preview: group.LastTurnPreview
-            ? { Role: group.LastTurnRole === 'User' ? userName : 'Agent', Text: group.LastTurnPreview }
+            ? { Role: SessionCardSpeakerLabel(group.LastTurnRole, meta, null, userName), Text: group.LastTurnPreview }
             : null,
         // Nothing to open when the session left no visible turns — a card that expands to an empty
         // panel is worse than one that plainly does not expand.

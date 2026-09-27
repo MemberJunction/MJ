@@ -68,7 +68,7 @@ export function MJRealtimeSessionCard({ Group, Meta, Turns, UserName = 'You' }: 
                 disabled={!view.CanExpand}
                 accessibilityRole={view.CanExpand ? 'button' : undefined}
                 accessibilityState={view.CanExpand ? { expanded } : undefined}
-                accessibilityLabel={`${view.Title}, ${view.TurnLabel}`}
+                accessibilityLabel={`${view.Title}, ${view.MessageCountLabel}`}
                 onPress={() => setExpanded((v) => !v)}
             >
                 <View style={styles.icon}>
