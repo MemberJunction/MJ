@@ -10,6 +10,9 @@ export * from './lib/models/conversation-state.model';
 export * from './lib/models/notification.model';
 export * from './lib/models/lazy-artifact-info';
 export * from './lib/models/navigation-request.model';
+// Host rules for an agent turn: reply mode, routes, and the host turn handler contract
+export * from './lib/models/agent-turn.model';
+export * from './lib/utils/agent-turn-routing';
 
 // Services - State
 export * from './lib/services/data-cache.service';
