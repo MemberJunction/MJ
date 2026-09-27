@@ -26,6 +26,19 @@ import { finalize, firstValueFrom, from, Observable, of, shareReplay, Subject, S
 import { z } from 'zod';
 
 /**
+ * Strips the trailing spaces SQL Server and PostgreSQL pad fixed-width string columns with. Only
+ * spaces: tabs and other whitespace are data. A loop rather than `/ +$/`, which backtracks
+ * quadratically on a long run of spaces that doesn't end the string.
+ */
+function trimTrailingSpaces(value: string): string {
+    let end = value.length;
+    while (end > 0 && value.charCodeAt(end - 1) === 32) {
+        end--;
+    }
+    return end === value.length ? value : value.slice(0, end);
+}
+
+/**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
  * used properties from the entity field metadata.
  *
@@ -200,7 +213,7 @@ export class EntityField {
             // value is the logical (un-padded) form. See
             // `EntityFieldInfo.FixedWidthColumn` for the source of truth.
             if (typeof value === 'string' && this._entityFieldInfo.FixedWidthColumn) {
-                value = value.replace(/ +$/, '');
+                value = trimTrailingSpaces(value);
             }
             this._value = value;
             // Any explicit set means the field now holds REAL data — including a blind write to
@@ -3908,7 +3921,7 @@ export abstract class BaseEntity<T = unknown> {
             if (typeof value === 'string' && fi?.FixedWidthColumn) {
                 const memo = this._rawConverted?.get(FieldName);
                 if (memo !== undefined) return memo;
-                value = value.replace(/ +$/, '');
+                value = trimTrailingSpaces(value);
                 this.memoizeRawConversion(FieldName, value);
             }
             return value;
