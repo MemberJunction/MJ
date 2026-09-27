@@ -50,7 +50,11 @@ export class RealtimeSessionTimelineCardComponent {
    */
   @Input() CurrentUserID: string | null = null;
 
-  /** Label for a user's line when the session row does not say whose call it was. */
+  /**
+   * Label for a user's line when the host passes no `CurrentUserID`, and so the card can't tell
+   * whose call it was. With `CurrentUserID` set it isn't used: the line says "You", the caller's
+   * name, or "Caller" when the session row doesn't say whose call it was.
+   */
   @Input() UserName = 'You';
 
   /** Emitted with the `MJ: AI Agent Sessions.ID` when the user asks to open the session review. */

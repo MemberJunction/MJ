@@ -356,10 +356,16 @@ describe('session card call details', () => {
       expect(SessionCardSpeakerLabel('User', meta({ UserID: OTHER, UserName: null }), VIEWER, 'You')).toBe('Caller');
     });
 
-    it('uses the fallback when either side of the comparison is unknown', () => {
+    it('says "Caller", never "You", when the viewer is known but the session row is not', () => {
+      expect(SessionCardSpeakerLabel('User', meta({ UserID: null }), VIEWER)).toBe('Caller');
+      expect(SessionCardSpeakerLabel('User', meta({ UserID: '  ', UserName: 'Dana Lee' }), VIEWER, 'You')).toBe('Caller');
+      expect(SessionCardSpeakerLabel('User', null, VIEWER)).toBe('Caller');
+    });
+
+    it('uses the fallback only when the caller passes no viewer id', () => {
       expect(SessionCardSpeakerLabel('User', meta(), null, 'Amith')).toBe('Amith');
-      expect(SessionCardSpeakerLabel('User', meta({ UserID: null }), VIEWER, 'Amith')).toBe('Amith');
-      expect(SessionCardSpeakerLabel('User', null, VIEWER)).toBe('You');
+      expect(SessionCardSpeakerLabel('User', meta({ UserID: OTHER }), undefined, 'Amith')).toBe('Amith');
+      expect(SessionCardSpeakerLabel('User', null, '  ')).toBe('You');
     });
   });
 });

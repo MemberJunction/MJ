@@ -320,14 +320,17 @@ export function SessionCardMessageCountLabel(group: RealtimeSessionTimelineGroup
  * Who said the card's quoted line.
  *
  * An agent turn is labeled with the agent's name, or "Agent" when the lookup did not supply one.
- * For a user turn, "You" or another person's name is used only when both the session row and the
- * caller identify the user. That way a shared conversation never labels someone else's call as
- * yours. When either is missing, the label is `fallbackUserName`.
+ * A user turn is labeled "You" on the viewer's own call and with the caller's name on anyone
+ * else's. When the session row doesn't say whose call it was, the label is the neutral "Caller",
+ * so a shared conversation never labels someone else's call as yours.
+ *
+ * `fallbackUserName` is used only when the caller passes no viewer id, and so can't tell whose
+ * call it was either way.
  *
  * @param role Who spoke the line (`RealtimeSessionTimelineGroup.LastTurnRole`).
  * @param meta The session-row enrichment, or null when the lookup was unavailable.
  * @param viewerUserID The signed-in user's id, or null when the caller does not know it.
- * @param fallbackUserName Label for a user turn when whose call it was cannot be established.
+ * @param fallbackUserName Label for a user turn when the caller passes no viewer id.
  */
 export function SessionCardSpeakerLabel(
   role: RealtimeSessionTimelineGroup['LastTurnRole'],
@@ -338,15 +341,18 @@ export function SessionCardSpeakerLabel(
   if (role === 'Assistant') {
     return meta?.AgentName?.trim() || 'Agent';
   }
-  const ownerID = meta?.UserID?.trim();
   const viewerID = viewerUserID?.trim();
-  if (!ownerID || !viewerID) {
+  if (!viewerID) {
     return fallbackUserName;
+  }
+  const ownerID = meta?.UserID?.trim();
+  if (!ownerID) {
+    return 'Caller';
   }
   if (UUIDsEqual(ownerID, viewerID)) {
     return 'You';
   }
-  // Someone else's call. Their name if the row carried it; otherwise a neutral label, never "You".
+  // Someone else's call: their name if the row carried it.
   return meta?.UserName?.trim() || 'Caller';
 }
 

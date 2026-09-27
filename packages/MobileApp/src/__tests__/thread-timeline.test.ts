@@ -183,9 +183,31 @@ describe('BuildRealtimeSessionCardView', () => {
         expect(BuildRealtimeSessionCardView(group(), meta({ AgentName: 'Sage' }), 2, 'Amith').Preview?.Role).toBe('Sage');
     });
 
-    it('keeps the supplied label on a user line until this screen passes the viewer, so it never guesses a name', () => {
+    it('keeps the supplied label on a user line when no viewer id is passed, so it never guesses a name', () => {
         const theirs = meta({ UserID: 'OTHER-USER', UserName: 'Dana Lee' });
-        expect(BuildRealtimeSessionCardView(group({ LastTurnRole: 'User' }), theirs, 2, 'You').Preview?.Role).toBe('You');
+        const view = BuildRealtimeSessionCardView(group({ LastTurnRole: 'User' }), theirs, 2, 'You');
+        expect(view.Preview?.Role).toBe('You');
+        expect(view.UserTurnLabel).toBe('You');
+    });
+
+    it('with the viewer id, says "You" on their own call and names the caller on anyone else\'s', () => {
+        const userLine = group({ LastTurnRole: 'User' });
+        const mine = BuildRealtimeSessionCardView(userLine, meta({ UserID: 'VIEWER', UserName: 'Amith' }), 2, 'You', 'viewer');
+        expect(mine.Preview?.Role).toBe('You');
+        expect(mine.UserTurnLabel).toBe('You');
+        const theirs = BuildRealtimeSessionCardView(userLine, meta({ UserID: 'OTHER-USER', UserName: 'Dana Lee' }), 2, 'You', 'VIEWER');
+        expect(theirs.Preview?.Role).toBe('Dana Lee');
+        expect(theirs.UserTurnLabel).toBe('Dana Lee');
+    });
+
+    it('labels the expanded user turns even when the last line was the agent\'s', () => {
+        const view = BuildRealtimeSessionCardView(group(), meta({ UserID: 'OTHER-USER', UserName: 'Dana Lee' }), 2, 'You', 'VIEWER');
+        expect(view.Preview?.Role).toBe('Agent');
+        expect(view.UserTurnLabel).toBe('Dana Lee');
+    });
+
+    it('says "Caller", never "You", when the viewer is known but the session row is not', () => {
+        expect(BuildRealtimeSessionCardView(group({ LastTurnRole: 'User' }), null, 2, 'You', 'VIEWER').UserTurnLabel).toBe('Caller');
     });
 
     it('does not offer to expand a session with no visible turns', () => {

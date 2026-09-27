@@ -32,6 +32,8 @@ export type RealtimeSessionCardView = {
     MetaLine: string;
     /** Speaker label and text for the collapsed one-line preview, or null when there is none. */
     Preview: { Role: string; Text: string } | null;
+    /** Label for the user's turns in the expanded transcript, by the same rule as the preview. */
+    UserTurnLabel: string;
     /** Whether tapping should reveal the transcript. */
     CanExpand: boolean;
 };
@@ -45,14 +47,16 @@ export type RealtimeSessionCardView = {
  * @param group The collapsed session block.
  * @param meta Session-row enrichment, or null when the lookup was unavailable.
  * @param turnCount How many visible turns the expansion has to show.
- * @param userName Label for the user's lines. This screen does not yet pass the viewer's id, so the
- *   shared speaker rule can only fall back to it and never names anyone else.
+ * @param userName Label for the user's lines when the viewer's id is not known.
+ * @param viewerUserID The signed-in user's id. With it the user's lines say "You" on the viewer's
+ *   own call, the caller's name on anyone else's, and "Caller" when the session row doesn't say.
  */
 export function BuildRealtimeSessionCardView(
     group: RealtimeSessionTimelineGroup,
     meta: RealtimeSessionTimelineMeta | null,
     turnCount: number,
     userName: string,
+    viewerUserID: string | null = null,
 ): RealtimeSessionCardView {
     const countLabel = SessionCardMessageCountLabel(group);
     const range = FormatRange(group);
@@ -63,8 +67,9 @@ export function BuildRealtimeSessionCardView(
         MessageCountLabel: countLabel,
         MetaLine: range ? `${range} · ${countLabel}` : countLabel,
         Preview: group.LastTurnPreview
-            ? { Role: SessionCardSpeakerLabel(group.LastTurnRole, meta, null, userName), Text: group.LastTurnPreview }
+            ? { Role: SessionCardSpeakerLabel(group.LastTurnRole, meta, viewerUserID, userName), Text: group.LastTurnPreview }
             : null,
+        UserTurnLabel: SessionCardSpeakerLabel('User', meta, viewerUserID, userName),
         // Nothing to open when the session left no visible turns — a card that expands to an empty
         // panel is worse than one that plainly does not expand.
         CanExpand: turnCount > 0,

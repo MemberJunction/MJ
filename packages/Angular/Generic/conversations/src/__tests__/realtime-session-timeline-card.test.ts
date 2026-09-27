@@ -147,8 +147,14 @@ describe('RealtimeSessionTimelineCardComponent — who said the quoted line', ()
     expect(card(userLine, meta({ UserID: OTHER_ID, UserName: 'Dana Lee' }), VIEWER_ID).SpeakerLabel).toBe('Dana Lee');
   });
 
-  it('uses the UserName input when whose call it was is unknown', () => {
-    const component = card(group({ LastTurnRole: 'User' }), null, VIEWER_ID);
+  it('says "Caller", never "You", when the session row doesn\'t say whose call it was', () => {
+    const userLine = group({ LastTurnRole: 'User' });
+    expect(card(userLine, null, VIEWER_ID).SpeakerLabel).toBe('Caller');
+    expect(card(userLine, meta({ UserID: null }), VIEWER_ID).SpeakerLabel).toBe('Caller');
+  });
+
+  it('uses the UserName input only when the host passes no CurrentUserID', () => {
+    const component = card(group({ LastTurnRole: 'User' }), meta({ UserID: OTHER_ID }), null);
     expect(component.SpeakerLabel).toBe('You');
     component.UserName = 'Amith';
     expect(component.SpeakerLabel).toBe('Amith');
