@@ -87,7 +87,7 @@ const result = await AIEngine.Instance.ChatCompletion({
 });
 ```
 
-Classification and summarisation run as AI Prompts through `AIPromptRunner` (`@memberjunction/ai-prompts`).
+Classification and summarization run as AI Prompts through `AIPromptRunner` (`@memberjunction/ai-prompts`).
 
 #### Semantic Search
 
