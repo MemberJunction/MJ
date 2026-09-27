@@ -16,7 +16,7 @@ The item numbers are Collaboration's (its plan's § 6, in [bizapps-collaboration
 
 **Checked against:** MJ `next` at `830c11c` (2026-09-27), and for § 6.1, bizapps-common's `next` at `df6bfc2` and bizapps-collaboration#8's plan. Paths are under `packages/`. `E:<line>` is a line of `MJCoreEntities/src/generated/entities/__mj.ts` at that commit. Lines move, so search by name.
 
-**Who does what.** The builder implements A14 to A18 in this pull request, in the order below, with each item's tests. The plan's author reviews it with a numbered punch list per push. § 6.1's app work isn't built here: bizapps-tasks builds it in its own code pull request (bizapps-collaboration#8's workstream T), citing § 6.1. It needs no plan pull request of its own.
+**Who does what.** The builder implements A14 to A18 in this pull request, in the order below, with each item's tests, once bizapps-collaboration#7 and #8 are done (Amith, 2026-09-27; Collaboration's D36). #8 merges first, with the grants that need these additions closed, and a follow-up there opens them once a release carries this pull request. The plan's author reviews it with a numbered punch list per push. § 6.1's app work isn't built here: bizapps-tasks builds it in its own code pull request (bizapps-collaboration#8's workstream T), citing § 6.1. It needs no plan pull request of its own.
 
 ## Contents
 
