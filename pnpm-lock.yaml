@@ -15146,6 +15146,9 @@ importers:
       '@memberjunction/work-queue-engine':
         specifier: 6.1.0
         version: link:../../WorkQueue/engine
+      '@memberjunction/work-queue-legacy-bridge':
+        specifier: 6.1.0
+        version: link:../../WorkQueue/legacy-bridge
       '@memberjunction/work-queue-server':
         specifier: 6.1.0
         version: link:../../WorkQueue/server

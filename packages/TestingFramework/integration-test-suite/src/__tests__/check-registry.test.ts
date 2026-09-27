@@ -271,7 +271,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'permission-engine': 14,
         'predictive-studio': 5,
         'prompt-runner': 1,
-        'queue': 7,
+        'queue': 10,
         'realtime-deterministic': 9,
         'record-process': 12,
         'record-process-facade': 2,

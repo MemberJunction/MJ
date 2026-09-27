@@ -64,6 +64,7 @@
     "@memberjunction/unit-testing": "6.1.0",
     "@memberjunction/work-queue-core": "6.1.0",
     "@memberjunction/work-queue-engine": "6.1.0",
+    "@memberjunction/work-queue-legacy-bridge": "6.1.0",
     "@memberjunction/work-queue-server": "6.1.0",
     "dotenv": "17.2.4",
     "express": "^5.2.1",

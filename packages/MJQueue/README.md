@@ -189,6 +189,52 @@ The queue system persists state across three tables:
 | `__mj.Queue` | Tracks active queue instances with process info and heartbeat |
 | `__mj.QueueTask` | Stores individual tasks with status, data, and output |
 
+## Durable processing on the work queue (opt-in)
+
+Tasks added with `QueueManager.AddTask('<Queue Type>', data, options, user)` normally run on an in-memory queue in
+the calling process, which is lost on restart. Each queue type can instead be routed to the durable work queue.
+
+This package does **not** depend on the work queue. It exposes a seam, `LegacyQueueRouterRegistry`; the server
+package `@memberjunction/work-queue-legacy-bridge` registers a router into it when `ServerBootstrap` imports it. A
+process that never imports the bridge (CodeGen, MetadataSync, the CLI) has no router and runs every task in-process.
+
+1. Set the work-queue topic `mjqueue.<queue type slug>` **and** its `MJQueue.LegacyQueueDriver` subscription to
+   `Active`. Topics are seeded (Disabled) for the shipped types:
+
+   | Queue type | Topic | Subscription |
+   | --- | --- | --- |
+   | `AI Action` | `mjqueue.ai-action` | `mjqueue.ai-action.legacy-driver` |
+   | `Entity AI Action` | `mjqueue.entity-ai-action` | `mjqueue.entity-ai-action.legacy-driver` |
+
+2. Run that subscription on at least one server: add it (or `'*'`) to `workQueue.subscriptions` in `mj.config.cjs`
+   on an instance with the work-queue host enabled.
+
+Once both topic and subscription are active, `AddTask` publishes `{ queueTypeName, data, options, userID }` to the
+topic and returns `undefined` (there is no in-process `TaskBase`). The `MJQueue.LegacyQueueDriver` handler resolves
+the `QueueBase` driver registered for the queue type and runs the task through `QueueBase.ExecuteTask` **as the user
+who called `AddTask`**. A failed `TaskResult` is retried with the subscription's backoff and then dead-lettered; a
+result marked `failureKind: 'Fatal'`, or a queue type with no registered driver, is dead-lettered immediately. Dead
+letters are inspected and replayed with the work-queue operator commands (`mj queue dead-letters`, `mj queue replay`).
+
+Routing falls back to the in-process queue when no router is registered, the topic is missing or not Active, no
+subscription on it is Active or Paused, the task data is not plain JSON, or the publish is rejected.
+
+`QueueBase.ProcessTask` has no cancellation parameter, so a routed task cannot be stopped mid-run by a work-queue
+cancel or a lost lease; its outcome is simply discarded. Set the subscription's `LeaseSeconds` above the driver's
+longest run.
+
+Your own `QueueBase` drivers route the same way: create a topic named `LegacyQueueTopicName('<your type>')` (from
+the bridge package) on the `Database` transport with a subscription whose `HandlerKey` is `MJQueue.LegacyQueueDriver`.
+Queue type names that differ only in case or punctuation share one topic.
+
+### Entity AI Action task data
+
+Providers enqueue an `EntityAIActionTaskReference` (`entityName` + canonical `recordID`) rather than a live
+`BaseEntity`. `EntityAIActionQueue` reloads the record when the task runs. If the record cannot be loaded the task
+fails with `failureKind: 'RecordNotFound'`: in-process it is recorded as `Failed`; on the work queue it is retried
+(PostgreSQL enqueues before its transaction commits) and, if still missing on the last attempt, completed with a
+warning because the record was deleted.
+
 ## Dependencies
 
 | Package | Purpose |
