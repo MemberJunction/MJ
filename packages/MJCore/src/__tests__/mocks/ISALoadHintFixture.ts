@@ -187,7 +187,16 @@ export function MakeLoadHintUser(roleID: string): UserInfo {
 // ─── Entities, store and provider ──────────────────────────────────────────
 
 /** A concrete entity class for every fixture entity. */
-export class LoadHintTestEntity extends BaseEntity {}
+export class LoadHintTestEntity extends BaseEntity {
+    /**
+     * True while the record holds its row in raw mode, without built fields — the state
+     * `BaseEngine` caches keep their rows in. Reads private state, as baseEntity.frozenRawRow.test.ts does.
+     */
+    public get RawModeActive(): boolean {
+        const state = this as unknown as { _raw: unknown; _fieldsHydrated: boolean };
+        return state._raw !== null && !state._fieldsHydrated;
+    }
+}
 
 /** Rows keyed by entity name, then by lowercased ID. Each row holds only its own table's columns. */
 export class InMemoryISAStore {
@@ -244,6 +253,8 @@ export interface RoundTrip {
 export class LoadHintTestProvider {
     public readonly RoundTrips: RoundTrip[] = [];
     public readonly ProviderType = 'Database';
+    private readonly loadFailures = new Map<string, { Remaining: number; Error: Error }>();
+    private readonly discoveryFailures = new Map<string, Error>();
 
     constructor(
         public readonly Entities: EntityInfo[],
@@ -273,13 +284,32 @@ export class LoadHintTestProvider {
 
     public async Load(entity: BaseEntity, key: CompositeKey): Promise<Record<string, unknown> | null> {
         this.RoundTrips.push({ Kind: 'Load', EntityName: entity.EntityInfo.Name });
+        const failure = this.loadFailures.get(entity.EntityInfo.Name.toLowerCase());
+        if (failure && failure.Remaining > 0) {
+            failure.Remaining--;
+            throw failure.Error;
+        }
         return this.Store.ViewRow(entity.EntityInfo, String(key.GetValueByIndex(0)));
     }
 
     public async FindISAChildEntity(entityInfo: EntityInfo, recordPKValue: string): Promise<{ ChildEntityName: string } | null> {
         this.RoundTrips.push({ Kind: 'FindISAChildEntity', EntityName: entityInfo.Name });
+        const failure = this.discoveryFailures.get(entityInfo.Name.toLowerCase());
+        if (failure) {
+            throw failure;
+        }
         const child = entityInfo.ChildEntities.find(c => this.Store.HasRow(c.Name, recordPKValue));
         return child ? { ChildEntityName: child.Name } : null;
+    }
+
+    /** Makes the next `times` row reads of `entityName` throw `error` (each still counts as a round trip). */
+    public FailLoads(entityName: string, times: number, error: Error): void {
+        this.loadFailures.set(entityName.toLowerCase(), { Remaining: times, Error: error });
+    }
+
+    /** Makes every `FindISAChildEntity` probe of `entityName` throw `error` (each still counts as a round trip). */
+    public FailDiscovery(entityName: string, error: Error): void {
+        this.discoveryFailures.set(entityName.toLowerCase(), error);
     }
 
     public async FindISAChildEntities(entityInfo: EntityInfo, recordPKValue: string): Promise<{ ChildEntityName: string }[]> {

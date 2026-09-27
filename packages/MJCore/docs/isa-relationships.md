@@ -184,7 +184,7 @@ When a record is loaded at any level of the IS-A hierarchy, `BaseEntity.Initiali
 3. If a child is found, creates the child entity and wires the bidirectional chain
 4. Recursively discovers grandchildren (the child may also be a parent type)
 
-When the entity has a subtype rule that can answer without a query, step 2 is usually skipped; see [Knowing the Subtype on Load](#knowing-the-subtype-on-load).
+When the entity opts in to asking its subtype rule on load, step 2 is usually skipped; see [Knowing the Subtype on Load](#knowing-the-subtype-on-load).
 
 ```mermaid
 sequenceDiagram
@@ -232,38 +232,62 @@ This executes as PK lookups on clustered indexes — effectively instant, even w
 
 Without help, a loaded record with IS-A children costs the discovery query plus the child's load. In the browser each is a round trip, so opening one record takes three, and a `RunView` with `ResultType: 'entity_object'` pays two more for every row: 201 round trips for 100 records.
 
-A disjoint parent (`AllowMultipleSubtypes = false`) whose entity has a **subtype rule** asks the rule first. When it names a child, that child's load — which happens anyway — checks the answer, and the discovery query runs only on a miss. One record then takes two round trips, and 100 records take 101.
+A disjoint parent (`AllowMultipleSubtypes = false`) can opt in to asking its **subtype rule** first. When the rule names a child, that child's load — which happens anyway — checks the answer, and the discovery query runs only on a miss. One record then takes two round trips, and 100 records take 101.
 
-The rule is the same one creation uses (`ResolveSubtypeEntityName()`), narrowed so that asking it never costs a query:
+It is opt-in because the rule is written for creating records, and a load has to get its answer without a query:
 
 | Rule | Asked on load when |
 |---|---|
-| A registered `EntitySubtypeResolver` | It sets `UseForLoadedRecords` to `true`. Resolvers written for create time may query, so the default is `false`. While a resolver is registered, the `SubtypeSelector` isn't consulted in its place. |
-| `Entity.SubtypeSelector` | Every hop of its path is found among the entity objects that loaded `BaseEngine` caches hold. A hop that isn't cached gives no hint, never a query. |
+| A registered `EntitySubtypeResolver` | Its class overrides `ResolveLoadHint`. `Resolve` answers the create-time question and may query; `ResolveLoadHint` answers from memory only, and returns `null` ("no hint") when it can't. A resolver that doesn't override it gives no hint, and the entity's `SubtypeSelector` isn't consulted in its place, because the resolver owns the rule: an app with a resolver and a selector gets load hints by overriding `ResolveLoadHint`. |
+| `Entity.SubtypeSelector` | It sets `"UseForLoadedRecords": true`, and every hop of its path is found among the entity objects that loaded `BaseEngine` caches hold. A hop that isn't cached gives no hint, never a query. |
 | The single-child default | Never. It decides what a new record becomes, not what an existing one is. |
+
+```json
+{ "Path": "ProductTypeID.ProductExtensionEntity", "UseForLoadedRecords": true }
+```
+
+A selector's cached hops are found through an index over each engine's array, rebuilt when the array gains or loses a row. Reading the keys never builds fields on the rows an engine holds in raw mode.
+
+A resolver answers the two questions separately. Creating a record can wait for an engine; loading one can't, so it reads the cache and gives no hint while the cache is cold:
 
 ```typescript
 @RegisterClass(EntitySubtypeResolver, 'Products')
 export class ProductSubtypeResolver extends EntitySubtypeResolver {
-    // Answers from the record and a loaded engine only, so it is safe to ask on every load.
-    public override get UseForLoadedRecords(): boolean {
-        return true;
+    // Creating a record: the answer must be right, so wait for the engine.
+    public async Resolve(record: BaseEntity): Promise<string | null> {
+        await ProductTypeEngine.Instance.Config(false, record.ContextCurrentUser);
+        return this.extensionFor(record);
     }
 
-    public Resolve(record: BaseEntity): string | null {
+    // Loading a record: answer from memory, or not at all.
+    public override ResolveLoadHint(record: BaseEntity): string | null {
+        return ProductTypeEngine.Instance.Loaded ? this.extensionFor(record) : null;
+    }
+
+    private extensionFor(record: BaseEntity): string | null {
         const product = record as ProductEntity;
         return ProductTypeEngine.Instance.GetProductType(product.ProductTypeID)?.ProductExtensionEntity ?? null;
     }
 }
 ```
 
-A hint changes the number of round trips, never which child is linked or whether the load succeeds:
+`BaseEntity` checks the registered class for a `ResolveLoadHint` override once, without constructing it, so a resolver that doesn't give load hints is never constructed when records load. One that does is constructed once per entity and shared by every record it loads, so keep it stateless. Override it as a method: an arrow-function property isn't seen.
 
-- **A wrong hint** (the rule names a child that has no row) runs the discovery query and links whatever it finds. `LogError` reports that the rule and the data disagree, since each such load costs an extra round trip.
+For well-formed data, a hint changes the number of round trips, not which child is linked or whether the load succeeds:
+
+- **A hinted child with no row, where the record has no subtype row at all**, is a normal state: core never creates a subtype row on save, so a typed record saved through a generic form or an import, or older than its type's subtype, has none. The discovery query finds nothing, and the record loads with no child. That costs one extra round trip per load, so opt in when records of subtyped types have their subtype rows. Nothing is logged as an error; with verbose logging on (`MJ_VERBOSE`) there is one line per entity and hinted child.
+- **A hinted child with no row, where the record's subtype row is in another child**: the discovery query links the real one, and `LogError` reports that the rule and the data disagree, once per entity and pair of subtypes.
 - **"No subtype"** from the rule still runs the discovery query: only the query can tell whether an older record kept a child row.
 - **A child the user can't read** isn't loaded from the hint; the discovery path decides, as it would without a hint.
-- **A resolver that throws**, or a rule that names an entity which isn't a declared IS-A child, is logged, and the record loads as it would without a hint.
+- **A resolver that throws or rejects** is logged once per entity, **a rule that names an entity which isn't a declared IS-A child** once per name, and the record loads as it would without a hint.
+- **A promotion** (`AttachToParent`) loads the parent without asking its rule: the child row it adds doesn't exist yet.
 - **Overlapping parents** (`AllowMultipleSubtypes = true`) never ask the rule: they list every child with `FindISAChildEntities`.
+
+Three benign exceptions:
+
+- **Reading the hinted child's row fails**: the load falls back to the discovery query, so a transient failure now recovers where it used to fail the load. A lasting one reads the row twice, then fails as before. A failure after the row was read, such as in the child's own child discovery or its eager companions, fails the load at once, as it does without a hint.
+- **Two child rows**, which break the disjoint rule: the discovery query's `UNION ALL` has no order, so it links either one; a hint links the one the rule names.
+- **A provider without `FindISAChildEntity`** links no child without a hint, and the hinted child with one.
 
 ### ISAParent / ISAChild Accessors
 
@@ -969,6 +993,6 @@ class BaseEntity {
 | `ISAChild` is null after Load | Provider doesn't implement `FindISAChildEntity` | Update provider or use `ResolveLeafEntity()` static method |
 | `ISAChild` is null on overlapping parent | Expected — overlapping parents return null for `ISAChild` | Use `ISAChildren` to get the list of child entity names |
 | Save on branch entity not saving all fields | Child entity not discovered | Ensure record was loaded with `Load()` (not just `SetMany()`) |
-| Child discovery adds latency | Extra query per Load for parent-type entities, and a round trip per record in the browser | Give the entity a subtype rule that answers on load — see [Knowing the Subtype on Load](#knowing-the-subtype-on-load) |
-| `IS-A load hint: ... The rule and the data disagree.` in the log | The entity's subtype rule names a child that has no row for this record, e.g. its type changed after its subtype row was written | Fix the rule or the data. The record still loads correctly, but each load costs an extra round trip until then |
+| Child discovery adds latency | Extra query per Load for parent-type entities, and a round trip per record in the browser | Opt the entity in to load hints (`ResolveLoadHint`, or a selector with `UseForLoadedRecords`) — see [Knowing the Subtype on Load](#knowing-the-subtype-on-load) |
+| `IS-A load hint: ... The rule and the data disagree.` in the log | The entity's subtype rule names a child that has no row for this record, and its subtype row is in another child, e.g. its type changed after its subtype row was written | Fix the rule or the data. The record still loads correctly, but each load costs an extra round trip until then |
 | Parent not deleted after child delete | Other child records still exist (overlapping) | Expected — parent preserved while any child references it |
