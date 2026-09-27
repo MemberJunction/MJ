@@ -1,0 +1,49 @@
+{
+  "name": "@memberjunction/work-queue-azure",
+  "type": "module",
+  "version": "6.1.0",
+  "description": "MemberJunction: Azure Service Bus transport and Azure Functions adapter for the durable work queue. No MemberJunction runtime dependencies.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./functions": {
+      "types": "./dist/functions/index.d.ts",
+      "default": "./dist/functions/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:servicebus": "vitest run --config vitest.servicebus.config.ts"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@azure/identity": "^4.13.3",
+    "@azure/service-bus": "^7.9.5",
+    "@memberjunction/work-queue-core": "6.1.0",
+    "long": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

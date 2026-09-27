@@ -2591,7 +2591,7 @@ importers:
         version: 3.0.7(@azure/identity@4.13.1)
       googleapis:
         specifier: ^144.0.0
-        version: 144.0.0
+        version: 144.0.0(encoding@0.1.13)
 
   packages/AI/RealtimeClient:
     dependencies:
@@ -9269,7 +9269,7 @@ importers:
     devDependencies:
       '@angular-devkit/build-angular':
         specifier: 21.2.23
-        version: 21.2.23(8b5ff6c8d6b2881cf5a377178f9c369e)
+        version: 21.2.23(c9585001f8eadf034085e60e36fd3d7a)
       '@angular/cli':
         specifier: 21.2.23
         version: 21.2.23(@types/node@24.10.11)(chokidar@5.0.0)
@@ -15359,6 +15359,31 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/WorkQueue/azure:
+    dependencies:
+      '@azure/identity':
+        specifier: ^4.13.3
+        version: 4.13.3
+      '@azure/service-bus':
+        specifier: ^7.9.5
+        version: 7.9.5
+      '@memberjunction/work-queue-core':
+        specifier: 6.1.0
+        version: link:../core
+      long:
+        specifier: ^5.2.0
+        version: 5.3.2
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/WorkQueue/base:
     dependencies:
       '@memberjunction/core':
@@ -16464,6 +16489,10 @@ packages:
     resolution: {integrity: sha512-EHaOXW0RYDKS5CFffnixdyRPak5ytiCtU7uXDcP/uiY+A6jFRwNGzzJBiznkCzvi5EYpY+YWinieqHb0oY916A==}
     engines: {node: '>=20.0.0'}
 
+  '@azure/abort-controller@1.1.0':
+    resolution: {integrity: sha512-TrRLIoSQVzfAJX9H1JeFjzAoDGcoK1IYX1UImfceTZpsyYfWr09Ss1aHW1y5TrrR3iq6RZLBwJ3E24uwPhwahw==}
+    engines: {node: '>=12.0.0'}
+
   '@azure/abort-controller@2.1.2':
     resolution: {integrity: sha512-nBrLsEWm4J2u5LpAPjxADTlq3trDgVZZXHNKabeXZtpq3d3AbN/KGO82R87rdDz5/lYB024rtEf10/q0urNgsA==}
     engines: {node: '>=18.0.0'}
@@ -16475,6 +16504,10 @@ packages:
   '@azure/communication-common@2.4.2':
     resolution: {integrity: sha512-5ZdPoBPmXG5+tlvCIZ9lnLxunZd8a9NCQunYJHLcaNJGTsg3ZXaHczel2ByP5PnHyLJIJNor9oHJsv6gY65oYg==}
     engines: {node: '>=20.0.0'}
+
+  '@azure/core-amqp@4.5.1':
+    resolution: {integrity: sha512-G+SURt2u/G+oj5J6Z8Ma7pbRwn5Rq9sRIh+oSejHTUjTNR431KGTQrf4aiFJXKuWD0QXZwxnFCFK//6iDL/QbQ==}
+    engines: {node: '>=22.0.0'}
 
   '@azure/core-auth@1.10.1':
     resolution: {integrity: sha512-ykRMW8PjVAn+RS6ww5cmK9U2CyH9p4Q88YJwvUslfuMmN98w/2rdGRLPqJYObapBCdzBVeDgYWdJnFPFb7qzpg==}
@@ -16499,6 +16532,10 @@ packages:
     resolution: {integrity: sha512-YKWi9YuCU04B55h25cnOYZHxXYtEvQEbKST5vqRga7hWY9ydd3FZHdeQF8pyh+acWZvppw13M/LMGx0LABUVMA==}
     engines: {node: '>=18.0.0'}
 
+  '@azure/core-process@1.0.0':
+    resolution: {integrity: sha512-/shnJ+ooO8WPxDhPEeI/2oRQuubn16gZ6CvlbpWbEswZfzwI9tI/sMAHmF3x1LuQ9yZYXfLW3TjzGMLEC5blKg==}
+    engines: {node: '>=22.0.0'}
+
   '@azure/core-rest-pipeline@1.22.2':
     resolution: {integrity: sha512-MzHym+wOi8CLUlKCQu12de0nwcq9k9Kuv43j4Wa++CsCpJwps2eeBQwD2Bu8snkxTtDKDx4GwjuR9E8yC8LNrg==}
     engines: {node: '>=20.0.0'}
@@ -16518,6 +16555,10 @@ packages:
   '@azure/identity@4.13.1':
     resolution: {integrity: sha512-5C/2WD5Vb1lHnZS16dNQRPMjN6oV/Upba+C9nBIs15PmOi6A3ZGs4Lr2u60zw4S04gi+u3cEXiqTVP7M4Pz3kw==}
     engines: {node: '>=20.0.0'}
+
+  '@azure/identity@4.13.3':
+    resolution: {integrity: sha512-zGQPtqvXPgSA8yfV2CkIQ1qirqk0p9AIVpC5uEkdXQYcKl07QHvyaGYRnZOk0AsQUmxNb4wfkcwY5di8Z5xa9A==}
+    engines: {node: '>=22.0.0'}
 
   '@azure/keyvault-common@2.1.0':
     resolution: {integrity: sha512-aCDidWuKY06LWQ4x7/8TIXK6iRqTaRWRL3t7T+LC+j1b07HtoIsOxP/tU90G4jCSBn5TAyUTCtA4MS/y5Hudaw==}
@@ -16561,6 +16602,10 @@ packages:
     resolution: {integrity: sha512-yPohvMwWLv1XnaWnIUyKUh8CvcVChCGqG/VluGwfGmaAfrZTNt5yQ+sIs462Sgw6+e2K83KGmMJ860p73ZSCrw==}
     engines: {node: '>=0.8.0'}
 
+  '@azure/msal-common@16.14.1':
+    resolution: {integrity: sha512-Or6xhPNyi4zHW25158yxBoyxuCqNSPa5YBVqfF1J5Ks4MJWBo/USXdp05DQIPu1Zli00YZu6t0+h6KvHJealxQ==}
+    engines: {node: '>=0.8.0'}
+
   '@azure/msal-node@2.16.3':
     resolution: {integrity: sha512-CO+SE4weOsfJf+C5LM8argzvotrXw252/ZU6SM2Tz63fEblhH1uuVaaO4ISYFuN4Q6BhTo7I3qIdi8ydUQCqhw==}
     engines: {node: '>=16'}
@@ -16568,6 +16613,14 @@ packages:
   '@azure/msal-node@5.4.0':
     resolution: {integrity: sha512-6EZEParwHRlnSSIikw8FNAnAzwmh71uhveUXdPNFeZFviJ9SH+rwFiurhjzXqICYTrpm3E+dj693QOwfPbJXAQ==}
     engines: {node: '>=20'}
+
+  '@azure/msal-node@6.0.1':
+    resolution: {integrity: sha512-ixSO1Y/kCVRthRs+hSx/5qkwaunX1/RAePhlMN0wIpIQ4WEZ6AREGGnGd1AP0qspHVsAwzWQKGubpjh50JyJIQ==}
+    engines: {node: '>=20'}
+
+  '@azure/service-bus@7.9.5':
+    resolution: {integrity: sha512-R5Af+4jtZZII2snLomaddMyElFtTCBRZp2qERPlP8PuISLU87eFYFM7xWzxjNd0yeiyQUBkamx/ZhOC8eWhCHA==}
+    engines: {node: '>=18.0.0'}
 
   '@azure/storage-blob@12.26.0':
     resolution: {integrity: sha512-SriLPKezypIsiZ+TtlFfE46uuBIap2HeaQVS78e1P7rz5OSbq0rsd52WE1mC5f7vAeLiXqv7I7oRhL3WFZEw3Q==}
@@ -21622,6 +21675,9 @@ packages:
   '@types/inquirer@9.0.9':
     resolution: {integrity: sha512-/mWx5136gts2Z2e5izdoRCo46lPp5TMs9R15GTSsgg/XnZyxDWVqoVU3R9lWnccKpqwsJLvRoxbCjoJtZB7DSw==}
 
+  '@types/is-buffer@2.0.2':
+    resolution: {integrity: sha512-G6OXy83Va+xEo8XgqAJYOuvOMxeey9xM5XKkvwJNmN8rVdcB+r15HvHsG86hl86JvU0y1aa7Z2ERkNFYWw9ySg==}
+
   '@types/istanbul-lib-coverage@2.0.6':
     resolution: {integrity: sha512-2QF/t/auWm0lsy8XtKVPG19v3sSOQlJe/YHZgfjb/KBBHOGSV+J2q/S671rcq9uTBrLAXmZpqJiaQbMT+zNU1w==}
 
@@ -25531,6 +25587,10 @@ packages:
     resolution: {integrity: sha512-wa56o2/ElJMYqjCjGkXri7it5FbebW5usLw/nPmCMs5DeZ7eziSYZhSmPRn0txqeW4LnAmQQU7FgqLpsEFKM4A==}
     engines: {node: '>= 0.4'}
 
+  is-buffer@2.0.5:
+    resolution: {integrity: sha512-i2R6zNFDwgEHJyQUtJEk0XFi1i0dPFn/oqjK3/vPCcDeJvW5NQ83V8QbicfF1SupOaB0h8ntgBC2YiE7dfyctQ==}
+    engines: {node: '>=4'}
+
   is-callable@1.2.7:
     resolution: {integrity: sha512-1BC0BVFhS/p0qtw6enp8e+8OD0UrK0oFLztSjNzhcKA3WDuJxxAPXzPuPtKkjEY9UUoEWlX/8fgKeu2S8i9JTA==}
     engines: {node: '>= 0.4'}
@@ -25995,6 +26055,9 @@ packages:
   jsonwebtoken@9.0.3:
     resolution: {integrity: sha512-MT/xP0CrubFRNLNKvxJ2BYfy53Zkm++5bX9dtuPbqAeQpTVe0MQTFhao8+Cp//EmJp244xt6Drw/GVEGCUj40g==}
     engines: {node: '>=12', npm: '>=6'}
+
+  jssha@3.3.2:
+    resolution: {integrity: sha512-0RhFxzijV4W0qTXa97D5b6twAWXX7SEOpw8qzAZyZ+oeGOP9e84PnDSLjl7SBB1vBQ+chSUwsZR06i1AzA+nEA==}
 
   jsx-ast-utils@3.3.5:
     resolution: {integrity: sha512-ZZow9HBI5O6EPgSJLUb8n2NKgmVWTwCvHGwFuJlMjvLFqlGG6pjirPhtdsseaLZjSibD8eegzmYpUZwoIlj2cQ==}
@@ -28420,6 +28483,12 @@ packages:
   rfdc@1.4.1:
     resolution: {integrity: sha512-q1b3N5QkRUWUl7iyylaaj3kOpIT0N2i9MqIEQXP73GVsN9cw3fdx8X63cEmWhJGi2PPCF23Ijp7ktmd39rawIA==}
 
+  rhea-promise@3.0.3:
+    resolution: {integrity: sha512-a875P5YcMkePSTEWMsnmCQS7Y4v/XvIw7ZoMtJxqtQRZsqSA6PsZxuz4vktyRykPuUgdNsA6F84dS3iEXZoYnQ==}
+
+  rhea@3.0.5:
+    resolution: {integrity: sha512-Ye1gzqH9DoCGMTaSfLfGmDdoderMshyVU5rdFES+D3N1U5PASZcNCKqhWJJUOOj8INtdrIPOfDALrRcoRRL7jw==}
+
   rimraf@5.0.10:
     resolution: {integrity: sha512-l0OE8wL34P4nJH/H2ffoaniAokM2qSmrtXHmlpvYr5AVVX8msAyW0l8NVJFDxlSK4u3Uh/f41cQheDVdnYijwQ==}
     hasBin: true
@@ -30601,7 +30670,7 @@ snapshots:
       tinyglobby: 0.2.15
       ts-morph: 21.0.1
     optionalDependencies:
-      '@angular-devkit/build-angular': 21.2.23(8b5ff6c8d6b2881cf5a377178f9c369e)
+      '@angular-devkit/build-angular': 21.2.23(c9585001f8eadf034085e60e36fd3d7a)
       '@angular/build': 21.2.23(3ceae79fd7ed0fe1f3994a5a26ea5c16)
       vite: 7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
@@ -30700,12 +30769,109 @@ snapshots:
       - webpack-cli
       - yaml
 
+  '@angular-devkit/build-angular@21.2.23(c9585001f8eadf034085e60e36fd3d7a)':
+    dependencies:
+      '@ampproject/remapping': 2.3.0
+      '@angular-devkit/architect': 0.2102.23(chokidar@5.0.0)
+      '@angular-devkit/build-webpack': 0.2102.23(chokidar@5.0.0)(webpack-dev-server@5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)))(webpack@5.105.2(esbuild@0.28.1))
+      '@angular-devkit/core': 21.2.23(chokidar@5.0.0)
+      '@angular/build': 21.2.23(352f6625325b8a9675eda04593a3a071)
+      '@angular/compiler-cli': 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@babel/core': 7.29.7
+      '@babel/generator': 7.29.1
+      '@babel/helper-annotate-as-pure': 7.27.3
+      '@babel/helper-split-export-declaration': 7.24.7
+      '@babel/plugin-transform-async-generator-functions': 7.29.0(@babel/core@7.29.7)
+      '@babel/plugin-transform-async-to-generator': 7.28.6(@babel/core@7.29.7)
+      '@babel/plugin-transform-runtime': 7.29.0(@babel/core@7.29.7)
+      '@babel/preset-env': 7.29.2(@babel/core@7.29.7)
+      '@babel/runtime': 7.29.2
+      '@discoveryjs/json-ext': 0.6.3
+      '@ngtools/webpack': 21.2.23(@angular/compiler-cli@21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3))(typescript@5.9.3)(webpack@5.105.2(esbuild@0.28.1))
+      ansi-colors: 4.1.3
+      autoprefixer: 10.4.27(postcss@8.5.23)
+      babel-loader: 10.0.0(@babel/core@7.29.7)(webpack@5.105.2(esbuild@0.28.1))
+      browserslist: 4.28.1
+      copy-webpack-plugin: 14.0.0(webpack@5.105.2(esbuild@0.28.1))
+      css-loader: 7.1.3(webpack@5.105.2(esbuild@0.28.1))
+      esbuild-wasm: 0.28.1
+      http-proxy-middleware: 3.0.7
+      istanbul-lib-instrument: 6.0.3
+      jsonc-parser: 3.3.1
+      karma-source-map-support: 1.4.0
+      less: 4.9.0
+      less-loader: 12.3.1(less@4.9.0)(webpack@5.105.2(esbuild@0.28.1))
+      license-webpack-plugin: 4.0.2(webpack@5.105.2(esbuild@0.28.1))
+      loader-utils: 3.3.1
+      mini-css-extract-plugin: 2.10.0(webpack@5.105.2(esbuild@0.28.1))
+      open: 11.0.0
+      ora: 9.3.0
+      picomatch: 4.0.4
+      piscina: 5.2.0
+      postcss: 8.5.23
+      postcss-loader: 8.2.0(postcss@8.5.23)(typescript@5.9.3)(webpack@5.105.2(esbuild@0.28.1))
+      resolve-url-loader: 5.0.0
+      rxjs: 7.8.2
+      sass: 1.97.3
+      sass-loader: 16.0.7(sass@1.97.3)(webpack@5.105.2(esbuild@0.28.1))
+      semver: 7.7.4
+      source-map-loader: 5.0.0(webpack@5.105.2(esbuild@0.28.1))
+      source-map-support: 0.5.21
+      terser: 5.46.0
+      tinyglobby: 0.2.15
+      tree-kill: 1.2.2
+      tslib: 2.8.1
+      typescript: 5.9.3
+      webpack: 5.105.2(esbuild@0.28.1)
+      webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
+      webpack-dev-server: 5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
+      webpack-merge: 6.0.1
+      webpack-subresource-integrity: 5.1.0(webpack@5.105.2(esbuild@0.28.1))
+    optionalDependencies:
+      '@angular/core': 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/localize': 21.2.22(@angular/compiler-cli@21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3))(@angular/compiler@21.2.22)
+      '@angular/platform-browser': 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@angular/service-worker': 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      esbuild: 0.28.1
+      ng-packagr: 21.2.7(@angular/compiler-cli@21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3))(tslib@2.8.1)(typescript@5.9.3)
+    transitivePeerDependencies:
+      - '@angular/compiler'
+      - '@rspack/core'
+      - '@swc/core'
+      - '@types/node'
+      - bufferutil
+      - chokidar
+      - debug
+      - html-webpack-plugin
+      - jiti
+      - lightningcss
+      - node-sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - tsx
+      - uglify-js
+      - utf-8-validate
+      - vitest
+      - webpack-cli
+      - yaml
+
   '@angular-devkit/build-webpack@0.2102.23(chokidar@5.0.0)(webpack-dev-server@5.2.6(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)))(webpack@5.105.2(esbuild@0.28.1))':
     dependencies:
       '@angular-devkit/architect': 0.2102.23(chokidar@5.0.0)
       rxjs: 7.8.2
       webpack: 5.105.2(esbuild@0.28.1)
       webpack-dev-server: 5.2.6(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
+    transitivePeerDependencies:
+      - chokidar
+
+  '@angular-devkit/build-webpack@0.2102.23(chokidar@5.0.0)(webpack-dev-server@5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)))(webpack@5.105.2(esbuild@0.28.1))':
+    dependencies:
+      '@angular-devkit/architect': 0.2102.23(chokidar@5.0.0)
+      rxjs: 7.8.2
+      webpack: 5.105.2(esbuild@0.28.1)
+      webpack-dev-server: 5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
     transitivePeerDependencies:
       - chokidar
 
@@ -32562,6 +32728,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@azure/abort-controller@1.1.0':
+    dependencies:
+      tslib: 2.8.1
+
   '@azure/abort-controller@2.1.2':
     dependencies:
       tslib: 2.8.1
@@ -32597,6 +32767,22 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
     optional: true
+
+  '@azure/core-amqp@4.5.1':
+    dependencies:
+      '@azure/abort-controller': 2.1.2
+      '@azure/core-auth': 1.10.1
+      '@azure/core-util': 1.13.1
+      '@azure/logger': 1.3.0
+      buffer: 6.0.3
+      events: 3.3.0
+      process: 0.11.10
+      rhea: 3.0.5
+      rhea-promise: 3.0.3
+      tslib: 2.8.1
+      util: 0.12.5
+    transitivePeerDependencies:
+      - supports-color
 
   '@azure/core-auth@1.10.1':
     dependencies:
@@ -32636,6 +32822,8 @@ snapshots:
   '@azure/core-paging@1.6.2':
     dependencies:
       tslib: 2.8.1
+
+  '@azure/core-process@1.0.0': {}
 
   '@azure/core-rest-pipeline@1.22.2':
     dependencies:
@@ -32677,6 +32865,23 @@ snapshots:
       '@azure/logger': 1.3.0
       '@azure/msal-browser': 5.17.0
       '@azure/msal-node': 5.4.0
+      open: 10.2.0
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - supports-color
+
+  '@azure/identity@4.13.3':
+    dependencies:
+      '@azure/abort-controller': 2.1.2
+      '@azure/core-auth': 1.10.1
+      '@azure/core-client': 1.10.1
+      '@azure/core-process': 1.0.0
+      '@azure/core-rest-pipeline': 1.22.2
+      '@azure/core-tracing': 1.3.1
+      '@azure/core-util': 1.13.1
+      '@azure/logger': 1.3.0
+      '@azure/msal-browser': 5.17.0
+      '@azure/msal-node': 6.0.1
       open: 10.2.0
       tslib: 2.8.1
     transitivePeerDependencies:
@@ -32757,6 +32962,8 @@ snapshots:
 
   '@azure/msal-common@16.11.1': {}
 
+  '@azure/msal-common@16.14.1': {}
+
   '@azure/msal-node@2.16.3':
     dependencies:
       '@azure/msal-common': 14.16.1
@@ -32767,6 +32974,34 @@ snapshots:
     dependencies:
       '@azure/msal-common': 16.11.1
       jsonwebtoken: 9.0.3
+
+  '@azure/msal-node@6.0.1':
+    dependencies:
+      '@azure/msal-common': 16.14.1
+      jsonwebtoken: 9.0.3
+
+  '@azure/service-bus@7.9.5':
+    dependencies:
+      '@azure/abort-controller': 1.1.0
+      '@azure/core-amqp': 4.5.1
+      '@azure/core-auth': 1.10.1
+      '@azure/core-client': 1.10.1
+      '@azure/core-paging': 1.6.2
+      '@azure/core-rest-pipeline': 1.22.2
+      '@azure/core-tracing': 1.3.1
+      '@azure/core-util': 1.13.1
+      '@azure/core-xml': 1.5.0
+      '@azure/logger': 1.3.0
+      '@types/is-buffer': 2.0.2
+      buffer: 6.0.3
+      is-buffer: 2.0.5
+      jssha: 3.3.2
+      long: 5.3.2
+      process: 0.11.10
+      rhea-promise: 3.0.3
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - supports-color
 
   '@azure/storage-blob@12.26.0':
     dependencies:
@@ -38796,6 +39031,10 @@ snapshots:
       '@types/through': 0.0.33
       rxjs: 7.8.2
 
+  '@types/is-buffer@2.0.2':
+    dependencies:
+      '@types/node': 24.10.11
+
   '@types/istanbul-lib-coverage@2.0.6': {}
 
   '@types/istanbul-lib-report@3.0.3':
@@ -43228,7 +43467,7 @@ snapshots:
 
   google-logging-utils@1.1.3: {}
 
-  googleapis-common@7.2.0:
+  googleapis-common@7.2.0(encoding@0.1.13):
     dependencies:
       extend: 3.0.2
       gaxios: 6.7.1(encoding@0.1.13)
@@ -43251,10 +43490,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  googleapis@144.0.0:
+  googleapis@144.0.0(encoding@0.1.13):
     dependencies:
       google-auth-library: 9.15.1(encoding@0.1.13)
-      googleapis-common: 7.2.0
+      googleapis-common: 7.2.0(encoding@0.1.13)
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -43759,6 +43998,8 @@ snapshots:
       call-bound: 1.0.4
       has-tostringtag: 1.0.2
 
+  is-buffer@2.0.5: {}
+
   is-callable@1.2.7: {}
 
   is-core-module@2.16.1:
@@ -44214,6 +44455,8 @@ snapshots:
       lodash.once: 4.1.1
       ms: 2.1.3
       semver: 7.7.4
+
+  jssha@3.3.2: {}
 
   jsx-ast-utils@3.3.5:
     dependencies:
@@ -47043,6 +47286,20 @@ snapshots:
 
   rfdc@1.4.1: {}
 
+  rhea-promise@3.0.3:
+    dependencies:
+      debug: 4.4.3(supports-color@5.5.0)
+      rhea: 3.0.5
+      tslib: 2.8.1
+    transitivePeerDependencies:
+      - supports-color
+
+  rhea@3.0.5:
+    dependencies:
+      debug: 4.4.3(supports-color@5.5.0)
+    transitivePeerDependencies:
+      - supports-color
+
   rimraf@5.0.10:
     dependencies:
       glob: 10.5.0
@@ -47971,7 +48228,7 @@ snapshots:
   tedious@18.6.2:
     dependencies:
       '@azure/core-auth': 1.10.1
-      '@azure/identity': 4.13.1
+      '@azure/identity': 4.13.3
       '@azure/keyvault-keys': 4.10.2
       '@js-joda/core': 5.7.0
       '@types/node': 24.10.11
@@ -47986,7 +48243,7 @@ snapshots:
   tedious@20.0.0:
     dependencies:
       '@azure/core-auth': 1.10.1
-      '@azure/identity': 4.13.1
+      '@azure/identity': 4.13.3
       '@azure/keyvault-keys': 4.10.2
       '@js-joda/core': 6.1.0
       '@types/node': 24.10.11
@@ -48924,6 +49181,45 @@ snapshots:
       - tslib
 
   webpack-dev-server@5.2.6(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)):
+    dependencies:
+      '@types/bonjour': 3.5.13
+      '@types/connect-history-api-fallback': 1.5.4
+      '@types/express': 4.17.25
+      '@types/express-serve-static-core': 4.19.8
+      '@types/serve-index': 1.9.4
+      '@types/serve-static': 1.15.10
+      '@types/sockjs': 0.3.36
+      '@types/ws': 8.18.1
+      ansi-html-community: 0.0.8
+      bonjour-service: 1.3.0
+      chokidar: 3.6.0
+      colorette: 2.0.20
+      compression: 1.8.1
+      connect-history-api-fallback: 2.0.0
+      express: 4.22.1
+      graceful-fs: 4.2.11
+      http-proxy-middleware: 2.0.9(@types/express@4.17.25)(debug@4.4.3)
+      ipaddr.js: 2.3.0
+      launch-editor: 2.14.1
+      open: 10.2.0
+      p-retry: 6.2.1
+      schema-utils: 4.3.3
+      selfsigned: 5.5.0
+      serve-index: 1.9.2
+      sockjs: 0.3.24
+      spdy: 4.0.2
+      webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
+      ws: 8.19.0
+    optionalDependencies:
+      webpack: 5.105.2(esbuild@0.28.1)
+    transitivePeerDependencies:
+      - bufferutil
+      - debug
+      - supports-color
+      - tslib
+      - utf-8-validate
+
+  webpack-dev-server@5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)):
     dependencies:
       '@types/bonjour': 3.5.13
       '@types/connect-history-api-fallback': 1.5.4
