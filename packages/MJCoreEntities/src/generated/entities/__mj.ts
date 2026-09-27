@@ -26699,16 +26699,18 @@ export const MJQueueTaskSchema = z.object({
         * * Display Name: Queue ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Queues (vwQueues.ID)`),
-    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('In Progress')]).describe(`
+    Status: z.union([z.literal('Completed'), z.literal('Failed'), z.literal('In Progress'), z.literal('Pending')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
-        * * SQL Data Type: nchar(10)
+        * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
     *   * Completed
     *   * Failed
-    *   * In Progress`),
+    *   * In Progress
+    *   * Pending
+        * * Description: Task lifecycle. Pending is written by QueueManager.AddTask; Completed or Failed is written by QueueBase.StartTask when the task settles. In Progress is a permitted value that no shipped code persists today (a running task is tracked in memory only).`),
     StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
@@ -108000,18 +108002,20 @@ export class MJQueueTaskEntity extends BaseEntity<MJQueueTaskEntityType> {
     /**
     * * Field Name: Status
     * * Display Name: Status
-    * * SQL Data Type: nchar(10)
+    * * SQL Data Type: nvarchar(20)
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
     *   * Completed
     *   * Failed
     *   * In Progress
+    *   * Pending
+    * * Description: Task lifecycle. Pending is written by QueueManager.AddTask; Completed or Failed is written by QueueBase.StartTask when the task settles. In Progress is a permitted value that no shipped code persists today (a running task is tracked in memory only).
     */
-    get Status(): 'Completed' | 'Failed' | 'In Progress' {
+    get Status(): 'Completed' | 'Failed' | 'In Progress' | 'Pending' {
         return this.Get('Status');
     }
-    set Status(value: 'Completed' | 'Failed' | 'In Progress') {
+    set Status(value: 'Completed' | 'Failed' | 'In Progress' | 'Pending') {
         this.Set('Status', value);
     }
 

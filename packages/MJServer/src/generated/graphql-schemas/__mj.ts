@@ -69201,8 +69201,8 @@ export class MJQueueTask_ {
     @MaxLength(36)
     QueueID?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(10)
+    @Field({nullable: true, description: `Task lifecycle. Pending is written by QueueManager.AddTask; Completed or Failed is written by QueueBase.StartTask when the task settles. In Progress is a permitted value that no shipped code persists today (a running task is tracked in memory only).`}) 
+    @MaxLength(20)
     Status?: string;
         
     @Field({nullable: true}) 

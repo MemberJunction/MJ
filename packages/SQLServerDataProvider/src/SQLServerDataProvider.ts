@@ -60,7 +60,7 @@ import {
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
-import { QueueManager } from '@memberjunction/queue';
+import { QueueManager, ToEntityAIActionTaskReference } from '@memberjunction/queue';
 import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
@@ -1056,8 +1056,10 @@ export class SQLServerDataProvider
    * the base dispatches this after an `await`, by which time that transaction may have settled.
    */
   protected override EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo, postCommitToken?: PostCommitToken): void {
+    // Build the serialisable reference now; it is resolved against the committed record when the task runs.
+    const reference = ToEntityAIActionTaskReference(params);
     this.RunAfterCommit(async () => {
-      await QueueManager.AddTask('Entity AI Action', params, null, user);
+      await QueueManager.AddTask('Entity AI Action', reference, null, user);
     }, 'Entity AI Action', postCommitToken);
   }
 

@@ -10,6 +10,9 @@ import { DoomedTransactionError } from '@memberjunction/generic-database-provide
 vi.mock('mssql', async () => (await import('./helpers/mock-mssql')).createMockMssqlModule());
 vi.mock('@memberjunction/queue', () => ({
     QueueManager: { AddTask: vi.fn().mockResolvedValue(undefined) },
+    ToEntityAIActionTaskReference: vi.fn(() => ({
+        kind: 'EntityAIActionReference', entityAIActionId: 'a', actionId: 'b', modelId: 'c', entityName: 'E', recordID: 'ID|1',
+    })),
 }));
 
 import sql from 'mssql';
@@ -207,6 +210,9 @@ describe('SQLServerDataProvider nested transactions (real class, mocked mssql)',
         expect(seen).toEqual([{ depth: 0, active: false }]);
         expect(provider.Handle()).toBeNull();
         expect(QueueManager.AddTask).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(QueueManager.AddTask).mock.calls[0][1]).toEqual({
+            kind: 'EntityAIActionReference', entityAIActionId: 'a', actionId: 'b', modelId: 'c', entityName: 'E', recordID: 'ID|1',
+        });
     });
 
     it('outer rollback clears deferred tasks and never AddTask (B13)', async () => {

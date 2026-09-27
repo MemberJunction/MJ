@@ -1,13 +1,22 @@
-import { UserInfo, BaseEntity, LogError } from '@memberjunction/core';
+import { UserInfo, BaseEntity, LogError, IMetadataProvider, Metadata } from '@memberjunction/core';
 import { MJQueueEntity, MJQueueTaskEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual, IShutdownable } from '@memberjunction/global';
 //import { MJQueueTaskEntity, MJQueueEntity } from 'mj_generatedentities';
+
+/**
+ * Why a task failed, when the driver knows retrying cannot help or the record was simply not there:
+ *  - 'Fatal': deterministic (unrecognised task data, unknown entity) — never retry.
+ *  - 'RecordNotFound': the referenced record did not load; it was deleted, or is not committed yet.
+ * Absent on success and on ordinary failures, which a durable caller may retry.
+ */
+export type TaskFailureKind = 'Fatal' | 'RecordNotFound';
 
 export class TaskResult {
   success: boolean
   userMessage: string
   output: any
   exception: any
+  failureKind?: TaskFailureKind
 }
  
 
@@ -72,6 +81,7 @@ export abstract class QueueBase implements IShutdownable {
   private _queueRecord: MJQueueEntity
   private _stopped: boolean = false;
   private _pendingTimer: ReturnType<typeof setTimeout> | null = null;
+  private _executionProvider: IMetadataProvider | null = null;
 
   constructor(QueueRecord: MJQueueEntity, QueueTypeID: string, ContextUser: UserInfo) {
     this._queueRecord = QueueRecord;
@@ -85,6 +95,26 @@ export abstract class QueueBase implements IShutdownable {
 
   public get QueueTypeID(): string {
     return this._queueTypeId;
+  }
+
+  /**
+   * The provider drivers use for data access. `ExecuteTask` sets it to the caller's provider (a work-queue
+   * delivery's provider); the in-process loop keeps the process-wide provider.
+   */
+  protected get Provider(): IMetadataProvider {
+    return this._executionProvider ?? Metadata.Provider; // global-provider-ok: legacy in-process queue has no per-request provider
+  }
+
+  /**
+   * Runs one task through this driver's ProcessTask and returns its result. Unlike AddTask it does not use the
+   * in-memory queue, does not start the processing loop and does not persist a QueueTask row — the caller owns
+   * durability (the work queue's LegacyQueueDriverHandler).
+   */
+  public async ExecuteTask(task: TaskBase, contextUser: UserInfo, provider?: IMetadataProvider): Promise<TaskResult> {
+    if (provider) {
+      this._executionProvider = provider;
+    }
+    return this.ProcessTask(task, contextUser);
   }
 
   /**

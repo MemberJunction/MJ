@@ -4,6 +4,8 @@ import { LogError, Metadata, RunView, UserInfo, BaseEntity } from "@memberjuncti
 import { MJQueueEntity, MJQueueTaskEntity, MJQueueTypeEntity } from "@memberjunction/core-entities";
 import { MJGlobal, UUIDsEqual, BaseSingleton, ShutdownRegistry, IShutdownable } from "@memberjunction/global";
 import os from 'os';
+import { FitToField } from "./FitToField";
+import { LegacyQueueRouterRegistry } from "./LegacyQueueRouter";
 
 /**
  *QueueManager class is a generic manager of all active queues for the process.
@@ -39,6 +41,25 @@ export class QueueManager extends BaseSingleton<QueueManager> implements IShutdo
         // Per-queue failures must not abort the rest of the shutdown.
       }
     }
+  }
+
+  /**
+   * Stops and forgets this process's queue for a queue type. `_queues` otherwise keeps a stopped queue for the
+   * life of the process, and a stopped queue refuses AddTask — so a later AddTask for the same type would fail.
+   * Returns true when a queue was removed.
+   */
+  public RemoveQueue(queueTypeID: string): boolean {
+    const index = this._queues.findIndex(q => q.QueueTypeID == queueTypeID);
+    if (index < 0) {
+      return false;
+    }
+    try {
+      this._queues[index].Stop();
+    } catch {
+      // A queue that fails to stop is still forgotten so the next AddTask can create a fresh one.
+    }
+    this._queues.splice(index, 1);
+    return true;
   }
 
   public Shutdown(): void {
@@ -88,12 +109,21 @@ export class QueueManager extends BaseSingleton<QueueManager> implements IShutdo
     ShutdownRegistry.Instance.Register(this);
   }
 
+  /**
+   * Adds a task for the named queue type. When a legacy queue router is registered (the server imports
+   * @memberjunction/work-queue-legacy-bridge) and it accepts the task, the task is processed durably elsewhere and
+   * this returns undefined — there is no in-process TaskBase for a routed task. Otherwise the task runs on this
+   * process's in-memory queue as before.
+   */
   public static async AddTask(QueueType: string, data: any, options: any, contextUser: UserInfo): Promise<TaskBase | undefined> {
+    if (await LegacyQueueRouterRegistry.Instance.TryRoute(QueueType, data, options, contextUser)) {
+      return undefined;
+    }
     await QueueManager.Config(contextUser);
     const queueType = QueueManager.QueueTypes.find(qt => qt.Name == QueueType);
     if (queueType == null)
       throw new Error(`Queue Type ${QueueType} not found.`)
-    
+
     return QueueManager.Instance.AddTask(queueType.ID, data, options, contextUser);
   }
 
@@ -113,10 +143,10 @@ export class QueueManager extends BaseSingleton<QueueManager> implements IShutdo
         // STEP 3: Create a task in the database for this new task
         const md = new Metadata(); // global-provider-ok: process-wide queue singleton, no per-request provider context (QueueManager is process-scoped)
         const taskRecord = <MJQueueTaskEntity>await md.GetEntityObject('MJ: Queue Tasks', contextUser);
-        taskRecord.Set('QueueID', queue.QueueID);
-        taskRecord.Set('Status', 'Pending');
-        taskRecord.Set('Data', JSON.stringify(data));
-        taskRecord.Set('Options', JSON.stringify(options));
+        taskRecord.QueueID = queue.QueueID;
+        taskRecord.Status = 'Pending';
+        taskRecord.Data = JSON.stringify(data);
+        taskRecord.Options = JSON.stringify(options);
         if (await taskRecord.Save()) {
           // db save worked, now we can create a taskBase object
           const task = new TaskBase(taskRecord, data, options);
@@ -168,33 +198,33 @@ export class QueueManager extends BaseSingleton<QueueManager> implements IShutdo
       const md = new Metadata(); // global-provider-ok: process-wide queue singleton, no per-request provider context (QueueManager is process-scoped)
       const newQueueRecord = <MJQueueEntity>await md.GetEntityObject('MJ: Queues', contextUser);
       newQueueRecord.NewRecord();
-      newQueueRecord.Set('QueueTypeID', queueType.ID);
-      newQueueRecord.Set('Name', queueType.Name);
-      newQueueRecord.Set('IsActive', true);
-      newQueueRecord.Set('ProcessPID', process.pid);
-      newQueueRecord.Set('ProcessPlatform', process.platform);
-      newQueueRecord.Set('ProcessVersion', process.version);
-      newQueueRecord.Set('ProcessCwd', process.cwd());
+      newQueueRecord.QueueTypeID = queueType.ID;
+      newQueueRecord.Name = FitToField(newQueueRecord, 'Name', queueType.Name) ?? queueType.Name;
+      newQueueRecord.IsActive = true;
+      newQueueRecord.ProcessPID = process.pid;
+      newQueueRecord.ProcessPlatform = FitToField(newQueueRecord, 'ProcessPlatform', process.platform);
+      newQueueRecord.ProcessVersion = FitToField(newQueueRecord, 'ProcessVersion', process.version);
+      newQueueRecord.ProcessCwd = FitToField(newQueueRecord, 'ProcessCwd', process.cwd());
 
       const networkInterfaces = os.networkInterfaces();
       const interfaceNames = Object.keys(networkInterfaces);
-      
+
       if (interfaceNames.length > 0) {
         const firstInterfaceName = interfaceNames[0];
         const firstInterface = networkInterfaces[firstInterfaceName];
         if (firstInterface && firstInterface.length > 0) {
-          newQueueRecord.Set('ProcessIPAddress', firstInterface[0].address);
-          newQueueRecord.Set('ProcessMacAddress', firstInterface[0].mac);
+          newQueueRecord.ProcessIPAddress = FitToField(newQueueRecord, 'ProcessIPAddress', firstInterface[0].address);
+          newQueueRecord.ProcessMacAddress = FitToField(newQueueRecord, 'ProcessMacAddress', firstInterface[0].mac);
         }
       }
 
-      newQueueRecord.Set('ProcessOSName', os.type());
-      newQueueRecord.Set('ProcessOSVersion', os.release());
-      newQueueRecord.Set('ProcessHostName', os.hostname());
-      newQueueRecord.Set('ProcessUserID', os.userInfo().uid.toString());
-      newQueueRecord.Set('ProcessUserName', os.userInfo().username); 
+      newQueueRecord.ProcessOSName = FitToField(newQueueRecord, 'ProcessOSName', os.type());
+      newQueueRecord.ProcessOSVersion = FitToField(newQueueRecord, 'ProcessOSVersion', os.release());
+      newQueueRecord.ProcessHostName = FitToField(newQueueRecord, 'ProcessHostName', os.hostname());
+      newQueueRecord.ProcessUserID = FitToField(newQueueRecord, 'ProcessUserID', os.userInfo().uid.toString());
+      newQueueRecord.ProcessUserName = FitToField(newQueueRecord, 'ProcessUserName', os.userInfo().username);
 
-      newQueueRecord.Set('LastHeartbeat', new Date());
+      newQueueRecord.LastHeartbeat = new Date();
 
       if (await newQueueRecord.Save()) {
         const newQueue = MJGlobal.Instance.ClassFactory.CreateInstance<QueueBase>(QueueBase, queueType.Name, newQueueRecord, queueType.ID, contextUser)   
@@ -203,7 +233,7 @@ export class QueueManager extends BaseSingleton<QueueManager> implements IShutdo
         return newQueue;
       }
       else
-        throw new Error(`Unable to create new queue for Queue Type ID ${queueType.ID}.`);
+        throw new Error(`Unable to create new queue for Queue Type ID ${queueType.ID}: ${newQueueRecord.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
     catch (e: any) {
       LogError(e.message);

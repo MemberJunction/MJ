@@ -102,7 +102,7 @@ import {
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
 import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
 import { ScoredCandidate } from '@memberjunction/core';
-import { QueueManager } from '@memberjunction/queue';
+import { QueueManager, ToEntityAIActionTaskReference } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
@@ -629,7 +629,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *                        captured before any `await` — pass it to {@link RunAfterCommit} when deferring.
      */
     protected EnqueueAfterSaveAIAction(params: EntityAIActionParams, user: UserInfo, _postCommitToken?: PostCommitToken): void {
-        QueueManager.AddTask('Entity AI Action', params, null, user);
+        // The task may be persisted or routed to the durable work queue, so it carries a reference to the
+        // record rather than the live BaseEntity. NOTE: this runs before any surrounding transaction commits
+        // (PostgreSQL inherits this method), so the driver treats "record not found" as retryable, not as deleted.
+        QueueManager.AddTask('Entity AI Action', ToEntityAIActionTaskReference(params), null, user);
     }
 
     /**************************************************************************/
