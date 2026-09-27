@@ -30,7 +30,7 @@ graph TD
 
 - **Chat Completions**: Full support for Anthropic's Messages API
 - **Streaming**: Real-time response streaming with thinking block extraction
-- **Prompt Caching**: Automatic ephemeral cache control on content blocks for reduced latency and cost
+- **Prompt Caching**: Automatic ephemeral cache control on content blocks for reduced latency and cost, with breakpoint placement that keeps a trailing volatile message (the agent runtime-state fragment) out of the cached prefix
 - **Multimodal Input**: Support for text, images (base64 and URL), and content block arrays
 - **Thinking/Reasoning**: Extraction of thinking content from Claude's extended thinking responses
 - **Error Analysis**: Integrated error analysis via `ErrorAnalyzer`
@@ -87,6 +87,10 @@ const result = await llm.ChatCompletion({
 console.log("Thinking:", result.data.choices[0].message.thinking);
 console.log("Answer:", result.data.choices[0].message.content);
 ```
+
+### Prompt caching and the trailing runtime-state fragment
+
+Anthropic caches only up to an explicit `cache_control` breakpoint, and a read-hit requires the new request to match a cached prefix *at* a breakpoint. By default the driver places the breakpoint on the last message. When the last message is the agent framework's volatile runtime-state fragment — recognised by the `volatileState` metadata flag via `BaseLLM.IsVolatileStateMessage`, or by a leading `<mj-runtime-state>` / `<mj-agent-specialization>` literal for callers passing plain messages — the driver uses `BaseLLM.SplitTrailingVolatileState` to put the breakpoint on the **last real history message** and sends the fragment (and any assistant prefill after it) uncached. If that leaves two `user` turns adjacent it inserts an `OK` assistant turn to preserve role alternation. Result: the stable history caches across loop iterations and only the fragment is re-processed. A `<<<MJ_CACHE_BREAKPOINT>>>` marker inside a text block still works for callers that want an explicit boundary elsewhere. See the [Agent Prompt Caching Guide](../../../../guides/AGENT_PROMPT_CACHING_GUIDE.md).
 
 ## Supported Parameters
 

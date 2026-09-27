@@ -198,7 +198,7 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
  * - `'systemPrompt'`: never relocate.
  * - `'trailingMessage'`: always relocate.
  *
- * Why: the OS prompt cannot control what an agent designer puts in a child prompt. Nine active
+ * Why: the OS prompt cannot control what an agent designer puts in a child prompt. Six active
  * Loop agents embed a volatile placeholder in theirs, which mutates the system prompt every
  * iteration from a position ahead of the catalogs and the whole history — moving the runtime-state
  * tail does nothing for them. Measured (Gemini 2.5 Flash, volatile specialization): keeping it in

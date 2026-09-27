@@ -6,9 +6,9 @@
  * references a placeholder that changes per iteration or per minute — the current date/time, the
  * Payload, the Scratchpad — then the rendered specialization mutates on every call from a position
  * INSIDE the system prompt, ahead of the catalogs and the entire message history, and the provider's
- * prefix cache breaks there no matter where the runtime-state tail is placed. Nine active Loop agents
- * do this today (Agent Manager, Query Builder, ActionSmith, Database Designer, Data Scout, Goal
- * Analyst, Experiment Designer, Model Development Agent, Planning Designer Agent).
+ * prefix cache breaks there no matter where the runtime-state tail is placed. Six active Loop agents
+ * do this in the shipped catalog (Agent Manager, Data Scout, Database Designer, Experiment Designer,
+ * Goal Analyst, Model Development Agent); IT95 TRS4 sweeps the live catalog for the current count.
  *
  * The check is a static scan of the child template's TEXT, decided once per run, so the layout
  * never flips mid-run (a flip would itself break the prefix). See {@link SpecializationPlacement}.
