@@ -1,0 +1,32 @@
+{
+  "resource_changes": [
+    {
+      "address": "module.work_queue.azurerm_servicebus_subscription.this[\"email.archive\"]",
+      "type": "azurerm_servicebus_subscription",
+      "change": {
+        "actions": [
+          "delete"
+        ]
+      }
+    },
+    {
+      "address": "module.work_queue.azurerm_servicebus_subscription_rule.this[\"email.archive\"]",
+      "type": "azurerm_servicebus_subscription_rule",
+      "change": {
+        "actions": [
+          "delete",
+          "create"
+        ]
+      }
+    },
+    {
+      "address": "module.work_queue.azurerm_role_assignment.mjapi_subscription_owner[\"email.archive\"]",
+      "type": "azurerm_role_assignment",
+      "change": {
+        "actions": [
+          "delete"
+        ]
+      }
+    }
+  ]
+}

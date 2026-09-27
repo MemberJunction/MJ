@@ -1,0 +1,41 @@
+{
+  "ManifestVersion": 1,
+  "GeneratedAt": "2026-09-27T12:00:00.000Z",
+  "Transport": {
+    "Name": "Azure-prod",
+    "DriverClass": "Azure",
+    "Configuration": {
+      "FullyQualifiedNamespace": "mj-wq-prod.servicebus.windows.net"
+    }
+  },
+  "Topics": [
+    {
+      "Name": "email.events",
+      "IsFifo": false,
+      "MaxPayloadBytes": 262144,
+      "Subscriptions": [
+        {
+          "Name": "email.slow",
+          "Filter": null,
+          "Policy": {
+            "SubscriptionName": "email.slow",
+            "TopicName": "email.events",
+            "PartitionMode": "None",
+            "MaxAttempts": 5,
+            "BackoffBaseSeconds": 10,
+            "BackoffMaxSeconds": 900,
+            "LeaseSeconds": 600,
+            "HeartbeatMode": "Auto"
+          },
+          "HostType": "MJWorker",
+          "Status": "Active",
+          "ExternalRef": null,
+          "DriverArtifacts": {
+            "ServiceBusRuleSql": "(NOT EXISTS(mj_target) OR mj_target = 'email.slow')",
+            "RequiresSession": false
+          }
+        }
+      ]
+    }
+  ]
+}

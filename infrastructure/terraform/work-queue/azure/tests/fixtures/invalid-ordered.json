@@ -1,0 +1,41 @@
+{
+  "ManifestVersion": 1,
+  "GeneratedAt": "2026-09-27T12:00:00.000Z",
+  "Transport": {
+    "Name": "Azure-prod",
+    "DriverClass": "Azure",
+    "Configuration": {
+      "FullyQualifiedNamespace": "mj-wq-prod.servicebus.windows.net"
+    }
+  },
+  "Topics": [
+    {
+      "Name": "integration.batch-ready",
+      "IsFifo": true,
+      "MaxPayloadBytes": 262144,
+      "Subscriptions": [
+        {
+          "Name": "integration.apply",
+          "Filter": null,
+          "Policy": {
+            "SubscriptionName": "integration.apply",
+            "TopicName": "integration.batch-ready",
+            "PartitionMode": "Ordered",
+            "MaxAttempts": 3,
+            "BackoffBaseSeconds": 10,
+            "BackoffMaxSeconds": 900,
+            "LeaseSeconds": 300,
+            "HeartbeatMode": "Auto"
+          },
+          "HostType": "MJWorker",
+          "Status": "Active",
+          "ExternalRef": null,
+          "DriverArtifacts": {
+            "ServiceBusRuleSql": "(NOT EXISTS(mj_target) OR mj_target = 'integration.apply')",
+            "RequiresSession": false
+          }
+        }
+      ]
+    }
+  ]
+}
