@@ -1,5 +1,6 @@
 import { Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { MentionPerson } from '@memberjunction/conversations-runtime';
 import { MentionSuggestion,
   ComposerTriggerProvider,
   MentionEditorComponent,
@@ -105,8 +106,44 @@ export class AiComposerComponent {
     return this.skillCommandProvider.TargetAgentId;
   }
 
+  private _allowedAgentIDs: readonly string[] | null = null;
+  private _mentionPeople: readonly MentionPerson[] | null = null;
+
+  /**
+   * The agents the '@' list may offer. Null (the default) offers every agent the user can run;
+   * an empty list offers none. Applies to this composer only.
+   */
+  @Input()
+  set AllowedAgentIDs(value: readonly string[] | null) {
+    this._allowedAgentIDs = value ?? null;
+    this.applyMentionScope();
+  }
+  get AllowedAgentIDs(): readonly string[] | null {
+    return this._allowedAgentIDs;
+  }
+
+  /**
+   * The people the '@' list offers, such as a chat's members. Null (the default) offers the
+   * current user, as before. Applies to this composer only.
+   */
+  @Input()
+  set MentionPeople(value: readonly MentionPerson[] | null) {
+    this._mentionPeople = value ?? null;
+    this.applyMentionScope();
+  }
+  get MentionPeople(): readonly MentionPerson[] | null {
+    return this._mentionPeople;
+  }
+
   constructor() {
     this.rebuildTriggerProviders();
+  }
+
+  /** Hands this composer's '@' scope to its own agent-mention provider (never the shared engine). */
+  private applyMentionScope(): void {
+    this.agentMentionProvider.Scope = this._allowedAgentIDs == null && this._mentionPeople == null
+      ? null
+      : { AllowedAgentIDs: this._allowedAgentIDs, People: this._mentionPeople };
   }
 
   /** Enables the '@' trigger (agent + user mentions). */
