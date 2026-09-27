@@ -14370,6 +14370,9 @@ importers:
       '@memberjunction/work-queue-engine':
         specifier: 6.1.0
         version: link:../WorkQueue/engine
+      '@memberjunction/work-queue-legacy-bridge':
+        specifier: 6.1.0
+        version: link:../WorkQueue/legacy-bridge
       '@memberjunction/work-queue-samples':
         specifier: 6.1.0
         version: link:../WorkQueue/samples
@@ -15441,6 +15444,37 @@ importers:
       mssql:
         specifier: ^11.0.1
         version: 11.0.1
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/WorkQueue/legacy-bridge:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.1.0
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0
+        version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0
+        version: link:../../GenericDatabaseProvider
+      '@memberjunction/global':
+        specifier: 6.1.0
+        version: link:../../MJGlobal
+      '@memberjunction/queue':
+        specifier: 6.1.0
+        version: link:../../MJQueue
+      '@memberjunction/work-queue-core':
+        specifier: 6.1.0
+        version: link:../core
+      '@memberjunction/work-queue-engine':
+        specifier: 6.1.0
+        version: link:../engine
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3

@@ -1,0 +1,80 @@
+[
+  {
+    "fields": {
+      "Name": "mjqueue.ai-action",
+      "Description": "Durable processing for the legacy @memberjunction/queue 'AI Action' queue type. Disabled by default: set this topic and its subscription to Active (and run the subscription on a work-queue host) to move 'AI Action' tasks off the in-process queue.",
+      "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
+      "IsFifo": false,
+      "AllowExternalPublish": false,
+      "MaxPayloadBytes": 262144,
+      "DefaultDeduplicationTTLSeconds": 86400,
+      "RetentionDays": 7,
+      "Status": "Disabled"
+    },
+    "primaryKey": {
+      "ID": "9061A227-6CC2-4AE0-8E5D-F9963F11A68D"
+    },
+    "relatedEntities": {
+      "MJ: Work Queue Subscriptions": [
+        {
+          "fields": {
+            "TopicID": "@parent:ID",
+            "Name": "mjqueue.ai-action.legacy-driver",
+            "Description": "Runs routed 'AI Action' tasks through the registered AIActionQueue driver.",
+            "PartitionMode": "None",
+            "MaxAttempts": 3,
+            "BackoffBaseSeconds": 30,
+            "BackoffMaxSeconds": 900,
+            "LeaseSeconds": 300,
+            "HeartbeatMode": "Auto",
+            "HostType": "MJWorker",
+            "HandlerKey": "MJQueue.LegacyQueueDriver",
+            "Status": "Disabled"
+          },
+          "primaryKey": {
+            "ID": "5A5A23D7-21C1-43DA-A3E6-5471002B0AAA"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "mjqueue.entity-ai-action",
+      "Description": "Durable processing for the legacy @memberjunction/queue 'Entity AI Action' queue type. Disabled by default: set this topic and its subscription to Active (and run the subscription on a work-queue host) to move after-save Entity AI Actions off the in-process queue.",
+      "TransportID": "@lookup:MJ: Work Queue Transports.Name=Database",
+      "IsFifo": false,
+      "AllowExternalPublish": false,
+      "MaxPayloadBytes": 262144,
+      "DefaultDeduplicationTTLSeconds": 86400,
+      "RetentionDays": 7,
+      "Status": "Disabled"
+    },
+    "primaryKey": {
+      "ID": "485AF8EB-4FDF-43A7-BF4D-4B9990A04121"
+    },
+    "relatedEntities": {
+      "MJ: Work Queue Subscriptions": [
+        {
+          "fields": {
+            "TopicID": "@parent:ID",
+            "Name": "mjqueue.entity-ai-action.legacy-driver",
+            "Description": "Runs routed 'Entity AI Action' tasks through the registered EntityAIActionQueue driver, which reloads the referenced record.",
+            "PartitionMode": "None",
+            "MaxAttempts": 3,
+            "BackoffBaseSeconds": 30,
+            "BackoffMaxSeconds": 900,
+            "LeaseSeconds": 300,
+            "HeartbeatMode": "Auto",
+            "HostType": "MJWorker",
+            "HandlerKey": "MJQueue.LegacyQueueDriver",
+            "Status": "Disabled"
+          },
+          "primaryKey": {
+            "ID": "69226259-1CFA-43C5-9D93-849357E27712"
+          }
+        }
+      ]
+    }
+  }
+]
