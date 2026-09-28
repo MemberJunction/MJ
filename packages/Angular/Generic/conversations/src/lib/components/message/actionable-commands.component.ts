@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { ActionableCommand, ComposeEmailCommand } from '@memberjunction/ai-core-plus';
+import { ActionableCommand } from '@memberjunction/ai-core-plus';
 
 /**
  * Component for displaying actionable command buttons
@@ -106,14 +106,13 @@ export class ActionableCommandsComponent {
    * mailbox. Empty recipients read as "no recipient" rather than rendering nothing, so an address
    * the agent never supplied cannot be mistaken for one it did.
    */
-  public composeEmailRecipients(command: ActionableCommand): string | null {
+  public ComposeEmailRecipients(command: ActionableCommand): string | null {
     if (command.type !== 'compose:email') {
       return null;
     }
-    const draft = command as ComposeEmailCommand;
-    const to = (draft.to ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
-    const cc = (draft.cc ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
-    const bcc = (draft.bcc ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
+    const to = (command.to ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
+    const cc = (command.cc ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
+    const bcc = (command.bcc ?? []).map((r) => r.trim()).filter((r) => r.length > 0);
     if (to.length === 0 && cc.length === 0 && bcc.length === 0) {
       return 'no recipient — you\'ll add one';
     }

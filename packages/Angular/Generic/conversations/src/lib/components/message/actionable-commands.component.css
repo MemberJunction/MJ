@@ -50,11 +50,12 @@
   min-width: 0;
 }
 
+/* Wraps rather than truncating: Bcc is listed LAST, so an ellipsis would cut off exactly the
+   address this line exists to expose. overflow-wrap breaks a long address that has no spaces. */
 .command-recipients {
-  font-size: 11px;
+  font-size: var(--mj-text-xs);
   color: var(--mj-text-muted, #6b6b6b);
   max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
