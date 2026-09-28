@@ -1,7 +1,8 @@
 # @memberjunction/record-cloning
 
 Server-side engine for cloning an entity record together with the graph of records around it:
-owned child rows, IS-A subtype rows, and the references it points at. It copies what the entity's
+owned child rows and the references it points at. (A Deep IS-A subtype or embedded row blocks the
+plan with `EDGE_KIND_UNSUPPORTED` in this release.) It copies what the entity's
 `Configuration.Clone` bag allows, re-points foreign keys at the new rows, and saves everything in
 one transaction with full provenance.
 
@@ -83,12 +84,12 @@ A successful clone writes, in the same transaction:
 - one `MJ: Record Clone Logs` header (masked plan, options, counts, `InitiatedByUserID` = the cloner)
 - one `MJ: Record Clone Log Items` row per planned node (`Created` / `Referenced` / `Skipped`)
 - one `MJ: Record Links` row per new record, with `LinkType = 'ClonedFrom'` (Source = clone, Target = original)
-- a `Record Cloned` audit log entry
+- a `Record Cloned` audit log entry, when the entity's clone authorization has `UseAuditLog` (every shipped one does)
 
 If the log or a link fails to save, the whole clone rolls back. The log, log items and links are
 saved as the **system user** when one is available, because they are the platform's record, not the
 cloner's data. The audit entry is recorded as the cloner. Refused and failed runs still get a log
-(`Cancelled` / `Error`) and an audit entry, written outside any transaction.
+(`Cancelled` / `Error`) and, under the same `UseAuditLog` rule, an audit entry, written outside any transaction.
 
 ## Transactions
 

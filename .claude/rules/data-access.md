@@ -771,7 +771,7 @@ Read it through the typed `ChangeContextObject` accessor on `MJRecordChangeEntit
 - **GraphQL clients cannot supply it.** `GraphQLDataProvider` never sends a clone context (a wire
   test guards this) and the resolver accepts only `RestoreContext___`. A client-supplied clone
   context would forge lineage.
-- If a restore context is also set, restore wins and the row is `Source = 'Restore'`.
+- A save can't be both: with a restore context also set, the provider throws ("an operation cannot be both a restore and a clone"). `SetCloneContext()` does not clear a pending restore context, so clear one before setting the other.
 
 ### Annotating a Record Change — `Comments` only
 

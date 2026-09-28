@@ -1,5 +1,5 @@
 /**
- * record-cloning.checks.ts — the 'record-cloning' bundle (RC1–RC12, IT95): entity record graph
+ * record-cloning.checks.ts — the 'record-cloning' bundle (RC1–RC13, IT95): entity record graph
  * cloning exercised CLIENT-FIRST, over the real GraphQL wire.
  *
  * WHY CLIENT TRANSPORT. Cloning is entity CRUD plus a permission gate, and both have a client
