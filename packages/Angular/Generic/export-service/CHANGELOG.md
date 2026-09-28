@@ -1,5 +1,11 @@
 # @memberjunction/ng-export-service
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

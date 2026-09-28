@@ -108,7 +108,7 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\
  * @param opts  - coverage threshold + the set of already-existing column names
  * @returns the promotion candidates, sorted by key for stable, replayable output
  */
-export function planPromotions(
+export function PlanPromotions(
     stats: OverflowKeyStats[],
     opts: PromotionPlanOptions = {}
 ): PromotionCandidate[] {
@@ -131,11 +131,19 @@ export function planPromotions(
         candidates.push({
             Key: stat.Key,
             Coverage: coverage,
-            Inferred: inferColumnTypeFromSamples(stat.SampleValues),
+            Inferred: InferColumnTypeFromSamples(stat.SampleValues),
         });
     }
 
     return candidates.sort((a, b) => a.Key.localeCompare(b.Key));
+}
+
+/** @deprecated Use {@link PlanPromotions}. */
+export function planPromotions(
+    stats: OverflowKeyStats[],
+    opts: PromotionPlanOptions = {}
+): PromotionCandidate[] {
+    return PlanPromotions(stats, opts);
 }
 
 /** A promoted custom column plus the two facts that decide whether it may be reclaimed (U7). */
@@ -177,7 +185,7 @@ export interface ReclaimCandidate {
  * engine only PLANS — MJC/RSU performs the destructive DROP, symmetric to how {@link planPromotions} plans
  * the ADD and the orchestrator executes it. Deterministic (sorted by column name).
  */
-export function planColumnReclamations(
+export function PlanColumnReclamations(
     columns: PromotedColumnState[],
     opts: ReclaimPlanOptions = {}
 ): ReclaimCandidate[] {
@@ -192,13 +200,21 @@ export function planColumnReclamations(
         .sort((a, b) => a.ColumnName.localeCompare(b.ColumnName));
 }
 
+/** @deprecated Use {@link PlanColumnReclamations}. */
+export function planColumnReclamations(
+    columns: PromotedColumnState[],
+    opts: ReclaimPlanOptions = {}
+): ReclaimCandidate[] {
+    return PlanColumnReclamations(columns, opts);
+}
+
 /**
  * Infers a generously-bounded column type from observed sample values. Narrows to
  * boolean/number/datetime ONLY when EVERY non-null sample unambiguously supports it;
  * otherwise defaults to a comfortably-bounded string. Never returns MAX/TEXT unless the
  * observed string length genuinely can't be bounded.
  */
-export function inferColumnTypeFromSamples(samples: unknown[]): InferredColumnType {
+export function InferColumnTypeFromSamples(samples: unknown[]): InferredColumnType {
     const nonNull = samples.filter(v => v !== null && v !== undefined);
 
     // No evidence → a safe, generous default string.
@@ -228,19 +244,29 @@ export function inferColumnTypeFromSamples(samples: unknown[]): InferredColumnTy
     return stringType(generousStringBound(longest));
 }
 
+/** @deprecated Use {@link InferColumnTypeFromSamples}. */
+export function inferColumnTypeFromSamples(samples: unknown[]): InferredColumnType {
+    return InferColumnTypeFromSamples(samples);
+}
+
 /**
  * Infers a column type from a sync-time custom-key statistic (out-of-band capture):
  * type from the bounded value sample, string WIDTH widened to cover the TRUE longest observed
  * value (`maxLength` — tracked across every record, while the sample is capped and may miss
  * the widest). Same generous 2×/floor/cap sizing rules as {@link inferColumnTypeFromSamples}.
  */
-export function inferColumnTypeFromStats(samples: unknown[], maxLength: number): InferredColumnType {
-    const inferred = inferColumnTypeFromSamples(samples);
+export function InferColumnTypeFromStats(samples: unknown[], maxLength: number): InferredColumnType {
+    const inferred = InferColumnTypeFromSamples(samples);
     if (inferred.SchemaFieldType !== 'string' || maxLength <= 0) return inferred;
     const widened = generousStringBound(maxLength);
     if (widened === null) return stringType(null);                                    // genuinely unboundable
     if (inferred.MaxLength !== null && inferred.MaxLength >= widened) return inferred; // sample already covers it
     return stringType(widened);
+}
+
+/** @deprecated Use {@link InferColumnTypeFromStats}. */
+export function inferColumnTypeFromStats(samples: unknown[], maxLength: number): InferredColumnType {
+    return InferColumnTypeFromStats(samples, maxLength);
 }
 
 /** Builds a string {@link InferredColumnType}; bound===null ⇒ unbounded (MAX/TEXT). */
@@ -294,7 +320,7 @@ const DEFAULT_SAMPLE_CAP = 20;
  * @param overflowJsonStrings - the raw overflow-column value from each sampled row
  * @param sampleCap - max values retained per key (default {@link DEFAULT_SAMPLE_CAP})
  */
-export function buildOverflowStats(
+export function BuildOverflowStats(
     overflowJsonStrings: Array<string | null | undefined>,
     sampleCap: number = DEFAULT_SAMPLE_CAP
 ): OverflowKeyStats[] {
@@ -325,6 +351,14 @@ export function buildOverflowStats(
     }));
 }
 
+/** @deprecated Use {@link BuildOverflowStats}. */
+export function buildOverflowStats(
+    overflowJsonStrings: Array<string | null | undefined>,
+    sampleCap: number = DEFAULT_SAMPLE_CAP
+): OverflowKeyStats[] {
+    return BuildOverflowStats(overflowJsonStrings, sampleCap);
+}
+
 /**
  * Sanitizes a source key into a safe SQL/MJ column identifier (letters, digits, underscore;
  * never leading-digit; bounded length). The original key is kept as the field map's
@@ -332,11 +366,16 @@ export function buildOverflowStats(
  * BASE name only — collision resolution (suffixing) is the orchestrator's job since it needs
  * the existing-column context.
  */
-export function sanitizeColumnName(key: string): string {
+export function SanitizeColumnName(key: string): string {
     let name = key.replace(/[^A-Za-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '');
     if (name.length === 0) name = 'Custom';
     if (/^[0-9]/.test(name)) name = `c_${name}`;
     return name.length > 120 ? name.slice(0, 120) : name;
+}
+
+/** @deprecated Use {@link SanitizeColumnName}. */
+export function sanitizeColumnName(key: string): string {
+    return SanitizeColumnName(key);
 }
 
 function safeParseObject(raw: string | null | undefined): Record<string, unknown> | null {

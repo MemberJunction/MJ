@@ -687,7 +687,7 @@ export const CommonStyles = {
 /**
  * Helper function to merge cell styles
  */
-export function mergeCellStyles(...styles: (CellStyle | undefined)[]): CellStyle {
+export function MergeCellStyles(...styles: (CellStyle | undefined)[]): CellStyle {
   const result: CellStyle = {};
 
   for (const style of styles) {
@@ -711,4 +711,9 @@ export function mergeCellStyles(...styles: (CellStyle | undefined)[]): CellStyle
   }
 
   return result;
+}
+
+/** @deprecated Use {@link MergeCellStyles}. */
+export function mergeCellStyles(...styles: (CellStyle | undefined)[]): CellStyle {
+  return MergeCellStyles(...styles);
 }

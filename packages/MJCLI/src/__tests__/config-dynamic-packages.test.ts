@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dynamicPackagesSchema } from '../config.js';
+import { DynamicPackagesSchema } from '../config.js';
 
 /**
  * The CLI's config schema must accept every `dynamicPackages` shape the loader accepts. The
@@ -9,7 +9,7 @@ import { dynamicPackagesSchema } from '../config.js';
  */
 describe('dynamicPackages config schema', () => {
   it('accepts the entries `mj app install` writes', () => {
-    const parsed = dynamicPackagesSchema.safeParse({
+    const parsed = DynamicPackagesSchema.safeParse({
       server: [{ PackageName: '@mj-biz-apps/orders-server', StartupExport: 'LoadBizAppsOrdersServer', AppName: 'mj-bizapps-orders', Enabled: true }],
       client: [{ PackageName: '@mj-biz-apps/orders-ng', AppName: 'mj-bizapps-orders', Enabled: true }],
     });
@@ -17,7 +17,7 @@ describe('dynamicPackages config schema', () => {
   });
 
   it('accepts hand-authored entries without AppName, with process scoping (the README examples)', () => {
-    const parsed = dynamicPackagesSchema.safeParse({
+    const parsed = DynamicPackagesSchema.safeParse({
       server: [
         { PackageName: '@acme/demo-seed-server', StartupExport: 'LoadDemoSeed', Processes: ['cli:sync'] },
         { PackageName: '@acme/audit-server', StartupExport: 'LoadAudit', ExcludeProcesses: ['cli:codegen'] },
@@ -33,12 +33,12 @@ describe('dynamicPackages config schema', () => {
 
   it('accepts every policy value the loader accepts, not only load/none', () => {
     for (const value of ['load', 'none', 'off', 'skip', 'false', '0', 'on', 'true', '1', 'full']) {
-      const parsed = dynamicPackagesSchema.safeParse({ policy: { 'cli:codegen': value } });
+      const parsed = DynamicPackagesSchema.safeParse({ policy: { 'cli:codegen': value } });
       expect(parsed.success, `policy value '${value}'`).toBe(true);
     }
   });
 
   it('still rejects an entry with no PackageName', () => {
-    expect(dynamicPackagesSchema.safeParse({ server: [{ StartupExport: 'X' }] }).success).toBe(false);
+    expect(DynamicPackagesSchema.safeParse({ server: [{ StartupExport: 'X' }] }).success).toBe(false);
   });
 });

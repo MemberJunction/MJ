@@ -57,11 +57,11 @@ export type LoopExecutionResult = {
     Success: boolean;
     /** Persisted to `Task.OutputPayload` — what downstream steps and conditions can read. */
     Output: {
-        iterations: number;
-        succeeded: number;
-        failed: number;
+        iterations: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+        succeeded: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+        failed: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
         /** Each iteration's output, in iteration order, so a downstream step can index into it. */
-        results: unknown[];
+        results: unknown[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     };
     ErrorMessage?: string;
 };

@@ -12,7 +12,7 @@ vi.mock('../../config', () => ({
 }));
 
 import { AuthProviderFactory, IAuthProvider } from '@memberjunction/auth-providers';
-import { initializeAuthProviders } from '../initializeProviders';
+import { InitializeAuthProviders } from '../initializeProviders';
 
 /**
  * Test suite for backward compatibility of the new auth provider system
@@ -31,7 +31,7 @@ describe('Authentication Provider Backward Compatibility', () => {
 
   describe('Configuration-Based Provider Initialization', () => {
     it('should initialize with no providers when config is empty', () => {
-      initializeAuthProviders();
+      InitializeAuthProviders();
 
       // With empty authProviders array, no providers should be registered
       expect(factory.hasProviders()).toBe(false);
@@ -53,7 +53,7 @@ describe('Authentication Provider Backward Compatibility', () => {
       expect(factory.hasProviders()).toBe(true);
 
       // Re-initialize clears everything
-      initializeAuthProviders();
+      InitializeAuthProviders();
       expect(factory.hasProviders()).toBe(false);
     });
   });

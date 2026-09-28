@@ -1,5 +1,81 @@
 # @memberjunction/conversations-runtime
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- c157749: Extract the mention-autocomplete engine out of Angular into `@memberjunction/conversations-runtime`, so a non-Angular host can offer the same `@` / `#` / `/` pickers.
+
+  **Why.** `MentionAutocompleteService` was 503 lines of permission-filtered caching and ranking — the agent / user / entity / query / skill sets behind every composer trigger, the `/` picker's target-agent narrowing, and the per-trigger match scoring. It imported nothing from `@angular/*` and carried no decorator; it was Angular-coupled purely by which package it sat in. `MentionParser`, the other half of the same feature, already lived in the runtime.
+
+  That location was the problem. The React Native app needs the same three pickers, and a native host cannot depend on an Angular library — so reaching them would have meant writing the agent/skill run-permission filtering, the accepted-skills intersection and the ranking a second time. A second copy of a _permission_ rule is the copy that drifts, and it drifts silently in the direction of showing someone a skill they may not run.
+
+  **What moved:** `MentionAutocomplete` (the engine), `IntersectAcceptedSkills` (the `/` narrowing rule), and the `MentionSuggestion` / `MentionSuggestionPreset` data shapes. Reachable as `ConversationsRuntime.Instance.MentionSuggestions` or directly as `MentionAutocomplete.Instance`.
+
+  **On the suggestion types.** `@memberjunction/ng-composer` keeps its own structurally identical `MentionSuggestion` — that one is a _rendering_ contract (what a dropdown row and a chip display), this one is a _data_ contract (what a suggestion engine produces). They are kept assignable so the Angular shim passes runtime suggestions straight through with no mapping. Deliberately NOT consolidated: `ng-composer`'s type is consumed by Explorer's omnibar across a dozen files, and MJ forbids cross-package re-exports, so unifying them would have meant a wide, unrelated churn in a branch that had no business causing it.
+
+  **No behaviour change.** `MentionAutocompleteService` remains importable from `@memberjunction/ng-conversations` with the same name and the same `.Instance` accessor — it is now an alias for the runtime engine, so there is still exactly one instance and one cache warm-up shared with the ClassFactory-instantiated trigger providers. Verified by the package's own suites: 1,319 tests green in `ng-conversations`, 122 in the runtime (the five skill-narrowing tests moved with the code they cover).
+
+  `skill-picker-narrowing.ts` is gone from `ng-conversations`; import `IntersectAcceptedSkills` from `@memberjunction/conversations-runtime` instead. No in-repo consumer outside its own test.
+
+### Patch Changes
+
+- d61b425: Voice and text now share a conversation properly, in both directions and on both surfaces.
+
+  **Context flows into a voice session.** `ConversationMessages` was a hardcoded `[]` with an MVP
+  note, so a call started mid-thread opened knowing nothing about what had been typed — the symptom
+  being the agent asking the user to repeat something they had just written. The consumer had been
+  written all along; only the plumbing was missing. The conversation's turns are now hydrated at
+  session mint under the same caps the session-resume path uses (newest 30 turns, 8,000 characters,
+  oldest dropped first). Because voice turns are themselves conversation rows, a resumed session
+  would otherwise receive its previous leg twice, so the prior-transcript loader returns its leg ids
+  and those legs are excluded; earlier calls that are not being resumed stay in.
+
+  **Voice sessions collapse in the mobile thread.** The realtime-session timeline grouping and the
+  card's presentation logic move from `ng-conversations` to `@memberjunction/conversations-runtime`
+  (`BuildConversationTimeline`, `SessionCardTitle`, `SessionCardStatusChip`,
+  `SessionCardIsSameDayRange`, `CollectRealtimeSessionIDs`, `MapRealtimeSessionMeta`,
+  `FindRealtimeSessionMeta`, `IsVisibleRealtimeTurn`). The module was always pure TypeScript — and
+  its own header already said rendering session-stamped rows as chat bubbles was wrong — but living
+  behind an Angular import meant the React Native thread did exactly that. Both surfaces now run the
+  same pass. `ng-conversations` re-exports from `lib/utils/realtime-session-timeline`, so its call
+  sites are unchanged, and the Angular card delegates to the promoted functions instead of keeping
+  its own copies.
+
+  Mobile renders the collapsed card natively, expandable in place to the turns it counted, with a new
+  `realtimeSessionCard` slot so a host can replace it.
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [5df9486]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ai-agent-client@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

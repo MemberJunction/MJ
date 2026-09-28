@@ -68,7 +68,7 @@ import { CreateBusinessCentralJournalEntryAction } from '../providers/business-c
 import { GetBusinessCentralAccountBalancesAction } from '../providers/business-central/actions/get-account-balances.action';
 import { GetBusinessCentralDimensionsAction } from '../providers/business-central/actions/get-dimensions.action';
 import { CreateJournalEntryAction } from '../verbs/create-journal-entry.action';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../constants';
 
 const contextUser = { ID: 'user-1', Name: 'Test User', Email: 'test@example.com' } as unknown as UserInfo;
 
@@ -494,7 +494,7 @@ describe('CreateJournalEntry dispatcher', () => {
     expect(result.Success).toBe(false);
     expect(result.ResultCode).toBe('PROVIDER_NOT_REGISTERED');
     expect(result.Message).toContain(
-      erpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, 'NetSuite'),
+      ErpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, 'NetSuite'),
     );
   });
 
@@ -535,7 +535,7 @@ describe('CreateJournalEntry dispatcher', () => {
 
     expect(MJGlobal.Instance.ClassFactory.TryCreateInstance).toHaveBeenCalledWith(
       expect.anything(),
-      erpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.QuickBooksOnline),
+      ErpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.QuickBooksOnline),
     );
     const [endpoint, method] = spy.mock.calls[0] as unknown as [string, string];
     expect(endpoint).toBe('journalentry');

@@ -17,17 +17,17 @@ export type WorkspaceStdio = 'inherit' | ['ignore', 'pipe', 'ignore'];
 
 /** The slice of a spawned child process this module consumes. */
 export interface WorkspaceChildProcess {
-  stdout?: { on(event: 'data', listener: (chunk: Buffer) => void): unknown } | null;
-  on(event: 'error', listener: (error: NodeJS.ErrnoException) => void): unknown;
-  on(event: 'close', listener: (code: number | null) => void): unknown;
-  kill(signal?: NodeJS.Signals): boolean;
+  stdout?: { on(event: 'data', listener: (chunk: Buffer) => void): unknown } | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  on(event: 'error', listener: (error: NodeJS.ErrnoException) => void): unknown;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  on(event: 'close', listener: (code: number | null) => void): unknown;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  kill(signal?: NodeJS.Signals): boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }
 
 /** Narrow structural spawn signature — node's `spawn` satisfies it; tests inject fakes. */
 export type SpawnWorkspaceProcess = (
   command: string,
   args: readonly string[],
-  options: { cwd: string; stdio: WorkspaceStdio }
+  options: { cwd: string; stdio: WorkspaceStdio }  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 ) => WorkspaceChildProcess;
 
 /**

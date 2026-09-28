@@ -46,7 +46,7 @@ import type { LoopAgentResponse } from '../agent-types/loop-agent-response-type'
 import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
 import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
-import { sanitizeToolName } from '../native-tools/action-tool-builder';
+import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 // ============================================================================
@@ -486,7 +486,7 @@ function llmEnvelope(envelope: LoopAgentResponse): AIPromptRunResult {
 function llmNativeActionCall(toolCallId: string, toolResults: boolean): AIPromptRunResult {
     const chatResult = {
         success: true,
-        data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id: toolCallId, name: sanitizeToolName(ACTION_NAME), arguments: { foo: 'bar' } }] } }] },
+        data: { choices: [{ message: { role: 'assistant', content: '', toolCalls: [{ id: toolCallId, name: SanitizeToolName(ACTION_NAME), arguments: { foo: 'bar' } }] } }] },
     } as unknown as AIPromptRunResult['chatResult'];
     RecordToolCallingDecision(chatResult, { useNativeTools: true, mode: 'Native', controlFlow: 'envelope', toolResults });
     // What the real runner hands back for a tool-call-only turn: parseAndValidate returns `{ result: null }`
@@ -790,7 +790,7 @@ describe('BaseAgent.Execute — native tool results: call turn → tool turn, no
         const next = messages[callIndex + 1];
         expect(next.role).toBe('tool');
         const blocks = next.content as ToolBlock[];
-        expect(blocks.map((b) => [b.type, b.toolCallId, b.toolName, b.isError])).toEqual([['tool_result', 'call_1', sanitizeToolName(ACTION_NAME), false]]);
+        expect(blocks.map((b) => [b.type, b.toolCallId, b.toolName, b.isError])).toEqual([['tool_result', 'call_1', SanitizeToolName(ACTION_NAME), false]]);
         // Neither the "[You invoked …]" recap nor the markdown "Action results:" message exists.
         expect(messages.some((m) => textOf(m).includes('You invoked'))).toBe(false);
         expect(messages.some((m) => textOf(m).startsWith('Action results:'))).toBe(false);

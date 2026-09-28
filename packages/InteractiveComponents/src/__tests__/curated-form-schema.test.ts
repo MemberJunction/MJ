@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCuratedFormSchema, curateFromEntityInfo } from '../forms/curated-form-schema';
+import { BuildCuratedFormSchema, CurateFromEntityInfo } from '../forms/curated-form-schema';
 import type { EntityInfo, EntityFieldInfo, IMetadataProvider } from '@memberjunction/core';
 
 /**
@@ -56,7 +56,7 @@ function mkProvider(entities: EntityInfo[]): IMetadataProvider {
 describe('buildCuratedFormSchema', () => {
     it('returns null when entity is unknown to provider', () => {
         const provider = mkProvider([]);
-        expect(buildCuratedFormSchema('Missing', provider)).toBeNull();
+        expect(BuildCuratedFormSchema('Missing', provider)).toBeNull();
     });
 
     it('strips __mj_* audit fields', () => {
@@ -65,7 +65,7 @@ describe('buildCuratedFormSchema', () => {
             mkField({ Name: '__mj_CreatedAt', Sequence: 2, TSType: 'Date' as never }),
             mkField({ Name: '__mj_UpdatedAt', Sequence: 3, TSType: 'Date' as never }),
         ]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         expect(schema.fields.map(f => f.name)).toEqual(['Name']);
     });
 
@@ -75,7 +75,7 @@ describe('buildCuratedFormSchema', () => {
             mkField({ Name: 'ViewOnly', Sequence: 2, IsVirtual: true }),
             mkField({ Name: 'Computed', Sequence: 3, IsVirtual: true, IsComputed: true }),
         ]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         expect(schema.fields.map(f => f.name)).toEqual(['Name']);
     });
 
@@ -84,7 +84,7 @@ describe('buildCuratedFormSchema', () => {
             mkField({ Name: 'ID', Sequence: 0, IsPrimaryKey: true, AllowsNull: false }),
             mkField({ Name: 'Name', Sequence: 1, AllowsNull: false }),
         ]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         const id = schema.fields.find(f => f.name === 'ID')!;
         expect(id.isPrimaryKey).toBe(true);
         // PKs aren't user-required because the DB assigns them.
@@ -97,7 +97,7 @@ describe('buildCuratedFormSchema', () => {
             mkField({ Name: 'Optional', AllowsNull: true }),
             mkField({ Name: 'Defaulted', AllowsNull: false, DefaultValue: "''" }),
         ]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         const byName = (n: string) => schema.fields.find(f => f.name === n)!;
         expect(byName('Name').required).toBe(true);
         expect(byName('Optional').required).toBe(false);
@@ -115,7 +115,7 @@ describe('buildCuratedFormSchema', () => {
                 ] as unknown as EntityFieldInfo['EntityFieldValues'],
             }),
         ]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         const status = schema.fields[0];
         expect(status.type).toBe('enum');
         expect(status.allowedValues).toEqual(['Active', 'Inactive', 'Pending']);
@@ -134,7 +134,7 @@ describe('buildCuratedFormSchema', () => {
                 RelatedEntity: 'Accounts',
             }),
         ]);
-        const schema = curateFromEntityInfo(
+        const schema = CurateFromEntityInfo(
             customerEntity, mkProvider([accountEntity, customerEntity]),
         );
         const fk = schema.fields.find(f => f.name === 'AccountID')!;
@@ -157,7 +157,7 @@ describe('buildCuratedFormSchema', () => {
             }),
         ]);
         const target = mkEntity('Users', [mkField({ Name: 'Name' })]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity, target]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity, target]));
         expect(schema.fields[0].type).toBe('foreign-key');
     });
 
@@ -168,7 +168,7 @@ describe('buildCuratedFormSchema', () => {
             mkField({ Name: 'B', TSType: 'boolean' as never }),
             mkField({ Name: 'D', TSType: 'Date' as never }),
         ]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         const t = (n: string) => schema.fields.find(f => f.name === n)!.type;
         expect(t('S')).toBe('string');
         expect(t('N')).toBe('number');
@@ -182,7 +182,7 @@ describe('buildCuratedFormSchema', () => {
             mkField({ Name: 'First', Sequence: 10 }),
             mkField({ Name: 'Second', Sequence: 20 }),
         ]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         expect(schema.fields.map(f => f.name)).toEqual(['First', 'Second', 'Third']);
     });
 
@@ -191,7 +191,7 @@ describe('buildCuratedFormSchema', () => {
             mkField({ Name: 'ID', IsPrimaryKey: true }),
             mkField({ Name: 'Name' }),
         ], { DisplayName: 'Customer', Description: 'A buyer.' } as unknown as Partial<EntityInfo>);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         expect(schema.entityName).toBe('Customers');
         expect(schema.displayName).toBe('Customer');
         expect(schema.description).toBe('A buyer.');
@@ -203,7 +203,7 @@ describe('buildCuratedFormSchema', () => {
             mkField({ Name: 'Short', TSType: 'string', MaxLength: 50 }),
             mkField({ Name: 'Long', TSType: 'string', MaxLength: 0 }),
         ]);
-        const schema = curateFromEntityInfo(entity, mkProvider([entity]));
+        const schema = CurateFromEntityInfo(entity, mkProvider([entity]));
         expect(schema.fields.find(f => f.name === 'Short')!.maxLength).toBe(50);
         expect(schema.fields.find(f => f.name === 'Long')!.maxLength).toBeUndefined();
     });

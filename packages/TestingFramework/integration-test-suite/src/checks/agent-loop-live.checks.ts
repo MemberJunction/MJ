@@ -26,9 +26,9 @@ import { Assert, AssertEqual, verifyAgentRun } from '@memberjunction/testing-int
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, AgentLiveFixture } from '@memberjunction/testing-integration';
 import {
-    AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, newMarker, sleep,
-    makeAIClient, userTurn, runAgentOverWire, resolveRunId,
-    getRunSteps, getPromptRuns, sumPromptRunTokens, deleteById, purgeAgentRun,
+    AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, NewMarker, Sleep,
+    MakeAIClient, UserTurn, RunAgentOverWire, ResolveRunId,
+    GetRunSteps, GetPromptRuns, SumPromptRunTokens, DeleteById, PurgeAgentRun,
 } from './agent-live-shared';
 
 /** Resolve the bundle accumulator or fail loudly (lifecycle Setup must have run). */
@@ -73,9 +73,9 @@ async function createConversationTurn(ctx: IntegrationCheckContext, text: string
 }
 
 /** Resolve the winning run id and record it for FK-safe teardown; fail loudly if no run landed. */
-async function landRun(ctx: IntegrationCheckContext, result: Awaited<ReturnType<typeof runAgentOverWire>>, fallbackFilter: string, label: string): Promise<string> {
-    await sleep(AGENT_LIVE_SETTLE_MS);
-    const runId = await resolveRunId(result, ctx.User, fallbackFilter, ctx.Provider);
+async function landRun(ctx: IntegrationCheckContext, result: Awaited<ReturnType<typeof RunAgentOverWire>>, fallbackFilter: string, label: string): Promise<string> {
+    await Sleep(AGENT_LIVE_SETTLE_MS);
+    const runId = await ResolveRunId(result, ctx.User, fallbackFilter, ctx.Provider);
     Assert(!!runId, `${label}: an AI Agent Run landed (result.agentRun or fallback query)`);
     fixture(ctx).LiveRunIds.push(runId!);
     return runId!;
@@ -107,7 +107,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const echo = await agentByName('IT: Echo Agent', ctx.User);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), echo, userTurn('ping'));
+            const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), echo, UserTurn('ping'));
             const runId = await landRun(ctx, result, `AgentID='${echo.ID}' AND Status<>'Running'`, 'AL1');
             // Deep pass: run settled + EVERY step terminal with CompletedAt (the ai-verify.ts:96 invariant).
             const v = await verifyAgentRun(runId, ctx.User, true);
@@ -120,14 +120,14 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const toolLoop = await agentByName('IT: Tool Loop Agent', ctx.User);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), toolLoop, userTurn('Calculate 6*7 using your action.'));
+            const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), toolLoop, UserTurn('Calculate 6*7 using your action.'));
             const runId = await landRun(ctx, result, `AgentID='${toolLoop.ID}' AND Status<>'Running'`, 'AL2');
             // deep=false: the Actions step's Action Execution Log is written by the fire-and-forget
             // queue and can land arbitrarily late — its finalization is pinned by actions-pipeline
             // AP2. AL2's contract is the STEP lineage + linkage (TargetLogID set), asserted below.
             await verifyAgentRun(runId, ctx.User, true, { skipActionLogs: true });
 
-            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
+            const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
             const types = steps.map(s => s.StepType);
             // P-compliance: the model took the instructed action (an Actions step naming Calculate Expression).
             const actionStep = steps.find(s => s.StepType === 'Actions' && (s.StepName ?? '').toLowerCase().includes('calculate expression'));
@@ -145,14 +145,14 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const toolLoop = await agentByName('IT: Tool Loop Agent', ctx.User);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), toolLoop, userTurn('Calculate 6*7 using your action.'));
+            const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), toolLoop, UserTurn('Calculate 6*7 using your action.'));
             const runId = await landRun(ctx, result, `AgentID='${toolLoop.ID}' AND Status<>'Running'`, 'AL3');
 
-            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
+            const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
             const actionStep = steps.find(s => s.StepType === 'Actions' && (s.StepName ?? '').toLowerCase().includes('calculate expression'));
             Assert(!!actionStep, 'AL3 [model-noncompliance:] the instructed Calculate Expression action ran (prerequisite for the carry-into-context assertion)');
 
-            const promptRuns = await getPromptRuns(runId, ctx.User, ctx.Provider);
+            const promptRuns = await GetPromptRuns(runId, ctx.User, ctx.Provider);
             Assert(promptRuns.length >= 2, `AL3: at least two prompt runs (a result-consuming turn exists) — got ${promptRuns.length}`);
             // 42 is the ACTION's deterministic output for 6*7 (pure code), not model prose — so any prompt
             // run whose assembled Messages contains it proves action results are folded back into context.
@@ -166,11 +166,11 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const toolLoop = await agentByName('IT: Tool Loop Agent', ctx.User);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), toolLoop, userTurn('Calculate 6*7 using your action.'));
+            const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), toolLoop, UserTurn('Calculate 6*7 using your action.'));
             const runId = await landRun(ctx, result, `AgentID='${toolLoop.ID}' AND Status<>'Running'`, 'AL4');
 
-            const promptRuns = await getPromptRuns(runId, ctx.User, ctx.Provider);
-            const sum = sumPromptRunTokens(promptRuns);
+            const promptRuns = await GetPromptRuns(runId, ctx.User, ctx.Provider);
+            const sum = SumPromptRunTokens(promptRuns);
             Assert(sum > 0, `AL4: child prompt runs recorded tokens (Σ=${sum} > 0)`);
 
             const run = await new RunView().RunView<{ TotalTokensUsed: number | null; TotalTokensUsedRollup: number | null }>({
@@ -195,7 +195,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
             // asserts the conversation-run linkage the carry-forward + compaction bundles depend on.
             const echo = await agentByName('IT: Echo Agent', ctx.User);
             const turn = await createConversationTurn(ctx, `AL5 conversation plumbing ${fixture(ctx).Marker}`);
-            const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), echo, userTurn('ping'), { conversationDetailId: turn.detailId, conversationId: turn.conversationId });
+            const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), echo, UserTurn('ping'), { conversationDetailId: turn.detailId, ConversationId: turn.conversationId });
             const runId = await landRun(ctx, result, `ConversationID='${turn.conversationId}' AND AgentID='${echo.ID}'`, 'AL5');
 
             const run = await new RunView().RunView<{ ConversationID: string | null }>({
@@ -228,13 +228,13 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
             Assert(bindings.length >= 1, 'AL6: the failover prompt has at least one active model binding to disable');
             try {
                 for (const b of bindings) { b.Status = 'Inactive'; Assert(await b.Save(), `AL6: disable binding ${b.ID}: ${b.LatestResult?.CompleteMessage}`); }
-                await sleep(AGENT_LIVE_SETTLE_MS);
+                await Sleep(AGENT_LIVE_SETTLE_MS);
 
-                const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), failover, userTurn('ping'));
-                const runId = await resolveRunId(result, ctx.User, `AgentID='${failover.ID}'`, ctx.Provider);
+                const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), failover, UserTurn('ping'));
+                const runId = await ResolveRunId(result, ctx.User, `AgentID='${failover.ID}'`, ctx.Provider);
                 if (runId) {
                     fixture(ctx).LiveRunIds.push(runId);
-                    await sleep(AGENT_LIVE_SETTLE_MS);
+                    await Sleep(AGENT_LIVE_SETTLE_MS);
                     const run = await new RunView().RunView<{ Status: string; ErrorMessage: string | null }>({
                         EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID='${runId}'`,
                         Fields: ['Status', 'ErrorMessage'], ResultType: 'simple', BypassCache: true,
@@ -245,7 +245,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
                     Assert(row!.Status !== 'Running', `AL6: the failed run finalized (not stuck Running)`);
                     Assert(!!row!.ErrorMessage && String(row!.ErrorMessage).length > 0, 'AL6: an ErrorMessage was recorded on the failed run');
                     // Any steps that were created must still be terminal (no orphan Running step on the failure path).
-                    const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
+                    const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
                     Assert(steps.every(s => s.Status !== 'Running' && s.CompletedAt != null), 'AL6: every step finalized on the failure path');
                 } else {
                     // No run row created at all is also an acceptable clean failure (nothing to leak).
@@ -269,13 +269,13 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
             try {
                 primary.Status = 'Inactive';
                 Assert(await primary.Save(), `AL7: disable primary binding ${primary.ID}: ${primary.LatestResult?.CompleteMessage}`);
-                await sleep(AGENT_LIVE_SETTLE_MS);
+                await Sleep(AGENT_LIVE_SETTLE_MS);
 
-                const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), failover, userTurn('ping'));
+                const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), failover, UserTurn('ping'));
                 const runId = await landRun(ctx, result, `AgentID='${failover.ID}' AND Status<>'Running'`, 'AL7');
                 await verifyAgentRun(runId, ctx.User, true);
 
-                const promptRuns = await getPromptRuns(runId, ctx.User, ctx.Provider);
+                const promptRuns = await GetPromptRuns(runId, ctx.User, ctx.Provider);
                 Assert(promptRuns.length >= 1, 'AL7: the run recorded at least one prompt run');
                 // Structural failover proof: the winning model persisted on the AIPromptRun is the secondary
                 // binding\'s model, never the deactivated primary\'s (swapping models never rewrites this check).
@@ -288,7 +288,7 @@ export const AgentLoopLiveChecks: NamedCheck[] = [
                     EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID='${runId}'`, Fields: ['TotalTokensUsed', 'TotalTokensUsedRollup'], ResultType: 'simple', BypassCache: true,
                 }, ctx.User);
                 const rr = run.Results?.[0];
-                AssertEqual(Number(rr?.TotalTokensUsed ?? rr?.TotalTokensUsedRollup ?? -1), sumPromptRunTokens(promptRuns), 'AL7: rollup identity holds after failover');
+                AssertEqual(Number(rr?.TotalTokensUsed ?? rr?.TotalTokensUsedRollup ?? -1), SumPromptRunTokens(promptRuns), 'AL7: rollup identity holds after failover');
             } finally {
                 primary.Status = 'Active';
                 if (!(await primary.Save())) { console.error(`AL7: RESTORE FAILED for primary binding ${primary.ID}: ${primary.LatestResult?.CompleteMessage}`); }
@@ -307,13 +307,13 @@ async function teardownAgentLive(fx: AgentLiveFixture | undefined, provider: IMe
         return;
     }
     for (const runId of fx.LiveRunIds) {
-        try { await purgeAgentRun(runId, provider, user); } catch (e) { console.error('live run purge failed:', e); }
+        try { await PurgeAgentRun(runId, provider, user); } catch (e) { console.error('live run purge failed:', e); }
     }
     for (const stepId of fx.FabricatedStepIds) {
-        await deleteById('MJ: AI Agent Run Steps', stepId, provider, user);
+        await DeleteById('MJ: AI Agent Run Steps', stepId, provider, user);
     }
     for (const runId of fx.FabricatedRunIds) {
-        await deleteById('MJ: AI Agent Runs', runId, provider, user);
+        await DeleteById('MJ: AI Agent Runs', runId, provider, user);
     }
     // Delete EVERY detail in each fixture conversation (covers agent-response details the run created), then the conversation.
     for (const convId of fx.ConversationIds) {
@@ -322,9 +322,9 @@ async function teardownAgentLive(fx: AgentLiveFixture | undefined, provider: IMe
                 EntityName: 'MJ: Conversation Details', ExtraFilter: `ConversationID='${convId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true,
             }, user);
             for (const d of (details.Success ? details.Results : [])) {
-                await deleteById('MJ: Conversation Details', d.ID, provider, user);
+                await DeleteById('MJ: Conversation Details', d.ID, provider, user);
             }
-            await deleteById('MJ: Conversations', convId, provider, user);
+            await DeleteById('MJ: Conversations', convId, provider, user);
         } catch (e) { console.error('conversation cleanup failed:', e); }
     }
 }
@@ -332,7 +332,7 @@ async function teardownAgentLive(fx: AgentLiveFixture | undefined, provider: IMe
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-loop-live', {
     Setup: async ctx => {
         ctx.AgentLoopLiveFixture = {
-            Marker: newMarker('AL'),
+            Marker: NewMarker('AL'),
             ConversationIds: [], ConversationDetailIds: [], LiveRunIds: [], FabricatedRunIds: [], FabricatedStepIds: [],
         };
     },

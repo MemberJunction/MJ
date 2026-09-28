@@ -525,7 +525,7 @@ export class InferProcessor implements IRecordProcessor {
                     payloadCopy = validation.value;
                 } else if (typeof payloadCopy === 'object' && payloadCopy !== null && output.Ref.startsWith('$.')) {
                     const propPath = output.Ref.substring(2);
-                    setNestedValue(payloadCopy as Record<string, unknown>, propPath, validation.value);
+                    SetNestedValue(payloadCopy as Record<string, unknown>, propPath, validation.value);
                 }
             }
         }
@@ -543,7 +543,7 @@ export class InferProcessor implements IRecordProcessor {
     }
 
     /** Lifecycle hook called before write-back is executed on this record. */
-    public async beforeWriteBack(
+    public async beforeWriteBack(  // case-violation-ok-legacy-back-compat: a subclass overrides this; a stub preserves CALLING the old name but not OVERRIDING it, and WriteBackProcessor also probes for it by string
         mapping: OutputMappingConfig | undefined,
         result: unknown,
         record: RecordRef,
@@ -752,7 +752,7 @@ export class InferProcessor implements IRecordProcessor {
  * Sets a value at a dot-delimited path (e.g. 'a.b' or 'items[0].name') on an object,
  * mutating the object in-place and creating intermediate objects or arrays as needed.
  */
-export function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
+export function SetNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
     if (!path) return;
     const parts = path.split('.');
     let current: Record<string, unknown> = obj;
@@ -802,5 +802,10 @@ export function setNestedValue(obj: Record<string, unknown>, path: string, value
     } else {
         current[lastPart] = value;
     }
+}
+
+/** @deprecated Use {@link SetNestedValue}. */
+export function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
+    return SetNestedValue(obj, path, value);
 }
 

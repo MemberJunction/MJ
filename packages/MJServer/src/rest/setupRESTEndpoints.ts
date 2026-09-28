@@ -3,7 +3,10 @@ import BodyParser from 'body-parser';
 import { LogStatusEx } from '@memberjunction/core';
 import { RESTEndpointHandler } from './RESTEndpointHandler.js';
 
-export const ___REST_API_BASE_PATH = '/api/v1';
+export const REST_API_BASE_PATH = '/api/v1';
+
+/** @deprecated Use {@link REST_API_BASE_PATH}. */
+export const ___REST_API_BASE_PATH = REST_API_BASE_PATH;
 
 /**
  * Configuration options for REST API endpoints
@@ -12,14 +15,14 @@ export interface RESTApiOptions {
     /**
      * Whether to enable REST API endpoints (default: false)
      */
-    enabled: boolean;
+    enabled: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Array of entity names to include in the API (case-insensitive)
      * If provided, only these entities will be accessible through the REST API
      * Supports wildcards using '*' (e.g., 'User*' matches 'User', 'UserRole', etc.)
      */
-    includeEntities?: string[];
+    includeEntities?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Array of entity names to exclude from the API (case-insensitive)
@@ -27,20 +30,20 @@ export interface RESTApiOptions {
      * Supports wildcards using '*' (e.g., 'Secret*' matches 'Secret', 'SecretKey', etc.)
      * Note: Exclude patterns always override include patterns
      */
-    excludeEntities?: string[];
+    excludeEntities?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Array of schema names to include in the API (case-insensitive)
      * If provided, only entities in these schemas will be accessible through the REST API
      */
-    includeSchemas?: string[];
+    includeSchemas?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
     /**
      * Array of schema names to exclude from the API (case-insensitive)
      * Entities in these schemas will not be accessible through the REST API
      * Note: Exclude patterns always override include patterns
      */
-    excludeSchemas?: string[];
+    excludeSchemas?: string[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /**
@@ -56,7 +59,7 @@ export const DEFAULT_REST_API_OPTIONS: RESTApiOptions = {
  * @param options Configuration options for REST API
  * @param authMiddleware Optional authentication middleware to use
  */
-export function setupRESTEndpoints(
+export function SetupRESTEndpoints(
     app: express.Application,
     options?: Partial<RESTApiOptions>,
     authMiddleware?: express.RequestHandler
@@ -71,14 +74,14 @@ export function setupRESTEndpoints(
         return;
     }
 
-    const basePath = ___REST_API_BASE_PATH;
+    const basePath = REST_API_BASE_PATH;
 
     // Create REST endpoint handler with entity and schema filters
     const restHandler = new RESTEndpointHandler({
-        includeEntities: config.includeEntities ? config.includeEntities.map(e => e.toLowerCase()) : undefined,
-        excludeEntities: config.excludeEntities ? config.excludeEntities.map(e => e.toLowerCase()) : undefined,
-        includeSchemas: config.includeSchemas ? config.includeSchemas.map(s => s.toLowerCase()) : undefined,
-        excludeSchemas: config.excludeSchemas ? config.excludeSchemas.map(s => s.toLowerCase()) : undefined
+        IncludeEntities: config.includeEntities ? config.includeEntities.map(e => e.toLowerCase()) : undefined,
+        ExcludeEntities: config.excludeEntities ? config.excludeEntities.map(e => e.toLowerCase()) : undefined,
+        IncludeSchemas: config.includeSchemas ? config.includeSchemas.map(s => s.toLowerCase()) : undefined,
+        ExcludeSchemas: config.excludeSchemas ? config.excludeSchemas.map(s => s.toLowerCase()) : undefined
     });
 
     // Mount REST API at the specified base path with authentication
@@ -90,4 +93,13 @@ export function setupRESTEndpoints(
     }
 
     LogStatusEx({ message: `REST API endpoints have been set up at ${basePath}`, verboseOnly: true });
+}
+
+/** @deprecated Use {@link SetupRESTEndpoints}. */
+export function setupRESTEndpoints(
+    app: express.Application,
+    options?: Partial<RESTApiOptions>,
+    authMiddleware?: express.RequestHandler
+): void {
+    return SetupRESTEndpoints(app, options, authMiddleware);
 }

@@ -110,7 +110,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
 import type { ChatResult } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
 import { TestLLM, makeFailedChatResult } from '@memberjunction/unit-testing';
-import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
+import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, VENDOR, makeModel, makeModelVendor, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
 // ---------------------------------------------------------------------------
 // Scripted TestLLM (shared harness, extends the REAL BaseLLM) — stands in for a
@@ -369,6 +369,22 @@ describe('executeModelWithFailover — non-eligible errors do not fail over', ()
     expect(pr.FailoverAttempts).toBe(0);             // not even recorded as a failover attempt
   });
 
+  // The failure must still be SURFACED. It used to fall through to the success path and come
+  // back with nothing logged — during the 6.2.0-edge.0 gate a spend-capped vendor failed every
+  // call this way and the run logs held no trace of why.
+  it('logs a failed result that cannot fail over, naming the error, instead of returning it silently', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    testLLM.Script({ kind: 'fail', error: new Error('Malformed JSON in request body') });
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await runFailover(runner, [c1]);
+
+    expect(result.success).toBe(false);
+    const logged = errorLog.mock.calls.map(args => args.map(String).join(' ')).join('\n');
+    expect(logged).toContain('Malformed JSON in request body');
+    expect(logged).toContain('InvalidRequest');
+  });
+
   it('returns a failed ChatResult as-is when the driver supplies NO errorInfo (undiagnosed failure)', async () => {
     const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
     const c2 = candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90);
@@ -515,5 +531,42 @@ describe('ExecutePrompt — failover through the full pipeline', () => {
     expect(result.success).toBe(false);
     expect(result.errorMessage).toContain('network socket disconnected');
     expect(testLLM.CalledModels).toHaveLength(1); // single attempt, no failover
+  });
+});
+
+// ===========================================================================
+// (f) Model type is a hard boundary for failover (plans/typed-decision-models.md, Task 0.2)
+// ===========================================================================
+describe('ExecutePrompt — failover never crosses model types', () => {
+  const EMBEDDING_MODEL_ID = 'F0000000-0000-4000-8000-0000000000E1';
+  const EMBEDDING_API_NAME = 'text-embedding-3-large';
+
+  /** A credentialed embeddings model that out-ranks every LLM — a type-blind pool would pick it first. */
+  function catalogWithTopRankedEmbeddingModel(): AICatalog {
+    const catalog = buildRealisticCatalog();
+    const vendor = makeModelVendor({
+      ModelID: EMBEDDING_MODEL_ID, VendorID: VENDOR.OpenAI, Vendor: 'OpenAI',
+      DriverClass: 'OpenAIEmbedding', APIName: EMBEDDING_API_NAME, Priority: 100,
+    });
+    catalog.models.push(makeModel({
+      ID: EMBEDDING_MODEL_ID, Name: 'Text Embedding 3 Large', Vendor: 'OpenAI',
+      AIModelTypeID: MODEL_TYPE.Embeddings, AIModelType: 'Embeddings', PowerRank: 99, ModelVendors: [vendor],
+    }));
+    catalog.modelVendors.push(vendor);
+    return catalog;
+  }
+
+  it('walks the LLM candidates on every failure but never calls a model of another type', async () => {
+    loadCatalog(catalogWithTopRankedEmbeddingModel(), [...DEFAULT_CONFIGURED_DRIVERS, ...DIRECT_DRIVE_DRIVERS, 'OpenAIEmbedding']);
+    testLLM.Script(...Array.from({ length: 40 }, () => ({
+      kind: 'fail' as const, error: new Error('fetch failed: network socket disconnected'),
+    })));
+    const prompt = makeE2EPrompt({ FailoverStrategy: 'NextBestModel', AIModelTypeID: MODEL_TYPE.LLM });
+
+    const result = await runner.ExecutePrompt(makeE2EParams(prompt) as never);
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels.length).toBeGreaterThanOrEqual(2);   // failover really happened
+    expect(testLLM.CalledModels).not.toContain(EMBEDDING_API_NAME);
   });
 });

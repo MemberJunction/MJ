@@ -1,5 +1,11 @@
 # @memberjunction/scheduling-base-types
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Patch Changes

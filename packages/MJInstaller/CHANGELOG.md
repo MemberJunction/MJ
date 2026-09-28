@@ -1,5 +1,31 @@
 # @memberjunction/installer
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 73fa918: Enhance agent-first tooling across MemberJunction with machine-readable diagnostics, hardened secret redaction, and native CLI execution trace auditing:
+  - **Machine-Readable Diagnostics (`mj doctor --format json`)**: Added canonical format flag and `--scope [install|runtime|ai|metadata|agent]` filtering to `mj doctor`. When JSON format is requested, suppress all terminal formatting and output structured diagnostics adhering to the `Diagnostics.toJSON()` schema, exiting non-zero on failure.
+  - **Diagnostic Codes & Subsystem Probes**: Added stable machine-readable check codes, scopes, contextual evidence, and actionable remediation descriptors. Added checks for `MJ_BASE_ENCRYPTION_KEY` and AI provider credentials (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`).
+  - **Hardened Secret Redaction**: Extended credential pattern matching in `ReportGenerator` across sensitive environment variable names (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`, etc.) and high-entropy token shapes (`sk-...`, `Bearer ...`, `ghp_...`, JWTs) across file snapshots, markdown reports, and container service logs.
+  - **Native CLI Trace Auditing**: Updated `citizen-builder/scripts/query-run-history.sh` to delegate to native `mj ai audit agent-run`, supporting `--format json`, step-by-step inspections, error audits, and agent name filtering.
+  - **Citizen Agent Builder Documentation & Skills**: Detailed the complete 11-step agent engineering loop in `citizen-builder/AGENTS.md` and `README.md`, updated skill templates (`test-agent`, `package-agent`) to use native JSON auditing, and bundled updated template assets into `@memberjunction/cli`.
+
+### Patch Changes
+
+- ee5c033: Fix a fresh `mj install` that could not boot MJAPI or Explorer (MemberJunction/MJ#4477). Since the schema-scale emit change, CodeGen produced the entity-subclass, GraphQL and Angular outputs by iterating a per-directory partition of the non-core entities. On a fresh database that list is empty, the partition was empty, and the generators were never called, so `packages/GeneratedEntities/src/generated/entity_subclasses.ts` and the Angular generated-forms module were never written while CodeGen still reported "complete". `partitionEntitiesByOutputDirectory` now always includes the default directory with an empty group when one is configured, restoring the pre-change behaviour of emitting an empty barrel. The installer's post-CodeGen artifact check now treats a missing `entity_subclasses.ts` as critical and names the missing file in the failure, instead of trusting the exit code.
+- ce55864: Fix four defects that break `mj install` on a fresh host.
+
+  **turbo's build summary was misread, in two ways.** turbo prints one comma-separated `Failed:` line naming every failed task. Both installer phases parsed it with a regex requiring a literal `Failed:` before each name, so they read only the first — a real `mj_api` build failure listed behind `mj_generatedactions` was tolerated and the install reported success. The same regex matched nothing at all when `FORCE_COLOR` made turbo wrap the names in ANSI escapes, turning the expected pre-CodeGen state of every distribution install (both `Generated*` packages fail until CodeGen writes their `src/generated/`) into a hard `BUILD_FAILED`. Both phases now share one classifier that strips ANSI and reads the whole list; `CodeGenPhase`'s copy additionally required a leading `@` and so could never match the unscoped generated packages. "No failures could be attributed" is now its own named error, build failure messages include turbo's stdout summary, and installer-spawned turbo runs pin `FORCE_COLOR=0`.
+
+  **`mj install --dir <new-directory>` failed preflight** with a false "pnpm not found on PATH". The package-manager probe runs from the target directory (corepack resolves per directory) but preflight ran it before anything created that directory, so the spawn failed `ENOENT` and a bare `catch` reported a missing binary. The directory is now created first, and a failed probe reports its real reason.
+
+  **Five interactive prompts could never fire.** `InstallConfigDefaults` pre-answered `DatabaseHost`, `DatabasePort`, `DatabaseTrustCert`, `APIPort` and `ExplorerPort` before `ConfigurePhase` applied its `??` guards. `DatabaseTrustCert` defaulting to `false` wrote an empty `DB_TRUST_SERVER_CERTIFICATE` and failed `migrate` against every self-signed (Docker, local) SQL Server. `--yes` and `--config` installs are unchanged.
+
+  **The database phase reported things it had not checked** — "Database connectivity verified" on a bare TCP probe, and `[FAIL] User sa NOT found` on a correct `sa` setup (`sa` maps to `dbo`).
+
+- 2cd8411: Fix a set of resource-leak findings from the Round 14 memory-leak audit: `ai-mcp-server`'s `--list-tools` CLI path now attaches a pool `error` handler and guarantees the SQL connection pool is closed in a `finally` block, so a failed tool-discovery run no longer orphans the connection; `ai-openai`'s `OpenAIRealtimeSession.Close()` (inherited by the xAI provider) now clears its callback-handler fields on close, matching the Gemini and ElevenLabs realtime sessions; `ng-dashboards`'s `ConnectionsComponent` and `GraphQLConsoleComponent` now call `super.ngOnInit()`/`super.ngOnDestroy()` so `BaseResourceComponent`'s query-param subscription and `destroy$` teardown run correctly; `installer`'s `GitHubReleaseProvider` and `SmokeTestPhase` now drain discarded HTTP response bodies instead of leaving them unconsumed; and `messaging-adapters`'s `SlackAdapter.thinkingMessageIds` map now uses the same TTL/max-size eviction pattern already applied to its sibling per-thread maps.
+
 ## 6.1.0
 
 ### Patch Changes

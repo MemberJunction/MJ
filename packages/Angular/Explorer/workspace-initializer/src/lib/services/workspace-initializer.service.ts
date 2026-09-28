@@ -33,7 +33,7 @@ export class WorkspaceInitializerService {
    * Initialize workspace with authenticated user
    * Replaces all the logic from AppComponent.handleLogin()
    */
-  async initializeWorkspace(
+  async InitializeWorkspace(
     token: string,
     userInfo: StandardUserInfo,
     environment: WorkspaceEnvironment
@@ -117,7 +117,7 @@ export class WorkspaceInitializerService {
       if (err?.response?.errors) {
         console.error('[Workspace] GraphQL errors:', JSON.stringify(err.response.errors, null, 2));
       }
-      const error = this.classifyError(err);
+      const error = this.ClassifyError(err);
       console.error('[Workspace] Classified as:', error.type, '-', error.message);
       return {
         success: false,
@@ -126,11 +126,20 @@ export class WorkspaceInitializerService {
     }
   }
 
+  /** @deprecated Use {@link InitializeWorkspace}. */
+  async initializeWorkspace(
+    token: string,
+    userInfo: StandardUserInfo,
+    environment: WorkspaceEnvironment
+  ): Promise<WorkspaceInitResult> {
+    return this.InitializeWorkspace(token, userInfo, environment);
+  }
+
   /**
    * Classify errors into actionable types
    * Replaces AppComponent error handling logic
    */
-  classifyError(err: any): WorkspaceInitError {
+  ClassifyError(err: any): WorkspaceInitError {
     // Check for no-roles error first (highest priority)
     if (this.isNoUserRolesError(err)) {
       // Add the validation issue through the service
@@ -182,6 +191,11 @@ export class WorkspaceInitializerService {
       userMessage: 'An unexpected error occurred. Please try again.',
       shouldRetry: false
     };
+  }
+
+  /** @deprecated Use {@link ClassifyError}. */
+  classifyError(err: any): WorkspaceInitError {
+    return this.ClassifyError(err);
   }
 
   /**
@@ -346,7 +360,7 @@ export class WorkspaceInitializerService {
    * Handle authentication retry with backoff
    * Replaces AppComponent.handleAuthRetry() logic
    */
-  async handleAuthRetry(error: WorkspaceInitError, currentPath: string): Promise<boolean> {
+  async HandleAuthRetry(error: WorkspaceInitError, currentPath: string): Promise<boolean> {
     if (!error.shouldRetry) {
       return false;
     }
@@ -367,5 +381,10 @@ export class WorkspaceInitializerService {
     }
 
     return false;
+  }
+
+  /** @deprecated Use {@link HandleAuthRetry}. */
+  async handleAuthRetry(error: WorkspaceInitError, currentPath: string): Promise<boolean> {
+    return this.HandleAuthRetry(error, currentPath);
   }
 }

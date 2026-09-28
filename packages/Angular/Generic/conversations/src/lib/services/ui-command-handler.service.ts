@@ -22,13 +22,31 @@ export class UICommandHandlerService {
    * Event emitted when an actionable command requires host-app handling.
    * Currently only open:resource commands are emitted — open:url is handled directly.
    */
-  public actionableCommandRequested = new EventEmitter<ActionableCommandRequest>();
+  public ActionableCommandRequested = new EventEmitter<ActionableCommandRequest>();
+
+  /** @deprecated Use {@link ActionableCommandRequested}. */
+  public get actionableCommandRequested() {
+    return this.ActionableCommandRequested;
+  }
+  /** @deprecated Use {@link ActionableCommandRequested}. */
+  public set actionableCommandRequested(value) {
+    this.ActionableCommandRequested = value;
+  }
 
   /**
    * Event emitted when an automatic command should be executed
    * Host application should subscribe to this and handle the command appropriately
    */
-  public automaticCommandRequested = new EventEmitter<AutomaticCommand>();
+  public AutomaticCommandRequested = new EventEmitter<AutomaticCommand>();
+
+  /** @deprecated Use {@link AutomaticCommandRequested}. */
+  public get automaticCommandRequested() {
+    return this.AutomaticCommandRequested;
+  }
+  /** @deprecated Use {@link AutomaticCommandRequested}. */
+  public set automaticCommandRequested(value) {
+    this.AutomaticCommandRequested = value;
+  }
 
   constructor(
     private dataCacheService: DataCacheService
@@ -38,18 +56,23 @@ export class UICommandHandlerService {
    * Execute an actionable command (triggered by user clicking a button).
    * Generic commands like open:url are handled directly; others are emitted to the host.
    */
-  public async executeActionableCommand(command: ActionableCommand, origin?: Omit<ActionableCommandRequest, 'command'>): Promise<void> {
+  public async ExecuteActionableCommand(command: ActionableCommand, origin?: Omit<ActionableCommandRequest, 'command'>): Promise<void> {
     if (command.type === 'open:url') {
       this.handleOpenUrl(command);
     } else {
       // open:resource requires app-specific navigation — emit for host to handle
       console.log('📤 Emitting actionable command for host app:', command);
-      this.actionableCommandRequested.emit({
+      this.ActionableCommandRequested.emit({
         command,
         conversationId: origin?.conversationId ?? null,
         conversationDetailId: origin?.conversationDetailId ?? null
       });
     }
+  }
+
+  /** @deprecated Use {@link ExecuteActionableCommand}. */
+  public async executeActionableCommand(command: ActionableCommand, origin?: Omit<ActionableCommandRequest, 'command'>): Promise<void> {
+    return this.ExecuteActionableCommand(command, origin);
   }
 
   /**
@@ -92,7 +115,7 @@ export class UICommandHandlerService {
    * Execute an automatic command (runs immediately without user interaction)
    * Special handling: refresh:data commands execute locally, others emit to host
    */
-  public async executeAutomaticCommand(command: AutomaticCommand): Promise<void> {
+  public async ExecuteAutomaticCommand(command: AutomaticCommand): Promise<void> {
     console.log('Executing automatic command:', command);
 
     if (command.type === 'refresh:data') {
@@ -101,25 +124,35 @@ export class UICommandHandlerService {
     } else {
       // Emit other automatic commands (like notifications) for host to handle
       console.log('📤 Emitting automatic command for host app:', command);
-      this.automaticCommandRequested.emit(command);
+      this.AutomaticCommandRequested.emit(command);
     }
+  }
+
+  /** @deprecated Use {@link ExecuteAutomaticCommand}. */
+  public async executeAutomaticCommand(command: AutomaticCommand): Promise<void> {
+    return this.ExecuteAutomaticCommand(command);
   }
 
   /**
    * Execute all automatic commands from an agent result
    */
-  public async executeAutomaticCommands(commands: AutomaticCommand[]): Promise<void> {
+  public async ExecuteAutomaticCommands(commands: AutomaticCommand[]): Promise<void> {
     if (!commands || commands.length === 0) {
       return;
     }
 
     for (const command of commands) {
       try {
-        await this.executeAutomaticCommand(command);
+        await this.ExecuteAutomaticCommand(command);
       } catch (error) {
         console.error('Error executing automatic command:', command, error);
       }
     }
+  }
+
+  /** @deprecated Use {@link ExecuteAutomaticCommands}. */
+  public async executeAutomaticCommands(commands: AutomaticCommand[]): Promise<void> {
+    return this.ExecuteAutomaticCommands(commands);
   }
 
   /**

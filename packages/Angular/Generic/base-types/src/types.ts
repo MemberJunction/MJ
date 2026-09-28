@@ -15,9 +15,9 @@ export type BaseFormComponentEventCodes = typeof BaseFormComponentEventCodes[key
  * Base type for events emitted by classes that interact with the Form Component architecture
  */
 export class BaseFormComponentEvent {
-    subEventCode!: string
-    elementRef: any
-    returnValue: any
+    subEventCode!: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    elementRef: any  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    returnValue: any  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
@@ -25,13 +25,13 @@ export class BaseFormComponentEvent {
  */
 export class FormEditingCompleteEvent extends BaseFormComponentEvent {
     subEventCode: string = BaseFormComponentEventCodes.EDITING_COMPLETE;
-    pendingChanges: PendingRecordItem[] = [];
+    pendingChanges: PendingRecordItem[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }
 
 /**
  * Type that is used for building an array of pending records that need to be saved or deleted by the Form architecture that sub-components have been editing during an edit cycle
  */
 export class PendingRecordItem {
-    entityObject!: BaseEntity;
-    action: 'save' | 'delete' = 'save';
+    entityObject!: BaseEntity;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    action: 'save' | 'delete' = 'save';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 }

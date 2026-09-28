@@ -115,7 +115,12 @@ Find memory notes that would help respond appropriately to this message.`;
  * Factory function to create a CohereReranker with default model.
  * Convenience function for simple usage.
  */
-export function createCohereReranker(apiKey: string, modelName?: string): CohereReranker {
+export function CreateCohereReranker(apiKey: string, modelName?: string): CohereReranker {
     return new CohereReranker(apiKey, modelName);
+}
+
+/** @deprecated Use {@link CreateCohereReranker}. */
+export function createCohereReranker(apiKey: string, modelName?: string): CohereReranker {
+    return CreateCohereReranker(apiKey, modelName);
 }
 

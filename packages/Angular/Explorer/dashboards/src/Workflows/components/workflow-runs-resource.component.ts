@@ -896,15 +896,15 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
             if (!UUIDsEqual(this.SelectedRunID ?? '', parentTaskID)) return;
             const parent = result.Success ? result.Results?.[0] : undefined;
             const bag = ParseWorkflowRunParentBag(parent?.InputPayload);
-            this.Invocation = bag.invocation;
+            this.Invocation = bag.Invocation;
             // Settled trumps the durable bag: $.debug.paused can still be true after the last
             // continue, and painting that as "paused here" hides that the run is over.
             if (this.GraphSettled) {
-                this.DebugState = { ...bag.debug, paused: false, pausedAtTaskID: null };
+                this.DebugState = { ...bag.Debug, paused: false, pausedAtTaskID: null };
                 this.DebugPaused = false;
             } else {
-                this.DebugState = bag.debug;
-                this.DebugPaused = bag.debug.paused;
+                this.DebugState = bag.Debug;
+                this.DebugPaused = bag.Debug.paused;
             }
         } catch {
             // A failed parent read leaves the last known debug state; frames remain the safety net.

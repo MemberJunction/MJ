@@ -37,7 +37,7 @@ export class ErrorAnalyzer {
      * console.log(`Can retry: ${errorInfo.severity !== 'Fatal'}`);
      * ```
      */
-    static analyzeError(error: any, providerName?: string): AIErrorInfo {
+    static AnalyzeError(error: any, providerName?: string): AIErrorInfo {
         // Extract HTTP status code if available
         const httpStatusCode = this.extractHttpStatusCode(error);
         
@@ -88,6 +88,11 @@ export class ErrorAnalyzer {
                 errorConstructor: error?.constructor?.name
             }
         };
+    }
+
+    /** @deprecated Use {@link AnalyzeError}. */
+    static analyzeError(error: any, providerName?: string): AIErrorInfo {
+        return this.AnalyzeError(error, providerName);
     }
     
     /**
@@ -145,6 +150,7 @@ export class ErrorAnalyzer {
             errorString.includes('payment') ||      // Payment required errors
             errorString.includes('insufficient funds') ||
             errorString.includes('quota exceeded') ||
+            errorString.includes('usage limits') || // Anthropic spend cap — sent as a 400 invalid_request_error, which the status fallback would misread as a malformed request
             errorString.includes('balance') ||      // Account balance issues
             errorString.includes('no funds')) {
             return 'NoCredit';

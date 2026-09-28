@@ -576,7 +576,7 @@ export class RestorePreviewPanelComponent extends BaseAngularComponent implement
 
   // ─── Display helpers (template) ─────────────────────────────────
 
-  public formatTimestamp(date: Date | null): string {
+  public FormatTimestamp(date: Date | null): string {
     if (!date) return '';
     return new Intl.DateTimeFormat('en-US', {
       year: 'numeric',
@@ -586,5 +586,10 @@ export class RestorePreviewPanelComponent extends BaseAngularComponent implement
       minute: '2-digit',
       hour12: true,
     }).format(new Date(date));
+  }
+
+  /** @deprecated Use {@link FormatTimestamp}. */
+  public formatTimestamp(date: Date | null): string {
+    return this.FormatTimestamp(date);
   }
 }

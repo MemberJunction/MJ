@@ -22,7 +22,10 @@ class TestableManageMetadata extends ManageMetadataBase {
    /** Ordered log of probes and executes, shared with the fake connection. */
    public events: string[] = [];
 
-   protected override async LogSQLBatchAndExecute(
+   // The base declares this `private`, per MJ's convention for private members. `override` is
+   // therefore not available; the subclass shadows it by name, which is what the interception
+   // needs and what TypeScript's compile-time-only `private` permits at runtime.
+   protected async logSQLBatchAndExecute(
       _pool: CodeGenConnection,
       sqlBatch: string[],
       _description: string,

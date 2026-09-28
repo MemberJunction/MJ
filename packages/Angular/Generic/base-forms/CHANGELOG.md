@@ -1,5 +1,85 @@
 # @memberjunction/ng-base-forms
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 683f652: feat(ng-base-forms): foreign-key lookups get a class-factory seam, the platform search API, metadata scoping, prefix ranking and recent picks.
+
+  The stock FK field ran one `LIKE '%q%'` on the name column, twenty rows, no ordering, and nothing an app could override — so on a large related entity a user typing three letters got twenty arbitrary records containing them, and `%` or `_` typed into the field acted as live wildcards.
+
+  Rows now come from an `FKLookupStrategy` resolved through the class factory by `<HostEntity>.<Field>`, then `<RelatedEntity>`, then MJ's own default. The default searches the column the user chose with an escaped `LIKE`, prefix matches first (or ranks through `SearchEntity` and hydrates by ID when a field opts into `SearchMode: 'hybrid'`), orders the browse list by the name field, applies the new `EntityField.RelatedEntityFilter` / `RelatedEntityOrderBy` metadata plus `[FKExtraFilter]` / `[FKOrderBy]` inputs — on the engine-cached path too — and leads with the user's last picks for that field, scoped the same way. A strategy can group its rows, give each a second line and chips, veto a pick with the full row it returned, and prefill the create form.
+
+  `@memberjunction/server` is listed because its generated GraphQL schema gains the two columns; the shared `fixed` group would bump it regardless, but the release notes should name it.
+
+  Minor rather than patch: this ships a migration adding two `EntityField` columns.
+
+### Patch Changes
+
+- e1fd4c1: fix: a date-only column renders as its stored calendar day in grids, cards, the record detail panel, aggregates, the aggregate panel, the view-config preview, the IS-A related card and the FK dropdown, not the previous day
+
+  A SQL `date` column arrives as UTC midnight, and every display path except the form field (fixed in #4177) formatted it in the reader's local zone, so a stored 2026-11-20 read as Nov 19 for everyone west of Greenwich and 2026-01-01 read as the previous year. The form and the list disagreed on the same row. `@memberjunction/core` now exports `IsDateOnlySQLType` and `FormatDateOnly`, its own `FormatValue` uses them for `date` types, and the grid, cards, detail panel, entity card and view-config preview branch on the field's declared SQL type. A `datetime` or `datetimeoffset` column is an instant and keeps local rendering with its time. `ng-entity-viewer` also exports `AggregateFieldName` and `AggregateField`, which read the column out of a single-field aggregate such as `MIN(IntakeDate)`, and the aggregate panel gains an optional `Entity` input: with it bound, a date aggregate renders as its day instead of the raw ISO string the wire carries, while a `COUNT` over a date column still renders as the count. A timestamp aggregate that arrives as that ISO string now renders in local time in grid cards rather than as the wire text. In `ng-base-forms`, the IS-A related card and the FK dropdown cells branch on the column's SQL type the same way. Closes MJ#4210.
+
+- 50241c8: fix(ng-entity-viewer): the entity grid's Merge button does something.
+
+  `MergeRecordsRequested` had no subscriber anywhere and the record-merge panel never called `MergeRecords`, so merging was reachable only from Knowledge Hub's duplicate review. The grid view renderer now hosts the panel in `mj-dialog`, lets the user choose which record survives, previews how many linked records would move to it, and merges two selected rows — offered only where the entity allows merge and the user can both update and delete. Fields the ORM will not write (keys, `AllowUpdateAPI = 0`, timestamps) are read-only in the comparison. IS-A records are refused with an explanation, on the client and in `MergeRecords` itself: the merge re-points only the keys that target the merged entity, and the loser's delete would follow the shared key into subtype or parent rows whose references never moved.
+
+  `mj-explorer-entity-data-grid` re-emits the same event rather than leaving a button that does nothing.
+
+- 5df9486: The IS-A related-records side panel (`<mj-isa-related-panel>`) now re-discovers a record's subtypes
+  when the form leaves edit mode. Creating a record together with its subtype in one save left the
+  panel empty — the record plainly had a Dog, the panel said it had nothing — until the user pressed
+  the in-app Refresh. The panel only re-asked on a new `Record` object (which the form deliberately
+  does not swap across a save of the same record) or on `Refreshed$` (reached only from the Refresh
+  button). Leaving edit mode is the third trigger; on a disjoint hierarchy it walks the in-memory
+  `ISAChild` chain and issues no query.
+- 1ed606c: A form section now sees every `mj-form-field` rendered inside it, including fields declared in a widget component's own template, so the left rail badges that section when those fields are required-and-empty or fail a save.
+
+  `mj-collapsible-panel` derived a section's counts, and its claim on a failed save's field-named errors, from `@ContentChildren` alone. A content query stops at a component view boundary, so a section whose fields lived inside a projected widget saw none of them: no required-and-empty badge before the save, and no owner for the two field errors after it. The panel now also provides `FORM_SECTION_FIELD_HOST`; every `mj-form-field` injects it optionally and registers on construction, which follows the element injector across any number of view boundaries. A registered field counts only while its element is physically inside the panel, so a field created in an overlay that inherited the panel's injector is not counted against it.
+
+  Two smaller fixes from the same report:
+  - The expanded rail now shows failures no section owns on their own row. They were counted only on the collapsed spine, so an expanded rail could look clean over a form the server had just refused.
+  - `BaseFormComponent.SaveRecord` no longer logs `Could not save record: Record not found` on every refused save. That line sat after the `if (record)` block with no `else`, so a create that failed validation logged a message pointing at an ID or routing fault. The refusal is already reported through the toast and the fields; the console line now fires only when the form has no record to save, and says so.
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [50241c8]
+- Updated dependencies [6207578]
+- Updated dependencies [e225ece]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/ng-entity-viewer@6.2.0-edge.0
+  - @memberjunction/ng-shared-generic@6.2.0-edge.0
+  - @memberjunction/ng-base-types@6.2.0-edge.0
+  - @memberjunction/ng-code-editor@6.2.0-edge.0
+  - @memberjunction/ng-file-storage@6.2.0-edge.0
+  - @memberjunction/ng-list-management@6.2.0-edge.0
+  - @memberjunction/ng-notifications@6.2.0-edge.0
+  - @memberjunction/ng-react@6.2.0-edge.0
+  - @memberjunction/ng-record-changes@6.2.0-edge.0
+  - @memberjunction/ng-record-tags@6.2.0-edge.0
+  - @memberjunction/interactive-component-types@6.2.0-edge.0
+  - @memberjunction/ng-markdown@6.2.0-edge.0
+  - @memberjunction/ng-ui-components@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
 ## 6.1.0
 
 ### Minor Changes

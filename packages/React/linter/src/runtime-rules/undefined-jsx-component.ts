@@ -1,4 +1,4 @@
-import { traverse, NodePath } from '../lint-utils';
+import { Traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -92,7 +92,7 @@ export class UndefinedJsxComponentRule extends BaseLintRule {
       }
     }
 
-    traverse(ast, {
+    Traverse(ast, {
       // Track variable declarations
       VariableDeclarator(path: NodePath<t.VariableDeclarator>) {
         if (t.isIdentifier(path.node.id)) {

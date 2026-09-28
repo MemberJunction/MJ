@@ -70,14 +70,24 @@ export class RingCentralSoftphoneHandle implements SoftphoneCallSource {
     }
 
     /** REGISTERs the SIP device so the softphone can place + receive calls. Called once at boot. */
-    public async register(): Promise<void> {
+    public async Register(): Promise<void> {
         await this.client.register();
         LogStatus(`[Telephony][RingCentral] softphone registered (codec ${this.client.codec.name}).`);
     }
 
+    /** @deprecated Use {@link Register}. */
+    public async register(): Promise<void> {
+        return this.Register();
+    }
+
     /** Subscribes a listener to inbound INVITEs (the coordinator). */
-    public onInvite(listener: (info: InboundInviteInfo) => void): void {
+    public OnInvite(listener: (info: InboundInviteInfo) => void): void {
         this.inviteListeners.push(listener);
+    }
+
+    /** @deprecated Use {@link OnInvite}. */
+    public onInvite(listener: (info: InboundInviteInfo) => void): void {
+        return this.OnInvite(listener);
     }
 
     // ── SoftphoneCallSource ───────────────────────────────────────────────────────────
@@ -98,13 +108,18 @@ export class RingCentralSoftphoneHandle implements SoftphoneCallSource {
     }
 
     /** Declines + forgets a parked INVITE (no agent resolved for the DID). Safe for an unknown call id. */
-    public async declineCall(callId: string): Promise<void> {
+    public async DeclineCall(callId: string): Promise<void> {
         const invite = this.parked.get(callId);
         if (!invite) {
             return;
         }
         this.parked.delete(callId);
         await this.client.decline(invite);
+    }
+
+    /** @deprecated Use {@link DeclineCall}. */
+    public async declineCall(callId: string): Promise<void> {
+        return this.DeclineCall(callId);
     }
 
     /** Best-effort teardown of the registration + parked state (server shutdown). */
@@ -116,7 +131,7 @@ export class RingCentralSoftphoneHandle implements SoftphoneCallSource {
 
     /** Parks one inbound INVITE and notifies listeners with its parsed identity. */
     private parkInvite(msg: SoftphoneInviteMessage): void {
-        const info = parseInvite(msg);
+        const info = ParseInvite(msg);
         if (!info) {
             return; // Unparseable INVITE (no Call-ID) — ignore rather than crash the registration.
         }
@@ -136,7 +151,7 @@ export class RingCentralSoftphoneHandle implements SoftphoneCallSource {
  * @param deps Test seam: inject a fake softphone client factory + RTP constructors to avoid loading the
  *   real SDKs. Production omits both, so the lazy loaders run.
  */
-export async function createRingCentralSoftphone(
+export async function CreateRingCentralSoftphone(
     config: RingCentralSoftphoneConfig,
     deps: {
         createClient?: (config: RingCentralSoftphoneConfig) => SoftphoneClient;
@@ -148,25 +163,41 @@ export async function createRingCentralSoftphone(
     return new RingCentralSoftphoneHandle(client, rtp);
 }
 
+/** @deprecated Use {@link CreateRingCentralSoftphone}. */
+export async function createRingCentralSoftphone(
+    config: RingCentralSoftphoneConfig,
+    deps: {
+        createClient?: (config: RingCentralSoftphoneConfig) => SoftphoneClient;
+        rtp?: RtpConstructors;
+    } = {},
+): Promise<RingCentralSoftphoneHandle> {
+    return CreateRingCentralSoftphone(config, deps);
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Pure parsing helpers (unit-tested directly — no SDK, no network).
 // ──────────────────────────────────────────────────────────────────────────────
 
 /** Parses an inbound INVITE's SIP headers into {@link InboundInviteInfo}, or null when there's no Call-ID. */
-export function parseInvite(msg: SoftphoneInviteMessage): InboundInviteInfo | null {
-    const callId = getHeader(msg.headers, 'Call-ID');
+export function ParseInvite(msg: SoftphoneInviteMessage): InboundInviteInfo | null {
+    const callId = GetHeader(msg.headers, 'Call-ID');
     if (!callId) {
         return null;
     }
     return {
         callId,
-        from: extractSipNumber(getHeader(msg.headers, 'From')),
-        to: extractSipNumber(getHeader(msg.headers, 'To')),
+        from: ExtractSipNumber(GetHeader(msg.headers, 'From')),
+        to: ExtractSipNumber(GetHeader(msg.headers, 'To')),
     };
 }
 
+/** @deprecated Use {@link ParseInvite}. */
+export function parseInvite(msg: SoftphoneInviteMessage): InboundInviteInfo | null {
+    return ParseInvite(msg);
+}
+
 /** Case-insensitive SIP-header lookup (header keys vary in casing across stacks). Returns '' when absent. */
-export function getHeader(headers: Record<string, string>, name: string): string {
+export function GetHeader(headers: Record<string, string>, name: string): string {
     const target = name.toLowerCase();
     for (const [key, value] of Object.entries(headers)) {
         if (key.toLowerCase() === target) {
@@ -176,17 +207,27 @@ export function getHeader(headers: Record<string, string>, name: string): string
     return '';
 }
 
+/** @deprecated Use {@link GetHeader}. */
+export function getHeader(headers: Record<string, string>, name: string): string {
+    return GetHeader(headers, name);
+}
+
 /**
  * Extracts the phone number from a SIP address header value — handles `"Name" <sip:+1555@host>;tag=…`,
  * `<sip:+1555@host>`, `sip:+1555@host`, and `tel:+1555`. Returns the user part verbatim (keeping a leading
  * `+`), or '' when no recognizable number is present.
  */
-export function extractSipNumber(headerValue: string): string {
+export function ExtractSipNumber(headerValue: string): string {
     if (!headerValue) {
         return '';
     }
     const match = headerValue.match(/(?:sip|sips|tel):([^@;>\s]+)/i);
     return match ? match[1].trim() : '';
+}
+
+/** @deprecated Use {@link ExtractSipNumber}. */
+export function extractSipNumber(headerValue: string): string {
+    return ExtractSipNumber(headerValue);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

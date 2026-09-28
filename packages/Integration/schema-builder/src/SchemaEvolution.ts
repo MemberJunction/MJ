@@ -20,7 +20,7 @@ import { TypeMapper } from './TypeMapper.js';
  */
 export class SchemaEvolution {
     private readonly DDL = new DDLGenerator();
-    private readonly Mapper = new TypeMapper();
+    private readonly mapper = new TypeMapper();
 
     /**
      * Diff a source object against an existing target table.
@@ -64,7 +64,7 @@ export class SchemaEvolution {
             if (pkNames.has(lowerName)) {
                 if (existingNames.has(lowerName)) {
                     const existingCol = existing.Columns.find(c => c.Name.toLowerCase() === lowerName);
-                    if (existingCol && this.HasColumnChanged(existingCol, col)) {
+                    if (existingCol && this.hasColumnChanged(existingCol, col)) {
                         warnings.push(`PK column '${col.TargetColumnName}' type changed from ${existingCol.SqlType} to ${col.TargetSqlType} — skipped (requires manual constraint drop/recreate)`);
                     }
                 }
@@ -75,7 +75,7 @@ export class SchemaEvolution {
                 added.push(col);
             } else {
                 const existingCol = existing.Columns.find(c => c.Name.toLowerCase() === lowerName);
-                if (existingCol && this.HasColumnChanged(existingCol, col)) {
+                if (existingCol && this.hasColumnChanged(existingCol, col)) {
                     modified.push({
                         ColumnName: col.TargetColumnName,
                         OldType: existingCol.SqlType,
@@ -100,7 +100,7 @@ export class SchemaEvolution {
         // skips standard columns (they're in `standardCols`), so a table created before a standard
         // column was introduced would never get it. ALTER-add any that are missing — otherwise the
         // engine's writes to a missing column silently no-op (hasField guard).
-        added.push(...this.EnsureStandardColumns(existing, platform));
+        added.push(...this.ensureStandardColumns(existing, platform));
 
         return { AddedColumns: added, ModifiedColumns: modified, RemovedColumns: removed, Warnings: warnings };
     }
@@ -110,7 +110,7 @@ export class SchemaEvolution {
      * as ALTER-ADD configs. New tables get these in CREATE TABLE (DDLGenerator.StandardColumns);
      * existing tables created before a column was added get it ALTER-ed in here.
      */
-    private EnsureStandardColumns(existing: ExistingTableInfo, platform: DatabasePlatform): TargetColumnConfig[] {
+    private ensureStandardColumns(existing: ExistingTableInfo, platform: DatabasePlatform): TargetColumnConfig[] {
         const have = new Set(existing.Columns.map(c => c.Name.toLowerCase()));
         const isSql = platform === 'sqlserver';
         const std: TargetColumnConfig[] = [
@@ -169,7 +169,7 @@ export class SchemaEvolution {
         return targetConfig.SoftForeignKeys.filter(fk => addedNames.has(fk.FieldName));
     }
 
-    private HasColumnChanged(existing: { SqlType: string; IsNullable: boolean }, target: TargetColumnConfig): boolean {
+    private hasColumnChanged(existing: { SqlType: string; IsNullable: boolean }, target: TargetColumnConfig): boolean {
         // Normalize types for comparison (case-insensitive, strip whitespace)
         const normalizedExisting = existing.SqlType.toLowerCase().replace(/\s+/g, '');
         const normalizedTarget = target.TargetSqlType.toLowerCase().replace(/\s+/g, '');
