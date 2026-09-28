@@ -442,5 +442,18 @@
       "lastModified": "2026-09-15T13:56:42.685Z",
       "checksum": "ffcb145b12e3690546bdd56181db4092ed845f55c858f1e2657aa6efd72ff7c5"
     }
+  },
+  {
+    "fields": {
+      "Name": "MemberJunction",
+      "Description": "Models that MemberJunction composes inside the platform from other models, rather than calling one vendor API. For example, LLM Decision answers typed decisions by running an MJ prompt on a chat model. They need no API key of their own: the models they run resolve their own credentials."
+    },
+    "primaryKey": {
+      "ID": "4306A7D6-1647-4BCE-8C68-979073194999"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T23:23:48.062Z",
+      "checksum": "34d767aaae8a5b9e5dd655e22c41b85f65bd0dc8e7f1518067cd6ae225beb4ea"
+    }
   }
 ]

@@ -1,0 +1,48 @@
+[
+  {
+    "fields": {
+      "Name": "Default Decision",
+      "Description": "The decision prompt used when no other is named, by the Run Decision action and by loop agents. Its bindings choose the decision model. Callers normally pass the state explicitly, so the template only renders a state passed as template data.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/default-decision.template.md",
+      "Status": "Active",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Decision",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "ResponseFormat": "Any",
+      "OutputType": "string",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=LLM Decision",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MemberJunction",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "42C51B63-97AE-4838-ACF0-FA32039D3E9E"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:23:50.070Z",
+            "checksum": "b82ea1f888d9a09cb26de6ebc1ce02195fd3ccb434a7d2e6cbffb8c3f420c561"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8D3B91E7-D840-4B1B-B7F0-EDB0C77BE6CB"
+    },
+    "sync": {
+      "lastModified": "2026-09-28T23:23:50.019Z",
+      "checksum": "040630c17996b99b378c07b4248ab91c4a8f4a4fd6122932853697dfe3190532"
+    }
+  }
+]
