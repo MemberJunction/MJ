@@ -26,6 +26,22 @@ describe('EntityInfo, EntityRelationshipInfo, and EntityFieldInfo Clone Config G
         expect(entity.NotCloneable).toBe(false);
     });
 
+    it('returns null, not a throw, for malformed Configuration JSON on each level', () => {
+        const entity = new EntityInfo();
+        entity.Configuration = '{"Clone": {"Enabled": true,';
+        expect(entity.CloneConfig).toBeNull();
+        expect(entity.CloneEnabled).toBe(false);
+        expect(entity.NotCloneable).toBe(false);
+
+        const rel = new EntityRelationshipInfo();
+        rel.Configuration = 'not json';
+        expect(rel.CloneConfig).toBeNull();
+
+        const field = new EntityFieldInfo();
+        field.Configuration = '{';
+        expect(field.CloneConfig).toBeNull();
+    });
+
     it('EntityInfo detects NotCloneable: true correctly', () => {
         const entity = new EntityInfo();
         entity.Configuration = JSON.stringify({
