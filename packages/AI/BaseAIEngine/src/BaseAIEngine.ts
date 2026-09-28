@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
-import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
+import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ParseVendorConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -1410,12 +1410,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Resolves the EFFECTIVE {@link AIModelConfiguration} for a model (optionally scoped to one of
      * its vendor rows) by walking the catalog cascade base-first:
      *
-     * `AIModelType.ModelConfiguration` < `AIVendor.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIModelVendor.ModelConfiguration`
+     * `AIModelType.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIVendor.Configuration.ModelDefaults` < `AIModelVendor.ModelConfiguration`
      *
-     * The vendor layer is the host-wide default for every model that vendor serves. It sits BELOW
-     * the model's own bag on purpose: the bag also carries capability knobs that describe the model,
-     * and a host-wide default must not override what a model says about itself; the model-vendor
-     * row is where a host diverges for one model. The vendor layer only contributes when a
+     * The vendor layer (`ModelDefaults` inside the vendor's own `Configuration` bag) is the host-wide
+     * default for every model that vendor serves. It sits ABOVE the model's own bag: a host's
+     * statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. Merged per key, so a
+     * vendor default only touches the keys it sets. The vendor layer only contributes when a
      * model-vendor row is supplied, because that row's `VendorID` is what names the vendor.
      *
      * Each layer's JSON column is parsed TOLERANTLY (a malformed/absent layer contributes nothing)
@@ -1441,8 +1442,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         const vendor = modelVendor?.VendorID ? this.VendorsByID.get(NormalizeUUID(modelVendor.VendorID)) : undefined;
         return ResolveEffectiveModelConfiguration(
             ParseModelConfiguration(modelType?.ModelConfiguration),
-            ParseModelConfiguration(vendor?.ModelConfiguration),
             ParseModelConfiguration(model.ModelConfiguration),
+            ParseVendorConfiguration(vendor?.Configuration)?.ModelDefaults,
             ParseModelConfiguration(modelVendor?.ModelConfiguration),
         );
     }

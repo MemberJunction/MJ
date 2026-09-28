@@ -11,6 +11,7 @@ import {
     AIModelConfiguration,
     IsPrefixPromptCache,
     ParseModelConfiguration,
+    ParseVendorConfiguration,
     ResolveEffectiveModelConfiguration,
 } from '../generic/modelConfiguration';
 
@@ -245,17 +246,24 @@ describe('IsPrefixPromptCache — the catalog answers "is this serving path a by
         expect(IsPrefixPromptCache(stored)).toBe(false);
     });
 
-    it("the most specific layer wins in both directions: a vendor default is overridden by the model-vendor row, and vice versa, without wiping sibling knobs", () => {
+    it("Type < Model < Vendor.ModelDefaults < ModelVendor: the vendor default beats the model's bag, the serving row beats everything, and sibling knobs survive", () => {
         const type: AIModelConfiguration = { LLM: { PrefixPromptCache: false } };
-        const vendor: AIModelConfiguration = { LLM: { PrefixPromptCache: true } };
-        const model: AIModelConfiguration = { LLM: { SupportsNativeToolCalling: true } };
+        const model: AIModelConfiguration = { LLM: { PrefixPromptCache: false, SupportsNativeToolCalling: true } };
+        const vendorDefaults: AIModelConfiguration = { LLM: { PrefixPromptCache: true } };
         const modelVendor: AIModelConfiguration = { LLM: { PrefixPromptCache: false } };
 
-        // Type < Vendor < Model < ModelVendor
-        expect(IsPrefixPromptCache(ResolveEffectiveModelConfiguration(type, vendor))).toBe(true);
-        expect(IsPrefixPromptCache(ResolveEffectiveModelConfiguration(type, vendor, model))).toBe(true); // model is silent: inherits the vendor
-        const effective = ResolveEffectiveModelConfiguration(type, vendor, model, modelVendor);
-        expect(IsPrefixPromptCache(effective)).toBe(false); // the serving row overrides the vendor default
+        expect(IsPrefixPromptCache(ResolveEffectiveModelConfiguration(type, model))).toBe(false);
+        expect(IsPrefixPromptCache(ResolveEffectiveModelConfiguration(type, model, vendorDefaults))).toBe(true); // the vendor default wins over the model's own false
+        const effective = ResolveEffectiveModelConfiguration(type, model, vendorDefaults, modelVendor);
+        expect(IsPrefixPromptCache(effective)).toBe(false); // the serving row is the tie-breaker
         expect(effective?.LLM?.SupportsNativeToolCalling).toBe(true); // ...without wiping the model's other knobs
+    });
+
+    it('ParseVendorConfiguration is as tolerant as ParseModelConfiguration and exposes ModelDefaults', () => {
+        expect(ParseVendorConfiguration(null)).toBeNull();
+        expect(ParseVendorConfiguration('{ nope')).toBeNull();
+        expect(ParseVendorConfiguration('[1,2]')).toBeNull();
+        expect(ParseVendorConfiguration('{"ModelDefaults":{"LLM":{"PrefixPromptCache":true}}}')?.ModelDefaults?.LLM?.PrefixPromptCache).toBe(true);
+        expect(ParseVendorConfiguration('{"SomethingElse":1}')?.ModelDefaults).toBeUndefined();
     });
 });

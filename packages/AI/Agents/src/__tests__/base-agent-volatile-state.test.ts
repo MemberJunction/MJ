@@ -21,11 +21,11 @@ const templates = vi.hoisted(() => ({ byId: new Map<string, string>() }));
  * (type < model < model-vendor, deep-merged per key). Tests seed it per case.
  */
 interface CatalogModel { ID: string; Name: string; ModelConfiguration?: string }
-interface CatalogVendor { ID: string; Name: string; ModelConfiguration?: string }
+interface CatalogVendor { ID: string; Name: string; Configuration?: string }
 interface CatalogModelVendor { ID: string; VendorID: string; TypeID: 'inference' | 'developer'; ModelConfiguration?: string }
 const catalog = vi.hoisted(() => ({
     models: new Map<string, { ID: string; Name: string; ModelConfiguration?: string }>(),
-    vendors: new Map<string, { ID: string; Name: string; ModelConfiguration?: string }>(),
+    vendors: new Map<string, { ID: string; Name: string; Configuration?: string }>(),
     modelVendors: new Map<string, Array<{ ID: string; VendorID: string; TypeID: 'inference' | 'developer'; ModelConfiguration?: string }>>(),
     reset(): void { this.models.clear(); this.vendors.clear(); this.modelVendors.clear(); },
 }));
@@ -45,8 +45,10 @@ vi.mock('@memberjunction/aiengine', () => ({
                 if (!model) { return null; }
                 const row = modelVendorID ? (catalog.modelVendors.get(modelID) ?? []).find(mv => mv.ID === modelVendorID) : undefined;
                 const vendor = row ? catalog.vendors.get(row.VendorID) : undefined;
-                // Type < Vendor < Model < ModelVendor, as the real engine resolves it
-                const layers = [vendor?.ModelConfiguration, model.ModelConfiguration, row?.ModelConfiguration].filter((j): j is string => typeof j === 'string').map(j => JSON.parse(j) as { LLM?: Record<string, unknown> });
+                const vendorDefaults = vendor?.Configuration ? (JSON.parse(vendor.Configuration) as { ModelDefaults?: { LLM?: Record<string, unknown> } }).ModelDefaults : undefined;
+                const parse = (j: string | undefined): { LLM?: Record<string, unknown> } | undefined => (typeof j === 'string' ? JSON.parse(j) as { LLM?: Record<string, unknown> } : undefined);
+                // Type < Model < Vendor.Configuration.ModelDefaults < ModelVendor, as the real engine resolves it
+                const layers = [parse(model.ModelConfiguration), vendorDefaults, parse(row?.ModelConfiguration)].filter((l): l is { LLM?: Record<string, unknown> } => !!l);
                 if (layers.length === 0) { return null; }
                 return { LLM: Object.assign({}, ...layers.map(l => l.LLM ?? {})) };
             },
@@ -420,7 +422,7 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         const bag = (flag: boolean | null | undefined): string | undefined =>
             flag === undefined ? undefined : JSON.stringify({ LLM: { PrefixPromptCache: flag } });
         const model: CatalogModel = { ID: modelID, Name: modelID, ModelConfiguration: bag(flags.model) };
-        const vendor: CatalogVendor = { ID: vendorID, Name: vendorID, ModelConfiguration: bag(flags.vendor) };
+        const vendor: CatalogVendor = { ID: vendorID, Name: vendorID, Configuration: flags.vendor === undefined ? undefined : JSON.stringify({ ModelDefaults: { LLM: { PrefixPromptCache: flags.vendor } } }) };
         const rows: CatalogModelVendor[] = [
             { ID: `${modelID}:${vendorID}:developer`, VendorID: vendorID, TypeID: 'developer', ModelConfiguration: bag(flags.developerRow) },
             { ID: `${modelID}:${vendorID}:inference`, VendorID: vendorID, TypeID: 'inference', ModelConfiguration: bag(flags.inferenceRow) },
@@ -468,8 +470,13 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
     });
 
-    it('a vendor-row default is inherited by every model it serves, and a model-vendor row can still override it', () => {
+    it("a vendor's Configuration.ModelDefaults is inherited by every model it serves, beats the model's own bag, and a model-vendor row can still override it", () => {
         const { promptParams } = makeInputs({});
+        // The model's own bag says false; the vendor default says true and wins (the row is the only tie-breaker).
+        const c = agentUnderTest();
+        const overModel = seed('gpt-said-no', 'openai', { vendor: true, model: false });
+        c._lastModelSelectionInfo = { ModelSelected: overModel.model, vendorSelected: overModel.vendor };
+        expect(c.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
         // Nothing on the model or its rows: the vendor's true flows through.
         const a = agentUnderTest();
         const inherited = seed('gpt-new', 'openai', { vendor: true });

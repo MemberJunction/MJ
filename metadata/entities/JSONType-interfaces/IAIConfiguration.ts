@@ -12,9 +12,9 @@
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
- *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
- *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -108,8 +108,9 @@ export interface LLMConfigurationSettings {
      * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
      * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
      * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
-     * in place — the safe default. Set `true` on the VENDOR row of a prefix-cache provider so every
-     * model it serves inherits it; a MODEL-VENDOR row overrides it for one model on that host.
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
      * Consumed by the loop agent's trailing runtime-state layout.
      */
     PrefixPromptCache?: boolean | null;
@@ -235,4 +236,22 @@ export interface IAIPromptModelConfiguration {
     Vision?: VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: AudioConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: IAIModelConfiguration | null;
 }

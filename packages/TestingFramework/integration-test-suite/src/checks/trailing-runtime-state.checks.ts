@@ -182,7 +182,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
     },
     {
         Id: 'trailing-runtime-state.TRS3',
-        Name: "TRS3: trailing-state mode comes from the catalog — a model served by OpenAILLM inherits PrefixPromptCache=true from its vendor row (append-only); one served by AnthropicLLM resolves false (replace)",
+        Name: "TRS3: trailing-state mode comes from the catalog — a model served by OpenAILLM inherits PrefixPromptCache=true from its vendor row's Configuration.ModelDefaults (append-only); one served by AnthropicLLM resolves false (replace)",
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
             const loop = loopAgentType(engine, 'TRS3');
@@ -197,7 +197,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
 
             const a = agentInternals(ctx);
             AssertEqual(a.ResolvePrefixPromptCache(openai.model, openai.vendor), true,
-                `'${openai.model.Name}' on ${openai.vendor.Name} must resolve PrefixPromptCache=true through the cascade (vendor row default) — metadata/ai-vendors has not been pushed, or the vendor row lost its bag`);
+                `'${openai.model.Name}' on ${openai.vendor.Name} must resolve PrefixPromptCache=true through the cascade (the vendor row's Configuration.ModelDefaults) — metadata/ai-vendors has not been pushed, or the vendor row lost its bag`);
             a._lastModelSelectionInfo = { ModelSelected: openai.model, vendorSelected: openai.vendor };
             AssertEqual(a.shouldUseAppendOnlyTrailingState(promptParams), true, 'a prefix-cache serving path runs append-only');
 

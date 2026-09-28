@@ -262,14 +262,14 @@ describe('AIEngineBase — inference-provider helpers & lookup indexes', () => {
     });
 });
 
-describe('AIEngineBase.GetEffectiveModelConfiguration — the four-layer cascade', () => {
+describe('AIEngineBase.GetEffectiveModelConfiguration — the four-layer cascade (Type < Model < Vendor.Configuration.ModelDefaults < ModelVendor)', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         (AIEngineBase as unknown as { _instance: unknown })._instance = undefined;
         seedVendorTypes();
         set('_modelTypes', [{ ID: INFERENCE_TYPE_ID, Name: 'LLM', ModelConfiguration: '{"LLM":{"PrefixPromptCache":false,"NativeToolResults":true}}' }]);
         set('_vendors', [
-            { ID: VENDOR_OPENAI, Name: 'OpenAI', ModelConfiguration: '{"LLM":{"PrefixPromptCache":true}}' },
+            { ID: VENDOR_OPENAI, Name: 'OpenAI', Configuration: '{"ModelDefaults":{"LLM":{"PrefixPromptCache":true}}}' },
             { ID: VENDOR_GROQ, Name: 'Groq' },
         ]);
         set('_models', [
@@ -295,9 +295,18 @@ describe('AIEngineBase.GetEffectiveModelConfiguration — the four-layer cascade
         expect(cfg?.LLM?.PrefixPromptCache).toBe(false);
     });
 
-    it("the model's own bag beats the vendor default (Type < Vendor < Model < ModelVendor)", () => {
+    it("the vendor default beats the model's own bag; only the model-vendor row can tie-break", () => {
         const cfg = AIEngineBase.Instance.GetEffectiveModelConfiguration(MODEL_B, `${MODEL_B}:${VENDOR_OPENAI}`);
-        expect(cfg?.LLM?.PrefixPromptCache).toBe(false);          // Model B says false; OpenAI's true does not override it
+        expect(cfg?.LLM?.PrefixPromptCache).toBe(true);           // Model B says false; OpenAI's ModelDefaults say true and win
+    });
+
+    it('a vendor whose Configuration has no ModelDefaults, or is malformed, contributes nothing', () => {
+        set('_vendors', [
+            { ID: VENDOR_OPENAI, Name: 'OpenAI', Configuration: '{"SomethingElse":1}' },
+            { ID: VENDOR_GROQ, Name: 'Groq', Configuration: '{ not json' },
+        ]);
+        expect(AIEngineBase.Instance.GetEffectiveModelConfiguration(MODEL_A, `${MODEL_A}:${VENDOR_OPENAI}`)?.LLM?.PrefixPromptCache).toBe(false);
+        expect(AIEngineBase.Instance.GetEffectiveModelConfiguration(MODEL_A, `${MODEL_A}:${VENDOR_GROQ}`)?.LLM?.PrefixPromptCache).toBe(false);
     });
 
     it('without a model-vendor row there is no vendor, so the cascade is type < model as before', () => {

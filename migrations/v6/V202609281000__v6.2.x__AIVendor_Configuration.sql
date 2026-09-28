@@ -1,52 +1,69 @@
 /*
-    AIVendor.ModelConfiguration — the vendor layer of the model-configuration cascade
+    AIVendor.Configuration — the vendor's own configuration bag, and the vendor layer of the
+    model-configuration cascade
 
-    Adds ONE nullable JSON column, `ModelConfiguration`, to AIVendor, completing the
-    inherit-with-override cascade that AIModelType, AIModel and AIModelVendor already carry
-    (V202608081622__v6.1.x__ModelConfiguration_JSONType_Columns.sql). Resolved base-first:
+    Adds ONE nullable JSON column, `Configuration`, to AIVendor. It is a general-purpose vendor
+    configuration bag (JSONType `IAIVendorConfiguration`), of which the first key is
+    `ModelDefaults`: an `IAIModelConfiguration` bag that forms the default model configuration for
+    every model this vendor serves. That key completes the inherit-with-override cascade that
+    AIModelType, AIModel and AIModelVendor already carry
+    (V202608081622__v6.1.x__ModelConfiguration_JSONType_Columns.sql), resolved base-first:
 
-        AIModelType.ModelConfiguration          (type-wide default)
-          <  AIVendor.ModelConfiguration        (host-wide default for every model this vendor serves)
-            <  AIModel.ModelConfiguration       (per-model — the model's own word still beats the host's)
-              <  AIModelVendor.ModelConfiguration (per model-on-this-provider — the winner)
+        AIModelType.ModelConfiguration            (type-wide default)
+          <  AIModel.ModelConfiguration           (per-model)
+            <  AIVendor.Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+              <  AIModelVendor.ModelConfiguration  (per model-on-this-provider — the tie-breaker, wins)
 
-    Why the vendor sits BELOW the model: the bag also carries capability knobs
-    (SupportsNativeToolCalling and friends) that describe the model, and a host-wide default must
-    not silently override what a model says about itself; the model-vendor row is where a host
-    diverges for one model. First consumer: `LLM.PrefixPromptCache`, which says whether a serving
-    path's prompt cache is an exact byte-prefix match (OpenAI, xAI) so the loop agent appends its
-    trailing runtime-state message rather than replacing it — set once on the vendor row, inherited
-    by every model the vendor serves, overridable per model-vendor row for hosts such as Fireworks,
-    Cerebras, Azure or Bedrock whose models diverge.
+    The vendor default sits ABOVE the model's own bag: a host's statement about how it serves
+    models beats the model's generic description, and the model-vendor row is where a host
+    diverges for one model. The merge is per key, so a vendor default only touches the keys it
+    actually sets. First consumer: `LLM.PrefixPromptCache`, which says whether a serving path's
+    prompt cache is an exact byte-prefix match (OpenAI, xAI) so the loop agent appends its
+    trailing runtime-state message rather than replacing it — set once on the vendor row,
+    inherited by every model the vendor serves, overridable per model-vendor row for hosts such as
+    Fireworks, Cerebras, Azure or Bedrock whose models diverge.
 
-    The column is a JSONType field: the same `IAIConfiguration.ts` interface the other three levels
-    use is pushed into `EntityField.JSONTypeDefinition` (bridge record in
-    `metadata/entities/.entity-field-jsontype-ai-configuration.json`), and CodeGen then emits the
-    same strongly-typed `ModelConfigurationObject` accessor on the generated AIVendor entity.
-    `AIEngineBase.GetEffectiveModelConfiguration` reads the new layer whenever it is given a
-    model-vendor row (the row's VendorID names the vendor).
+    The column is a JSONType field: `metadata/entities/JSONType-interfaces/IAIConfiguration.ts`
+    (which also defines the model-configuration shapes the `ModelDefaults` key reuses) is pushed
+    into `EntityField.JSONTypeDefinition` (bridge record in
+    `metadata/entities/.entity-field-jsontype-ai-configuration.json`), and CodeGen then emits a
+    strongly-typed `ConfigurationObject` accessor on the generated AIVendor entity.
+    `AIEngineBase.GetEffectiveModelConfiguration` reads `ModelDefaults` as the vendor layer
+    whenever it is given a model-vendor row (the row's VendorID names the vendor).
 
-    Purely additive — no drops, no data changes, no CHECK constraints.
+    Purely additive — no drops, no data changes, no CHECK constraints. Guarded so it is safe to
+    re-run on a database that already carries the column.
 */
 
 -- ════════════════════════════════════════════════════════════════════════════════════
--- 1. AIVendor gains the same nullable JSON column the other catalog levels carry
+-- 1. AIVendor gains a nullable JSON configuration bag
 -- ════════════════════════════════════════════════════════════════════════════════════
 
-ALTER TABLE [${flyway:defaultSchema}].[AIVendor]
-    ADD [ModelConfiguration] NVARCHAR(MAX) NULL;
+IF COL_LENGTH('${flyway:defaultSchema}.AIVendor', 'Configuration') IS NULL
+BEGIN
+    ALTER TABLE [${flyway:defaultSchema}].[AIVendor]
+        ADD [Configuration] NVARCHAR(MAX) NULL;
+END
 GO
 
 -- ════════════════════════════════════════════════════════════════════════════════════
 -- 2. Column description
 -- ════════════════════════════════════════════════════════════════════════════════════
 
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Vendor-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections) for every model this vendor serves. Second layer of the ModelConfiguration cascade, above AIModelType and below AIModel and AIModelVendor, which inherit from it per key and may override. NULL = contributes nothing.',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE',  @level1name = 'AIVendor',
-    @level2type = N'COLUMN', @level2name = 'ModelConfiguration';
+IF NOT EXISTS (
+    SELECT 1 FROM sys.extended_properties
+    WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.AIVendor')
+      AND minor_id = COLUMNPROPERTY(OBJECT_ID('${flyway:defaultSchema}.AIVendor'), 'Configuration', 'ColumnId')
+      AND name = N'MS_Description'
+)
+BEGIN
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.',
+        @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+        @level1type = N'TABLE',  @level1name = 'AIVendor',
+        @level2type = N'COLUMN', @level2name = 'Configuration';
+END
 GO
 
 
@@ -106,10 +123,10 @@ GO
 --
 -- Everything below this block was generated by the MemberJunction CodeGen tool
 -- after the hand-written DDL above was applied to the development database.
--- It contains the framework plumbing for the new AIVendor.ModelConfiguration
--- column: the EntityField metadata insert (Sequence resolved at apply time),
--- the regenerated base view, stored procedures (spCreate/spUpdate), permission
--- grants, and related sp_addextendedproperty calls.
+-- It contains the framework plumbing for the new AIVendor.Configuration column:
+-- the EntityField metadata insert (Sequence resolved at apply time), the
+-- regenerated base view, stored procedures (spCreate/spUpdate/spDelete),
+-- permission grants, and related sp_addextendedproperty calls.
 --
 -- DO NOT EDIT BY HAND. If the hand-written DDL above changes, re-run CodeGen
 -- and replace this entire section with the fresh output.
@@ -118,9 +135,9 @@ GO
 -- =============================================================================
 -- =============================================================================
 
-/* SQL text to insert the new entity field (AIVendor.ModelConfiguration) */
+/* SQL text to insert 1 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ece93be6-1b16-47f6-a355-76a4de1a57d3' OR (EntityID = 'D95A17EE-5750-4218-86AD-10F06E4DFBCA' AND Name = 'ModelConfiguration')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7b643280-923b-498c-a214-5e0012cb06b1' OR (EntityID = 'D95A17EE-5750-4218-86AD-10F06E4DFBCA' AND Name = 'Configuration')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -153,12 +170,12 @@ GO
          )
          VALUES
          (
-            'ece93be6-1b16-47f6-a355-76a4de1a57d3',
+            '7b643280-923b-498c-a214-5e0012cb06b1',
             'D95A17EE-5750-4218-86AD-10F06E4DFBCA', -- Entity: MJ: AI Vendors
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D95A17EE-5750-4218-86AD-10F06E4DFBCA'),
-            'ModelConfiguration',
-            'Model Configuration',
-            'Vendor-wide default of the per-modality model-configuration bag (JSON, IAIModelConfiguration shape: LLM / Realtime / Vision / Audio sections) for every model this vendor serves. Second layer of the ModelConfiguration cascade, above AIModelType and below AIModel and AIModelVendor, which inherit from it per key and may override. NULL = contributes nothing.',
+            'Configuration',
+            'Configuration',
+            'Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.',
             'nvarchar',
             -1,
             0,
@@ -277,8 +294,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIVendor]
     @Description nvarchar(MAX) = NULL,
     @CredentialTypeID_Clear bit = 0,
     @CredentialTypeID uniqueidentifier = NULL,
-    @ModelConfiguration_Clear bit = 0,
-    @ModelConfiguration nvarchar(MAX) = NULL
+    @Configuration_Clear bit = 0,
+    @Configuration nvarchar(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -293,7 +310,7 @@ BEGIN
                 [Name],
                 [Description],
                 [CredentialTypeID],
-                [ModelConfiguration]
+                [Configuration]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -302,7 +319,7 @@ BEGIN
                 @Name,
                 CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
                 CASE WHEN @CredentialTypeID_Clear = 1 THEN NULL ELSE ISNULL(@CredentialTypeID, NULL) END,
-                CASE WHEN @ModelConfiguration_Clear = 1 THEN NULL ELSE ISNULL(@ModelConfiguration, NULL) END
+                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END
             )
     END
     ELSE
@@ -313,7 +330,7 @@ BEGIN
                 [Name],
                 [Description],
                 [CredentialTypeID],
-                [ModelConfiguration]
+                [Configuration]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -321,7 +338,7 @@ BEGIN
                 @Name,
                 CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, NULL) END,
                 CASE WHEN @CredentialTypeID_Clear = 1 THEN NULL ELSE ISNULL(@CredentialTypeID, NULL) END,
-                CASE WHEN @ModelConfiguration_Clear = 1 THEN NULL ELSE ISNULL(@ModelConfiguration, NULL) END
+                CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -362,8 +379,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIVendor]
     @Description nvarchar(MAX) = NULL,
     @CredentialTypeID_Clear bit = 0,
     @CredentialTypeID uniqueidentifier = NULL,
-    @ModelConfiguration_Clear bit = 0,
-    @ModelConfiguration nvarchar(MAX) = NULL
+    @Configuration_Clear bit = 0,
+    @Configuration nvarchar(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -373,7 +390,7 @@ BEGIN
         [Name] = ISNULL(@Name, [Name]),
         [Description] = CASE WHEN @Description_Clear = 1 THEN NULL ELSE ISNULL(@Description, [Description]) END,
         [CredentialTypeID] = CASE WHEN @CredentialTypeID_Clear = 1 THEN NULL ELSE ISNULL(@CredentialTypeID, [CredentialTypeID]) END,
-        [ModelConfiguration] = CASE WHEN @ModelConfiguration_Clear = 1 THEN NULL ELSE ISNULL(@ModelConfiguration, [ModelConfiguration]) END
+        [Configuration] = CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, [Configuration]) END
     WHERE
         [ID] = @ID
 

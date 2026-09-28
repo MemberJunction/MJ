@@ -4632,8 +4632,9 @@ export class BaseAgent {
      * use replace-in-place to keep context compact.
      *
      * Which providers are which is METADATA, not code: the `PrefixPromptCache` flag in the model
-     * catalog's `ModelConfiguration` cascade (Model Types < Vendors < Models < Model Vendors), read
-     * through {@link ResolvePrefixPromptCache}. `true` means append-only; anything else means replace.
+     * catalog's `ModelConfiguration` cascade (Model Types < Models < Vendors' `Configuration.ModelDefaults`
+     * < Model Vendors), read through {@link ResolvePrefixPromptCache}. `true` means append-only;
+     * anything else means replace.
      *
      * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
      * immediately. Otherwise the answer is frozen at the first model selection and reused for every
@@ -4683,10 +4684,11 @@ export class BaseAgent {
     /**
      * Whether a model, as served by a vendor, sits behind a byte-prefix prompt cache
      * (`LLM.PrefixPromptCache`), read from the model catalog's `ModelConfiguration` cascade —
-     * `AIModelType < AIVendor < AIModel < AIModelVendor` — via `AIEngine.GetEffectiveModelConfiguration`.
-     * The most specific layer is the INFERENCE-PROVIDER model-vendor row for `vendor`, whose vendor
-     * row supplies the host-wide default; when the vendor is unknown, or has no inference row for this
-     * model, the model and type layers still answer. False when no layer declares it, which callers
+     * `AIModelType < AIModel < AIVendor.Configuration.ModelDefaults < AIModelVendor` — via
+     * `AIEngine.GetEffectiveModelConfiguration`. The most specific layer is the INFERENCE-PROVIDER
+     * model-vendor row for `vendor`, whose vendor row supplies the host-wide default that beats the
+     * model's own bag; when the vendor is unknown, or has no inference row for this model, the model
+     * and type layers still answer. False when no layer declares it, which callers
      * treat as a block cache (replace-in-place).
      *
      * Extension point: a subclass with out-of-catalog knowledge (an OpenAI-compatible gateway whose
