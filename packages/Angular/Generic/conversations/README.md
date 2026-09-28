@@ -10,8 +10,8 @@ The widget exposes three layers of extension:
 
 | Surface | What it lets you do |
 |---|---|
-| **7 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected). Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
-| **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
+| **8 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected), or above the composer with `composerExtra`. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. `(beforeAgentTurn)` fires once per agent turn, before any reply row exists, and can also send the turn to another agent (`event.RedirectAgentId`). Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
 | **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
 
 Slot interfaces + cloneable default components + the `ChatSlotDirective` are exported — see the public API.
@@ -205,6 +205,39 @@ Two gating rules are worth knowing:
 - **`includeTheme` gates only the token AUTO-SNAPSHOT.** An explicitly supplied `brandTokens` map, plus `logoUrl` / `title` / `trademark`, apply whenever `branding` is present. In the modal, "Include branding" is the single user-facing switch for all of it, and it sits with the general options because it affects every format — not just HTML.
 
 `trademark` and `title` are **not** markdown-escaped; a value containing `_`, `]`, `)`, or a newline can break the surrounding markdown. Supply plain text (the HTML and JSON paths are escaped).
+#### Chats with several people
+
+A host that puts several people in one conversation (a team room, a shared chat) sets when agents answer through these inputs, without forking the chat area. Each defaults to today's behavior:
+
+| Input | Default | Effect when set |
+|---|---|---|
+| `AgentReplyMode` | `'Always'` | `'MentionOnly'` starts an agent turn only for a message that tags an agent. Any other message is posted with no turn: no reply row, no placeholder, no turn events |
+| `AllowedAgentIDs` | `null` (every agent) | The agents that may answer. Narrows the `@` list, every route (a tagged agent, continuity, the pinned and host default agents, the conversation manager), the manager's delegation, including each agent step of a workflow it plans, and the pin and voice pickers. An empty list allows none |
+| `MentionPeople` | `null` (the current user only) | The people the `@` list offers, such as the chat's members (`MentionPerson` from `@memberjunction/conversations-runtime`). Each composer keeps its own list |
+| `AgentHistoryFrom` | `null` (the whole conversation) | The first moment of the conversation an agent turn may read. The server loads the agent's history from there, uses no summary of earlier messages, and holds the same floor in the run's other reads of the conversation. Sent only when set, so leaving it null keeps working against an older MJAPI |
+| `AgentTurnHandler` | `null` (MJ's own path) | An async hook that runs each turn on the host's server. The chat area calls it once per turn, after `BeforeAgentTurn` and before any reply row exists, and shows the rows it reports |
+| `AutoNameConversation` | `true` | `false` stops MJ naming a new conversation from its first message or first voice utterance |
+
+Routing picks one agent per turn, in this order: a tagged agent, then (under `'Always'` only) the last agent that answered other than the conversation manager, the conversation's pinned agent, the host's `DefaultAgentId`, and the conversation manager. An agent `AllowedAgentIDs` leaves out is skipped. `BeforeAgentTurn` then fires once, carrying the resolved `AgentId`, `AgentName`, `Route` and `UserMessageId`: a listener can cancel the turn, which then writes nothing more, or set `RedirectAgentId` to another allowed agent.
+
+The `composerExtra` slot renders host UI directly above the composer, wherever the chat area shows one (the new-conversation composer and the empty state's included). Its context is `IMJChatComposerExtraContext`: the conversation as `$implicit`, plus `ConversationId` and `IsProcessing`.
+
+```html
+<mj-conversation-chat-area
+  [conversationId]="conversationId"
+  AgentReplyMode="MentionOnly"
+  [AllowedAgentIDs]="spaceAgentIds"
+  [MentionPeople]="members"
+  [AgentHistoryFrom]="historyFloor"
+  [AgentTurnHandler]="runTurnOnServer"
+  [AutoNameConversation]="false"
+  (BeforeAgentTurn)="onBeforeAgentTurn($event)">
+  <ng-template mjChatSlot="composerExtra" let-busy="IsProcessing">
+    <div class="audience-line">Everyone in this chat sees your message</div>
+  </ng-template>
+</mj-conversation-chat-area>
+```
+
 #### Assistant identity
 
 White-label hosts can brand the AI side of the message feed through the component contract (no CSS on `.message-sender` / `.avatar-circle` internals). Both default to `null` — the engine-resolved agent identity, today's behavior:

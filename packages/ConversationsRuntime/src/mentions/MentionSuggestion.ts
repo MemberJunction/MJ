@@ -65,3 +65,31 @@ export interface MentionSuggestion {
     /** Producer-defined extra payload; renderers never inspect it. */
     data?: Record<string, unknown>;
 }
+
+/**
+ * A person a composer's `@` list can offer. Deliberately minimal: a host passes the people who
+ * belong to one chat (its members, say), not whole `UserInfo` records.
+ */
+export interface MentionPerson {
+    /** The person's `MJ: Users` ID, carried by the inserted mention. */
+    ID: string;
+    /** The name shown in the list and on the chip. */
+    Name: string;
+    /** Optional secondary line, such as an email address. */
+    Email?: string | null;
+}
+
+/**
+ * Narrows one composer's `@` list. The suggestion engine is a process-wide singleton shared by
+ * every composer on the page, so anything that differs per chat travels with the request rather
+ * than living on the engine; two composers with different scopes never see each other's lists.
+ */
+export interface MentionSuggestionScope {
+    /** When set, only these agents are offered. Null or omitted offers every agent the user can run. */
+    AllowedAgentIDs?: readonly string[] | null;
+    /**
+     * When set, these are the people offered, in place of the engine's own user list (which holds
+     * only the current user). Null or omitted keeps the engine's list.
+     */
+    People?: readonly MentionPerson[] | null;
+}
