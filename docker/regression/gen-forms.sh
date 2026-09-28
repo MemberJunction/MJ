@@ -20,7 +20,8 @@ $COMPOSE --profile gen-forms run --build --rm form-generator
 RUN_STATUS=$?
 
 echo "▶ Tearing down temporary stack..."
-$COMPOSE down -v
+# Every service is profile-gated, so `down` without the profile removes nothing.
+$COMPOSE --profile gen-forms down -v
 
 if [ $RUN_STATUS -ne 0 ]; then
     echo "✗ Form generation failed (exit $RUN_STATUS)"

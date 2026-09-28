@@ -39,8 +39,9 @@ x-db-env: &db-env
 services:
   sqlserver:
     # Also active during the gen-forms profile since form-generator runs
-    # codegen against this DB. (The gen-forms profile tears the temp stack
-    # down afterward, so this doesn't conflict with a parallel `full` run.)
+    # codegen against this DB. Both profiles share this one container, so
+    # gen-forms.sh removes it when it finishes — do not run gen-forms while a
+    # `full` stack is up.
     profiles: ["full", "gen-forms"]
     image: mcr.microsoft.com/mssql/server:2022-latest
     platform: linux/amd64
@@ -69,6 +70,11 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # CodeGen's advanced generation parses CHECK constraints into field
+      # validators with these keys. Demo email/URL field types do not come from
+      # here — scripts/set-demo-field-types.cjs sets them.
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
 
   # Form generator — opt-in service (profile: gen-forms) that runs codegen
   # against a temporary DB and writes Angular entity-form components to a
@@ -87,6 +93,11 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # CodeGen's advanced generation parses CHECK constraints into field
+      # validators with these keys. Demo email/URL field types do not come from
+      # here — scripts/set-demo-field-types.cjs sets them.
+      AI_VENDOR_API_KEY__GeminiLLM: "${AI_VENDOR_API_KEY__GeminiLLM:-}"
+      AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
     entrypoint: ["/bin/bash", "/app/form-gen-entrypoint.sh"]
     volumes:
       - ./form-gen-entrypoint.sh:/app/form-gen-entrypoint.sh:ro
