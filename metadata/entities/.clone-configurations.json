@@ -376,8 +376,18 @@
             "JsonRemap": [
               {
                 "Field": "RerankerConfiguration",
-                "Path": "$.rerankPromptId",
-                "EntityName": "MJ: AI Prompts"
+                "Rules": [
+                  {
+                    "Path": "rerankPromptID",
+                    "Mode": "remap",
+                    "TargetEntityName": "MJ: AI Prompts",
+                    "OnMissing": "reuse"
+                  },
+                  {
+                    "Path": "rerankerModelId",
+                    "Mode": "reuse"
+                  }
+                ]
               }
             ]
           },

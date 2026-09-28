@@ -678,14 +678,7 @@ export class ClonePlanner {
                         ServerAllocated: combinedServerAllocated.length > 0 ? combinedServerAllocated : undefined,
                         PromptFor: combinedPromptFor.length > 0 ? combinedPromptFor : undefined,
                         Rules: (descConfig?.Fields?.Rules ?? entConfig?.Fields?.Rules) as import('@memberjunction/record-cloning-base').CloneFieldMappingContext['FieldRules']['Rules'],
-                        JsonRemap: entConfig?.Fields?.JsonRemap
-                            ? (Array.isArray(entConfig.Fields.JsonRemap)
-                                ? entConfig.Fields.JsonRemap
-                                : Object.entries(entConfig.Fields.JsonRemap).map(([Field, Rules]) => ({
-                                      Field,
-                                      Rules: Rules as import('@memberjunction/record-cloning-base').JsonRemapRule[],
-                                  })))
-                            : undefined,
+                        JsonRemap: entConfig?.Fields?.JsonRemap,
                     };
                 })(),
                 RequestOverrides: isRoot ? { ...(request.FieldOverrides ?? request.Options?.FieldOverrides ?? {}), ...retargetOverrides } : undefined,

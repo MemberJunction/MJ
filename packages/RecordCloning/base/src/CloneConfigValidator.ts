@@ -198,6 +198,24 @@ export class CloneConfigValidator {
                     continue;
                 }
                 checkFieldExists(remap.Field, `Fields.JsonRemap[${remap.Field}]`);
+                if (!remap.Preset && !(remap.Rules?.length)) {
+                    errors.push({
+                        EntityName: entity.Name,
+                        PropertyPath: `Fields.JsonRemap[${remap.Field}]`,
+                        Message: `JsonRemap for '${remap.Field}' has neither Rules nor a Preset, so it would rewrite nothing.`,
+                        Severity: 'Error',
+                    });
+                }
+                for (const rule of remap.Rules ?? []) {
+                    if (!rule?.Path || !rule?.Mode) {
+                        errors.push({
+                            EntityName: entity.Name,
+                            PropertyPath: `Fields.JsonRemap[${remap.Field}].Rules`,
+                            Message: `Each JsonRemap rule for '${remap.Field}' needs a Path and a Mode.`,
+                            Severity: 'Error',
+                        });
+                    }
+                }
                 const f = entityFields.get(remap.Field.toLowerCase());
                 if (f && f.Type && !f.Type.toLowerCase().includes('varchar') && !f.Type.toLowerCase().includes('text') && !f.Type.toLowerCase().includes('json')) {
                     errors.push({

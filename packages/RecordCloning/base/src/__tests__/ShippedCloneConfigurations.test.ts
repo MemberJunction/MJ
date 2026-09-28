@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { IEntityCloneConfiguration } from '@memberjunction/core';
 import { ResolveEdgePolicy } from '../ClonePolicyResolver';
+import { ApplyJsonRemap, type JsonRemapRule } from '../JsonRemapEngine';
 
 /**
  * Guards the clone configurations MJ ships in metadata/entities/.clone-configurations.json.
@@ -22,6 +23,24 @@ const enabledRoots = shipped.filter((r) => r.fields.Configuration?.Clone?.Enable
 describe('shipped clone configurations', () => {
     it('ships at least the core cloneable roots', () => {
         expect(enabledRoots.map((r) => r.fields.Name)).toEqual(expect.arrayContaining(['MJ: Users', 'MJ: AI Agents', 'MJ: AI Prompts', 'MJ: Actions']));
+    });
+
+    it('gives every JsonRemap entry a Field and Rules or a Preset', () => {
+        const empty = shipped.flatMap((r) =>
+            (r.fields.Configuration?.Clone?.Fields?.JsonRemap ?? [])
+                .filter((j) => !j.Field || (!j.Preset && !j.Rules?.length))
+                .map((j) => `${r.fields.Name}.${j.Field ?? '?'}`)
+        );
+        expect(empty).toEqual([]);
+    });
+
+    it('remaps a cloned agent\'s rerank prompt and keeps its reranker model', () => {
+        const remap = byName.get('MJ: AI Agents')!.Fields!.JsonRemap!.find((j) => j.Field === 'RerankerConfiguration')!;
+        const res = ApplyJsonRemap(
+            { enabled: true, rerankPromptID: 'prompt-old', rerankerModelId: 'model-1' },
+            { Rules: remap.Rules as JsonRemapRule[], KeyMap: { 'prompt-old': 'prompt-new', 'model-1': 'model-other' } }
+        );
+        expect(res.Output).toEqual({ enabled: true, rerankPromptID: 'prompt-new', rerankerModelId: 'model-1' });
     });
 
     it('offers Clone only on the catalog roots (child entities are cloned under their root, not on their own)', () => {

@@ -101,7 +101,7 @@ describe('CloneConfigValidator', () => {
                 Enabled: true,
                 Fields: {
                     JsonRemap: [
-                        { Field: 'NonStringCol' },
+                        { Field: 'NonStringCol', Preset: 'dashboard-ui-config' },
                     ],
                 },
             },
@@ -162,7 +162,7 @@ describe('CloneConfigValidator', () => {
                         Strict: true,
                         Copy: ['Name', 'ParentID'],
                         Reset: { Status: 'Draft' },
-                        JsonRemap: [{ Field: 'UIConfig' }],
+                        JsonRemap: [{ Field: 'UIConfig', Preset: 'dashboard-ui-config' }],
                         Exclude: ['NonStringCol'],
                     },
                 },
@@ -190,6 +190,14 @@ describe('CloneConfigValidator', () => {
                 Presets: [{ Key: 'p', Label: 'P', Relationships: { Anything: { Policy: 'Maybe' } } }],
             });
             expect(found.filter((e) => e.PropertyPath.endsWith('.Policy')).map((e) => e.PropertyPath)).toHaveLength(3);
+        });
+
+        it('rejects a JsonRemap entry with neither Rules nor a Preset, and a rule without Path or Mode', () => {
+            const empty = withConfig({ Enabled: true, Fields: { JsonRemap: [{ Field: 'UIConfig' }] } });
+            expect(empty.map((e) => e.Message)).toEqual([expect.stringContaining('neither Rules nor a Preset')]);
+
+            const bad = withConfig({ Enabled: true, Fields: { JsonRemap: [{ Field: 'UIConfig', Rules: [{ Path: 'a.b' } as { Path: string; Mode: string }] }] } });
+            expect(bad.map((e) => e.PropertyPath)).toEqual(['Fields.JsonRemap[UIConfig].Rules']);
         });
 
         it('reports a JsonRemap entry without a Field instead of throwing', () => {

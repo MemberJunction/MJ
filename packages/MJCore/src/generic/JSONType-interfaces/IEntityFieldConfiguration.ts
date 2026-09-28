@@ -56,8 +56,10 @@ export interface IJsonRemapSpec {
     /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
     Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
     /** Entity the ID refers to, for remap. */
-    Entity?: string;
+    TargetEntityName?: string;
     /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
     OnMissing?: 'reuse' | 'drop';
+    /** Remove arrays and objects left empty by a drop. Default true. */
+    CleanEmptyContainers?: boolean;
 }
 

@@ -212,8 +212,8 @@ export interface ICloneFieldRules {
     ServerAllocated?: string[];
     /** Rich rewrites. Evaluated per row with the source row as fields, plus clone context (user, now, root, keyMap) — see §7.5. */
     Rules?: Record<string, unknown>;
-    /** JSON columns that embed record IDs. */
-    JsonRemap?: Record<string, IJsonRemapSpec[]>;
+    /** JSON columns that embed record IDs, one entry per column. */
+    JsonRemap?: IJsonRemapColumn[];
     /** Columns that must be cleared together (all-or-nothing CHECK pairs). Each group is cleared as a unit when any member is reset. */
     ClearTogether?: string[][];
     /** Unique keys the metadata cannot see: composite and filtered indexes. See §7.3. */
@@ -230,9 +230,20 @@ export interface IJsonRemapSpec {
     /** remap = rewrite via key map when the target is in the clone set, else per OnMissing; reuse = leave; regenerate = new UUID; null = set null; drop = remove element/key. */
     Mode: 'remap' | 'reuse' | 'regenerate' | 'null' | 'drop';
     /** Entity the ID refers to, for remap. */
-    Entity?: string;
+    TargetEntityName?: string;
     /** For remap when the referenced record was not cloned: reuse the original (default) or drop the element and count it. */
     OnMissing?: 'reuse' | 'drop';
+    /** Remove arrays and objects left empty by a drop. Default true. */
+    CleanEmptyContainers?: boolean;
+}
+
+/** One JSON column to rewrite: explicit rules, a shipped preset, or both (the preset's rules run first). An entry with neither is invalid. */
+export interface IJsonRemapColumn {
+    /** The JSON column. */
+    Field: string;
+    Rules?: IJsonRemapSpec[];
+    /** A shipped rule set for a known payload shape. */
+    Preset?: 'dashboard-ui-config' | 'scheduled-job-configuration';
 }
 
 export interface ICloneRelationshipPolicy {
