@@ -179,10 +179,10 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
 describe('GetSharingDomainDisplayLabel', () => {
   it('maps each built-in permission domain to a business-friendly heading', () => {
     expect(GetSharingDomainDisplayLabel('Dashboard Permissions')).toBe('Dashboards');
-    expect(GetSharingDomainDisplayLabel('Artifact Permissions')).toBe('Files');
+    expect(GetSharingDomainDisplayLabel('Artifact Permissions')).toBe('Artifacts');
     expect(GetSharingDomainDisplayLabel('Collection Permissions')).toBe('Collections');
     expect(GetSharingDomainDisplayLabel('Access Control Rules')).toBe('Rules');
-    expect(GetSharingDomainDisplayLabel('Resource Permissions')).toBe('Shared items');
+    expect(GetSharingDomainDisplayLabel('Resource Permissions')).toBe('Shared Items');
   });
 
   it('falls back to the domain name with a trailing " Permissions" stripped', () => {
@@ -192,5 +192,14 @@ describe('GetSharingDomainDisplayLabel', () => {
 
   it('falls back to the raw domain name when there is nothing to strip', () => {
     expect(GetSharingDomainDisplayLabel('Something Custom')).toBe('Something Custom');
+  });
+
+  it('normalizes whitespace before the map lookup, so a padded built-in still maps', () => {
+    expect(GetSharingDomainDisplayLabel('  Dashboard Permissions ')).toBe('Dashboards');
+  });
+
+  it('does not treat inherited Object.prototype members as map hits', () => {
+    // A custom domain literally named "constructor" must not render the Object constructor.
+    expect(GetSharingDomainDisplayLabel('constructor')).toBe('constructor');
   });
 });

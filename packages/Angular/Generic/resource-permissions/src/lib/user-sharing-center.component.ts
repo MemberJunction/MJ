@@ -34,8 +34,11 @@ export interface SharingCenterDomainGroup {
      * audit-entity mapping, and icon selection in PermissionEngine. Never renamed.
      */
     DomainName: string;
-    /** Business-friendly heading shown to the user (see `GetSharingDomainDisplayLabel`). */
-    Label: string;
+    /**
+     * Business-friendly heading shown to the user (see `GetSharingDomainDisplayLabel`). Optional so
+     * consumers that build this shape themselves keep compiling; the template falls back to `DomainName`.
+     */
+    Label?: string;
     Icon: string;
     Rows: NormalizedPermission[];
     Expanded: boolean;
@@ -50,10 +53,10 @@ export interface SharingCenterDomainGroup {
  */
 export const SharingDomainDisplayLabels: Record<string, string> = {
     'Dashboard Permissions': 'Dashboards',
-    'Artifact Permissions': 'Files',
+    'Artifact Permissions': 'Artifacts',
     'Collection Permissions': 'Collections',
     'Access Control Rules': 'Rules',
-    'Resource Permissions': 'Shared items',
+    'Resource Permissions': 'Shared Items',
 };
 
 /**
@@ -62,14 +65,14 @@ export const SharingDomainDisplayLabels: Record<string, string> = {
  * "Widget Permissions" reads as "Widget"), then to the raw domain name.
  */
 export function GetSharingDomainDisplayLabel(domainName: string): string {
-    const mapped = SharingDomainDisplayLabels[domainName];
-    if (mapped) {
-        return mapped;
+    const trimmed = domainName.trim();
+    // hasOwn, not a bare index: DomainName is user-authored for custom domains, and a plain
+    // object lookup would return inherited Object.prototype members for names like "constructor".
+    if (Object.hasOwn(SharingDomainDisplayLabels, trimmed)) {
+        return SharingDomainDisplayLabels[trimmed];
     }
     // Plain string ops rather than /\s+Permissions$/i: a whitespace run before an anchored
-    // literal backtracks quadratically on adversarial input (CodeQL js/polynomial-redos), and
-    // DomainName is user-authored for custom domains.
-    const trimmed = domainName.trim();
+    // literal backtracks quadratically on adversarial input (CodeQL js/polynomial-redos).
     const suffix = ' permissions';
     if (trimmed.toLowerCase().endsWith(suffix)) {
         const stripped = trimmed.slice(0, -suffix.length).trimEnd();

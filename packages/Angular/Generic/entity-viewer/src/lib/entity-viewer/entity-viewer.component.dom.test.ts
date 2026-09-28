@@ -83,13 +83,13 @@ describe('EntityViewerComponent (DOM)', () => {
 });
 
 describe('EntityViewerComponent.NoRecordsTitle', () => {
-  // The title speaks the entity's own plural ("No Contacts yet") and only falls back to the
+  // The title speaks the entity's own plural ("No Contacts to display") and only falls back to the
   // generic "records" wording when no entity is in scope. Pinned because the interpolation
   // is easy to lose silently — a broken template literal still type-checks.
   const CONTACT = { Name: 'Contact', DisplayNamePlural: 'Contacts' } as unknown as EntityInfo;
 
   it('uses the entity display-name plural when an entity is in scope and no filter is active', () => {
-    expect(render({ entity: CONTACT }).componentInstance.NoRecordsTitle).toBe('No Contacts yet');
+    expect(render({ entity: CONTACT }).componentInstance.NoRecordsTitle).toBe('No Contacts to display');
   });
 
   it('falls back to the generic wording when no entity is in scope', () => {

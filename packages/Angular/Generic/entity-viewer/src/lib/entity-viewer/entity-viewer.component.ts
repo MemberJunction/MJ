@@ -759,11 +759,12 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     if (this.DebouncedFilterText) {
       return 'No matching records';
     }
-    // Prefer the entity's business-friendly plural ("No Contacts yet") over the generic
-    // "No records found" so the empty state speaks the user's own domain language.
+    // Prefer the entity's business-friendly plural ("No Contacts to display") over the generic
+    // "No records found" so the empty state speaks the user's own domain language. Same wording
+    // as the grid and cards plug-ins so the copy does not shift between view types.
     // Falls back to "records" when no entity is in scope.
     const plural = this.EffectiveEntity?.DisplayNamePlural;
-    return plural ? `No ${plural} yet` : 'No records found';
+    return plural ? `No ${plural} to display` : 'No records found';
   }
 
   /** True when the "no records" empty state is the result of an active filter. */
