@@ -312,8 +312,8 @@ interface ListContextMenu {
              nearly every row in steady state while marking shared thins out over time.
              On an environment upgrading to this column every existing folder is shared
              and so every row is badged — which is exactly the disclosure people need at
-             that moment. Sits beside the name rather than at the right edge, where the
-             count lives and the hover actions overlay it. -->
+             that moment. Sits beside the name it describes rather than at the right
+             edge, which belongs to the count. -->
         @if (!node.project.OwnerUserID) {
           <!-- role="img" so the aria-label is actually announced: on a bare span with no
                role, an aria-label is not reliably exposed, and the <i> carrying the glyph
@@ -1199,11 +1199,10 @@ interface ListContextMenu {
     .folder-chevron.expanded { transform: rotate(90deg); }
     .folder-icon { font-size: 12px; width: 16px; text-align: center; flex-shrink: 0; }
     .folder-name {
-      /* NOT flex: 1. Growing to fill the row pushed the shared badge to the right edge,
-         next to the count and under the hover actions, where the users glyph and the
-         edit pencil overlapped into one icon. The badge belongs beside the name; the
-         .folder-spacer after it takes the slack instead. Shrink + min-width:0 keeps the
-         ellipsis behaviour on a long name. */
+      /* NOT flex: 1. Growing to fill the row would push the shared badge to the right
+         edge, beside the count, instead of beside the name it describes. The
+         .folder-spacer after the badge takes the slack instead. Shrink + min-width:0
+         keeps the ellipsis behaviour on a long name. */
       flex: 0 1 auto;
       min-width: 0;
       white-space: nowrap;
