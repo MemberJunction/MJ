@@ -1540,7 +1540,12 @@ export class BaseAgent {
 
             // Arm conversation-history retrieval tools — available only when the run has a
             // conversation to page against (the same gate as all cross-turn context features).
-            this._conversationToolManager.Initialize(wrappedParams.conversationId || null, params.contextUser);
+            // A history floor holds here too: the tools page only rows from it onward.
+            this._conversationToolManager.Initialize(
+                wrappedParams.conversationId || null,
+                params.contextUser,
+                wrappedParams.ConversationHistoryFrom ?? null
+            );
             this._conversationToolManager.SetSummaryHost(this.buildConversationSummaryHost(wrappedParams));
 
             // Initialize artifact tools with any input artifacts attached to the run.
@@ -6181,10 +6186,12 @@ The context is now within limits. Please retry your request with the recovered c
      * its direct predecessor's results, so context never compounds.
      *
      * Gated on conversationId + root depth — programmatic runs and sub-agents skip it.
+     * Skipped under a history floor (`ConversationHistoryFrom`): the previous run's tool
+     * results can quote messages from before the floor.
      * @protected
      */
     protected async injectPriorTurnToolResults(params: ExecuteAgentParams): Promise<void> {
-        if (!params.conversationId || this._depth !== 0) {
+        if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom) {
             return;
         }
         try {
@@ -14853,10 +14860,12 @@ The context is now within limits. Please retry your request with the recovered c
      * (agent or type ContextWindowMaxTokens) — before the first prompt the model is
      * unknown, and compacting against the conservative default would over-trigger on
      * large-context models. The post-turn hook (real model known) covers those.
+     * Skipped under a history floor (`ConversationHistoryFrom`): a summary folds in the
+     * conversation from its first message, which is what the floor excludes.
      * @protected
      */
     protected async checkPreTurnCompaction(params: ExecuteAgentParams, config: AgentConfiguration | undefined): Promise<void> {
-        if (!params.conversationId || this._depth !== 0) {
+        if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom) {
             return;
         }
         const budget = this.resolveCompactionBudget(params, config);
@@ -14882,10 +14891,19 @@ The context is now within limits. Please retry your request with the recovered c
      * final step (→ AwaitingFeedback) is the NORMAL ending of a conversational turn;
      * gating on 'Completed' alone silently disabled post-turn compaction for exactly
      * the long-chat scenario this feature targets.
+     *
+     * Skipped under a history floor (`ConversationHistoryFrom`). A run with a floor must not
+     * write the conversation's summary: the summary covers every row below its boundary, and
+     * a run that may not read the rows before the floor can't produce that — nor, once reads
+     * are narrowed to what the asker can see, can it tell which rows it was not shown.
      * @protected
      */
     protected startPostTurnCompaction(): void {
         const params = this._executeParams;
+        if (params?.ConversationHistoryFrom) {
+            this.logStatus('Post-turn compaction skipped — the run has a history floor', true, params);
+            return;
+        }
         if (!params?.conversationId || this._depth !== 0 || !this._agentRun
             || !BaseAgent.settledRunStatuses.includes(this._agentRun.Status)) {
             // A quiet return here is indistinguishable from "the pass ran and found nothing to do":
