@@ -616,6 +616,9 @@ describe('ClonePlanner', () => {
             const plan = await new ClonePlanner({ Provider: provider }).Plan(request, standardUser);
             expect(plan.Blocked).toBe(true);
             expect(plan.Warnings.find((w) => w.Code === 'NOT_CLONEABLE')?.Message).toContain('Configuration.Clone.Enabled');
+            // Nothing was walked, but the refusal still names the record that was asked for.
+            expect(plan.RootSourceKey).toBe('parent-1');
+            expect(plan.Roots).toEqual([plan.RootSourceKey]);
         });
     });
 

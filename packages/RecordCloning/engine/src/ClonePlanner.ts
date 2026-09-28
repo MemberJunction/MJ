@@ -67,6 +67,17 @@ function fieldLevelDenials(entity: EntityInfo, user: UserInfo): { DeniedReadFiel
     return { DeniedReadFields: names(deniedRead), DeniedCreateFields: names(deniedCreate) };
 }
 
+/** The requested root key as a record-id string, whatever shape the request used. */
+function requestedKeyString(key: unknown): string {
+    if (typeof key === 'string') return ToRecordKeyString(key);
+    if (key && typeof key === 'object') {
+        if (Array.isArray((key as CompositeKeyLike).KeyValuePairs)) return ToRecordKeyString(key as CompositeKeyLike);
+        // The { Field: value } shorthand.
+        return ToRecordKeyString({ KeyValuePairs: Object.entries(key).map(([FieldName, Value]) => ({ FieldName, Value })) });
+    }
+    return '';
+}
+
 export class ClonePlanner {
     private _provider?: IMetadataProvider;
 
@@ -224,9 +235,10 @@ export class ClonePlanner {
                 PlanVersion: 1,
                 EffectiveOptions: effectiveOptions,
                 Hash: '',
-                Roots: [typeof sourceRecordKey === 'string' ? sourceRecordKey : ''],
+                // Name the requested record even though nothing was walked, so the refusal log says which.
+                Roots: [requestedKeyString(sourceRecordKey)],
                 RootEntityName: entityName,
-                RootSourceKey: typeof sourceRecordKey === 'string' ? sourceRecordKey : '',
+                RootSourceKey: requestedKeyString(sourceRecordKey),
                 RootTargetKey: '',
                 Nodes: [],
                 Edges: [],
