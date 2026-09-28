@@ -282,7 +282,12 @@ export class PostgreSQLDialect extends SQLDialect {
     // the metadata source.
 
     private static readonly _booleanTypeNames = ['bool', 'boolean'] as const;
-    private static readonly _stringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    /**
+     * PG character / text types. Includes the full-text search types `tsvector` and `tsquery`: the driver returns
+     * them as text, and CodeGen's full-text search exposes a `tsvector` column (`__mj_fts_vector`) through the base
+     * view. Left unclassified they fell through to number / GraphQL `Int`, which cannot serialize the vector text.
+     */
+    private static readonly _stringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name', 'tsvector', 'tsquery'] as const;
     /**
      * PG fixed-width / space-padded char types. `character` (without `varying`)
      * and `bpchar` are the formal/internal names; `char` is the short alias.
