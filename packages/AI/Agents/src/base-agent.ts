@@ -2060,8 +2060,10 @@ export class BaseAgent {
         return {
             CoAgent: params.agent,
             TargetAgentID: targetID,
-            // The run's runtime API keys, so a client-direct voice session mints on the customer's
-            // credential like every prompt in the same run. Absent ⇒ platform keys, as before.
+            // The run's runtime API keys, so the bridged voice session mints on the caller's key when
+            // the run carries one for the realtime driver (the same run-key → platform order as
+            // GetAIAPIKey; realtime does not consult MJ Credentials). Absent ⇒ platform keys, as before.
+            // CreateBridgeRealtimeSession (the LiveKit / telephony factory) passes no apiKeys today.
             APIKeys: params.apiKeys,
             AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
             PreferredModelID: modelID,
@@ -2104,8 +2106,9 @@ export class BaseAgent {
         // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
         // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
         // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
-        // The run's runtime API keys reach realtime exactly as they reach prompts and actions: one
-        // resolver, driver class in, key out, the platform key when the run has none for that class.
+        // The run's runtime API keys, in GetAIAPIKey's order: the run's key for a driver class, else
+        // the platform's. That is the legacy tier of prompt key resolution — a prompt consults MJ
+        // Credentials / AICredentialBindings first, and realtime does not consult them at all.
         //
         // This also affects WHICH vendor runs the session, deliberately. Vendor selection walks
         // candidates by priority and takes the first whose key resolves, so an organization that

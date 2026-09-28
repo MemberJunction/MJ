@@ -233,6 +233,9 @@ export interface RealtimeModelVoices {
  *
  * @param contextUser The user the engine config runs as (server-side).
  * @param provider The request-scoped metadata provider (multi-provider safe).
+ * @param resolveAPIKey Key-resolution seam deciding which vendors count as runnable. Defaults to the
+ *   platform lookup (`AI_VENDOR_API_KEY__<driver>`); the voice-picker query has no run context and
+ *   passes none, so today the list always reflects the platform's keys.
  * @returns Active realtime models, each with its driver's voices.
  */
 export async function GetRealtimeModelVoices(

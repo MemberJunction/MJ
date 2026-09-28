@@ -38,10 +38,9 @@ export interface RealtimeVendorSelection {
  * Resolves a key for a `DriverClass`. Injectable so callers that already own a key-resolution seam
  * (and their tests) can substitute one without reaching into the environment.
  *
- * An alias of {@link AIAPIKeyResolver} — the canonical shape in `@memberjunction/ai`, shared with
- * the prompt and action paths — kept under this name because it is the published realtime API. A
- * run-scoped resolver (`MakeAIAPIKeyResolver(params.apiKeys)`) is what carries a customer's own
- * credentials in here; the default below is the platform-only lookup.
+ * An alias of {@link AIAPIKeyResolver} in `@memberjunction/ai`, kept under this name because it is
+ * the published realtime API. A run-scoped resolver (e.g. `MakeAIAPIKeyResolver(params.apiKeys)`)
+ * is what carries a caller's own credentials in here; the default below is the platform-only lookup.
  */
 export type RealtimeAPIKeyResolver = AIAPIKeyResolver;
 

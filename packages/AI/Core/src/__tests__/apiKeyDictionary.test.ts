@@ -168,9 +168,9 @@ describe('AIAPIKeys.GetAPIKey — a driver name that is missing (#3532)', () => 
 
 describe('MakeAIAPIKeyResolver', () => {
     /**
-     * The canonical way a run's keys reach code that spends them — prompts, actions, realtime — without
-     * that code holding the list. Precedence is the one `GetAIAPIKey` already applies, so a caller that
-     * swaps a bare `GetAIAPIKey(driverClass)` for a resolver cannot change behaviour by accident.
+     * A way for a run's keys to reach code that spends them without that code holding the list.
+     * Precedence is the one `GetAIAPIKey` already applies, so a caller that swaps a bare
+     * `GetAIAPIKey(driverClass)` for a resolver cannot change behaviour by accident.
      */
     let originalEnv: NodeJS.ProcessEnv;
     beforeEach(() => { originalEnv = { ...process.env }; });
