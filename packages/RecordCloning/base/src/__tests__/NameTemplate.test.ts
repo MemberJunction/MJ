@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     RenderNameTemplate,
     NameCollisionPrefix,
+    TryFindNextAvailableName,
     IncrementName,
     FindNextAvailableName,
 } from '../NameTemplate';
@@ -159,5 +160,41 @@ describe('NameCollisionPrefix', () => {
 
     it('is empty when nothing is renamed', () => {
         expect(NameCollisionPrefix('Sales', { Strategy: 'none' })).toBe('');
+    });
+});
+
+describe('TryFindNextAvailableName: columns too short for another copy', () => {
+    it('keeps the counter when the column leaves no room for the name (used to loop forever)', () => {
+        const first = TryFindNextAvailableName('ABC', [], { Template: 'Copy of {Name}', MaxLength: 10 });
+        const second = TryFindNextAvailableName('ABC', [first!], { Template: 'Copy of {Name}', MaxLength: 10 });
+        expect(first).toBe('Copy of AB');
+        expect(second).not.toBe(first);
+        expect(second!.length).toBeLessThanOrEqual(10);
+        expect(second!.endsWith('(2)')).toBe(true);
+    });
+
+    it('does the same for a template with {n}', () => {
+        const first = TryFindNextAvailableName('ABC', [], { Template: 'Copy {n} of {Name}', MaxLength: 6 });
+        const second = TryFindNextAvailableName('ABC', [first!], { Template: 'Copy {n} of {Name}', MaxLength: 6 });
+        expect(second).not.toBeNull();
+        expect(second).not.toBe(first);
+        expect(second!.length).toBeLessThanOrEqual(6);
+    });
+
+    it('gives up instead of hanging when no distinct name fits', () => {
+        // The counter itself doesn't fit once the one candidate that fits is taken.
+        expect(TryFindNextAvailableName('AB', ['Co'], { Template: 'Copy of {Name}', MaxLength: 2 })).toBeNull();
+        const taken = Array.from({ length: 1200 }, (_, i) => (i === 0 ? 'Copy of X' : `Copy of X (${i + 1})`));
+        expect(TryFindNextAvailableName('X', taken, { Template: 'Copy of {Name}' })).toBeNull();
+    });
+
+    it('fits increment names before checking them, so it never returns a taken or source name', () => {
+        expect(TryFindNextAvailableName('ABCDEFGHIJ', ['ABCDEFGHIJ'], { Strategy: 'increment', MaxLength: 10 })).toBe('ABCDEFGH 2');
+        expect(TryFindNextAvailableName('Project v9', [], { Strategy: 'increment', MaxLength: 10 })).toBe('Projec v10');
+        expect(TryFindNextAvailableName('Widget (2)', ['Widget (3)'], { Strategy: 'increment' })).toBe('Widget (4)');
+    });
+
+    it('leaves the name alone for the prompt strategy: the user supplies it', () => {
+        expect(TryFindNextAvailableName('alice@example.com', [], { Strategy: 'prompt' })).toBe('alice@example.com');
     });
 });

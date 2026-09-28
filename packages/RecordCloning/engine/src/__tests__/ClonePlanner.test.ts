@@ -269,6 +269,41 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('blocks with NAME_UNAVAILABLE when no free name fits a short column, instead of hanging', async () => {
+        const short = {
+            ...parentEntity, RelatedEntities: [],
+            Fields: [
+                { Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', IsSPParameter: () => true },
+                { Name: 'Name', IsPrimaryKey: false, Type: 'nvarchar', MaxLength: 2, IsSPParameter: () => true },
+            ],
+        } as unknown as EntityInfo;
+        const provider = { ...mockProvider, Entities: [short], EntityByName: (n: string) => (n === 'ParentEntity' ? short : null) } as IMetadataProvider;
+        mockRunViewInstance.mockImplementation(async (params: { Fields?: string[] }) =>
+            params.Fields ? { Success: true, Results: [{ Name: 'Co' }] } : { Success: true, Results: [{ ID: 'parent-1', Name: 'AB' }] }
+        );
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+        expect(plan.Warnings.find((w) => w.Code === 'NAME_UNAVAILABLE')?.Field).toBe('Name');
+        expect(plan.Blocked).toBe(true);
+        mockRunViewInstance.mockReset();
+    });
+
+    it('looks up taken names without LIKE wildcards or [ ] classes from the source name', async () => {
+        const noChildren = { ...parentEntity, RelatedEntities: [] } as EntityInfo;
+        const provider = { ...mockProvider, Entities: [noChildren], EntityByName: (n: string) => (n === 'ParentEntity' ? noChildren : null) } as IMetadataProvider;
+        const filters: string[] = [];
+        mockRunViewInstance.mockImplementation(async (params: { Fields?: string[]; ExtraFilter?: string }) => {
+            if (params.Fields) {
+                filters.push(params.ExtraFilter ?? '');
+                return { Success: true, Results: [{ Name: 'Copy of [Beta] 50%' }] };
+            }
+            return { Success: true, Results: [{ ID: 'parent-1', Name: '[Beta] 50%' }] };
+        });
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+        expect(filters[0]).toContain("Name LIKE 'Copy of %'");
+        expect(plan.Nodes[0].FieldChanges.find((c) => c.Kind === 'Rename')?.NewValue).toBe('Copy of [Beta] 50% (2)');
+        mockRunViewInstance.mockReset();
+    });
+
     it('computes valid clone plan with pre-minted target keys and stable hash', async () => {
         const planner = new ClonePlanner({ Provider: mockProvider });
 

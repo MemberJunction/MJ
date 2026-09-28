@@ -686,6 +686,16 @@ export class ClonePlanner {
                 NewParentKey: isRoot ? request.Options?.NewParentKey : undefined,
             });
 
+            for (const field of fieldMappingResult.NamingFailures) {
+                warnings.push({
+                    Code: 'NAME_UNAVAILABLE',
+                    Severity: 'Error',
+                    NodeKey: nodeKey,
+                    Field: field,
+                    Message: `No free value for '${field}' fits the column: every candidate is taken or too long. Enter a name, or clear an existing copy.`,
+                });
+                planBlocked = true;
+            }
             for (const ignored of fieldMappingResult.IgnoredRequestValues) {
                 warnings.push({
                     Code: 'OPTION_OVERRIDE_IGNORED',
@@ -816,8 +826,12 @@ export class ClonePlanner {
             for (const field of FieldMetaFromEntity(node.EntityInfo).filter(IsRenameField)) {
                 const value = node.RecordData?.[field.Name];
                 if (value === null || value === undefined || value === '') continue;
-                const prefix = NameCollisionPrefix(String(value), { ...naming, MaxLength: field.MaxLength });
-                if (!prefix) continue;
+                // LIKE wildcards and SQL Server's [ ] classes can't be escaped portably (PostgreSQL's
+                // provider rewrites [word] even inside literals), so match on the text before the first
+                // one. That only widens the lookup; names are compared exactly afterwards.
+                const full = NameCollisionPrefix(String(value), { ...naming, MaxLength: field.MaxLength });
+                if (!full) continue; // this strategy doesn't rename
+                const prefix = full.split(/[[\]%_\\]/)[0]; // may be '' — then every value is read
                 const k = `${node.EntityName}\u0000${field.Name}`;
                 if (!prefixes.has(k)) prefixes.set(k, { entity: node.EntityName, field: field.Name, prefixes: new Set() });
                 prefixes.get(k)!.prefixes.add(prefix);
@@ -830,7 +844,7 @@ export class ClonePlanner {
             const all = [...set];
             const taken = new Set<string>();
             for (let i = 0; i < all.length; i += 50) {
-                const filter = all.slice(i, i + 50).map((p) => `${field} LIKE '${EscapeSQLString(p)}%'`).join(' OR ');
+                const filter = all.slice(i, i + 50).map((p) => (p ? `${field} LIKE '${EscapeSQLString(p)}%'` : `${field} IS NOT NULL`)).join(' OR ');
                 const res = await rv.RunView<Record<string, unknown>>(
                     { EntityName: entity, Fields: [field], ExtraFilter: `(${filter})`, ResultType: 'simple', MaxRows: 5000 },
                     contextUser

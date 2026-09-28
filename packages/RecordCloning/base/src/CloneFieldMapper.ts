@@ -7,7 +7,7 @@
  */
 
 import { CloneFieldChange } from './types';
-import { FindNextAvailableName, NameTemplateOptions } from './NameTemplate';
+import { TryFindNextAvailableName, NameTemplateOptions } from './NameTemplate';
 import { ApplyJsonRemap, JsonRemapRule } from './JsonRemapEngine';
 
 export interface FieldMappingFieldMeta {
@@ -94,6 +94,8 @@ export interface CloneFieldMappingResult {
     RequiresIdentitySecondPass: boolean;
     /** Request values the mapper refused, with why; the planner reports each as a warning. */
     IgnoredRequestValues: Array<{ Field: string; Kind: 'Override' | 'Prompt'; Reason: string }>;
+    /** Rename fields for which no free name fits the column; the planner blocks on these. */
+    NamingFailures: string[];
 }
 
 /**
@@ -103,6 +105,7 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
     const changes: CloneFieldChange[] = [];
     const values: Record<string, unknown> = {};
     const excludedOrDenied = new Set<string>();
+    const namingFailures: string[] = [];
     let requiresIdentitySecondPass = false;
 
     const keyMap = ctx.KeyMap || {};
@@ -266,7 +269,7 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
 
         if (IsRenameField(field) && values[field.Name] !== undefined && values[field.Name] !== null) {
             const oldName = String(values[field.Name]);
-            const newName = FindNextAvailableName(
+            const newName = TryFindNextAvailableName(
                 oldName,
                 ctx.NamingOptions?.ExistingNamesByField?.[field.Name] ?? ctx.NamingOptions?.ExistingNames ?? new Set(),
                 {
@@ -279,6 +282,10 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
                 }
             );
 
+            if (newName === null) {
+                namingFailures.push(field.Name);
+                continue;
+            }
             if (newName !== oldName) {
                 values[field.Name] = newName;
                 changes.push({
@@ -461,5 +468,6 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
         MappedValues: values,
         RequiresIdentitySecondPass: requiresIdentitySecondPass,
         IgnoredRequestValues: ignored,
+        NamingFailures: namingFailures,
     };
 }

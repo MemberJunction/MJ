@@ -126,70 +126,93 @@ function splitTrailingDigits(value: string): [string, string] {
     return [value.slice(0, i), value.slice(i)];
 }
 
+/** Most candidates tried before giving up; a column this crowded needs a name from the user. */
+const MAX_NAME_ATTEMPTS = 1000;
+
 /**
- * Finds the next deterministically available name given a source name and
- * an existing list or set of colliding names.
+ * `head + keep`, shortening `head` (never `keep`, which carries the counter) to fit `maxLength`.
+ * Null when `keep` alone doesn't fit.
+ */
+function fitKeeping(head: string, keep: string, maxLength: number | undefined): string | null {
+    if (!maxLength || maxLength <= 0 || head.length + keep.length <= maxLength) return head + keep;
+    const room = maxLength - keep.length;
+    if (room < 0) return null;
+    return head.slice(0, room).trimEnd() + keep;
+}
+
+/**
+ * The next name not in `existingNames`, or null when none can be found: the column is too short
+ * for a distinct name, or every candidate within MAX_NAME_ATTEMPTS is taken. Comparison is
+ * case-insensitive, like SQL Server's default collation. The source name itself is never returned
+ * by the renaming strategies ('none' and 'prompt' leave the name to the caller).
+ */
+export function TryFindNextAvailableName(
+    sourceName: string,
+    existingNames: Set<string> | string[],
+    options?: NameTemplateOptions
+): string | null {
+    const lowered = new Set([...existingNames].map((n) => n.toLowerCase()));
+    const strategy = options?.Strategy || 'suffix';
+    const maxLength = options?.MaxLength;
+    if (strategy === 'none' || strategy === 'prompt') return sourceName;
+
+    const seen = new Set<string>([sourceName.toLowerCase()]);
+    /** A usable candidate: new, not taken, not the source. Remembers what it has tried. */
+    const free = (candidate: string | null): candidate is string => {
+        if (candidate === null) return false;
+        const key = candidate.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return !lowered.has(key);
+    };
+
+    if (strategy === 'increment') {
+        // Fit each step before checking it, keeping the trailing counter whole.
+        let next = sourceName;
+        for (let i = 0; i < MAX_NAME_ATTEMPTS; i++) {
+            next = IncrementName(next);
+            const closing = next.endsWith(')') ? ')' : '';
+            const [before, digits] = splitTrailingDigits(closing ? next.slice(0, -1) : next);
+            const marker = /\s?[(vV]?$/.exec(before)?.[0] ?? '';
+            const candidate = fitKeeping(before.slice(0, before.length - marker.length), marker + digits + closing, maxLength);
+            if (candidate === null) return null;
+            if (free(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    // 'suffix': the template, then " (n)" (or {n} in the template) until a name is free.
+    const template = options?.Template || 'Copy of {Name}';
+    const ctx: NameTemplateContext = { SourceRecordName: sourceName, DateStr: options?.Context?.DateStr, UserName: options?.Context?.UserName };
+    const hasCounter = template.includes('{n}');
+    const candidateFor = (n: number): string | null => {
+        const counter = hasCounter ? String(n) : n === 1 ? '' : ` (${n})`;
+        const render = (name: string) => RenderNameTemplate(template, { ...ctx, SourceRecordName: name, Counter: n });
+        const withCounter = (name: string) => (hasCounter ? render(name) : render(name) + counter);
+        const full = withCounter(sourceName);
+        if (!maxLength || maxLength <= 0 || full.length <= maxLength) return full;
+        // Shorten the name first...
+        const room = sourceName.length - (full.length - maxLength);
+        if (room > 0) return withCounter(sourceName.slice(0, room).trimEnd());
+        // ...then the template's own text, keeping the counter.
+        const bare = hasCounter ? RenderNameTemplate(template, { ...ctx, SourceRecordName: '', Counter: undefined }) : render('');
+        return fitKeeping(bare, hasCounter ? String(n) : counter, maxLength);
+    };
+    for (let n = 1; n <= MAX_NAME_ATTEMPTS; n++) {
+        const candidate = candidateFor(n);
+        if (free(candidate)) return candidate;
+    }
+    return null;
+}
+
+/**
+ * Finds the next available name for `sourceName`; see {@link TryFindNextAvailableName}. Returns the
+ * source name unchanged when no distinct name can be found.
  */
 export function FindNextAvailableName(
     sourceName: string,
     existingNames: Set<string> | string[],
     options?: NameTemplateOptions
 ): string {
-    // Unique indexes usually compare case-insensitively (SQL Server's default collation), so collisions do too.
-    const lowered = new Set([...existingNames].map((n) => n.toLowerCase()));
-    const existing = { has: (candidate: string) => lowered.has(candidate.toLowerCase()) };
-    const strategy = options?.Strategy || 'suffix';
-    const maxLength = options?.MaxLength;
-
-    if (strategy === 'none') {
-        return sourceName;
-    }
-
-    if (strategy === 'increment') {
-        let candidate = IncrementName(sourceName);
-        while (existing.has(candidate)) {
-            candidate = IncrementName(candidate);
-        }
-        return fitToLength(candidate, maxLength, (name) => name);
-    }
-
-    // 'suffix' strategy
-    const rawTemplate = options?.Template || 'Copy of {Name}';
-    const ctx: NameTemplateContext = {
-        SourceRecordName: sourceName,
-        Counter: 1,
-        DateStr: options?.Context?.DateStr,
-        UserName: options?.Context?.UserName,
-    };
-
-    // If template has {n}, start testing from n=1 (or n=2 if initial has no n)
-    const render = (counter: number | undefined, suffix = '') =>
-        fitToLength(sourceName, maxLength, (name) => RenderNameTemplate(rawTemplate, { ...ctx, SourceRecordName: name, Counter: counter }) + suffix);
-
-    if (rawTemplate.includes('{n}')) {
-        let n = 1;
-        while (true) {
-            const candidate = render(n);
-            if (!existing.has(candidate)) {
-                return candidate;
-            }
-            n++;
-        }
-    }
-
-    // If template does not have {n}, try the raw template first
-    const firstCandidate = render(ctx.Counter);
-    if (!existing.has(firstCandidate)) {
-        return firstCandidate;
-    }
-
-    // Collision! Append " ({n})" deterministically
-    let n = 2;
-    while (true) {
-        const candidate = render(ctx.Counter, ` (${n})`);
-        if (!existing.has(candidate)) {
-            return candidate;
-        }
-        n++;
-    }
+    return TryFindNextAvailableName(sourceName, existingNames, options) ?? sourceName;
 }

@@ -99,7 +99,9 @@ export type CloneWarningCode =
     /** Rows the relationship's `ExcludeRows` leaves out, e.g. device tokens or drafts on a user clone. */
     | 'ROWS_EXCLUDED'
     /** The root entity's clone configuration failed validation; the plan is blocked. */
-    | 'CONFIG_INVALID';
+    | 'CONFIG_INVALID'
+    /** No free name fits a renamed column (it is too short, or every candidate is taken); the plan is blocked. */
+    | 'NAME_UNAVAILABLE';
 
 /**
  * Warning or notification emitted by the planning or execution engine.
