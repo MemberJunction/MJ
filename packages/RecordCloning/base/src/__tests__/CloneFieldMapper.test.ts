@@ -147,6 +147,22 @@ describe('CloneFieldMapper', () => {
         expect(result.MappedValues.ReadDeniedField).toBeUndefined();
     });
 
+    it('marks a rule value copied from an encrypted field sensitive, so it is masked like its source', () => {
+        const result = MapFieldsForClone({
+            EntityName: 'Integrations',
+            Fields: [
+                { Name: 'APIKey', IsPrimaryKey: false, Encrypted: true },
+                { Name: 'Notes', IsPrimaryKey: false },
+            ],
+            SourceRecord: { APIKey: 'sk-live-1', Notes: '' },
+            CurrentUserId: 'cloner',
+            FieldRules: { Rules: { Rules: [{ TargetField: 'Notes', Source: { Kind: 'field', Field: 'APIKey' } }] } },
+        });
+        const rule = result.FieldChanges.find((c) => c.Field === 'Notes' && c.Kind === 'Rule');
+        expect(rule?.NewValue).toBe('sk-live-1');
+        expect(rule?.Sensitive).toBe(true);
+    });
+
     it('never lets a request override a field the configuration resets or stamps', () => {
         const result = MapFieldsForClone({
             EntityName: 'MJ: Users',

@@ -452,6 +452,8 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
                     OldValue: oldVal,
                     NewValue: newVal,
                     Reason: 'Derived via field rule.',
+                    // A value copied from an encrypted column is as secret as its source.
+                    ...(rule.Source?.Kind === 'field' && ctx.Fields.some((f) => f.Encrypted && f.Name === rule.Source?.Field) ? { Sensitive: true } : {}),
                 });
             }
         }
