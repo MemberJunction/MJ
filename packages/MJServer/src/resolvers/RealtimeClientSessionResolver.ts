@@ -26,7 +26,7 @@
  */
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
+import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView, BaseEntity } from '@memberjunction/core';
 import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
@@ -377,6 +377,21 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     private readonly sessionManager = new SessionManager(this.clientSessionService);
 
     /**
+     * The reason a `Save()`/`Delete()` returned false, for a log line. `CompleteMessage` renders
+     * `Message`, `Error` and every `Errors[]` entry (validation errors included, since `Save()`
+     * runs `Validate()` and records its errors there), so there is no separate `Validate()` call.
+     * When a subclass refused the write without recording anything, say so explicitly instead of
+     * "unknown error", which is what hid MJ#4791.
+     */
+    private describeSaveFailure(entity: BaseEntity): string {
+        const detail = entity.LatestResult?.CompleteMessage?.trim();
+        return detail
+            ? detail
+            : `no failure detail recorded (LatestResult ${entity.LatestResult ? 'empty' : 'null'}; ` +
+              `ResultHistory length ${entity.ResultHistory.length}) — the write was refused before reaching the provider`;
+    }
+
+    /**
      * Start a client-direct realtime voice session targeting `targetAgentId`.
      *
      * Flow:
@@ -647,7 +662,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         session.Config_ = JSON.stringify(next);
         if (!(await session.Save())) {
             LogError(
-                `RealtimeClientSessionResolver.updatePendingFeedbackRunID save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.updatePendingFeedbackRunID save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
             );
         }
     }
@@ -1799,7 +1814,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const saved = await session.Save();
         if (!saved) {
             LogError(
-                `RealtimeClientSessionResolver.persistObservabilityRunIDs save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.persistObservabilityRunIDs save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
             );
         }
     }
@@ -1917,7 +1932,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!saved) {
             LogError(
                 `SaveSessionChannelState: save failed for session ${agentSessionID} / channel ${channelID}: ` +
-                    `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    `${this.describeSaveFailure(row)}`,
             );
         }
         return saved;
@@ -2202,7 +2217,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         artifact.UserID = contextUser.ID;
         artifact.Visibility = 'Always';
         if (!(await artifact.Save())) {
-            const message = `SaveSessionChannelArtifact: artifact save failed: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+            const message = `SaveSessionChannelArtifact: artifact save failed: ${this.describeSaveFailure(artifact)}`;
             LogError(message);
             return { Success: false, ErrorMessage: message, ConversationDetailLinked: false };
         }
@@ -2214,7 +2229,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         version.Content = contentJson;
         version.UserID = contextUser.ID;
         if (!(await version.Save())) {
-            const message = `SaveSessionChannelArtifact: artifact version save failed: ${version.LatestResult?.CompleteMessage ?? 'unknown error'}`;
+            const message = `SaveSessionChannelArtifact: artifact version save failed: ${this.describeSaveFailure(version)}`;
             LogError(message);
             return { Success: false, ErrorMessage: message, ArtifactID: artifact.ID, ConversationDetailLinked: false };
         }
@@ -2360,7 +2375,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         LogError(
             `ExecuteRealtimeSessionTool: hidden anchor detail save failed for session ${session.ID}: ` +
-                `${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `${this.describeSaveFailure(detail)}`,
         );
         return null;
     }
@@ -2387,7 +2402,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         if (!saved) {
             LogError(
                 `RealtimeClientSessionResolver: artifact junction save failed for detail ${conversationDetailID} / version ${artifactVersionID}: ` +
-                    `${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    `${this.describeSaveFailure(junction)}`,
             );
         }
         return saved;
@@ -2427,7 +2442,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             if (!(await row.Save())) {
                 LogError(
                     `SaveSessionChannelArtifact: LastActiveAt stamp failed for session ${agentSessionID} / channel ${channelID}: ` +
-                        `${row.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                        `${this.describeSaveFailure(row)}`,
                 );
             }
         } catch (error) {
@@ -2603,7 +2618,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         session.RecordingMedia = 'Audio';
         if (!(await session.Save())) {
             LogError(
-                `RealtimeClientSessionResolver.stampRecordingStart save failed: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.stampRecordingStart save failed for session ${session.ID}: ${this.describeSaveFailure(session)}`,
             );
         }
     }
@@ -2637,7 +2652,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const saved = await detail.Save();
         if (!saved) {
             LogError(
-                `RealtimeClientSessionResolver.persistTranscriptTurn save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.persistTranscriptTurn save failed for session ${session.ID} (write user ${contextUser.ID}): ${this.describeSaveFailure(detail)}`,
             );
         }
         return saved;
@@ -2738,7 +2753,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 `RealtimeClientSessionResolver.replacePreviousTranscriptTurn save failed for session `
                 + `${session.ID} — the ${mappedRole} turn keeps its PREVIOUS, shorter text and the `
                 + `transcript now understates what was said: `
-                + `${previous.LatestResult?.CompleteMessage || JSON.stringify(previous.LatestResult ?? null)}`,
+                + `${this.describeSaveFailure(previous)}`,
             );
         }
         return saved;
@@ -2830,13 +2845,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             const saved = await detail.Save();
             if (!saved) {
                 LogError(
-                    `RealtimeClientSessionResolver.persistDirectActionTurn save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                    `RealtimeClientSessionResolver.persistDirectActionTurn save failed for session ${session.ID} (tool '${toolName}', call ${callId ?? 'n/a'}, write user ${contextUser.ID}): ${this.describeSaveFailure(detail)}`,
                 );
             }
             return saved;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            LogError(`RealtimeClientSessionResolver.persistDirectActionTurn unexpected error: ${message}`);
+            LogError(`RealtimeClientSessionResolver.persistDirectActionTurn unexpected error for session ${session.ID}: ${message}`);
             return false;
         }
     }
