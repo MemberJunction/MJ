@@ -35,7 +35,7 @@ import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
 import { configInfo, type MagicLinkConfig } from '../../config.js';
 import { MagicLinkKeyManager } from './MagicLinkKeys.js';
-import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSessionClaims, CanIssueInvites, IsRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
+import { GenerateRawToken, GenerateSessionId, HashToken, EvaluateInvite, BuildSessionClaims, BuildConsumeInvitePostgresSQL, CanIssueInvites, IsRoleGrantable, MAGIC_LINK_TOKEN_PREFIX } from './magicLinkCore.js';
 import type {
   CreateMagicLinkInviteParams,
   CreateMagicLinkInviteResult,
@@ -52,12 +52,16 @@ const ANONYMOUS_USER_ID = '273910DF-28F1-45C1-A8F8-6E9AD8E5F008';
 type ConsumeOutcome = 'won' | 'lost' | 'failed';
 
 /**
- * The guarded single-use procedure (migration V202609251600__v6.2.x__MagicLink_Consume_Invite_Sproc).
- * A procedure, not raw DML, because MJ grants its runtime roles EXECUTE on procedures and SELECT on
- * views — never DML on base tables — so on any host whose MJAPI login is not db_owner a raw UPDATE
- * is refused (#4753). Ownership chaining lets the procedure update the table on the caller's behalf.
+ * The SQL Server guarded single-use procedure (migration V202609251600__v6.2.x__MagicLink_Consume_Invite_Sproc).
+ * A procedure, not raw DML, because on SQL Server MJ grants its runtime roles EXECUTE on procedures
+ * and SELECT on views — never DML on base tables — so on any host whose MJAPI login is not db_owner
+ * a raw UPDATE is refused (#4753). Ownership chaining lets the procedure update the table on the
+ * caller's behalf. PostgreSQL has no counterpart function; see {@link BuildConsumeInvitePostgresSQL}.
  */
 const CONSUME_INVITE_PROC = 'spConsumeMagicLinkInvite';
+
+/** MagicLinkInvite base table (core schema) — the PostgreSQL consume updates it directly. */
+const INVITE_TABLE = 'MagicLinkInvite';
 
 /** Outcome of provisioning a redeeming user. */
 interface ProvisionResult {
@@ -654,32 +658,38 @@ export class MagicLinkService {
   }
 
   /**
-   * Atomically consumes one use of the invite through {@link CONSUME_INVITE_PROC}, whose single
-   * guarded UPDATE re-checks every eligibility condition (Active, not exhausted, not expired) at the
-   * DB level, so the increment and the guard are one atomic operation. Concurrent redemptions of a
-   * single-use link race on the row and exactly one gets the row back.
+   * Atomically consumes one use of the invite with a single guarded UPDATE that re-checks every
+   * eligibility condition (Active, not exhausted, not expired) at the DB level, so the increment and
+   * the guard are one atomic operation. Concurrent redemptions of a single-use link race on the row
+   * and exactly one gets the row back.
+   *
+   * The statement differs per platform because the grants do:
+   * - **SQL Server** calls {@link CONSUME_INVITE_PROC} (`EXEC … @ID=@p0`). Runtime roles have
+   *   EXECUTE on procedures but no DML on base tables (#4753).
+   * - **PostgreSQL** runs {@link BuildConsumeInvitePostgresSQL}'s `UPDATE … RETURNING` directly.
+   *   Runtime roles hold table DML there, and no PG counterpart of the procedure exists.
+   * The ID is always a bound parameter.
    *
    * Returns `'won'` (this call consumed a use), `'lost'` (the guard matched nothing: consumed,
    * revoked or expired concurrently) or `'failed'` (the statement never ran — permissions, a missing
    * procedure, a connection error). `'failed'` is kept distinct from `'lost'` on purpose: collapsing
    * them is what made #4753's permission error surface to users as "already redeemed".
-   *
-   * The call form comes from the provider's dialect (`EXEC … @ID=@p0` on SQL Server,
-   * `SELECT * FROM …($1)` on PostgreSQL); the ID is always a bound parameter.
    */
   private async consumeInvite(invite: MJMagicLinkInviteEntity, provider: DatabaseProviderBase, contextUser: UserInfo): Promise<ConsumeOutcome> {
-    const placeholder = provider.BuildParameterPlaceholder(0);
-    const arg = provider.PlatformKey === 'postgresql' ? placeholder : `@ID=${placeholder}`;
-    const call = provider.Dialect.ProcedureCallSyntax(provider.MJCoreSchemaName, CONSUME_INVITE_PROC, [arg]);
+    const isPg = provider.PlatformKey === 'postgresql';
+    const statement = isPg ? `PostgreSQL guarded UPDATE on ${INVITE_TABLE}` : CONSUME_INVITE_PROC;
     try {
-      const rows = await provider.ExecuteSQL<{ ID: string }>(call, [invite.ID], { isMutation: true, description: `MagicLink ${CONSUME_INVITE_PROC}` }, contextUser);
+      const sql = isPg
+        ? BuildConsumeInvitePostgresSQL(`${provider.MJCoreSchemaName}.${INVITE_TABLE}`)
+        : provider.Dialect.ProcedureCallSyntax(provider.MJCoreSchemaName, CONSUME_INVITE_PROC, [`@ID=${provider.BuildParameterPlaceholder(0)}`]);
+      const rows = await provider.ExecuteSQL<{ ID: string }>(sql, [invite.ID], { isMutation: true, description: `MagicLink ${statement}` }, contextUser);
       if (!Array.isArray(rows)) {
-        LogError(`[MagicLink] ${CONSUME_INVITE_PROC} returned no result set for invite ${invite.ID}; treating the consume as failed.`);
+        LogError(`[MagicLink] ${statement} returned no result set for invite ${invite.ID}; treating the consume as failed.`);
         return 'failed';
       }
       return rows.length === 1 ? 'won' : 'lost';
     } catch (e) {
-      LogError(`[MagicLink] ${CONSUME_INVITE_PROC} FAILED for invite ${invite.ID} — the statement never ran, so this is NOT a lost race: ${e instanceof Error ? e.message : String(e)}`);
+      LogError(`[MagicLink] ${statement} FAILED for invite ${invite.ID} — the statement never ran, so this is NOT a lost race: ${e instanceof Error ? e.message : String(e)}`);
       return 'failed';
     }
   }

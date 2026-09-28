@@ -144,6 +144,41 @@ export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { 
   return EvaluateInvite(invite, nowMs);
 }
 
+/** PostgreSQL table identifier — `schema.table` (word chars only); auto-quoted downstream. */
+const QUALIFIED_TABLE_PATTERN_PG = /^\w+\.\w+$/;
+
+/**
+ * Builds the PostgreSQL atomic compare-and-swap UPDATE that consumes one use of an invite.
+ *
+ * PostgreSQL only. SQL Server consumes through the granted `spConsumeMagicLinkInvite` procedure,
+ * because its runtime roles are never granted table DML (#4753). PostgreSQL needs neither: its
+ * runtime roles hold INSERT/UPDATE/DELETE on every `__mj` table
+ * (V202605040300__v5.33.x__Unblock_PostgreSQL_End_To_End.pg-only.sql), and no PG counterpart of
+ * the procedure exists — the release-time converter leaves `CREATE PROCEDURE` unhandled.
+ *
+ * The WHERE re-checks every eligibility condition (the same predicate as the procedure), so the
+ * increment and the guard are one atomic statement: concurrent redemptions of a single-use link
+ * serialize on the row lock and exactly one matches. `RETURNING ID` yields the row iff the guard
+ * matched. The invite ID MUST be bound by the caller as `$1` — it is never interpolated.
+ *
+ * `qualifiedTable` is `schema.table` unquoted (PostgreSQLDataProvider.ExecuteSQL auto-quotes the
+ * PascalCase identifiers) and is asserted against a whitelist before interpolation — the caller
+ * never passes user input, so this is defense-in-depth.
+ */
+export function BuildConsumeInvitePostgresSQL(qualifiedTable: string): string {
+  if (!QUALIFIED_TABLE_PATTERN_PG.test(qualifiedTable)) {
+    throw new Error(`BuildConsumeInvitePostgresSQL: refusing to build SQL for non-whitelisted table identifier '${qualifiedTable}'.`);
+  }
+  return (
+    `UPDATE ${qualifiedTable} ` +
+    `SET UseCount = UseCount + 1, ` +
+    `ConsumedAt = COALESCE(ConsumedAt, (now() AT TIME ZONE 'utc')), ` +
+    `Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END ` +
+    `WHERE ID = $1 AND Status = 'Active' AND UseCount < MaxUses AND ExpiresAt > (now() AT TIME ZONE 'utc') ` +
+    `RETURNING ID;`
+  );
+}
+
 /**
  * Pure scope-union: appends `next` to `prior` unless an entry from the same invite
  * is already present (dedup by inviteId). This is how a session accumulates the union

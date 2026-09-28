@@ -6,6 +6,7 @@ import {
   HashToken,
   EvaluateInvite,
   BuildSessionClaims,
+  BuildConsumeInvitePostgresSQL,
   CanIssueInvites,
   IsRoleGrantable,
   UnionScopes,
@@ -164,6 +165,55 @@ describe('magic-link core', () => {
     it('handles an empty/undefined prior union', () => {
       expect(UnionScopes(undefined, a)).toEqual([a]);
       expect(UnionScopes([], a)).toEqual([a]);
+    });
+  });
+
+  describe('BuildConsumeInvitePostgresSQL', () => {
+    // PostgreSQL only: SQL Server consumes through spConsumeMagicLinkInvite (#4753), but PG has no
+    // such function and its runtime roles hold table DML, so PG keeps this direct guarded UPDATE.
+    // PG uses `schema.table` unquoted — PostgreSQLDataProvider.ExecuteSQL auto-quotes the
+    // PascalCase identifiers.
+    const pgTable = '__mj.MagicLinkInvite';
+    const pgSql = BuildConsumeInvitePostgresSQL(pgTable);
+
+    it('targets the supplied unquoted schema.table', () => {
+      expect(pgSql).toContain(`UPDATE ${pgTable} `);
+    });
+
+    it('uses UPDATE … RETURNING as the atomic single-use gate (no OUTPUT/DECLARE table var)', () => {
+      expect(pgSql).toContain('RETURNING ID;');
+      expect(pgSql).not.toContain('OUTPUT');
+      expect(pgSql).not.toContain('DECLARE');
+    });
+
+    it('binds the invite ID as PG positional param $1, not T-SQL @p0 (injection-safe)', () => {
+      expect(pgSql).toContain('ID = $1');
+      expect(pgSql).not.toMatch(/@/);
+      expect(pgSql).not.toMatch(/ID = '/);
+    });
+
+    it('uses PG timestamp expressions, not T-SQL SYSUTCDATETIME()', () => {
+      expect(pgSql).not.toContain('SYSUTCDATETIME');
+      expect(pgSql).toContain("ConsumedAt = COALESCE(ConsumedAt, (now() AT TIME ZONE 'utc'))");
+    });
+
+    it('guards atomically on Active + not-exhausted + not-expired (same predicate as spConsumeMagicLinkInvite)', () => {
+      const where = pgSql.slice(pgSql.indexOf('WHERE'));
+      expect(where).toContain("Status = 'Active'");
+      expect(where).toContain('UseCount < MaxUses');
+      expect(where).toContain("ExpiresAt > (now() AT TIME ZONE 'utc')");
+    });
+
+    it('increments UseCount and flips Status on the last use (same semantics as spConsumeMagicLinkInvite)', () => {
+      expect(pgSql).toContain('UseCount = UseCount + 1');
+      expect(pgSql).toContain("Status = CASE WHEN UseCount + 1 >= MaxUses THEN 'Consumed' ELSE Status END");
+    });
+
+    it('rejects a non-whitelisted table identifier (defense-in-depth against injection)', () => {
+      expect(() => BuildConsumeInvitePostgresSQL('[__mj].[MagicLinkInvite]')).toThrow();
+      expect(() => BuildConsumeInvitePostgresSQL('__mj.MagicLinkInvite; DROP TABLE x;--')).toThrow();
+      expect(() => BuildConsumeInvitePostgresSQL('__mj.Magic Link')).toThrow();
+      expect(() => BuildConsumeInvitePostgresSQL(pgTable)).not.toThrow();
     });
   });
 

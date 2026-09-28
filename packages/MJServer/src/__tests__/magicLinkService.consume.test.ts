@@ -20,7 +20,7 @@ import { Metadata, RunView, type DatabaseProviderBase, type IMetadataProvider, t
 import type { MJMagicLinkInviteEntity } from '@memberjunction/core-entities';
 import type { MagicLinkConfig } from '../config.js';
 import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
-import { MAGIC_LINK_TOKEN_PREFIX } from '../auth/magicLink/magicLinkCore.js';
+import { MAGIC_LINK_TOKEN_PREFIX, BuildConsumeInvitePostgresSQL } from '../auth/magicLink/magicLinkCore.js';
 
 type Platform = 'sqlserver' | 'postgresql';
 
@@ -112,14 +112,31 @@ describe('MagicLinkService.consumeInvite (#4753)', () => {
     expect(String(sql).toUpperCase()).not.toContain('UPDATE');
   });
 
-  it('PostgreSQL: calls the procedure positionally', async () => {
+  // PG has no spConsumeMagicLinkInvite function (the release-time converter does not emit
+  // procedures) and PG's runtime roles hold table DML, so PG keeps the direct guarded UPDATE.
+  it('PostgreSQL: runs the guarded UPDATE … RETURNING directly, with the ID bound as $1', async () => {
     const provider = makeProvider('postgresql');
     provider.ExecuteSQL.mockResolvedValue([{ ID: INVITE_ID }]);
     await consume(provider);
 
-    const [sql, params] = provider.ExecuteSQL.mock.calls[0];
-    expect(sql).toBe('SELECT * FROM __mj."spConsumeMagicLinkInvite"($1)');
+    expect(provider.ExecuteSQL).toHaveBeenCalledTimes(1);
+    const [sql, params, options, user] = provider.ExecuteSQL.mock.calls[0];
+    expect(sql).toBe(BuildConsumeInvitePostgresSQL('__mj.MagicLinkInvite'));
+    expect(sql).not.toContain('spConsumeMagicLinkInvite');
     expect(params).toEqual([INVITE_ID]);
+    expect(options).toEqual(expect.objectContaining({ isMutation: true }));
+    expect(user).toBe(contextUser);
+    expect(sql).not.toContain(INVITE_ID);
+  });
+
+  it("PostgreSQL: maps one row to 'won', zero rows to 'lost', and a thrown error to 'failed'", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const provider = makeProvider('postgresql');
+    provider.ExecuteSQL.mockResolvedValueOnce([{ ID: INVITE_ID }]).mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('connection reset'));
+
+    expect(await consume(provider)).toBe('won');
+    expect(await consume(provider)).toBe('lost');
+    expect(await consume(provider)).toBe('failed');
   });
 
   it("returns 'won' when exactly one row comes back", async () => {

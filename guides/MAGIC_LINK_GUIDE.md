@@ -288,13 +288,15 @@ security scanners can't burn a single-use token by merely fetching the URL:
    fragment (`#token=…`); API clients add `?format=json` (or `Content-Type:
    application/json`) to get the JWT as JSON.
 
-Single-use is enforced **atomically**: the `spConsumeMagicLinkInvite` stored
-procedure runs one guarded `UPDATE` (`UseCount < MaxUses AND Status = 'Active' AND
-ExpiresAt > now`) *before* the token is minted, so two concurrent redemptions of a
-single-use link race on the row and exactly one wins (fail-closed). The procedure is
-granted to `cdp_Developer`/`cdp_Integration`, so it works when the MJAPI login is a
-member of MJ's data roles rather than `db_owner` — those roles never get DML on the
-base table (#4753). A losing/late redemption is rejected (`410 Gone`,
+Single-use is enforced **atomically**: one guarded `UPDATE` (`UseCount < MaxUses
+AND Status = 'Active' AND ExpiresAt > now`) runs *before* the token is minted, so two
+concurrent redemptions of a single-use link race on the row and exactly one wins
+(fail-closed). On SQL Server the `UPDATE` lives in the `spConsumeMagicLinkInvite`
+stored procedure, granted to `cdp_Developer`/`cdp_Integration`, so it works when the
+MJAPI login is a member of MJ's data roles rather than `db_owner` — those roles never
+get DML on the base table (#4753). On PostgreSQL the runtime roles do hold table DML
+and there is no counterpart function, so the service runs the same guarded
+`UPDATE … RETURNING` directly. A losing/late redemption is rejected (`410 Gone`,
 `errorCode: "consumed"`). A database failure during the consume (permissions, a
 missing procedure, a lost connection) is reported as `500`, `errorCode:
 "server_error"` — never as `410 consumed`.
