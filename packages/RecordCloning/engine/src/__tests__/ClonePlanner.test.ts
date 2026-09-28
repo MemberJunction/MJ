@@ -176,6 +176,18 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('does not repeat, on every plan, a key for an entity reached only through a descendant', async () => {
+        const other = { ...parentEntity, ID: 'ent-other', Name: 'OtherEntity', RelatedEntities: [] } as unknown as EntityInfo;
+        const cfg = { ...parentEntity, RelatedEntities: [], CloneConfig: { Enabled: true, Relationships: { 'OtherEntity.ParentID': { Policy: 'Deep' } } } } as unknown as EntityInfo;
+        const provider = { ...mockProvider, Entities: [cfg, other], EntityByName: (n: string) => (n === 'ParentEntity' ? cfg : n === 'OtherEntity' ? other : null) } as IMetadataProvider;
+        mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] });
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+
+        expect(plan.Warnings.filter((w) => w.Code === 'CONFIG_INVALID')).toEqual([]);
+        mockRunViewInstance.mockReset();
+    });
+
     it('retargets only the root foreign keys the configuration offers', async () => {
         const withFk = {
             ...parentEntity,

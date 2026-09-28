@@ -126,6 +126,9 @@ export class ClonePlanner {
                 md.Entities.map((e) => ({ Name: e.Name, Fields: [] }))
             );
             for (const finding of findings) {
+                // A key for an entity reached through a descendant is valid configuration; the
+                // Entities form's Validate still notes it, but every plan needn't repeat it.
+                if (finding.Severity === 'Warning' && finding.PropertyPath.startsWith('Relationships[')) continue;
                 // A relationship key that matches nothing only means that edge isn't configured
                 // (a stale key, say): report it, but don't refuse every clone of the entity over it.
                 const blocking = finding.Severity === 'Error' && !finding.PropertyPath.startsWith('Relationships[');

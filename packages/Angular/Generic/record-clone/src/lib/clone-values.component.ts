@@ -40,6 +40,8 @@ import type {
                     class="mj-input root-name-input"
                     placeholder="Enter record name..."
                     [value]="RootName"
+                    [readOnly]="RootNameReadOnly"
+                    [attr.aria-readonly]="RootNameReadOnly || null"
                     (input)="OnRootNameInput($event)" />
                 @if (NamingStrategyReason) {
                     <span class="control-hint naming-hint">
@@ -305,6 +307,8 @@ export class CloneValuesComponent implements OnInit, OnChanges {
     @Input() RootName = '';
     /** Why the suggested name was chosen (e.g. the source name already exists). */
     @Input() NamingStrategyReason?: string;
+    /** The configuration sets the name (a rule or reset), so it's shown but can't be typed over. */
+    @Input() RootNameReadOnly = false;
     /** Fields the entity's `Clone.Fields.PromptFor` requires the user to fill. */
     @Input() PromptedFields: ClonePromptFieldItem[] = [];
     /** Current values for the prompted fields, keyed by field name. */

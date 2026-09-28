@@ -127,7 +127,8 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                 }
 
                 <!-- Scope Step -->
-                @if (CurrentState === 'scope' || CurrentStep === 'scope') {
+                <!-- Wizard steps only while the wizard is active: after Execute the result (or failure) replaces them. -->
+                @if (ShowWizardTabs && (CurrentState === 'scope' || CurrentStep === 'scope')) {
                     <div class="step-container" [class.step-hidden]="CurrentStep !== 'scope'">
                         <mj-clone-scope-controls
                             [Presets]="AvailablePresets"
@@ -187,11 +188,12 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                 }
 
                 <!-- Values Step -->
-                @if (CurrentState === 'values' || CurrentStep === 'values') {
+                @if (ShowWizardTabs && (CurrentState === 'values' || CurrentStep === 'values')) {
                     <div class="step-container" [class.step-hidden]="CurrentStep !== 'values'">
                         <mj-clone-values
                             [EntityName]="EffectiveEntityName"
                             [RootName]="RootRecordName"
+                            [RootNameReadOnly]="RootNameReadOnly"
                             [NamingStrategyReason]="NamingStrategyReason"
                             [PromptedFields]="PromptedFields"
                             [PromptedValues]="PromptedValues"
@@ -227,7 +229,7 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                 }
 
                 <!-- Review Step -->
-                @if (CurrentState === 'review' || CurrentStep === 'review') {
+                @if ((ShowWizardTabs || CurrentState === 'executing') && (CurrentState === 'review' || CurrentStep === 'review')) {
                     <div class="step-container" [class.step-hidden]="CurrentStep !== 'review'">
                         @if (PlanChangedNotice) {
                             <div class="plan-changed-notice" role="status">
@@ -1061,6 +1063,22 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         }
     }
 
+    /**
+     * Whether the configuration, not the user, decides the root's name: a rule derives it (a user's
+     * Name from the prompted Email), a reset stamps it, or UserEditable doesn't allow field edits.
+     * The server ignores a typed name then, so the box is read-only.
+     */
+    public get RootNameReadOnly(): boolean {
+        const entInfo = this.ProviderToUse?.EntityByName(this.EffectiveEntityName);
+        const cfg = entInfo?.CloneConfig;
+        const nameField = (entInfo?.NameField?.Name ?? 'Name').toLowerCase();
+        const ruleTargets = (cfg?.Fields?.Rules as { Rules?: Array<{ TargetField?: string; Field?: string }> } | undefined)?.Rules ?? [];
+        const governed = ruleTargets.some((r) => (r.TargetField || r.Field || '').toLowerCase() === nameField)
+            || Object.keys(cfg?.Fields?.Reset ?? {}).some((k) => k.toLowerCase() === nameField);
+        const editable = cfg?.UserEditable ?? 'all';
+        return governed || editable === 'none' || editable === 'scope';
+    }
+
     private setupInitialValues(): void {
         if (!this.ActivePlan) return;
 
@@ -1093,7 +1111,8 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
                     FieldName: fName,
                     DisplayName: fieldInfo?.DisplayName || fName,
                     Type: fieldInfo?.Type || 'string',
-                    IsRequired: fieldInfo ? !fieldInfo.AllowsNull : true,
+                    // The plan blocks without every PromptFor value (the copy can't reuse the source's).
+                    IsRequired: true,
                     Description: fieldInfo?.Description,
                     DefaultValue: (proposed ?? null) as string | number | boolean | null,
                 };

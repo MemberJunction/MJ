@@ -241,6 +241,51 @@ describe('RecordClonePanelComponent (DOM)', () => {
         expect((mockService.PlanClone as ReturnType<typeof vi.fn>).mock.calls.at(-1)![0].Options.FieldOverrides).toEqual({ Name: 'Jane (copy)' });
     });
 
+    it('replaces the Review step with the result once the clone ran, so Execute cannot be pressed again', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        panel.GoToStep('review');
+        fixture.detectChanges();
+        expect(query(fixture, 'mj-clone-review')).not.toBeNull();
+
+        await panel.ExecuteClone();
+        fixture.detectChanges();
+
+        expect(panel.CurrentState).toBe('done');
+        expect(query(fixture, 'mj-clone-review')).toBeNull();
+        expect(query(fixture, 'mj-clone-result')).not.toBeNull();
+    });
+
+    it('requires every prompted field and locks a name the configuration derives', async () => {
+        const provider = {
+            EntityByName: () => ({
+                Name: 'Users',
+                NameField: { Name: 'Name' },
+                Fields: [{ Name: 'FirstName', DisplayName: 'First Name', Type: 'nvarchar', AllowsNull: true }],
+                CloneConfig: {
+                    Enabled: true,
+                    Fields: { PromptFor: ['FirstName'], Rules: { Rules: [{ TargetField: 'Name', Source: { Kind: 'field', Field: 'Email' } }] } },
+                },
+            }),
+        };
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1', Provider: provider },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        panel.GoToStep('values');
+        fixture.detectChanges();
+
+        expect(panel.PromptedFields.map((f) => [f.FieldName, f.IsRequired])).toEqual([['FirstName', true]]);
+        expect(panel.RootNameReadOnly).toBe(true);
+        expect((query(fixture, '#root-name-input') as HTMLInputElement).readOnly).toBe(true);
+    });
+
     it('emits CloseRequested when panel close is triggered', () => {
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],
