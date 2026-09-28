@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * scope gate that stops a narrowed binding from firing on records outside its scope.
  */
 
-const { mockClassFactory, mockIsEntityActionInScope, mockRunAction, actionFilters, durableRegistry, mockRedactParamsToRecord } = vi.hoisted(() => ({
+const { mockClassFactory, mockIsEntityActionInScope, mockRunAction, actionFilters, durableRegistry, mockRedactParamsToRecord, liveActionParams } = vi.hoisted(() => ({
     mockClassFactory: { CreateInstance: vi.fn(), GetAllRegistrations: vi.fn().mockReturnValue([]) },
     mockIsEntityActionInScope: vi.fn(),
     mockRunAction: vi.fn(),
@@ -16,7 +16,10 @@ const { mockClassFactory, mockIsEntityActionInScope, mockRunAction, actionFilter
     // Mutable so a test can install a submitter and `beforeEach` can reset it to `null` — the shape
     // `DurableEntityActionRegistry.Instance` actually has, not a fresh object per test.
     durableRegistry: { Submitter: null as null | { Submit: ReturnType<typeof vi.fn> }, Register: vi.fn() },
-    mockRedactParamsToRecord: vi.fn()
+    mockRedactParamsToRecord: vi.fn(),
+    // The engine's live ActionParam list — what ActionExecutionLog.Params redaction reads. Mutable so a
+    // test can make it disagree with the per-action `Params.Items` collection, which can go stale.
+    liveActionParams: [] as Array<{ ID: string; ActionID: string; Name: string; Type: string; LogValue?: boolean }>,
 }));
 
 vi.mock('@memberjunction/global', async (importOriginal) => ({
@@ -92,6 +95,7 @@ vi.mock('../generic/ActionEngine', () => ({
             Config: vi.fn().mockResolvedValue(undefined),
             Actions: [{ ID: 'ACTION-1', Name: 'Notify', Params: { Items: [{ ID: 'p1', Name: 'Record', Type: 'Input' }] } }],
             ActionFilters: actionFilters,
+            ActionParams: liveActionParams,
             RunAction: mockRunAction
         }
     }
@@ -154,6 +158,7 @@ beforeEach(() => {
     // guarantees it doesn't leak into a test that runs after it, regardless of file order.
     durableRegistry.Submitter = null;
     mockRedactParamsToRecord.mockReset();
+    liveActionParams.splice(0, liveActionParams.length);
 });
 
 // ── 'Entity Object Data' ─────────────────────────────────────────────────────────────────────────
@@ -486,6 +491,8 @@ describe('Durable AfterCreate with a queue submitter', () => {
 
     it('submits RedactedParams as the name-keyed record RedactParamsToRecord returns, not an array', async () => {
         mockRedactParamsToRecord.mockReturnValue({ TypeCode: 'SystemEvent' });
+        const definition = { ID: 'p1', ActionID: 'ACTION-1', Name: 'Record', Type: 'Input' };
+        liveActionParams.splice(0, liveActionParams.length, definition);
         const submit = vi.fn().mockResolvedValue({ Success: true, ParentTaskID: 'T1' });
         durableRegistry.Submitter = { Submit: submit };
 
@@ -501,12 +508,31 @@ describe('Durable AfterCreate with a queue submitter', () => {
         // per-binding LogValue rules.
         expect(mockRedactParamsToRecord).toHaveBeenCalledWith(
             deferredParams,
-            [{ ID: 'p1', Name: 'Record', Type: 'Input' }],
+            [definition],
             entityActionParams,
         );
         expect(submit).toHaveBeenCalledTimes(1);
         const request = submit.mock.calls[0][0] as { RedactedParams: unknown };
         expect(Array.isArray(request.RedactedParams)).toBe(false);
         expect(request.RedactedParams).toEqual({ TypeCode: 'SystemEvent' });
+    });
+
+    it('redacts against the engine\'s live ActionParam definitions, not the per-action collection', async () => {
+        // An admin set LogValue=0 on a running server: the engine's list (which the log path reads) has
+        // the new row, while `action.Params.Items` — a cached collection that only notices a changed
+        // array reference or length — still holds the old one. Redacting against the stale copy wrote
+        // the now-suppressed value into Task.InputPayload while the log redacted it.
+        const live = { ID: 'p1', ActionID: 'ACTION-1', Name: 'Record', Type: 'Input', LogValue: false };
+        liveActionParams.splice(0, liveActionParams.length, live, { ID: 'p9', ActionID: 'OTHER-ACTION', Name: 'X', Type: 'Input' });
+        mockRedactParamsToRecord.mockReturnValue({});
+        durableRegistry.Submitter = { Submit: vi.fn().mockResolvedValue({ Success: true, ParentTaskID: 'T1' }) };
+
+        const entityActionParams = [{ ActionParamID: 'p1', ValueType: 'Static', Value: 'x' }];
+        const deferExecution = (await invokeDurable(entityActionParams)).DeferExecution!;
+        await deferExecution({ Params: [{ Name: 'Record', Value: 'x', Type: 'Input' }] });
+
+        const definitions = mockRedactParamsToRecord.mock.calls[0][1] as unknown[];
+        expect(definitions).toHaveLength(1);
+        expect(definitions[0]).toBe(live);
     });
 });

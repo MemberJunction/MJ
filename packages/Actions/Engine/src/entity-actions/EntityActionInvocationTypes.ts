@@ -243,7 +243,16 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
                 // through the same rules ActionExecutionLog.Params goes through, so the binding's
                 // LogValue rows decide what survives — but stored by name, not as an array, because
                 // TaskGraphActionRunner re-hydrates this payload into a run by parameter name.
-                RedactedParams: RedactParamsToRecord(runParams.Params, [...action.Params.Items], params.EntityAction.Params),
+                //
+                // The definitions come from the engine's live ActionParam list — the same source the log
+                // redaction reads (ActionEngine.ParamDefinitionsFor) — not from `action.Params`, a cached
+                // collection that keeps serving the pre-save row after an in-place engine update. Reading
+                // that one let a runtime LogValue=0 redact the log while its value still reached the Task.
+                RedactedParams: RedactParamsToRecord(
+                    runParams.Params,
+                    ActionEngineServer.Instance.ActionParams.filter((p) => UUIDsEqual(p.ActionID, action.ID)),
+                    params.EntityAction.Params,
+                ),
                 ContextUser: params.ContextUser,
             });
 
