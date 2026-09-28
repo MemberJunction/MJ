@@ -44,7 +44,7 @@
 -- the folder dialog now defaults a NEW folder to PERSONAL. The sidebar is a
 -- personal surface (its conversations are already bound to their owner), so a
 -- folder everyone can see is the surprising option. Existing folders are
--- unaffected either way — this only governs what the checkbox starts at.
+-- unaffected either way — this only governs which option the dialog starts at.
 --
 -- Named OwnerUserID rather than UserID to match MJ's existing spelling for exactly
 -- this relationship — AIAgent.OwnerUserID, ScheduledJob.OwnerUserID,
@@ -55,8 +55,11 @@
 --
 -- WHAT THIS DOES NOT DO. A column is not a policy — so this migration does not stop
 -- at the column. It also attaches a row-level-security filter to the UI role's read
--- permission (see the section below the DDL), which is what makes a personal folder
--- actually unreadable rather than merely unlisted by two Angular readers. A host that
+-- permission (see the section below the DDL). For a user whose every read grant on
+-- the entity carries that filter, a personal folder is unreadable server-side rather
+-- than merely unlisted by two Angular readers. That is narrower than "every other
+-- user": a user holding any role with unfiltered read is exempt, and under the seeded
+-- roles that includes everyone who can create a folder — see SCOPE below. A host that
 -- does nothing still sees no difference, because every folder that exists today is
 -- shared and the filter admits shared folders unchanged.
 --
@@ -65,18 +68,19 @@
 -- definition. They become private when someone makes them personal, not when this
 -- migration runs. Tenant separation stays the host's Environment or its own RLS choice.
 --
--- The consumer-side follow-ons, kept out of the schema change so the column can land
--- and be adopted independently:
+-- The consumer side ships in the same change as this migration:
 --
---   - ConversationEngine.LoadProjects gains `AND (OwnerUserID IS NULL OR
---     OwnerUserID='<contextUser.ID>')`, so a personal folder reaches only its owner,
---     and the folder-create dialog offers personal vs shared.
+--   - `BuildProjectVisibilityFilter` (MJCoreEntities) is the one client-side
+--     definition of "shared plus mine", `(OwnerUserID IS NULL OR
+--     OwnerUserID='<contextUser.ID>')`, used by ConversationEngine.LoadProjects and
+--     the Assign Project picker. It keeps a personal folder out of other people's
+--     sidebars whatever their roles; it is a listing rule, not a boundary.
+--   - The folder dialog offers personal vs shared at create time, and personal ->
+--     shared afterwards (never the reverse).
 --   - TENANT scoping is NOT addressed here and should not be. Multi-tenant hosts
 --     separate customers by Environment (which Project is already keyed on) or by
 --     their own row-level security; an OrganizationID on a core MJ table would be
---     inventing a tenancy model MJ does not have. The leak described above is closed
---     for personal folders by this column, and for shared folders by the host's
---     environment or RLS choice.
+--     inventing a tenancy model MJ does not have.
 -- ============================================================================
 
 ALTER TABLE ${flyway:defaultSchema}.Project
@@ -98,7 +102,8 @@ EXEC sp_addextendedproperty @name = N'MS_Description',
 GO
 
 -- ============================================================================
--- SERVER-SIDE ENFORCEMENT: a personal folder is unreadable, not merely unlisted.
+-- SERVER-SIDE ENFORCEMENT: to a user whose reads are filtered, a personal folder is
+-- unreadable, not merely unlisted. Who that is depends on roles — see SCOPE.
 --
 -- Without this, "personal" is a convention — two `ExtraFilter` strings in Angular
 -- readers. Any user with Read on the entity still reads every personal folder NAME
@@ -118,6 +123,26 @@ GO
 -- entity-admin surfaces keep seeing everything, which is the same position that
 -- migration took. `UserExemptFromRowLevelSecurity` gives that for free: a user holding
 -- any role whose read permission carries no filter is exempt.
+--
+-- WHAT THAT MEANS UNDER THE SEEDED ROLES. The exemption is per USER: one unfiltered
+-- read grant among a user's roles lifts the filter for that user entirely. The seeded
+-- permissions on MJ: Projects are UI (read only), Developer (create/read/update/
+-- delete) and Integration (all four), so the only default roles that can create a
+-- folder are the two that are exempt. In a default install the filter therefore binds
+-- users whose only role is UI (the default `newUserRoles`) — who cannot create a
+-- folder — and does NOT bind anyone holding Developer or Integration. Those users
+-- still see only shared-plus-their-own in the sidebar and the Assign Project picker,
+-- because `BuildProjectVisibilityFilter` narrows those reads, but a direct RunView,
+-- the entity browser, or the User form's Projects grid returns every personal folder
+-- in the environment to them.
+--
+-- So the guarantee is: a personal folder is unreadable to any user whose every
+-- read-granting role on MJ: Projects carries this filter (or one at least as narrow).
+-- A host that wants folders private between the people who create them gives those
+-- people a role that grants Create/Update on MJ: Projects with no Read, or with Read
+-- bound to this filter, alongside UI — and keeps Developer and Integration for
+-- administrators and service accounts. Filtering Developer's own read as well is a
+-- product decision this migration deliberately does not make.
 --
 -- WHAT IT STILL DOES NOT CLOSE, said plainly because the PR description used to
 -- over-claim it: a SHARED folder (OwnerUserID IS NULL) is readable by everyone in the
