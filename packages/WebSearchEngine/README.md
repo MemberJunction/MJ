@@ -287,10 +287,16 @@ Four rules, each of which has a failure mode if ignored:
 | `MISSING_QUERY` | ❌ | `Query` was blank |
 | `NO_PROVIDERS_CONFIGURED` | ❌ | No provider rows at all — a setup problem, not a search failure |
 | `PROVIDER_LOAD_FAILED` | ❌ | The provider list could not be **read** — query failed, entity missing from metadata, or no permission. Distinct from the row above on purpose: a failed read also leaves the list empty, and telling an operator to "add a record" when the read never succeeded sends them to fix configuration that is fine |
-| `NO_ELIGIBLE_PROVIDER` | ❌ | Providers exist, none is available and capable of this request |
+| `NO_ELIGIBLE_PROVIDER` | ❌ | Retained for callers that branch on it. The priority path no longer produces it: `IncludeAnswer` is a preference, and when no provider can answer, the engine serves plain results with `Notice` set (below) |
 | `PROVIDER_NOT_FOUND` / `_NOT_ACTIVE` / `_UNAVAILABLE` / `_LACKS_CAPABILITY` | ❌ | An explicit `Provider` could not serve — see the table above |
 | `ALL_PROVIDERS_FAILED` | ❌ | Every eligible provider was tried; see `Attempts` |
 | `INVALID_REQUEST` | ❌ | The request itself was rejected; retrying elsewhere cannot help |
+
+**`IncludeAnswer` is a preference, not a requirement.** With no `Provider` named, an answer-capable
+provider is preferred when one is available. When none is, the search still runs on the priority
+list with `IncludeAnswer` cleared, `Answer` is absent, and `Notice` says what was dropped and why.
+An agent can read hits; it cannot read an error. Naming a `Provider` that cannot answer is a caller
+mistake and still returns `PROVIDER_LACKS_CAPABILITY`.
 
 `Search()` **never throws** for a search-level failure — branch on `Success`, as with `RunView`.
 Exceptions escaping a driver are caught, recorded as a transient attempt, and failed over.

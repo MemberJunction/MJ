@@ -135,7 +135,11 @@ export type WebSearchResultCode =
      * instruction (and an actively misleading one) when the read itself never succeeded.
      */
     | 'PROVIDER_LOAD_FAILED'
-    /** Providers exist, but none is Active, available and capable of this request. */
+    /**
+     * Providers exist, but none is Active, available and capable of this request. Retained for
+     * callers that branch on it; the priority path no longer produces it, because `IncludeAnswer`
+     * is a preference — see {@link WebSearchResult.Notice}.
+     */
     | 'NO_ELIGIBLE_PROVIDER'
     /** An explicit `Provider` was named and no such provider exists in metadata. */
     | 'PROVIDER_NOT_FOUND'
@@ -183,6 +187,13 @@ export interface WebSearchResult {
     Hits: WebSearchHit[];
     /** Synthesized answer, only when `IncludeAnswer` was requested and the provider produced one. */
     Answer?: string;
+    /**
+     * Set when the search succeeded but not exactly as asked. Today that is one case: `IncludeAnswer`
+     * was requested, no available provider can synthesize an answer, and the engine served plain
+     * results from the priority list instead of failing. A caller that truly needs the answer
+     * checks for this; one that only needed hits (the common case for an agent) can ignore it.
+     */
+    Notice?: string;
     /** `Name` of the provider that actually served the result. Always set when `Success`. */
     ProviderUsed?: string;
     /**
