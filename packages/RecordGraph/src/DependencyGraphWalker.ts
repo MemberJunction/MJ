@@ -9,7 +9,7 @@ import {
     
     UserInfo, LogError, LogStatus,
 } from '@memberjunction/core';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     DependencyNode,
     EdgeKind,
@@ -19,7 +19,6 @@ import {
     WalkOptions,
     WalkStats,
 } from './types';
-import { escapeSqlString } from './sql';
 import { BuildCompositeKeyFromRecord } from './keys';
 import { SortNodesTopologically } from './sort';
 import { SYSTEM_FK_SKIP_PATTERNS } from './constants';
@@ -46,6 +45,9 @@ interface ForwardReference {
     IsHierarchy: boolean;
     IsEmbedded: boolean;
 }
+
+/** Walk options with every default applied. `EdgePolicy` stays optional: no callback means every edge is Deep. */
+type ResolvedWalkOptions = Required<Omit<WalkOptions, 'EdgePolicy'>> & Pick<WalkOptions, 'EdgePolicy'>;
 
 /**
  * Extended metadata provider interface with optional FindISAChildEntities
@@ -144,12 +146,8 @@ export class DependencyGraphWalker {
         ancestorStack.add(entityInfo.Name);
         this.incrementEntityCount(stats, entityInfo.Name);
 
-        // Walk subtypes of root if requested
-        if (resolvedOptions.IncludeSubtypes) {
-            await this.walkSubtypes(rootNode, resolvedOptions, visited, ancestorStack, stats, contextUser);
-        }
-
-        // Root always gets full discovery mode (both reverse + forward)
+        // Root always gets full discovery mode (both reverse + forward); walkChildren also walks
+        // the root's IS-A subtypes when IncludeSubtypes is on.
         await this.walkChildren(rootNode, 'full', resolvedOptions, visited, ancestorStack, stats, contextUser);
 
         // Pop root (cleanup)
@@ -178,7 +176,7 @@ export class DependencyGraphWalker {
     private async walkChildren(
         parentNode: DependencyNode,
         discoveryMode: DiscoveryMode,
-        options: Required<WalkOptions>,
+        options: ResolvedWalkOptions,
         visited: Set<string>,
         ancestorStack: Set<string>,
         stats: WalkStats,
@@ -222,7 +220,7 @@ export class DependencyGraphWalker {
      */
     private async walkReverseRelationships(
         parentNode: DependencyNode,
-        options: Required<WalkOptions>,
+        options: ResolvedWalkOptions,
         visited: Set<string>,
         ancestorStack: Set<string>,
         stats: WalkStats,
@@ -336,7 +334,7 @@ export class DependencyGraphWalker {
      */
     private async walkNonCuratedInbound(
         parentNode: DependencyNode,
-        options: Required<WalkOptions>,
+        options: ResolvedWalkOptions,
         visited: Set<string>,
         ancestorStack: Set<string>,
         stats: WalkStats,
@@ -351,12 +349,12 @@ export class DependencyGraphWalker {
         if (parentKeyValue == null) return;
 
         // Curated child entity IDs to skip
-        const curatedChildEntityIds = new Set(parentEntity.RelatedEntities.map(r => r.RelatedEntityID));
+        const curatedChildEntityIds = new Set(parentEntity.RelatedEntities.map(r => NormalizeUUID(r.RelatedEntityID)));
 
         for (const entity of md.Entities) {
             if (options.RequireTrackRecordChanges && !entity.TrackRecordChanges) continue;
             if (this.shouldSkipEntity(entity.Name, options)) continue;
-            if (curatedChildEntityIds.has(entity.ID)) continue;
+            if (curatedChildEntityIds.has(NormalizeUUID(entity.ID))) continue;
 
             for (const field of entity.Fields) {
                 if (!field.RelatedEntityID || !UUIDsEqual(field.RelatedEntityID, parentEntity.ID)) continue;
@@ -378,7 +376,7 @@ export class DependencyGraphWalker {
                 if (decision === 'Skip') continue;
 
                 // Load records matching inbound FK
-                const filter = `[${field.Name}] = '${escapeSqlString(String(parentKeyValue))}'` +
+                const filter = `[${field.Name}] = '${EscapeSQLString(String(parentKeyValue))}'` +
                     (!options.IncludeDeleted && this.entityHasSoftDelete(entity) ? ' AND __mj_DeletedAt IS NULL' : '');
 
                 try {
@@ -432,7 +430,7 @@ export class DependencyGraphWalker {
      */
     private async walkSoftLinks(
         parentNode: DependencyNode,
-        options: Required<WalkOptions>,
+        options: ResolvedWalkOptions,
         visited: Set<string>,
         ancestorStack: Set<string>,
         stats: WalkStats,
@@ -470,8 +468,8 @@ export class DependencyGraphWalker {
                 // key column, the bare value ("abc"); match both.
                 const recordIDValue = parentNode.RecordKey.ToRecordID();
                 const bareIDValue = parentNode.RecordKey.ToCompactURLSegment();
-                const filter = `([${field.EntityIDFieldName}] = '${escapeSqlString(parentEntity.ID)}' OR [${field.EntityIDFieldName}] = '${escapeSqlString(parentEntity.Name)}') ` +
-                    `AND ([${field.Name}] = '${escapeSqlString(recordIDValue)}' OR [${field.Name}] = '${escapeSqlString(bareIDValue)}')` +
+                const filter = `([${field.EntityIDFieldName}] = '${EscapeSQLString(parentEntity.ID)}' OR [${field.EntityIDFieldName}] = '${EscapeSQLString(parentEntity.Name)}') ` +
+                    `AND ([${field.Name}] = '${EscapeSQLString(recordIDValue)}' OR [${field.Name}] = '${EscapeSQLString(bareIDValue)}')` +
                     (!options.IncludeDeleted && this.entityHasSoftDelete(entity) ? ' AND __mj_DeletedAt IS NULL' : '');
 
                 try {
@@ -526,7 +524,7 @@ export class DependencyGraphWalker {
      */
     private async walkSubtypes(
         parentNode: DependencyNode,
-        options: Required<WalkOptions>,
+        options: ResolvedWalkOptions,
         visited: Set<string>,
         ancestorStack: Set<string>,
         stats: WalkStats,
@@ -610,7 +608,7 @@ export class DependencyGraphWalker {
      */
     private async walkForwardReferences(
         parentNode: DependencyNode,
-        options: Required<WalkOptions>,
+        options: ResolvedWalkOptions,
         visited: Set<string>,
         ancestorStack: Set<string>,
         stats: WalkStats,
@@ -765,7 +763,7 @@ export class DependencyGraphWalker {
      */
     private discoverReverseRelationships(
         parentEntity: EntityInfo,
-        options: Required<WalkOptions>
+        options: ResolvedWalkOptions
     ): ReverseRelationship[] {
         const cached = this.reverseRelCache.get(parentEntity.ID);
         if (cached) return cached;
@@ -777,7 +775,7 @@ export class DependencyGraphWalker {
             // Only walk One-To-Many (parent has many children)
             if (rel.Type.trim() !== 'One To Many') continue;
 
-            const childEntity = md.Entities.find(e => UUIDsEqual(e.ID, rel.RelatedEntityID));
+            const childEntity = md.EntityByID(rel.RelatedEntityID);
             if (!childEntity) continue;
             if (options.RequireTrackRecordChanges && !childEntity.TrackRecordChanges) continue;
 
@@ -818,7 +816,7 @@ export class DependencyGraphWalker {
      */
     private discoverForwardReferences(
         entity: EntityInfo,
-        options: Required<WalkOptions>
+        options: ResolvedWalkOptions
     ): ForwardReference[] {
         const cached = this.forwardRefCache.get(entity.ID);
         if (cached) return cached;
@@ -831,7 +829,7 @@ export class DependencyGraphWalker {
             if (this.isSystemFKField(field.Name)) continue;
 
             const isSelf = UUIDsEqual(field.RelatedEntityID, entity.ID);
-            const targetEntity = isSelf ? entity : md.Entities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
+            const targetEntity = isSelf ? entity : md.EntityByID(field.RelatedEntityID);
             if (!targetEntity) continue;
             if (options.RequireTrackRecordChanges && !targetEntity.TrackRecordChanges) continue;
 
@@ -861,13 +859,13 @@ export class DependencyGraphWalker {
     private async loadChildRecords(
         parentNode: DependencyNode,
         rel: ReverseRelationship,
-        options: Required<WalkOptions>,
+        options: ResolvedWalkOptions,
         contextUser: UserInfo
     ): Promise<Record<string, unknown>[]> {
         const parentKeyValue = parentNode.RecordData[rel.ParentKeyField] ?? null;
         if (parentKeyValue == null) return [];
 
-        let extraFilter = `[${rel.ChildJoinField}] = '${escapeSqlString(String(parentKeyValue))}'`;
+        let extraFilter = `[${rel.ChildJoinField}] = '${EscapeSQLString(String(parentKeyValue))}'`;
         if (!options.IncludeDeleted && this.entityHasSoftDelete(rel.ChildEntityInfo)) {
             extraFilter += ` AND __mj_DeletedAt IS NULL`;
         }
@@ -992,7 +990,7 @@ export class DependencyGraphWalker {
      */
     private logWalkSummary(
         rootEntityName: string,
-        options: Required<WalkOptions>,
+        options: ResolvedWalkOptions,
         stats: WalkStats
     ): void {
         const entityBreakdown = Array.from(stats.EntityCounts.entries())
@@ -1053,7 +1051,7 @@ export class DependencyGraphWalker {
     }
 
     /** Check if an entity should be skipped based on filter options. */
-    private shouldSkipEntity(entityName: string, options: Required<WalkOptions>): boolean {
+    private shouldSkipEntity(entityName: string, options: ResolvedWalkOptions): boolean {
         if (options.ExcludeEntities.length > 0 && options.ExcludeEntities.includes(entityName)) {
             return true;
         }
@@ -1069,7 +1067,7 @@ export class DependencyGraphWalker {
     }
 
     /** Apply defaults to walk options. */
-    private resolveDefaults(options: WalkOptions): Required<WalkOptions> {
+    private resolveDefaults(options: WalkOptions): ResolvedWalkOptions {
         return {
             MaxDepth: options.MaxDepth ?? 10,
             EntityFilter: options.EntityFilter ?? [],
@@ -1080,7 +1078,7 @@ export class DependencyGraphWalker {
             IncludeSubtypes: options.IncludeSubtypes ?? false,
             FollowHierarchies: options.FollowHierarchies ?? false,
             ListNonCuratedInbound: options.ListNonCuratedInbound ?? false,
-            EdgePolicy: options.EdgePolicy ?? null as unknown as (edge: GraphEdgeCandidate) => EdgePolicyDecision,
+            EdgePolicy: options.EdgePolicy,
         };
     }
 }

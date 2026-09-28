@@ -229,19 +229,15 @@ describe('DependencyGraphWalker', () => {
 
             const walker = new DependencyGraphWalker(providerWithISA);
 
-            mockRunViewInstance
-                .mockResolvedValueOnce({
-                    Success: true,
-                    Results: [{ ID: 'parent-1' }],
-                })
-                .mockResolvedValueOnce({
-                    Success: true,
-                    Results: [{ ID: 'parent-1', ExtraSubtypeField: 'subtype-val' }],
-                })
-                .mockResolvedValueOnce({
-                    Success: true,
-                    Results: [],
-                });
+            // Answer by query, not call order: the root load, then the subtype row loaded by the
+            // root's key; every relationship query finds nothing.
+            mockRunViewInstance.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+                if (params.EntityName === 'ParentEntity') return { Success: true, Results: [{ ID: 'parent-1' }] };
+                if (params.EntityName === 'ChildEntity' && /^\[?ID\]?\s*=\s*'parent-1'$/.test(params.ExtraFilter ?? '')) {
+                    return { Success: true, Results: [{ ID: 'parent-1', ExtraSubtypeField: 'subtype-val' }] };
+                }
+                return { Success: true, Results: [] };
+            });
 
             const { CompositeKey } = await import('@memberjunction/core');
             const rootKey = new CompositeKey([{ FieldName: 'ID', Value: 'parent-1' }]);
@@ -262,6 +258,9 @@ describe('DependencyGraphWalker', () => {
             expect(subtypeNode?.DiscoveringEdge?.Kind).toBe('IsASubtype');
             // The provider matches the bare key value, not the "ID|parent-1" record-id string.
             expect((providerWithISA.FindISAChildEntities as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('parent-1');
+            // The root's subtypes are looked up once, not once before and again inside walkChildren.
+            const rootLookups = (providerWithISA.FindISAChildEntities as ReturnType<typeof vi.fn>).mock.calls.filter((c) => c[0].Name === 'ParentEntity');
+            expect(rootLookups).toHaveLength(1);
         });
 
         it('matches soft links stored as the full record-id or the bare value', async () => {

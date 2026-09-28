@@ -254,7 +254,7 @@ describe('ClonePlanner', () => {
             const results = /ParentID/.test(f) ? rows.filter((r) => r.ParentID && parents.includes(r.ParentID)) : rows.filter((r) => r.ID === id);
             return { Success: true, Results: results };
         });
-        const provider = { ...mockProvider, Entities: [folder], EntityByName: (n: string) => (n === 'Folders' ? folder : null) } as IMetadataProvider;
+        const provider = { ...mockProvider, Entities: [folder], EntityByName: (n: string) => (n === 'Folders' ? folder : null), EntityByID: (id: string) => (id === folder.ID ? folder : undefined) } as IMetadataProvider;
 
         const plan = await new ClonePlanner({ Provider: provider }).Plan(
             { EntityName: 'Folders', SourceRecordKey: { ID: 'f-child' }, Options: { Hierarchy: 'subtree' } },
@@ -472,6 +472,7 @@ describe('ClonePlanner', () => {
             ...mockProvider,
             Entities: [parentEntity as EntityInfo, unauthorizedChild],
             EntityByName: (name: string) => (name === 'ChildEntity' ? unauthorizedChild : parentEntity as EntityInfo),
+            EntityByID: (id: string) => [parentEntity as EntityInfo, unauthorizedChild].find((e) => e.ID === id),
         } as IMetadataProvider;
 
         const planner = new ClonePlanner({ Provider: provider });
