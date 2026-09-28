@@ -1309,14 +1309,21 @@ export abstract class BaseModelRunner {
   /**
    * Creates the `MJ: AI Prompt Runs` record for one model call, fills the fields every runner shares,
    * lets the subclass add its own request fields, then queues the INSERT (fire-and-forget).
+   *
+   * For prompt-based runners: the record is always tied to an `AIPrompt` and its `AIPromptParams`.
+   *
+   * @param applyRequestFields Sets the runner's own request columns. It runs once, after the shared
+   *   fields are set and before the INSERT is queued, so everything it sets is on the inserted row.
+   *   **It must be synchronous.** An `async` callback type-checks against this signature, but any
+   *   field it sets after its first `await` races the INSERT and can miss the row.
    */
-  protected async createRunRecord(
+  protected async CreateRunRecord(
     prompt: MJAIPromptEntityExtended,
     model: MJAIModelEntityExtended,
     params: AIPromptParams,
     startTime: Date,
     vendorId?: string,
-    modelSelectionInfo?: any,
+    modelSelectionInfo?: AIModelSelectionInfo,
     applyRequestFields?: (promptRun: MJAIPromptRunEntityExtended) => void
   ): Promise<MJAIPromptRunEntityExtended> {
     const provider: IMetadataProvider = params.provider ?? Metadata.Provider;
@@ -1860,11 +1867,26 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Queues the finalize UPDATE for a prompt-run record. Inside the queued task: sets the completion
-   * timing, lets the subclass apply its result fields, then computes the rollups and TotalCost.
+   * Queues the finalize UPDATE for a prompt-run record. Inside the queued task it sets, in order:
+   * the completion timing (`CompletedAt`, `ExecutionTimeMS`); the outcome (`Success`, and `Status` =
+   * `'Completed'` or `'Failed'` from it); then the subclass's result fields; then the token rollups and
+   * `TotalCost`.
+   *
+   * The outcome is a parameter, not left to the callback, so every runner's row leaves `'Running'`.
+   * It is written before the callback runs, so the row reaches its final status even if the callback
+   * throws (the error is logged under `PromptRunUpdate` and the rollups are skipped).
+   *
+   * For prompt-based runners, like {@link CreateRunRecord}.
+   *
+   * @param success Whether the call succeeded, as the runner judges it (the chat runner also requires
+   *   its output to pass validation).
+   * @param applyResultFields Sets the runner's own result columns. It can read the timing and outcome
+   *   already set, and may refine them (for example `ErrorDetails`). **It must be synchronous**: it runs
+   *   inside the queued save task, and anything it sets after an `await` can miss the UPDATE.
    */
-  protected async finalizeRunRecord(
+  protected async FinalizeRunRecord(
     promptRun: MJAIPromptRunEntityExtended,
+    success: boolean,
     endTime: Date,
     executionTimeMS: number,
     applyResultFields: (promptRun: MJAIPromptRunEntityExtended) => void
@@ -1877,6 +1899,8 @@ export abstract class BaseModelRunner {
       try {
         promptRun.CompletedAt = endTime;
         promptRun.ExecutionTimeMS = executionTimeMS;
+        promptRun.Success = success;
+        promptRun.Status = success ? 'Completed' : 'Failed';
 
         applyResultFields(promptRun);
 

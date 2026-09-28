@@ -141,7 +141,7 @@ interface ModelSelectionResult {
  * Stop sequences and assistant prefill are handled separately because their shapes differ
  * between the two targets (comma-delimited/array vs. raw string).
  */
-export interface ResolvedScalarInferenceParams {
+interface ResolvedScalarInferenceParams {
   temperature?: number;
   topP?: number;
   topK?: number;
@@ -3845,16 +3845,16 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Creates an AIPromptRun entity for execution tracking
    */
-  protected async createPromptRun(
+  private async createPromptRun(
     prompt: MJAIPromptEntityExtended,
     model: MJAIModelEntityExtended,
     params: AIPromptParams,
     systemPromptText: string,
     startTime: Date,
     vendorId?: string,
-    modelSelectionInfo?: any
+    modelSelectionInfo?: AIModelSelectionInfo
   ): Promise<MJAIPromptRunEntityExtended> {
-    return this.createRunRecord(
+    return this.CreateRunRecord(
       prompt,
       model,
       params,
@@ -3868,7 +3868,7 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Sets a prompt-run's chat-specific request fields: messages, prefill, sampling parameters,
    * response format, streaming, effort level, child prompt and the validation/retry columns. Called by
-   * {@link BaseModelRunner.createRunRecord} just before the INSERT is queued.
+   * {@link BaseModelRunner.CreateRunRecord} just before the INSERT is queued.
    */
   private applyChatRequestFields(
     promptRun: MJAIPromptRunEntityExtended,
@@ -3967,7 +3967,7 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Updates the AIPromptRun entity with execution results
    */
-  protected async updatePromptRun(
+  private async updatePromptRun(
     promptRun: MJAIPromptRunEntityExtended,
     prompt: MJAIPromptEntityExtended,
     modelResult: ChatResult,
@@ -3981,8 +3981,11 @@ export class AIPromptRunner extends BaseModelRunner {
       totalCost: number;
     },
   ): Promise<void> {
-    return this.finalizeRunRecord(
+    // A chat run succeeds only if the model call succeeded AND its output did not fail validation.
+    const success = modelResult.success && (parsedResult.validationResult?.Success !== false);
+    return this.FinalizeRunRecord(
       promptRun,
+      success,
       endTime,
       executionTimeMS,
       (run) => this.applyChatResultFields(run, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens)
@@ -3991,9 +3994,10 @@ export class AIPromptRunner extends BaseModelRunner {
 
   /**
    * Populates a prompt-run's chat-specific finalized fields (result, tokens, cost, timing, validation)
-   * from the model result. Runs INSIDE the post-INSERT save task — see {@link BaseModelRunner.finalizeRunRecord},
-   * which also sets the completion timing and rollups and logs (non-fatal) any error thrown here: the
-   * AIPromptRun is observability, not part of the prompt's success contract.
+   * from the model result. Runs INSIDE the post-INSERT save task — see {@link BaseModelRunner.FinalizeRunRecord},
+   * which sets the completion timing, `Success` and `Status` before this runs and the rollups after it,
+   * and logs (non-fatal) any error thrown here: the AIPromptRun is observability, not part of the
+   * prompt's success contract.
    */
   private applyChatResultFields(
     promptRun: MJAIPromptRunEntityExtended,
@@ -4184,12 +4188,7 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    // Set Success flag based on validation result
-    promptRun.Success = modelResult.success && (parsedResult.validationResult?.Success !== false);
-    
-    // Set final Status based on success
-    promptRun.Status = promptRun.Success ? 'Completed' : 'Failed';
-    
+    // Success and Status were set by FinalizeRunRecord from the outcome updatePromptRun passed it.
     // Set ErrorDetails if failed
     if (!promptRun.Success) {
       if (!modelResult.success && modelResult.errorMessage) {
