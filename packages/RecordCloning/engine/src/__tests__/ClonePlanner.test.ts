@@ -239,6 +239,22 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('ignores a requested naming strategy when UserEditable does not allow field edits', async () => {
+        mockRunViewInstance.mockImplementation(async (params: { Fields?: string[] }) =>
+            params.Fields ? { Success: true, Results: [] } : { Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] });
+        const locked = { ...parentEntity, RelatedEntities: [], CloneConfig: { Enabled: true, UserEditable: 'none' } } as unknown as EntityInfo;
+        const provider = { ...mockProvider, Entities: [locked], EntityByName: (n: string) => (n === 'ParentEntity' ? locked : null) } as IMetadataProvider;
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan(
+            { EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' }, Options: { Naming: { Strategy: 'none' } } },
+            standardUser
+        );
+
+        const name = plan.Nodes[0].FieldChanges.filter((c) => c.Field === 'Name').at(-1);
+        expect(name?.NewValue).not.toBe('Original Parent');
+        mockRunViewInstance.mockReset();
+    });
+
     it('drops rows an ExcludeRows rule names under a qualified, miscased relationship key', async () => {
         mockRunViewInstance.mockImplementation(async (params: { EntityName: string }) =>
             params.EntityName === 'ParentEntity'

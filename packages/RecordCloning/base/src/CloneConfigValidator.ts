@@ -6,7 +6,7 @@
  * @see plans/record-cloning/README.md §4.5, §13.3
  */
 
-import { FieldMappingFieldMeta } from './CloneFieldMapper';
+import { FieldMappingFieldMeta, IsRenameField } from './CloneFieldMapper';
 
 export interface CloneConfigValidationError {
     EntityName: string;
@@ -339,7 +339,50 @@ export class CloneConfigValidator {
         }
 
         errors.push(...CloneConfigValidator.unhonoredKeys(entity.Name, config));
+        errors.push(...CloneConfigValidator.promptNaming(entity, config));
         return errors;
+    }
+
+    /**
+     * `Naming.Strategy: 'prompt'` leaves every rename field (the name field, each unique string) at
+     * the source's value for the user to replace, but only `PromptFor` fields make the plan wait for
+     * one. A rename field that is neither prompted nor set by a rule would copy verbatim and fail on
+     * its unique index at save.
+     */
+    private static promptNaming(entity: CloneConfigEntityMeta, config: NonNullable<CloneConfigEntityMeta['CloneConfiguration']>): CloneConfigValidationError[] {
+        const raw = config as Record<string, unknown>;
+        const found: CloneConfigValidationError[] = [];
+        const naming = raw.Naming as { Strategy?: string } | undefined;
+        if (naming?.Strategy === 'prompt') {
+            const covered = new Set<string>([
+                ...(config.Fields?.PromptFor ?? []),
+                ...(config.Fields?.Rules?.Rules ?? []).map((r) => r.TargetField || r.Field || ''),
+                ...Object.keys(config.Fields?.Reset ?? {}),
+                ...(config.Fields?.Exclude ?? []),
+                ...(config.Fields?.ServerAllocated ?? []),
+            ].map((f) => f.toLowerCase()));
+            for (const field of entity.Fields.filter((f) => !f.IsPrimaryKey && IsRenameField(f))) {
+                if (covered.has(field.Name.toLowerCase())) continue;
+                found.push({
+                    EntityName: entity.Name,
+                    PropertyPath: 'Naming.Strategy',
+                    Message: `Naming.Strategy 'prompt' needs '${field.Name}' in Fields.PromptFor or set by a rule: otherwise the copy keeps the source's value.`,
+                    Severity: 'Error',
+                });
+            }
+        }
+        const descendants = (raw.Descendants as Record<string, { Fields?: { PromptFor?: string[] } }> | undefined) ?? {};
+        for (const [name, desc] of Object.entries(descendants)) {
+            if (desc?.Fields?.PromptFor?.length) {
+                found.push({
+                    EntityName: entity.Name,
+                    PropertyPath: `Descendants[${name}].Fields.PromptFor`,
+                    Message: `PromptFor under Descendants is not prompted: only the root's PromptFor fields are asked for.`,
+                    Severity: 'Warning',
+                });
+            }
+        }
+        return found;
     }
 
     /**

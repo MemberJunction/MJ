@@ -212,6 +212,27 @@ describe('CloneConfigValidator', () => {
             expect(unhonored.every((e) => e.Severity === 'Warning')).toBe(true);
         });
 
+        it('refuses prompt naming that leaves a rename field neither prompted nor set by a rule', () => {
+            const users = (fields: Partial<NonNullable<CloneConfigEntityMeta['CloneConfiguration']>['Fields']>) =>
+                CloneConfigValidator.Validate({
+                    ...baseEntity,
+                    Fields: [
+                        { Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier' },
+                        { Name: 'Name', IsPrimaryKey: false, IsNameField: true, Type: 'nvarchar' },
+                        { Name: 'Email', IsPrimaryKey: false, IsUnique: true, Type: 'nvarchar' },
+                    ],
+                    CloneConfiguration: { Enabled: true, Naming: { Strategy: 'prompt' }, Fields: fields } as CloneConfigEntityMeta['CloneConfiguration'],
+                }).filter((e) => e.PropertyPath === 'Naming.Strategy');
+
+            expect(users({ PromptFor: ['Email'] }).map((e) => e.Message)).toEqual([expect.stringContaining("'Name'")]);
+            expect(users({ PromptFor: ['Email'], Rules: { Rules: [{ TargetField: 'Name' }] } })).toEqual([]);
+        });
+
+        it('warns that PromptFor under Descendants is not prompted', () => {
+            const found = withConfig({ Enabled: true, Descendants: { Child: { Fields: { PromptFor: ['Code'] } } } } as CloneConfigEntityMeta['CloneConfiguration']);
+            expect(found.filter((e) => e.PropertyPath === 'Descendants[Child].Fields.PromptFor').map((e) => e.Severity)).toEqual(['Warning']);
+        });
+
         it('reports a JsonRemap entry without a Field instead of throwing', () => {
             const found = withConfig({ Enabled: true, Fields: { JsonRemap: [{} as never], Strict: true } });
             expect(found.some((e) => e.PropertyPath === 'Fields.JsonRemap')).toBe(true);

@@ -539,11 +539,14 @@ export class ClonePlanner {
 
         // Naming for each row, and the names already taken, so a repeat clone doesn't collide at save.
         const cloneConfigOf = (e: EntityInfo) => e.CloneConfig ?? null;
+        // A request may pick the naming only where the configuration lets it edit fields, like any
+        // other request value: with UserEditable 'none' a caller can't ask for 'none' and keep the name.
+        const requestNaming = ['fields', 'all'].includes(rootConfig?.UserEditable ?? 'all');
         const namingFor = (depNode: DependencyNode): NameTemplateOptions => {
             if (depNode.Depth === 0) {
                 return {
-                    Template: request.Options?.Naming?.Template || request.Options?.NamingTemplate || rootConfig?.Naming?.Template,
-                    Strategy: request.Options?.Naming?.Strategy || request.Options?.NamingStrategy || rootConfig?.Naming?.Strategy || 'suffix',
+                    Template: (requestNaming ? request.Options?.Naming?.Template || request.Options?.NamingTemplate : undefined) || rootConfig?.Naming?.Template,
+                    Strategy: (requestNaming ? request.Options?.Naming?.Strategy || request.Options?.NamingStrategy : undefined) || rootConfig?.Naming?.Strategy || 'suffix',
                     Context: { UserName: contextUser.Name },
                 };
             }
