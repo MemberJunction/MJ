@@ -276,7 +276,8 @@ export class UserViewResource extends BaseResourceComponent {
                 debounceTime(300),
                 takeUntil(this.destroy$)
             )
-            .subscribe(() => this.entityViewerRef?.Refresh());
+            // In place: a change made elsewhere shouldn't move the user off their page or sort.
+            .subscribe(() => this.entityViewerRef?.RefreshInPlace());
     }
 
     override set Data(value: ResourceData) {

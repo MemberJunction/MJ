@@ -1437,6 +1437,17 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  /**
+   * Re-loads the page the user is on, with the same sort and filters, keeping the rows visible
+   * meanwhile. For refreshes the user didn't ask for (another tab or the server changed rows):
+   * unlike {@link Refresh}, it doesn't send them back to page 1.
+   */
+  public RefreshInPlace(): void {
+    if (!this.Records) {
+      this.LoadData();
+    }
+  }
+
   // ========================================
   // PROGRAMMATIC GRID CONTROL (agent / external driver)
   // ========================================
