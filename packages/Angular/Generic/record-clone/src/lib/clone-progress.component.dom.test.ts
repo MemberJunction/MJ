@@ -43,4 +43,12 @@ describe('CloneProgressComponent (DOM)', () => {
         const percentage = text(fixture, '.progress-percentage');
         expect(percentage).toBe('50%');
     });
+
+    it('shows an indeterminate loader with the message when the update has no progress numbers', () => {
+        const fixture = renderComponentFixture(CloneProgressComponent, {
+            inputs: { Progress: { Message: 'Creating 12 records in one transaction...', Total: 12 } },
+        });
+        expect(query(fixture, 'mj-loading')).not.toBeNull();
+        expect(query(fixture, '.progress-percentage')).toBeNull();
+    });
 });

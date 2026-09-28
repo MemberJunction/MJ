@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJProgressBarComponent } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import type { CloneProgressUpdate } from './record-clone-types';
 
 @Component({
@@ -19,6 +20,10 @@ import type { CloneProgressUpdate } from './record-clone-types';
     selector: 'mj-clone-progress',
     template: `
         <div class="clone-progress-container">
+          @if (!IsDeterminate) {
+            <!-- No progress channel reports per-row counts yet: say what is happening, not a made-up percentage. -->
+            <mj-loading [Text]="Progress?.Message || Progress?.Phase || 'Cloning...'" Size="medium"></mj-loading>
+          } @else {
             <div class="progress-header">
                 <span class="progress-title">
                     <i class="fa-solid fa-spinner fa-spin progress-spinner"></i>
@@ -42,6 +47,7 @@ import type { CloneProgressUpdate } from './record-clone-types';
                     <span class="records-counter">Record {{Progress.CompletedRecords ?? Progress.Processed ?? 0}} of {{Progress.TotalRecords ?? Progress.Total}}@if (Progress.CurrentEntityName) { ({{Progress.CurrentEntityName}})}</span>
                 }
             </div>
+          }
         </div>
     `,
     styles: [`
@@ -106,6 +112,7 @@ import type { CloneProgressUpdate } from './record-clone-types';
     `],
     imports: [
         CommonModule,
+        SharedGenericModule,
         MJProgressBarComponent,
     ],
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -113,6 +120,13 @@ import type { CloneProgressUpdate } from './record-clone-types';
 export class CloneProgressComponent {
     /** Latest progress update; null shows an indeterminate bar. */
     @Input() Progress: CloneProgressUpdate | null = null;
+
+    /** Whether the update carries real progress (a percentage or rows done), not just a message. */
+    public get IsDeterminate(): boolean {
+        const p = this.Progress;
+        if (!p) return false;
+        return p.PercentComplete != null || p.Percent != null || p.CompletedRecords != null || p.Processed != null;
+    }
 
     public get PercentComplete(): number {
         if (!this.Progress) return 0;

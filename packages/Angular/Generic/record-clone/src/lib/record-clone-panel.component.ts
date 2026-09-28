@@ -781,11 +781,11 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
         this.PlanChangedNotice = null;
         this.CurrentState = 'executing';
+        // One transaction on the server, with no per-row progress channel: an indeterminate state with the row count.
+        const rows = this.ActivePlan.Counts.Create;
         this.ExecutionProgress = {
-            Percent: 10,
-            Message: 'Preparing clone transaction...',
-            Processed: 0,
-            Total: this.ActivePlan.Counts.Create,
+            Message: `Creating ${rows} record${rows === 1 ? '' : 's'} in one transaction...`,
+            Total: rows,
         };
         this.cdr.markForCheck();
 
