@@ -345,8 +345,8 @@ export class AnthropicLLM extends BaseLLM {
      * when the caller passed plain `ChatMessage`s without metadata. Forged tags in history cannot
      * reach here as an opening literal because the agent layer escapes them before sending.
      */
-    protected override IsVolatileStateMessage(message: ChatMessage | undefined): boolean {
-        if (super.IsVolatileStateMessage(message)) {
+    protected override isVolatileStateMessage(message: ChatMessage | undefined): boolean {
+        if (super.isVolatileStateMessage(message)) {
             return true;
         }
         if (!message) {
@@ -376,7 +376,7 @@ export class AnthropicLLM extends BaseLLM {
         // assistant prefill), place the ephemeral cache breakpoint on the last real history message
         // instead, so the next iteration's prefix still ends at a cached boundary. Otherwise the
         // volatile fragment would sit inside the cached prefix and miss on every iteration.
-        const split = enableCaching ? this.SplitTrailingVolatileState(messages) : null;
+        const split = enableCaching ? this.splitTrailingVolatileState(messages) : null;
         if (split) {
             const head = this.formatMessagesWithCaching(split.head, true);
             const tail = this.formatMessagesWithCaching(split.tail, false);

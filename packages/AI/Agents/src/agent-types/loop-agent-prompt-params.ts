@@ -237,7 +237,7 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
  * - `'replace'`: always replace. Use this to keep context compact on a run whose catalog rows say
  *   `true` but where context growth matters more than cache hits.
  *
- * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.ResolvePrefixPromptCache`.
+ * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.resolvePrefixPromptCache`.
  */
 export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
 

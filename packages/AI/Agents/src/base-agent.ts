@@ -524,8 +524,8 @@ export class BaseAgent {
      * Algorithm, top to bottom:
      * 1. Null, undefined or a non-object yields `''` (a call with no arguments).
      * 2. The top-level keys are sorted, and each `(key, value)` pair passes through
-     *    {@link NormalizeActionParamEntry}, which may rename it, rewrite its value, or drop it.
-     * 3. Every value passes through {@link NormalizeActionParamValue}: plain objects are rebuilt with
+     *    {@link normalizeActionParamEntry}, which may rename it, rewrite its value, or drop it.
+     * 3. Every value passes through {@link normalizeActionParamValue}: plain objects are rebuilt with
      *    sorted keys at EVERY depth, arrays keep their order but normalize each element, and
      *    anything else (strings, numbers, booleans, null, Dates, entity instances) is kept as is.
      * 4. The result is serialized with `JSON.stringify`. Should that throw (a circular reference,
@@ -533,18 +533,18 @@ export class BaseAgent {
      *    distinguishes differently-shaped calls, and never throws.
      *
      * Three protected layers so a subclass can change one part without re-implementing the rest:
-     * override {@link NormalizeActionParamEntry} to ignore a key (a trace id, a timestamp the model
-     * regenerates on every call), or {@link NormalizeActionParamValue} to canonicalize values
+     * override {@link normalizeActionParamEntry} to ignore a key (a trace id, a timestamp the model
+     * regenerates on every call), or {@link normalizeActionParamValue} to canonicalize values
      * (case-fold a search query, trim whitespace) so near-identical retries count as identical.
      */
-    protected NormalizeActionParams(params: Record<string, unknown> | null | undefined): string {
+    protected normalizeActionParams(params: Record<string, unknown> | null | undefined): string {
         if (!params || typeof params !== 'object') {
             return '';
         }
         try {
             const normalized: Record<string, unknown> = {};
             for (const key of Object.keys(params).sort()) {
-                const entry = this.NormalizeActionParamEntry(key, params[key]);
+                const entry = this.normalizeActionParamEntry(key, params[key]);
                 if (entry) {
                     normalized[entry.key] = entry.value;
                 }
@@ -557,12 +557,12 @@ export class BaseAgent {
 
     /**
      * Normalizes one top-level `(key, value)` pair of an action's arguments. The default keeps the
-     * key and normalizes the value through {@link NormalizeActionParamValue}. Return `null` to drop
+     * key and normalizes the value through {@link normalizeActionParamValue}. Return `null` to drop
      * the pair from the call's identity — the seam for ignoring arguments that legitimately differ
      * between otherwise identical retries.
      */
-    protected NormalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null {
-        return { key, value: this.NormalizeActionParamValue(value) };
+    protected normalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null {
+        return { key, value: this.normalizeActionParamValue(value) };
     }
 
     /**
@@ -574,15 +574,15 @@ export class BaseAgent {
      * `IsPlainObject` from `@memberjunction/global`: a Date, Map or entity instance must pass through
      * as an opaque leaf and serialize as itself, not be rebuilt as an empty bag of sorted keys.
      */
-    protected NormalizeActionParamValue(value: unknown): unknown {
+    protected normalizeActionParamValue(value: unknown): unknown {
         if (Array.isArray(value)) {
-            return value.map(item => this.NormalizeActionParamValue(item));
+            return value.map(item => this.normalizeActionParamValue(item));
         }
         if (value !== null && typeof value === 'object' && (Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null)) {
             const source = value as Record<string, unknown>;
             const sorted: Record<string, unknown> = {};
             for (const key of Object.keys(source).sort()) {
-                sorted[key] = this.NormalizeActionParamValue(source[key]);
+                sorted[key] = this.normalizeActionParamValue(source[key]);
             }
             return sorted;
         }
@@ -4633,7 +4633,7 @@ export class BaseAgent {
      *
      * Which providers are which is METADATA, not code: the `PrefixPromptCache` flag in the model
      * catalog's `ModelConfiguration` cascade (Model Types < Models < Vendors' `Configuration.ModelDefaults`
-     * < Model Vendors), read through {@link ResolvePrefixPromptCache}. `true` means append-only;
+     * < Model Vendors), read through {@link resolvePrefixPromptCache}. `true` means append-only;
      * anything else means replace.
      *
      * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
@@ -4664,7 +4664,7 @@ export class BaseAgent {
         if (promptParams.override?.modelId) {
             const model = AIEngine.Instance?.ModelsByID?.get(NormalizeUUID(promptParams.override.modelId));
             const vendor = promptParams.override.vendorId ? AIEngine.Instance?.VendorsByID?.get(NormalizeUUID(promptParams.override.vendorId)) : undefined;
-            return this.ResolvePrefixPromptCache(model, vendor);
+            return this.resolvePrefixPromptCache(model, vendor);
         }
 
         if (this._resolvedTrailingStateMode !== undefined) {
@@ -4673,7 +4673,7 @@ export class BaseAgent {
         if (this._lastModelSelectionInfo) {
             const model = this._lastModelSelectionInfo.ModelSelected;
             const vendor = this._lastModelSelectionInfo.vendorSelected;
-            this._resolvedTrailingStateMode = this.ResolvePrefixPromptCache(model, vendor);
+            this._resolvedTrailingStateMode = this.resolvePrefixPromptCache(model, vendor);
             return this._resolvedTrailingStateMode;
         }
 
@@ -4694,7 +4694,7 @@ export class BaseAgent {
      * Extension point: a subclass with out-of-catalog knowledge (an OpenAI-compatible gateway whose
      * rows carry no flag, say) can override this rather than the mode decision above.
      */
-    protected ResolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+    protected resolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
         if (!model) {
             return false;
         }
@@ -4845,16 +4845,16 @@ export class BaseAgent {
      * placeholders. Extension point — an agent type whose template lays the state out under other
      * headings overrides this to return its own markers.
      */
-    protected get VolatileTemplateMarkers(): readonly string[] {
+    protected get volatileTemplateMarkers(): readonly string[] {
         return VOLATILE_TEMPLATE_MARKERS;
     }
 
     /**
-     * True when unrendered template text contains any of {@link VolatileTemplateMarkers} — the legacy
+     * True when unrendered template text contains any of {@link volatileTemplateMarkers} — the legacy
      * Loop layout, or any template that embeds the payload.
      */
     protected templateTextEmbedsVolatileState(templateText: string): boolean {
-        return this.VolatileTemplateMarkers.some(marker => templateText.includes(marker));
+        return this.volatileTemplateMarkers.some(marker => templateText.includes(marker));
     }
 
     /**
@@ -8246,7 +8246,7 @@ The context is now within limits. Please retry your request with the recovered c
         contextUser?: UserInfo, options?: ExecuteSingleActionOptions): Promise<ActionResult> {
         
         const skipBreaker = options?.skipCircuitBreaker === true;
-        const normalizedParams = this.NormalizeActionParams(action.params);
+        const normalizedParams = this.normalizeActionParams(action.params);
 
         // Run-scoped circuit breaker: each rule short-circuits in 0ms with a result that carries the
         // rule that fired, so the failure directive can name it without consulting the history.
@@ -10148,7 +10148,7 @@ The context is now within limits. Please retry your request with the recovered c
                 await this.recordFoldedTaskGraph(params, previousDecision);
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
-                return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount, this.ActionOptionsForAgentType());
+                return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount, this.actionOptionsForAgentType());
             // Type assertion required because 'Skill' is not part of the BaseAgentNextStep step
             // union (non-terminal, like 'ClientTools') — LoopAgentType.DetermineNextStep() emits it
             // when the LLM chooses to activate a skill.
@@ -12478,7 +12478,7 @@ The context is now within limits. Please retry your request with the recovered c
      * is false — Flow), otherwise none. Kept as a seam so a subclass can widen or narrow the
      * exemption without touching the loop.
      */
-    protected ActionOptionsForAgentType(): ExecuteSingleActionOptions | undefined {
+    protected actionOptionsForAgentType(): ExecuteSingleActionOptions | undefined {
         return this.AgentTypeInstance?.UsesActionCircuitBreaker === false ? { skipCircuitBreaker: true } : undefined;
     }
 

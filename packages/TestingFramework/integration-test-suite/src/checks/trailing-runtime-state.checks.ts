@@ -58,7 +58,7 @@ interface TrailingStateInternals {
     buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended): Promise<VolatileMessage | null>;
     assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage, isAppendOnly?: boolean): ChatMessage[];
     shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
-    ResolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean;
+    resolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean;
 }
 
 /** Anthropic driver keyhole: the protected formatter whose breakpoint placement TRS6 asserts. */
@@ -196,13 +196,13 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
             const promptParams = promptParamsFor(ctx, loop.systemPrompt);
 
             const a = agentInternals(ctx);
-            AssertEqual(a.ResolvePrefixPromptCache(openai.model, openai.vendor), true,
+            AssertEqual(a.resolvePrefixPromptCache(openai.model, openai.vendor), true,
                 `'${openai.model.Name}' on ${openai.vendor.Name} must resolve PrefixPromptCache=true through the cascade (the vendor row's Configuration.ModelDefaults) — metadata/ai-vendors has not been pushed, or the vendor row lost its bag`);
             a._lastModelSelectionInfo = { ModelSelected: openai.model, vendorSelected: openai.vendor };
             AssertEqual(a.shouldUseAppendOnlyTrailingState(promptParams), true, 'a prefix-cache serving path runs append-only');
 
             const b = agentInternals(ctx);
-            AssertEqual(b.ResolvePrefixPromptCache(anthropic.model, anthropic.vendor), false,
+            AssertEqual(b.resolvePrefixPromptCache(anthropic.model, anthropic.vendor), false,
                 `'${anthropic.model.Name}' on ${anthropic.vendor.Name} must resolve false (block-cache provider, no flag anywhere in its cascade)`);
             b._lastModelSelectionInfo = { ModelSelected: anthropic.model, vendorSelected: anthropic.vendor };
             AssertEqual(b.shouldUseAppendOnlyTrailingState(promptParams), false, 'a block-cache serving path runs replace-in-place');

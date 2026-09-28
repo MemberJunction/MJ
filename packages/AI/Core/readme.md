@@ -43,7 +43,7 @@ One additional realtime primitive lives here that is *not* a `BaseModel` capabil
 | `StreamingChatCallbacks` | Callbacks for real-time streaming: `OnContent`, `OnComplete`, `OnError` |
 | `ParallelChatCompletionsCallbacks` | Callbacks for batch parallel completions |
 | `ChatMessageRole` | Enum: `system`, `user`, `assistant` |
-| `VolatileStateMessageMetadata` / `TrailingVolatileStateSplit` | The one metadata flag (`volatileState`) drivers and the agent layer agree on for a per-request trailing message, and the `{ head, tail }` split `BaseLLM.SplitTrailingVolatileState` returns so a driver can place its cache boundary before the volatile tail (protected seam: `IsVolatileStateMessage`, `TrailingVolatileStateIndex`, `SplitTrailingVolatileState`) |
+| `VolatileStateMessageMetadata` / `TrailingVolatileStateSplit` | The one metadata flag (`volatileState`) drivers and the agent layer agree on for a per-request trailing message, and the `{ head, tail }` split `BaseLLM.splitTrailingVolatileState` returns so a driver can place its cache boundary before the volatile tail (protected seam: `isVolatileStateMessage`, `trailingVolatileStateIndex`, `splitTrailingVolatileState`) |
 
 ### Embedding Types
 

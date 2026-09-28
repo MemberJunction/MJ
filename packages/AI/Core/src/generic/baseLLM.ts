@@ -262,7 +262,7 @@ export abstract class BaseLLM extends BaseModel {
      * sets. A driver may override to recognise the message by other means (Anthropic also accepts
      * the fragment's tag literal for callers that pass plain text), but should call `super` first.
      */
-    protected IsVolatileStateMessage(message: ChatMessage | undefined): boolean {
+    protected isVolatileStateMessage(message: ChatMessage | undefined): boolean {
         const metadata = message?.metadata as VolatileStateMessageMetadata | undefined;
         return metadata?.volatileState === true;
     }
@@ -273,12 +273,12 @@ export abstract class BaseLLM extends BaseModel {
      * appended after it. -1 is also returned when nothing precedes the fragment, because then there
      * is no stable history for a provider to cache ahead of it.
      */
-    protected TrailingVolatileStateIndex(messages: ChatMessage[]): number {
+    protected trailingVolatileStateIndex(messages: ChatMessage[]): number {
         const last = messages.length - 1;
-        if (last >= 1 && this.IsVolatileStateMessage(messages[last])) {
+        if (last >= 1 && this.isVolatileStateMessage(messages[last])) {
             return last;
         }
-        if (last >= 2 && messages[last].role === ChatMessageRole.assistant && this.IsVolatileStateMessage(messages[last - 1])) {
+        if (last >= 2 && messages[last].role === ChatMessageRole.assistant && this.isVolatileStateMessage(messages[last - 1])) {
             return last - 1;
         }
         return -1;
@@ -290,8 +290,8 @@ export abstract class BaseLLM extends BaseModel {
      * request has no trailing volatile state, in which case the driver formats the whole list as usual.
      * Neither array is a copy of the input's messages; only the list is new.
      */
-    protected SplitTrailingVolatileState(messages: ChatMessage[]): TrailingVolatileStateSplit | null {
-        const index = this.TrailingVolatileStateIndex(messages);
+    protected splitTrailingVolatileState(messages: ChatMessage[]): TrailingVolatileStateSplit | null {
+        const index = this.trailingVolatileStateIndex(messages);
         if (index < 1) {
             return null;
         }

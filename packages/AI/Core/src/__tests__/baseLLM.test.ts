@@ -508,9 +508,9 @@ describe('BaseLLM — native tool calling', () => {
 describe('BaseLLM — trailing volatile-state seam', () => {
     /** Exposes the protected extension points so the contract can be asserted without a provider. */
     class SeamLLM extends TestLLM {
-        public IsVolatile(message: ChatMessage | undefined): boolean { return this.IsVolatileStateMessage(message); }
-        public Index(messages: ChatMessage[]): number { return this.TrailingVolatileStateIndex(messages); }
-        public Split(messages: ChatMessage[]): { head: ChatMessage[]; tail: ChatMessage[] } | null { return this.SplitTrailingVolatileState(messages); }
+        public IsVolatile(message: ChatMessage | undefined): boolean { return this.isVolatileStateMessage(message); }
+        public Index(messages: ChatMessage[]): number { return this.trailingVolatileStateIndex(messages); }
+        public Split(messages: ChatMessage[]): { head: ChatMessage[]; tail: ChatMessage[] } | null { return this.splitTrailingVolatileState(messages); }
     }
     const volatile: ChatMessage = { role: 'user', content: '<mj-runtime-state>...</mj-runtime-state>', metadata: { volatileState: true } };
     const plain = (content: string, role: 'user' | 'assistant' = 'user'): ChatMessage => ({ role, content });

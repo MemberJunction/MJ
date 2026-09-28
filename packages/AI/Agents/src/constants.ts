@@ -75,7 +75,7 @@ export const RUNTIME_STATE_PAYLOAD_HEADING = '## Current State';
  * renders the volatile state itself — the legacy Loop layout on a database whose template has not
  * synced, or any custom template that embeds the payload. `BaseAgent` suppresses the trailing
  * fragment for such a template so the model never receives the state twice. Overridable per agent
- * through `BaseAgent.VolatileTemplateMarkers`.
+ * through `BaseAgent.volatileTemplateMarkers`.
  */
 export const VOLATILE_TEMPLATE_MARKERS: readonly string[] = [
     RUNTIME_STATE_DATETIME_HEADING,

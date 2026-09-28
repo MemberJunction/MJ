@@ -347,66 +347,66 @@ beforeEach(() => {
 
 describe('BaseAgent — Fix 2A: Action Failure Handling & Circuit Breaker', () => {
 
-    describe('NormalizeActionParams — the identity of a call\'s arguments', () => {
+    describe('normalizeActionParams — the identity of a call\'s arguments', () => {
         interface Normalizer {
-            NormalizeActionParams(params: Record<string, unknown> | null | undefined): string;
-            NormalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null;
-            NormalizeActionParamValue(value: unknown): unknown;
+            normalizeActionParams(params: Record<string, unknown> | null | undefined): string;
+            normalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null;
+            normalizeActionParamValue(value: unknown): unknown;
         }
         const normalizer = (agent: BaseAgent = new BaseAgent()): Normalizer => agent as unknown as Normalizer;
 
         it('yields the empty identity for no arguments', () => {
             const n = normalizer();
-            expect(n.NormalizeActionParams(null)).toBe('');
-            expect(n.NormalizeActionParams(undefined)).toBe('');
-            expect(n.NormalizeActionParams({})).toBe('{}');
+            expect(n.normalizeActionParams(null)).toBe('');
+            expect(n.normalizeActionParams(undefined)).toBe('');
+            expect(n.normalizeActionParams({})).toBe('{}');
         });
 
         it('ignores key order at every depth, including inside arrays', () => {
             const n = normalizer();
             const a = { query: 'x', options: { limit: 5, filter: { b: 1, a: 2 } }, rows: [{ z: 1, y: 2 }] };
             const b = { rows: [{ y: 2, z: 1 }], options: { filter: { a: 2, b: 1 }, limit: 5 }, query: 'x' };
-            expect(n.NormalizeActionParams(a)).toBe(n.NormalizeActionParams(b));
-            expect(n.NormalizeActionParams(a)).toBe('{"options":{"filter":{"a":2,"b":1},"limit":5},"query":"x","rows":[{"y":2,"z":1}]}');
+            expect(n.normalizeActionParams(a)).toBe(n.normalizeActionParams(b));
+            expect(n.normalizeActionParams(a)).toBe('{"options":{"filter":{"a":2,"b":1},"limit":5},"query":"x","rows":[{"y":2,"z":1}]}');
         });
 
         it('keeps array order significant and leaves non-plain objects untouched', () => {
             const n = normalizer();
-            expect(n.NormalizeActionParams({ ids: [1, 2] })).not.toBe(n.NormalizeActionParams({ ids: [2, 1] }));
+            expect(n.normalizeActionParams({ ids: [1, 2] })).not.toBe(n.normalizeActionParams({ ids: [2, 1] }));
             const when = new Date('2026-01-01T00:00:00Z');
-            expect(n.NormalizeActionParamValue(when)).toBe(when);
-            expect(n.NormalizeActionParams({ when })).toBe('{"when":"2026-01-01T00:00:00.000Z"}');
+            expect(n.normalizeActionParamValue(when)).toBe(when);
+            expect(n.normalizeActionParams({ when })).toBe('{"when":"2026-01-01T00:00:00.000Z"}');
         });
 
         it('never throws: an unserializable argument set falls back to a deterministic key list', () => {
             const n = normalizer();
             const circular: Record<string, unknown> = { name: 'loop' };
             circular.self = circular;
-            expect(() => n.NormalizeActionParams(circular)).not.toThrow();
-            expect(n.NormalizeActionParams(circular)).toBe('[unserializable:name,self]');
-            expect(n.NormalizeActionParams({ big: BigInt(1), a: 1 })).toBe('[unserializable:a,big]');
+            expect(() => n.normalizeActionParams(circular)).not.toThrow();
+            expect(n.normalizeActionParams(circular)).toBe('[unserializable:name,self]');
+            expect(n.normalizeActionParams({ big: BigInt(1), a: 1 })).toBe('[unserializable:a,big]');
         });
 
         it('a subclass can drop an argument from the identity by overriding the entry layer', () => {
             class IgnoresTraceId extends BaseAgent {
-                protected override NormalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null {
-                    return key === 'traceId' ? null : super.NormalizeActionParamEntry(key, value);
+                protected override normalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null {
+                    return key === 'traceId' ? null : super.normalizeActionParamEntry(key, value);
                 }
             }
             const n = normalizer(new IgnoresTraceId());
-            expect(n.NormalizeActionParams({ traceId: 'run-1', query: 'x' })).toBe(n.NormalizeActionParams({ traceId: 'run-2', query: 'x' }));
-            expect(n.NormalizeActionParams({ traceId: 'run-1', query: 'x' })).toBe('{"query":"x"}');
+            expect(n.normalizeActionParams({ traceId: 'run-1', query: 'x' })).toBe(n.normalizeActionParams({ traceId: 'run-2', query: 'x' }));
+            expect(n.normalizeActionParams({ traceId: 'run-1', query: 'x' })).toBe('{"query":"x"}');
         });
 
         it('a subclass can canonicalize values by overriding the value layer, and it applies at every depth', () => {
             class CaseFolds extends BaseAgent {
-                protected override NormalizeActionParamValue(value: unknown): unknown {
-                    return typeof value === 'string' ? value.trim().toLowerCase() : super.NormalizeActionParamValue(value);
+                protected override normalizeActionParamValue(value: unknown): unknown {
+                    return typeof value === 'string' ? value.trim().toLowerCase() : super.normalizeActionParamValue(value);
                 }
             }
             const n = normalizer(new CaseFolds());
-            expect(n.NormalizeActionParams({ query: '  Cities ', nested: { terms: ['LIMA', 'Bogotá '] } }))
-                .toBe(n.NormalizeActionParams({ nested: { terms: ['lima', 'bogotá'] }, query: 'cities' }));
+            expect(n.normalizeActionParams({ query: '  Cities ', nested: { terms: ['LIMA', 'Bogotá '] } }))
+                .toBe(n.normalizeActionParams({ nested: { terms: ['lima', 'bogotá'] }, query: 'cities' }));
         });
     });
 

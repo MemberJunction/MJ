@@ -197,7 +197,7 @@ describe('BaseAgent.buildVolatileStateMessage', () => {
 
         // A subclass declaring its own heading as a volatile marker suppresses the fragment for that template.
         class CustomLayoutAgent extends BaseAgent {
-            protected override get VolatileTemplateMarkers(): readonly string[] {
+            protected override get volatileTemplateMarkers(): readonly string[] {
                 return [...VOLATILE_TEMPLATE_MARKERS, '## Working Memory'];
             }
         }

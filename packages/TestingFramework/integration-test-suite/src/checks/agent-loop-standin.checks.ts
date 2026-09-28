@@ -59,7 +59,7 @@ interface AgentLoopInternals {
     _fatalActionFailures: Set<string>;
     _actionFailureHistory: Map<string, { lastParamsString: string; identicalFailures: number; totalConsecutiveFailures: number }>;
     recordActionFailure(action: AgentAction, actionEntity: MJActionEntityExtended | undefined, message: string | null | undefined, normalizedParams: string): void;
-    NormalizeActionParams(params: Record<string, unknown> | null | undefined): string;
+    normalizeActionParams(params: Record<string, unknown> | null | undefined): string;
 }
 
 /** The core 'Calculate Expression' action: a pure, deterministic failure source with no external dependency. */
@@ -558,7 +558,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             // is recorded through the same method a dispatched fatal failure goes through; what is
             // under test is the breaker's response to it on every later call.
             const action: AgentAction = { name: BREAKER_ACTION, params: { Expression: BAD_EXPRESSION } };
-            h.internals.recordActionFailure(action, h.calc, 'API key not found for the expression service', h.internals.NormalizeActionParams(action.params));
+            h.internals.recordActionFailure(action, h.calc, 'API key not found for the expression service', h.internals.normalizeActionParams(action.params));
             Assert(h.internals._fatalActionFailures.has(BREAKER_ACTION), 'a fatal message locks the action out');
             AssertEqual(h.internals._actionFailureHistory.has(BREAKER_ACTION), false, 'a fatal failure is not counted in the parameter-aware history');
 
@@ -582,7 +582,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             // Lock the action out fatally AND build an identical-arguments record, then prove the
             // exempt path ignores both and neither dispatch outcome moves the counters.
             const action: AgentAction = { name: BREAKER_ACTION, params: { Expression: BAD_EXPRESSION } };
-            h.internals.recordActionFailure(action, h.calc, 'API key not found for the expression service', h.internals.NormalizeActionParams(action.params));
+            h.internals.recordActionFailure(action, h.calc, 'API key not found for the expression service', h.internals.normalizeActionParams(action.params));
             const before = { fatal: h.internals._fatalActionFailures.has(BREAKER_ACTION), record: h.internals._actionFailureHistory.get(BREAKER_ACTION) };
             AssertEqual(before.fatal, true, 'precondition: fatal lockout in place');
 

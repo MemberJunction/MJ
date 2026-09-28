@@ -42,7 +42,7 @@ Rules the layout keeps:
 - **State only, never rules.** Instructions stay in the system prompt. The fragment is authoritative framework state and the pointer says so.
 - **Never persisted.** The fragment is appended to a *copy* of the history for one request (`assembleOutgoingMessages`). The stored history stays byte-stable. The one exception is append-only mode, below, where prior fragments are deliberately retained because the provider needs them.
 - **Tag literals are escaped at send time.** `<mj-runtime-state>` and `<mj-agent-specialization>` in any non-system history message (user turns, action results, sub-agent results, tool-call arguments) are rewritten to `&lt;...&gt;` in the outgoing copy, so nothing can pose as framework state. Escaping is deterministic, so it does not disturb the cached prefix.
-- **Delivery gate.** The fragment is only sent when the system prompt template carries the pointer. A template that still embeds the old blocks (a database whose `metadata/prompts` has not synced) gets no fragment, so the model never sees the state twice. A template with neither (Flow agents, custom prompts) gets none either. The markers that identify the old layout live in `VOLATILE_TEMPLATE_MARKERS` (`constants.ts`) and are overridable through `BaseAgent.VolatileTemplateMarkers`.
+- **Delivery gate.** The fragment is only sent when the system prompt template carries the pointer. A template that still embeds the old blocks (a database whose `metadata/prompts` has not synced) gets no fragment, so the model never sees the state twice. A template with neither (Flow agents, custom prompts) gets none either. The markers that identify the old layout live in `VOLATILE_TEMPLATE_MARKERS` (`constants.ts`) and are overridable through `BaseAgent.volatileTemplateMarkers`.
 
 All string literals involved (placeholder names, tag literals, block headings, markers) live in one place: [`packages/AI/Agents/src/constants.ts`](../packages/AI/Agents/src/constants.ts).
 
@@ -68,7 +68,7 @@ MJ: AI Model Types . ModelConfiguration      (type-wide default)
 
 The vendor default sits above the model's own bag on purpose: a host's statement about how it serves models beats the model's generic description, and the model-vendor row is where a host diverges for one model. The merge is per key, so a vendor default only touches the keys it actually sets.
 
-`BaseAgent.ResolvePrefixPromptCache(model, vendor)` finds the vendor's *inference-provider* model-vendor row and reads the effective configuration through `AIEngine.GetEffectiveModelConfiguration`, which folds in the `ModelDefaults` of the vendor named by that model-vendor row. `true` ships under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows in `metadata/ai-vendors`, so every model they serve inherits it and a new OpenAI model needs no seed of its own. A host that caches differently for one model sets the flag on that model-vendor row in `metadata/ai-models`. Nothing in code knows a provider's name.
+`BaseAgent.resolvePrefixPromptCache(model, vendor)` finds the vendor's *inference-provider* model-vendor row and reads the effective configuration through `AIEngine.GetEffectiveModelConfiguration`, which folds in the `ModelDefaults` of the vendor named by that model-vendor row. `true` ships under `Configuration.ModelDefaults` on the OpenAI and x.ai vendor rows in `metadata/ai-vendors`, so every model they serve inherits it and a new OpenAI model needs no seed of its own. A host that caches differently for one model sets the flag on that model-vendor row in `metadata/ai-models`. Nothing in code knows a provider's name.
 
 The mode is decided **once per run**: from a runtime model override, else from the first iteration's model selection, then frozen so a failover cannot flip the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary. The prompt's bound models are deliberately not consulted, because prompts bind several vendors for failover.
 
@@ -78,7 +78,7 @@ Per-agent override, on the Loop type's prompt params (`trailingStateMode`): `aut
 
 Anthropic caches only up to an explicit `cache_control` breakpoint and read-hits require the new request to match a cached prefix *at* a breakpoint. If the breakpoint sat on the last message, it would sit on the fragment and miss every iteration.
 
-`BaseLLM` owns the framework-generic half: `IsVolatileStateMessage` (the `volatileState` metadata flag the agent layer sets on the fragment), `TrailingVolatileStateIndex` and `SplitTrailingVolatileState`. `AnthropicLLM` uses the split to place its breakpoint on the **last real history message** and sends the fragment uncached, inserting an `OK` assistant turn when two user turns would otherwise touch. Any other provider that needs a pre-fragment breakpoint reuses the same seam.
+`BaseLLM` owns the framework-generic half: `isVolatileStateMessage` (the `volatileState` metadata flag the agent layer sets on the fragment), `trailingVolatileStateIndex` and `splitTrailingVolatileState`. `AnthropicLLM` uses the split to place its breakpoint on the **last real history message** and sends the fragment uncached, inserting an `OK` assistant turn when two user turns would otherwise touch. Any other provider that needs a pre-fragment breakpoint reuses the same seam.
 
 ## 5. Specialization placement
 
@@ -98,7 +98,7 @@ Benchmarking the layout on the Research Agent exposed a pre-existing bug: `execu
 
 A success clears both counters. A blocked call returns a `CircuitBreakerActionResult` (a failed `ActionResult` carrying the `Reason`) in ~0 ms and never reaches `ActionEngine.RunAction`, so it writes no execution-log row. Other failures get `[WARNING/ACTION_FAILURE]` with an "attempt N of 5" counter. Directives are appended to the history as a `user` message, never injected into the system prompt, so the cacheable prefix stays intact.
 
-Argument identity is `NormalizeActionParams`: keys sorted at every depth, arrays kept in order, three protected layers (`NormalizeActionParams` → `NormalizeActionParamEntry` → `NormalizeActionParamValue`) so a subclass can ignore a key or canonicalize values.
+Argument identity is `normalizeActionParams`: keys sorted at every depth, arrays kept in order, three protected layers (`normalizeActionParams` → `normalizeActionParamEntry` → `normalizeActionParamValue`) so a subclass can ignore a key or canonicalize values.
 
 **Exemption.** Callers that do their own per-element failure accounting and have no model in their loop pass `{ skipCircuitBreaker: true }`: the pipeline registry, and the ForEach and While operators. Those calls bypass all three rules and leave the breaker's history untouched in both directions.
 
