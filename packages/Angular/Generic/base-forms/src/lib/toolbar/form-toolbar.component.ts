@@ -1035,7 +1035,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     return this.MoreMenuItems.length > 0 || !!this.DeleteMenuItem;
   }
 
-  /** Whether the action is pinned and shown as a button on this form. */
+  /** Whether the action is pinned for this user and offered on this form (shown as a button, or waiting past the cap). */
   public IsPinned(key: string): boolean {
     return (this._pinnedItems ??= this.resolvePinnedItems()).Pinned.has(key);
   }
@@ -1100,6 +1100,8 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** Moves focus into a just-opened panel, once it has rendered, so keyboard users land in it. */
   private focusFirstIn(panelSelector: string): void {
+    // A macrotask, not a microtask: the panel's @if block renders in the change detection that
+    // runs after this handler, and a microtask would still find it missing.
     setTimeout(() => {
       const panel = this.host.nativeElement.querySelector(panelSelector) as HTMLElement | null;
       const first = panel?.querySelector('input, button:not([disabled])') as HTMLElement | null;
@@ -1185,9 +1187,12 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
   /** The engine for this component's provider (a multi-provider host has one per connection), else the global one. */
   private get userInfoEngine(): UserInfoEngine {
     const provider = this.ProviderToUse;
-    return provider
+    const engine = provider
       ? UserInfoEngine.GetProviderInstance<UserInfoEngine>(provider, UserInfoEngine) as UserInfoEngine
       : UserInfoEngine.Instance;
+    // A host that never ran startup (lazy startup, a bare form) can hand back a fresh, unloaded
+    // engine with no settings: pins would never load. Use the loaded global one then.
+    return engine.Loaded ? engine : UserInfoEngine.Instance;
   }
 
   private readPins(): string[] | null {
@@ -1540,6 +1545,14 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   OnResetSectionOrder(): void {
     this.ResetSectionOrderRequested.emit();
+  }
+
+  /** "Reorder sections" in the View panel: close it properly (listeners, focus on View), then open the manager. */
+  OnReorderSectionsFromView(): void {
+    this.ViewMenuOpen = false;
+    this.syncDocumentListeners();
+    this.focusTrigger('view');
+    this.OnManageSections();
   }
 
   OnManageSections(): void {

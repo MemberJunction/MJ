@@ -121,7 +121,7 @@
                     [class.over-cap]="IsPinnedOverCap(item.Key)"
                     [attr.aria-disabled]="!IsPinned(item.Key) && !CanPinMore ? 'true' : null"
                     [attr.aria-pressed]="IsPinned(item.Key)"
-                    [attr.aria-label]="(IsPinned(item.Key) ? 'Unpin ' : 'Pin ') + item.MenuLabel"
+                    [attr.aria-label]="'Pin ' + item.MenuLabel"
                     [title]="IsPinnedOverCap(item.Key) ? 'Pinned, but the toolbar is full (' + MaxPinnedActions + ' max): unpin another to show it, or click to unpin' : IsPinned(item.Key) ? 'Unpin from toolbar' : (CanPinMore ? 'Pin to toolbar' : 'Unpin another action first (' + MaxPinnedActions + ' max)')"
                     (click)="TogglePin(item.Key)">
                     <i class="fa-solid fa-thumbtack"></i>
@@ -204,7 +204,7 @@
                 </button>
               }
               @if (Config.ShowSectionManager) {
-                <button class="mj-forms-menu-item" type="button" (click)="ViewMenuOpen = false; OnManageSections()">
+                <button class="mj-forms-menu-item" type="button" (click)="OnReorderSectionsFromView()">
                   <span class="mj-forms-menu-icon"><i class="fa-solid fa-bars-staggered"></i></span>
                   <span class="mj-forms-menu-label">Reorder sections</span>
                 </button>

@@ -297,7 +297,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(pinnedTitles(f)).toContain('View tags');
       expect(save).toHaveBeenLastCalledWith(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: ['favorite', 'history', 'tags'] }));
 
-      btn(f, 'button[aria-label="Unpin Favorite"]')!.click();
+      btn(f, 'button[aria-label="Pin Favorite"][aria-pressed="true"]')!.click();
       f.detectChanges();
       expect(pinnedTitles(f)).not.toContain('Make Favorite');
     });
@@ -402,7 +402,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       document.body.appendChild(f.nativeElement);
       openMore(f);
       await tick();
-      (btn(f, '.mj-forms-menu-item[title="Refresh record"]') ?? btn(f, '.mj-forms-menu .mj-forms-menu-item'))!.click();
+      btn(f, '.mj-forms-menu-item[title="Refresh record from database"]')!.click();
       f.detectChanges();
       expect(document.activeElement).toBe(btn(f, 'button[title="More actions"]'));
       f.nativeElement.remove();
@@ -425,7 +425,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const f = render();
       expect(f.componentInstance.PinnedActionItems.map((i) => i.Key)).toEqual(['favorite', 'history', 'list']);
       openMore(f);
-      const tagsPin = btn(f, 'button[aria-label="Unpin Tags"]')!;
+      const tagsPin = btn(f, 'button[aria-label="Pin Tags"]')!;
       expect(tagsPin.getAttribute('aria-pressed')).toBe('true');
       expect(tagsPin.classList).toContain('over-cap');
       expect(tagsPin.getAttribute('title')).toContain('toolbar is full');
@@ -451,6 +451,37 @@ describe('MjFormToolbarComponent (DOM)', () => {
       input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       expect(out).toEqual(['']);
       expect(f.componentInstance.ViewMenuOpen).toBe(true);
+
+      input.value = ''; // what the host's cleared filter binds back
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(f.componentInstance.ViewMenuOpen).toBe(false);
+    });
+
+    it('closes View properly before opening the section manager, and returns focus to View', async () => {
+      const f = render({ Config: { ...DEFAULT_TOOLBAR_CONFIG, ShowSectionManager: true } });
+      document.body.appendChild(f.nativeElement);
+      openView(f);
+      const listeners = () => (f.componentInstance as unknown as { _unlistenDocument: unknown[] })._unlistenDocument.length;
+      expect(listeners()).toBe(2);
+      const manage = capture(f.componentInstance.ManageSectionsRequested);
+      (queryAll(f, '.mj-forms-menu-item').find((b) => b.textContent?.includes('Reorder sections')) as HTMLElement).click();
+      f.detectChanges();
+      expect(f.componentInstance.ViewMenuOpen).toBe(false);
+      expect(listeners()).toBe(0);
+      expect(document.activeElement).toBe(btn(f, '[data-menu-trigger="view"]'));
+      expect(manage.length).toBe(1);
+      f.nativeElement.remove();
+    });
+
+    it('returns focus to View when the current form variant is picked again', () => {
+      const f = render({ Variants: [{ ID: 'v1', Label: 'Admin layout', Scope: 'Role', Status: 'Active' }], CurrentVariantID: 'v1' });
+      document.body.appendChild(f.nativeElement);
+      btn(f, '[data-menu-trigger="view"]')!.click();
+      f.detectChanges();
+      (queryAll(f, '.mj-form-variant-picker-row')[1] as HTMLElement).click();
+      f.detectChanges();
+      expect(document.activeElement).toBe(btn(f, '[data-menu-trigger="view"]'));
+      f.nativeElement.remove();
     });
 
     it('shows a non-default form variant on the View button', () => {
