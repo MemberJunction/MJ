@@ -1,7 +1,7 @@
 // Reflect.metadata polyfill at import time.
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
-import { EntityFieldTSType, type EntityFieldInfo } from '@memberjunction/core';
+import { EntityFieldTSType, type EntityFieldInfo, type EntityInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
 /**
@@ -12,6 +12,9 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 class Probe extends ResolverBase {
     public Convert(field: Partial<EntityFieldInfo>, raw: unknown) {
         return this.ClientOldValueToFieldValue(field as EntityFieldInfo, raw);
+    }
+    public MustLoad(entity: Partial<EntityInfo>, oldValues: boolean) {
+        return this.MustLoadTruthFromDatabase(entity as EntityInfo, { OldValues___: oldValues ? [{ Key: 'Comments', Value: null }] : undefined }, false, false);
     }
 }
 const probe = new Probe();
@@ -32,5 +35,18 @@ describe('ResolverBase.ClientOldValueToFieldValue', () => {
     it('types numbers and booleans like the field', () => {
         expect(probe.Convert({ Name: 'N', TSType: EntityFieldTSType.Number, Type: 'int' }, '42')).toBe(42);
         expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit' }, 'false')).toBe(false);
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit', AllowsNull: true }, null)).toBe(false);
+        expect(probe.Convert({ Name: 'B', TSType: EntityFieldTSType.Boolean, Type: 'bit' }, '1')).toBe(true);
+        expect(probe.Convert({ Name: 'M', TSType: EntityFieldTSType.Number, Type: 'money' }, '1.5')).toBe(1.5);
+    });
+});
+
+describe('ResolverBase.MustLoadTruthFromDatabase', () => {
+    it('always loads a Record Change from the database, so client OldValues cannot pin forged audit columns', () => {
+        expect(probe.MustLoad({ Name: 'MJ: Record Changes', TrackRecordChanges: false }, true)).toBe(true);
+    });
+
+    it('still trusts OldValues on other untracked entities without field security', () => {
+        expect(probe.MustLoad({ Name: 'MJ: Tags', TrackRecordChanges: false, EnableFieldLevelSecurity: false }, true)).toBe(false);
     });
 });

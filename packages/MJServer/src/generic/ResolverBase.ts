@@ -1776,6 +1776,11 @@ export class ResolverBase {
    *
    * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
    * the feature switched on, which is almost none of them.
+   *
+   * `MJ: Record Changes` always loads from the database: its server class allows an update only when
+   * Comments is the one dirty field, and "dirty" compared against client-supplied OldValues lets a
+   * caller pin forged audit columns as both old and new values. It doesn't track its own changes, so
+   * nothing else forces the load.
    */
   protected MustLoadTruthFromDatabase(
     entityInfo: EntityInfo,
@@ -1785,6 +1790,7 @@ export class ResolverBase {
   ): boolean {
     return (
       entityInfo.TrackRecordChanges ||
+      entityInfo.Name.trim().toLowerCase() === 'mj: record changes' ||
       !input.OldValues___ ||
       hasDeniedReadFields ||
       hasNarrowedAuditPayload ||
@@ -1927,55 +1933,29 @@ export class ResolverBase {
    * value. Both the OldValues comparison and the load-from-OldValues path use it: without it a date
    * old value becomes an Invalid Date and an unchanged date field reads as edited.
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- wire values are untyped strings
-  protected ClientOldValueToFieldValue(field: EntityFieldInfo | undefined, raw: any): any {
-    let val = raw;
+  protected ClientOldValueToFieldValue(field: EntityFieldInfo | undefined, raw: unknown): string | number | boolean | Date | null {
+    let val: unknown = raw;
     if ((val === null || val === undefined) && field && field.DefaultValue !== null && field.DefaultValue !== undefined && !field.AllowsNull)
       val = field.DefaultValue; // set default value as the field was never set and it does NOT allow nulls
+    if (val === undefined) val = null;
+    // A null old value stays null, except a boolean, which the comparison has always read as false.
+    if (field?.TSType === EntityFieldTSType.Boolean && val === null) return false;
+    if (!field || val === null) return val as string | null;
 
-    if (field) {
-      switch (field.TSType) {
-        case EntityFieldTSType.Number:
-          if (val == null && val == undefined) {
-            val = null;
-          }
-          else {
-            let typeLowered = (field.Type as string).toLowerCase();
-
-            switch (typeLowered) {
-              case 'int':
-              case 'smallint':
-              case 'bigint':
-              case 'tinyint':
-                val = parseInt(val);
-                break;
-              case 'money':
-              case 'smallmoney':
-              case 'decimal':
-              case 'numeric':
-              case 'float':
-                val = parseFloat(val);
-                break;
-              default:
-                val = parseFloat(val);
-                break;
-            }
-          }
-          break;
-        case EntityFieldTSType.Boolean:
-          val = val === null || val === undefined || val === 'false' || val === '0' || parseInt(val) === 0 ? false : true;
-          break;
-        case EntityFieldTSType.Date:
-          // first, if val is a string and it is actually a number (milliseconds since epoch), convert it to a number.
-          if (val !== null && val !== undefined && val.toString().trim() !== '' && !isNaN(val)) val = parseInt(val);
-
-          val = val !== null && val !== undefined ? new Date(val) : null;
-          break;
-        default:
-          break; // already a string
+    const text = String(val);
+    switch (field.TSType) {
+      case EntityFieldTSType.Number: {
+        const integer = ['int', 'smallint', 'bigint', 'tinyint'].includes((field.Type as string).toLowerCase());
+        return integer ? parseInt(text) : parseFloat(text);
       }
+      case EntityFieldTSType.Boolean:
+        return !(text === 'false' || text === '0' || parseInt(text) === 0);
+      case EntityFieldTSType.Date:
+        // Epoch milliseconds (the GraphQL Timestamp form) arrive as a numeric string.
+        return new Date(text.trim() !== '' && !isNaN(Number(text)) ? parseInt(text) : text);
+      default:
+        return text; // already a string
     }
-    return val;
   }
 
   /**
