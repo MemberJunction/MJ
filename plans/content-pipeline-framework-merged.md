@@ -3,50 +3,80 @@
 ## Status
 - **Status**: Draft — competing alternative (option 3 of 3)
 - **Created**: 2026-09-28
+- **Revised**: 2026-09-28 — per-record detail rows kept in queue mode; heartbeat with buffered progress; cooperative in-flight cancel; record-cap fix; scope-provider registry
 - **Author**: Dray + Claude
 - **Branch**: dray/content-pipeline-framework
-- **Depends on**: `feat/work-queue` landing on `next`, **and** a small set of new capabilities in `packages/RecordSetProcessor` (see Architecture). This is the only one of the three plans in this PR that requires changes to both systems rather than depending on one, unmodified.
+- **Depends on**: `feat/work-queue` landing on `next`, **and** a small set of generic additions to `packages/RecordSetProcessor` (see API Changes). This is the only one of the three plans in this PR that changes both systems rather than depending on one, unmodified.
 
 ## Relationship to the other two plans in this PR
 
-This PR now contains three competing architectures for the same five-stage content pipeline:
+This PR contains three competing architectures for the same five-stage content pipeline:
 
 1. `content-pipeline-framework.md` — built entirely on Record Set Processing (RSP), unmodified.
 2. `content-pipeline-framework-workqueue.md` — built entirely on Work Queue, unmodified.
-3. **This document** — proposes that RSP and Work Queue aren't actually two competing ways to do the same thing; they're one processing engine (RSP) and one queue substrate (Work Queue) that should compose, not duplicate each other. Concretely: add a Work-Queue-backed `IRecordSetSource` to RSP, so a Record Process's *only* configuration difference between "single-instance, synchronous, entity-filter-driven" and "safely distributed across any number of concurrent, crash-tolerant consumers" is which source it points at — not a different engine, different audit model, or different declarative-work-type registry.
+3. **This document** — RSP and Work Queue are not two ways to do the same job. RSP is the processing engine; Work Queue is a queue substrate. They should compose, not duplicate each other.
 
-None of the three documents were altered to accommodate this one; they stand as independent options for the reviewing team to weigh.
+None of the three documents were altered to accommodate this one.
 
 ## Overview
 
-RSP already treats "where do records come from" (`IRecordSetSource`) and "how is progress recorded" (`IProcessRunTracker`) as pluggable seams, independent of "what do we do to each record" (the processor / declarative `WorkType`). Work Queue is not a second processing engine competing with RSP for that same job — it's a queue substrate (atomic claim, lease, sweep, dedup, retry, fan-out) that happens to also run handlers against what it distributes, because nothing else in the platform offered it a processing engine to plug into.
+A Record Process is always the unit you configure and run. Its **scope** decides where its records come from:
 
-This plan adds exactly that: a `WorkQueueSource` implementing `IRecordSetSource`, backed by Work Queue's already-built, already-tested Database transport claim mechanism, plus a matched `IProcessRunTracker` that settles Work Queue deliveries instead of writing generic detail rows. A Record Process pointed at a Work Queue subscription gets atomic multi-consumer claiming, crash-safe lease recovery, and real-time tracking. A Record Process pointed at a plain entity filter keeps behaving exactly as it does today. Same processor code, same declarative `WorkType` registry, same `ProcessBatch` bulk-efficiency hook, in both cases.
+- **Filter / View / List / SingleRecord** (today): RSP queries the entity directly. Single-tracked; exactly today's behavior.
+- **Queue** (new): RSP claims records from a Work Queue subscription. Any number of containers can run the same Record Process concurrently, each claiming its own records atomically, with crash recovery via leases.
+
+Same processor code, same declarative `WorkType` registry, same `ProcessBatch` bulk hook, same run history in both modes. Moving a stage from single-tracked to distributed is a scope change, not a rewrite.
+
+The two systems each keep the job they're best at:
+
+| Concern | Owned by | Recorded in |
+|---|---|---|
+| **Logistics** — is it running, on which container, since when, how many attempts, live status | Work Queue | `WorkQueueDelivery` |
+| **Substance** — what was read, what was found, what failed and why | RSP | `MJ: Process Runs` / `MJ: Process Run Details` |
+
+In queue mode a record gets both: a delivery row that tracks its logistics live, and a detail row that records what it actually did. Neither table is asked to do the other's job.
+
+How records get *into* the queue is an implementation decision outside this framework — e.g. a scheduled job that finds ready records and publishes them. Everything needed for that already exists.
 
 ## Goals & Non-Goals
 
 ### Goals
-- One processing engine, one declarative `WorkType` registry, one bulk-efficiency mechanism (`ProcessBatch`), usable identically whether the working set comes from a live entity filter or a Work Queue subscription.
-- Preserve every capability of both systems rather than trading one set for the other: ad hoc/synchronous/UI-driven single-shot operations (RSP's existing strength) and safe atomic multi-consumer claiming with real-time tracking and bounded retry (Work Queue's existing strength).
-- Let a Record Process move between "single-tracked" and "distributed across N consumers" by changing its scope configuration, not by rewriting its processor.
-- Avoid asking either team to build a redundant version of something the other already has and has already tested.
+- One processing engine, one `WorkType` registry, one bulk-efficiency mechanism, one run history, whether records come from a filter or a queue.
+- Safe concurrent processing across any number of containers, including records that run for hours or days.
+- Live status for long-running records, fed by the processor itself and flushed on each lease heartbeat.
+- In-system cancellation: remove an item before pickup, and request a cooperative stop for one in flight — instead of killing a container.
+- No capability of either system is lost, and neither team is asked to build something the other already has.
 
 ### Non-Goals
-- Not proposing Work Queue's queue mechanics change at all — claim, lease, sweep, dedup, fencing, the topic/subscription model, all remain exactly as built. This proposal only changes where "run a handler against a claimed message" logic lives.
-- Not proposing to remove RSP's existing sources (View/List/Filter/Array/SingleRecord/Keyset) — they remain fully available for ad hoc and synchronous use cases that have nothing to do with this pipeline or with concurrent claiming.
-- Not attempting to unify `MJ: Process Run Details` and `WorkQueueDelivery` into one schema. They remain two separate tables, selected automatically by which source a Record Process uses — not overlapping responsibilities, just two backing stores for the same audit concept, chosen by mode.
-- Not deciding here whether every pipeline stage needs queue mode — that's a per-stage call in the Implementation Plan, though in practice all five likely want it eventually.
+- No change to Work Queue's queue mechanics: claim, lease, sweep, dedup, fencing, topic/subscription model are used exactly as built.
+- No removal of RSP's existing scopes — they remain the right choice for ad hoc, synchronous, single-instance work.
+- No merging of `Process Run Details` and `WorkQueueDelivery` into one table. They record different things (see Overview).
+- No decision on how records are published to the queue.
+- No guarantee that an in-flight cancel stops work — it's cooperative (see Cancellation).
 
 ## Background & Context
 
-Verified, existing primitives this plan composes rather than reinvents:
+Verified against source on the `feat/work-queue` branch:
 
-- `IRecordSetSource` is already pluggable (`packages/RecordSetProcessor/base/src/interfaces.ts`) — `ViewSource`, `ListSource`, `FilterSource`, `KeysetSource`, `ArraySource` are all independent implementations behind the same contract.
-- Work Queue's Database transport claim is already atomic and batched in one round trip for the unpartitioned case — `spWorkQueueClaimUnpartitioned` (`migrations/v6/V202609241637__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql:311`), a single `TOP (@MaxRows) ... UPDLOCK, READPAST` read feeding one `UPDATE ... OUTPUT`.
-- `IRecordProcessor.ProcessBatch?` already exists and the RSP engine already dispatches to it when present (`packages/RecordSetProcessor/base/src/interfaces.ts:93`, `packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts:245-249`) — this already solves the bulk-external-call efficiency problem (Embed's shape) that Work Queue's own `ConsumerRuntime.ProcessBatch` does not (it runs N individual handler calls concurrently, not one bulk call across all N payloads).
-- `RecordProcessorRegistry` (`packages/RecordSetProcessor/base/src/registry.ts`) is the existing, precedented pattern for teaching RSP about a new work type from a separate package, without RSP's own base/engine depending on that package — already used by Predictive Studio's `'ML Model'` work type. This plan's `WorkQueueSource`/tracker should live behind the same kind of arm's-length integration, not inside RSP's own packages (see Files to Modify).
+**RSP**
+- `IRecordSetSource` is pluggable (`packages/RecordSetProcessor/base/src/interfaces.ts`); `FilterSource`, `ViewSource`, `ListSource`, `ArraySource`, `KeysetSource` are independent implementations.
+- `IRecordProcessor.ProcessBatch?` is dispatched once per page with every eligible record when present (`engine/src/RecordSetProcessor.ts:245`). A thrown batch fails every record in the page.
+- The engine processes one page at a time: it claims/fetches the next page only after every record in the current page has settled (`runBatchLoop` → `processBatch` → `runWithConcurrency`).
+- The engine trims a page to the run's `maxRecords` cap *after* the source returns it (`RecordSetProcessor.ts:134-144`). Harmless for a query; wrong for a claim (see Phase M0).
+- `RecordProcessorContext` is built once per page and shared by every record in it; it carries no cancellation signal or progress channel.
+- `RecordProcessExecutor.Run()` never passes a tracker, so every run gets `GenericProcessRunTracker`. Every built-in trigger — the scheduled-job driver, the Run Now remote operation, and on-change (via the `Run Record Process` action) — goes through `RunByID`.
+- `ScopeType` and `WorkType` are database CHECK constraints (`CK_RecordProcess_ScopeType`, `CK_RecordProcess_WorkType`). New values need a migration that drops and re-adds the constraint, then CodeGen — the same path `'ML Model'` took.
+- `RecordProcessorRegistry` (`base/src/registry.ts`) is the existing pattern for teaching RSP about something new from a separate package: the engine handles built-ins, then consults the registry. Predictive Studio uses it.
 
-This idea came directly out of comparing the other two plans side by side: a Work Queue Subscription and an RSP Record Process differ only in how they select and claim records, not in what happens to a record once it's claimed. Once `ProcessBatch` is accounted for, that similarity becomes exact.
+**Work Queue**
+- `ITransportConsumer` (`packages/WorkQueue/core/src/transport.ts:88`) exposes every primitive this plan needs: `Receive(max)`, `ExtendLease(delivery, seconds, progress)`, `Complete`, `Retry(delaySeconds)`, `DeadLetter`, `Release` (no attempt consumed on the Database transport), `AcknowledgeCancel`, `Close`. `DatabaseTransportConsumer` is exported from `@memberjunction/work-queue-engine`.
+- The unpartitioned claim takes up to N deliveries in one call (`spWorkQueueClaimUnpartitioned`, `migrations/v6/V202609241637__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql:311`).
+- Database transport capabilities include `CancelPending`, `CancelInFlight` and `PersistsProgress` (`engine/src/transports/database/databaseCapabilities.ts`).
+- `ExtendLease` is fenced on the lease token, `Status='InFlight'` and no cancel request (`spWorkQueueExtendLease`). It returns `'Held' | 'Lost' | 'Cancelled'`.
+- A heartbeat carries `WorkProgress { Percent?: 0..100; Message?: ≤500 chars; Checkpoint?: small JSON }` into `WorkQueueDelivery.Progress`. Each heartbeat **replaces** the previous value — it is a latest-status slot, not a log.
+- `HeartbeatIntervalSeconds(policy)` = `LeaseSeconds / 3`, capped. `ComputeBackoffSeconds` is exported. Both live in `@memberjunction/work-queue-core`.
+- Subscriptions carry `MaxAttempts`, backoff, `LeaseSeconds`, `HeartbeatMode`, `MaxProcessingSeconds`, and `HostType` (`'MJWorker' | 'External'`). An `External` subscription is not consumed by MJ's own Work Queue host, so it won't compete with this plan's consumers.
+- Consumer concurrency is host/process configuration, not a subscription column. N containers each running concurrency C process up to N×C records at once. Neither system enforces a global per-source rate limit across processes.
 
 ## Architecture / Design
 
@@ -56,14 +86,16 @@ This idea came directly out of comparing the other two plans side by side: a Wor
 erDiagram
     MJRecordProcess {
         uuid ID
-        string ScopeType "adds 'Queue' alongside View/List/Filter/SingleRecord"
-        uuid ScopeWorkQueueSubscriptionID "FK, populated only when ScopeType='Queue'"
+        string ScopeType "adds 'Queue' (CHECK constraint migration)"
+        uuid ScopeWorkQueueSubscriptionID "populated only when ScopeType='Queue'"
         string WorkType
     }
     WorkQueueSubscription {
         uuid ID
         uuid TopicID
-        json Filter
+        string HostType "'External' for queue-scoped Record Processes"
+        int LeaseSeconds
+        int MaxAttempts
     }
     MJProcessRun {
         uuid ID
@@ -72,150 +104,231 @@ erDiagram
     MJProcessRunDetail {
         uuid ID
         uuid ProcessRunID
-    }
-    WorkQueueMessage {
-        uuid ID
-        uuid TopicID
+        uuid WorkQueueDeliveryID "new, nullable — set in queue mode"
+        json ResultPayload "substance: what was done, plus progress history"
     }
     WorkQueueDelivery {
         uuid ID
         uuid SubscriptionID
-        uuid MessageID
         string Status
         int AttemptCount
+        string Progress "logistics: latest live status"
     }
 
     MJRecordProcess ||--o| WorkQueueSubscription : "scoped to, when ScopeType=Queue"
     MJRecordProcess ||--o{ MJProcessRun : "runs of"
-    MJProcessRun ||--o{ MJProcessRunDetail : "audit trail — FilterSource/ViewSource/etc. runs"
-    WorkQueueSubscription ||--o{ WorkQueueDelivery : "audit trail — Queue-scoped runs, instead of Process Run Detail"
-    WorkQueueMessage ||--o{ WorkQueueDelivery : "delivered to"
+    MJProcessRun ||--o{ MJProcessRunDetail : "one per record — both modes"
+    WorkQueueDelivery ||--o| MJProcessRunDetail : "logistics of — queue mode"
 ```
 
-The two audit tables are alternates, not overlapping: a Queue-scoped Record Process's per-record history lives in `WorkQueueDelivery` (already real-time); every other scope type keeps using `Process Run Detail` exactly as today. Nothing about this merges the two tables — it routes to the right one automatically based on `ScopeType`.
+`WorkQueueDeliveryID` on the detail row is the join between "what happened" and "where and how it ran." It could live in `ResultPayload` instead, but a real column lets the Record Process UI link straight to the delivery.
 
 ### Component / Flow Design
 
 ```mermaid
 flowchart TB
-    subgraph Shared["Shared — unchanged regardless of scope"]
-        Engine["RSP engine loop — pages, bounds concurrency, calls the processor"]
-        Processor["The processor — same code, same WorkType registry, same ProcessBatch hook"]
+    subgraph Unchanged["Unchanged in both modes"]
+        Engine["RSP engine — pages, bounds concurrency, budget gate, circuit breaker, dry-run"]
+        Processor["Processor — same code, same WorkType registry, same ProcessBatch hook"]
+        Generic["GenericProcessRunTracker — Process Run header + one detail row per record"]
     end
-    subgraph FilterPath["ScopeType = Filter / View / List / Array / SingleRecord"]
-        FS["FilterSource, etc. — direct SQL query"]
-        GT["GenericProcessRunTracker"]
-        PRD["MJ: Process Run Details"]
+    subgraph Queue["ScopeType = Queue — bridge package"]
+        Source["WorkQueueSource — claims deliveries, runs the heartbeat, owns per-record signal + progress buffer"]
+        Tracker["QueueAwareTracker — writes the detail row via GenericProcessRunTracker, then settles the delivery"]
     end
-    subgraph QueuePath["ScopeType = Queue — new"]
-        WQS["WorkQueueSource — claims via spWorkQueueClaimUnpartitioned"]
-        WQT["WorkQueueAwareTracker — settles the claimed delivery"]
-        WQD["WorkQueueDelivery — real-time by construction"]
-    end
-
-    FS --> Engine
-    WQS --> Engine
+    Source -->|"claimed records"| Engine
     Engine --> Processor
-    Processor --> GT --> PRD
-    Processor --> WQT --> WQD
+    Processor -. "context.ReportProgress / context.Signal" .-> Source
+    Processor --> Tracker
+    Tracker --> Generic
+    Tracker -->|"Complete / Retry / DeadLetter / AcknowledgeCancel"| WQ[("WorkQueueDelivery")]
+    Source -->|"ExtendLease + latest progress, every heartbeat"| WQ
 ```
 
-The processor box is identical in both paths — the same `PipelineProcessor` (or a plain `WorkType='Action'`/`'Agent'`/`'FieldRules'` processor) runs whether its records came from a live filter or a claimed queue delivery.
+A queue-mode run, start to finish:
+1. A container runs the Record Process — the same call any run uses. RSP opens a Process Run.
+2. The engine asks the source for the next page, never more than the run's remaining cap. The source claims that many deliveries in one call and starts heartbeating all of them immediately, including records still waiting their turn in the page.
+3. The processor runs each record, with a per-record context carrying a cancellation signal and a progress reporter.
+4. As the processor reports progress, the source buffers it. Every heartbeat flushes the latest status to the delivery.
+5. As each record finishes, the tracker writes its detail row — including the accumulated progress history — then settles the delivery.
+6. When nothing is left to claim, the tracker closes the Process Run, the source stops its heartbeat timer and closes its consumer, and the container exits.
+
+### Heartbeat and buffered progress
+
+A record can run for hours or longer — a whole-source Discover has taken more than a day — so a long lease is not a substitute for renewing it.
+
+- The source runs one timer per run at `HeartbeatIntervalSeconds(policy)` (a third of the subscription's `LeaseSeconds`; a 90-second lease gives a 30-second heartbeat). Each tick renews every claimed, unsettled delivery.
+- A processor calls `context.ReportProgress({ Message, Percent, Checkpoint })` as often as it likes — the same places it would have written to the console. The source keeps only the latest value per record in memory, and each heartbeat sends it with the lease renewal. Reports between heartbeats cost nothing.
+- Because the delivery's `Progress` is overwritten on each heartbeat, it shows *current* status ("inserted 200 of 3000"). The full sequence of reports is kept by the source and written into the record's detail row at the end, so the history isn't lost.
+- `Checkpoint` carries small structured counters (e.g. `{ "Inserted": 200, "Total": 3000 }`) for a UI to render without parsing the message.
+- Heartbeats run on the Node event loop. A driver that does long synchronous CPU work blocks them and loses its lease; such work must yield or run in a worker thread. This is the same rule Work Queue documents for its own handlers.
+
+### Cancellation
+
+Two levels, both in-system:
+- **Before pickup:** an operator cancels the pending delivery. The claim procedure already skips cancelled deliveries, so no container ever picks it up. Nothing to build.
+- **In flight (cooperative):** an operator requests cancel on an in-flight delivery. The next heartbeat's `ExtendLease` returns `'Cancelled'`. The source aborts that record's `context.Signal` with reason `'Cancelled'`. A processor that checks the signal — between pages of a crawl, between files, before a bulk call — stops and returns. The tracker records the outcome in the detail row and calls `AcknowledgeCancel`, which marks the delivery `Discarded` and frees it.
+
+A processor that doesn't check the signal runs to completion; cancellation can't stop work the code doesn't pause for. That's the same guarantee Work Queue gives its own handlers.
+
+A cancel request can never cause a record to run twice. Verified in the procedures: once a cancel is requested, `spWorkQueueCompleteDelivery` refuses to complete the delivery and `spWorkQueueExtendLease` stops renewing it. If the lease then expires while an unresponsive processor is still running, `spWorkQueueExpireLeases` marks it `Discarded` rather than returning it to `Pending`. So the tracker always ends a cancel-requested delivery with `AcknowledgeCancel`, even when the processor finished the work anyway. The detail row records what really happened; the queue records that it was cancelled.
+
+Run-level pause/cancel (the Process Run's `CancellationRequested`, checked between pages) is unchanged and still works in queue mode.
+
+If a heartbeat returns `'Lost'` — the lease expired and another container may now own the record — the source aborts the signal with reason `'LeaseLost'` and the tracker does **not** settle the delivery. The detail row still records what this container did.
+
+### Settling a delivery
+
+After writing the detail row, the tracker decides what the queue should do, checking in this order:
+
+| Outcome | Settle call |
+|---|---|
+| Lease lost | none — another holder owns it |
+| Cancel was requested during processing — whatever the processor's outcome | `AcknowledgeCancel` |
+| `Succeeded` or `Skipped` | `Complete` |
+| `Failed` with `FailureKind: 'Fatal'`, or attempts reached `MaxAttempts` | `DeadLetter` |
+| Any other `Failed` | `Retry(ComputeBackoffSeconds(...))` |
+
+That's the entire retry policy on this side. The backoff math is Work Queue's own exported function, not a re-implementation.
 
 ### API Changes
 
-Two small, generic additions to `record-set-processor-base` — neither is Work-Queue-specific, both are useful to any future source/failure model, not just this one:
+All additive and generic. None of them mention Work Queue.
 
 ```typescript
-// interfaces.ts — additive, optional, no breaking change
-export interface IRecordSetSource {
-    NextBatch(cursor, batchSize, contextUser, provider?): Promise<RecordBatch>;
-    Describe(): SourceDescriptor;
-    /**
-     * Optional liveness hook. When present, the engine calls this periodically for any
-     * batch this source produced that is still being processed, so a source backed by a
-     * leased claim (e.g. Work Queue) can renew it. Sources without a lease concept omit this.
-     */
-    KeepAlive?(records: RecordRef[]): Promise<void>;
+// record-set-processor-base — types.ts
+export interface RecordResult {
+    // ...existing fields unchanged
+    /** Lets a tracker that supports retries distinguish "never retry" from "try again". Ignored by GenericProcessRunTracker. */
+    FailureKind?: 'Fatal' | 'Transient';
 }
 
-// RecordResult — additive field, defaults preserve today's Succeeded/Failed/Skipped behavior
-export interface RecordResult {
-    Status: 'Succeeded' | 'Failed' | 'Skipped';
-    /** Only meaningful to a tracker that can act on it (e.g. WorkQueueAwareTracker deciding
-     *  retry-with-backoff vs. immediate dead-letter). Ignored by GenericProcessRunTracker. */
-    FailureKind?: 'Fatal' | 'Transient';
-    // ...existing fields unchanged
+export interface RecordProgress {
+    Message?: string;   // a sink may truncate (Work Queue keeps 500 chars)
+    Percent?: number;   // 0..100
+    Checkpoint?: Record<string, unknown>;
 }
+
+// record-set-processor-base — interfaces.ts
+export interface RecordProcessorContext {
+    // ...existing fields unchanged
+    /** Aborted when this record should stop: 'Cancelled', 'LeaseLost', or run shutdown. Absent for sources with no such concept. */
+    Signal?: AbortSignal;
+    /** Report status as often as convenient; the source decides how and when it's persisted. No-op when absent. */
+    ReportProgress?: (progress: RecordProgress) => void;
+}
+
+export interface RecordBinding {
+    Signal?: AbortSignal;
+    ReportProgress?: (progress: RecordProgress) => void;
+}
+
+export interface IRecordSetSource {
+    // ...existing NextBatch / Describe unchanged
+    /** Optional. Supplies per-record controls; the engine merges them into that record's context. */
+    BindRecord?(record: RecordRef): RecordBinding | undefined;
+}
+
+// record-set-processor-base — registry.ts (alongside RecordProcessorRegistry)
+/** Builds the source and its paired tracker for a ScopeType the executor doesn't handle natively. */
+export type RecordScopeProviderFactory = (context: RecordScopeBuildContext) => { Source: IRecordSetSource; Tracker: IProcessRunTracker };
+export class RecordScopeProviderRegistry { Register(scopeType: string, factory: RecordScopeProviderFactory): void; /* ... */ }
 ```
 
-`WorkQueueSource` and `WorkQueueAwareTracker` themselves are **not** added to `packages/RecordSetProcessor` — they live in a new, separate integration package (working name `@memberjunction/record-set-processor-work-queue`) that depends on both `record-set-processor-base` and Work Queue's client packages. This mirrors exactly how Predictive Studio's `ML Model` work type teaches RSP about itself via `RecordProcessorRegistry` from its own package, rather than RSP depending on Predictive Studio. Neither `RecordSetProcessor` nor `WorkQueue` needs to know the other exists at the package level — they compose only through this third package.
+Engine and executor changes:
+- **Record cap:** ask the source for `min(batchSize, maxRecords - processed)`, not `batchSize`, so nothing is claimed that won't be processed.
+- **Per-record context:** build each record's context from the page context plus `source.BindRecord?.(record)`. For the `ProcessBatch` path there is one call per page, so it receives a page-level signal (aborted on run shutdown) and a page-level progress reporter. Per-record cancels are honored when results are settled.
+- **Scope provider:** `RecordProcessExecutor` handles the built-in scopes as today, then consults `RecordScopeProviderRegistry`, then fails — the same fall-through `BuildProcessor` already uses for work types. When a provider supplies a tracker, `Run()` passes it into `Process()`.
+
+The source and its tracker come from one factory because they share state: which deliveries are claimed, their lease tokens, their signals and progress buffers.
+
+`WorkQueueSource` and `QueueAwareTracker` live in a new package, `@memberjunction/record-set-processor-work-queue`, which depends on `record-set-processor-base` and Work Queue's packages and registers the `'Queue'` scope provider at startup. Neither `RecordSetProcessor` nor `WorkQueue` depends on it — the same arm's-length pattern Predictive Studio uses for its work type.
 
 ## Implementation Plan
 
-### Phase M0 — `RecordResult.FailureKind` + engine plumbing
-Additive field on `RecordResult`. `GenericProcessRunTracker` ignores it (no behavior change for existing scopes). No schema change — it's a field on an in-memory result type a tracker reads, not a persisted column on the generic table.
+### Phase M0 — Record-cap fix
+The engine requests no more than the remaining cap from the source. Fixes a latent issue for any claiming source, and saves a wasted read for query sources. Unit test: a run capped at 30 with a page size of 100 requests 30.
 
-### Phase M1 — `KeepAlive?` on `IRecordSetSource` + engine support
-Add the optional method to the interface. The engine's per-batch execution starts a periodic timer for any source implementing `KeepAlive?`, calling it with the currently in-flight records until they've all settled. Sources without it (every existing one) are entirely unaffected — this is the one genuinely new RSP engine capability neither system has today; nothing about it is Work-Queue-specific.
+### Phase M1 — Contract additions
+`RecordResult.FailureKind`; `RecordProcessorContext.Signal` / `ReportProgress`; `RecordProgress`; `IRecordSetSource.BindRecord?`. The engine builds a per-record context. Existing sources, processors and trackers are unaffected — every new member is optional and absent today.
 
-### Phase M2 — `WorkQueueSource` (new package)
-Implements `IRecordSetSource.NextBatch()` by calling Work Queue's atomic unpartitioned claim (`spWorkQueueClaimUnpartitioned` or its client-library equivalent), wrapping each claimed delivery as a `RecordRef` and internally tracking its lease token. Implements `KeepAlive?()` by extending those leases (mirrors what `ConsumerRuntime`'s own auto-heartbeat does today, reused at the protocol level, not the code level, since `WorkQueueSource` isn't running inside `ConsumerRuntime`).
+### Phase M2 — Scope-provider registry
+`RecordScopeProviderRegistry` in base; `RecordProcessExecutor.BuildSource` and `Run()` consult it and pass the provider's tracker into `Process()`. Built-in scopes behave exactly as today.
 
-### Phase M3 — `WorkQueueAwareTracker` (same new package)
-Implements `IProcessRunTracker`. `RecordResult` settles the matching delivery: `FailureKind: 'Fatal'` or attempts exhausted → dead-letter; anything else → release for retry with backoff; success → complete. Real-time status comes from `WorkQueueDelivery` natively — no open-on-start/update-in-place workaround needed, unlike the RSP-only plan's F2.
+### Phase M3 — `ScopeType = 'Queue'`
+Migration dropping and re-adding `CK_RecordProcess_ScopeType` with `'Queue'`; new nullable `ScopeWorkQueueSubscriptionID` (FK to `WorkQueueSubscription`); new nullable `WorkQueueDeliveryID` on `ProcessRunDetail`; CodeGen. Record Process UI surfaces that switch on `ScopeType` need the new value handled.
 
-### Phase M4 — `ScopeType='Queue'` on `MJ: Record Processes`
-New value plus `ScopeWorkQueueSubscriptionID` field. `RecordProcessExecutor.BuildSource` gains a case recognizing it (mirrors its existing View/List/Filter/SingleRecord switch), constructing a `WorkQueueSource` for that subscription. A parallel case in whatever builds the tracker selects `WorkQueueAwareTracker` for the same scope.
+### Phase M4 — `WorkQueueSource` (bridge package)
+- `NextBatch` calls `DatabaseTransportConsumer.Receive(n)` and returns claimed deliveries as `RecordRef`s; `Exhausted` when fewer than requested come back. The cursor is unused and resume is disabled.
+- Starts the heartbeat timer on first claim: renews every unsettled delivery with the latest buffered progress; maps `'Cancelled'` and `'Lost'` to that record's abort signal; retries a thrown `ExtendLease` on the next tick.
+- `BindRecord` returns the record's signal and a `ReportProgress` that updates its buffer and appends to its history.
 
-### Phase M5 — Prove it end to end
-A trivial no-op `WorkType` against a real Work Queue subscription and a real `ScopeType='Queue'` Record Process — same proof pattern the RSP-only plan's F1 uses, now covering the new source/tracker pair before any real stage exists. Includes a multi-instance test: run the same Record Process concurrently from two processes, confirm no double-processing.
+### Phase M5 — `QueueAwareTracker` (bridge package)
+- Delegates the Process Run header, checkpoints, pause/cancel handshake and completion to a wrapped `GenericProcessRunTracker`.
+- For each record: writes the detail row through the wrapped tracker, adding `WorkQueueDeliveryID` and the progress history, then settles the delivery per the table above.
+- On `CompleteRun`: stops the heartbeat, `Release`s any delivery still claimed but never processed (e.g. after an unexpected exception — costs no attempt), closes the consumer.
 
-### Phase M6 — Apply to the five pipeline stages
-Each stage's Record Process (Discover/Extract/Tag/Segment/Embed) uses `ScopeType='Queue'`, pointed at a per-stage subscription (or per-source subscriptions where dedicated resource isolation is wanted — same topology choice as the Work-Queue-only plan, now expressed through `ScopeWorkQueueSubscriptionID` selection rather than a bespoke dispatch layer). Stage domain logic, the working record, drivers — identical to both other plans; only the scope configuration differs from the RSP-only plan's F0–F11.
+### Phase M6 — Prove it end to end
+No-op processor against a real `ScopeType='Queue'` Record Process, then:
+- a slow processor outliving several lease periods, confirming heartbeats keep it and progress appears on the delivery;
+- an in-flight cancel honored via the signal, ending `Discarded` with a detail row;
+- a lease deliberately lost, confirming no settle and no double completion;
+- two concurrent runs of the same Record Process, confirming no record is processed twice;
+- a capped run, confirming nothing is claimed beyond the cap.
 
-### Phase M7 — Retire nothing
-Plain filter-scoped Record Processes remain fully available platform-wide for ad hoc, synchronous, single-instance use — this phase is explicitly a no-op, called out so it's clear nothing is being deprecated.
+### Phase M7 — Apply to the pipeline stages
+Each stage's Record Process uses `ScopeType='Queue'`, pointed at its subscription (per stage, or per source where a customer gets dedicated containers). Stage logic, working record and drivers are the same as in the other two plans. Long-running drivers (Discover, large crawls) check `context.Signal` between units of work and call `context.ReportProgress` where they used to log.
+
+### Nothing retired
+Filter, View, List and SingleRecord scopes stay available platform-wide for ad hoc and synchronous work.
 
 ## Migration & Data
 
-All additive:
-- `ScopeType` gains a `'Queue'` value (metadata, mirrors how `WorkType` gained `'ML Model'` for Predictive Studio).
-- `ScopeWorkQueueSubscriptionID` field on `MJ: Record Processes`.
-- `RecordResult.FailureKind` — a TypeScript field, not a database column; only `WorkQueueDelivery` (Work Queue's own, already-existing schema) persists anything derived from it.
-- No changes to `MJ: Process Runs` / `MJ: Process Run Details` schema, and no changes to any Work Queue table.
+- `CK_RecordProcess_ScopeType` re-created with `'Queue'`.
+- `RecordProcess.ScopeWorkQueueSubscriptionID` — nullable FK.
+- `ProcessRunDetail.WorkQueueDeliveryID` — nullable FK.
+- `RecordResult.FailureKind`, `RecordProgress`, the context members and `BindRecord` are TypeScript only.
+- No changes to any Work Queue table or procedure.
 
 ## Testing Strategy
 
-- `WorkQueueSource`/`WorkQueueAwareTracker` claim and settle mechanics, tested against a live database — same live-conformance pattern Work Queue's own engine package already uses (`MJ_WORKQUEUE_LIVE_DB=1`).
-- `KeepAlive?` timing under a deliberately slow fake processor, confirming a lease survives a longer-than-`LeaseSeconds` operation.
-- Same processor code run against both a `FilterSource` and a `WorkQueueSource` in the same test suite, asserting identical output and confirming the audit trail lands in the correct table for each.
-- Multi-instance test: N concurrent RSP runs against one `ScopeType='Queue'` Record Process, asserting no record is processed twice — this is the test that would have failed for the RSP-only plan's F12 and passes here by construction.
+- **Unit (RSP):** record-cap request size; per-record context merges `BindRecord`; scope-provider fall-through and tracker pass-through; built-in scopes unchanged.
+- **Unit (bridge):** heartbeat cadence from `LeaseSeconds`; progress buffered and flushed only on heartbeat; history written to the detail row; `'Cancelled'` and `'Lost'` map to the right signal reasons; settle table, including backoff from `ComputeBackoffSeconds`.
+- **Live database** (the pattern Work Queue's engine tests already use, `MJ_WORKQUEUE_LIVE_DB=1`): the Phase M6 scenarios.
+- **Integration tier:** one bundle running the same processor through a `FilterSource` and a `WorkQueueSource`, asserting identical detail rows apart from `WorkQueueDeliveryID`.
 
 ## Risks & Open Questions
 
-- **`KeepAlive?` has no precedent in either system** — it's the one piece being designed from scratch here, not composed from something already built. Needs real design: timing, what happens if a `KeepAlive?` call itself fails transiently, whether it's engine-driven (a shared timer) or delegated entirely to the source's own implementation.
-- **Cross-team dependency.** This is the only one of the three plans needing sign-off and coordinated work from both the RSP codeowners and the Work Queue codeowners, rather than being a single-team ask. Worth surfacing early rather than discovering it mid-implementation.
-- **Whether `FailureKind` should ever be inferred automatically** (certain thrown error types mapping to `Transient` by convention, the way `FatalWorkError`/anything-else already works for a plain `WorkHandler`) or should always be set explicitly by the processor. Leaning toward explicit for now, revisit if it proves tedious.
-- **This plan makes the `HandleBatch` feedback (queued up for the Work Queue developer under the Work-Queue-only plan) unnecessary if this direction is chosen** — `ProcessBatch` already covers that need once `WorkQueueSource` exists, for free, on both mode. Don't raise that request until this direction is decided one way or the other; asking for it prematurely risks Work Queue building something this plan makes redundant. This is specific to *this* plan being chosen — if the Work-Queue-only plan is chosen instead, that ask still stands on its own merits.
-- **The declarative `WorkType` registry (Action/Agent/FieldRules/ML Model) becomes usable against queue-distributed work for free** under this plan — worth a deliberate conversation with whoever owns those work types about whether that's desired as-is, or needs its own guardrails (e.g., should an ad hoc `Action` really be runnable at arbitrary queue-distributed concurrency without additional review).
-- **Whether `WorkQueueAwareTracker` should be a genuinely new class or whether `GenericProcessRunTracker` should grow an optional "settle against Work Queue instead" mode** is an implementation detail, not a design question — leaning toward a new class for a cleaner separation, per Files to Modify below.
+- **Cooperative cancel only.** A processor that never checks `context.Signal` runs to completion. Drivers need to be written with checkpoints where stopping is safe.
+- **Head-of-line blocking within a page.** The engine fetches the next page only after the current page fully settles, so a page moves at the speed of its slowest record. For stages mixing multi-hour and seconds-long records, use a small `BatchSize` (1 for whole-source Discover) until a rolling mode exists.
+- **Event-loop blocking** stops heartbeats (see Heartbeat). Needs to be in driver-author guidance.
+- **Progress is latest-value.** The delivery holds one status up to 500 characters plus percent and a small checkpoint; history lives in the detail row, written at the end. If history must be visible *while* a record runs, the tracker would also update the detail row in place — deferred until needed.
+- **No global per-source rate limit.** Concurrency is per process; isolating a source to one container with concurrency 1 is the only way to guarantee a strict ceiling today.
+- **Cross-team dependency.** Needs RSP and Work Queue codeowners' sign-off, though Work Queue itself needs no changes.
+- **`FailureKind` inference.** Explicit per processor for now; revisit if a thrown-error convention (like Work Queue's `FatalWorkError`) proves simpler.
+- **Declarative work types at queue scale.** `Action`/`Agent`/`FieldRules`/`ML Model` Record Processes become runnable against queue scope for free; worth confirming with their owners that no extra guardrails are wanted.
+- **`HandleBatch` is unnecessary under this plan.** `ProcessBatch` already covers bulk work for queue-scoped records. That request to Work Queue should wait until a direction is chosen; it only applies if the Work-Queue-only plan wins.
 
 ## Files to Modify
 
 | File / Package | Change |
 |---|---|
-| `packages/RecordSetProcessor/base/src/interfaces.ts` | Additive: `IRecordSetSource.KeepAlive?`, `RecordResult.FailureKind` |
-| `packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts` | Engine calls `source.KeepAlive?()` periodically for any batch still in flight |
-| `packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts` | `BuildSource` gains a `ScopeType='Queue'` case; tracker selection gains the matching case |
-| New package `@memberjunction/record-set-processor-work-queue` | `WorkQueueSource`, `WorkQueueAwareTracker` — depends on both `record-set-processor-base` and Work Queue's client packages; neither existing package depends on this one |
-| `packages/WorkQueue/*` | **No changes** — this plan uses Work Queue's existing claim/lease/dedup/sweep mechanics entirely as-is |
-| `packages/MJCoreEntities` (generated) | `ScopeType` value, `ScopeWorkQueueSubscriptionID` field on `MJ: Record Processes` — via `mj sync push` + CodeGen |
-| `metadata/*.json` | Five stages' Record Process rows set to `ScopeType='Queue'`, pointed at their subscriptions |
+| `packages/RecordSetProcessor/base/src/types.ts` | `RecordResult.FailureKind`, `RecordProgress` |
+| `packages/RecordSetProcessor/base/src/interfaces.ts` | `RecordProcessorContext.Signal` / `ReportProgress`, `RecordBinding`, `IRecordSetSource.BindRecord?` |
+| `packages/RecordSetProcessor/base/src/registry.ts` | `RecordScopeProviderRegistry` |
+| `packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts` | Cap-aware page request; per-record context |
+| `packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts` | Scope-provider fall-through; pass provider tracker into `Process()` |
+| New `@memberjunction/record-set-processor-work-queue` | `WorkQueueSource`, `QueueAwareTracker`, `'Queue'` provider registration |
+| `packages/WorkQueue/*` | None |
+| `migrations/v6/` | `ScopeType` CHECK, two nullable FK columns |
+| `packages/MJCoreEntities` (generated) | Via CodeGen |
+| Record Process Explorer UI | Handle `ScopeType='Queue'`; link detail rows to deliveries |
 
 ## References
 
-- The two sibling plans in this PR: `content-pipeline-framework.md`, `content-pipeline-framework-workqueue.md`.
-- `packages/RecordSetProcessor/base/src/interfaces.ts`, `registry.ts` — the existing pluggable seams this plan extends.
-- `packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts`, `trackers/GenericProcessRunTracker.ts` — the existing dispatch and tracker this plan mirrors for the new scope.
-- `migrations/v6/V202609241637__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql` — the claim stored procedures `WorkQueueSource` calls.
+- Sibling plans: `content-pipeline-framework.md`, `content-pipeline-framework-workqueue.md`.
+- `packages/RecordSetProcessor/base/src/interfaces.ts`, `types.ts`, `registry.ts`.
+- `packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts`, `RecordProcessExecutor.ts`, `trackers/GenericProcessRunTracker.ts`.
+- `packages/WorkQueue/core/src/transport.ts`, `handler.ts`, `backoff.ts`.
+- `packages/WorkQueue/engine/src/transports/database/` — `DatabaseTransportConsumer`, `databaseCapabilities.ts`.
+- `migrations/v6/V202609241637__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql` — claim, extend-lease and settle procedures.
