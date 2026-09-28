@@ -36,7 +36,8 @@ import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
-import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
+import { ConversationsRuntime, type MentionPerson } from '@memberjunction/conversations-runtime';
+import type { AgentReplyMode, AgentTurnHandler } from '../../models/agent-turn.model';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
@@ -768,6 +769,49 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.DefaultAgentId;
   }
 
+  // ── Host rules for chats with several people ────────────────────────────
+  // All opt-in and forwarded to every composer the chat area shows. Left at their defaults,
+  // the chat area behaves exactly as before. See MessageInputComponent for each rule in full.
+
+  /**
+   * When a message starts an agent turn. `'Always'` (the default) answers every message;
+   * `'MentionOnly'` answers only a message that tags an agent, and posts any other message
+   * with no turn at all (no reply row, no placeholder, no turn events).
+   */
+  @Input() AgentReplyMode: AgentReplyMode = 'Always';
+
+  /**
+   * The agents that may answer in this chat: narrows the '@' list, every route, the
+   * conversation manager's delegation, and the pin and voice pickers. Null (the default)
+   * allows every agent the user can run; an empty list allows none.
+   */
+  @Input() AllowedAgentIDs: readonly string[] | null = null;
+
+  /**
+   * The people the '@' list offers, such as the chat's members. Null (the default) offers only
+   * the current user, as before.
+   */
+  @Input() MentionPeople: readonly MentionPerson[] | null = null;
+
+  /**
+   * The first moment of the conversation an agent turn may read. The server loads the agent's
+   * history from there and uses no summary of earlier messages. Null (the default) reads the
+   * whole conversation.
+   */
+  @Input() AgentHistoryFrom: Date | null = null;
+
+  /**
+   * Runs agent turns on the host's server instead of MJ's own path, after routing and
+   * `BeforeAgentTurn`, before any reply row exists. Null (the default) runs them on MJ's path.
+   */
+  @Input() AgentTurnHandler: AgentTurnHandler | null = null;
+
+  /**
+   * Whether MJ names a new conversation from its first message or its first voice utterance.
+   * True (the default) keeps today's behavior; a host that names its own chats turns it off.
+   */
+  @Input() AutoNameConversation: boolean = true;
+
   /**
    * Scope to apply when this surface CREATES a new conversation. Forwarded
    * to `ConversationEngine.CreateConversation` so the new row's
@@ -1069,8 +1113,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // stay as single emitters without a Before-pair.
   //
   // WIRING STATUS:
-  //   ✓ beforeAgentTurn / afterAgentTurn — wired in message-input.component
-  //     around `agentService.processMessage()` (re-emitted from chat-area).
+  //   ✓ beforeAgentTurn / afterAgentTurn — wired in message-input.component:
+  //     BeforeAgentTurn fires once per turn on every route, before any reply
+  //     row exists (re-emitted from chat-area).
   //   ✓ beforeResponseFormSubmitted / afterResponseFormSubmitted — wired in
   //     message-item.component's `onFormSubmitted()`, forwarded through
   //     message-list to chat-area.
@@ -1089,7 +1134,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   //     (diffed for open/close) / SessionEnded$. Non-Angular hosts (React,
   //     Vue, Node) register their own adapter — the chat-area code is unchanged.
 
-  /** Cancelable — fired BEFORE a user message is sent to the agent. */
+  /**
+   * Cancelable — fired once per agent turn, on every route, after routing picked the agent and
+   * before any reply row exists. Cancel it to write nothing more, or set `RedirectAgentId` to
+   * send the turn to another allowed agent. A message that starts no turn fires nothing.
+   */
   @Output() BeforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
 
   /**
@@ -1100,7 +1149,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * initialise in order, and the other way round this captures undefined.
    */
   @Output() beforeAgentTurn = this.BeforeAgentTurn;
-  /** Fired AFTER a successful agent turn completes. */
+  /** Fired AFTER a successful agent turn completes, on every route. */
   @Output() AfterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
 
   /**
@@ -2563,7 +2612,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.RealtimeSession.Captions$
       .pipe(takeUntil(this.destroy$))
       .subscribe((captions) => {
-        if (namedThisSession) {
+        if (namedThisSession || !this.AutoNameConversation) {
           return;
         }
         const created = this.RealtimeSession.SessionCreatedConversationId;

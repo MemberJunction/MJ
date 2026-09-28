@@ -1702,7 +1702,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     );
     componentRef.instance.Group = group;
     componentRef.instance.Meta = meta;
-    componentRef.instance.UserName = this.CurrentUser?.Name || 'You';
+    // The card says "You" on the viewer's own call and names the caller on anyone else's, which is
+    // why it takes the viewer's id rather than their name.
+    componentRef.instance.CurrentUserID = this.CurrentUser?.ID ?? null;
     componentRef.instance.OpenRequested.subscribe((sessionId: string) => this.RealtimeSessionOpenRequested.emit(sessionId));
     this._renderedMessages.set(key, { kind: 'realtime-session', ref: componentRef });
   }

@@ -45,7 +45,7 @@ vi.mock('@memberjunction/core', () => ({
 }));
 
 vi.mock('../util', () => ({
-    initializeDriverWithAccountCredentials: vi.fn(),
+    InitializeDriverWithAccountCredentials: vi.fn(),
 }));
 
 import { FileStorageEngine } from '../FileStorageEngine';
@@ -114,8 +114,8 @@ describe('FileStorageEngine driver-cache disposal', () => {
     describe('GetDriver on-demand caching', () => {
         it('does not call Dispose when populating a previously-uncached account', async () => {
             const newDriver = makeFakeDriver();
-            const { initializeDriverWithAccountCredentials } = await import('../util');
-            vi.mocked(initializeDriverWithAccountCredentials).mockResolvedValue(newDriver);
+            const { InitializeDriverWithAccountCredentials } = await import('../util');
+            vi.mocked(InitializeDriverWithAccountCredentials).mockResolvedValue(newDriver);
             mockBase.GetAccountWithProvider.mockReturnValue({
                 account: { ID: 'account-new' },
                 provider: {},
