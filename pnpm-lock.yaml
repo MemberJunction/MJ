@@ -8334,12 +8334,12 @@ importers:
       '@memberjunction/ng-base-types':
         specifier: 6.2.0-edge.0
         version: link:../base-types
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.2.0-edge.0
+        version: link:../shared
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.0
         version: link:../ui-components
-      rxjs:
-        specifier: ^7.8.2
-        version: 7.8.2
       tslib:
         specifier: ^2.8.1
         version: 2.8.1

@@ -23,6 +23,7 @@ import { CommonModule } from '@angular/common';
 import { BaseEntity, BaseEntityEvent, CompositeKey } from '@memberjunction/core';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import type {
     RecordCloneKey,
     RecordCloneDescribeOutput,
@@ -104,8 +105,7 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                 <!-- Loading State -->
                 @if (CurrentState === 'loading') {
                     <div class="panel-state-center">
-                        <i class="fa-solid fa-spinner fa-spin loading-icon"></i>
-                        <span class="loading-text">{{LoadingMessage}}</span>
+                        <mj-loading [Text]="LoadingMessage" Size="medium"></mj-loading>
                     </div>
                 }
 
@@ -426,16 +426,6 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
             gap: var(--mj-space-3);
         }
 
-        .loading-icon {
-            font-size: 28px;
-            color: var(--mj-brand-primary);
-        }
-
-        .loading-text {
-            font-size: var(--mj-text-sm);
-            color: var(--mj-text-secondary);
-        }
-
         .not-cloneable-icon {
             font-size: 36px;
             color: var(--mj-status-warning-text);
@@ -472,6 +462,7 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
     `],
     imports: [
         CommonModule,
+        SharedGenericModule,
         MJButtonDirective,
         MJTabNavComponent,
         CloneScopeControlsComponent,
