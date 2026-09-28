@@ -75,29 +75,26 @@ export class TaskGraphActionRunner implements TaskActionRunner {
     }
 
     /**
-     * Rebuilds the action's parameters from the task's stored payload.
+     * Rebuilds the action's parameters from the task's input, one parameter per key.
      *
-     * **The values here have been through redaction**, because `Task.InputPayload` is persistent,
-     * user-visible storage and nothing writes a raw `ActionParam[]` there. A parameter the binding
-     * marked as not-logged therefore arrives absent rather than secret — the action sees a missing
-     * value, which is the honest consequence of choosing not to persist it, and the reason durable
-     * dispatch is opt-in per binding rather than the default.
+     * For a **durable entity-action** graph the input was written by `RedactParamsToRecord`
+     * (`@memberjunction/actions-base`) at deferral time, so its values have been through redaction:
+     * a parameter the binding marked as not-logged arrives absent rather than secret — the action
+     * sees a missing value, which is the honest consequence of choosing not to persist it, and the
+     * reason durable dispatch is opt-in per binding rather than the default. Every other graph's
+     * input is whatever its spec authored. This method re-applies no redaction rule in either case.
      *
-     * The name→value shape read here is written by `RedactParamsToRecord` (`@memberjunction/actions-base`)
-     * at deferral time — this method only rebuilds `ActionParam[]` from it, it does not re-apply any
-     * redaction rule.
-     *
-     * Dependency outputs are merged underneath the task's own input so a node's explicit parameters
-     * always win over an upstream node that happened to emit the same key.
+     * `InputPayload` already carries the dependency outputs: the dispatcher merges them underneath
+     * the task's own input (`mergedPayload`) before calling this runner, so a node's explicit
+     * parameters win and a step with an input mapping gets exactly the parameters it declared.
+     * `DependencyOutputs` is keyed by upstream task ID, not by parameter name, so it is deliberately
+     * not read here — spreading it would hand the action one extra parameter per dependency, named
+     * by a GUID and holding that task's whole output.
      */
     private buildParams(params: TaskActionRunParams): ActionParam[] {
-        const merged: Record<string, unknown> = {};
-        for (const [name, value] of params.DependencyOutputs) {
-            merged[name] = value;
+        if (!params.InputPayload || typeof params.InputPayload !== 'object') {
+            return [];
         }
-        if (params.InputPayload && typeof params.InputPayload === 'object') {
-            Object.assign(merged, params.InputPayload as Record<string, unknown>);
-        }
-        return Object.entries(merged).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
+        return Object.entries(params.InputPayload as Record<string, unknown>).map(([Name, Value]) => ({ Name, Value, Type: 'Input' }));
     }
 }

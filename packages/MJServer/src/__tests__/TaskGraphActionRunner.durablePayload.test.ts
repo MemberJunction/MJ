@@ -111,4 +111,19 @@ describe('TaskGraphActionRunner — durable payload round-trips by param name (#
         // The binding-suppressed parameter never reaches the action — absent, not present-with-undefined.
         expect(sentParams.some((p) => p.Name === 'InternalNotes')).toBe(false);
     });
+
+    it('does not turn dependency outputs into params named by the upstream task ID', async () => {
+        // The dispatcher keys DependencyOutputs by the upstream task's ID and has ALREADY merged their
+        // values into InputPayload (TaskGraphDispatcher.mergedPayload). A runner that also spread the
+        // map handed the action one extra param per dependency, named by a GUID and holding that
+        // task's whole output — which then landed, unredacted, in ActionExecutionLog.Params.
+        const upstreamID = '20924BD7-5128-4150-8404-FB44A55AEA0F';
+        const params = baseRunParams({ EntityName: 'MJ: Entities', Record: { ID: 'R1', Name: 'MJ: Tags' } });
+        params.DependencyOutputs = new Map([[upstreamID, { Record: { ID: 'R1', Name: 'MJ: Tags' } }]]);
+
+        await new TaskGraphActionRunner().RunActionForTask(params);
+
+        const sentParams = vi.mocked(ActionEngineServer.Instance.RunAction).mock.calls[0][0].Params as ActionParam[];
+        expect(sentParams.map((p) => p.Name).sort()).toEqual(['EntityName', 'Record']);
+    });
 });
