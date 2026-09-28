@@ -1170,7 +1170,10 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             throw new Error('Cannot read subfolders without a folder id.');
         }
 
-        const rv = new RunView();
+        // The engine's own provider, as DeleteProject uses for the folder itself. `new RunView()`
+        // would be the process-global default, which in a multi-provider client can be a
+        // different server from the one this delete runs against.
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJProjectEntity>(
             {
                 EntityName: 'MJ: Projects',

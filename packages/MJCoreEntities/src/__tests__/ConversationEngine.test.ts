@@ -59,6 +59,14 @@ let runViewParamsLog: Array<Record<string, unknown>> = [];
  */
 let runViewsBatchLog: Array<Array<Record<string, unknown>>> = [];
 
+/**
+ * The provider each RunView call was bound to, keyed by that call's param object: `null` for a
+ * bare `new RunView()` (the process-global default), the provider object for one built by
+ * `RunView.FromMetadataProvider`. Keyed by params rather than kept as a parallel array because
+ * some tests reset `runViewParamsLog` mid-test, which would silently misalign an index.
+ */
+const runViewProviderByParams = new WeakMap<object, unknown>();
+
 const DEFAULT_RV_RESULT = { Success: true, Results: [] };
 const DEFAULT_RQ_RESULT = { Success: true, Results: [] };
 
@@ -164,13 +172,15 @@ vi.mock('@memberjunction/core', () => {
         },
         Metadata: MockMetadata,
         RunView: class MockRunView {
+            constructor(private readonly boundProvider: unknown = null) {}
             // ConversationEngine's windowed reads go through the provider-bound factory
             // rather than `new RunView()`, so the mock must expose it.
-            static FromMetadataProvider(_provider: unknown) {
-                return new MockRunView();
+            static FromMetadataProvider(provider: unknown) {
+                return new MockRunView(provider);
             }
             async RunView(params: Record<string, unknown>) {
                 runViewParamsLog.push(params);
+                runViewProviderByParams.set(params, this.boundProvider);
                 // Claim this call's result BEFORE any awaiting, so a held-open call keeps the
                 // result queued for it rather than handing it to whoever resolves first.
                 const result = nextRunViewResult();
@@ -184,6 +194,7 @@ vi.mock('@memberjunction/core', () => {
                 runViewsBatchLog.push(params);
                 for (const p of params) {
                     runViewParamsLog.push(p);
+                    runViewProviderByParams.set(p, this.boundProvider);
                 }
                 return Promise.resolve(params.map(() => nextRunViewResult()));
             }
@@ -1566,6 +1577,23 @@ describe('ConversationEngine', () => {
 
                 const childRead = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects').at(-1)!;
                 expect(childRead['IgnoreMaxRows']).toBe(true);
+            });
+
+            it('reads children through the engine\'s provider, not the process-global default', async () => {
+                // In a multi-provider client the global default can be a different server from
+                // the one this delete runs against — and a child set read from the wrong server
+                // is as incomplete as one read from the narrowed cache.
+                runViewResultQueue.push({ Success: true, Results: [createMockProject({ ID: 'p1' })] });
+                await engine.LoadProjects('env-1', contextUser);
+                runViewResultQueue.push({ Success: true, Results: [] });
+
+                await engine.DeleteProject('p1', contextUser);
+
+                const childRead = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Projects').at(-1)!;
+                expect(String(childRead['ExtraFilter'])).toBe("ParentID='p1'");
+                // null would mean a bare `new RunView()`; the mock engine's ProviderToUse is the
+                // only provider in this suite carrying this CurrentUser.
+                expect(runViewProviderByParams.get(childRead)).toMatchObject({ CurrentUser: { ID: 'user-1' } });
             });
 
             it('refuses to read children without an id, instead of answering "none"', async () => {
