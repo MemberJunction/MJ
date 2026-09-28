@@ -1343,7 +1343,7 @@ import {
     WebSearchQueryServerOperation,
 } from '@memberjunction/web-search-engine';
 
-// @memberjunction/core-actions (148 classes)
+// @memberjunction/core-actions (149 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1459,6 +1459,7 @@ import {
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
@@ -2550,6 +2551,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
@@ -2604,7 +2606,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1052;
+export const CLASS_REGISTRATIONS_COUNT = 1053;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
