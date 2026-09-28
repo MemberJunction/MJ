@@ -394,7 +394,7 @@ describe('RecordClonePanelComponent (DOM)', () => {
         vi.spyOn(mockService, 'ExecuteClone').mockResolvedValue({
             ...MOCK_EXECUTE,
             Success: false,
-            ResultCode: 'EXECUTION_FAILED',
+            ResultCode: 'EXECUTION_ERROR',
             ErrorMessage: 'Save failed.',
         });
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
@@ -409,7 +409,7 @@ describe('RecordClonePanelComponent (DOM)', () => {
         await panel.ExecuteClone();
 
         expect(panel.CurrentState).toBe('failed');
-        expect(failed).toEqual({ EntityName: 'Users', Message: 'Save failed.', ResultCode: 'EXECUTION_FAILED' });
+        expect(failed).toEqual({ EntityName: 'Users', Message: 'Save failed.', ResultCode: 'EXECUTION_ERROR' });
 
         const before = vi.mocked(mockService.PlanClone).mock.calls.length;
         panel.BackToReview();
