@@ -23,7 +23,7 @@ vi.mock('../realtime/realtime-vendor-resolution', () => ({
 }));
 
 import { RealtimeClientSessionService } from '../realtime/realtime-client-session-service';
-import type { MJAIModelEntityExtended, MJAIAgentEntityExtended } from '@memberjunction/core-entities';
+import type { MJAIModelEntityExtended, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { PrepareClientSessionInput } from '../realtime/realtime-client-session-service';
 import type { BaseRealtimeModel } from '@memberjunction/ai';
 
@@ -114,7 +114,9 @@ describe('PrepareClientSessionInput.APIKeys reaches model selection', () => {
         expect(svc.PassedResolver!('VoiceDriver')).toBe('sk-customer');
     });
 
-    it('still builds one with no keys on the input — the platform lookup, so no branch special-cases it', async () => {
+    it('still builds one with no keys on the input — it answers nothing, leaving every class to the seam', async () => {
+        // Hermetic whatever the shell exports: the funnel's resolver holds RUN keys only and never
+        // reads the environment. The platform key comes from getAPIKeyForDriver in the tail.
         const svc = new KeyProbeService();
         await svc.ResolveForSession({
             CoAgent: {} as unknown as MJAIAgentEntityExtended,
@@ -123,6 +125,19 @@ describe('PrepareClientSessionInput.APIKeys reaches model selection', () => {
             PreferredModelID: 'm1',
         });
         expect(svc.PassedResolver).toBeTypeOf('function');
-        expect(svc.PassedResolver!('VoiceDriver')).toBeUndefined();  // no run key, no env key in this process
+        expect(svc.PassedResolver!('VoiceDriver')).toBeUndefined();
+    });
+
+    it('answers only for the driver classes the run keys, never with another class\'s key', async () => {
+        const svc = new KeyProbeService();
+        await svc.ResolveForSession({
+            CoAgent: {} as unknown as MJAIAgentEntityExtended,
+            TargetAgentID: 't1',
+            AgentSessionID: 's1',
+            PreferredModelID: 'm1',
+            APIKeys: [{ driverClass: 'SomeOtherDriver', apiKey: 'sk-customer-llm' }],
+        });
+        expect(svc.PassedResolver!('VoiceDriver')).toBeUndefined();
+        expect(svc.PassedResolver!('SomeOtherDriver')).toBe('sk-customer-llm');
     });
 });

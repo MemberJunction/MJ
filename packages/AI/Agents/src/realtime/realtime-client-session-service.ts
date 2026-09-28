@@ -42,7 +42,6 @@ import {
     GetAIAPIKey,
     AIAPIKey,
     AIAPIKeyResolver,
-    MakeAIAPIKeyResolver,
     IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
@@ -100,10 +99,14 @@ import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtim
  */
 export interface PrepareClientSessionInput {
     /**
-     * The run's runtime API keys, when the session is started inside an agent run that carries them
-     * (`ExecuteAgentParams.apiKeys`). Vendor selection and the minted session both resolve against
-     * these first and fall back to the platform key per driver class — the same precedence every
-     * prompt follows. Absent ⇒ platform keys only, which is every client-initiated session today.
+     * The run's runtime API keys, when the session is prepared from an agent run that carries them
+     * (`ExecuteAgentParams.apiKeys`, set by `BaseAgent.StartBridgeRealtimeSession`). Vendor selection
+     * and the minted session try these first, per driver class; for a class they do not key, this
+     * service's {@link RealtimeClientSessionService.getAPIKeyForDriver} seam answers (by default the
+     * `AI_VENDOR_API_KEY__<driver>` environment key). That is the same order as `GetAIAPIKey` — the
+     * legacy tier of prompt key resolution. MJ Credentials / `AICredentialBinding`s, which a prompt
+     * consults first, are not consulted by realtime. Absent ⇒ the seam alone, which is every
+     * client-initiated session today.
      */
     APIKeys?: AIAPIKey[];
     /** The Realtime Co-Agent entity. Provide this OR {@link PrepareClientSessionInput.CoAgentID}. */
@@ -1583,20 +1586,35 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         effectiveConfig?: RealtimeCoAgentConfig
     ): Promise<RealtimeModelResolutionOutcome> {
-        // One resolver for every branch below: the session's runtime keys (when it was started inside
-        // a run that carries them) ahead of the platform key, per driver class. Built here rather than
-        // per branch so the requested-model, configured-preference and default paths cannot disagree
-        // about which credentials the session may use.
-        const resolveAPIKey = MakeAIAPIKeyResolver(input.APIKeys);
+        // One resolver for every branch below, built here rather than per branch so the requested-model,
+        // configured-preference and default paths cannot disagree about which credentials the session
+        // may use. It answers with the session's RUN keys only: resolveVendorAndInstantiate layers this
+        // service's getAPIKeyForDriver seam under it, giving run key → seam → (the seam's default) env.
+        // A resolver that fell back to the environment itself would answer before the seam, so a
+        // subclass that overrides the seam would lose to AI_VENDOR_API_KEY__<driver>.
+        const resolveRunKey = this.buildRunKeyResolver(input.APIKeys);
         if (input.PreferredModelID) {
-            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveAPIKey);
+            return this.resolvePreferredRealtimeModel(input.PreferredModelID, resolveRunKey);
         }
-        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveAPIKey);
+        const fromConfig = this.resolveConfiguredModelPreference(effectiveConfig, resolveRunKey);
         if (fromConfig) {
             return { Resolution: fromConfig };
         }
-        const resolution = await this.resolveRealtimeModel(coAgent, resolveAPIKey);
+        const resolution = await this.resolveRealtimeModel(coAgent, resolveRunKey);
         return resolution ? { Resolution: resolution } : { ErrorMessage: this.noModelMessage() };
+    }
+
+    /**
+     * The session's run-scoped keys as a resolver: the key for a driver class when the run carries
+     * one, else `undefined` — no platform fallback. The fallback belongs to
+     * {@link getAPIKeyForDriver}, which {@link resolveVendorAndInstantiate} consults for any class
+     * this does not key.
+     *
+     * @param apiKeys The session's run keys ({@link PrepareClientSessionInput.APIKeys}), if any.
+     * @returns A resolver over those keys only.
+     */
+    private buildRunKeyResolver(apiKeys: AIAPIKey[] | undefined): AIAPIKeyResolver {
+        return (driverClass) => apiKeys?.find(k => k.driverClass === driverClass)?.apiKey || undefined;
     }
 
     /**
@@ -1607,6 +1625,7 @@ export class RealtimeClientSessionService {
      * explicit runtime choice ({@link resolvePreferredRealtimeModel}), which fails loud.
      *
      * @param effectiveConfig The resolved effective configuration.
+     * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @returns The resolution, or `null` when no preference is configured or it can't be satisfied.
      */
     protected resolveConfiguredModelPreference(effectiveConfig?: RealtimeCoAgentConfig, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
@@ -1666,6 +1685,7 @@ export class RealtimeClientSessionService {
      * the caller's user explicitly chose this one.
      *
      * @param preferredModelID The `MJ: AI Models.ID` the user chose.
+     * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @returns The resolution outcome (resolution or a specific failure reason).
      */
     protected resolvePreferredRealtimeModel(preferredModelID: string, resolve?: AIAPIKeyResolver): RealtimeModelResolutionOutcome {
@@ -1715,6 +1735,7 @@ export class RealtimeClientSessionService {
      * step can't be satisfied.
      *
      * @param coAgent The co-agent being voiced (reserved for future per-agent model preference).
+     * @param resolve The session's run-scoped key resolver (run keys only; see {@link resolveVendorAndInstantiate}).
      * @returns The resolved model + identifiers, or `null`.
      */
     protected async resolveRealtimeModel(coAgent: MJAIAgentEntityExtended, resolve?: AIAPIKeyResolver): Promise<RealtimeModelResolution | null> {
@@ -1737,7 +1758,14 @@ export class RealtimeClientSessionService {
      * Shared tail of model resolution: picks the vendor (with a usable API key) for an
      * already-chosen model entity and instantiates its realtime driver.
      *
+     * Key precedence, per driver class: `resolve` (the session's run keys), then this service's
+     * {@link getAPIKeyForDriver} seam, whose default is the environment key. Vendor selection and the
+     * mint use that one chain, so a session is never routed to a vendor it cannot then be minted on.
+     *
      * @param model The chosen model entity.
+     * @param resolve The session's run-scoped key resolver. Expected to answer with run keys only:
+     *   one that falls back to the environment itself answers before {@link getAPIKeyForDriver} and
+     *   so bypasses an override of it.
      * @returns The full resolution, or `null` when no vendor/key/driver can be satisfied.
      */
     protected resolveVendorAndInstantiate(model: MJAIModelEntityExtended, resolve?: AIAPIKeyResolver): RealtimeModelResolution | null {
@@ -1773,6 +1801,9 @@ export class RealtimeClientSessionService {
     /**
      * Resolves the API key for a vendor driver class. **Overridable seam** (wraps the module-level
      * {@link GetAIAPIKey}) so tests can simulate present/absent keys without environment setup.
+     * Consulted for every driver class the session's run keys do not cover, so an override (a vault,
+     * a different key, or `undefined` to disable a vendor) applies whether or not the environment
+     * also holds a key.
      *
      * @param driverClass The vendor's `DriverClass`.
      * @returns The API key, or a falsy value when none is configured.
@@ -1814,6 +1845,7 @@ export class RealtimeClientSessionService {
      * THIS service's {@link getAPIKeyForDriver} so subclasses and tests keep their key-resolution seam.
      *
      * @param modelID The chosen model's id.
+     * @param resolve The complete key chain to select against; defaults to {@link getAPIKeyForDriver}.
      * @returns The vendor driver/api identifiers, or `null` when none has a usable key.
      */
     protected selectRealtimeVendor(modelID: string, resolve?: AIAPIKeyResolver): RealtimeVendorSelection | null {
