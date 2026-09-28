@@ -17,16 +17,19 @@
  * (fls-client.checks.ts). A passed contextUser cannot change who the server thinks is calling, so
  * per-user authorization over the wire is only observable through per-user authentication.
  *
- * TIERS. RC3 and RC10–RC12 are read-only and run in every lane: a dry run or a Plan that writes is
- * itself the bug. RC11 creates a throwaway company integration only when the mutation tier is armed
- * and no scheduled job already has one; otherwise it runs its assertions on the jobs that exist and
- * says what it could not cover. Every other check writes and carries `RequiresMutation: true`.
+ * TIERS. RC3 and RC10–RC13 are read-only and run in every lane, PR CI included: a dry run or a Plan
+ * that writes is itself the bug. RC11 creates a throwaway company integration, and RC12 provisions the
+ * subject user (whose settings include excluded ones), only when the mutation tier is armed; otherwise
+ * they run on the rows that exist and say what they could not cover. Every other check writes and
+ * carries `RequiresMutation: true`.
  *
  * FIXTURES. Setup writes nothing. The mutating checks provision the subject user on first use and
  * append every row they (or a clone they executed) created to the module-scoped fixture; each row
  * is prefixed per run and tagged "(mj-integration-test — safe to delete)". Teardown sweeps FK-safe
- * in reverse: clone log items and logs, `ClonedFrom` links, created rows (retried until no pass
- * makes progress), then everything hanging off the throwaway users, then the users.
+ * in reverse: the clone logs its Executes returned (and their items), `ClonedFrom` links, created
+ * rows (retried until no pass makes progress), then everything hanging off the throwaway users, then
+ * the users. Logs are deleted by the IDs Execute returned, never by a filter, so a shared database
+ * keeps everyone else's.
  *
  * @see plans/record-cloning/README.md §13.2
  */
@@ -76,8 +79,16 @@ const CLONE_LOGS = 'MJ: Record Clone Logs';
 const CLONE_LOG_ITEMS = 'MJ: Record Clone Log Items';
 const RECORD_LINKS = 'MJ: Record Links';
 
-/** Settings the shipped `MJ: Users` configuration's `ExcludeRows` must never copy (plan §13.2, RC12). */
-const EXCLUDED_SETTING_PREFIXES = ['mobile.', 'mj.chat.drafts', 'mj.realtimeVoice.recordingConsent'];
+/**
+ * Setting prefixes the `MJ: Users` configuration's `ExcludeRows` must never copy (plan §13.2, RC1, RC12),
+ * read from the configuration the server runs, so the checks follow the shipped list.
+ */
+function excludedSettingPrefixes(md: IMetadataProvider): string[] {
+    const rule = md.EntityByName(USERS)?.CloneConfig?.Relationships?.[USER_SETTINGS];
+    const prefixes = (rule?.ExcludeRows ?? []).filter((r) => r.Field === 'Setting').flatMap((r) => r.StartsWith ?? []);
+    Assert(prefixes.length > 0, `the ${USERS} clone configuration has no Setting ExcludeRows for ${USER_SETTINGS}`);
+    return prefixes;
+}
 
 /** The three settings the subject user carries: one ordinary, two the configuration excludes. */
 const SUBJECT_SETTINGS: Array<{ Setting: string; Value: string }> = [
@@ -151,10 +162,10 @@ async function executeClone(provider: IMetadataProvider, input: RecordCloneExecu
 }
 
 /** Records an Execute's source and everything it created, so Teardown sweeps it even if a later assertion throws. */
-function trackExecute(ctx: IntegrationCheckContext, sourceId: string, out: RecordCloneExecuteOutput | undefined): void {
+function trackExecute(ctx: IntegrationCheckContext, out: RecordCloneExecuteOutput | undefined): void {
     const f = fx(ctx);
-    if (!f.SourceRecordIDs.some((id) => UUIDsEqual(id, sourceId))) {
-        f.SourceRecordIDs.push(sourceId);
+    if (out?.CloneLogID) {
+        f.CloneLogIDs.push(out.CloneLogID);
     }
     for (const created of out?.Created ?? []) {
         if (!created.TargetKey) continue;
@@ -390,7 +401,7 @@ export const RecordCloningChecks: NamedCheck[] = [
                 SourceRecordKey: idKey(subjectId),
                 Options: { Preset: 'with-settings', PromptedValues: prompted, Reason: `IT95 RC1 ${FIXTURE_TAG}` },
             }, 'RC1');
-            trackExecute(ctx, subjectId, out);
+            trackExecute(ctx, out);
             Assert(out.Success && out.ResultCode === 'SUCCESS', `RC1: the user clone failed — ${describeFailure(out)}`);
             const cloneId = rootTarget(out, 'RC1');
             Assert(!UUIDsEqual(cloneId, subjectId), 'RC1: the clone must be a new user');
@@ -401,8 +412,9 @@ export const RecordCloningChecks: NamedCheck[] = [
             AssertEqual(clone.IsActive, false, 'RC1: a cloned user must start inactive');
             AssertEqual(String(clone.Type).trim(), 'User', 'RC1: a cloned user must never be an Owner');
 
+            const excluded = excludedSettingPrefixes(md);
             const expectedSettings = srcSettings.map((s) => s.Setting)
-                .filter((s) => !EXCLUDED_SETTING_PREFIXES.some((p) => s.startsWith(p))).sort().join(',');
+                .filter((s) => !excluded.some((p) => s.startsWith(p))).sort().join(',');
             const cloneSettings = await readRows<{ Setting: string }>(md, USER_SETTINGS, `UserID = '${cloneId}'`, { Fields: ['Setting'] });
             AssertEqual(cloneSettings.map((s) => s.Setting).sort().join(','), expectedSettings,
                 'RC1: with-settings must copy the ordinary settings and leave out device tokens and chat drafts');
@@ -411,19 +423,6 @@ export const RecordCloningChecks: NamedCheck[] = [
             AssertEqual(await countRows(md, USER_ROLES, `UserID = '${subjectId}'`), srcRoles.length, 'RC1: the source lost roles');
             AssertEqual(await countRows(md, USER_APPLICATIONS, `UserID = '${subjectId}'`), srcApps.length, 'RC1: the source lost applications');
             AssertEqual(await countRows(md, USER_SETTINGS, `UserID = '${subjectId}'`), srcSettings.length, 'RC1: the source lost settings');
-
-            // The subject is not an Owner, so the reset above proves only IsActive. Plan (writes
-            // nothing) a clone of the acting Owner and confirm the configured Type reset applies.
-            if (String(ctx.User.Type ?? '').trim() === 'Owner') {
-                const ownerPlan = await planClone(md, {
-                    EntityName: USERS,
-                    SourceRecordKey: idKey(ctx.User.ID),
-                    Options: { PromptedValues: promptedValuesFor(f, 'rc1-owner') },
-                }, 'RC1 owner plan');
-                const root = ownerPlan.Nodes.find((n) => n.Depth === 0 && n.EntityName === USERS);
-                Assert(root != null, 'RC1: the owner plan has no root node');
-                AssertEqual(finalValue(root!, 'Type'), 'User', 'RC1: a clone of an Owner must be planned as a plain User');
-            }
 
             // Roles and applications last, so a failure here still reports everything above.
             const sortIds = (ids: string[]) => ids.map((i) => i.toLowerCase()).sort().join(',');
@@ -446,7 +445,7 @@ export const RecordCloningChecks: NamedCheck[] = [
                 md, TEMPLATE_CONTENTS, `TemplateID = '${source.TemplateID}'`, { Fields: ['ID', 'TemplateText'] });
 
             const out = await executeClone(md, { EntityName: AI_PROMPTS, SourceRecordKey: idKey(source.ID) }, 'RC2');
-            trackExecute(ctx, source.ID, out);
+            trackExecute(ctx, out);
             Assert(out.Success && out.ResultCode === 'SUCCESS', `RC2: the prompt clone failed — ${describeFailure(out)}`);
             const cloneId = rootTarget(out, 'RC2');
 
@@ -515,7 +514,7 @@ export const RecordCloningChecks: NamedCheck[] = [
             const promptsBefore = await countRows(md, AI_PROMPTS);
             const templatesBefore = await countRows(md, TEMPLATES);
             const refused = await executeClone(denied, input, 'RC4 denied');
-            trackExecute(ctx, source.ID, refused);
+            trackExecute(ctx, refused);
             Assert(!refused.Success, 'RC4: a caller without the clone authorization was allowed to clone');
             AssertEqual(refused.ResultCode, 'FORBIDDEN', `RC4: the refusal must be FORBIDDEN (got ${describeFailure(refused)})`);
             Assert(/authorization/i.test(refused.ErrorMessage ?? '') && /Clone Records/.test(refused.ErrorMessage ?? ''),
@@ -526,7 +525,7 @@ export const RecordCloningChecks: NamedCheck[] = [
 
             // Positive control: the identical call from an identity holding the authorization.
             const allowed = await executeClone(md, input, 'RC4 authorized');
-            trackExecute(ctx, source.ID, allowed);
+            trackExecute(ctx, allowed);
             Assert(allowed.Success && allowed.ResultCode === 'SUCCESS',
                 `RC4: the same call as an authorized caller must succeed — ${describeFailure(allowed)}`);
         },
@@ -566,7 +565,7 @@ export const RecordCloningChecks: NamedCheck[] = [
             const startedAt = new Date(Date.now() - 5_000);
 
             const out = await executeClone(md, input, 'RC5');
-            trackExecute(ctx, subjectId, out);
+            trackExecute(ctx, out);
             Assert(!out.Success, 'RC5: the clone reported success although its query category copy cannot be inserted');
             AssertEqual(out.ResultCode, 'EXECUTION_ERROR', `RC5: a failed child must surface as EXECUTION_ERROR (got ${describeFailure(out)})`);
 
@@ -590,7 +589,7 @@ export const RecordCloningChecks: NamedCheck[] = [
             const md = ctx.Provider;
             const source = await findPromptWithTemplate(ctx);
             const out = await executeClone(md, { EntityName: AI_PROMPTS, SourceRecordKey: idKey(source.ID) }, 'RC6');
-            trackExecute(ctx, source.ID, out);
+            trackExecute(ctx, out);
             Assert(out.Success && out.ResultCode === 'SUCCESS', `RC6: the clone failed — ${describeFailure(out)}`);
             Assert(!!out.CloneLogID, 'RC6: a successful clone must return its clone log id');
             Assert(out.Created.length > 0, 'RC6: a successful clone must report what it created');
@@ -663,7 +662,7 @@ export const RecordCloningChecks: NamedCheck[] = [
 
             const logsBefore = await countRows(md, CLONE_LOGS, `RootSourceRecordID = '${subjectId}' AND Status = 'Cancelled'`);
             const stale = await executeClone(md, { ...input, ExpectedPlanHash: reviewed.Hash }, 'RC7 stale');
-            trackExecute(ctx, subjectId, stale);
+            trackExecute(ctx, stale);
             AssertEqual(stale.ResultCode, 'PLAN_CHANGED', `RC7: a stale plan hash must be refused with PLAN_CHANGED (got ${describeFailure(stale)})`);
             Assert(!stale.Success, 'RC7: a PLAN_CHANGED refusal must not report success');
             Assert(stale.Plan != null && stale.Plan.Hash !== reviewed.Hash, 'RC7: PLAN_CHANGED must return the fresh plan with its new hash');
@@ -671,20 +670,13 @@ export const RecordCloningChecks: NamedCheck[] = [
             AssertEqual(await countRows(md, USERS, `Email = '${prompted.Email}'`), 0, 'RC7: a PLAN_CHANGED refusal wrote a user');
             AssertEqual(await countRows(md, CLONE_LOGS, `RootSourceRecordID = '${subjectId}' AND Status = 'Cancelled'`), logsBefore + 1,
                 'RC7: a PLAN_CHANGED refusal must leave one Cancelled clone log');
+            Assert(stale.CloneLogID != null, 'RC7: a PLAN_CHANGED refusal must return the ID of the Cancelled log it wrote');
 
             // Positive control: the fresh hash is accepted.
             const fresh = await executeClone(md, { ...input, ExpectedPlanHash: stale.Plan!.Hash }, 'RC7 fresh');
-            trackExecute(ctx, subjectId, fresh);
+            trackExecute(ctx, fresh);
             Assert(fresh.Success && fresh.ResultCode === 'SUCCESS', `RC7: executing with the fresh plan's hash must succeed — ${describeFailure(fresh)}`);
-
-            // The same guarantee for a graph with children: the reviewed hash must survive a re-plan
-            // when nothing changed, or every clone of such a graph from the UI is refused.
-            const promptSource = await findPromptWithTemplate(ctx);
-            const promptInput: RecordClonePlanInput = { EntityName: AI_PROMPTS, SourceRecordKey: idKey(promptSource.ID) };
-            const p1 = await planClone(md, promptInput, 'RC7 prompt plan');
-            const p2 = await planClone(md, promptInput, 'RC7 prompt replan');
-            AssertEqual(p2.Hash, p1.Hash,
-                'RC7: re-planning an unchanged AI prompt graph gave a different hash, so Execute with the reviewed hash would always return PLAN_CHANGED');
+            // RC13 covers hash stability for a graph with children without writing.
         },
     },
     {
@@ -728,7 +720,7 @@ export const RecordCloningChecks: NamedCheck[] = [
             }
 
             const out = await executeClone(md, { EntityName: ACTIONS, SourceRecordKey: idKey(source.ID) }, 'RC8');
-            trackExecute(ctx, source.ID, out);
+            trackExecute(ctx, out);
             Assert(out.Success && out.ResultCode === 'SUCCESS', `RC8: the action clone failed — ${describeFailure(out)}`);
             const cloneId = rootTarget(out, 'RC8');
             AssertEqual(out.Created.filter((c) => c.EntityName === ACTIONS).length, 1, 'RC8: the clone must create exactly one action');
@@ -900,12 +892,21 @@ export const RecordCloningChecks: NamedCheck[] = [
             Assert(!plan.Blocked, `RC12: the plan is blocked — ${plan.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message).join('; ')}`);
             AssertEqual(nodesOf(plan, USER_SETTINGS).length, 0, `RC12: ${USER_SETTINGS} must not be copied unless the with-settings preset is chosen`);
 
-            // with-settings: the user with the most settings, so the exclusion has the most to act on.
-            const bySettings = [...users].sort((a, b) => countFor(settings, b.ID) - countFor(settings, a.ID))[0];
-            if (countFor(settings, bySettings.ID) === 0) {
-                console.warn('  ⚠ record-cloning.RC12 — no user has settings, so the with-settings exclusion was not exercised');
+            // with-settings: with the mutation tier armed, the subject user, whose settings include ones
+            // the configuration excludes, so the exclusion always has something to act on. Otherwise the
+            // user with the most settings.
+            if (IsTierEnabled('mutation')) {
+                const { UserID: subjectId } = await ensureSubject(ctx);
+                const subjectSettings = await readRows<{ ID: string; Setting: string }>(md, USER_SETTINGS, `UserID = '${subjectId}'`, { Fields: ['ID', 'Setting'] });
+                await assertWithSettingsPlan(md, subjectId, subjectSettings, options, true);
             } else {
-                await assertWithSettingsPlan(md, bySettings.ID, settings.filter((s) => UUIDsEqual(s.UserID, bySettings.ID)), options);
+                const bySettings = [...users].sort((a, b) => countFor(settings, b.ID) - countFor(settings, a.ID))[0];
+                if (countFor(settings, bySettings.ID) === 0) {
+                    console.warn('  ⚠ record-cloning.RC12 — no user has settings and the mutation tier is off, so the with-settings exclusion was not exercised. ' +
+                        'Set RUN_MUTATION_TESTS=1 to cover it.');
+                } else {
+                    await assertWithSettingsPlan(md, bySettings.ID, settings.filter((s) => UUIDsEqual(s.UserID, bySettings.ID)), options, false);
+                }
             }
 
             // Roles and applications last, so a failure here still reports the settings legs above.
@@ -915,6 +916,45 @@ export const RecordCloningChecks: NamedCheck[] = [
                 `RC12: the plan must copy each of the user's ${USER_APPLICATIONS}`);
         },
     },
+    {
+        Id: 'record-cloning.RC13',
+        Name: 'RC13: plans that write nothing — an Owner is planned as an inactive User, a user without prompted values is blocked, and unchanged graphs re-plan to the same hash',
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const f = fx(ctx);
+            const md = ctx.Provider;
+
+            // An Owner source: the configured resets must turn the copy into an inactive plain User.
+            const owner = (await readRows<{ ID: string }>(md, USERS, `Type = 'Owner'`, { Fields: ['ID'], OrderBy: 'Email ASC', MaxRows: 1 }))[0];
+            Assert(owner != null, `RC13: no Owner in ${USERS} to plan a clone of`);
+            const ownerInput: RecordClonePlanInput = { EntityName: USERS, SourceRecordKey: idKey(owner.ID), Options: { PromptedValues: promptedValuesFor(f, 'rc13') } };
+            const ownerPlan = await planClone(md, ownerInput, 'RC13 owner plan');
+            Assert(!ownerPlan.Blocked, `RC13: the owner plan is blocked — ${ownerPlan.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message).join('; ')}`);
+            const root = ownerPlan.Nodes.find((n) => n.Depth === 0 && n.EntityName === USERS);
+            Assert(root != null, 'RC13: the owner plan has no root node');
+            AssertEqual(finalValue(root!, 'Type'), 'User', 'RC13: a clone of an Owner must be planned as a plain User');
+            AssertEqual(finalValue(root!, 'IsActive'), false, 'RC13: a cloned user must be planned inactive');
+
+            // An existing user with children re-plans to the same hash when nothing changed, or every
+            // Execute from the UI would come back PLAN_CHANGED.
+            const ownerAgain = await planClone(md, ownerInput, 'RC13 owner replan');
+            AssertEqual(ownerAgain.Hash, ownerPlan.Hash, 'RC13: re-planning an unchanged user gave a different hash');
+
+            // No prompted values: the shipped configuration prompts for Email and names, so the plan
+            // must block rather than copy the source's Email.
+            const unprompted = await planClone(md, { EntityName: USERS, SourceRecordKey: idKey(owner.ID) }, 'RC13 unprompted plan');
+            Assert(unprompted.Blocked, 'RC13: a user plan without prompted values must be blocked');
+            Assert(unprompted.Warnings.some((w) => w.Code === 'UNIQUE_PROMPT_REQUIRED' && w.Severity === 'Error'),
+                `RC13: the unprompted plan must say which values are missing (got ${unprompted.Warnings.map((w) => w.Code).join(', ') || 'no warnings'})`);
+
+            // The same for an AI prompt graph (prompt, template, template contents).
+            const promptSource = await findPromptWithTemplate(ctx);
+            const promptInput: RecordClonePlanInput = { EntityName: AI_PROMPTS, SourceRecordKey: idKey(promptSource.ID) };
+            const p1 = await planClone(md, promptInput, 'RC13 prompt plan');
+            const p2 = await planClone(md, promptInput, 'RC13 prompt replan');
+            AssertEqual(p2.Hash, p1.Hash,
+                'RC13: re-planning an unchanged AI prompt graph gave a different hash, so Execute with the reviewed hash would always return PLAN_CHANGED');
+        },
+    },
 ];
 
 /** RC12's with-settings leg: every planned setting is the source's own, and none matches an excluded prefix. */
@@ -922,19 +962,22 @@ async function assertWithSettingsPlan(
     md: IMetadataProvider,
     userId: string,
     sourceSettings: Array<{ ID: string; Setting: string }>,
-    options: { PromptedValues: Record<string, string> }
+    options: { PromptedValues: Record<string, string> },
+    mustExclude: boolean
 ): Promise<void> {
+    const excluded = excludedSettingPrefixes(md);
     const withSettings = await planClone(md, {
         EntityName: USERS, SourceRecordKey: idKey(userId), Options: { ...options, Preset: 'with-settings' },
     }, 'RC12 with-settings');
     Assert(!withSettings.Blocked, 'RC12: the with-settings plan is blocked');
     const planned = nodesOf(withSettings, USER_SETTINGS).map((n) => sourceSettings.find((s) => UUIDsEqual(s.ID, bareKey(n.SourceKey))));
     Assert(planned.every((s) => s != null), 'RC12: the with-settings plan copies a setting the source user does not have');
-    const leaked = planned.filter((s) => EXCLUDED_SETTING_PREFIXES.some((p) => s!.Setting.startsWith(p)));
+    const leaked = planned.filter((s) => excluded.some((p) => s!.Setting.startsWith(p)));
     AssertEqual(leaked.length, 0, `RC12: with-settings copied excluded settings: ${leaked.map((s) => s!.Setting).join(', ')}`);
-    const copyable = sourceSettings.filter((s) => !EXCLUDED_SETTING_PREFIXES.some((p) => s.Setting.startsWith(p)));
-    Assert(copyable.length === 0 || planned.length > 0, 'RC12: with-settings copied none of the source user\'s ordinary settings');
+    const copyable = sourceSettings.filter((s) => !excluded.some((p) => s.Setting.startsWith(p)));
+    AssertEqual(planned.length, copyable.length, 'RC12: with-settings must copy each of the source user\'s ordinary settings');
     const excludedCount = sourceSettings.length - copyable.length;
+    Assert(!mustExclude || excludedCount > 0, 'RC12: the subject user carries no setting the configuration excludes, so the exclusion was not exercised');
     console.log(`      → with-settings planned ${planned.length} of ${sourceSettings.length} settings (${excludedCount} matched an excluded prefix)`);
 }
 
@@ -1018,7 +1061,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('record-cloning', {
             StartedAt: new Date(Date.now() - 60_000),
             CreatedRows: [],
             UserIDs: [],
-            SourceRecordIDs: [],
+            CloneLogIDs: [],
             ApiKeyIDs: [],
             ApiKeyScopeIDs: [],
         };
@@ -1028,21 +1071,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('record-cloning', {
         if (!f) {
             return;
         }
-        const since = f.StartedAt.toISOString();
-
-        // 1. Clone logs (and their items) the bundle's Executes wrote, including refusals.
-        const logFilters: string[] = [];
-        if (f.SourceRecordIDs.length > 0) logFilters.push(`RootSourceRecordID IN (${sqlList(f.SourceRecordIDs)})`);
-        if (f.UserIDs.length > 0) logFilters.push(`InitiatedByUserID IN (${sqlList(f.UserIDs)})`);
-        if (logFilters.length > 0) {
-            const logs = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>({
-                EntityName: CLONE_LOGS, ExtraFilter: `(${logFilters.join(' OR ')}) AND StartedAt >= '${since}'`,
-                Fields: ['ID'], ResultType: 'simple', BypassCache: true,
-            }).catch(() => undefined);
-            for (const log of logs?.Success ? logs.Results : []) {
-                await deleteWhere(ctx, CLONE_LOG_ITEMS, `RecordCloneLogID = '${log.ID}'`);
-                await deleteRow(ctx, CLONE_LOGS, log.ID);
-            }
+        // 1. Clone logs (and their items) the bundle's Executes returned, refusals included.
+        for (const logId of f.CloneLogIDs) {
+            await deleteWhere(ctx, CLONE_LOG_ITEMS, `RecordCloneLogID = '${logId}'`);
+            await deleteRow(ctx, CLONE_LOGS, logId);
         }
 
         // 2. ClonedFrom links whose Source is a row a clone created.

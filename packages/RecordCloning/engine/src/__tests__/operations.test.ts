@@ -242,6 +242,19 @@ describe('RecordCloneOperationsHandler', () => {
             expect(res.ResultCode).toBe('FORBIDDEN');
         });
 
+        it('returns the refusal log ID for blocked and PLAN_CHANGED refusals', async () => {
+            vi.spyOn(CloneExecutor.prototype, 'WriteRefusalLog').mockResolvedValue('log-refused');
+            const plan = vi.spyOn(ClonePlanner.prototype, 'Plan');
+
+            plan.mockResolvedValueOnce(enginePlan({ Blocked: true, Warnings: [{ Code: 'CAP_EXCEEDED', Severity: 'Error', Message: 'too many' }] }) as never);
+            expect((await handler.Execute({ EntityName: 'ParentEntity', SourceRecordKey: key }, mockUser)).CloneLogID).toBe('log-refused');
+
+            plan.mockResolvedValueOnce(enginePlan({ Hash: 'hash-current' }) as never);
+            const changed = await handler.Execute({ EntityName: 'ParentEntity', SourceRecordKey: key, ExpectedPlanHash: 'hash-reviewed' }, mockUser);
+            expect(changed.ResultCode).toBe('PLAN_CHANGED');
+            expect(changed.CloneLogID).toBe('log-refused');
+        });
+
         it('refuses other blocked plans with BLOCKED', async () => {
             vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(
                 enginePlan({ Blocked: true, Warnings: [{ Code: 'CAP_EXCEEDED', Severity: 'Error', Message: 'too many' }] }) as never

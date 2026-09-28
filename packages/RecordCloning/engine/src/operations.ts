@@ -129,13 +129,14 @@ export function ToPlanDetails(plan: ClonePlan): RecordClonePlanDetails {
 function refusedExecute(
     resultCode: RecordCloneExecuteOutput['ResultCode'],
     message: string,
-    plan?: ClonePlan
+    plan?: ClonePlan,
+    cloneLogId: string | null = null
 ): RecordCloneExecuteOutput {
     return {
         Success: false,
         ResultCode: resultCode,
         ErrorMessage: message,
-        CloneLogID: null,
+        CloneLogID: cloneLogId,
         Roots: [],
         Created: [],
         Skipped: [],
@@ -259,8 +260,8 @@ export class RecordCloneOperationsHandler {
         if (plan.Blocked) {
             const forbidden = plan.Warnings.some((w) => w.Code === 'FORBIDDEN');
             const reasons = plan.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message).join('; ');
-            if (input.Options?.DryRun !== true) await executor.WriteRefusalLog(plan, contextUser, `${forbidden ? 'FORBIDDEN' : 'BLOCKED'}: ${reasons}`);
-            return refusedExecute(forbidden ? 'FORBIDDEN' : 'BLOCKED', reasons || 'The clone plan is blocked.', plan);
+            const logId = input.Options?.DryRun !== true ? await executor.WriteRefusalLog(plan, contextUser, `${forbidden ? 'FORBIDDEN' : 'BLOCKED'}: ${reasons}`) : null;
+            return refusedExecute(forbidden ? 'FORBIDDEN' : 'BLOCKED', reasons || 'The clone plan is blocked.', plan, logId);
         }
 
         // A dry run stops after planning: nothing is written, and the plan is the result.
@@ -279,8 +280,8 @@ export class RecordCloneOperationsHandler {
         }
 
         if (input.ExpectedPlanHash && (plan.Hash || plan.PlanHash) !== input.ExpectedPlanHash) {
-            await executor.WriteRefusalLog(plan, contextUser, 'PLAN_CHANGED: the records changed since the plan was reviewed.');
-            const changed = refusedExecute('PLAN_CHANGED', 'The records changed since the plan was reviewed. Review the new plan and confirm again.', plan);
+            const logId = await executor.WriteRefusalLog(plan, contextUser, 'PLAN_CHANGED: the records changed since the plan was reviewed.');
+            const changed = refusedExecute('PLAN_CHANGED', 'The records changed since the plan was reviewed. Review the new plan and confirm again.', plan, logId);
             changed.Warnings = [
                 ...changed.Warnings,
                 { Code: 'PLAN_CHANGED', Severity: 'Error', Message: 'Plan hash mismatch between review and execution.' },

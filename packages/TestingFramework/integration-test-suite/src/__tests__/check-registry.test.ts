@@ -165,7 +165,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 8], // MSP1-MSP8 sync push atomicity, incl. server-derived child rows, mutation tier (IT94)
-        ['record-cloning', RecordCloningChecks, 12], // RC1-RC9 plan §13.2 + RC10-RC12 real-database dry runs, client transport (IT95)
+        ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT95)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -273,7 +273,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'prompt-runner': 1,
         'queue': 7,
         'realtime-deterministic': 9,
-        'record-cloning': 12,
+        'record-cloning': 13,
         'record-process': 12,
         'record-process-facade': 2,
         'remote-op-ai-authoring': 3,

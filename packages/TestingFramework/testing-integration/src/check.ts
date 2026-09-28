@@ -366,7 +366,7 @@ export interface EntityGraphClientFixture {
 export interface RecordCloningFixture {
     /** Unique per-run prefix stamped on every row the bundle creates. */
     Prefix: string;
-    /** When the bundle started; clone logs are only swept when written after it. */
+    /** When the bundle started. */
     StartedAt: Date;
     /** The throwaway source user (UI role only, one app, three settings, one query category), once provisioned. */
     SubjectUserID?: string;
@@ -380,8 +380,8 @@ export interface RecordCloningFixture {
     CreatedRows: CreatedRow[];
     /** Throwaway users; their roles, applications, settings, audit logs and keys are swept before them. */
     UserIDs: string[];
-    /** Root source record IDs the bundle executed clones of, for finding the clone logs Execute wrote. */
-    SourceRecordIDs: string[];
+    /** Clone logs the bundle's Executes returned (successes and refusals); teardown deletes exactly these. */
+    CloneLogIDs: string[];
     /** Minted `MJ: API Keys` rows. */
     ApiKeyIDs: string[];
     /** `MJ: API Key Scopes` rows granting the minted keys `full_access`. */

@@ -81,10 +81,11 @@ export class CloneExecutor {
 
         // 1. Refuse blocked plan
         if (plan.Blocked) {
-            await this.WriteRefusalLog(plan, contextUser, 'Blocked: ' + plan.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message).join('; '));
+            const logId = await this.WriteRefusalLog(plan, contextUser, 'Blocked: ' + plan.Warnings.filter((w) => w.Severity === 'Error').map((w) => w.Message).join('; '));
             return {
                 Success: false,
                 ResultCode: 'BLOCKED',
+                CloneLogID: logId,
                 RootRecordKey: plan.RootTargetKey,
                 RecordsCloned: 0,
                 Warnings: plan.Warnings,
@@ -100,10 +101,11 @@ export class CloneExecutor {
         });
 
         if (currentHash !== plan.Hash && currentHash !== plan.PlanHash) {
-            await this.WriteRefusalLog(plan, contextUser, 'PLAN_CHANGED: the plan changed between review and execution.');
+            const logId = await this.WriteRefusalLog(plan, contextUser, 'PLAN_CHANGED: the plan changed between review and execution.');
             return {
                 Success: false,
                 ResultCode: 'PLAN_CHANGED',
+                CloneLogID: logId,
                 RootRecordKey: plan.RootTargetKey,
                 RecordsCloned: 0,
                 Warnings: [
@@ -125,8 +127,8 @@ export class CloneExecutor {
         };
         if (transProvider.SupportsEntityTransactions !== true || typeof transProvider.BeginEntityTransaction !== 'function') {
             const message = 'This provider cannot run the clone in a transaction, so it was not started (a partial clone cannot be undone).';
-            await this.WriteRefusalLog(plan, contextUser, message);
-            return { Success: false, ResultCode: 'EXECUTION_ERROR', RootRecordKey: plan.RootTargetKey, RecordsCloned: 0, Warnings: plan.Warnings, ErrorMessage: message };
+            const logId = await this.WriteRefusalLog(plan, contextUser, message);
+            return { Success: false, ResultCode: 'EXECUTION_ERROR', CloneLogID: logId, RootRecordKey: plan.RootTargetKey, RecordsCloned: 0, Warnings: plan.Warnings, ErrorMessage: message };
         }
 
         const cloneLogId = GenerateUUID();
@@ -263,11 +265,13 @@ export class CloneExecutor {
     /**
      * Records a refused run (blocked, or the plan changed since review) as a Cancelled clone log,
      * so every Execute leaves a trace. Written outside any transaction; never throws.
+     * @returns the log's ID, or null when it could not be written.
      */
-    public async WriteRefusalLog(plan: ClonePlan, contextUser: UserInfo, reason: string): Promise<void> {
+    public async WriteRefusalLog(plan: ClonePlan, contextUser: UserInfo, reason: string): Promise<string | null> {
         const id = GenerateUUID();
-        await this.writeLog(plan, contextUser, { ID: id, Status: 'Cancelled', StartedAt: new Date(), ErrorMessage: reason });
+        const logged = await this.writeLog(plan, contextUser, { ID: id, Status: 'Cancelled', StartedAt: new Date(), ErrorMessage: reason });
         await this.writeAudit(plan, contextUser, false, id, null, reason);
+        return logged ? id : null;
     }
 
     /**
