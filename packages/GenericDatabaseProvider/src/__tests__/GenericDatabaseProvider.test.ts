@@ -2082,6 +2082,139 @@ describe('GenericDatabaseProvider nested transactions', () => {
     });
 });
 
+/** Records, for every statement, whether the issuing scope was part of the ambient transaction. */
+class AffinityProvider extends RecordingProvider {
+    public memberAtSQL: boolean[] = [];
+
+    public get CallerIsMember(): boolean {
+        return this.IsCallerInAmbientTransaction();
+    }
+
+    override async ExecuteSQL<T>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> {
+        this.memberAtSQL.push(this.IsCallerInAmbientTransaction());
+        return super.ExecuteSQL<T>(sql, params, options);
+    }
+}
+
+describe('GenericDatabaseProvider transaction scope affinity (#4786)', () => {
+    const tick = (): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, 1));
+    /** A promise opened on demand — code awaiting it was scheduled before whatever runs before `open()`. */
+    function gate(): { wait: Promise<void>; open: () => void } {
+        let open!: () => void;
+        const wait = new Promise<void>((resolve) => { open = resolve; });
+        return { wait, open };
+    }
+    const reports4786 = (spy: { mock: { calls: unknown[][] } }): string[] =>
+        spy.mock.calls.flat().map((m) => String(m)).filter((m) => m.includes('#4786'));
+
+    it('the caller that began is a member; an unrelated caller on the same instance is not', async () => {
+        const p = new AffinityProvider();
+        const g = gate();
+        const unrelated = (async () => { await g.wait; return p.CallerIsMember; })();
+        await p.BeginTransaction();
+        g.open();
+        expect(p.CallerIsMember).toBe(true);
+        expect(await unrelated).toBe(false);
+        await p.RollbackTransaction();
+    });
+
+    it('work spawned inside the transaction scope is a member; after commit nobody is', async () => {
+        const p = new AffinityProvider();
+        await p.BeginTransaction();
+        expect(await (async () => { await tick(); return p.CallerIsMember; })()).toBe(true);
+        await p.CommitTransaction();
+        expect(p.CallerIsMember).toBe(false);
+    });
+
+    it('a nested begin from the member scope creates a savepoint and does not report a foreign join', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new AffinityProvider();
+            await p.BeginTransaction();
+            await p.BeginTransaction();
+            expect(p.TransactionDepth).toBe(2);
+            expect(reports4786(errorSpy)).toEqual([]);
+            await p.CommitTransaction();
+            await p.CommitTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('an unrelated caller that begins while a transaction is open joins it and it is reported once', async () => {
+        // LogError writes through console.error.
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new AffinityProvider();
+            const g = gate();
+            const unrelated = (async () => {
+                await g.wait;
+                await p.BeginTransaction();
+                const depth = p.TransactionDepth;
+                const member = p.CallerIsMember;
+                await p.BeginTransaction(); // a second nested begin in the same foreign scope
+                await p.CommitTransaction();
+                await p.CommitTransaction();
+                return { depth, member };
+            })();
+            await p.BeginTransaction();
+            g.open();
+            expect(await unrelated).toEqual({ depth: 2, member: true });
+            expect(reports4786(errorSpy)).toHaveLength(1);
+            await p.CommitTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('savepoint SQL runs as a member even when the frame is settled from an unrelated scope', async () => {
+        const p = new AffinityProvider();
+        const g = gate();
+        const settler = (async () => {
+            await g.wait;
+            expect(p.CallerIsMember).toBe(false);
+            await p.RollbackTransaction();
+        })();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.memberAtSQL = [];
+        g.open();
+        await settler;
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.memberAtSQL.length).toBeGreaterThan(0);
+        expect(p.memberAtSQL.every(Boolean)).toBe(true);
+        await p.CommitTransaction();
+    });
+
+    it('post-commit work registered by an unrelated caller is not dropped when the open transaction rolls back', async () => {
+        const p = new AffinityProvider();
+        const ran: string[] = [];
+        const g = gate();
+        const unrelated = (async () => {
+            await g.wait;
+            const token = p.CapturePostCommitToken();
+            p.RunAfterCommit(async () => { ran.push('with-token'); }, 'unrelated with token', token);
+            p.RunAfterCommit(async () => { ran.push('no-token'); }, 'unrelated without token');
+        })();
+        await p.BeginTransaction();
+        g.open();
+        await unrelated;
+        await p.RollbackTransaction();
+        await tick();
+        expect(ran.sort()).toEqual(['no-token', 'with-token']);
+    });
+
+    it('post-commit work registered by the member is still dropped when its transaction rolls back', async () => {
+        const p = new AffinityProvider();
+        const ran: string[] = [];
+        await p.BeginTransaction();
+        p.RunAfterCommit(async () => { ran.push('member'); }, 'member task');
+        await p.RollbackTransaction();
+        await tick();
+        expect(ran).toEqual([]);
+    });
+});
+
 describe('GenericDatabaseProvider save-call variable suffix (loom #12 WP3)', () => {
     const HEX12 = /^_[0-9a-f]{12}$/;
 

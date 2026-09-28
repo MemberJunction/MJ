@@ -119,6 +119,15 @@ describe('TransactionAffinity (#4786)', () => {
         expect(() => a.Bind(a.Claim())).toThrow(/no open transaction/i);
     });
 
+    it('Bind rejects a membership claimed on another owner — it would be bound to the wrong epoch sequence', () => {
+        const a = new TransactionAffinity();
+        const b = new TransactionAffinity();
+        const claimedOnB = b.Claim();
+        a.OpenEpoch();
+        expect(() => a.Bind(claimedOnB)).toThrow(/another TransactionAffinity/i);
+        expect(claimedOnB.Epoch).toBeNull();
+    });
+
     it('LIMIT: a begin reached after an await inside a helper does not make the helper\'s caller a member', async () => {
         const a = new TransactionAffinity();
         async function openAfterAwait(): Promise<void> { await tick(); await begin(a, true); }

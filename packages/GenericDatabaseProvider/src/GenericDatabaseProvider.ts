@@ -106,6 +106,7 @@ import { QueueManager } from '@memberjunction/queue';
 import { BuildEntityActionDispatchKey, EntityActionDispatchGuard, EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult, BuildEntityChangeContext } from '@memberjunction/actions-base';
 import { TransactionFrameTracker } from './TransactionFrameTracker';
+import { TransactionAffinity, type TransactionMembership } from './TransactionAffinity.js';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { GeoCodeSyncService, GeocodeResult } from '@memberjunction/geo-core';
 
@@ -5827,6 +5828,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private _idlePostCommitTasks: PostCommitEntry[] = [];
     /** Identity of each open frame and the fate of recent transactions, for {@link PostCommitToken}s. */
     private readonly _frameTracker = new TransactionFrameTracker();
+    /** Which async scope the open transaction belongs to (#4786). See {@link IsCallerInAmbientTransaction}. */
+    private readonly _affinity = new TransactionAffinity();
+    /** Epoch whose foreign join was already reported, so a transaction reports at most one (#4786). */
+    private _foreignJoinReportedEpoch: number | null = null;
 
     protected override get CurrentTransactionDepth(): number {
         return this._transactionDepth;
@@ -5848,12 +5853,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Throw if a statement would run on the pool while frames are still open
-     * after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
-     * — outermost begin has depth 1 before the handle is published, and
-     * concurrent reads on SQL Server legitimately use the pool in that window.
-     */
-    /**
      * A debounced metadata refresh is timer-driven, so it can fire at any point of a caller's
      * unit of work — including the microtask window while the ambient transaction is being
      * committed. Joining that transaction puts the metadata batch on the transaction's single
@@ -5873,12 +5872,30 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
     }
 
+    /**
+     * Throw if a statement from a member of the ambient transaction would run on the pool while its
+     * frames are still open after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
+     * — outermost begin has depth 1 before the handle is published, and concurrent reads on SQL
+     * Server legitimately use the pool in that window. Callers outside the transaction's scope
+     * (see {@link IsCallerInAmbientTransaction}) do not use its handle, so a subclass should apply
+     * this check only to members' statements.
+     */
     protected AssertAmbientTransactionUsable(): void {
         if (this._doomed) {
             throw new DoomedTransactionError(
                 `SQL issued at depth ${this._transactionDepth} while the ambient transaction is doomed would autocommit on the pool`,
             );
         }
+    }
+
+    /**
+     * Whether the calling async scope is part of this provider's ambient transaction (#4786). A shared
+     * provider's open transaction belongs to the scope that began it and its descendants; every other
+     * caller must run on the pool, as if no transaction were open. Subclasses consult this — not merely
+     * "is a handle open" — before routing a statement to the transaction handle.
+     */
+    protected IsCallerInAmbientTransaction(): boolean {
+        return this._affinity.IsCallerMember;
     }
 
     /**
@@ -5941,8 +5958,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Queue `task` until the outermost commit of the ambient transaction, or start it now when
-     * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract.
+     * Queue `task` until the outermost commit of the caller's transaction, or start it now when
+     * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract. Work
+     * registered by a caller outside the open transaction's scope (#4786) is not tied to that
+     * transaction: it runs once this provider is idle, whichever way that transaction ends.
      *
      * - Queued tasks run once, in registration order, after the outermost commit succeeds and the
      *   transaction lock is released — so a task may begin its own transaction. The committer
@@ -5968,15 +5987,25 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             super.RunAfterCommit(task, description);
             return;
         }
+        if (!this.IsCallerInAmbientTransaction()) {
+            this.runDetachedTask(task, description);
+            return;
+        }
         this._postCommitTasks.push({ Task: task, Description: description, Depth: this._transactionDepth });
     }
 
     /**
-     * Snapshot of the open transaction frames. Synchronous, and never `undefined` on this provider:
-     * outside a transaction it returns a token whose epoch is `null`, which says the work is already
-     * durable rather than saying nothing. See {@link DatabaseProviderBase.CapturePostCommitToken}.
+     * Snapshot of the caller's transaction frames. Synchronous, and never `undefined` on this
+     * provider: outside a transaction it returns a token whose epoch is `null`, which says the work
+     * is already durable rather than saying nothing. See
+     * {@link DatabaseProviderBase.CapturePostCommitToken}. Work registered by a caller outside the
+     * open transaction's scope (#4786) is not tied to that transaction, so such a caller gets the
+     * same `null`-epoch token.
      */
     public override CapturePostCommitToken(): PostCommitToken {
+        if (!this.IsCallerInAmbientTransaction()) {
+            return { Epoch: null, FrameIds: [] };
+        }
         return this._frameTracker.Capture();
     }
 
@@ -6033,7 +6062,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         this._idlePostCommitTasks = [];
         LogStatus(`Running ${tasks.length} post-commit task(s) held back by an unrelated transaction`);
         for (const entry of tasks) {
-            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+            // The drainer's membership is not the task's: the task must not ride the drainer's transaction.
+            await this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(entry.Task, entry.Description));
         }
     }
 
@@ -6044,7 +6074,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
         LogStatus(`Running ${tasks.length} post-commit task(s) after transaction commit`);
         for (const entry of tasks) {
-            await this.RunPostCommitTaskSafely(entry.Task, entry.Description);
+            // Detached from the committer's (now stale) membership explicitly, not merely by epoch mismatch.
+            await this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(entry.Task, entry.Description));
         }
     }
 
@@ -6114,7 +6145,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     public async BeginTransaction(): Promise<void> {
-        return this.WithTransactionLock(() => this.beginTransactionCore());
+        // Claimed before the first await (the lock's): see TransactionAffinity.Claim for why.
+        const membership = this._affinity.Claim();
+        return this.WithTransactionLock(() => this.beginTransactionCore(membership));
     }
 
     public async CommitTransaction(): Promise<void> {
@@ -6136,7 +6169,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         await this.drainIdlePostCommitTasks();
     }
 
-    private async beginTransactionCore(): Promise<void> {
+    private async beginTransactionCore(membership: TransactionMembership): Promise<void> {
         if (this._doomed) {
             throw new DoomedTransactionError();
         }
@@ -6146,6 +6179,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (this._transactionDepth === 1) {
                 this._abandonedByFailedCommit = false;
                 await this.BeginPhysicalTransaction();
+                this._affinity.OpenEpoch();
+                this._affinity.Bind(membership);
                 return;
             }
             if (!this.HasPhysicalTransaction) {
@@ -6162,6 +6197,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 this._savepointCounter--;
                 throw savepointError;
             }
+            // Only once the savepoint exists (as the outermost binds only after BEGIN): a begin that
+            // failed to join must not leave its caller's statements routed to the transaction handle.
+            this.bindJoiningMembership(membership);
         } catch (e) {
             if (this._transactionDepth > 0) {
                 this._transactionDepth--;
@@ -6180,14 +6218,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
     }
 
+    /**
+     * A nested begin joins the open transaction as a savepoint. When the caller was not already part of
+     * it, that is an unrelated unit of work entangling itself with someone else's transaction on a shared
+     * instance: its savepoint commits only if the owner commits, and settling out of order corrupts both.
+     * Joining keeps pre-#4786 behaviour — waiting for the owner instead can deadlock when the owner is
+     * itself waiting on this work (a coalesced entity-action rerun) — so it is reported, once per
+     * transaction, instead of silently happening.
+     */
+    private bindJoiningMembership(membership: TransactionMembership): void {
+        const epoch = this._affinity.CurrentEpoch;
+        if (membership.Epoch !== epoch && this._foreignJoinReportedEpoch !== epoch) {
+            this._foreignJoinReportedEpoch = epoch;
+            LogError(
+                `${this.constructor.name}: a transaction was begun by code outside the async scope of the transaction ` +
+                `already open on this provider instance, so it joins that transaction as a savepoint. Its writes now ` +
+                `commit or roll back with a unit of work it is not part of. Run independent units of work on ` +
+                `CreateIndependentInstance() or a per-request provider (#4786).`,
+            );
+        }
+        this._affinity.Bind(membership);
+    }
+
+    /** Savepoint SQL is the provider's own bookkeeping: it must reach the handle whichever scope settles the frame. */
+    private executeTransactionControlSQL(sql: string, description: string): Promise<unknown> {
+        return this._affinity.RunAsMember(() => this.ExecuteSQL(sql, undefined, { description, ignoreLogging: true }));
+    }
+
     private async createSavepoint(savepointName: string): Promise<void> {
         const sql = this.Dialect.CreateSavepointSQL(savepointName);
-        const options: ExecuteSQLOptions = {
-            description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
-            ignoreLogging: true,
-        };
         try {
-            await this.ExecuteSQL(sql, undefined, options);
+            await this.executeTransactionControlSQL(sql, `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`);
         } catch (savepointError) {
             if (this.HasPhysicalTransaction && this.isDoomedPhysicalTransactionError(savepointError)) {
                 await this.AbandonPhysicalTransaction();
@@ -6264,10 +6325,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
         if (releaseSQL) {
             try {
-                await this.ExecuteSQL(releaseSQL, undefined, {
-                    description: `Releasing savepoint ${savepointName}`,
-                    ignoreLogging: true,
-                });
+                await this.executeTransactionControlSQL(releaseSQL, `Releasing savepoint ${savepointName}`);
             } catch (e) {
                 await this.AbandonPhysicalTransaction();
                 this.markDoomed();
@@ -6311,16 +6369,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
         }
         try {
-            await this.ExecuteSQL(this.Dialect.RollbackToSavepointSQL(savepointName), undefined, {
-                description: `Rolling back to savepoint ${savepointName}`,
-                ignoreLogging: true,
-            });
+            await this.executeTransactionControlSQL(
+                this.Dialect.RollbackToSavepointSQL(savepointName),
+                `Rolling back to savepoint ${savepointName}`,
+            );
             const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
             if (releaseSQL) {
-                await this.ExecuteSQL(releaseSQL, undefined, {
-                    description: `Releasing savepoint ${savepointName} after rollback`,
-                    ignoreLogging: true,
-                });
+                await this.executeTransactionControlSQL(releaseSQL, `Releasing savepoint ${savepointName} after rollback`);
             }
             this.discardPostCommitTasks(this._transactionDepth, `savepoint ${savepointName} was rolled back`);
             this._savepointStack.pop();
@@ -6353,10 +6408,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
-     * Back to depth 0. A successful commit detaches the post-commit queue first, so anything still
-     * queued here belongs to a transaction that rolled back, failed, or was abandoned.
+     * Back to depth 0 — every ending of the transaction goes through here, so it is also where the
+     * transaction's memberships go stale. A successful commit detaches the post-commit queue first, so
+     * anything still queued here belongs to a transaction that rolled back, failed, or was abandoned.
      */
     private clearTransactionState(): void {
+        this._affinity.CloseEpoch();
         this._transactionDepth = 0;
         this._doomed = false;
         this.clearSavepointState();

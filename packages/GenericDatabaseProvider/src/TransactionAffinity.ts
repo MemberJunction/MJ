@@ -73,6 +73,9 @@ export class TransactionAffinity {
 
     /** Make a claimed membership part of the open transaction (as its opener, or joining it). */
     public Bind(membership: TransactionMembership): void {
+        if (membership.Owner !== this) {
+            throw new Error('TransactionAffinity.Bind: the membership was claimed on another TransactionAffinity');
+        }
         if (this._epoch === null) {
             throw new Error('TransactionAffinity.Bind: there is no open transaction to bind the membership to');
         }
