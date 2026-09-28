@@ -1072,7 +1072,6 @@
       "Name": "MJ: List Details",
       "Configuration": {
         "Clone": {
-          "Enabled": true,
           "MaxDepth": 1,
           "MaxRecords": 1000,
           "Fields": {
@@ -1174,7 +1173,6 @@
       "Name": "MJ: Data Context Items",
       "Configuration": {
         "Clone": {
-          "Enabled": true,
           "MaxDepth": 1,
           "MaxRecords": 500,
           "Fields": {
@@ -1337,7 +1335,6 @@
       "Name": "MJ: Application Entities",
       "Configuration": {
         "Clone": {
-          "Enabled": true,
           "Fields": {
             "UniqueKeys": [
               {
@@ -1369,7 +1366,6 @@
       "Name": "MJ: Application Settings",
       "Configuration": {
         "Clone": {
-          "Enabled": true,
           "Fields": {
             "UniqueKeys": [
               {
@@ -1531,7 +1527,6 @@
       "Name": "MJ: Component Dependencies",
       "Configuration": {
         "Clone": {
-          "Enabled": true,
           "Fields": {
             "UniqueKeys": [
               {
@@ -1563,7 +1558,6 @@
       "Name": "MJ: Component Library Links",
       "Configuration": {
         "Clone": {
-          "Enabled": true,
           "Fields": {
             "UniqueKeys": [
               {

@@ -24,6 +24,14 @@ describe('shipped clone configurations', () => {
         expect(enabledRoots.map((r) => r.fields.Name)).toEqual(expect.arrayContaining(['MJ: Users', 'MJ: AI Agents', 'MJ: AI Prompts', 'MJ: Actions']));
     });
 
+    it('offers Clone only on the catalog roots (child entities are cloned under their root, not on their own)', () => {
+        expect(enabledRoots.map((r) => r.fields.Name).sort()).toEqual([
+            'MJ: AI Agents', 'MJ: AI Prompts', 'MJ: Actions', 'MJ: Applications', 'MJ: Components', 'MJ: Dashboards',
+            'MJ: Data Contexts', 'MJ: Lists', 'MJ: Queries', 'MJ: Record Processes', 'MJ: Roles', 'MJ: Scheduled Jobs',
+            'MJ: Templates', 'MJ: Themes', 'MJ: User Views', 'MJ: Users',
+        ]);
+    });
+
     it.each(enabledRoots.map((r) => [r.fields.Name, r.fields.Configuration!.Clone!] as const))(
         '%s does not follow a relationship it does not list',
         (name, config) => {
