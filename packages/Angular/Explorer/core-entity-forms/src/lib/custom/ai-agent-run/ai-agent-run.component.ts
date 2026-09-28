@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
 import { Subject, Subscription } from 'rxjs';
-import { BaseEntity, BaseEntityEvent, CompositeKey, Metadata } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, Metadata, ResolveEntityEventRow } from '@memberjunction/core';
 import {
     LoadAgentRunTree,
     MAX_AGENT_RUN_TREE_DEPTH,
@@ -58,18 +58,90 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   private workflowPollTimer: ReturnType<typeof setTimeout> | null = null;
 
   // UI state
-  activeTab = 'timeline';
-  selectedTimelineItem: TimelineItem | null = null;
-  jsonPanelExpanded = false;
-  loading = false;
+  ActiveTab = 'timeline';
+
+  /** @deprecated Use {@link ActiveTab}. */
+  get activeTab() {
+    return this.ActiveTab;
+  }
+  /** @deprecated Use {@link ActiveTab}. */
+  set activeTab(value) {
+    this.ActiveTab = value;
+  }
+  SelectedTimelineItem: TimelineItem | null = null;
+
+  /** @deprecated Use {@link SelectedTimelineItem}. */
+  get selectedTimelineItem(): TimelineItem | null {
+    return this.SelectedTimelineItem;
+  }
+  /** @deprecated Use {@link SelectedTimelineItem}. */
+  set selectedTimelineItem(value: TimelineItem | null) {
+    this.SelectedTimelineItem = value;
+  }
+  JsonPanelExpanded = false;
+
+  /** @deprecated Use {@link JsonPanelExpanded}. */
+  get jsonPanelExpanded() {
+    return this.JsonPanelExpanded;
+  }
+  /** @deprecated Use {@link JsonPanelExpanded}. */
+  set jsonPanelExpanded(value) {
+    this.JsonPanelExpanded = value;
+  }
+  Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  set loading(value) {
+    this.Loading = value;
+  }
   error: string | null = null;
-  analyticsLoaded = false;
-  visualizationLoaded = false;
+  AnalyticsLoaded = false;
+
+  /** @deprecated Use {@link AnalyticsLoaded}. */
+  get analyticsLoaded() {
+    return this.AnalyticsLoaded;
+  }
+  /** @deprecated Use {@link AnalyticsLoaded}. */
+  set analyticsLoaded(value) {
+    this.AnalyticsLoaded = value;
+  }
+  VisualizationLoaded = false;
+
+  /** @deprecated Use {@link VisualizationLoaded}. */
+  get visualizationLoaded() {
+    return this.VisualizationLoaded;
+  }
+  /** @deprecated Use {@link VisualizationLoaded}. */
+  set visualizationLoaded(value) {
+    this.VisualizationLoaded = value;
+  }
   
-  agent: MJAIAgentEntityExtended | null = null;
+  Agent: MJAIAgentEntityExtended | null = null;
+
+  /** @deprecated Use {@link Agent}. */
+  get agent(): MJAIAgentEntityExtended | null {
+    return this.Agent;
+  }
+  /** @deprecated Use {@link Agent}. */
+  set agent(value: MJAIAgentEntityExtended | null) {
+    this.Agent = value;
+  }
   
   // Cost metrics using shared service
-  costMetrics: AgentRunCostMetrics | null = null;
+  CostMetrics: AgentRunCostMetrics | null = null;
+
+  /** @deprecated Use {@link CostMetrics}. */
+  get costMetrics(): AgentRunCostMetrics | null {
+    return this.CostMetrics;
+  }
+  /** @deprecated Use {@link CostMetrics}. */
+  set costMetrics(value: AgentRunCostMetrics | null) {
+    this.CostMetrics = value;
+  }
   
   // Cached parsed results to prevent redundant JSON parsing
   private _cachedParsedResult: string | null = null;
@@ -80,8 +152,26 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   // Simple parsing state - true when all parsing is complete
   private _allParsingComplete = false;
   
-  @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
-  @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
+  @ViewChild(AIAgentRunTimelineComponent) TimelineComponent?: AIAgentRunTimelineComponent;
+
+  /** @deprecated Use {@link TimelineComponent}. */
+  get timelineComponent(): AIAgentRunTimelineComponent | undefined {
+    return this.TimelineComponent;
+  }
+  /** @deprecated Use {@link TimelineComponent}. */
+  set timelineComponent(value: AIAgentRunTimelineComponent | undefined) {
+    this.TimelineComponent = value;
+  }
+  @ViewChild(AIAgentRunAnalyticsComponent) AnalyticsComponent?: AIAgentRunAnalyticsComponent;
+
+  /** @deprecated Use {@link AnalyticsComponent}. */
+  get analyticsComponent(): AIAgentRunAnalyticsComponent | undefined {
+    return this.AnalyticsComponent;
+  }
+  /** @deprecated Use {@link AnalyticsComponent}. */
+  set analyticsComponent(value: AIAgentRunAnalyticsComponent | undefined) {
+    this.AnalyticsComponent = value;
+  }
 
   // Field injections
   private navigationService = inject(NavigationService);
@@ -89,7 +179,16 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   private appManager = inject(ApplicationManager);
 
   // Instance of data helper per component
-  public dataHelper = new AIAgentRunDataHelper();
+  public DataHelper = new AIAgentRunDataHelper();
+
+  /** @deprecated Use {@link DataHelper}. */
+  public get dataHelper() {
+    return this.DataHelper;
+  }
+  /** @deprecated Use {@link DataHelper}. */
+  public set dataHelper(value) {
+    this.DataHelper = value;
+  }
 
   /**
    * The run's complete execution tree — loaded ONCE here and shared with every tab.
@@ -100,13 +199,40 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
    * different run than the one beside it. Sharing it also means a refresh updates all three at once
    * rather than whichever one the user happens to open next.
    */
-  public runTree: AgentRunTreeNode | null = null;
+  public RunTree: AgentRunTreeNode | null = null;
+
+  /** @deprecated Use {@link RunTree}. */
+  public get runTree(): AgentRunTreeNode | null {
+    return this.RunTree;
+  }
+  /** @deprecated Use {@link RunTree}. */
+  public set runTree(value: AgentRunTreeNode | null) {
+    this.RunTree = value;
+  }
 
   /** True while the tree is loading, so a tab can say so rather than render an empty run. */
-  public runTreeLoading = false;
+  public RunTreeLoading = false;
+
+  /** @deprecated Use {@link RunTreeLoading}. */
+  public get runTreeLoading() {
+    return this.RunTreeLoading;
+  }
+  /** @deprecated Use {@link RunTreeLoading}. */
+  public set runTreeLoading(value) {
+    this.RunTreeLoading = value;
+  }
 
   /** Why the tree could not be loaded, or null. Surfaced rather than swallowed. */
-  public runTreeError: string | null = null;
+  public RunTreeError: string | null = null;
+
+  /** @deprecated Use {@link RunTreeError}. */
+  public get runTreeError(): string | null {
+    return this.RunTreeError;
+  }
+  /** @deprecated Use {@link RunTreeError}. */
+  public set runTreeError(value: string | null) {
+    this.RunTreeError = value;
+  }
 
   /**
    * Loads (or reloads) the shared run tree.
@@ -116,21 +242,21 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
    */
   private async loadRunTree(): Promise<void> {
     if (!this.record?.ID) return;
-    this.runTreeLoading = true;
-    this.runTreeError = null;
+    this.RunTreeLoading = true;
+    this.RunTreeError = null;
     try {
       const result = await LoadAgentRunTree(this.record.ID, this.RunQueryToUse);
-      this.runTree = result.Root;
-      this.runTreeError = result.ErrorMessage;
+      this.RunTree = result.Root;
+      this.RunTreeError = result.ErrorMessage;
       if (result.Truncated) {
-        this.runTreeError =
+        this.RunTreeError =
           `This run nests deeper than ${MAX_AGENT_RUN_TREE_DEPTH} levels; what is shown is truncated.`;
       }
     } catch (e) {
-      this.runTreeError = e instanceof Error ? e.message : String(e);
-      this.runTree = null;
+      this.RunTreeError = e instanceof Error ? e.message : String(e);
+      this.RunTree = null;
     } finally {
-      this.runTreeLoading = false;
+      this.RunTreeLoading = false;
       this.scheduleWorkflowPoll();
     }
   }
@@ -148,8 +274,8 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
    * snapshot of a moving thing, with nothing saying so.
    */
   public get WorkflowStillRunning(): boolean {
-    if (!this.runTree) return false;
-    for (const node of WalkAgentRunTree(this.runTree)) {
+    if (!this.RunTree) return false;
+    for (const node of WalkAgentRunTree(this.RunTree)) {
       if (node.NodeType !== 'Task' && node.NodeType !== 'TaskGraph') continue;
       if (!TERMINAL_TASK_STATUSES.has(node.Status)) return true;
     }
@@ -186,7 +312,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     await super.ngOnInit();
     
     if (this.record && this.record.ID) {
-      await this.dataHelper.loadAgentRunData(this.record.ID);
+      await this.DataHelper.loadAgentRunData(this.record.ID);
       await this.loadRunTree();
       await this.loadAgent();
       await this.loadCostMetrics();
@@ -211,9 +337,9 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     this.entityEventSubscription?.unsubscribe();
     this.entityEventSubscription = null;
     this.clearParsedCache();
-    this.dataHelper.clearData();
-    this.costMetrics = null;
-    this.agent = null;
+    this.DataHelper.clearData();
+    this.CostMetrics = null;
+    this.Agent = null;
   }
 
   private subscribeToRunEvents(): void {
@@ -235,7 +361,24 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
    * use case here); `remote-invalidate` covers writes from a separate
    * server process if GraphQL cache-invalidation is wired up.
    */
-  private handleEntityEvent(mjEvent: MJEvent): void {
+  /**
+   * Fire-and-forget: nothing consumes the return, which is what lets this be async. It has to be,
+   * because a remote event no longer carries the row unless the deployment allowlisted the entity
+   * — the fields below come from a keyed re-read instead (see `ResolveEntityEventRow`).
+   *
+   * Because the subscriber in `subscribeToRunEvents` drops the promise, a throw here would surface
+   * as an unhandled rejection; the body is wrapped so it is logged instead, the same way
+   * `FormBuilderResourceComponent.handleEntityEvent` handles it.
+   */
+  private async handleEntityEvent(mjEvent: MJEvent): Promise<void> {
+    try {
+      await this.handleEntityEventUnguarded(mjEvent);
+    } catch (err) {
+      LogError(`AIAgentRunForm.handleEntityEvent: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  private async handleEntityEventUnguarded(mjEvent: MJEvent): Promise<void> {
     if (mjEvent.event !== MJEventType.ComponentEvent) return;
     if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
     const evt = mjEvent.args as BaseEntityEvent | undefined;
@@ -252,10 +395,12 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       // Status change on THIS run row.
       const savedID = this.resolveEventID(evt);
       if (savedID && UUIDsEqual(savedID, runId)) {
-        this.refreshData();
+        this.RefreshData();
         // If the run completed, drop the subscription — no further
         // writes are expected and we don't want to hold the listener.
-        const newStatus = this.resolveEventField<string>(evt, 'Status');
+        // Resolved only once the id has matched, so an unrelated run's event costs no read.
+        const row = await this.resolveEventRow(evt);
+        const newStatus = row?.['Status'] as string | undefined;
         if (newStatus && newStatus !== 'Running') {
           this.unsubscribeFromRunEvents();
         }
@@ -263,9 +408,14 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       return;
     }
 
-    // Steps still carry AgentRunID, so a step write can be correlated exactly to this run.
+    // Steps still carry AgentRunID, so a step write can be correlated exactly to this run. Unlike
+    // `Status` above, this read is NOT behind an id match — it cannot be, because AgentRunID is a
+    // foreign key on the step and there is nothing to compare until the row is in hand. So while
+    // this form is open on a Running agent, every step save anywhere in the deployment costs it
+    // one keyed read (or nothing, if the entity is allowlisted for broadcast). It is bounded by
+    // the run's lifetime: `unsubscribeFromRunEvents()` fires once the run leaves 'Running'.
     if (entityName === 'MJ: AI Agent Run Steps') {
-      const childAgentRunId = this.resolveEventField<string>(evt, 'AgentRunID');
+      const childAgentRunId = (await this.resolveEventRow(evt))?.['AgentRunID'] as string | undefined;
       if (childAgentRunId && UUIDsEqual(childAgentRunId, runId)) {
         this.refreshRunDataDebounced();
       }
@@ -315,20 +465,16 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     return null;
   }
 
-  private resolveEventField<T>(evt: BaseEntityEvent, fieldName: string): T | null {
-    if (evt.baseEntity) {
-      const val = evt.baseEntity.Get?.(fieldName) as T | undefined;
-      return val ?? null;
-    }
-    const payload = evt.payload as { recordData?: string | null } | undefined;
-    if (!payload?.recordData) return null;
-    try {
-      const row = JSON.parse(payload.recordData) as Record<string, unknown>;
-      const v = row?.[fieldName];
-      return (v ?? null) as T | null;
-    } catch {
-      return null;
-    }
+  /**
+   * The row behind an event, for the two fields this component needs that the primary key cannot
+   * give it (`Status` on the run, `AgentRunID` on a step).
+   *
+   * A remote event carries the row only for entities a deployment has opted into broadcasting;
+   * otherwise this re-reads that one record as the signed-in user, so a session that may not read
+   * it gets nothing rather than someone else's data.
+   */
+  private async resolveEventRow(evt: BaseEntityEvent): Promise<Record<string, unknown> | null> {
+    return await ResolveEntityEventRow(evt, this.ProviderToUse);
   }
 
   /**
@@ -341,7 +487,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     queueMicrotask(() => {
       this.refreshInFlight = false;
       if (!this.record?.ID) return;
-      this.dataHelper.loadAgentRunData(this.record.ID, true);
+      this.DataHelper.loadAgentRunData(this.record.ID, true);
     });
   }
   
@@ -352,7 +498,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       const md = this.ProviderToUse;
       const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       if (agent && await agent.Load(this.record.AgentID)) {
-        this.agent = agent;
+        this.Agent = agent;
         this.cdr.detectChanges();
       }
     } catch (error) {
@@ -364,11 +510,11 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     if (!this.record?.ID) return;
     
     try {
-      this.costMetrics = await this.costService.getAgentRunCostMetrics(this.record.ID);
+      this.CostMetrics = await this.costService.getAgentRunCostMetrics(this.record.ID);
       this.cdr.markForCheck();
     } catch (error) {
       console.error('Error loading cost metrics:', error);
-      this.costMetrics = {
+      this.CostMetrics = {
         totalCost: 0,
         totalPrompts: 0,
         totalTokensInput: 0,
@@ -379,24 +525,29 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     }
   }
   
-  changeTab(tab: string) {
-    this.activeTab = tab;
+  ChangeTab(tab: string) {
+    this.ActiveTab = tab;
     
     // Lazy load the Visualization (playable + static flow) view on first access
-    if (tab === 'visualization' && !this.visualizationLoaded) {
-      this.visualizationLoaded = true;
+    if (tab === 'visualization' && !this.VisualizationLoaded) {
+      this.VisualizationLoaded = true;
       this.cdr.markForCheck();
     }
     
     // Lazy load analytics when the tab is first accessed
-    if (tab === 'analytics' && !this.analyticsLoaded) {
-      this.analyticsLoaded = true;
+    if (tab === 'analytics' && !this.AnalyticsLoaded) {
+      this.AnalyticsLoaded = true;
       this.cdr.markForCheck();
     }
   }
+
+  /** @deprecated Use {@link ChangeTab}. */
+  changeTab(tab: string) {
+    return this.ChangeTab(tab);
+  }
   
   
-  calculateDuration(start: Date, end?: Date | null): string {
+  CalculateDuration(start: Date, end?: Date | null): string {
     if (!end) return 'Running...';
     
     const ms = end.getTime() - start.getTime();
@@ -405,46 +556,86 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     if (ms < 3600000) return `${Math.floor(ms / 60000)}m ${Math.floor((ms % 60000) / 1000)}s`;
     return `${Math.floor(ms / 3600000)}h ${Math.floor((ms % 3600000) / 60000)}m`;
   }
+
+  /** @deprecated Use {@link CalculateDuration}. */
+  calculateDuration(start: Date, end?: Date | null): string {
+    return this.CalculateDuration(start, end);
+  }
   
+  SelectTimelineItem(item: TimelineItem) {
+    this.SelectedTimelineItem = item;
+    this.JsonPanelExpanded = true;
+    this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link SelectTimelineItem}. */
   selectTimelineItem(item: TimelineItem) {
-    this.selectedTimelineItem = item;
-    this.jsonPanelExpanded = true;
-    this.cdr.markForCheck();
+    return this.SelectTimelineItem(item);
   }
   
+  CloseJsonPanel() {
+    this.SelectedTimelineItem = null;
+    this.cdr.markForCheck();
+  }
+
+  /** @deprecated Use {@link CloseJsonPanel}. */
   closeJsonPanel() {
-    this.selectedTimelineItem = null;
-    this.cdr.markForCheck();
+    return this.CloseJsonPanel();
   }
   
-  navigateToSubRun(runId: string) {
+  NavigateToSubRun(runId: string) {
     SharedService.Instance.OpenEntityRecord("MJ: AI Agent Runs", CompositeKey.FromID(runId));
   }
 
-  navigateToParentRun() {
+  /** @deprecated Use {@link NavigateToSubRun}. */
+  navigateToSubRun(runId: string) {
+    return this.NavigateToSubRun(runId);
+  }
+
+  NavigateToParentRun() {
     if (this.record.ParentRunID) {
       SharedService.Instance.OpenEntityRecord("MJ: AI Agent Runs", CompositeKey.FromID(this.record.ParentRunID));
     }
   }
-  
-  navigateToActionLog(logId: string) {
-    SharedService.Instance.OpenEntityRecord("MJ: Action Execution Logs", CompositeKey.FromID(logId));
+
+  /** @deprecated Use {@link NavigateToParentRun}. */
+  navigateToParentRun() {
+    return this.NavigateToParentRun();
   }
   
-  openEntityRecord(entityName: string, recordId: string | null) {
+  NavigateToActionLog(logId: string) {
+    SharedService.Instance.OpenEntityRecord("MJ: Action Execution Logs", CompositeKey.FromID(logId));
+  }
+
+  /** @deprecated Use {@link NavigateToActionLog}. */
+  navigateToActionLog(logId: string) {
+    return this.NavigateToActionLog(logId);
+  }
+  
+  OpenEntityRecord(entityName: string, recordId: string | null) {
     if (recordId) {
       SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
     }
   }
+
+  /** @deprecated Use {@link OpenEntityRecord}. */
+  openEntityRecord(entityName: string, recordId: string | null) {
+    return this.OpenEntityRecord(entityName, recordId);
+  }
   
-  navigateToEntityRecord(event: { entityName: string; recordId: string }) {
+  NavigateToEntityRecord(event: { entityName: string; recordId: string }) {
     SharedService.Instance.OpenEntityRecord(event.entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.entityName), event.recordId));
+  }
+
+  /** @deprecated Use {@link NavigateToEntityRecord}. */
+  navigateToEntityRecord(event: { entityName: string; recordId: string }) {
+    return this.NavigateToEntityRecord(event);
   }
 
   /**
    * Navigate to the conversation in the Chat application
    */
-  navigateToConversation() {
+  NavigateToConversation() {
     if (!this.record?.ConversationID) return;
 
     // Find the Chat app
@@ -461,8 +652,13 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       chatApp.ID
     );
   }
+
+  /** @deprecated Use {@link NavigateToConversation}. */
+  navigateToConversation() {
+    return this.NavigateToConversation();
+  }
   
-  refreshData() {
+  RefreshData() {
     // Reload the agent run record to get latest status
     if (this.record?.ID) {
       // Clear parsed cache when refreshing data
@@ -476,19 +672,24 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
         this.loadCostMetrics();
         
         // Reload data through helper - this will update all components (force reload for refresh)
-        this.dataHelper.loadAgentRunData(this.record.ID, true);
+        this.DataHelper.loadAgentRunData(this.record.ID, true);
         void this.loadRunTree();
         
         // Trigger analytics refresh
-        if (this.analyticsComponent) {
-          this.analyticsComponent.loadData();
+        if (this.AnalyticsComponent) {
+          this.AnalyticsComponent.loadData();
         }
       });
     }
   }
+
+  /** @deprecated Use {@link RefreshData}. */
+  refreshData() {
+    return this.RefreshData();
+  }
   
   
-  getStatusIcon(status: string): string {
+  GetStatusIcon(status: string): string {
     const iconMap: Record<string, string> = {
       'Running': 'fa-circle-notch fa-spin',
       'Completed': 'fa-check-circle',
@@ -498,8 +699,13 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     };
     return iconMap[status] || 'fa-question-circle';
   }
+
+  /** @deprecated Use {@link GetStatusIcon}. */
+  getStatusIcon(status: string): string {
+    return this.GetStatusIcon(status);
+  }
   
-  async copyToClipboard(text: string) {
+  async CopyToClipboard(text: string) {
     try {
       await navigator.clipboard.writeText(text);
       // Could show a toast notification here
@@ -507,11 +713,16 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       console.error('Failed to copy to clipboard:', err);
     }
   }
+
+  /** @deprecated Use {@link CopyToClipboard}. */
+  async copyToClipboard(text: string) {
+    return this.CopyToClipboard(text);
+  }
   
   /**
    * Get the Result field with recursive JSON parsing applied
    */
-  get parsedResult(): string {
+  get ParsedResult(): string {
     if (!this.record?.Result) {
       return '';
     }
@@ -552,11 +763,16 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       return fallbackResult;
     }
   }
+
+  /** @deprecated Use {@link ParsedResult}. */
+  get parsedResult(): string {
+    return this.ParsedResult;
+  }
   
   /**
    * Get the Starting Payload field with recursive JSON parsing applied
    */
-  get parsedStartingPayload(): string {
+  get ParsedStartingPayload(): string {
     if (!this.record?.StartingPayload) {
       return '';
     }
@@ -598,10 +814,15 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     }
   }
 
+  /** @deprecated Use {@link ParsedStartingPayload}. */
+  get parsedStartingPayload(): string {
+    return this.ParsedStartingPayload;
+  }
+
   /**
    * Get the Final Payload (state) field with recursive JSON parsing applied
    */
-  get parsedFinalPayload(): string {
+  get ParsedFinalPayload(): string {
     if (!this.record?.FinalPayload) return '';
     
     // Return cached result if available
@@ -640,10 +861,15 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     }
   }
 
+  /** @deprecated Use {@link ParsedFinalPayload}. */
+  get parsedFinalPayload(): string {
+    return this.ParsedFinalPayload;
+  }
+
   /**
    * Get the Data field with recursive JSON parsing applied
    */
-  get parsedData(): string {
+  get ParsedData(): string {
     if (!this.record?.Data) return '';
     
     // Return cached result if available
@@ -681,11 +907,16 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       return fallbackResult;
     }
   }
+
+  /** @deprecated Use {@link ParsedData}. */
+  get parsedData(): string {
+    return this.ParsedData;
+  }
   
   /**
    * Get parsed Starting Payload as an object for deep diff
    */
-  get startingPayloadObject(): any {
+  get StartingPayloadObject(): any {
     if (!this.record?.StartingPayload) return null;
     
     try {
@@ -711,10 +942,15 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     }
   }
 
+  /** @deprecated Use {@link StartingPayloadObject}. */
+  get startingPayloadObject(): any {
+    return this.StartingPayloadObject;
+  }
+
   /**
    * Get parsed Final Payload as an object for deep diff
    */
-  get finalPayloadObject(): any {
+  get FinalPayloadObject(): any {
     if (!this.record?.FinalPayload) return null;
     
     try {
@@ -740,6 +976,11 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     }
   }
 
+  /** @deprecated Use {@link FinalPayloadObject}. */
+  get finalPayloadObject(): any {
+    return this.FinalPayloadObject;
+  }
+
   /**
    * Clear all cached parsed results
    */
@@ -760,22 +1001,22 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
       
       // Parse all fields that exist
       if (this.record?.Result) {
-        this.parsedResult; // Triggers parsing and caching
+        this.ParsedResult; // Triggers parsing and caching
         parsedCount++;
       }
       
       if (this.record?.StartingPayload) {
-        this.parsedStartingPayload; // Triggers parsing and caching
+        this.ParsedStartingPayload; // Triggers parsing and caching
         parsedCount++;
       }
       
       if (this.record?.FinalPayload) {
-        this.parsedFinalPayload; // Triggers parsing and caching
+        this.ParsedFinalPayload; // Triggers parsing and caching
         parsedCount++;
       }
       
       if (this.record?.Data) {
-        this.parsedData; // Triggers parsing and caching
+        this.ParsedData; // Triggers parsing and caching
         parsedCount++;
       }
       
@@ -789,26 +1030,36 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   /**
    * Check if all parsing is complete - used by template
    */
-  get isParsingComplete(): boolean {
+  get IsParsingComplete(): boolean {
     return this._allParsingComplete;
+  }
+
+  /** @deprecated Use {@link IsParsingComplete}. */
+  get isParsingComplete(): boolean {
+    return this.IsParsingComplete;
   }
 
   /**
    * Check if we have both payloads to show diff
    */
-  get showPayloadDiff(): boolean {
+  get ShowPayloadDiff(): boolean {
     return !!(this.record?.StartingPayload && this.record?.FinalPayload);
+  }
+
+  /** @deprecated Use {@link ShowPayloadDiff}. */
+  get showPayloadDiff(): boolean {
+    return this.ShowPayloadDiff;
   }
 
   /**
    * Check if selected timeline item is a step with payload changes
    */
-  get showStepPayloadDiff(): boolean {
-    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+  get ShowStepPayloadDiff(): boolean {
+    if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
       return false;
     }
     
-    const stepData = this.selectedTimelineItem.data;
+    const stepData = this.SelectedTimelineItem.data;
     if (stepData && (stepData.PayloadAtStart?.trim().length > 0 
                  || stepData.PayloadAtEnd?.trim().length > 0)) {
       return stepData.PayloadAtStart !== stepData.PayloadAtEnd;
@@ -818,15 +1069,20 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     }
   }
 
+  /** @deprecated Use {@link ShowStepPayloadDiff}. */
+  get showStepPayloadDiff(): boolean {
+    return this.ShowStepPayloadDiff;
+  }
+
   /**
    * Get parsed PayloadAtStart for the selected step
    */
-  get stepPayloadAtStartObject(): any {
-    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+  get StepPayloadAtStartObject(): any {
+    if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
       return null;
     }
     
-    const stepData = this.selectedTimelineItem.data;
+    const stepData = this.SelectedTimelineItem.data;
     if (!stepData || !stepData.PayloadAtStart) {
       return null;
     }
@@ -851,15 +1107,20 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     }
   }
 
+  /** @deprecated Use {@link StepPayloadAtStartObject}. */
+  get stepPayloadAtStartObject(): any {
+    return this.StepPayloadAtStartObject;
+  }
+
   /**
    * Get parsed PayloadAtEnd for the selected step
    */
-  get stepPayloadAtEndObject(): any {
-    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+  get StepPayloadAtEndObject(): any {
+    if (!this.SelectedTimelineItem || this.SelectedTimelineItem.type !== 'step') {
       return null;
     }
     
-    const stepData = this.selectedTimelineItem.data;
+    const stepData = this.SelectedTimelineItem.data;
     if (!stepData || !stepData.PayloadAtEnd) {
       return null;
     }
@@ -882,5 +1143,10 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     } catch (e) {
       return null;
     }
+  }
+
+  /** @deprecated Use {@link StepPayloadAtEndObject}. */
+  get stepPayloadAtEndObject(): any {
+    return this.StepPayloadAtEndObject;
   }
 }

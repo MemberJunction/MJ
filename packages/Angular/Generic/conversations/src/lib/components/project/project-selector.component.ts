@@ -102,19 +102,118 @@ export interface ProjectWithStats extends MJProjectEntity {
   `]
 })
 export class ProjectSelectorComponent extends BaseAngularComponent implements OnInit  {
-  @Input() environmentId!: string;
-  @Input() currentUser!: UserInfo;
-  @Input() selectedProjectId: string | null = null;
-  @Input() disabled: boolean = false;
-  @Input() showStats: boolean = true;
+  @Input() EnvironmentId!: string;
 
-  @Output() projectSelected = new EventEmitter<MJProjectEntity | null>();
-  @Output() projectCreated = new EventEmitter<MJProjectEntity>();
-  @Output() projectUpdated = new EventEmitter<MJProjectEntity>();
-  @Output() projectDeleted = new EventEmitter<string>();
+  /** @deprecated Use {@link EnvironmentId}. */
+  @Input() set environmentId(value: string) {
+    this.EnvironmentId = value;
+  }
+  /** @deprecated Use {@link EnvironmentId}. */
+  get environmentId(): string {
+    return this.EnvironmentId;
+  }
+  @Input() CurrentUser!: UserInfo;
 
-  public projectsWithStats: ProjectWithStats[] = [];
-  public selectedProject: MJProjectEntity | null = null;
+  /** @deprecated Use {@link CurrentUser}. */
+  @Input() set currentUser(value: UserInfo) {
+    this.CurrentUser = value;
+  }
+  /** @deprecated Use {@link CurrentUser}. */
+  get currentUser(): UserInfo {
+    return this.CurrentUser;
+  }
+  @Input() SelectedProjectId: string | null = null;
+
+  /** @deprecated Use {@link SelectedProjectId}. */
+  @Input() set selectedProjectId(value: string | null) {
+    this.SelectedProjectId = value;
+  }
+  /** @deprecated Use {@link SelectedProjectId}. */
+  get selectedProjectId(): string | null {
+    return this.SelectedProjectId;
+  }
+  @Input() Disabled: boolean = false;
+
+  /** @deprecated Use {@link Disabled}. */
+  @Input() set disabled(value: boolean) {
+    this.Disabled = value;
+  }
+  /** @deprecated Use {@link Disabled}. */
+  get disabled(): boolean {
+    return this.Disabled;
+  }
+  @Input() ShowStats: boolean = true;
+
+  /** @deprecated Use {@link ShowStats}. */
+  @Input() set showStats(value: boolean) {
+    this.ShowStats = value;
+  }
+  /** @deprecated Use {@link ShowStats}. */
+  get showStats(): boolean {
+    return this.ShowStats;
+  }
+
+  @Output() ProjectSelected = new EventEmitter<MJProjectEntity | null>();
+
+  /**
+   * @deprecated Use {@link ProjectSelected}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (projectSelected) keeps working. Must stay AFTER ProjectSelected: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() projectSelected = this.ProjectSelected;
+  @Output() ProjectCreated = new EventEmitter<MJProjectEntity>();
+
+  /**
+   * @deprecated Use {@link ProjectCreated}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (projectCreated) keeps working. Must stay AFTER ProjectCreated: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() projectCreated = this.ProjectCreated;
+  @Output() ProjectUpdated = new EventEmitter<MJProjectEntity>();
+
+  /**
+   * @deprecated Use {@link ProjectUpdated}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (projectUpdated) keeps working. Must stay AFTER ProjectUpdated: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() projectUpdated = this.ProjectUpdated;
+  @Output() ProjectDeleted = new EventEmitter<string>();
+
+  /**
+   * @deprecated Use {@link ProjectDeleted}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (projectDeleted) keeps working. Must stay AFTER ProjectDeleted: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() projectDeleted = this.ProjectDeleted;
+
+  public ProjectsWithStats: ProjectWithStats[] = [];
+
+  /** @deprecated Use {@link ProjectsWithStats}. */
+  public get projectsWithStats(): ProjectWithStats[] {
+    return this.ProjectsWithStats;
+  }
+  /** @deprecated Use {@link ProjectsWithStats}. */
+  public set projectsWithStats(value: ProjectWithStats[]) {
+    this.ProjectsWithStats = value;
+  }
+  public SelectedProject: MJProjectEntity | null = null;
+
+  /** @deprecated Use {@link SelectedProject}. */
+  public get selectedProject(): MJProjectEntity | null {
+    return this.SelectedProject;
+  }
+  /** @deprecated Use {@link SelectedProject}. */
+  public set selectedProject(value: MJProjectEntity | null) {
+    this.SelectedProject = value;
+  }
 
   constructor(
     private dialogService: DialogService,
@@ -135,16 +234,16 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
       const [projectsResult, conversationsResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Projects',
-          ExtraFilter: `EnvironmentID='${this.environmentId}' AND IsArchived=0`,
+          ExtraFilter: `EnvironmentID='${this.EnvironmentId}' AND IsArchived=0`,
           OrderBy: 'Name ASC',
           ResultType: 'entity_object'
         },
         {
           EntityName: 'MJ: Conversations',
-          ExtraFilter: `EnvironmentID='${this.environmentId}'`,
+          ExtraFilter: `EnvironmentID='${this.EnvironmentId}'`,
           ResultType: 'entity_object'
         }
-      ], this.currentUser);
+      ], this.CurrentUser);
 
       if (projectsResult.Success && conversationsResult.Success) {
         const projects = projectsResult.Results as MJProjectEntity[] || [];
@@ -154,14 +253,14 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
         const conversationCounts = this.calculateConversationCounts(conversations);
 
         // Merge projects with stats
-        this.projectsWithStats = projects.map(p => {
+        this.ProjectsWithStats = projects.map(p => {
           const projectWithStats = p as ProjectWithStats;
           projectWithStats.conversationCount = conversationCounts.get(p.ID) || 0;
           return projectWithStats;
         });
 
-        if (this.selectedProjectId) {
-          this.selectedProject = this.projectsWithStats.find(p => UUIDsEqual(p.ID, this.selectedProjectId)) || null;
+        if (this.SelectedProjectId) {
+          this.SelectedProject = this.ProjectsWithStats.find(p => UUIDsEqual(p.ID, this.SelectedProjectId)) || null;
         }
       }
     } catch (error) {
@@ -181,17 +280,54 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
     return counts;
   }
 
+  OnProjectChange(project: MJProjectEntity | null): void {
+    this.SelectedProject = project;
+    this.ProjectSelected.emit(project);
+  }
+
+  /** @deprecated Use {@link OnProjectChange}. */
   onProjectChange(project: MJProjectEntity | null): void {
-    this.selectedProject = project;
-    this.projectSelected.emit(project);
+    return this.OnProjectChange(project);
   }
 
+  OnProjectSelectChange(projectId: string): void {
+    const project = this.ProjectsWithStats.find(p => UUIDsEqual(p.ID, projectId)) || null;
+    this.OnProjectChange(project);
+  }
+
+  /** @deprecated Use {@link OnProjectSelectChange}. */
   onProjectSelectChange(projectId: string): void {
-    const project = this.projectsWithStats.find(p => UUIDsEqual(p.ID, projectId)) || null;
-    this.onProjectChange(project);
+    return this.OnProjectSelectChange(projectId);
   }
 
+  OnCreateProject(): void {
+    const dialogRef = this.mjDialogService.open({
+      content: ProjectFormModalComponent,
+      width: 600,
+      minWidth: 400
+    });
+
+    const modalInstance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
+    modalInstance.dialogRef = dialogRef;
+    modalInstance.environmentId = this.EnvironmentId;
+    modalInstance.currentUser = this.CurrentUser;
+
+    modalInstance.projectSaved.subscribe(async (project: MJProjectEntity) => {
+      this.ProjectCreated.emit(project);
+      await this.loadProjects();
+      this.SelectedProject = project;
+      this.ProjectSelected.emit(project);
+    });
+  }
+
+  /** @deprecated Use {@link OnCreateProject}. */
   onCreateProject(): void {
+    return this.OnCreateProject();
+  }
+
+  OnEditProject(): void {
+    if (!this.SelectedProject) return;
+
     const dialogRef = this.mjDialogService.open({
       content: ProjectFormModalComponent,
       width: 600,
@@ -200,46 +336,29 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
 
     const modalInstance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
     modalInstance.dialogRef = dialogRef;
-    modalInstance.environmentId = this.environmentId;
-    modalInstance.currentUser = this.currentUser;
+    modalInstance.project = this.SelectedProject;
+    modalInstance.environmentId = this.EnvironmentId;
+    modalInstance.currentUser = this.CurrentUser;
 
     modalInstance.projectSaved.subscribe(async (project: MJProjectEntity) => {
-      this.projectCreated.emit(project);
+      this.ProjectUpdated.emit(project);
       await this.loadProjects();
-      this.selectedProject = project;
-      this.projectSelected.emit(project);
+      this.SelectedProject = project;
+      this.ProjectSelected.emit(project);
     });
   }
 
+  /** @deprecated Use {@link OnEditProject}. */
   onEditProject(): void {
-    if (!this.selectedProject) return;
-
-    const dialogRef = this.mjDialogService.open({
-      content: ProjectFormModalComponent,
-      width: 600,
-      minWidth: 400
-    });
-
-    const modalInstance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
-    modalInstance.dialogRef = dialogRef;
-    modalInstance.project = this.selectedProject;
-    modalInstance.environmentId = this.environmentId;
-    modalInstance.currentUser = this.currentUser;
-
-    modalInstance.projectSaved.subscribe(async (project: MJProjectEntity) => {
-      this.projectUpdated.emit(project);
-      await this.loadProjects();
-      this.selectedProject = project;
-      this.projectSelected.emit(project);
-    });
+    return this.OnEditProject();
   }
 
-  async onDeleteProject(): Promise<void> {
-    if (!this.selectedProject) return;
+  async OnDeleteProject(): Promise<void> {
+    if (!this.SelectedProject) return;
 
-    const projectName = this.selectedProject.Name;
-    const projectId = this.selectedProject.ID;
-    const conversationCount = (this.selectedProject as ProjectWithStats).conversationCount || 0;
+    const projectName = this.SelectedProject.Name;
+    const projectId = this.SelectedProject.ID;
+    const conversationCount = (this.SelectedProject as ProjectWithStats).conversationCount || 0;
 
     let message = `Are you sure you want to delete the project "${projectName}"?`;
     if (conversationCount > 0) {
@@ -258,15 +377,15 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
 
     try {
       const md = this.ProviderToUse;
-      const project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
+      const project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.CurrentUser);
       await project.Load(projectId);
 
       const deleted = await project.Delete();
       if (deleted) {
-        this.projectDeleted.emit(projectId);
+        this.ProjectDeleted.emit(projectId);
         await this.loadProjects();
-        this.selectedProject = null;
-        this.projectSelected.emit(null);
+        this.SelectedProject = null;
+        this.ProjectSelected.emit(null);
       } else {
         throw new Error('Delete operation returned false');
       }
@@ -274,5 +393,10 @@ export class ProjectSelectorComponent extends BaseAngularComponent implements On
       console.error('Error deleting project:', error);
       await this.dialogService.alert('Error', 'Failed to delete project. Please try again.');
     }
+  }
+
+  /** @deprecated Use {@link OnDeleteProject}. */
+  async onDeleteProject(): Promise<void> {
+    return this.OnDeleteProject();
   }
 }

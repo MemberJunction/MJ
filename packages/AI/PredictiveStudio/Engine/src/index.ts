@@ -90,6 +90,11 @@ export const PredictiveStudioEngineVersion = '5.43.0';
  * @param plan a (possibly partial) modeling plan
  * @returns whether the plan has passed the user approval gate
  */
-export function isModelingPlanApproved(plan: ModelingPlanSpec): boolean {
+export function IsModelingPlanApproved(plan: ModelingPlanSpec): boolean {
   return plan.Approved === true;
+}
+
+/** @deprecated Use {@link IsModelingPlanApproved}. */
+export function isModelingPlanApproved(plan: ModelingPlanSpec): boolean {
+  return IsModelingPlanApproved(plan);
 }

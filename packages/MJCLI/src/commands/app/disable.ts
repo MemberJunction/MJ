@@ -2,7 +2,7 @@ import { Args, Command } from '@oclif/core';
 import { DisableApp } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import { buildOrchestratorContext } from '../../utils/open-app-context.js';
+import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
 
 /**
  * CLI command: `mj app disable <name>`.
@@ -29,7 +29,7 @@ export default class AppDisable extends Command {
     const spinner = ora(`Disabling ${args.name}...`).start();
 
     try {
-      const context = await buildOrchestratorContext(this);
+      const context = await BuildOrchestratorContext(this);
 
       const result = await DisableApp(args.name, context);
 

@@ -98,7 +98,7 @@ const SOFT_KEYBOARD_MIN_HEIGHT = 120;
  * soft keyboard there is no way to press Return before that keyboard has appeared — so the first
  * real press always has an answer by the time it matters.
  */
-export function useHardwareKeyboard(): boolean {
+export function UseHardwareKeyboard(): boolean {
     const [hardware, setHardware] = useState(true);
 
     useEffect(() => {
@@ -121,6 +121,11 @@ export function useHardwareKeyboard(): boolean {
     // On web there is no on-screen keyboard to observe and `shiftKey` is reported anyway, so the
     // desktop rule applies unconditionally.
     return Platform.OS === 'web' ? true : hardware;
+}
+
+/** @deprecated Use {@link UseHardwareKeyboard}. */
+export function useHardwareKeyboard(): boolean {
+    return UseHardwareKeyboard();
 }
 
 /**

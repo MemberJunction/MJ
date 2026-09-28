@@ -26,13 +26,23 @@ export type TagsTab = (typeof TAGS_TABS)[number];
  * Cap an array of names to {@link TAGS_AGENT_CONTEXT_NAME_LIST_CAP} entries.
  * Pure + deterministic; never mutates the input.
  */
-export function capTagNames(names: readonly string[]): string[] {
+export function CapTagNames(names: readonly string[]): string[] {
     return names.slice(0, TAGS_AGENT_CONTEXT_NAME_LIST_CAP);
 }
 
+/** @deprecated Use {@link CapTagNames}. */
+export function capTagNames(names: readonly string[]): string[] {
+    return CapTagNames(names);
+}
+
 /** Type-guard for a Tags tab string — keeps SwitchClassifyTab tolerant of arbitrary input. */
-export function isValidTagsTab(tab: unknown): tab is TagsTab {
+export function IsValidTagsTab(tab: unknown): tab is TagsTab {
     return typeof tab === 'string' && (TAGS_TABS as readonly string[]).includes(tab);
+}
+
+/** @deprecated Use {@link IsValidTagsTab}. */
+export function isValidTagsTab(tab: unknown): tab is TagsTab {
+    return IsValidTagsTab(tab);
 }
 
 /**
@@ -48,8 +58,8 @@ export interface TaxNodeCandidate {
 
 /** Outcome of {@link resolveTaxNode}: the matched node, or a tolerant error. */
 export type TagsResolveResult<T> =
-    | { ok: true; value: T }
-    | { ok: false; error: string };
+    | { ok: true; value: T }  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    | { ok: false; error: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /**
  * Resolve an agent-supplied taxonomy reference to one of the tree nodes. Tries, in order
@@ -60,7 +70,7 @@ export type TagsResolveResult<T> =
  *
  * Pure + deterministic. Returns a tolerant "available tags" error on a miss (never throws).
  */
-export function resolveTaxNode<T extends TaxNodeCandidate>(
+export function ResolveTaxNode<T extends TaxNodeCandidate>(
     input: string,
     nodes: readonly T[],
 ): TagsResolveResult<T> {
@@ -78,19 +88,32 @@ export function resolveTaxNode<T extends TaxNodeCandidate>(
         n => n.Name.toLowerCase().includes(needle) || (n.DisplayName ?? '').toLowerCase().includes(needle),
     );
     if (byPartial) return { ok: true, value: byPartial };
-    return { ok: false, error: buildTagsNotFoundError(input, nodes.map(n => n.DisplayName || n.Name)) };
+    return { ok: false, error: BuildTagsNotFoundError(input, nodes.map(n => n.DisplayName || n.Name)) };
+}
+
+/** @deprecated Use {@link ResolveTaxNode}. */
+export function resolveTaxNode<T extends TaxNodeCandidate>(
+    input: string,
+    nodes: readonly T[],
+): TagsResolveResult<T> {
+    return ResolveTaxNode(input, nodes);
 }
 
 /** Build a tolerant "not found" error listing a bounded sample of available tag names. */
-export function buildTagsNotFoundError(input: string, availableNames: readonly string[]): string {
+export function BuildTagsNotFoundError(input: string, availableNames: readonly string[]): string {
     if (availableNames.length === 0) {
         return `No match for "${input}". No tags are loaded.`;
     }
-    const sample = capTagNames(availableNames).join(', ');
+    const sample = CapTagNames(availableNames).join(', ');
     const more = availableNames.length > TAGS_AGENT_CONTEXT_NAME_LIST_CAP
         ? ` (+${availableNames.length - TAGS_AGENT_CONTEXT_NAME_LIST_CAP} more)`
         : '';
     return `No tag matches "${input}". Available: ${sample}${more}.`;
+}
+
+/** @deprecated Use {@link BuildTagsNotFoundError}. */
+export function buildTagsNotFoundError(input: string, availableNames: readonly string[]): string {
+    return BuildTagsNotFoundError(input, availableNames);
 }
 
 /**
@@ -139,7 +162,7 @@ export interface TagsAgentContextInput {
  * live pipeline status, and bounded lists of tag-library + taxonomy names the safe
  * search/select/open tools can target. Pure function.
  */
-export function buildTagsAgentContext(input: TagsAgentContextInput): Record<string, unknown> {
+export function BuildTagsAgentContext(input: TagsAgentContextInput): Record<string, unknown> {
     const context: Record<string, unknown> = {
         ActiveTab: input.ActiveTab,
         SourceCount: input.SourceCount,
@@ -161,18 +184,23 @@ export function buildTagsAgentContext(input: TagsAgentContextInput): Record<stri
     }
 
     if (input.TagLibraryNames.length > 0) {
-        context['TopTagNames'] = capTagNames(input.TagLibraryNames);
+        context['TopTagNames'] = CapTagNames(input.TagLibraryNames);
         if (input.TagLibraryNames.length > TAGS_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['TagLibraryNameCount'] = input.TagLibraryNames.length;
         }
     }
 
     if (input.TaxonomyNodeNames.length > 0) {
-        context['TaxonomyNodeNames'] = capTagNames(input.TaxonomyNodeNames);
+        context['TaxonomyNodeNames'] = CapTagNames(input.TaxonomyNodeNames);
         if (input.TaxonomyNodeNames.length > TAGS_AGENT_CONTEXT_NAME_LIST_CAP) {
             context['TaxonomyNodeNameCount'] = input.TaxonomyNodeNames.length;
         }
     }
 
     return context;
+}
+
+/** @deprecated Use {@link BuildTagsAgentContext}. */
+export function buildTagsAgentContext(input: TagsAgentContextInput): Record<string, unknown> {
+    return BuildTagsAgentContext(input);
 }

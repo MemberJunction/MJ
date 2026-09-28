@@ -40,8 +40,8 @@ import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, Is
 import { SQLParser } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
-import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, PublishStatusUpdate } from './PushStatusResolver.js';
+import { CACHE_INVALIDATION_TOPIC, MayBroadcastRecordData } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { Subscription } from 'rxjs';
@@ -51,7 +51,7 @@ export class ResolverBase {
   private static _cloudeventsHeaders = process.env.CLOUDEVENTS_HTTP_HEADERS ? JSON.parse(process.env.CLOUDEVENTS_HTTP_HEADERS) : {};
 
   private static _eventSubscriptionKey: string = '___MJServer___ResolverBase___EventSubscriptions';
-  private get EventSubscriptions(): Map<string, Subscription> {
+  private get eventSubscriptions(): Map<string, Subscription> {
     // here we use the global object store instead of a static member becuase in some cases based on import code paths/bundling/etc, the static member
     // could actually be duplicated and we'd end up with multiple instances of the same map, which would be bad.
     const g = MJGlobal.Instance.GetGlobalObjectStore();
@@ -1450,16 +1450,24 @@ export class ResolverBase {
    * Publishes a CACHE_INVALIDATION event to connected browser clients after a successful
    * entity save or delete. Includes the originSessionId so the originating browser can
    * skip redundant re-fetches (it already handled the event locally).
+   *
+   * The row itself rides along ONLY for entities opted in via
+   * `cacheSettings.recordDataBroadcastEntities` — this event reaches every connected client
+   * unfiltered, so the row would otherwise be readable by sessions that could not read the record.
    */
   protected PublishCacheInvalidation(entityObject: BaseEntity, action: 'save' | 'delete', userPayload: UserPayload): void {
+    const entityName = entityObject.EntityInfo.Name;
     PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-      entityName: entityObject.EntityInfo.Name,
+      entityName,
       primaryKeyValues: JSON.stringify(entityObject.PrimaryKey.KeyValuePairs),
       action,
       sourceServerId: MJGlobal.Instance.ProcessUUID,
       timestamp: new Date(),
       originSessionId: userPayload?.sessionId || null,
-      recordData: action === 'save' ? JSON.stringify(entityObject.GetAll()) : undefined,
+      recordData:
+        action === 'save' && MayBroadcastRecordData(entityName)
+          ? JSON.stringify(entityObject.GetAll())
+          : undefined,
     });
   }
 
@@ -1472,7 +1480,7 @@ export class ResolverBase {
    * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
    */
   protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
-    publishStatusUpdate(pubSub, {
+    PublishStatusUpdate(pubSub, {
       sessionId,
       ownerUserId: userPayload?.userRecord?.ID ?? '',
       message,
@@ -1485,7 +1493,7 @@ export class ResolverBase {
     // cause issues with multiple messages for the same event.
     const uniqueKey = entityObject.EntityInfo.Name;
 
-    if (!this.EventSubscriptions.has(uniqueKey)) {
+    if (!this.eventSubscriptions.has(uniqueKey)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
       LogDebug(`ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`);
       const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
@@ -1518,7 +1526,7 @@ export class ResolverBase {
           }
         }
       });
-      this.EventSubscriptions.set(uniqueKey, theSub);
+      this.eventSubscriptions.set(uniqueKey, theSub);
     }
   }
 

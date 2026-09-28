@@ -211,31 +211,46 @@ export class MJFilterPanelComponent {
   @Output() ValuesChange = new EventEmitter<Record<string, unknown>>();
   @Output() Reset = new EventEmitter<void>();
 
-  public getValue(key: string): unknown {
+  public GetValue(key: string): unknown {
     return this.Values?.[key];
   }
 
-  public setValue(key: string, value: unknown): void {
+  /** @deprecated Use {@link GetValue}. */
+  public getValue(key: string): unknown {
+    return this.GetValue(key);
+  }
+
+  public SetValue(key: string, value: unknown): void {
     this.Values = { ...this.Values, [key]: value };
     this.ValuesChange.emit(this.Values);
   }
 
+  /** @deprecated Use {@link SetValue}. */
+  public setValue(key: string, value: unknown): void {
+    return this.SetValue(key, value);
+  }
+
   /** Whether a chip option is currently active (handles single + multi). */
-  public isChipActive(field: FilterFieldConfig, optValue: FilterOptionValue): boolean {
+  public IsChipActive(field: FilterFieldConfig, optValue: FilterOptionValue): boolean {
     if (field.multi) {
-      const current = this.getValue(field.key);
+      const current = this.GetValue(field.key);
       return Array.isArray(current) && current.includes(optValue);
     }
-    return this.getValue(field.key) === optValue;
+    return this.GetValue(field.key) === optValue;
+  }
+
+  /** @deprecated Use {@link IsChipActive}. */
+  public isChipActive(field: FilterFieldConfig, optValue: FilterOptionValue): boolean {
+    return this.IsChipActive(field, optValue);
   }
 
   /** Chip click: replace (single-select) or toggle in/out of the array (multi). */
-  public onChipClick(field: FilterFieldConfig, optValue: FilterOptionValue): void {
+  public OnChipClick(field: FilterFieldConfig, optValue: FilterOptionValue): void {
     if (!field.multi) {
-      this.setValue(field.key, optValue);
+      this.SetValue(field.key, optValue);
       return;
     }
-    const current = this.getValue(field.key);
+    const current = this.GetValue(field.key);
     const next: FilterOptionValue[] = Array.isArray(current) ? [...current] : [];
     const idx = next.indexOf(optValue);
     if (idx >= 0) {
@@ -243,6 +258,11 @@ export class MJFilterPanelComponent {
     } else {
       next.push(optValue);
     }
-    this.setValue(field.key, next);
+    this.SetValue(field.key, next);
+  }
+
+  /** @deprecated Use {@link OnChipClick}. */
+  public onChipClick(field: FilterFieldConfig, optValue: FilterOptionValue): void {
+    return this.OnChipClick(field, optValue);
   }
 }

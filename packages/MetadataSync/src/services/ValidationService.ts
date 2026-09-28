@@ -13,15 +13,15 @@ import {
   ParsedReference,
 } from '../types/validation';
 import { RecordData } from '../lib/sync-engine';
-import { getSystemUser } from '../lib/provider-utils';
-import { parseMetadataReference } from '../lib/reference-parser';
+import { GetSystemUser } from '../lib/provider-utils';
+import { ParseMetadataReference } from '../lib/reference-parser';
 import {
   METADATA_KEYWORDS,
-  isMetadataKeyword,
-  extractKeywordValue
+  IsMetadataKeyword,
+  ExtractKeywordValue
 } from '../constants/metadata-keywords';
 import { EntityConfig } from '../config';
-import { resolveCollectionRelationship } from '../lib/collection-resolver';
+import { ResolveCollectionRelationship } from '../lib/collection-resolver';
 
 // Type aliases for clarity
 type EntityData = RecordData;
@@ -51,7 +51,7 @@ export class ValidationService {
   /**
    * Validates all metadata files in the specified directory
    */
-  public async validateDirectory(dir: string): Promise<ValidationResult> {
+  public async ValidateDirectory(dir: string): Promise<ValidationResult> {
     // Validate that include and exclude are not used together
     if (this.options.include && this.options.exclude) {
       throw new Error('Cannot specify both --include and --exclude options. Please use one or the other.');
@@ -110,6 +110,11 @@ export class ValidationService {
         fileResults,
       },
     };
+  }
+
+  /** @deprecated Use {@link ValidateDirectory}. */
+  public async validateDirectory(dir: string): Promise<ValidationResult> {
+    return this.ValidateDirectory(dir);
   }
 
   /**
@@ -437,7 +442,7 @@ export class ValidationService {
       if (!fieldInfo) {
         // Check if this might be a virtual property (getter/setter)
         try {
-          const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name, getSystemUser());
+          const entityInstance = await this.metadata.GetEntityObject(entityInfo.Name, GetSystemUser());
           // we use this approach instead of checking Entity Fields because
           // some sub-classes implement setter properties that allow you to set
           // values that are not physically in the database but are resolved by the sub-class
@@ -694,7 +699,7 @@ export class ValidationService {
    * Check if a string is actually a MetadataSync reference (not just any @ string)
    */
   private isValidReference(value: string): boolean {
-    return isMetadataKeyword(value);
+    return IsMetadataKeyword(value);
   }
 
   /**
@@ -750,7 +755,7 @@ export class ValidationService {
    * parser is unit-testable without instantiating this service.
    */
   private parseReference(reference: string): ParsedReference | null {
-    return parseMetadataReference(reference);
+    return ParseMetadataReference(reference);
   }
 
   /**
@@ -1291,7 +1296,7 @@ export class ValidationService {
   private async loadUserRoles(): Promise<void> {
     try {
       const rv = new RunView();
-      const systemUser = getSystemUser();
+      const systemUser = GetSystemUser();
 
       // Load all user roles with role names
       const result = await rv.RunView(
@@ -1464,7 +1469,7 @@ export class ValidationService {
     if (Array.isArray(jsonContent)) {
       for (const item of jsonContent) {
         if (typeof item === 'string' && item.startsWith(`${METADATA_KEYWORDS.INCLUDE}:`)) {
-          const includePath = extractKeywordValue(item) as string;
+          const includePath = ExtractKeywordValue(item) as string;
           await this.validateIncludeFile(includePath.trim(), sourceFile);
         } else if (item && typeof item === 'object') {
           await this.validateJsonIncludes(item, sourceFile);
@@ -1538,7 +1543,7 @@ export class ValidationService {
         if (typeof value === 'string' && this.isValidReference(value)) {
           // Process different reference types
           if (value.startsWith(METADATA_KEYWORDS.FILE)) {
-            const filePath = extractKeywordValue(value) as string;
+            const filePath = ExtractKeywordValue(value) as string;
             // Recursively validate the file reference (with circular detection)
             await this.validateFileReference(filePath, sourceFile, entityName, key, visitedFiles);
           } else if (value.startsWith(METADATA_KEYWORDS.LOOKUP)) {
@@ -1548,7 +1553,7 @@ export class ValidationService {
               await this.validateLookupReference(parsed, sourceFile, entityName, key);
             }
           } else if (value.startsWith(METADATA_KEYWORDS.TEMPLATE)) {
-            const templatePath = extractKeywordValue(value) as string;
+            const templatePath = ExtractKeywordValue(value) as string;
             await this.validateTemplateReference(templatePath, sourceFile, entityName, key);
           } else if (value.startsWith(METADATA_KEYWORDS.PARENT)) {
             const parsed = this.parseReference(value);
@@ -1566,7 +1571,7 @@ export class ValidationService {
               this.validateRootReference(parsed.value, parentContext, sourceFile, entityName, key);
             }
           } else if (value.startsWith(METADATA_KEYWORDS.ENV)) {
-            const envVar = extractKeywordValue(value) as string;
+            const envVar = ExtractKeywordValue(value) as string;
             if (!process.env[envVar]) {
               this.addWarning({
                 type: 'validation',
@@ -1893,7 +1898,7 @@ export class ValidationService {
         continue;
       }
 
-      const resolved = resolveCollectionRelationship(entityInfo, colName);
+      const resolved = ResolveCollectionRelationship(entityInfo, colName);
       if (!resolved) {
         this.addError({
           type: 'entity',

@@ -1,6 +1,6 @@
 import { SummarizeParams, SummarizeResult } from "./summarize.types";
 import { BaseModel, ModelUsage } from "./baseModel";
-import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, validateToolConversation } from "./chat.types";
+import { ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 import { ErrorAnalyzer } from "./errorAnalyzer";
 
@@ -79,7 +79,7 @@ export abstract class BaseLLM extends BaseModel {
         // error that names only an opaque id. Scoped to tool-capable drivers because a driver that
         // ignores tools cannot be tripped by the mistake.
         if (this.SupportsTools) {
-            validateToolConversation(params.messages);
+            ValidateToolConversation(params.messages);
         }
 
         // Native tool calling is non-streaming only: streaming tool-call delta assembly
@@ -181,7 +181,19 @@ export abstract class BaseLLM extends BaseModel {
      */
     protected abstract nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult>;
     
+    /**
+     * @deprecated Classification through a driver method is deprecated along with the legacy AI
+     * Actions system, its only caller, and will be removed in the next major version. Most drivers
+     * do not implement it. Run an AI Prompt through `AIPromptRunner` (`@memberjunction/ai-prompts`)
+     * instead, which adds model selection, failover and cost tracking.
+     */
     public abstract ClassifyText(params: ClassifyParams): Promise<ClassifyResult>;
+    /**
+     * @deprecated Summarization through a driver method is deprecated along with the legacy AI
+     * Actions system, its only caller, and will be removed in the next major version. Run a
+     * summarization AI Prompt through `AIPromptRunner` (`@memberjunction/ai-prompts`) instead,
+     * which adds model selection, failover and cost tracking.
+     */
     public abstract SummarizeText(params: SummarizeParams): Promise<SummarizeResult>;
     
     /**

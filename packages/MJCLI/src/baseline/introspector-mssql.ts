@@ -7,7 +7,7 @@
  */
 
 import type { QueryRunner } from './connection';
-import { isExcludedTable, stableSortBy } from './util';
+import { IsExcludedTable, StableSortBy } from './util';
 import type {
   CheckConstraintDef,
   ColumnDef,
@@ -33,7 +33,7 @@ interface Progress {
   onPhase?(phase: string, count?: number): void;
 }
 
-export async function introspectMssql(db: QueryRunner, progress: Progress = {}): Promise<SchemaSnapshot> {
+export async function IntrospectMssql(db: QueryRunner, progress: Progress = {}): Promise<SchemaSnapshot> {
   progress.onPhase?.('schemas');
   const schemas = await db.query<{ name: string }>(`
     SELECT s.name
@@ -75,23 +75,28 @@ export async function introspectMssql(db: QueryRunner, progress: Progress = {}):
   const permissions = await readPermissions(db);
 
   return {
-    dialect: 'mssql',
-    schemas: stableSortBy(schemas, (s) => s.name.toLowerCase()),
-    tables: stableSortBy(tables, (t) => `${t.schema}.${t.name}`.toLowerCase()),
-    views: stableSortBy(views, (v) => `${v.schema}.${v.name}`.toLowerCase()),
-    procedures: stableSortBy(procedures, (r) => `${r.schema}.${r.name}`.toLowerCase()),
-    functions: stableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
-    triggers: stableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
-    sequences: stableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
-    userDefinedTypes: stableSortBy(userDefinedTypes, (u) => `${u.schema}.${u.name}`.toLowerCase()),
-    extendedProperties: stableSortBy(
+    Dialect: 'mssql',
+    Schemas: StableSortBy(schemas, (s) => s.name.toLowerCase()),
+    Tables: StableSortBy(tables, (t) => `${t.Schema}.${t.Name}`.toLowerCase()),
+    Views: StableSortBy(views, (v) => `${v.schema}.${v.name}`.toLowerCase()),
+    Procedures: StableSortBy(procedures, (r) => `${r.schema}.${r.name}`.toLowerCase()),
+    Functions: StableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
+    Triggers: StableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
+    Sequences: StableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
+    UserDefinedTypes: StableSortBy(userDefinedTypes, (u) => `${u.Schema}.${u.Name}`.toLowerCase()),
+    ExtendedProperties: StableSortBy(
       extendedProperties,
       (p) => extPropSortKey(p),
     ),
-    principals: stableSortBy(principals, (p) => `${p.kind}|${p.name}`.toLowerCase()),
-    roleMemberships: stableSortBy(roleMemberships, (m) => `${m.role}|${m.member}`.toLowerCase()),
-    permissions: stableSortBy(permissions, (p) => permissionSortKey(p)),
+    Principals: StableSortBy(principals, (p) => `${p.Kind}|${p.Name}`.toLowerCase()),
+    RoleMemberships: StableSortBy(roleMemberships, (m) => `${m.role}|${m.member}`.toLowerCase()),
+    Permissions: StableSortBy(permissions, (p) => permissionSortKey(p)),
   };
+}
+
+/** @deprecated Use {@link IntrospectMssql}. */
+export async function introspectMssql(db: QueryRunner, progress: Progress = {}): Promise<SchemaSnapshot> {
+ return IntrospectMssql(db, progress);
 }
 
 /** Canonical sort key for permissions so the emitted GRANT block is byte-deterministic. */
@@ -110,12 +115,12 @@ function permissionSortKey(p: PermissionDef): string {
 /** Canonical sort key for extended properties so output stays byte-deterministic. */
 function extPropSortKey(p: ExtendedPropertyDef): string {
   return [
-    p.schemaName.toLowerCase(),
-    (p.level1Type || '').toLowerCase(),
-    (p.level1Name || '').toLowerCase(),
-    (p.level2Type || '').toLowerCase(),
-    (p.level2Name || '').toLowerCase(),
-    p.name.toLowerCase(),
+    p.SchemaName.toLowerCase(),
+    (p.Level1Type || '').toLowerCase(),
+    (p.Level1Name || '').toLowerCase(),
+    (p.Level2Type || '').toLowerCase(),
+    (p.Level2Name || '').toLowerCase(),
+    p.Name.toLowerCase(),
   ].join('|');
 }
 
@@ -233,9 +238,9 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
     // it in the baseline collides ("There is already an object named ...").
     // Filtering at the introspector level removes the table AND all of its
     // nested constraints/indexes/data from the snapshot in one pass.
-    if (isExcludedTable(t.table_name)) continue;
+    if (IsExcludedTable(t.table_name)) continue;
     const tableKey = `${t.schema_name}.${t.table_name}`;
-    const columns: ColumnDef[] = stableSortBy(
+    const columns: ColumnDef[] = StableSortBy(
       columnRows.filter((c) => c.schema_name === t.schema_name && c.table_name === t.table_name),
       (c) => String(c.ordinal).padStart(6, '0'),
     ).map((c) => ({
@@ -257,9 +262,9 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
     );
     const primaryKey: PrimaryKeyDef | undefined = pkCols.length
       ? {
-          name: pkCols[0].constraint_name,
-          clustered: !!pkCols[0].is_clustered,
-          columns: stableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
+          Name: pkCols[0].constraint_name,
+          Clustered: !!pkCols[0].is_clustered,
+          Columns: StableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
         }
       : undefined;
 
@@ -269,11 +274,11 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       ),
       (r) => r.constraint_name,
     );
-    const uniqueConstraints: UniqueConstraintDef[] = stableSortBy(
+    const uniqueConstraints: UniqueConstraintDef[] = StableSortBy(
       [...uniqueGroups.entries()].map(([name, rows]) => ({
         name,
         clustered: !!rows[0].is_clustered,
-        columns: stableSortBy(rows, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
+        columns: StableSortBy(rows, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
       })),
       (u) => u.name.toLowerCase(),
     );
@@ -284,16 +289,16 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       ),
       (r) => r.index_name,
     );
-    const indexes: IndexDef[] = stableSortBy(
+    const indexes: IndexDef[] = StableSortBy(
       [...indexGroups.entries()].map(([name, rows]) => {
-        const keyCols = stableSortBy(rows.filter((r) => r.is_included === 0), (r) => String(r.key_ordinal).padStart(6, '0'));
+        const keyCols = StableSortBy(rows.filter((r) => r.is_included === 0), (r) => String(r.key_ordinal).padStart(6, '0'));
         const inclCols = rows.filter((r) => r.is_included === 1).map((r) => r.column_name);
         return {
           name,
           isUnique: !!rows[0].is_unique,
           isClustered: !!rows[0].is_clustered,
           columns: keyCols.map((r) => r.column_name),
-          includes: stableSortBy(inclCols, (n) => n.toLowerCase()),
+          includes: StableSortBy(inclCols, (n) => n.toLowerCase()),
           filter: rows[0].filter_definition ?? undefined,
         };
       }),
@@ -304,9 +309,9 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       fkRows.filter((r) => r.schema_name === t.schema_name && r.table_name === t.table_name),
       (r) => r.constraint_name,
     );
-    const foreignKeys: ForeignKeyDef[] = stableSortBy(
+    const foreignKeys: ForeignKeyDef[] = StableSortBy(
       [...fkGroups.entries()].map(([name, rows]) => {
-        const ordered = stableSortBy(rows, (r) => String(r.key_index).padStart(6, '0'));
+        const ordered = StableSortBy(rows, (r) => String(r.key_index).padStart(6, '0'));
         return {
           name,
           columns: ordered.map((r) => r.column_name),
@@ -320,7 +325,7 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       (f) => f.name.toLowerCase(),
     );
 
-    const checks: CheckConstraintDef[] = stableSortBy(
+    const checks: CheckConstraintDef[] = StableSortBy(
       checkRows
         .filter((r) => r.schema_name === t.schema_name && r.table_name === t.table_name)
         .map((r) => ({ name: r.constraint_name, expression: r.definition })),
@@ -328,15 +333,15 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
     );
 
     tables.push({
-      schema: t.schema_name,
-      name: t.table_name,
-      hasIdentity: !!t.has_identity,
-      columns,
-      primaryKey,
-      uniqueConstraints,
-      indexes,
-      foreignKeys,
-      checks,
+      Schema: t.schema_name,
+      Name: t.table_name,
+      HasIdentity: !!t.has_identity,
+      Columns: columns,
+      PrimaryKey: primaryKey,
+      UniqueConstraints: uniqueConstraints,
+      Indexes: indexes,
+      ForeignKeys: foreignKeys,
+      Checks: checks,
     });
   }
   return tables;
@@ -395,7 +400,7 @@ async function readTriggers(db: QueryRunner): Promise<TriggerDef[]> {
  * Skipped types: A (application role) is kept; X/E/G handle AAD/Windows; everything
  * not in this table is filtered out at the WHERE level below so we never see it.
  */
-const PRINCIPAL_TYPE_MAP: Record<string, DatabasePrincipalDef['kind']> = {
+const PRINCIPAL_TYPE_MAP: Record<string, DatabasePrincipalDef['Kind']> = {
   S: 'sql_user',
   U: 'windows_user',
   R: 'database_role',
@@ -429,9 +434,9 @@ async function readPrincipals(db: QueryRunner): Promise<DatabasePrincipalDef[]> 
     .map((r): DatabasePrincipalDef | null => {
       const kind = PRINCIPAL_TYPE_MAP[r.type];
       if (!kind) return null;
-      const def: DatabasePrincipalDef = { name: r.name, kind };
-      if (r.owner_name) def.owner = r.owner_name;
-      if (r.default_schema_name) def.defaultSchema = r.default_schema_name;
+      const def: DatabasePrincipalDef = { Name: r.name, Kind: kind };
+      if (r.owner_name) def.Owner = r.owner_name;
+      if (r.default_schema_name) def.DefaultSchema = r.default_schema_name;
       return def;
     })
     .filter((p): p is DatabasePrincipalDef => p !== null);
@@ -612,7 +617,7 @@ async function readUserDefinedTypes(db: QueryRunner): Promise<UserDefinedTypeDef
 
   const out: UserDefinedTypeDef[] = [];
   for (const t of typeRows) {
-    const cols: UserDefinedTypeColumnDef[] = stableSortBy(
+    const cols: UserDefinedTypeColumnDef[] = StableSortBy(
       columnRows.filter((c) => c.type_table_object_id === t.type_table_object_id),
       (c) => String(c.ordinal).padStart(6, '0'),
     ).map((c) => ({
@@ -626,19 +631,19 @@ async function readUserDefinedTypes(db: QueryRunner): Promise<UserDefinedTypeDef
     const pkCols = pkRows.filter((r) => r.type_table_object_id === t.type_table_object_id);
     const primaryKey: PrimaryKeyDef | undefined = pkCols.length
       ? {
-          name: pkCols[0].constraint_name,
-          clustered: !!pkCols[0].is_clustered,
-          columns: stableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
+          Name: pkCols[0].constraint_name,
+          Clustered: !!pkCols[0].is_clustered,
+          Columns: StableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
         }
       : undefined;
 
     out.push({
-      schema: t.schema_name,
-      name: t.type_name,
-      kind: 'table',
-      isMemoryOptimized: !!t.is_memory_optimized,
-      columns: cols,
-      primaryKey,
+      Schema: t.schema_name,
+      Name: t.type_name,
+      Kind: 'table',
+      IsMemoryOptimized: !!t.is_memory_optimized,
+      Columns: cols,
+      PrimaryKey: primaryKey,
     });
   }
   return out;
@@ -752,15 +757,15 @@ async function readExtendedProperties(db: QueryRunner): Promise<ExtendedProperty
     if (r.class_id === 1 && !r.level1_type) continue;
     if (!r.schema_name) continue;
     // Mirror the table-level filter for any property attached to flyway_schema_history.
-    if (r.level1_name && isExcludedTable(r.level1_name)) continue;
+    if (r.level1_name && IsExcludedTable(r.level1_name)) continue;
     out.push({
-      name: r.prop_name,
-      value: r.prop_value ?? '',
-      schemaName: r.schema_name,
-      level1Type: r.level1_type ?? undefined,
-      level1Name: r.level1_name ?? undefined,
-      level2Type: r.level2_type ?? undefined,
-      level2Name: r.level2_name ?? undefined,
+      Name: r.prop_name,
+      Value: r.prop_value ?? '',
+      SchemaName: r.schema_name,
+      Level1Type: r.level1_type ?? undefined,
+      Level1Name: r.level1_name ?? undefined,
+      Level2Type: r.level2_type ?? undefined,
+      Level2Name: r.level2_name ?? undefined,
     });
   }
   return out;

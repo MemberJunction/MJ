@@ -50,7 +50,7 @@ function maybeParseJsonScalar(raw: string): unknown {
  *
  * Accepts a loose shape so tests don't need the full DriverExecutionContext type.
  */
-export function buildVariableValuesFromContext(
+export function BuildVariableValuesFromContext(
     context: { resolvedVariables?: { values?: Record<string, unknown> } } | null | undefined,
     env: NodeJS.ProcessEnv = process.env
 ): Record<string, unknown> {
@@ -81,6 +81,14 @@ export function buildVariableValuesFromContext(
     return values;
 }
 
+/** @deprecated Use {@link BuildVariableValuesFromContext}. */
+export function buildVariableValuesFromContext(
+    context: { resolvedVariables?: { values?: Record<string, unknown> } } | null | undefined,
+    env: NodeJS.ProcessEnv = process.env
+): Record<string, unknown> {
+    return BuildVariableValuesFromContext(context, env);
+}
+
 /**
  * Every unresolved `{{var}}` in a test's auth bindings, labelled by where it sits.
  *
@@ -89,7 +97,7 @@ export function buildVariableValuesFromContext(
  * the run fails at the identity provider looking like a credential problem, not a
  * configuration one. `startUrl` and `goal` fail loudly on their own; this does not.
  */
-export function findUnresolvedAuthPlaceholders(auth: unknown): string[] {
+export function FindUnresolvedAuthPlaceholders(auth: unknown): string[] {
     const bindings = (auth as { bindings?: unknown })?.bindings;
     if (!Array.isArray(bindings)) {
         return [];
@@ -104,12 +112,17 @@ export function findUnresolvedAuthPlaceholders(auth: unknown): string[] {
             if (typeof value !== 'string') {
                 continue;
             }
-            for (const key of findUnresolvedPlaceholders(value)) {
+            for (const key of FindUnresolvedPlaceholders(value)) {
                 out.push(`auth.bindings[${i}].${field}:{{${key}}}`);
             }
         }
     });
     return out;
+}
+
+/** @deprecated Use {@link FindUnresolvedAuthPlaceholders}. */
+export function findUnresolvedAuthPlaceholders(auth: unknown): string[] {
+    return FindUnresolvedAuthPlaceholders(auth);
 }
 
 /**
@@ -124,13 +137,13 @@ export function findUnresolvedAuthPlaceholders(auth: unknown): string[] {
  * setting `params.ApplicationContext` in that case so the engine doesn't
  * render an empty heading.
  */
-export function composeApplicationContext(
+export function ComposeApplicationContext(
     suiteLevel: string | undefined,
     perTest: string | undefined,
     values: Record<string, unknown>
 ): string | undefined {
     const layers: string[] = [];
-    const substitute = (s: string) => Object.keys(values).length === 0 ? s : substituteVariables(s, values);
+    const substitute = (s: string) => Object.keys(values).length === 0 ? s : SubstituteVariables(s, values);
 
     if (typeof suiteLevel === 'string' && suiteLevel.trim()) {
         layers.push(substitute(suiteLevel));
@@ -139,6 +152,15 @@ export function composeApplicationContext(
         layers.push(`## Test-specific Notes\n\n${substitute(perTest)}`);
     }
     return layers.length === 0 ? undefined : layers.join('\n\n');
+}
+
+/** @deprecated Use {@link ComposeApplicationContext}. */
+export function composeApplicationContext(
+    suiteLevel: string | undefined,
+    perTest: string | undefined,
+    values: Record<string, unknown>
+): string | undefined {
+    return ComposeApplicationContext(suiteLevel, perTest, values);
 }
 
 /**
@@ -154,7 +176,7 @@ export function composeApplicationContext(
  *
  * Returns a NEW object — the input is not mutated.
  */
-export function substituteVariables<T>(obj: T, values: Record<string, unknown>): T {
+export function SubstituteVariables<T>(obj: T, values: Record<string, unknown>): T {
     if (Object.keys(values).length === 0) {
         return obj;
     }
@@ -185,6 +207,11 @@ export function substituteVariables<T>(obj: T, values: Record<string, unknown>):
     return walk(obj) as T;
 }
 
+/** @deprecated Use {@link SubstituteVariables}. */
+export function substituteVariables<T>(obj: T, values: Record<string, unknown>): T {
+    return SubstituteVariables(obj, values);
+}
+
 /**
  * Return the distinct `{{key}}` placeholder names still present in a string
  * after substitution. A non-empty result means variables the string
@@ -192,7 +219,7 @@ export function substituteVariables<T>(obj: T, values: Record<string, unknown>):
  * keys instead of letting the literal `{{key}}` flow into a URL/goal and
  * surface later as a mysterious navigation error.
  */
-export function findUnresolvedPlaceholders(value: string | undefined): string[] {
+export function FindUnresolvedPlaceholders(value: string | undefined): string[] {
     if (!value) {
         return [];
     }
@@ -201,4 +228,9 @@ export function findUnresolvedPlaceholders(value: string | undefined): string[] 
         keys.add(match[1]);
     }
     return [...keys];
+}
+
+/** @deprecated Use {@link FindUnresolvedPlaceholders}. */
+export function findUnresolvedPlaceholders(value: string | undefined): string[] {
+    return FindUnresolvedPlaceholders(value);
 }

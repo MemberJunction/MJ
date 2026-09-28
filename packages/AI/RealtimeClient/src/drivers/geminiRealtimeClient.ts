@@ -22,11 +22,11 @@ import {
     type Transcription,
 } from '@google/genai';
 import { BaseRealtimeClient, RealtimeClientState } from '../generic/baseRealtimeClient';
-import { base64ToArrayBuffer } from '../audio/pcmUtils';
+import { Base64ToArrayBuffer } from '../audio/pcmUtils';
 import { IRealtimePcmPlayback, RealtimePcmPlayback } from '../audio/pcmPlayback';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
-import { createPcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
-import { createStreamFrameCapture, IFrameCapture } from '../media/frameCapture';
+import { CreatePcmMicCapture, IPcmMicCapture } from '../audio/micCapture';
+import { CreateStreamFrameCapture, IFrameCapture } from '../media/frameCapture';
 import type { RealtimeUsageModalityDetail } from '@memberjunction/ai';
 
 // ── Audio constants (Gemini Live wire formats) ─────────────────────────────────
@@ -344,7 +344,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
 
         // Start camera capture if inbound video is established and cameraStream provided
         if (this.cameraStream && this.IsTrackEstablished('video', 'inbound')) {
-            this.cameraCapture = createStreamFrameCapture(this.cameraStream, {
+            this.cameraCapture = CreateStreamFrameCapture(this.cameraStream, {
                 Rate: 1,
                 OnFrame: (frame) => this.SendVideoFrame(frame.data, frame.mimeType),
             });
@@ -613,7 +613,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
         micStream: MediaStream,
         onPcmChunk: (base64Pcm16: string) => void
     ): Promise<IGeminiMicCapture> {
-        return createPcmMicCapture(micStream, GEMINI_INPUT_SAMPLE_RATE, onPcmChunk);
+        return CreatePcmMicCapture(micStream, GEMINI_INPUT_SAMPLE_RATE, onPcmChunk);
     }
 
     /** Creation seam for the playout engine. Production returns {@link GeminiPcmPlayback}. */
@@ -947,7 +947,7 @@ export class GeminiRealtimeClient extends BaseRealtimeClient {
             const data = part.inlineData?.data;
             if (data) {
                 this.markGenerationStarted();
-                this.playback?.Enqueue(base64ToArrayBuffer(data));
+                this.playback?.Enqueue(Base64ToArrayBuffer(data));
             }
         }
     }

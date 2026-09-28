@@ -95,7 +95,7 @@ export class ComponentErrorAnalyzer {
    * @param errors Array of error messages
    * @returns Array of failed component names
    */
-  static identifyFailedComponents(errors: string[]): string[] {
+  static IdentifyFailedComponents(errors: string[]): string[] {
     const failedComponents = new Set<string>();
     
     for (const error of errors) {
@@ -106,12 +106,17 @@ export class ComponentErrorAnalyzer {
     return Array.from(failedComponents);
   }
 
+  /** @deprecated Use {@link IdentifyFailedComponents}. */
+  static identifyFailedComponents(errors: string[]): string[] {
+    return this.IdentifyFailedComponents(errors);
+  }
+
   /**
    * Analyzes errors and returns detailed information about failures
    * @param errors Array of error messages
    * @returns Array of detailed failure information
    */
-  static analyzeComponentErrors(errors: string[]): FailedComponentInfo[] {
+  static AnalyzeComponentErrors(errors: string[]): FailedComponentInfo[] {
     const failures: FailedComponentInfo[] = [];
     
     for (const error of errors) {
@@ -129,6 +134,11 @@ export class ComponentErrorAnalyzer {
     });
     
     return Array.from(uniqueFailures.values());
+  }
+
+  /** @deprecated Use {@link AnalyzeComponentErrors}. */
+  static analyzeComponentErrors(errors: string[]): FailedComponentInfo[] {
+    return this.AnalyzeComponentErrors(errors);
   }
 
   /**
@@ -291,7 +301,7 @@ export class ComponentErrorAnalyzer {
   /**
    * Format error analysis results for logging
    */
-  static formatAnalysisResults(failures: FailedComponentInfo[]): string {
+  static FormatAnalysisResults(failures: FailedComponentInfo[]): string {
     if (failures.length === 0) {
       return 'No component failures detected';
     }
@@ -311,5 +321,10 @@ export class ComponentErrorAnalyzer {
     });
     
     return result;
+  }
+
+  /** @deprecated Use {@link FormatAnalysisResults}. */
+  static formatAnalysisResults(failures: FailedComponentInfo[]): string {
+    return this.FormatAnalysisResults(failures);
   }
 }

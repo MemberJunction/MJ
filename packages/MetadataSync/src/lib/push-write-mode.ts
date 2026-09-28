@@ -43,7 +43,7 @@ export interface PushDirectoryMode {
  * The mode for one entity directory. The CLI flag wins over every file, so a run can force either
  * mode without editing metadata; then the directory's own config, then the root's, then shared.
  */
-export function resolveDirectoryMode(input: PushWriteModeInput): PushDirectoryMode {
+export function ResolveDirectoryMode(input: PushWriteModeInput): PushDirectoryMode {
   if (input.isolatedFlag !== undefined) {
     return { mode: input.isolatedFlag ? 'isolated' : 'shared', source: 'flag' };
   }
@@ -56,13 +56,23 @@ export function resolveDirectoryMode(input: PushWriteModeInput): PushDirectoryMo
   return { mode: 'shared', source: 'default' };
 }
 
+/** @deprecated Use {@link ResolveDirectoryMode}. */
+export function resolveDirectoryMode(input: PushWriteModeInput): PushDirectoryMode {
+  return ResolveDirectoryMode(input);
+}
+
 /** Graphs to run at once in a directory of this mode. */
-export function graphBatchSizeFor(mode: PushWriteMode, parallelBatchSize?: number): number {
+export function GraphBatchSizeFor(mode: PushWriteMode, parallelBatchSize?: number): number {
   return mode === 'isolated' ? parallelBatchSize ?? DEFAULT_PARALLEL_BATCH_SIZE : 1;
 }
 
+/** @deprecated Use {@link GraphBatchSizeFor}. */
+export function graphBatchSizeFor(mode: PushWriteMode, parallelBatchSize?: number): number {
+  return GraphBatchSizeFor(mode, parallelBatchSize);
+}
+
 /** The warning shown once per push that writes any isolated directory to the database. */
-export function isolatedModeWarning(directories: string[], graphBatchSize: number): string {
+export function IsolatedModeWarning(directories: string[], graphBatchSize: number): string {
   const list = directories.join(', ');
   return (
     `Isolated transactions (${graphBatchSize} graphs in parallel) for: ${list}. ` +
@@ -71,11 +81,21 @@ export function isolatedModeWarning(directories: string[], graphBatchSize: numbe
   );
 }
 
+/** @deprecated Use {@link IsolatedModeWarning}. */
+export function isolatedModeWarning(directories: string[], graphBatchSize: number): string {
+  return IsolatedModeWarning(directories, graphBatchSize);
+}
+
 /** Told once when `--parallel-batch-size` cannot apply, so the flag does not look effective. */
-export function unusedBatchSizeWarning(size: number): string {
+export function UnusedBatchSizeWarning(size: number): string {
   return (
     `--parallel-batch-size=${size} is ignored: no entity directory in this push uses isolated transactions, ` +
     `so records are saved one graph at a time in a single transaction. ` +
     `Set push.isolatedTransactions on an entity's .mj-sync.json, or pass --isolated-transactions, to run graphs in parallel.`
   );
+}
+
+/** @deprecated Use {@link UnusedBatchSizeWarning}. */
+export function unusedBatchSizeWarning(size: number): string {
+  return UnusedBatchSizeWarning(size);
 }

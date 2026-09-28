@@ -13,13 +13,23 @@ import type { MagicLinkJWTClaims, MagicLinkScopeEntry, RedeemErrorCode } from '.
 export const MAGIC_LINK_TOKEN_PREFIX = 'mj_ml_';
 
 /** Generates a cryptographically random raw magic-link token. */
-export function generateRawToken(): string {
+export function GenerateRawToken(): string {
   return MAGIC_LINK_TOKEN_PREFIX + randomBytes(32).toString('hex');
 }
 
+/** @deprecated Use {@link GenerateRawToken}. */
+export function generateRawToken(): string {
+  return GenerateRawToken();
+}
+
 /** Generates an opaque per-session id (anonymous-session forensics correlation). */
-export function generateSessionId(): string {
+export function GenerateSessionId(): string {
   return randomBytes(16).toString('base64url');
+}
+
+/** @deprecated Use {@link GenerateSessionId}. */
+export function generateSessionId(): string {
+  return GenerateSessionId();
 }
 
 /**
@@ -28,8 +38,13 @@ export function generateSessionId(): string {
  * carries the full 256 bits. Both write (CreateInvite) and read (RedeemInvite)
  * paths call this, so the encoding stays internally consistent.
  */
-export function hashToken(rawToken: string): string {
+export function HashToken(rawToken: string): string {
   return createHash('sha256').update(rawToken).digest('base64url');
+}
+
+/** @deprecated Use {@link HashToken}. */
+export function hashToken(rawToken: string): string {
+  return HashToken(rawToken);
 }
 
 /** Minimal shape of an invite needed for redemption eligibility. */
@@ -54,7 +69,7 @@ function normalizeName(name: string): string {
  * (including an external user already holding a restricted magic-link session)
  * from minting invites.
  */
-export function canIssueInvites(
+export function CanIssueInvites(
   userType: string | null | undefined,
   userRoleNames: readonly string[],
   issuerRoleNames: readonly string[],
@@ -69,13 +84,22 @@ export function canIssueInvites(
   return userRoleNames.some((r) => allowed.has(normalizeName(r)));
 }
 
+/** @deprecated Use {@link CanIssueInvites}. */
+export function canIssueInvites(
+  userType: string | null | undefined,
+  userRoleNames: readonly string[],
+  issuerRoleNames: readonly string[],
+): boolean {
+  return CanIssueInvites(userType, userRoleNames, issuerRoleNames);
+}
+
 /**
  * Pure check for WHAT role an invite may grant. The restricted role is always
  * grantable; any other role must be explicitly listed in `grantableRoleNames`.
  * Applied to every caller (Owners included) so a privileged role can never be
  * attached to an external magic-link user unless the deployment opts in.
  */
-export function isRoleGrantable(
+export function IsRoleGrantable(
   roleName: string | null | undefined,
   restrictedRoleName: string,
   grantableRoleNames: readonly string[],
@@ -88,8 +112,17 @@ export function isRoleGrantable(
   return allowed.has(target);
 }
 
+/** @deprecated Use {@link IsRoleGrantable}. */
+export function isRoleGrantable(
+  roleName: string | null | undefined,
+  restrictedRoleName: string,
+  grantableRoleNames: readonly string[],
+): boolean {
+  return IsRoleGrantable(roleName, restrictedRoleName, grantableRoleNames);
+}
+
 /** Pure redemption-eligibility check. Returns ok + an error code when not. */
-export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { ok: boolean; errorCode?: RedeemErrorCode } {
+export function EvaluateInvite(invite: InviteEvaluationInput, nowMs: number): { ok: boolean; errorCode?: RedeemErrorCode } {
   if (invite.Status === 'Revoked') {
     return { ok: false, errorCode: 'revoked' };
   }
@@ -104,6 +137,11 @@ export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { 
     return { ok: false, errorCode: 'invalid' };
   }
   return { ok: true };
+}
+
+/** @deprecated Use {@link EvaluateInvite}. */
+export function evaluateInvite(invite: InviteEvaluationInput, nowMs: number): { ok: boolean; errorCode?: RedeemErrorCode } {
+  return EvaluateInvite(invite, nowMs);
 }
 
 /** SQL dialect for {@link buildConsumeInviteSQL}. */
@@ -149,7 +187,7 @@ const QUALIFIED_TABLE_PATTERN_PG = /^\w+\.\w+$/;
  * @param qualifiedTable  `[schema].[table]` (sqlserver) or `schema.table` (postgresql) for MagicLinkInvite
  * @param dialect         target SQL dialect (defaults to `'sqlserver'`)
  */
-export function buildConsumeInviteSQL(qualifiedTable: string, dialect: ConsumeInviteDialect = 'sqlserver'): string {
+export function BuildConsumeInviteSQL(qualifiedTable: string, dialect: ConsumeInviteDialect = 'sqlserver'): string {
   if (dialect === 'postgresql') {
     if (!QUALIFIED_TABLE_PATTERN_PG.test(qualifiedTable)) {
       throw new Error(`buildConsumeInviteSQL: refusing to build SQL for non-whitelisted table identifier '${qualifiedTable}'.`);
@@ -178,13 +216,18 @@ export function buildConsumeInviteSQL(qualifiedTable: string, dialect: ConsumeIn
   );
 }
 
+/** @deprecated Use {@link BuildConsumeInviteSQL}. */
+export function buildConsumeInviteSQL(qualifiedTable: string, dialect: ConsumeInviteDialect = 'sqlserver'): string {
+  return BuildConsumeInviteSQL(qualifiedTable, dialect);
+}
+
 /**
  * Pure scope-union: appends `next` to `prior` unless an entry from the same invite
  * is already present (dedup by inviteId). This is how a session accumulates the union
  * of scopes across multiple redeemed links — carried in the re-minted JWT, never as
  * roles on a shared user, so anonymous sessions can't accrete into a superuser.
  */
-export function unionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, next: MagicLinkScopeEntry): MagicLinkScopeEntry[] {
+export function UnionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, next: MagicLinkScopeEntry): MagicLinkScopeEntry[] {
   const result = [...(prior ?? [])];
   if (!result.some((s) => s.inviteId === next.inviteId)) {
     result.push(next);
@@ -192,8 +235,13 @@ export function unionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, n
   return result;
 }
 
+/** @deprecated Use {@link UnionScopes}. */
+export function unionScopes(prior: readonly MagicLinkScopeEntry[] | undefined, next: MagicLinkScopeEntry): MagicLinkScopeEntry[] {
+  return UnionScopes(prior, next);
+}
+
 /** Builds the session-token claims (pure). */
-export function buildSessionClaims(args: {
+export function BuildSessionClaims(args: {
   issuer: string;
   audience: string;
   inviteId: string;
@@ -236,9 +284,35 @@ export function buildSessionClaims(args: {
     mj_app_id: args.applicationId,
     mj_role: args.roleName,
     mj_invited_by: args.invitedByUserId,
-    mj_scopes: unionScopes(args.priorScopes, scopeEntry),
+    mj_scopes: UnionScopes(args.priorScopes, scopeEntry),
     mj_anon: args.anonymous ? true : undefined,
     mj_sid: args.sessionId,
     mj_magic_link: true,
   };
+}
+
+/** @deprecated Use {@link BuildSessionClaims}. */
+export function buildSessionClaims(args: {
+  issuer: string;
+  audience: string;
+  inviteId: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  applicationId: string;
+  roleName: string;
+  invitedByUserId?: string;
+  /** True for anonymous sessions — the server enforces scope from mj_scopes, not roles. */
+  anonymous?: boolean;
+  /** Opaque per-session id (anonymous forensics correlation). */
+  sessionId?: string;
+  /** Prior session's scope union to carry forward (multi-link anonymous sessions). */
+  priorScopes?: readonly MagicLinkScopeEntry[];
+  /** Resource-share/embed scope for this link's entry. */
+  resourceType?: string;
+  resourceId?: string;
+  nowSeconds: number;
+  ttlSeconds: number;
+}): MagicLinkJWTClaims {
+  return BuildSessionClaims(args);
 }

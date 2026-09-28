@@ -14,10 +14,10 @@ import { BuildDashboardConfig, type DashboardPanelSpec } from '@/dashboards/dash
 
 /** A browsable entity row (from MJ's `Metadata.Entities`) shown in the explorer's entity list. */
 export type EntityListItem = {
-    name: string;
-    displayName: string;
-    schemaName: string;
-    description: string | null;
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    displayName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    schemaName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -71,18 +71,18 @@ function displayCellValue(v: unknown): string {
 /** One entity record projected to a card: id, title, subtitle, and the raw field bag. */
 export type EntityRecordRow = {
     /** Composite PK serialized (entity record id). */
-    id: string;
-    title: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** A couple of secondary fields for the card subtitle. */
-    subtitle: string;
-    raw: Record<string, unknown>;
+    subtitle: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+    raw: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /** Result of {@link LoadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
 export type EntityRecordsLoad = {
-    entity: EntityInfo;
-    rows: EntityRecordRow[];
-    totalShown: number;
+    entity: EntityInfo;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Rows: EntityRecordRow[];
+    TotalShown: number;
 };
 
 /**
@@ -140,17 +140,17 @@ export async function LoadEntityRecords(
         return { id: idVal, title, subtitle, raw: r };
     });
 
-    return { entity, rows, totalShown: rows.length };
+    return { entity, Rows: rows, TotalShown: rows.length };
 }
 
 /** A single displayable field of a record: its key, label, and stringified value. */
-export type RecordFieldRow = { key: string; label: string; value: string };
+export type RecordFieldRow = { key: string; label: string; value: string };  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 
 /** Result of {@link LoadRecordDetail}: the entity metadata, a title, and the projected field rows. */
 export type RecordDetailLoad = {
-    entity: EntityInfo;
-    title: string;
-    fields: RecordFieldRow[];
+    entity: EntityInfo;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    fields: RecordFieldRow[];  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -196,10 +196,10 @@ export async function LoadRecordDetail(
 
 /** A saved query (from MJ's `Metadata.Queries`) shown in the explorer's query list. */
 export type QueryListItem = {
-    id: string;
-    name: string;
-    description: string | null;
-    category: string | null;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    category: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /**
      * Whether the query needs a parameter with no default before it can run.
      *
@@ -207,7 +207,7 @@ export type QueryListItem = {
      * `Parameter validation failed: Required parameter 'X' is missing` — an error where a panel
      * should be. The composer needs to know BEFORE offering it, not after saving.
      */
-    requiresParameters: boolean;
+    requiresParameters: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /**
@@ -238,11 +238,11 @@ export function QueryCount(): number {
 
 /** Result of running a saved query: column names, row objects, count, and success/error. */
 export type QueryRunResult = {
-    columns: string[];
-    rows: Record<string, unknown>[];
-    rowCount: number;
-    success: boolean;
-    errorMessage?: string;
+    Columns: string[];
+    Rows: Record<string, unknown>[];
+    RowCount: number;
+    success: boolean;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    errorMessage?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 };
 
 /**
@@ -256,7 +256,7 @@ export type QueryRunResult = {
  * @param maxRows     Row cap (default 200).
  * @returns A {@link QueryRunResult} with columns, rows, count, and status.
  */
-export async function runQuery(
+export async function runQuery(  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     queryId: string,
     parameters?: Record<string, unknown>,
     contextUser?: UserInfo,
@@ -270,9 +270,9 @@ export async function runQuery(
     const rows = (result.Results ?? []) as Record<string, unknown>[];
     const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
     return {
-        columns,
-        rows,
-        rowCount: result.RowCount ?? rows.length,
+        Columns: columns,
+        Rows: rows,
+        RowCount: result.RowCount ?? rows.length,
         success: result.Success,
         errorMessage: result.Success ? undefined : (result.ErrorMessage ?? 'Query failed.'),
     };
@@ -284,9 +284,9 @@ export async function runQuery(
 
 /** A dashboard row shown in the explorer's dashboard list. */
 export type DashboardListItem = {
-    id: string;
-    name: string;
-    description: string | null;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /**
@@ -325,11 +325,11 @@ export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardL
 
 /** An artifact that can be placed on a dashboard. */
 export type DashboardArtifactOption = {
-    id: string;
-    name: string;
-    typeName: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    typeName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** The conversation it came from, so a user can tell two similarly-named artifacts apart. */
-    conversation: string | null;
+    conversation: string | null;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 };
 
 /**
@@ -417,26 +417,26 @@ export type DashboardPartKind = 'view' | 'query' | 'artifact' | 'weburl' | 'unkn
 /** A single parsed dashboard panel. */
 export type DashboardPart = {
     /** Panel id from the layout. */
-    id: string;
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Panel display title. */
-    title: string;
+    title: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Normalized renderer kind. */
-    kind: DashboardPartKind;
+    kind: DashboardPartKind;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
     /** Resolved Dashboard Part Type name. */
-    typeName: string;
+    typeName: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
     /** Raw, type-specific panel config (viewId/queryId/artifactId/url/…). */
-    config: Record<string, unknown>;
+    config: Record<string, unknown>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 };
 
 /** A dashboard resolved into its renderable parts. */
 export type DashboardLoad = {
-    id: string;
-    name: string;
-    description: string | null;
-    updatedAt: Date | null;
-    parts: DashboardPart[];
+    id: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    name: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    description: string | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    updatedAt: Date | null;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+    Parts: DashboardPart[];
     /** Count of parts that can't render natively on mobile (desktop-only). */
-    desktopOnlyCount: number;
+    DesktopOnlyCount: number;
 };
 
 /** A node in the Golden Layout tree stored in `Dashboard.UIConfigDetails`. */
@@ -500,7 +500,7 @@ function kindFromTypeName(name: string): DashboardPartKind {
  * The walk therefore keys on `type === 'component'` and recurses on `content` regardless of node
  * type — the same thing the Angular viewer's own walker does.
  */
-export function parsePanels(uiConfigDetails: string): RawPanel[] {
+export function ParsePanels(uiConfigDetails: string): RawPanel[] {
     if (!uiConfigDetails || uiConfigDetails.trim() === '') return [];
     try {
         const parsed: unknown = JSON.parse(uiConfigDetails);
@@ -512,6 +512,11 @@ export function parsePanels(uiConfigDetails: string): RawPanel[] {
     } catch {
         return [];
     }
+}
+
+/** @deprecated Use {@link ParsePanels}. */
+export function parsePanels(uiConfigDetails: string): RawPanel[] {
+    return ParsePanels(uiConfigDetails);
 }
 
 /**
@@ -535,7 +540,7 @@ export async function LoadDashboard(dashboardId: string, contextUser?: UserInfo)
     const loaded = await dashboard.Load(dashboardId);
     if (!loaded) return null;
 
-    const rawPanels = parsePanels(dashboard.UIConfigDetails ?? '');
+    const rawPanels = ParsePanels(dashboard.UIConfigDetails ?? '');
     const partTypeNameById = await loadPartTypeNames(currentUser);
 
     const parts: DashboardPart[] = rawPanels.map((panel, idx) => {
@@ -558,8 +563,8 @@ export async function LoadDashboard(dashboardId: string, contextUser?: UserInfo)
         name: dashboard.Name,
         description: dashboard.Description,
         updatedAt: updatedAtRaw ? new Date(updatedAtRaw) : null,
-        parts,
-        desktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
+        Parts: parts,
+        DesktopOnlyCount: parts.filter((p) => p.kind === 'unknown' || p.kind === 'weburl' || p.kind === 'view').length,
     };
 }
 

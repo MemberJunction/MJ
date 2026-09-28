@@ -4,7 +4,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
-import { runSemanticEntitySearch, getActionParamValue, getActionBooleanParam } from "./semantic-entity-search.helper";
+import { RunSemanticEntitySearch, GetActionParamValue, GetActionBooleanParam } from "./semantic-entity-search.helper";
 
 /**
  * Shared base for the "Find Best Agent" / "Find Candidate Agents" wrappers.
@@ -39,10 +39,10 @@ export abstract class BaseFindAgentsAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
-            const taskDescription = getActionParamValue(params, 'taskdescription') as string | undefined;
-            const maxResults = parseInt(String(getActionParamValue(params, 'maxresults') ?? '5'));
-            const minimumSimilarityScore = parseFloat(String(getActionParamValue(params, 'minimumsimilarityscore') ?? '0.5'));
-            const includeInactive = getActionBooleanParam(params, 'includeinactive', false);
+            const taskDescription = GetActionParamValue(params, 'taskdescription') as string | undefined;
+            const maxResults = parseInt(String(GetActionParamValue(params, 'maxresults') ?? '5'));
+            const minimumSimilarityScore = parseFloat(String(GetActionParamValue(params, 'minimumsimilarityscore') ?? '0.5'));
+            const includeInactive = GetActionBooleanParam(params, 'includeinactive', false);
 
             if (!taskDescription || taskDescription.trim().length === 0) {
                 return { Success: false, ResultCode: 'INVALID_INPUT', Message: 'TaskDescription parameter is required and cannot be empty' };
@@ -62,7 +62,7 @@ export abstract class BaseFindAgentsAction extends BaseAction {
             // ranking, so agents the daily vector sync hasn't embedded yet — e.g. one just
             // created by the Agent Manager — are still discoverable by text instead of being
             // invisible until the next sync.
-            const search = await runSemanticEntitySearch(params, this.entityName, taskDescription, maxResults * 3, minimumSimilarityScore, 'hybrid');
+            const search = await RunSemanticEntitySearch(params, this.entityName, taskDescription, maxResults * 3, minimumSimilarityScore, 'hybrid');
             if (!search.ok) {
                 return { Success: false, ResultCode: search.resultCode ?? 'SEARCH_FAILED', Message: search.message ?? 'Semantic search failed' };
             }

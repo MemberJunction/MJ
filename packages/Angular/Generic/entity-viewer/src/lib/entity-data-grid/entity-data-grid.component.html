@@ -154,7 +154,7 @@
           </button>
         }
         <!-- Communication Button (predefined) -->
-        @if (ShowCommunicationButton) {
+        @if (ShowCommunicationButton && EntitySupportsCommunication) {
           <button
             class="toolbar-button"
             title="Send message to selected records"

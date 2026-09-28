@@ -24,8 +24,8 @@ import { Assert, AssertEqual, verifyAgentRun } from '@memberjunction/testing-int
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext, AgentLiveFixture } from '@memberjunction/testing-integration';
 import {
-    AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, newMarker, sleep,
-    makeAIClient, userTurn, runAgentOverWire, resolveRunId, getRunSteps, deleteById, purgeAgentRun,
+    AGENT_LIVE_FIXTURE_TAG, AGENT_LIVE_SETTLE_MS, NewMarker, Sleep,
+    MakeAIClient, UserTurn, RunAgentOverWire, ResolveRunId, GetRunSteps, DeleteById, PurgeAgentRun,
 } from './agent-live-shared';
 
 function fixture(ctx: IntegrationCheckContext): AgentLiveFixture {
@@ -48,14 +48,14 @@ async function resolveShipped(name: string, user: UserInfo): Promise<MJAIAgentEn
 
 /** Run a shipped agent over the wire, land its run id (recorded for teardown), deep-verify it. */
 async function runAndVerify(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, message: string, opts?: { conversationDetailId?: string; conversationId?: string }): Promise<string> {
-    const result = await runAgentOverWire(makeAIClient(ctx.Provider, ctx.User), agent, userTurn(message), opts);
-    await sleep(AGENT_LIVE_SETTLE_MS);
+    const result = await RunAgentOverWire(MakeAIClient(ctx.Provider, ctx.User), agent, UserTurn(message), opts);
+    await Sleep(AGENT_LIVE_SETTLE_MS);
     const fallback = opts?.conversationDetailId
         ? `AgentID='${agent.ID}' AND ConversationDetailID='${opts.conversationDetailId}'`
         : opts?.conversationId
             ? `AgentID='${agent.ID}' AND ConversationID='${opts.conversationId}'`
             : `AgentID='${agent.ID}' AND Status<>'Running'`;
-    const runId = await resolveRunId(result, ctx.User, fallback, ctx.Provider);
+    const runId = await ResolveRunId(result, ctx.User, fallback, ctx.Provider);
     Assert(!!runId, `shipped run for '${agent.Name}' landed an AI Agent Run`);
     fixture(ctx).LiveRunIds.push(runId!);
     // Deep pass — recurses into Sub-Agent child runs and every step's target log.
@@ -72,7 +72,7 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             const sage = await resolveShipped('Sage', ctx.User);
             if (!sage) { return; }
             const runId = await runAndVerify(ctx, sage, 'Reply with the single word: pong.');
-            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
+            const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
             Assert(steps.length > 0, 'SA1: the run produced steps (the agent graph executed)');
         }
     },
@@ -85,7 +85,7 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
             if (!qb) { return; }
             // verifyAgentRun already recurses Sub-Agent steps into their linked child runs (parent↔child lineage).
             const runId = await runAndVerify(ctx, qb, 'How many users are in the system? Give the number only.');
-            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
+            const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
             const subAgentSteps = steps.filter(s => s.StepType === 'Sub-Agent');
             // If it delegated, every Sub-Agent step must be linked to a child run (TargetLogID) — no dangling delegation.
             Assert(subAgentSteps.every(s => !!s.TargetLogID), 'SA2: every Sub-Agent step links a child run (TargetLogID set)');
@@ -104,7 +104,7 @@ export const ShippedAgentsLiveChecks: NamedCheck[] = [
                 'Using only this sentence and no web search, answer in one word what color the sky is described as: "The sky is blue." Then finish.',
             );
             // verifyAgentRun recursed the whole tree; re-assert no top-level orphan Running step remains.
-            const steps = await getRunSteps(runId, ctx.User, ctx.Provider);
+            const steps = await GetRunSteps(runId, ctx.User, ctx.Provider);
             Assert(steps.every(s => s.Status !== 'Running' && s.CompletedAt != null), 'SA3: every step in the tree finalized (no orphan Running steps)');
         }
     },
@@ -165,7 +165,7 @@ async function teardownShipped(fx: AgentLiveFixture | undefined, provider: IMeta
         return;
     }
     for (const runId of fx.LiveRunIds) {
-        try { await purgeAgentRun(runId, provider, user); } catch (e) { console.error('shipped run purge failed:', e); }
+        try { await PurgeAgentRun(runId, provider, user); } catch (e) { console.error('shipped run purge failed:', e); }
     }
     for (const convId of fx.ConversationIds) {
         try {
@@ -173,9 +173,9 @@ async function teardownShipped(fx: AgentLiveFixture | undefined, provider: IMeta
                 EntityName: 'MJ: Conversation Details', ExtraFilter: `ConversationID='${convId}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true,
             }, user);
             for (const d of (details.Success ? details.Results : [])) {
-                await deleteById('MJ: Conversation Details', d.ID, provider, user);
+                await DeleteById('MJ: Conversation Details', d.ID, provider, user);
             }
-            await deleteById('MJ: Conversations', convId, provider, user);
+            await DeleteById('MJ: Conversations', convId, provider, user);
         } catch (e) { console.error('SA4 conversation cleanup failed:', e); }
     }
 }
@@ -183,7 +183,7 @@ async function teardownShipped(fx: AgentLiveFixture | undefined, provider: IMeta
 IntegrationCheckRegistry.Instance.RegisterLifecycle('shipped-agents-live', {
     Setup: async ctx => {
         ctx.ShippedAgentsLiveFixture = {
-            Marker: newMarker('SA'),
+            Marker: NewMarker('SA'),
             ConversationIds: [], ConversationDetailIds: [], LiveRunIds: [], FabricatedRunIds: [], FabricatedStepIds: [],
         };
     },

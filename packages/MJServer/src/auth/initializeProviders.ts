@@ -14,7 +14,7 @@ import { AuthProviderEngine } from './AuthProviderEngine.js';
  * {@link initializeAuthProvidersFromMetadata}, which runs later in startup once a database
  * connection and a system user exist.
  */
-export function initializeAuthProviders(): void {
+export function InitializeAuthProviders(): void {
   const factory = AuthProviderFactory.Instance;
 
   // Clear any existing providers
@@ -60,6 +60,11 @@ export function initializeAuthProviders(): void {
   // authProviders array at this point, and erroring here would cry wolf on every boot.
 }
 
+/** @deprecated Use {@link InitializeAuthProviders}. */
+export function initializeAuthProviders(): void {
+  return InitializeAuthProviders();
+}
+
 /**
  * Layers the metadata provider catalog on top of the config-declared providers.
  *
@@ -74,7 +79,7 @@ export function initializeAuthProviders(): void {
  *
  * @returns the number of providers registered from metadata.
  */
-export async function initializeAuthProvidersFromMetadata(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
+export async function InitializeAuthProvidersFromMetadata(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
   try {
     await AuthProviderEngine.Instance.Config(false, contextUser, provider);
     const count = await AuthProviderEngine.Instance.RegisterAll(contextUser);
@@ -87,6 +92,11 @@ export async function initializeAuthProvidersFromMetadata(contextUser?: UserInfo
     LogError(`[Auth] Could not load the authentication provider catalog from metadata (${message}). Continuing with providers from mj.config.cjs.`);
     return 0;
   }
+}
+
+/** @deprecated Use {@link InitializeAuthProvidersFromMetadata}. */
+export async function initializeAuthProvidersFromMetadata(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
+  return InitializeAuthProvidersFromMetadata(contextUser, provider);
 }
 
 /**
@@ -119,7 +129,7 @@ export async function initializeAuthProvidersFromMetadata(contextUser?: UserInfo
  *
  * @returns the number of providers registered from metadata after the refresh.
  */
-export async function refreshAuthProviders(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
+export async function RefreshAuthProviders(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
   await AuthProviderEngine.Instance.Config(true, contextUser, provider);
 
   // Probe the reloaded catalog BEFORE clearing anything: reading Providers throws
@@ -127,12 +137,17 @@ export async function refreshAuthProviders(contextUser?: UserInfo, provider?: IM
   // failure must abort the refresh while the registry is still intact.
   const pendingRows = AuthProviderEngine.Instance.Providers.length;
 
-  initializeAuthProviders();
+  InitializeAuthProviders();
   const count = await AuthProviderEngine.Instance.RegisterAll(contextUser);
   LogStatus(
     `[Auth] Provider registry refreshed — ${count} of ${pendingRows} metadata provider(s) registered on top of the config-declared set.`
   );
   return count;
+}
+
+/** @deprecated Use {@link RefreshAuthProviders}. */
+export async function refreshAuthProviders(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<number> {
+  return RefreshAuthProviders(contextUser, provider);
 }
 
 /**
@@ -142,7 +157,7 @@ export async function refreshAuthProviders(contextUser?: UserInfo, provider?: IM
  * Split out from {@link initializeAuthProviders} because "no providers" is only genuinely wrong
  * once BOTH sources have had their turn.
  */
-export function validateAuthProvidersRegistered(): boolean {
+export function ValidateAuthProvidersRegistered(): boolean {
   const hasProviders = AuthProviderFactory.Instance.hasProviders();
   if (!hasProviders) {
     LogError(
@@ -151,4 +166,9 @@ export function validateAuthProvidersRegistered(): boolean {
     );
   }
   return hasProviders;
+}
+
+/** @deprecated Use {@link ValidateAuthProvidersRegistered}. */
+export function validateAuthProvidersRegistered(): boolean {
+  return ValidateAuthProvidersRegistered();
 }

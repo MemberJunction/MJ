@@ -10,9 +10,9 @@ const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 describe('ParseWorkflowRunParentBag', () => {
     it('returns empty debug state for missing or garbage input', () => {
-        expect(ParseWorkflowRunParentBag(null).debug).toEqual(EmptyDebugState());
-        expect(ParseWorkflowRunParentBag('{not json').debug.breakpoints).toEqual([]);
-        expect(ParseWorkflowRunParentBag('{}').invocation).toEqual({});
+        expect(ParseWorkflowRunParentBag(null).Debug).toEqual(EmptyDebugState());
+        expect(ParseWorkflowRunParentBag('{not json').Debug.breakpoints).toEqual([]);
+        expect(ParseWorkflowRunParentBag('{}').Invocation).toEqual({});
     });
 
     it('reads breakpoints, overrides, and invocation roots from the parent bag', () => {
@@ -27,12 +27,12 @@ describe('ParseWorkflowRunParentBag', () => {
             invocation: { data: { approved: true }, context: { env: 'dev' } },
         });
         const bag = ParseWorkflowRunParentBag(raw);
-        expect(bag.debug.paused).toBe(true);
-        expect(bag.debug.pausedReason).toBe('breakpoint');
-        expect(bag.debug.pausedAtTaskID).toBe(A);
-        expect(bag.debug.breakpoints).toEqual([A, B]);
-        expect(bag.debug.edgeOverrides).toEqual({ [A]: 'true' });
-        expect(bag.invocation).toEqual({ data: { approved: true }, context: { env: 'dev' } });
+        expect(bag.Debug.paused).toBe(true);
+        expect(bag.Debug.pausedReason).toBe('breakpoint');
+        expect(bag.Debug.pausedAtTaskID).toBe(A);
+        expect(bag.Debug.breakpoints).toEqual([A, B]);
+        expect(bag.Debug.edgeOverrides).toEqual({ [A]: 'true' });
+        expect(bag.Invocation).toEqual({ data: { approved: true }, context: { env: 'dev' } });
     });
 });
 

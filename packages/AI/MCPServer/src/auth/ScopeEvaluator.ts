@@ -52,9 +52,14 @@ export class ScopeEvaluator {
    * fullAccess.hasScope('entity:read');  // true (full_access is a wildcard)
    * ```
    */
-  hasScope(scope: string): boolean {
+  HasScope(scope: string): boolean {
     if (this.HasFullAccess) return true;
     return this.scopes.has(scope);
+  }
+
+  /** @deprecated Use {@link HasScope}. */
+  hasScope(scope: string): boolean {
+    return this.HasScope(scope);
   }
 
   /**
@@ -71,9 +76,14 @@ export class ScopeEvaluator {
    * evaluator.hasAnyScope(['action:execute', 'agent:run']);  // false
    * ```
    */
-  hasAnyScope(scopes: string[]): boolean {
+  HasAnyScope(scopes: string[]): boolean {
     if (this.HasFullAccess) return true;
     return scopes.some((scope) => this.scopes.has(scope));
+  }
+
+  /** @deprecated Use {@link HasAnyScope}. */
+  hasAnyScope(scopes: string[]): boolean {
+    return this.HasAnyScope(scopes);
   }
 
   /**
@@ -90,9 +100,14 @@ export class ScopeEvaluator {
    * evaluator.hasAllScopes(['entity:read', 'action:execute']);  // false
    * ```
    */
-  hasAllScopes(scopes: string[]): boolean {
+  HasAllScopes(scopes: string[]): boolean {
     if (this.HasFullAccess) return true;
     return scopes.every((scope) => this.scopes.has(scope));
+  }
+
+  /** @deprecated Use {@link HasAllScopes}. */
+  hasAllScopes(scopes: string[]): boolean {
+    return this.HasAllScopes(scopes);
   }
 
   /**
@@ -100,8 +115,13 @@ export class ScopeEvaluator {
    *
    * @returns Array of granted scope names
    */
-  getScopes(): string[] {
+  GetScopes(): string[] {
     return Array.from(this.scopes);
+  }
+
+  /** @deprecated Use {@link GetScopes}. */
+  getScopes(): string[] {
+    return this.GetScopes();
   }
 
   /**
@@ -118,14 +138,19 @@ export class ScopeEvaluator {
    * evaluator.getScopesMatching('*:read');    // ['entity:read']
    * ```
    */
-  getScopesMatching(pattern: string): string[] {
+  GetScopesMatching(pattern: string): string[] {
     // Convert glob pattern to regex
     const regexPattern = pattern
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')  // Escape regex special chars
       .replace(/\*/g, '.*');                  // Convert * to .*
     const regex = new RegExp(`^${regexPattern}$`);
 
-    return this.getScopes().filter((scope) => regex.test(scope));
+    return this.GetScopes().filter((scope) => regex.test(scope));
+  }
+
+  /** @deprecated Use {@link GetScopesMatching}. */
+  getScopesMatching(pattern: string): string[] {
+    return this.GetScopesMatching(pattern);
   }
 
   /**
@@ -133,8 +158,13 @@ export class ScopeEvaluator {
    *
    * @returns true if no scopes are granted
    */
-  isEmpty(): boolean {
+  IsEmpty(): boolean {
     return this.scopes.size === 0;
+  }
+
+  /** @deprecated Use {@link IsEmpty}. */
+  isEmpty(): boolean {
+    return this.IsEmpty();
   }
 
   /**
@@ -142,8 +172,13 @@ export class ScopeEvaluator {
    *
    * @returns Number of granted scopes
    */
-  get count(): number {
+  get Count(): number {
     return this.scopes.size;
+  }
+
+  /** @deprecated Use {@link Count}. */
+  get count(): number {
+    return this.Count;
   }
 }
 
@@ -162,8 +197,13 @@ export class ScopeEvaluator {
  * }
  * ```
  */
-export function createScopeEvaluator(claims: { scopes?: string[] }): ScopeEvaluator {
+export function CreateScopeEvaluator(claims: { scopes?: string[] }): ScopeEvaluator {
   return new ScopeEvaluator(claims.scopes ?? []);
+}
+
+/** @deprecated Use {@link CreateScopeEvaluator}. */
+export function createScopeEvaluator(claims: { scopes?: string[] }): ScopeEvaluator {
+  return CreateScopeEvaluator(claims);
 }
 
 /**
@@ -175,10 +215,15 @@ export function createScopeEvaluator(claims: { scopes?: string[] }): ScopeEvalua
  * @param scope - The scope name to check
  * @returns true if the scope is granted
  */
-export function checkScope(claims: { scopes?: string[] }, scope: string): boolean {
+export function CheckScope(claims: { scopes?: string[] }, scope: string): boolean {
   if (!claims.scopes) return false;
   if (claims.scopes.includes('full_access')) return true;
   return claims.scopes.includes(scope);
+}
+
+/** @deprecated Use {@link CheckScope}. */
+export function checkScope(claims: { scopes?: string[] }, scope: string): boolean {
+  return CheckScope(claims, scope);
 }
 
 /**
@@ -190,10 +235,15 @@ export function checkScope(claims: { scopes?: string[] }, scope: string): boolea
  * @param scopes - The scope names to check
  * @returns true if any scope is granted
  */
-export function checkAnyScope(claims: { scopes?: string[] }, scopes: string[]): boolean {
+export function CheckAnyScope(claims: { scopes?: string[] }, scopes: string[]): boolean {
   if (!claims.scopes) return false;
   if (claims.scopes.includes('full_access')) return true;
   return scopes.some((scope) => claims.scopes!.includes(scope));
+}
+
+/** @deprecated Use {@link CheckAnyScope}. */
+export function checkAnyScope(claims: { scopes?: string[] }, scopes: string[]): boolean {
+  return CheckAnyScope(claims, scopes);
 }
 
 /**
@@ -205,8 +255,13 @@ export function checkAnyScope(claims: { scopes?: string[] }, scopes: string[]): 
  * @param scopes - The scope names to check
  * @returns true if all scopes are granted
  */
-export function checkAllScopes(claims: { scopes?: string[] }, scopes: string[]): boolean {
+export function CheckAllScopes(claims: { scopes?: string[] }, scopes: string[]): boolean {
   if (!claims.scopes) return false;
   if (claims.scopes.includes('full_access')) return true;
   return scopes.every((scope) => claims.scopes!.includes(scope));
+}
+
+/** @deprecated Use {@link CheckAllScopes}. */
+export function checkAllScopes(claims: { scopes?: string[] }, scopes: string[]): boolean {
+  return CheckAllScopes(claims, scopes);
 }

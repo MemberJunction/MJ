@@ -205,7 +205,7 @@ export const DEFAULT_MONETARY_BANDS: OutcomeBand[] = [
  * Resolves an effective OutcomeConfig from a model or pipeline, falling back to sensible
  * domain defaults when no explicit configuration is provided.
  */
-export function resolveOutcomeConfig(modelLike?: {
+export function ResolveOutcomeConfig(modelLike?: {
   Lineage?: string | null;
   TargetVariable?: string | null;
   ProblemType?: string | null;
@@ -213,7 +213,7 @@ export function resolveOutcomeConfig(modelLike?: {
 }): OutcomeConfig {
   // 1. Direct explicit object passed in
   if (modelLike?.outcomeConfig && typeof modelLike.outcomeConfig === 'object') {
-    return normalizeOutcomeConfig(modelLike.outcomeConfig);
+    return NormalizeOutcomeConfig(modelLike.outcomeConfig);
   }
 
   // 2. Parse from Lineage JSON if available
@@ -222,7 +222,7 @@ export function resolveOutcomeConfig(modelLike?: {
       const parsed = JSON.parse(modelLike.Lineage) as Record<string, unknown>;
       const cfg = (parsed.outcomeConfig ?? parsed.OutcomeConfig) as OutcomeConfig | undefined;
       if (cfg && typeof cfg === 'object') {
-        return normalizeOutcomeConfig(cfg);
+        return NormalizeOutcomeConfig(cfg);
       }
     } catch (err) {
       console.warn('resolveOutcomeConfig: failed to parse Lineage JSON', err);
@@ -310,11 +310,21 @@ export function resolveOutcomeConfig(modelLike?: {
   };
 }
 
+/** @deprecated Use {@link ResolveOutcomeConfig}. */
+export function resolveOutcomeConfig(modelLike?: {
+  Lineage?: string | null;
+  TargetVariable?: string | null;
+  ProblemType?: string | null;
+  outcomeConfig?: OutcomeConfig | null;
+}): OutcomeConfig {
+  return ResolveOutcomeConfig(modelLike);
+}
+
 /**
  * Closes small sentinel gaps between consecutive sorted bands defensively
  * (e.g. [0, 0.3999) and [0.4, 0.6999) -> [0, 0.4) and [0.4, 0.7)).
  */
-export function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
+export function CloseSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
   if (!bands || bands.length <= 1) return bands;
   const indices = bands.map((_, i) => i).sort((a, b) => bands[a].Min - bands[b].Min);
   const result = bands.map((b) => ({ ...b }));
@@ -335,10 +345,15 @@ export function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
   return result;
 }
 
+/** @deprecated Use {@link CloseSentinelBandGaps}. */
+export function closeSentinelBandGaps(bands: OutcomeBand[]): OutcomeBand[] {
+  return CloseSentinelBandGaps(bands);
+}
+
 /**
  * Normalizes an incoming OutcomeConfig to ensure sensible defaults for any omitted properties.
  */
-export function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
+export function NormalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
   const polarity = cfg.Polarity;
   const defaultBands =
     polarity === 'positive'
@@ -364,9 +379,14 @@ export function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
           : 'Prediction Tier'),
     Polarity: polarity,
     Format: cfg.Format,
-    Bands: closeSentinelBandGaps(rawBands),
+    Bands: CloseSentinelBandGaps(rawBands),
     OutcomeStyles: cfg.OutcomeStyles ?? {},
   };
+}
+
+/** @deprecated Use {@link NormalizeOutcomeConfig}. */
+export function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
+  return NormalizeOutcomeConfig(cfg);
 }
 
 /**
@@ -375,12 +395,12 @@ export function normalizeOutcomeConfig(cfg: OutcomeConfig): OutcomeConfig {
  * Order-independent matching identical to assignBand (#4104).
  * Returns null if the score is out of range or not finite.
  */
-export function resolveScoreBand(score: number, config?: OutcomeConfig | null): OutcomeBand | null {
+export function ResolveScoreBand(score: number, config?: OutcomeConfig | null): OutcomeBand | null {
   if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   if (!config) return null;
   const rawBands = config.Bands ?? (config.Polarity === 'positive' ? DEFAULT_POSITIVE_BANDS : config.Polarity === 'adverse' ? DEFAULT_ADVERSE_BANDS : DEFAULT_NEUTRAL_BANDS);
   if (!rawBands || rawBands.length === 0) return null;
-  const bands = closeSentinelBandGaps(rawBands);
+  const bands = CloseSentinelBandGaps(rawBands);
 
   // Check normalized [0, 1] bounds without silent clamping
   const isNormalizedProbability = bands.every(b => b.Min >= 0 && b.Max <= 1);
@@ -413,10 +433,15 @@ export function resolveScoreBand(score: number, config?: OutcomeConfig | null): 
   return null;
 }
 
+/** @deprecated Use {@link ResolveScoreBand}. */
+export function resolveScoreBand(score: number, config?: OutcomeConfig | null): OutcomeBand | null {
+  return ResolveScoreBand(score, config);
+}
+
 /**
  * Resolves the visual badge styling and icon for a predicted class.
  */
-export function resolveOutcomeStyle(className: string | undefined | null, config?: OutcomeConfig | null): OutcomeStyle {
+export function ResolveOutcomeStyle(className: string | undefined | null, config?: OutcomeConfig | null): OutcomeStyle {
   if (!className) {
     return { BadgeColor: 'gray' };
   }
@@ -446,11 +471,16 @@ export function resolveOutcomeStyle(className: string | undefined | null, config
   return { BadgeColor: 'gray' };
 }
 
+/** @deprecated Use {@link ResolveOutcomeStyle}. */
+export function resolveOutcomeStyle(className: string | undefined | null, config?: OutcomeConfig | null): OutcomeStyle {
+  return ResolveOutcomeStyle(className, config);
+}
+
 /**
  * Formats a predicted score into a human-readable display string based on
  * the model's OutcomeConfig format, problem type, and score magnitude.
  */
-export function formatPredictionScore(
+export function FormatPredictionScore(
   score: number,
   config?: OutcomeConfig | null,
   problemType?: string | null,
@@ -487,5 +517,14 @@ export function formatPredictionScore(
 
   // Default: percentage (0.0 - 1.0 scale)
   return (score * 100).toFixed(1) + '%';
+}
+
+/** @deprecated Use {@link FormatPredictionScore}. */
+export function formatPredictionScore(
+  score: number,
+  config?: OutcomeConfig | null,
+  problemType?: string | null,
+): string {
+  return FormatPredictionScore(score, config, problemType);
 }
 

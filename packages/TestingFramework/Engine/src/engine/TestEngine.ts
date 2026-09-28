@@ -44,9 +44,9 @@ import {
     SuiteFixtureContext
 } from '../types';
 import {
-    gatherExecutionContext,
-    getMachineName,
-    getMachineIdentifier
+    GatherExecutionContext,
+    GetMachineName,
+    GetMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 
@@ -853,11 +853,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
 
         // Set execution context fields for cross-server aggregation
-        testRun.MachineName = getMachineName();
-        testRun.MachineID = getMachineIdentifier() || null;
+        testRun.MachineName = GetMachineName();
+        testRun.MachineID = GetMachineIdentifier() || null;
         testRun.RunByUserName = contextUser.Name;
         testRun.RunByUserEmail = contextUser.Email;
-        testRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+        testRun.RunContextDetails = JSON.stringify(GatherExecutionContext());
 
         const saved = await testRun.Save();
         if (!saved) {
@@ -895,11 +895,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         }
 
         // Set execution context fields for cross-server aggregation
-        suiteRun.MachineName = getMachineName();
-        suiteRun.MachineID = getMachineIdentifier() || null;
+        suiteRun.MachineName = GetMachineName();
+        suiteRun.MachineID = GetMachineIdentifier() || null;
         suiteRun.RunByUserName = contextUser.Name;
         suiteRun.RunByUserEmail = contextUser.Email;
-        suiteRun.RunContextDetails = JSON.stringify(gatherExecutionContext());
+        suiteRun.RunContextDetails = JSON.stringify(GatherExecutionContext());
 
         const saved = await suiteRun.Save();
         if (!saved) {

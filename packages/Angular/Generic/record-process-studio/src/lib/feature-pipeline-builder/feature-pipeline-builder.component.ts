@@ -361,34 +361,124 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         Caching: { Cacheable: false },
     };
 
-    public availablePrompts: PromptOption[] = [];
-    public availableDocs: EntityDocOption[] = [];
-    public availableEntities: EntityInfo[] = [];
-    public entityFields: EntityFieldInfo[] = [];
-    public selectedPrompt: PromptOption | null = null;
+    public AvailablePrompts: PromptOption[] = [];
 
-    public contextMode: 'fields' | 'document' | 'query' = 'fields';
-    public fieldsCsv = '';
-    public cacheKeyFieldsCsv = '';
-    public validationErrors: SpecValidationIssue[] = [];
-    public renderedConstraintPreview = '';
+    /** @deprecated Use {@link AvailablePrompts}. */
+    public get availablePrompts(): PromptOption[] {
+        return this.AvailablePrompts;
+    }
+    /** @deprecated Use {@link AvailablePrompts}. */
+    public set availablePrompts(value: PromptOption[]) {
+        this.AvailablePrompts = value;
+    }
+    public AvailableDocs: EntityDocOption[] = [];
+
+    /** @deprecated Use {@link AvailableDocs}. */
+    public get availableDocs(): EntityDocOption[] {
+        return this.AvailableDocs;
+    }
+    /** @deprecated Use {@link AvailableDocs}. */
+    public set availableDocs(value: EntityDocOption[]) {
+        this.AvailableDocs = value;
+    }
+    public AvailableEntities: EntityInfo[] = [];
+
+    /** @deprecated Use {@link AvailableEntities}. */
+    public get availableEntities(): EntityInfo[] {
+        return this.AvailableEntities;
+    }
+    /** @deprecated Use {@link AvailableEntities}. */
+    public set availableEntities(value: EntityInfo[]) {
+        this.AvailableEntities = value;
+    }
+    public EntityFields: EntityFieldInfo[] = [];
+
+    /** @deprecated Use {@link EntityFields}. */
+    public get entityFields(): EntityFieldInfo[] {
+        return this.EntityFields;
+    }
+    /** @deprecated Use {@link EntityFields}. */
+    public set entityFields(value: EntityFieldInfo[]) {
+        this.EntityFields = value;
+    }
+    public SelectedPrompt: PromptOption | null = null;
+
+    /** @deprecated Use {@link SelectedPrompt}. */
+    public get selectedPrompt(): PromptOption | null {
+        return this.SelectedPrompt;
+    }
+    /** @deprecated Use {@link SelectedPrompt}. */
+    public set selectedPrompt(value: PromptOption | null) {
+        this.SelectedPrompt = value;
+    }
+
+    public ContextMode: 'fields' | 'document' | 'query' = 'fields';
+
+    /** @deprecated Use {@link ContextMode}. */
+    public get contextMode(): 'fields' | 'document' | 'query' {
+        return this.ContextMode;
+    }
+    /** @deprecated Use {@link ContextMode}. */
+    public set contextMode(value: 'fields' | 'document' | 'query') {
+        this.ContextMode = value;
+    }
+    public FieldsCsv = '';
+
+    /** @deprecated Use {@link FieldsCsv}. */
+    public get fieldsCsv() {
+        return this.FieldsCsv;
+    }
+    /** @deprecated Use {@link FieldsCsv}. */
+    public set fieldsCsv(value) {
+        this.FieldsCsv = value;
+    }
+    public CacheKeyFieldsCsv = '';
+
+    /** @deprecated Use {@link CacheKeyFieldsCsv}. */
+    public get cacheKeyFieldsCsv() {
+        return this.CacheKeyFieldsCsv;
+    }
+    /** @deprecated Use {@link CacheKeyFieldsCsv}. */
+    public set cacheKeyFieldsCsv(value) {
+        this.CacheKeyFieldsCsv = value;
+    }
+    public ValidationErrors: SpecValidationIssue[] = [];
+
+    /** @deprecated Use {@link ValidationErrors}. */
+    public get validationErrors(): SpecValidationIssue[] {
+        return this.ValidationErrors;
+    }
+    /** @deprecated Use {@link ValidationErrors}. */
+    public set validationErrors(value: SpecValidationIssue[]) {
+        this.ValidationErrors = value;
+    }
+    public RenderedConstraintPreview = '';
+
+    /** @deprecated Use {@link RenderedConstraintPreview}. */
+    public get renderedConstraintPreview() {
+        return this.RenderedConstraintPreview;
+    }
+    /** @deprecated Use {@link RenderedConstraintPreview}. */
+    public set renderedConstraintPreview(value) {
+        this.RenderedConstraintPreview = value;
+    }
 
     async ngOnInit(): Promise<void> {
-        this.availableEntities = [...this.ProviderToUse.Entities].sort((a, b) =>
+        this.AvailableEntities = [...this.ProviderToUse.Entities].sort((a, b) =>
             (a.DisplayName || a.Name).localeCompare(b.DisplayName || b.Name)
         );
         await this.loadPrompts();
         await this.loadEntityDocs();
-        this.syncFromRecord();
+        this.SyncFromRecord();
     }
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['Record'] || changes['EntityID']) {
-            this.syncFromRecord();
+            this.SyncFromRecord();
         }
     }
 
-    public syncFromRecord(): void {
+    public SyncFromRecord(): void {
         if (this.Record) {
             this.spec.Name = this.Record.Name || '';
             this.spec.Description = this.Record.Description || '';
@@ -413,30 +503,35 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         }
 
         if (this.spec.Context.EntityDocumentID) {
-            this.contextMode = 'document';
+            this.ContextMode = 'document';
         } else if (this.spec.Context.QueryID) {
-            this.contextMode = 'query';
+            this.ContextMode = 'query';
         } else {
-            this.contextMode = 'fields';
+            this.ContextMode = 'fields';
         }
 
-        this.fieldsCsv = (this.spec.Context.Fields ?? []).join(', ');
-        this.cacheKeyFieldsCsv = (this.spec.Caching.KeyFields ?? []).join(', ');
+        this.FieldsCsv = (this.spec.Context.Fields ?? []).join(', ');
+        this.CacheKeyFieldsCsv = (this.spec.Caching.KeyFields ?? []).join(', ');
 
         const targetEntityID = this.Record?.EntityID || this.EntityID;
         if (targetEntityID) {
             const entity = this.ProviderToUse.EntityByID(targetEntityID);
-            this.entityFields = entity?.Fields ? [...entity.Fields].sort((a, b) => a.Name.localeCompare(b.Name)) : [];
+            this.EntityFields = entity?.Fields ? [...entity.Fields].sort((a, b) => a.Name.localeCompare(b.Name)) : [];
         } else {
-            this.entityFields = [];
+            this.EntityFields = [];
         }
 
         if (this.Record?.PromptID) {
-            this.selectedPrompt = this.availablePrompts.find((p) => UUIDsEqual(p.ID, this.Record?.PromptID)) ?? null;
+            this.SelectedPrompt = this.AvailablePrompts.find((p) => UUIDsEqual(p.ID, this.Record?.PromptID)) ?? null;
         }
 
         this.recomputeValidation();
         this.cdr.detectChanges();
+    }
+
+    /** @deprecated Use {@link SyncFromRecord}. */
+    public syncFromRecord(): void {
+        return this.SyncFromRecord();
     }
 
     private async loadPrompts(): Promise<void> {
@@ -448,13 +543,13 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                 ResultType: 'simple',
             });
             if (res.Success && Array.isArray(res.Results)) {
-                this.availablePrompts = res.Results;
+                this.AvailablePrompts = res.Results;
             } else {
-                this.availablePrompts = [];
+                this.AvailablePrompts = [];
                 LogError(`Failed to load AI Prompts: ${res.ErrorMessage || 'unknown error'}`);
             }
         } catch (error) {
-            this.availablePrompts = [];
+            this.AvailablePrompts = [];
             LogError('Error loading AI Prompts', undefined, error);
         }
     }
@@ -468,46 +563,61 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                 ResultType: 'simple',
             });
             if (res.Success && Array.isArray(res.Results)) {
-                this.availableDocs = res.Results;
+                this.AvailableDocs = res.Results;
             } else {
-                this.availableDocs = [];
+                this.AvailableDocs = [];
                 LogError(`Failed to load Entity Documents: ${res.ErrorMessage || 'unknown error'}`);
             }
         } catch (error) {
-            this.availableDocs = [];
+            this.AvailableDocs = [];
             LogError('Error loading Entity Documents', undefined, error);
         }
     }
 
-    public onContextModeChange(event: Event): void {
-        this.contextMode = (event.target as HTMLSelectElement).value as 'fields' | 'document' | 'query';
+    public OnContextModeChange(event: Event): void {
+        this.ContextMode = (event.target as HTMLSelectElement).value as 'fields' | 'document' | 'query';
         if (!this.spec.Context) this.spec.Context = {};
-        if (this.contextMode === 'fields') {
+        if (this.ContextMode === 'fields') {
             this.spec.Context.EntityDocumentID = undefined;
             this.spec.Context.QueryID = undefined;
-        } else if (this.contextMode === 'document') {
+        } else if (this.ContextMode === 'document') {
             this.spec.Context.QueryID = undefined;
-        } else if (this.contextMode === 'query') {
+        } else if (this.ContextMode === 'query') {
             this.spec.Context.EntityDocumentID = undefined;
         }
         this.emitChanges();
     }
 
-    public onEntityDocChange(event: Event): void {
+    /** @deprecated Use {@link OnContextModeChange}. */
+    public onContextModeChange(event: Event): void {
+        return this.OnContextModeChange(event);
+    }
+
+    public OnEntityDocChange(event: Event): void {
         if (!this.spec.Context) this.spec.Context = {};
         this.spec.Context.EntityDocumentID = (event.target as HTMLSelectElement).value;
         this.emitChanges();
     }
 
-    public onQueryIDChange(event: Event): void {
+    /** @deprecated Use {@link OnEntityDocChange}. */
+    public onEntityDocChange(event: Event): void {
+        return this.OnEntityDocChange(event);
+    }
+
+    public OnQueryIDChange(event: Event): void {
         if (!this.spec.Context) this.spec.Context = {};
         this.spec.Context.QueryID = (event.target as HTMLInputElement).value;
         this.emitChanges();
     }
 
-    public onFieldsCsvChange(event: Event): void {
+    /** @deprecated Use {@link OnQueryIDChange}. */
+    public onQueryIDChange(event: Event): void {
+        return this.OnQueryIDChange(event);
+    }
+
+    public OnFieldsCsvChange(event: Event): void {
         const val = (event.target as HTMLInputElement).value;
-        this.fieldsCsv = val;
+        this.FieldsCsv = val;
         if (!this.spec.Context) this.spec.Context = {};
         this.spec.Context.Fields = val
             .split(',')
@@ -516,14 +626,24 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public onPromptChange(event: Event): void {
+    /** @deprecated Use {@link OnFieldsCsvChange}. */
+    public onFieldsCsvChange(event: Event): void {
+        return this.OnFieldsCsvChange(event);
+    }
+
+    public OnPromptChange(event: Event): void {
         const promptID = (event.target as HTMLSelectElement).value;
         if (this.Record) {
             this.Record.PromptID = promptID;
         }
         this.spec.PromptID = promptID;
-        this.selectedPrompt = this.availablePrompts.find((p) => UUIDsEqual(p.ID, promptID)) ?? null;
+        this.SelectedPrompt = this.AvailablePrompts.find((p) => UUIDsEqual(p.ID, promptID)) ?? null;
         this.emitChanges();
+    }
+
+    /** @deprecated Use {@link OnPromptChange}. */
+    public onPromptChange(event: Event): void {
+        return this.OnPromptChange(event);
     }
 
     public addOutput(): void {
@@ -532,36 +652,46 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             Ref: '$',
             Target: {
                 Mode: 'field',
-                EntityFieldName: this.entityFields.length > 0 ? this.entityFields[0].Name : '',
+                EntityFieldName: this.EntityFields.length > 0 ? this.EntityFields[0].Name : '',
             },
         };
         this.spec.Outputs.push(newOutput);
         this.emitChanges();
     }
 
-    public removeOutput(index: number): void {
+    public RemoveOutput(index: number): void {
         this.spec.Outputs.splice(index, 1);
         this.emitChanges();
     }
 
-    public updateOutputProp(index: number, prop: 'Name' | 'Ref', event: Event): void {
+    /** @deprecated Use {@link RemoveOutput}. */
+    public removeOutput(index: number): void {
+        return this.RemoveOutput(index);
+    }
+
+    public UpdateOutputProp(index: number, prop: 'Name' | 'Ref', event: Event): void {
         const val = (event.target as HTMLInputElement).value;
         this.spec.Outputs[index][prop] = val;
         this.emitChanges();
     }
 
-    public updateTargetMode(index: number, event: Event): void {
+    /** @deprecated Use {@link UpdateOutputProp}. */
+    public updateOutputProp(index: number, prop: 'Name' | 'Ref', event: Event): void {
+        return this.UpdateOutputProp(index, prop, event);
+    }
+
+    public UpdateTargetMode(index: number, event: Event): void {
         const mode = (event.target as HTMLSelectElement).value as OutputTarget['Mode'];
         const current = this.spec.Outputs[index];
         if (mode === 'field') {
             current.Target = {
                 Mode: 'field',
-                EntityFieldName: this.entityFields.length > 0 ? this.entityFields[0].Name : '',
+                EntityFieldName: this.EntityFields.length > 0 ? this.EntityFields[0].Name : '',
             };
         } else if (mode === 'child') {
             current.Target = {
                 Mode: 'child',
-                EntityName: this.availableEntities.length > 0 ? this.availableEntities[0].Name : '',
+                EntityName: this.AvailableEntities.length > 0 ? this.AvailableEntities[0].Name : '',
                 ParentField: 'ParentID',
                 Map: {},
             };
@@ -574,7 +704,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public updateFieldTarget(index: number, event: Event): void {
+    /** @deprecated Use {@link UpdateTargetMode}. */
+    public updateTargetMode(index: number, event: Event): void {
+        return this.UpdateTargetMode(index, event);
+    }
+
+    public UpdateFieldTarget(index: number, event: Event): void {
         const fieldName = (event.target as HTMLSelectElement).value;
         const target = this.spec.Outputs[index].Target;
         if (target.Mode === 'field') {
@@ -583,7 +718,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public updateChildTargetEntity(index: number, event: Event): void {
+    /** @deprecated Use {@link UpdateFieldTarget}. */
+    public updateFieldTarget(index: number, event: Event): void {
+        return this.UpdateFieldTarget(index, event);
+    }
+
+    public UpdateChildTargetEntity(index: number, event: Event): void {
         const entityName = (event.target as HTMLSelectElement).value;
         const target = this.spec.Outputs[index].Target;
         if (target.Mode === 'child') {
@@ -592,7 +732,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public updateConstraintType(index: number, event: Event): void {
+    /** @deprecated Use {@link UpdateChildTargetEntity}. */
+    public updateChildTargetEntity(index: number, event: Event): void {
+        return this.UpdateChildTargetEntity(index, event);
+    }
+
+    public UpdateConstraintType(index: number, event: Event): void {
         const type = (event.target as HTMLSelectElement).value;
         const output = this.spec.Outputs[index];
         if (type === 'none') {
@@ -609,7 +754,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public updateViolationPolicy(index: number, event: Event): void {
+    /** @deprecated Use {@link UpdateConstraintType}. */
+    public updateConstraintType(index: number, event: Event): void {
+        return this.UpdateConstraintType(index, event);
+    }
+
+    public UpdateViolationPolicy(index: number, event: Event): void {
         const policy = (event.target as HTMLSelectElement).value as ViolationPolicy;
         if (this.spec.Outputs[index].Constraint) {
             this.spec.Outputs[index].Constraint.OnViolation = policy;
@@ -617,22 +767,42 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public getEnumValuesCsv(constraint?: ValueConstraint): string {
+    /** @deprecated Use {@link UpdateViolationPolicy}. */
+    public updateViolationPolicy(index: number, event: Event): void {
+        return this.UpdateViolationPolicy(index, event);
+    }
+
+    public GetEnumValuesCsv(constraint?: ValueConstraint): string {
         if (!constraint || constraint.Type !== 'enum' || !Array.isArray(constraint.Values)) {
             return '';
         }
         return constraint.Values.join(', ');
     }
 
-    public getNumericMin(constraint?: ValueConstraint): number | string {
+    /** @deprecated Use {@link GetEnumValuesCsv}. */
+    public getEnumValuesCsv(constraint?: ValueConstraint): string {
+        return this.GetEnumValuesCsv(constraint);
+    }
+
+    public GetNumericMin(constraint?: ValueConstraint): number | string {
         return constraint && constraint.Type === 'numeric' && constraint.Min !== undefined ? constraint.Min : '';
     }
 
-    public getNumericMax(constraint?: ValueConstraint): number | string {
+    /** @deprecated Use {@link GetNumericMin}. */
+    public getNumericMin(constraint?: ValueConstraint): number | string {
+        return this.GetNumericMin(constraint);
+    }
+
+    public GetNumericMax(constraint?: ValueConstraint): number | string {
         return constraint && constraint.Type === 'numeric' && constraint.Max !== undefined ? constraint.Max : '';
     }
 
-    public updateEnumValues(index: number, event: Event): void {
+    /** @deprecated Use {@link GetNumericMax}. */
+    public getNumericMax(constraint?: ValueConstraint): number | string {
+        return this.GetNumericMax(constraint);
+    }
+
+    public UpdateEnumValues(index: number, event: Event): void {
         const val = (event.target as HTMLInputElement).value;
         const output = this.spec.Outputs[index];
         if (!output.Constraint || output.Constraint.Type !== 'enum') {
@@ -645,7 +815,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public updateNumericMin(index: number, event: Event): void {
+    /** @deprecated Use {@link UpdateEnumValues}. */
+    public updateEnumValues(index: number, event: Event): void {
+        return this.UpdateEnumValues(index, event);
+    }
+
+    public UpdateNumericMin(index: number, event: Event): void {
         const val = parseFloat((event.target as HTMLInputElement).value);
         const output = this.spec.Outputs[index];
         if (output.Constraint && output.Constraint.Type === 'numeric') {
@@ -654,7 +829,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public updateNumericMax(index: number, event: Event): void {
+    /** @deprecated Use {@link UpdateNumericMin}. */
+    public updateNumericMin(index: number, event: Event): void {
+        return this.UpdateNumericMin(index, event);
+    }
+
+    public UpdateNumericMax(index: number, event: Event): void {
         const val = parseFloat((event.target as HTMLInputElement).value);
         const output = this.spec.Outputs[index];
         if (output.Constraint && output.Constraint.Type === 'numeric') {
@@ -663,27 +843,47 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public updateWatermarkStrategy(event: Event): void {
+    /** @deprecated Use {@link UpdateNumericMax}. */
+    public updateNumericMax(index: number, event: Event): void {
+        return this.UpdateNumericMax(index, event);
+    }
+
+    public UpdateWatermarkStrategy(event: Event): void {
         if (this.Record) {
             this.Record.WatermarkStrategy = (event.target as HTMLSelectElement).value as MJRecordProcessEntity['WatermarkStrategy'];
         }
     }
 
-    public updateSkipUnchanged(event: Event): void {
+    /** @deprecated Use {@link UpdateWatermarkStrategy}. */
+    public updateWatermarkStrategy(event: Event): void {
+        return this.UpdateWatermarkStrategy(event);
+    }
+
+    public UpdateSkipUnchanged(event: Event): void {
         if (this.Record) {
             this.Record.SkipUnchanged = (event.target as HTMLSelectElement).value === 'true';
         }
     }
 
-    public updateCacheable(event: Event): void {
+    /** @deprecated Use {@link UpdateSkipUnchanged}. */
+    public updateSkipUnchanged(event: Event): void {
+        return this.UpdateSkipUnchanged(event);
+    }
+
+    public UpdateCacheable(event: Event): void {
         if (!this.spec.Caching) this.spec.Caching = { Cacheable: false };
         this.spec.Caching.Cacheable = (event.target as HTMLSelectElement).value === 'true';
         this.emitChanges();
     }
 
-    public updateCacheKeyFields(event: Event): void {
+    /** @deprecated Use {@link UpdateCacheable}. */
+    public updateCacheable(event: Event): void {
+        return this.UpdateCacheable(event);
+    }
+
+    public UpdateCacheKeyFields(event: Event): void {
         const val = (event.target as HTMLInputElement).value;
-        this.cacheKeyFieldsCsv = val;
+        this.CacheKeyFieldsCsv = val;
         if (!this.spec.Caching) this.spec.Caching = { Cacheable: true };
         this.spec.Caching.KeyFields = val
             .split(',')
@@ -692,18 +892,33 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.emitChanges();
     }
 
-    public updateCacheTTL(event: Event): void {
+    /** @deprecated Use {@link UpdateCacheKeyFields}. */
+    public updateCacheKeyFields(event: Event): void {
+        return this.UpdateCacheKeyFields(event);
+    }
+
+    public UpdateCacheTTL(event: Event): void {
         const val = parseInt((event.target as HTMLInputElement).value, 10);
         if (!this.spec.Caching) this.spec.Caching = { Cacheable: true };
         this.spec.Caching.TTLSeconds = isNaN(val) ? 86400 : val;
         this.emitChanges();
     }
 
-    public updateCacheScope(event: Event): void {
+    /** @deprecated Use {@link UpdateCacheTTL}. */
+    public updateCacheTTL(event: Event): void {
+        return this.UpdateCacheTTL(event);
+    }
+
+    public UpdateCacheScope(event: Event): void {
         const val = (event.target as HTMLSelectElement).value as 'pipeline' | 'prompt';
         if (!this.spec.Caching) this.spec.Caching = { Cacheable: true };
         this.spec.Caching.Scope = val;
         this.emitChanges();
+    }
+
+    /** @deprecated Use {@link UpdateCacheScope}. */
+    public updateCacheScope(event: Event): void {
+        return this.UpdateCacheScope(event);
     }
 
     private emitChanges(): void {
@@ -735,7 +950,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     }
 
     private recomputeValidation(): void {
-        this.renderedConstraintPreview = renderConstraintBlock(this.spec.Outputs);
+        this.RenderedConstraintPreview = renderConstraintBlock(this.spec.Outputs);
         const entity = this.Record?.EntityID ? this.ProviderToUse.EntityByID(this.Record.EntityID) : null;
         if (entity) {
             const stub: EntityMetadataStub = {
@@ -750,9 +965,9 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                     EntityFieldValues: f.EntityFieldValues ? f.EntityFieldValues.map((v) => ({ Value: v.Value, Code: v.Code })) : undefined,
                 })),
             };
-            this.validationErrors = validateSpec(this.spec, stub);
+            this.ValidationErrors = validateSpec(this.spec, stub);
         } else {
-            this.validationErrors = this.spec.Outputs.length === 0
+            this.ValidationErrors = this.spec.Outputs.length === 0
                 ? [{
                     Path: 'Outputs',
                     Severity: 'error',
@@ -761,7 +976,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                 }]
                 : [];
         }
-        const hasErrors = this.validationErrors.some((i) => i.Severity === 'error');
+        const hasErrors = this.ValidationErrors.some((i) => i.Severity === 'error');
         this.ValidChange.emit(!hasErrors);
     }
 }

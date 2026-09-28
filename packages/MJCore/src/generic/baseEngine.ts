@@ -502,7 +502,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // do a full deep copy of the array to ensure no tampering
         return JSON.parse(JSON.stringify(this._metadataConfigs));
     }
- 
+
+    /**
+     * The engine's metadata configs themselves, not a copy: read them, never change them.
+     *
+     * {@link Configs} deep-copies on every read. `BaseEngineRegistry.FindCachedEntity()` reads the
+     * configs of every loaded engine on each call, and runs for every record an IsA parent with an
+     * opted-in `SubtypeSelector` loads, so it reads this instead.
+     */
+    public get ReadonlyConfigs(): ReadonlyArray<Readonly<BaseEnginePropertyConfig>> {
+        return this._metadataConfigs;
+    }
+
     /**
      * Configures the engine by loading metadata from the database.
      * Subclasses must implement this method to define their configuration behavior.
@@ -1953,7 +1964,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this.NotifyDataChange(config, result.Results);
 
             if (config.Expiration) {
-                this.SetExpirationTimer(config.PropertyName, config.Expiration);
+                this.setExpirationTimer(config.PropertyName, config.Expiration);
             }
         } else if (!this.ContextUserCanReadConfigEntity(config.EntityName, contextUser)) {
             // PERMANENT failure: the user lacks Read on this entity, so a retry will
@@ -2130,7 +2141,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results, loadedSuccessfully: true });
 
             if (config.Expiration) {
-                this.SetExpirationTimer(config.PropertyName, config.Expiration);
+                this.setExpirationTimer(config.PropertyName, config.Expiration);
             }
         }
     }
@@ -2278,7 +2289,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param propertyName - The name of the property
      * @param expiration - The expiration time in milliseconds
      */
-    private SetExpirationTimer(propertyName: string, expiration: number): void {
+    private setExpirationTimer(propertyName: string, expiration: number): void {
         if (this._expirationTimers.has(propertyName)) {
             clearTimeout(this._expirationTimers.get(propertyName));
         }
