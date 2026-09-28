@@ -689,19 +689,30 @@ export class AIPromptRunner extends BaseModelRunner {
         this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
       }
 
+      // Apply this runner's model-type floor to everything the planner may choose from: a prompt
+      // typed differently fails here, and neither the model pool nor the prompt's bindings can admit
+      // a model of another type (the planner's own filters treat an empty AIModelTypeID as "any").
+      this.AssertPromptMatchesRequiredType(prompt);
+      if (modelSelectionPrompt !== prompt) {
+        this.AssertPromptMatchesRequiredType(modelSelectionPrompt);
+      }
+      const requiredTypeId = this.RequiredModelTypeID();
+      const typedModels = AIEngine.Instance.Models.filter(m => UUIDsEqual(m.AIModelTypeID, requiredTypeId));
+
       // Get prompt-specific model associations using the model selection prompt
       const promptModels = AIEngine.Instance.PromptModels.filter(
         (pm) =>
           UUIDsEqual(pm.PromptID, modelSelectionPrompt.ID) &&
           (pm.Status === 'Active' || pm.Status === 'Preview') &&
-          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)),
+          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)) &&
+          UUIDsEqual(AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID))?.AIModelTypeID, requiredTypeId),
       );
 
       // Create execution plan using the modelSelectionPrompt for model configurations
       executionTasks = this._executionPlanner.createExecutionPlan(
         modelSelectionPrompt,
         promptModels,
-        AIEngine.Instance.Models,
+        typedModels,
         renderedPromptText,
         params.contextUser,
         params.configurationId,
@@ -1603,6 +1614,12 @@ export class AIPromptRunner extends BaseModelRunner {
    */
   private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
     const base = `No suitable model found for prompt ${promptName}`;
+
+    // A selection step that threw (for example the model-type floor) records its error here; show it
+    // rather than the generic "no candidates" text. Every other reason keeps its detailed message below.
+    if (selectionInfo?.selectionReason?.startsWith('Error during model selection:')) {
+      return `${base}. ${selectionInfo.selectionReason}`;
+    }
 
     if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
       return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
