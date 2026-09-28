@@ -705,6 +705,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         this.ActivePlan = null;
         this.ExecutionResult = null;
         this.ExecutionProgress = null;
+        this.PlanChangedNotice = null;
         this.PromptedValues = {};
         this.PromptedFields = [];
         this.RetargetFields = [];
@@ -741,6 +742,12 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
             this.ActivePlan = planOutput.Plan;
             if (planOutput.Plan) {
+                // The name the server will apply can move with the plan (a rule derives it from a
+                // prompted value, a rename avoids a newly taken one); follow it unless the user typed one.
+                if (this.RootNameReadOnly || !this.HasUserEditedRootName) {
+                    const planned = this.plannedRootName();
+                    if (planned !== null) this.RootRecordName = planned;
+                }
                 this.PlanChanged.emit(planOutput.Plan);
             }
         } catch (err) {
@@ -779,7 +786,9 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     /** Executes the reviewed plan. The server refuses with `PLAN_CHANGED` if the plan hash moved. */
     public async ExecuteClone(): Promise<void> {
-        if (!this.ActivePlan || this.ActivePlan.Blocked || this.IsReplanning) return;
+        // Also refuse re-entry: the button is disabled only by binding, so a second call before
+        // change detection (a host, a key repeat) would start a second clone.
+        if (!this.ActivePlan || this.ActivePlan.Blocked || this.IsReplanning || this.CurrentState === 'executing') return;
 
         this.PlanChangedNotice = null;
         this.CurrentState = 'executing';
@@ -842,6 +851,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     /** From the Failed state: back to Review with a fresh plan, since the old one may be why it failed. */
     public BackToReview(): void {
+        this.PlanChangedNotice = null;
         this.CurrentStep = 'review';
         this.CurrentState = 'review';
         this.ScopeOptions = this.buildOptionsWithValues();
@@ -1079,6 +1089,19 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         return governed || editable === 'none' || editable === 'scope';
     }
 
+    /** The last change on the root's name field in the current plan: the value the server applies. */
+    private rootNameChange(): RecordClonePlanDetails['Nodes'][number]['FieldChanges'][number] | undefined {
+        const rootNode = this.ActivePlan?.Nodes.find((n) => n.Depth === 0 || n.ParentKey === null);
+        if (!rootNode) return undefined;
+        const nameField = (this.ProviderToUse?.EntityByName(this.EffectiveEntityName)?.NameField?.Name ?? 'Name').toLowerCase();
+        return [...rootNode.FieldChanges].reverse().find((fc) => fc.Field.toLowerCase() === nameField);
+    }
+
+    private plannedRootName(): string | null {
+        const change = this.rootNameChange();
+        return change ? String(change.NewValue) : null;
+    }
+
     private setupInitialValues(): void {
         if (!this.ActivePlan) return;
 
@@ -1086,8 +1109,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         if (rootNode) {
             // The value the server will apply is the last change on the name field (its rename, when
             // the naming strategy made one), not the first, which is the plain copy of the source.
-            const nameField = (this.ProviderToUse?.EntityByName(this.EffectiveEntityName)?.NameField?.Name ?? 'Name').toLowerCase();
-            const nameChange = [...rootNode.FieldChanges].reverse().find((fc) => fc.Field.toLowerCase() === nameField);
+            const nameChange = this.rootNameChange();
             if (nameChange) {
                 this.RootRecordName = String(nameChange.NewValue);
                 this.NamingStrategyReason = nameChange.Reason || 'Suggested by naming strategy';

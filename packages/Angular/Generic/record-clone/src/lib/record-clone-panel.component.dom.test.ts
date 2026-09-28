@@ -286,6 +286,45 @@ describe('RecordClonePanelComponent (DOM)', () => {
         expect((query(fixture, '#root-name-input') as HTMLInputElement).readOnly).toBe(true);
     });
 
+    it('starts one clone however many times Execute is called before it returns', async () => {
+        let finish!: (v: RecordCloneExecuteOutput) => void;
+        vi.mocked(mockService.ExecuteClone).mockImplementation(() => new Promise((r) => (finish = r)));
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+
+        const first = panel.ExecuteClone();
+        const second = panel.ExecuteClone();
+        finish(MOCK_EXECUTE);
+        await Promise.all([first, second]);
+
+        expect(mockService.ExecuteClone).toHaveBeenCalledTimes(1);
+    });
+
+    it('follows the planned name across re-plans until the user types one', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        expect(panel.RootRecordName).toBe('John Doe (Copy)');
+
+        const renamed = structuredClone(MOCK_PLAN.Plan!);
+        renamed.Nodes[0].FieldChanges.push({ Field: 'Name', OldValue: 'John Doe', NewValue: 'jane@example.com', Kind: 'Rule', Reason: 'Derived via field rule.' });
+        vi.mocked(mockService.PlanClone).mockResolvedValueOnce({ Plan: renamed });
+        await panel.Replan();
+        expect(panel.RootRecordName).toBe('jane@example.com');
+
+        panel.OnRootNameChange('My own name');
+        vi.mocked(mockService.PlanClone).mockResolvedValueOnce({ Plan: renamed });
+        await panel.Replan();
+        expect(panel.RootRecordName).toBe('My own name');
+    });
+
     it('emits CloseRequested when panel close is triggered', () => {
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],
