@@ -2455,18 +2455,18 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      */
     private async createHiddenSessionAnchorDetail(
         session: MJAIAgentSessionEntity,
-        contextUser: UserInfo,
+        callerUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<string | null> {
-        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, contextUser);
+        const detail = await provider.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAIL_ENTITY, callerUser);
         detail.NewRecord();
         detail.ConversationID = session.ConversationID;
         detail.Role = 'AI';
         detail.HiddenToUser = true;
         detail.Message = 'Artifacts produced during a realtime session (system anchor).';
         detail.AgentSessionID = session.ID;
-        // Attribute the anchor to the SESSION owner, not the (possibly elevated) writer — identical
-        // for every non-elevated caller, whose ownership of the session is already proven.
+        // Attribute to the SESSION owner — the caller writing this row, whose ownership
+        // `loadOwnedActiveSession` already proved.
         detail.UserID = session.UserID;
         if (await detail.Save()) {
             return detail.ID;
@@ -2792,11 +2792,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // `UserCache.GetSystemUser()`, which on this deployment resolves to the unconfigured
         // placeholder `not.set@nowhere.com` ("Configured provisioning user not found; falling back
         // to an Owner"). That user EXISTS — it is not a missing/invalid principal — and even carries
-        // full CRUD on `MJ: Conversation Details`. It is refused anyway: measured on MJ#4791 against
-        // the real DB, `MJConversationDetailEntityExtended`'s owner gate accepts only the
-        // conversation's OWNER or an Edit/Owner Resource Permission grantee, and the System user is
-        // neither. `Save()` returns false with a NULL `LatestResult` — indistinguishable from a
-        // permission denial, and just as silent.
+        // full CRUD on `MJ: Conversation Details`. It is refused anyway:
+        // `MJConversationDetailEntityExtended`'s owner gate accepts only the conversation's OWNER or
+        // an Edit/Owner Resource Permission grantee, and the System user is neither. Measured on
+        // MJ#4791 (before the core-entities fix that now records the denial): `Save()` → `false`,
+        // `LatestResult` null — indistinguishable from a permission denial, and just as silent. The
+        // denial itself still happens; that fix only made it stop being silent.
         const writeUser = contextUser;
         const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJConversationDetailEntity>(
@@ -2876,9 +2877,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * method) and therefore the conversation, and the anonymous/magic-link role carries Create on
      * `MJ: Conversation Details`, scoped by its RLS filter to rows on conversations it owns. The
      * System user is NOT the conversation owner, so `MJConversationDetailEntityExtended`'s owner
-     * gate refuses it outright — measured on MJ#4791 against the real DB: `Save()` returns `false`
-     * with a NULL `LatestResult`, and `ResultHistory` stays empty. Elevating this write silently
-     * dropped both hidden tool-execution turns of a real magic-link session.
+     * gate refuses it outright. Measured on MJ#4791 (before the core-entities fix that now records
+     * the denial): `Save()` returned `false` with a NULL `LatestResult` and an empty
+     * `ResultHistory` — indistinguishable from any other silent failure. Elevating this write is
+     * what silently dropped both hidden tool-execution turns of a real magic-link session; the
+     * denial itself still happens today, only its silence was fixed separately.
      * `ResolveScopedAnonymousRunUser` elevates AI-**run**-entity writes only (prompt runs, agent
      * runs, the relayed dispatch itself) — never this one.
      */
