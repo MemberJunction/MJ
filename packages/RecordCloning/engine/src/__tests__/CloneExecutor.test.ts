@@ -242,7 +242,7 @@ describe('CloneExecutor', () => {
         expect(item?.RecordCloneLogID).toBe(result.CloneLogID);
         expect(JSON.parse(item!.FieldChangesJSON!)).toHaveLength(1);
         const link = rows().find((e) => e.LinkType === 'ClonedFrom');
-        expect(JSON.parse(link!.Metadata!)).toEqual({ CloneLogID: result.CloneLogID });
+        expect(JSON.parse(link!.Metadata!)).toEqual({ CloneLogID: result.CloneLogID, Depth: 0, RootTargetRecordID: 'tgt-1' });
     });
 
     it('writes the real value to the clone but only the sentinel to the log PlanJSON', async () => {

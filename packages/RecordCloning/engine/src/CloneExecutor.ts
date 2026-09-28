@@ -345,7 +345,7 @@ export class CloneExecutor {
             link.SourceRecordID = ToRecordKeyString(entity.PrimaryKey ?? planNode.TargetKey);
             link.TargetEntityID = entity.EntityInfo.ID;
             link.TargetRecordID = ToRecordKeyString(planNode.SourceKey);
-            link.Metadata = JSON.stringify({ CloneLogID: cloneLogId });
+            link.Metadata = JSON.stringify({ CloneLogID: cloneLogId, Depth: planNode.Depth ?? 0, RootTargetRecordID: rootTargetId });
             if (!(await link.Save())) {
                 throw new Error(`Record link for ${nodeKey} not saved: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
