@@ -3070,6 +3070,7 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         // The hidden anchor `Conversation Detail` is written as the CALLER (#4791) — like every
         // other `MJ: Conversation Details` write, the System user is refused as not the owner.
         expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
         // The hidden anchor is attributed to the SESSION owner, not the elevated principal.
         expect(anchors).toHaveLength(1);
         expect(anchors[0].UserID).toBe('anon-1');
