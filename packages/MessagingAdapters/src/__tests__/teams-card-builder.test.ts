@@ -775,6 +775,12 @@ describe('BuildUnopenableResourceNotes — compose:email', () => {
         expect(JSON.stringify(BuildUnopenableResourceNotes([cmd({ to: undefined })]))).toContain('Open draft in Mail');
     });
 
+    // `??` would let an empty label through and render "✉️ _ — email draft available…".
+    it('falls back to "Email draft" when the label is empty, matching Slack', () => {
+        const text = String((BuildUnopenableResourceNotes([cmd({ label: '' })])[0] as { text: string }).text);
+        expect(text.startsWith('✉️ _Email draft — ')).toBe(true);
+    });
+
     // An Adaptive Card TextBlock renders a markdown subset INCLUDING links, and every field here
     // is agent-authored — so an injected subject must not become a live hyperlink in an MJ card.
     it('escapes markdown so agent text cannot inject a link', () => {

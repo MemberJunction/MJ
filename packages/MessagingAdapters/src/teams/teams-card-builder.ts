@@ -332,7 +332,7 @@ export function buildUnopenableResourceNotes(commands: ActionableCommand[]): Rec
  * subject would need an explicit private-context signal from the adapter, which does not exist yet.
  */
 function formatComposeEmailNote(cmd: ComposeEmailCommand): string {
-    return `✉️ _${escapeCardMarkdown(cmd.label ?? 'Email draft')} — email draft available; open it with "View in MJ Explorer" below to review and send._`;
+    return `✉️ _${escapeCardMarkdown(cmd.label || 'Email draft')} — email draft available; open it with "View in MJ Explorer" below to review and send._`;
 }
 
 /**
