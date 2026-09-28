@@ -1940,7 +1940,11 @@ export class ResolverBase {
     if (val === undefined) val = null;
     // A null old value stays null, except a boolean, which the comparison has always read as false.
     if (field?.TSType === EntityFieldTSType.Boolean && val === null) return false;
-    if (!field || val === null) return val as string | null;
+    if (val === null) return null;
+    if (!field) {
+      // No field metadata to convert by: pass scalars through, stringify anything else.
+      return typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' || val instanceof Date ? val : String(val);
+    }
 
     const text = String(val);
     switch (field.TSType) {
