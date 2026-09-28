@@ -9,7 +9,7 @@ import {
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -1691,10 +1691,11 @@ export class AIPromptRunner extends BaseModelRunner {
    * to the configured failover strategy when errors occur.
    * 
    * Candidates come from model selection (`allCandidates`), already filtered to the prompt's
-   * model type by ID. The method calls several smaller, focused helper methods:
-   * - updatePromptRunWithFailoverSuccess: Records successful failover metadata
-   * - updatePromptRunWithFailoverFailure: Records failed failover metadata
-   * - createFailoverErrorResult: Creates standardized error response
+   * model type by ID. When failover applies, the loop itself is
+   * {@link BaseModelRunner.ExecuteWithFailover}: this method supplies the chat call on each candidate
+   * (`executeModel` with that candidate's model, vendor, driver, effort level and prompt-model
+   * configuration) and the final error result (`createFailoverErrorResult`). The base records
+   * failover success or failure on the prompt run.
    */
   protected async executeModelWithFailover(
     model: MJAIModelEntityExtended,
@@ -1726,7 +1727,7 @@ export class AIPromptRunner extends BaseModelRunner {
         promptModelConfiguration
       );
     }
-    return this.executeWithFailover(
+    return this.ExecuteWithFailover(
       prompt,
       params,
       allCandidates,
@@ -1755,7 +1756,7 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Creates an error result for failed failover attempts
    */
-  protected createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
+  private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
     const startTime = new Date();
     const endTime = new Date();
 

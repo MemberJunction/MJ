@@ -1489,7 +1489,7 @@ export abstract class BaseModelRunner {
   /**
    * Updates prompt run with failover failure tracking data
    */
-  protected updatePromptRunWithFailoverFailure(
+  private updatePromptRunWithFailoverFailure(
     promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
@@ -1509,8 +1509,15 @@ export abstract class BaseModelRunner {
    * credentials, lets processFailoverError decide retry / next candidate / stop, and records failover
    * success or failure on the prompt run. The model call itself and the final error result are
    * supplied by the subclass, so the loop works for any result type that extends BaseResult.
+   *
+   * For prompt-based runners: it takes the `AIPrompt` and `AIPromptParams` the call is for, and
+   * candidates that carry prompt-model fields (effort level, the `AIPromptModel` configuration).
+   *
+   * @param executeOnCandidate Makes the call on one candidate. It must use the candidate's own model,
+   *   vendor, driver and prompt-model fields, not those of the first candidate.
+   * @param createErrorResult Builds the result returned when every candidate has failed.
    */
-  protected async executeWithFailover<TResult extends BaseResult>(
+  protected async ExecuteWithFailover<TResult extends BaseResult>(
     prompt: MJAIPromptEntityExtended,
     params: AIPromptParams,
     allCandidates: ModelVendorCandidate[],
@@ -1930,7 +1937,7 @@ export abstract class BaseModelRunner {
    *
    * @returns Decision object indicating whether to retry same model, continue to next candidate, or stop
    */
-  protected async processFailoverError(
+  private async processFailoverError(
     error: Error,
     errorInfo: AIErrorInfo,
     candidate: ModelVendorCandidate,
