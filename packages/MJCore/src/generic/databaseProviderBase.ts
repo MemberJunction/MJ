@@ -335,6 +335,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * physical transaction on the same pool, blind to any transaction the caller had already
      * started.
      *
+     * The transaction belongs to the async scope that calls this: that code and everything it starts
+     * run on the transaction; unrelated callers on the same provider instance run on the pool
+     * (GenericDatabaseProvider, #4786). Call it from the function that performs the writes — a begin
+     * reached only after an `await` inside a helper does not include the helper's caller.
+     *
      * The returned scope is **settle-once**: the first `Commit()` or `Rollback()` wins and later
      * calls are no-ops, so `try { ...; Commit() } catch { Rollback() }` is safe even when the work
      * already unwound its own scope.

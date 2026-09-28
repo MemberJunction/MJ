@@ -78,16 +78,50 @@ the same `BeginEntityTransaction()` everything else does, which is why the two c
 disagree. If you called any of them, switch to `BeginEntityTransaction()` — or better,
 `RunInEntityTransaction()`.
 
-> **Concurrency note.** The ambient transaction lives on the *provider instance*, not a global.
-> MJServer builds per-request providers, so an ambient transaction is effectively request-scoped.
-> Long-lived CLI tools must not run parallel Saves on one provider instance. `mj sync push` is
-> atomic by default: every save runs on the host provider inside the push transaction, **one
-> JSON-root graph at a time**, so nothing interleaves. An entity directory that opts into isolated
-> transactions (`push.isolatedTransactions`, or `--isolated-transactions`) runs its graphs
-> in parallel on `DatabaseProviderBase.CreateIndependentInstance()`, which forks a provider that
-> **shares the connection pool and metadata cache** but has its own transaction stack (SQL Server and
-> PostgreSQL). Those saves commit as they go and are not rolled back with the push.
+> **Concurrency note.** The transaction *handle* lives on the provider instance; *membership* in it
+> is per async scope (above). MJServer builds per-request providers, so an ambient transaction is
+> effectively request-scoped. Long-lived CLI tools must not run parallel Saves on one provider
+> instance. `mj sync push` is atomic by default: every save runs on the host provider inside the
+> push transaction, **one JSON-root graph at a time**, so nothing interleaves. An entity directory
+> that opts into isolated transactions (`push.isolatedTransactions`, or `--isolated-transactions`)
+> runs its graphs in parallel on `DatabaseProviderBase.CreateIndependentInstance()`, which forks a
+> provider that **shares the connection pool and metadata cache** but has its own transaction stack
+> (SQL Server and PostgreSQL). Those saves commit as they go and are not rolled back with the push.
 > `ReleaseIndependentInstance()` must not close the pool.
+
+### Who is in the transaction (scope affinity)
+
+A transaction belongs to the **async scope that began it** — the code that awaited
+`BeginTransaction()` / `BeginEntityTransaction()` / `RunInEntityTransaction()` and everything that
+code starts (awaited calls, `Promise.all` fan-out, timers and fire-and-forget work launched from
+inside it). Only that scope's statements run on the transaction. Any other caller on the same
+provider instance — another request using the global provider, a background timer that started
+earlier — runs on the pool exactly as if no transaction were open: it is never rolled back with the
+transaction, never queued behind its `COMMIT`, and never blocked by it being doomed (#4786).
+
+Consequences:
+
+- **Begin where you write.** The scope is set when the begin is *called*. Call it from the function
+  that performs the writes (or use `RunInEntityTransaction`, which does). A helper that `await`s
+  something and *then* begins does not make its caller part of the transaction:
+  ```typescript
+  // ❌ the caller's writes after `await open()` are NOT in the transaction
+  async function open() { await loadConfig(); return provider.BeginEntityTransaction(); }
+  ```
+- **Work that outlives the transaction runs on the pool.** Something launched inside the scope that
+  runs after the commit/rollback (a timer, an un-awaited promise) is no longer part of any
+  transaction — it autocommits, as before, and never joins a *later* transaction someone else opens.
+  Use `RunAfterCommit()` for work that must wait for the commit.
+- **`RunAfterCommit()`/`CapturePostCommitToken()` called from outside the scope don't run on the
+  spot either.** While a transaction is open on the instance, an outside caller's task is not tied
+  to that transaction — but it is held until the provider goes idle, not fired immediately, so it
+  can never land on the connection that transaction is committing or rolling back on.
+- **An unrelated scope that *begins* while another transaction is open still joins it** as a
+  savepoint (pre-6.2 behaviour, kept because waiting could deadlock), and the provider logs it once
+  per transaction. Independent units of work belong on `CreateIndependentInstance()` or a
+  per-request provider.
+- `ExecuteSQLOptions.ignoreAmbientTransaction` still lets code *inside* the scope run a read on the
+  pool (#4514).
 
 ### Client-side
 
