@@ -130,10 +130,10 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
             this.RecordDenied('You have view-only access to this conversation.', resultType);
             return false;
         } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
             LogError(
-                `MJConversationDetailEntityExtended.currentUserMayWrite failed: ${
-                    error instanceof Error ? error.message : String(error)
-                }`
+                `MJConversationDetailEntityExtended.currentUserMayWrite failed ` +
+                    `(${operation} on conversation ${this.ConversationID}, user ${user.ID}): ${message}`
             );
             // Fail closed — safer to deny than silently allow a compromised write.
             this.RecordDenied('Unable to verify conversation permissions.', resultType);

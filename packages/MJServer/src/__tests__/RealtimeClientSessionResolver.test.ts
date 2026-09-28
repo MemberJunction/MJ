@@ -210,8 +210,8 @@ interface FakeSession {
     NewRecord: () => void;
     Save: () => Promise<boolean>;
     Load: (id: string) => Promise<boolean>;
-    LatestResult?: { CompleteMessage?: string };
-    /** Only set on the fakes exercising `describeSaveFailure`'s "no LatestResult" fallback branch. */
+    LatestResult?: { CompleteMessage?: string; Success?: boolean };
+    /** Only set on the fakes exercising `describeSaveFailure`'s "no failure detail recorded" branches. */
     ResultHistory?: unknown[];
 }
 
@@ -1726,6 +1726,7 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
     });
 
     it('returns a structured failure when the artifact header save fails (no version attempted)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const failingArtifact = makeSessionEntity({
             ID: 'artifact-fail',
             Save: vi.fn(async () => false),
@@ -1742,10 +1743,14 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toMatch(/artifact save failed/i);
+        expect(result.ErrorMessage).toContain('session session-1');
+        expect(result.ErrorMessage).toContain('db down');
+        expect(errSpy.mock.calls.map((call) => String(call[0]))).toContain(result.ErrorMessage);
         expect(version.Save).not.toHaveBeenCalled();
     });
 
     it('returns a structured failure (carrying the orphaned ArtifactID) when the version save fails', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         const failingVersion = makeSessionEntity({
             ID: 'version-fail',
             Save: vi.fn(async () => false),
@@ -1764,6 +1769,10 @@ describe('RealtimeClientSessionResolver.SaveSessionChannelArtifact', () => {
         expect(result.Success).toBe(false);
         expect(result.ArtifactID).toBe('artifact-1');
         expect(result.ArtifactVersionID).toBeUndefined();
+        expect(result.ErrorMessage).toMatch(/artifact version save failed/i);
+        expect(result.ErrorMessage).toContain('session session-1');
+        expect(result.ErrorMessage).toContain('too big');
+        expect(errSpy.mock.calls.map((call) => String(call[0]))).toContain(result.ErrorMessage);
         expect(junction.Save).not.toHaveBeenCalled();
     });
 
@@ -3239,10 +3248,55 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         const loggedLines = errSpy.mock.calls.map((call) => String(call[0]));
         const failureLine = loggedLines.find((line) => line.includes('persistDirectActionTurn'));
         expect(failureLine).toBeDefined();
-        expect(failureLine).toContain('session-1');
-        expect(failureLine).toContain('anon-1');
-        expect(failureLine).toContain('no failure detail recorded');
+        // Exact substrings: 'anon-1' alone is the caller, session.UserID AND detail.UserID at once,
+        // so only the labelled form proves the WRITE user is what got logged.
+        expect(failureLine).toContain('session session-1');
+        expect(failureLine).toContain('write user anon-1');
+        expect(failureLine).toContain('no failure detail recorded (LatestResult null; ResultHistory length 0)');
+        expect(failureLine).toContain('the write was refused before reaching the provider');
         expect(failureLine).not.toContain('unknown error');
+    });
+
+    it('does not claim WHERE the write was refused when a result was registered with an empty message (#4791)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const detail = makeSessionEntity({
+            ID: 'detail-1',
+            Save: vi.fn(async () => false),
+            LatestResult: { Success: false, CompleteMessage: '   ' },
+            ResultHistory: [{}],
+        });
+        currentProvider = makeToolTurnProvider(detail);
+        const resolver = makeAnonResolver();
+
+        await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{}');
+
+        const loggedLines = errSpy.mock.calls.map((call) => String(call[0]));
+        const failureLine = loggedLines.find((line) => line.includes('persistDirectActionTurn'));
+        expect(failureLine).toBeDefined();
+        expect(failureLine).toContain('no failure detail recorded (LatestResult empty; ResultHistory length 1)');
+        expect(failureLine).not.toContain('refused before reaching the provider');
+    });
+
+    it('never logs a PRIOR SUCCESS entry\'s text as the failure reason when the refusal registered nothing (#4791)', async () => {
+        errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        const detail = makeSessionEntity({
+            ID: 'detail-1',
+            Save: vi.fn(async () => false),
+            LatestResult: { Success: true, CompleteMessage: 'previous save ok' },
+            ResultHistory: [{}, {}],
+        });
+        currentProvider = makeToolTurnProvider(detail);
+        const resolver = makeAnonResolver();
+
+        await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{}');
+
+        const loggedLines = errSpy.mock.calls.map((call) => String(call[0]));
+        const failureLine = loggedLines.find((line) => line.includes('persistDirectActionTurn'));
+        expect(failureLine).toBeDefined();
+        expect(failureLine).toContain(
+            'no failure detail recorded (latest result entry is a prior success; ResultHistory length 2)',
+        );
+        expect(failureLine).not.toContain('previous save ok');
     });
 
     it('logs the real CompleteMessage when present (#4791)', async () => {

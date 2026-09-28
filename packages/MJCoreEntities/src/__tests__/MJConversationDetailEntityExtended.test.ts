@@ -170,6 +170,21 @@ describe('MJConversationDetailEntityExtended owner gate', () => {
         expect(entity.LatestResult?.Type).toBe('update');
     });
 
+    it('fails closed and logs the operation, conversation and user when the permission check throws', async () => {
+        mocks.engineConfig.mockRejectedValue(new Error('engine offline'));
+        const entity = await makeEntity();
+
+        const result = await entity.Delete();
+
+        expect(result).toBe(false);
+        expect(entity.LatestResult?.CompleteMessage).toBe('Unable to verify conversation permissions.');
+        expect(mocks.logError).toHaveBeenCalledTimes(1);
+        expect(mocks.logError).toHaveBeenCalledWith(
+            'MJConversationDetailEntityExtended.currentUserMayWrite failed (delete on conversation conv-1, user system-1): engine offline'
+        );
+        expect(mocks.superDelete).not.toHaveBeenCalled();
+    });
+
     it('records the rating-field denial message for a non-owner', async () => {
         const entity = await makeEntity();
         entity.Fields = [{ Name: 'UserRating', Dirty: true }];
