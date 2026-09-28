@@ -14,6 +14,8 @@ import {
     EventEmitter,
     OnInit,
     ChangeDetectorRef,
+    ElementRef,
+    ViewChild,
     inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -32,12 +34,15 @@ import { CompositeKeyToRecordCloneKey, type CloneNavigationEvent } from './recor
     selector: 'mj-clone-lineage-chip',
     template: `
         @if (HasLineage) {
-            <div class="lineage-wrapper">
+            <div class="lineage-wrapper" (keydown.escape)="OnEscape($event)">
                 <!-- Compact Chip Button -->
                 <button
+                    #chipTrigger
                     type="button"
                     class="lineage-chip-btn"
                     [class.active]="IsOpen"
+                    [attr.aria-expanded]="IsOpen"
+                    [attr.aria-controls]="PopoverId"
                     (click)="TogglePopover()"
                     [title]="ChipTooltip">
                     <i [class]="ChipIcon"></i>
@@ -46,16 +51,19 @@ import { CompositeKeyToRecordCloneKey, type CloneNavigationEvent } from './recor
 
                 <!-- Lineage Popover Menu -->
                 @if (IsOpen) {
-                    <div class="lineage-popover" role="dialog" aria-label="Record Lineage">
+                    <!-- A disclosure panel, not a modal dialog: the page stays usable around it. -->
+                    <div class="lineage-popover" [id]="PopoverId" role="region" aria-label="Record lineage">
                         <div class="popover-header">
                             <span class="popover-title">
                                 <i class="fa-solid fa-code-fork"></i>
                                 Record Clone Lineage
                             </span>
                             <button
+                                #closeButton
                                 type="button"
                                 class="popover-close-btn"
-                                (click)="ClosePopover()"
+                                (click)="ClosePopover(true)"
+                                aria-label="Close lineage"
                                 title="Close">
                                 <i class="fa-solid fa-xmark"></i>
                             </button>
@@ -404,14 +412,30 @@ export class CloneLineageChipComponent extends BaseAngularComponent implements O
         }
     }
 
+    private static nextId = 0;
+    /** Ties the chip's aria-controls to its popover. */
+    public readonly PopoverId = `mj-clone-lineage-${++CloneLineageChipComponent.nextId}`;
+    @ViewChild('chipTrigger') private chipTrigger?: ElementRef<HTMLButtonElement>;
+    @ViewChild('closeButton') private closeButton?: ElementRef<HTMLButtonElement>;
+
     public TogglePopover(): void {
         this.IsOpen = !this.IsOpen;
-        this.cdr.markForCheck();
+        this.cdr.detectChanges();
+        // Move focus into the panel on open, so keyboard users land in it.
+        if (this.IsOpen) this.closeButton?.nativeElement.focus();
     }
 
-    public ClosePopover(): void {
+    /** Closes the popover; `returnFocus` puts focus back on the chip (Escape, the close button). */
+    public ClosePopover(returnFocus = false): void {
         this.IsOpen = false;
         this.cdr.markForCheck();
+        if (returnFocus) this.chipTrigger?.nativeElement.focus();
+    }
+
+    public OnEscape(event: Event): void {
+        if (!this.IsOpen) return;
+        event.stopPropagation();
+        this.ClosePopover(true);
     }
 
     public OnNavigate(item: RecordCloneLineageItem): void {

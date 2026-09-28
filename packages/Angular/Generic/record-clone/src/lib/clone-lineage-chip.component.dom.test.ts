@@ -61,6 +61,29 @@ describe('CloneLineageChipComponent (DOM)', () => {
         expect(text(fixture, '.chip-label')).toBe('Cloned from Enterprise Pipeline Template');
     });
 
+    it('works as a disclosure: focus moves in on open, Escape closes and returns focus to the chip', () => {
+        const fixture = renderComponentFixture(CloneLineageChipComponent, {
+            inputs: { AutoLoad: false, LineageData: LINEAGE_WITH_SOURCE },
+        });
+        document.body.appendChild(fixture.nativeElement);
+        const chip = query(fixture, '.lineage-chip-btn') as HTMLButtonElement;
+        expect(chip.getAttribute('aria-expanded')).toBe('false');
+
+        chip.click();
+        fixture.detectChanges();
+        const popover = query(fixture, '.lineage-popover') as HTMLElement;
+        expect(chip.getAttribute('aria-expanded')).toBe('true');
+        expect(chip.getAttribute('aria-controls')).toBe(popover.id);
+        expect(popover.getAttribute('role')).not.toBe('dialog');
+        expect(document.activeElement).toBe(query(fixture, '.popover-close-btn'));
+
+        popover.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        fixture.detectChanges();
+        expect(query(fixture, '.lineage-popover')).toBeNull();
+        expect(document.activeElement).toBe(chip);
+        fixture.nativeElement.remove();
+    });
+
     it('toggles popover on click and emits NavigateToRecord when item is clicked', () => {
         const fixture = renderComponentFixture(CloneLineageChipComponent, {
             inputs: {

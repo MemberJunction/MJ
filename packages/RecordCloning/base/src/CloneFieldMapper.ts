@@ -1,8 +1,10 @@
 /**
  * @file CloneFieldMapper.ts
- * Pure 12-stage field mapping pipeline for record cloning.
+ * Pure 13-stage field mapping pipeline for record cloning.
  * Maps: Excluded -> NotWritable -> DeniedRead/DeniedCreate -> Copy -> Reset -> Ownership
- * -> ServerAllocated -> Rename -> Remap -> RemapJSON -> Rule -> Override -> Prompt.
+ * -> ServerAllocated -> Rename -> Remap -> RemapJSON -> Override -> Prompt -> Rule.
+ * Rules run last, so a derived field (a user's Name from the prompted Email) sees the final
+ * values; request overrides and prompts are refused on fields a rule or reset governs.
  * @see plans/record-cloning/README.md §7.1, §7.2, §13.1
  */
 
