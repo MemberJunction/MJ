@@ -188,11 +188,20 @@ export interface ActionResultCrushConfig {
     codeLang: CodeLang | undefined;
 }
 
+/** One failed loop iteration (ForEach or While), or a loop that failed before its first iteration. */
+interface LoopIterationError {
+    /** Zero-based index of the iteration that failed. */
+    index: number;
+    message: string;
+    /** The ForEach collection element or While attempt context. Arbitrary payload data, only ever serialized. */
+    item?: unknown;
+}
+
 /** What a While loop produced, handed from executeWhileIterations to completeWhileLoop. */
 interface WhileLoopResults {
     results: BaseAgentNextStep[];
     /** Iteration failures, plus the condition failure when there is one. */
-    errors: unknown[];
+    errors: LoopIterationError[];
     finalPayload: BaseAgentNextStep['newPayload'];
     iterations: number;
     /** Set when the loop condition could not be evaluated — distinct from evaluating to false. */
@@ -13909,7 +13918,7 @@ The context is now within limits. Please retry your request with the recovered c
         loopType: 'ForEach' | 'While',
         collectionOrCondition: string,
         results: BaseAgentNextStep[],
-        errors: unknown[],
+        errors: LoopIterationError[],
         params: ExecuteAgentParams,
         actionName?: string
     ) {
@@ -13929,6 +13938,20 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * One loop error as readable text. Joining the error objects directly wrote "[object Object]"
+     * into the step's ErrorMessage. Falls back to JSON when an iteration threw something with no
+     * message (a thrown non-Error).
+     */
+    private describeLoopError(err: LoopIterationError): string {
+        return err.message ? err.message : JSON.stringify(err);
+    }
+
+    /** All loop errors as text for a step's ErrorMessage. */
+    private formatLoopErrors(errors: LoopIterationError[]): string {
+        return errors.map(err => this.describeLoopError(err)).join('\n\n');
+    }
+
+    /**
      * Formats loop iteration results as markdown. Handles two distinct result shapes
      * depending on whether the loop body executed actions or sub-agents:
      *
@@ -13944,24 +13967,7 @@ The context is now within limits. Please retry your request with the recovered c
      * handler), while action formatting happens at render time (here). Both produce the same
      * markdown style used by non-loop results, ensuring consistency across the codebase.
      */
-    /**
-     * One loop error as readable text. Loop errors are `{ index, item, message }` objects — joining
-     * the array directly wrote "[object Object]" into the step's ErrorMessage.
-     */
-    private describeLoopError(err: unknown): string {
-        if (typeof err === 'string') {
-            return err;
-        }
-        const message = (err as Record<string, unknown> | null)?.message;
-        return typeof message === 'string' && message ? message : JSON.stringify(err);
-    }
-
-    /** All loop errors as text for a step's ErrorMessage. */
-    private formatLoopErrors(errors: unknown[]): string {
-        return errors.map(err => this.describeLoopError(err)).join('\n\n');
-    }
-
-    private formatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: unknown[]): string {
+    private formatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: LoopIterationError[]): string {
         const lines: string[] = [];
 
         for (let i = 0; i < results.length; i++) {
@@ -14172,7 +14178,7 @@ The context is now within limits. Please retry your request with the recovered c
         let currentPayload = initialPayload;
         const maxIterations = whileOp.maxIterations ?? 100;
         const results: BaseAgentNextStep[] = [];
-        const errors = [];
+        const errors: LoopIterationError[] = [];
         let iterationCount = 0;
         let conditionError: string | undefined;
 
@@ -14233,7 +14239,7 @@ The context is now within limits. Please retry your request with the recovered c
         parentStepId: string,
         params: ExecuteAgentParams,
         config: AgentConfiguration
-    ): Promise<{ payload?: any, error?: any, result?: BaseAgentNextStep }> {
+    ): Promise<{ payload?: any, error?: LoopIterationError, result?: BaseAgentNextStep }> {
         try {
             // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(

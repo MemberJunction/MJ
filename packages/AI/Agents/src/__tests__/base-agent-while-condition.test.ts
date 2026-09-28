@@ -14,23 +14,30 @@ import { describe, it, expect, vi } from 'vitest';
 import { BaseAgent } from '../base-agent';
 import type { BaseAgentNextStep, ExecuteAgentParams, WhileOperation } from '@memberjunction/ai-core-plus';
 
+/** Structural mirror of base-agent.ts's module-private LoopIterationError. */
+interface LoopIterationError {
+    index: number;
+    message: string;
+    item?: unknown;
+}
+
 interface WhileLoopResults {
     results: BaseAgentNextStep[];
-    errors: unknown[];
+    errors: LoopIterationError[];
     finalPayload: BaseAgentNextStep['newPayload'];
     iterations: number;
     conditionError?: string;
 }
 
 type IterationStub = (whileOp: WhileOperation, attemptContext: object, index: number, currentPayload: Record<string, unknown>)
-    => Promise<{ payload?: Record<string, unknown>; error?: { index: number; message: string }; result?: BaseAgentNextStep }>;
+    => Promise<{ payload?: Record<string, unknown>; error?: LoopIterationError; result?: BaseAgentNextStep }>;
 
 interface WhileInternals {
     executeWhileIterations(whileOp: WhileOperation, initialPayload: object, parentStepId: string,
                            params: ExecuteAgentParams, config: object): Promise<WhileLoopResults>;
     completeWhileLoop(whileOp: WhileOperation, loopStepEntity: object, loopResults: WhileLoopResults,
                       previousDecision: BaseAgentNextStep, params: ExecuteAgentParams): Promise<BaseAgentNextStep>;
-    formatLoopErrors(errors: unknown[]): string;
+    formatLoopErrors(errors: LoopIterationError[]): string;
     executeSingleWhileIteration: ReturnType<typeof vi.fn<IterationStub>>;
     finalizeStepEntity: ReturnType<typeof vi.fn>;
 }
@@ -136,8 +143,14 @@ describe('BaseAgent While loop — condition that evaluates normally (behaviour 
 describe('loop error text', () => {
     it('renders iteration error objects by message, never as [object Object]', () => {
         const agent = makeAgent();
-        const text = agent.formatLoopErrors([{ index: 0, item: {}, message: 'boom' }, 'plain', { index: 2 }]);
+        const text = agent.formatLoopErrors([{ index: 0, item: {}, message: 'boom' }, { index: 1, message: 'second' }]);
 
-        expect(text).toBe('boom\n\nplain\n\n{"index":2}');
+        expect(text).toBe('boom\n\nsecond');
+    });
+
+    it('falls back to the error as JSON when it carries no message (an iteration threw a non-Error)', () => {
+        const agent = makeAgent();
+
+        expect(agent.formatLoopErrors([{ index: 2, message: '' }])).toBe('{"index":2,"message":""}');
     });
 });
