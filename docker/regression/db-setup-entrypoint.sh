@@ -108,6 +108,11 @@ echo ""
 echo "Step 3: Running CodeGen..."
 node /app/packages/MJCLI/bin/run.js codegen \
     || echo "  ⚠ CodeGen pass 1 reported failures; a later pass must succeed"
+# Pass 1 created the demo EntityField rows; type the email/URL ones before the
+# next pass so this DB matches the forms that form-gen-entrypoint.sh generated.
+node "$SCRIPTS/set-demo-field-types.cjs" 2>&1 || {
+    echo "  WARNING: Demo field type update failed — email/URL fields stay untyped"
+}
 echo "  ↻ CodeGen pass 1 complete; re-running against settled metadata..."
 node /app/packages/MJCLI/bin/run.js codegen || {
     echo "  ⚠ CodeGen pass 2 reported failures; running pass 3"
