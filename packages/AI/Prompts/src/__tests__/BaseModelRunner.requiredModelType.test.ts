@@ -154,11 +154,11 @@ class ConcreteTestRunner extends BaseModelRunner {
   }
 
   public invokeRequiredModelTypeID(): string {
-    return this.requiredModelTypeID();
+    return this.RequiredModelTypeID();
   }
 
   public invokeAssertPromptMatchesRequiredType(prompt: MJAIPromptEntityExtended): void {
-    this.assertPromptMatchesRequiredType(prompt);
+    this.AssertPromptMatchesRequiredType(prompt);
   }
 
   public invokeBuildModelVendorCandidates(
@@ -442,7 +442,7 @@ describe('BaseModelRunner.RequiredModelType enforcement', () => {
         return '  llm  ';
       }
       public invokeRequiredModelTypeID(): string {
-        return this.requiredModelTypeID();
+        return this.RequiredModelTypeID();
       }
     }
 
@@ -461,7 +461,7 @@ describe('BaseModelRunner.RequiredModelType enforcement', () => {
         return 'NonexistentType';
       }
       public invokeRequiredModelTypeID(): string {
-        return this.requiredModelTypeID();
+        return this.RequiredModelTypeID();
       }
       public invokeBuildModelVendorCandidates(p: MJAIPromptEntityExtended): ModelVendorCandidate[] {
         return this.BuildModelVendorCandidates(p);

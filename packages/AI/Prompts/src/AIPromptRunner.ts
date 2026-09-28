@@ -692,11 +692,11 @@ export class AIPromptRunner extends BaseModelRunner {
       // Apply this runner's model-type floor to everything the planner may choose from: a prompt
       // typed differently fails here, and neither the model pool nor the prompt's bindings can admit
       // a model of another type (the planner's own filters treat an empty AIModelTypeID as "any").
-      this.assertPromptMatchesRequiredType(prompt);
+      this.AssertPromptMatchesRequiredType(prompt);
       if (modelSelectionPrompt !== prompt) {
-        this.assertPromptMatchesRequiredType(modelSelectionPrompt);
+        this.AssertPromptMatchesRequiredType(modelSelectionPrompt);
       }
-      const requiredTypeId = this.requiredModelTypeID();
+      const requiredTypeId = this.RequiredModelTypeID();
       const typedModels = AIEngine.Instance.Models.filter(m => UUIDsEqual(m.AIModelTypeID, requiredTypeId));
 
       // Get prompt-specific model associations using the model selection prompt
