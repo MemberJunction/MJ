@@ -56,10 +56,13 @@ already unwound its own scope. `RunInEntityTransaction()` wraps that for you and
 The provider arbitrates. If a transaction is **already in flight**, `BeginEntityTransaction()` joins
 it (a dialect savepoint — SQL Server `SAVE TRANSACTION`, PostgreSQL `SAVEPOINT`) rather than starting
 a second physical transaction; only the outermost commit commits for real. **Participants never ask
-whether someone else already opened a transaction.** Inspect `TransactionDepth` (public on
-`DatabaseProviderBase`), not `IsInTransaction` — SQL Server deliberately leaves `IsInTransaction`
-false so `RunMaybeSerial` can fan out. After a server abort, call `ResetTransactionState()` rather
-than poking private fields.
+whether someone else already opened a transaction** — code that needs to be inside one just calls
+`BeginEntityTransaction()` (or `RunInEntityTransaction()`) and joins automatically. To see whether a
+transaction is open on an instance at all, read `TransactionDepth` (public on `DatabaseProviderBase`),
+not `IsInTransaction` — SQL Server deliberately leaves `IsInTransaction` false so `RunMaybeSerial` can
+fan out. `TransactionDepth` is instance-wide: on a shared provider `TransactionDepth > 0` does **not**
+mean your statements run in that transaction (see [Who is in the transaction](#who-is-in-the-transaction-scope-affinity)).
+After a server abort, call `ResetTransactionState()` rather than poking private fields.
 
 That is not a nicety, it is a correctness requirement. Before 6.2 MemberJunction had two transaction
 mechanisms that were blind to each other:
@@ -97,8 +100,11 @@ A transaction belongs to the **async scope that began it** — the code that awa
 code starts (awaited calls, `Promise.all` fan-out, timers and fire-and-forget work launched from
 inside it). Only that scope's statements run on the transaction. Any other caller on the same
 provider instance — another request using the global provider, a background timer that started
-earlier — runs on the pool exactly as if no transaction were open: it is never rolled back with the
-transaction, never queued behind its `COMMIT`, and never blocked by it being doomed (#4786).
+earlier — runs its statements on the pool: they are never rolled back with the transaction, never
+queued behind its `COMMIT`, and never blocked by it being doomed (#4786). That caller is not wholly
+unaffected — a `BeginTransaction()` it issues joins the open transaction, or throws
+`DoomedTransactionError` while that transaction is doomed, and the edge cases below can pull code
+into a transaction it did not begin.
 
 Consequences:
 
@@ -113,14 +119,25 @@ Consequences:
   runs after the commit/rollback (a timer, an un-awaited promise) is no longer part of any
   transaction — it autocommits, as before, and never joins a *later* transaction someone else opens.
   Use `RunAfterCommit()` for work that must wait for the commit.
-- **`RunAfterCommit()`/`CapturePostCommitToken()` called from outside the scope don't run on the
-  spot either.** While a transaction is open on the instance, an outside caller's task is not tied
-  to that transaction — but it is held until the provider goes idle, not fired immediately, so it
-  can never land on the connection that transaction is committing or rolling back on.
+- **`RunAfterCommit()` from outside the scope runs now, detached, on the pool.** A task registered by
+  a caller that is not in the open transaction (or with a token whose transaction already committed)
+  is not tied to that transaction: it starts immediately, fire-and-forget, outside every transaction
+  on the instance, so it is never rolled back with — nor awaited by — someone else's unit of work.
+  If such a task begins its own transaction while another is open on the instance, it joins that one
+  as a savepoint (logged, see the next bullet); a task that needs a transaction of its own belongs on
+  `CreateIndependentInstance()`.
 - **An unrelated scope that *begins* while another transaction is open still joins it** as a
-  savepoint (pre-6.2 behaviour, kept because waiting could deadlock), and the provider logs it once
-  per transaction. Independent units of work belong on `CreateIndependentInstance()` or a
-  per-request provider.
+  savepoint (the behaviour before #4786, kept because waiting could deadlock), and the provider logs
+  it once per transaction. The joiner stays in that transaction after its own savepoint is released:
+  its later statements keep running on it — and roll back with it — until the owner ends it.
+  Independent units of work belong on `CreateIndependentInstance()` or a per-request provider.
+- **A begin that runs synchronously inside un-awaited work or an event listener makes the code that
+  launched it part of that transaction.** Async context flows down into a call *and* back up out of
+  its synchronous prefix, so `void saveAll()` whose first step begins a transaction, or an
+  `EventEmitter` listener that begins one, makes the launcher (the emitter) a member. On Node builds
+  without `AsyncContextFrame` (Node < 24, or `--no-async-context-frame`), a begin inside a
+  `setInterval` callback also carries over to that interval's later ticks. Await the unit of work, or
+  run independent units on `CreateIndependentInstance()` / a per-request provider.
 - `ExecuteSQLOptions.ignoreAmbientTransaction` still lets code *inside* the scope run a read on the
   pool (#4514).
 

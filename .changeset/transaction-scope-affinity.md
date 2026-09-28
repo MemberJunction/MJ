@@ -11,6 +11,8 @@ The transaction now belongs to the async scope that began it (tracked with `Asyn
 
 - SQL Server (`ExecuteSQL`, `ExecuteSQLBatch`) and PostgreSQL (`ExecuteSQL`, `RunColocatedSQL`) route to the transaction only for callers in its scope; `ignoreAmbientTransaction` keeps working inside the scope.
 - Savepoint SQL always reaches the handle, whichever scope settles a frame.
-- `RunAfterCommit` / `CapturePostCommitToken` from a caller outside the transaction no longer tie that caller's work to a transaction it is not part of — that work is held until the provider goes idle rather than run immediately, so it can never land on the connection that transaction is committing or rolling back on.
-- A caller outside the scope that *begins* a transaction while one is open still joins it as a savepoint, now logged once per transaction.
+- `RunAfterCommit` / `CapturePostCommitToken` from a caller outside the transaction no longer tie that caller's work to a transaction it is not part of — that work runs now, detached, on the pool, outside every transaction on the instance. If such a task opens its own transaction while another is open on the instance, it joins that one as a savepoint (logged); use an independent instance for that. `PendingIdlePostCommitTaskCount` is deprecated and always 0.
+- A caller outside the scope that *begins* a transaction while one is open still joins it as a savepoint, now logged once per transaction; it stays in that transaction until the owner ends it.
+- A begin that fails no longer leaves a pending claim behind that would make work forked from the same scope a member of that scope's next transaction.
+- A begin that runs synchronously inside un-awaited work or an event listener makes the launcher part of the transaction (see "Who is in the transaction" in the transactions guide).
 - Work launched inside the scope that runs after it ends runs on the pool, as before, and never joins a later transaction.

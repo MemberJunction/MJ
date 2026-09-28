@@ -203,10 +203,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Public nesting depth. 0 = no ambient TX. Join-TX callers (accounting
-     * CreateJournalEntries) must read this, not `IsInTransaction` (SQL Server
-     * leaves that false). Deprecated camelCase `transactionDepth` alias ships
-     * for one release.
+     * Public nesting depth of the transaction open on this instance; 0 = none. Read this, not
+     * `IsInTransaction` (SQL Server leaves that false), when you need to know whether a transaction
+     * is open at all. The depth is instance-wide: on a shared provider `TransactionDepth > 0` does
+     * NOT mean the caller's statements run in that transaction — only the async scope that began it
+     * is part of it (#4786). Code that needs to be inside a transaction should simply call
+     * {@link BeginTransaction} / {@link BeginEntityTransaction}: joining one the caller is already in
+     * is automatic. Deprecated camelCase `transactionDepth` alias ships for one release.
      */
     public get TransactionDepth(): number {
         return this.CurrentTransactionDepth;
@@ -253,15 +256,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Run `task` once the ambient transaction on this provider has committed, or now if there is
-     * no ambient transaction.
+     * Run `task` once the caller's transaction on this provider (the one its async scope belongs
+     * to) has committed, or now if the caller is in no transaction on this provider.
      *
      * Use it for side effects that must only happen for work that is actually durable — queueing
      * background jobs, firing deferred entity actions — and must not run *inside* the caller's
      * transaction. Providers that track transactions (see `GenericDatabaseProvider`) queue the task
-     * while a transaction is open, run queued tasks in registration order after the **outermost**
-     * commit succeeds (once the transaction lock is released, so a task may open its own
-     * transaction), and discard them — without running them — when the transaction rolls back,
+     * while the caller's transaction is open, run queued tasks in registration order after the
+     * **outermost** commit succeeds (once the transaction lock is released, so a task may open its
+     * own transaction), and discard them — without running them — when the transaction rolls back,
      * fails to commit, or is abandoned.
      *
      * This default is for providers that do not track transactions: the task starts immediately.
@@ -289,8 +292,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Snapshot of the transaction frames open right now, for a later {@link RunAfterCommit}.
-     * Synchronous by contract — call it before the first `await` of the code that causes the work.
+     * Snapshot of the caller's transaction frames on this provider (the transaction its async scope
+     * belongs to), for a later {@link RunAfterCommit}. Synchronous by contract — call it before the
+     * first `await` of the code that causes the work.
      *
      * @returns `undefined` when no transaction is open. This default never tracks transactions, so
      *          it always returns `undefined`.
