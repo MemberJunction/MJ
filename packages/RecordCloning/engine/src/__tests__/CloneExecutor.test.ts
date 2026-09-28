@@ -8,6 +8,7 @@ import {
     IEntityDataProvider,
 } from '@memberjunction/core';
 import { CloneExecutor } from '../CloneExecutor';
+import { CloneMaterializer } from '../CloneMaterializer';
 import { ClonePlan } from '@memberjunction/record-cloning-base';
 import { ComputeClonePlanHash } from '../ClonePlanHash';
 import { ENCRYPTED_SENTINEL } from '@memberjunction/global';
@@ -296,6 +297,35 @@ describe('CloneExecutor', () => {
         expect(audited).toHaveBeenCalledOnce();
         expect(audited.mock.calls[0]).toEqual(expect.arrayContaining(['Clone Records in Custom Schemas', 'Record Cloned', 'Success']));
         expect(await run(false)).not.toHaveBeenCalled();
+    });
+
+    it('saves a prerequisite chain deepest first, so each row exists before its referrer saves', async () => {
+        const order: string[] = [];
+        const fake = (name: string) => {
+            const ent = new MockEntity(parentEntityInfo as EntityInfo, mockDataProvider);
+            vi.spyOn(ent, 'Save').mockImplementation(async () => (order.push(name), true));
+            return ent;
+        };
+        const root = fake('root');
+        const a = fake('A (depth 1)');
+        const b = fake('B (depth 2)');
+        vi.spyOn(CloneMaterializer.prototype, 'Materialize').mockResolvedValue({
+            RootEntity: root,
+            StagedEntities: new Map([['node-root', root], ['a', a], ['b', b]]),
+            SidecarEntities: [],
+            PrerequisiteEntities: [a, b],
+        } as unknown as Awaited<ReturnType<CloneMaterializer['Materialize']>>);
+        const plan = rootOnlyPlan();
+        plan.Nodes.push(
+            { ...plan.Nodes[0], NodeKey: 'a', Key: 'a', Depth: 1 },
+            { ...plan.Nodes[0], NodeKey: 'b', Key: 'b', Depth: 2 },
+        );
+        plan.PlanHash = ComputeClonePlanHash({ Nodes: plan.Nodes, Edges: [], Excluded: [] });
+
+        await new CloneExecutor({ Provider: mockMetadataProvider }).Execute(plan, mockUser);
+        vi.mocked(CloneMaterializer.prototype.Materialize).mockRestore();
+
+        expect(order.slice(0, 3)).toEqual(['B (depth 2)', 'A (depth 1)', 'root']);
     });
 
     it('records a failed clone in an Error log written after the rollback', async () => {

@@ -163,8 +163,13 @@ export class CloneExecutor {
                     });
                 }
 
-                // 4b. Save Prerequisites in dependency order (e.g. ForwardFK targets needed before rootEntity can be saved)
-                const prereqEntities = prerequisiteEntities ?? [];
+                // 4b. Save prerequisites (ForwardFK targets the root needs) deepest first: in a chain
+                // root -> A -> B, B must exist before A can point at it. Stable for equal depths.
+                const depthOf = new Map<BaseEntity, number>();
+                for (const [nodeKey, entity] of stagedEntities.entries()) {
+                    depthOf.set(entity, plan.Nodes.find((n) => (n.NodeKey ?? n.Key) === nodeKey)?.Depth ?? 0);
+                }
+                const prereqEntities = [...(prerequisiteEntities ?? [])].sort((a, b) => (depthOf.get(b) ?? 0) - (depthOf.get(a) ?? 0));
                 for (const prereq of prereqEntities) {
                     const prereqSaved = await prereq.Save(saveOptions);
                     if (!prereqSaved) {
