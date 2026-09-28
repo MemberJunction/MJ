@@ -3,6 +3,7 @@
 "@memberjunction/actions": patch
 "@memberjunction/task-graph": patch
 "@memberjunction/server": patch
+"@memberjunction/integration-test-suite": patch
 ---
 
 Durable entity actions (`EntityAction.RunMode = 'Durable'`) now receive their declared parameters by name (#4794).
@@ -13,6 +14,7 @@ Durable entity actions (`EntityAction.RunMode = 'Durable'`) now receive their de
 - `@memberjunction/actions`: `BuildDurableDeferral` submits that record.
 - `@memberjunction/task-graph`: a task whose `InputPayload` is not a name → value object now **fails** with a message naming the task, instead of running with its input silently dropped.
 - `@memberjunction/server`: round-trip regression test through `TaskGraphActionRunner`.
+- `@memberjunction/integration-test-suite`: EA6 now rejects an array `RedactedParams` and checks a bound param arrives by name.
 
 **Upgrade note:** durable tasks queued before this fix still carry array payloads. They now fail loudly (`Task <id> has an InputPayload that is an array; expected a name → value object…`) instead of running with no inputs. Re-trigger the source save if that work matters, or — from the Workflows run view — use the failed step's **Edit input & retry** control to replace the stored array with a name → value object and retry it in place.
 
