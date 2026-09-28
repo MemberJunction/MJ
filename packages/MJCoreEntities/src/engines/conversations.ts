@@ -117,6 +117,12 @@ export interface ConversationWindowSourceRow {
     Role: string | null;
     Message: string | null;
     SummaryOfEarlierConversation: string | null;
+    /**
+     * When the row was written. Read only by an assembly with a history floor
+     * (`historyFrom`), which drops rows written before it; optional so callers that build
+     * rows by hand for an unfloored assembly need not supply it.
+     */
+    __mj_CreatedAt?: Date | string | null;
 }
 
 /**
@@ -125,7 +131,7 @@ export interface ConversationWindowSourceRow {
  * from the assembler's requirements.
  */
 export const ConversationWindowFields: readonly (keyof ConversationWindowSourceRow)[] =
-    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation'];
+    ['ID', 'Sequence', 'Role', 'Message', 'SummaryOfEarlierConversation', '__mj_CreatedAt'];
 
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
@@ -2346,6 +2352,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *   the most recent N messages. Ignored when a boundary exists — the summary already
      *   covers everything before it, and cutting into the post-boundary tail would create
      *   a coverage gap.
+     * @param options.historyFrom - A history floor: see {@link AssembleContextWindow}.
      * @returns Messages in chronological order, each stamped with
      *   {@link ConversationContextMetadata}
      */
@@ -2355,6 +2362,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         options?: {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
+            historyFrom?: Date | null;
         }
     ): Promise<ConversationContextMessage[]> {
         await this.Config(false, contextUser);
@@ -2374,18 +2382,26 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param conversationId - The conversation whose detail rows to load
      * @param contextUser - The requesting user (entity RLS is applied under this user)
      * @param provider - Optional per-request metadata provider; falls back to the global default
+     * @param historyFrom - Optional history floor: only rows written at or after it are loaded,
+     *   so nothing before it leaves the database. Pair it with the same `historyFrom` on
+     *   {@link AssembleContextWindow}, which also drops the summary of earlier messages.
      * @returns The conversation's rows in Sequence order, shaped for {@link AssembleContextWindow}
-     * @throws When the underlying RunView reports failure (never returns a silent empty set)
+     * @throws When the underlying RunView reports failure (never returns a silent empty set),
+     *   or when `historyFrom` is an invalid date
      */
     public static async LoadWindowRowsFresh(
         conversationId: string,
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        historyFrom?: Date | null
     ): Promise<ConversationWindowSourceRow[]> {
         const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+        const conversationFilter = `ConversationID='${conversationId}'`;
         const rows = await rv.RunView<ConversationWindowSourceRow>({
             EntityName: 'MJ: Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}'`,
+            ExtraFilter: historyFrom
+                ? `${conversationFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
+                : conversationFilter,
             OrderBy: 'Sequence ASC',
             Fields: [...ConversationWindowFields],
             ResultType: 'simple',
@@ -2407,20 +2423,30 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      *
      * Accepts the minimal {@link ConversationWindowSourceRow} shape, satisfied by full
      * entities AND `ResultType: 'simple'` rows selecting {@link ConversationWindowFields}.
+     *
+     * **History floor.** With `options.historyFrom` set, the window starts there: rows written
+     * before it are dropped, and so is any persisted summary. A summary folds in the
+     * conversation from its first message — exactly what the floor excludes — so under a
+     * floor none is used, and the window is the most recent `maxTailMessages` rows at or
+     * after the floor. A row whose `__mj_CreatedAt` is missing or unreadable can't be shown
+     * to be after the floor, so it is dropped too.
      */
     public static AssembleContextWindow(
         details: ReadonlyArray<ConversationWindowSourceRow>,
         options?: {
             excludeDetailIds?: string[];
             maxTailMessages?: number;
+            historyFrom?: Date | null;
         }
     ): ConversationContextMessage[] {
         const excluded = new Set((options?.excludeDetailIds || []).map(id => NormalizeUUID(id)));
+        const floor = options?.historyFrom ?? null;
         const ordered = details
             .filter(d => !excluded.has(NormalizeUUID(d.ID)))
+            .filter(d => !floor || ConversationEngine.isAtOrAfter(d.__mj_CreatedAt, floor))
             .sort((a, b) => a.Sequence - b.Sequence);
 
-        const boundary = ConversationEngine.findSummaryBoundary(ordered);
+        const boundary = floor ? undefined : ConversationEngine.findSummaryBoundary(ordered);
         if (boundary) {
             const tail = ordered.filter(d => d.Sequence >= boundary.Sequence);
             return [ConversationEngine.buildSummaryMessage(boundary), ...tail.map(d => ConversationEngine.detailToContextMessage(d))];
@@ -2429,6 +2455,29 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const all = ordered.map(d => ConversationEngine.detailToContextMessage(d));
         const cap = options?.maxTailMessages;
         return cap && all.length > cap ? all.slice(-cap) : all;
+    }
+
+    /**
+     * The `ExtraFilter` predicate for a history floor: rows written at or after `historyFrom`.
+     * Shared by every reader that honours a floor, so they agree on what it means.
+     *
+     * @param historyFrom The first moment that may be read.
+     * @param column The timestamp column to compare, when the predicate runs against a view
+     *   or subquery that names it differently.
+     * @throws RangeError when `historyFrom` is an invalid date — a floor that can't be written
+     *   down must fail rather than silently read everything.
+     */
+    public static HistoryFromFilter(historyFrom: Date, column: string = '__mj_CreatedAt'): string {
+        return `${column} >= '${historyFrom.toISOString()}'`;
+    }
+
+    /** True when a row's timestamp is at or after the floor; false when it is missing or unreadable. */
+    private static isAtOrAfter(createdAt: Date | string | null | undefined, floor: Date): boolean {
+        if (createdAt == null) {
+            return false;
+        }
+        const time = createdAt instanceof Date ? createdAt.getTime() : Date.parse(createdAt);
+        return !Number.isNaN(time) && time >= floor.getTime();
     }
 
     /**

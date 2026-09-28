@@ -120,6 +120,7 @@
           <mj-conversation-agent-picker
             [Conversation]="conversation"
             [CurrentUser]="currentUser"
+            [AllowedAgentIDs]="AllowedAgentIDs"
             [Disabled]="isReadOnlyView">
           </mj-conversation-agent-picker>
         }
@@ -218,6 +219,9 @@
             [enableAgentMentions]="allowAgentMentions"
             [enableEntityMentions]="allowEntityMentions"
             [enableSkillCommands]="allowSkillCommands"
+            [AllowedAgentIDs]="AllowedAgentIDs"
+            [MentionPeople]="MentionPeople"
+            [ComposerExtraTemplate]="slotTemplate('composerExtra')"
             [maxAttachments]="maxAttachments"
             [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
             [acceptedFileTypes]="acceptedFileTypes"
@@ -233,6 +237,16 @@
         <div class="chat-messages-wrapper">
           <div class="chat-messages-container"></div>
           <div class="chat-input-container">
+            <!-- composerExtra slot — host UI directly above the composer (IMJChatComposerExtraContext). -->
+            @if (slotTemplate('composerExtra'); as t) {
+              <div class="chat-composer-extra">
+                <ng-container *ngTemplateOutlet="t; context: {
+                  $implicit: conversation,
+                  ConversationId: conversationId,
+                  IsProcessing: isProcessing
+                }"></ng-container>
+              </div>
+            }
             <div class="message-input-container-wrapper">
               <mj-message-input
                 #emptyStateInput
@@ -250,6 +264,8 @@
                 [enableSkillCommands]="allowSkillCommands"
                 [enablePlanMode]="allowPlanMode"
                 [enableRealtime]="allowRealtime"
+                [AllowedAgentIDs]="AllowedAgentIDs"
+                [MentionPeople]="MentionPeople"
                 [maxAttachments]="maxAttachments"
                 [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                 [acceptedFileTypes]="acceptedFileTypes"
@@ -336,6 +352,16 @@
                   <span>You have view-only access to this conversation.</span>
                 </div>
               }
+              <!-- composerExtra slot — host UI directly above the composer (IMJChatComposerExtraContext). -->
+              @if (slotTemplate('composerExtra'); as t) {
+                <div class="chat-composer-extra">
+                  <ng-container *ngTemplateOutlet="t; context: {
+                    $implicit: conversation,
+                    ConversationId: conversationId,
+                    IsProcessing: isProcessing
+                  }"></ng-container>
+                </div>
+              }
               <!-- Input Component - Multiple instances cached, only one visible -->
               <div class="message-input-container-wrapper">
                 @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
@@ -357,6 +383,12 @@
                     [defaultAgentId]="defaultAgentId"
                     [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
                     [agentConfigurationPresetId]="inputRef.conversationId === conversationId ? ActiveAgentConfigurationPresetId : null"
+                    [AgentReplyMode]="AgentReplyMode"
+                    [AllowedAgentIDs]="AllowedAgentIDs"
+                    [MentionPeople]="MentionPeople"
+                    [AgentHistoryFrom]="AgentHistoryFrom"
+                    [AgentTurnHandler]="AgentTurnHandler"
+                    [AutoNameConversation]="AutoNameConversation"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments && allowAttachments"
