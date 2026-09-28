@@ -290,6 +290,29 @@ describe('LLMDecision', () => {
             expect(answer.Probability).toBe(0);
         });
 
+        it('accepts a probability the model wrote as a numeric string ("0.1")', async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(
+                makeSuccessRunResult({
+                    q1: '0.1',
+                    q2: { a: '0.25', b: '0.75' },
+                })
+            );
+
+            const result = await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: {
+                    q1: { Kind: 'Likelihood', Instructions: 'Check' },
+                    q2: { Kind: 'Choice', Instructions: 'Pick', Options: [{ Value: 'a', Description: 'A' }, { Value: 'b', Description: 'B' }] },
+                },
+            });
+
+            expect(result.success).toBe(true);
+            expect((result.Answers.q1 as LikelihoodAnswer).Probability).toBeCloseTo(0.1);
+            expect((result.Answers.q2 as ChoiceAnswer).Value).toBe('b');
+        });
+
         it('fails when value is a string ("high")', async () => {
             const decision = new LLMDecision('', PROMPT_ID, mockUser);
             executePromptSpy.mockResolvedValueOnce(makeSuccessRunResult({ q1: 'high' }));
