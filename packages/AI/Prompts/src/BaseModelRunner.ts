@@ -127,10 +127,6 @@ export interface FailoverAttempt {
  *
  * `AIPromptRunner`, the chat runner, is built on it. Subclasses declare the model type they run
  * through {@link BaseModelRunner.RequiredModelType}.
- *
- * **Its protected API is still settling.** This class arrives in a short series of changes meant to
- * ship in one release (#4767 through #4801). Until the series is complete, protected members may
- * still be renamed or narrowed back to `private`, so do not subclass it from outside this package yet.
  */
 export abstract class BaseModelRunner {
   /**
@@ -140,15 +136,19 @@ export abstract class BaseModelRunner {
    *
    * The contract:
    * - It is a name, not an ID, so a subclass can declare it without a metadata lookup. The base
-   *   resolves it to the type's ID through `AIEngine.Instance.ModelTypes` (a case-insensitive name
-   *   match) and compares each model's `AIModelTypeID` with that ID using `UUIDsEqual`. Names are
-   *   never compared with each other, and a name that matches no model type is an error.
-   * - It is a hard floor. `AIPrompt.AIModelTypeID` may equal it but never widen it, and a prompt whose
-   *   `AIModelTypeID` is null runs on the runner's type, not on any type.
-   *
-   * Declared but not yet enforced: candidate selection does not read it until the last change in this
-   * series (#4801), which implements the resolution and the floor above. Until then, a prompt with a
-   * null `AIModelTypeID` can still draw a model of any type.
+   *   resolves it to the type's ID through `AIEngine.Instance.ModelTypes` ({@link RequiredModelTypeID}:
+   *   a case-insensitive, trimmed name match) and compares each model's `AIModelTypeID` with that ID
+   *   using `UUIDsEqual`, on every candidate-selection path. Names are never compared with each other,
+   *   and a name that matches no model type is an error.
+   * - It is a hard floor. `AIPrompt.AIModelTypeID` may equal it. Model types are flat, so a prompt type
+   *   that differs would widen or contradict the floor, and the runner refuses the prompt with an error
+   *   naming both the prompt's configured type and the runner's required type.
+   * - `AIPrompt.AIModelTypeID = NULL` means "whatever the runner requires" (not "any model").
+   *   This closes a footgun where prompts with an unset column drew models of every type.
+   * - Bound models (`AIPromptModel`) of a different type are skipped during candidate building
+   *   with a `LogStatus` warning, but do not fail the prompt unless no valid candidates remain.
+   * - Model overrides of a different type return no candidate (an override cannot violate the
+   *   runner's hard floor).
    */
   public abstract get RequiredModelType(): string;
 
@@ -583,6 +583,54 @@ export abstract class BaseModelRunner {
     const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose);
     return this.isValidAPIKey(apiKey);
   }
+
+  /**
+   * Resolves the runner's {@link RequiredModelType} name against `AIEngine.Instance.ModelTypes`
+   * (case-insensitive, trimmed) and returns its UUID. Callers compare models' `AIModelTypeID` with it
+   * using `UUIDsEqual`.
+   * Throws a descriptive error if the model type is not found in the engine metadata.
+   */
+  protected RequiredModelTypeID(): string {
+    const requiredType = this.RequiredModelType?.trim().toLowerCase();
+    if (!requiredType) {
+      throw new Error(`Runner requires a model type, but RequiredModelType is empty`);
+    }
+    const match = AIEngine.Instance.ModelTypes.find(
+      mt => mt.Name?.trim().toLowerCase() === requiredType
+    );
+    if (!match) {
+      throw new Error(
+        `Required model type "${this.RequiredModelType}" was not found in AIEngine.Instance.ModelTypes`
+      );
+    }
+    return match.ID;
+  }
+
+  /** The name of a model type for messages, or its ID when the engine doesn't know it. */
+  private modelTypeName(modelTypeId: string): string {
+    return AIEngine.Instance.ModelTypesByID.get(NormalizeUUID(modelTypeId))?.Name ?? modelTypeId;
+  }
+
+  /**
+   * Asserts that the prompt's configured model type matches the runner's required model type.
+   * If `prompt.AIModelTypeID` is null or undefined, does not throw (the runner's required type applies).
+   * If `prompt.AIModelTypeID` is set and does not match {@link RequiredModelTypeID}, throws a descriptive
+   * error naming the prompt, the prompt's configured type (resolved to name if possible), and the runner's
+   * required type.
+   */
+  protected AssertPromptMatchesRequiredType(prompt: MJAIPromptEntityExtended): void {
+    if (!prompt.AIModelTypeID) {
+      return;
+    }
+    const requiredTypeId = this.RequiredModelTypeID();
+    if (!UUIDsEqual(prompt.AIModelTypeID, requiredTypeId)) {
+      const promptTypeName = this.modelTypeName(prompt.AIModelTypeID);
+      throw new Error(
+        `Prompt "${prompt.Name}" requires model type "${promptTypeName}" (${prompt.AIModelTypeID}), but this runner requires "${this.RequiredModelType}" (${requiredTypeId})`
+      );
+    }
+  }
+
   /**
    * Builds a unified, ordered list of model-vendor candidates based on all selection criteria.
    * Uses a 3-phase approach to properly handle SelectionStrategy='Specific' with AIPromptModel priorities.
@@ -604,6 +652,8 @@ export abstract class BaseModelRunner {
     preferredVendorId?: string,
     verbose?: boolean
   ): ModelVendorCandidate[] {
+    this.AssertPromptMatchesRequiredType(prompt);
+
     // PHASE 1: Handle explicit model ID (highest priority)
     if (explicitModelId) {
       return this.buildCandidatesForExplicitModel(explicitModelId, prompt, preferredVendorId);
@@ -621,7 +671,9 @@ export abstract class BaseModelRunner {
 
   /**
    * PHASE 1: Build candidates for explicitly specified model ID.
-   * Returns candidates for the single model if it's active and compatible.
+   * Returns candidates for the single model if it's active. Throws if the model is of a different type
+   * than the runner requires: the caller asked for that model by ID, so running a different one instead
+   * would be wrong, and an empty result would surface only a generic "no candidates" message.
    */
   private buildCandidatesForExplicitModel(
     explicitModelId: string,
@@ -633,9 +685,12 @@ export abstract class BaseModelRunner {
       return [];
     }
 
-    // Check model type compatibility
-    if (prompt.AIModelTypeID && !UUIDsEqual(model.AIModelTypeID, prompt.AIModelTypeID)) {
-      return [];
+    // Check model type compatibility against runner's required model type
+    const requiredTypeId = this.RequiredModelTypeID();
+    if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+      throw new Error(
+        `Model override "${model.Name}" is type "${this.modelTypeName(model.AIModelTypeID)}", but this runner requires "${this.RequiredModelType}"`
+      );
     }
 
     const candidates = this.createCandidatesForModel(model, 20000, 'explicit', preferredVendorId);
@@ -666,7 +721,7 @@ export abstract class BaseModelRunner {
     const sortedPromptModels = this.sortPromptModelsForSpecificStrategy(promptModels, configurationId);
 
     // Build candidates maintaining order
-    const candidates = this.buildCandidatesFromPromptModels(sortedPromptModels);
+    const candidates = this.buildCandidatesFromPromptModels(sortedPromptModels, prompt);
 
     // If RequireSpecificModels is true (or no candidates at all), enforce strict behavior
     if (candidates.length === 0 && prompt.RequireSpecificModels) {
@@ -717,12 +772,14 @@ export abstract class BaseModelRunner {
     // Compute target power rank from the configured models
     const targetPowerRank = this.computeTargetPowerRank(configuredPromptModels);
 
-    // Get all active models matching the prompt's model type, excluding already-present models
+    const requiredTypeId = this.RequiredModelTypeID();
+
+    // Get all active models matching the runner's required model type, excluding already-present models
     const existingModelIds = new Set(candidates.map(c => c.model.ID));
     const fallbackPool = AIEngine.Instance.Models.filter(
       m => m.IsActive &&
            !existingModelIds.has(m.ID) &&
-           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID))
+           UUIDsEqual(m.AIModelTypeID, requiredTypeId)
     );
 
     if (fallbackPool.length === 0) return;
@@ -814,7 +871,7 @@ export abstract class BaseModelRunner {
 
     if (promptModels.length > 0) {
       // Use prompt-specific models with blended priorities
-      this.addPromptSpecificCandidates(candidates, promptModels, preferredVendorId);
+      this.addPromptSpecificCandidates(candidates, promptModels, preferredVendorId, prompt);
 
       // Add configuration fallback candidates if needed
       if (configurationId) {
@@ -897,9 +954,11 @@ export abstract class BaseModelRunner {
    * Expands VendorID=null to all vendors for that model.
    */
   private buildCandidatesFromPromptModels(
-    promptModels: MJAIPromptModelEntity[]
+    promptModels: MJAIPromptModelEntity[],
+    prompt?: MJAIPromptEntityExtended
   ): ModelVendorCandidate[] {
     const candidates: ModelVendorCandidate[] = [];
+    const requiredTypeId = this.RequiredModelTypeID();
 
     for (let i = 0; i < promptModels.length; i++) {
       const pm = promptModels[i];
@@ -907,6 +966,14 @@ export abstract class BaseModelRunner {
       const computedPriority = promptModels.length - i;
       const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
       if (!model || !model.IsActive) continue;
+
+      if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+        const modelTypeName = this.modelTypeName(model.AIModelTypeID);
+        LogStatus(
+          `Skipping model "${model.Name}" for prompt "${prompt?.Name ?? pm.PromptID}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
+        );
+        continue;
+      }
 
       if (pm.VendorID) {
         // Specific vendor specified - create single candidate
@@ -1056,11 +1123,20 @@ export abstract class BaseModelRunner {
   private addPromptSpecificCandidates(
     candidates: ModelVendorCandidate[],
     promptModels: MJAIPromptModelEntity[],
-    preferredVendorId?: string
+    preferredVendorId?: string,
+    prompt?: MJAIPromptEntityExtended
   ): void {
+    const requiredTypeId = this.RequiredModelTypeID();
     for (const pm of promptModels) {
       const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
       if (model && model.IsActive) {
+        if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+          const modelTypeName = this.modelTypeName(model.AIModelTypeID);
+          LogStatus(
+            `Skipping model "${model.Name}" for prompt "${prompt?.Name ?? pm.PromptID}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
+          );
+          continue;
+        }
         const modelCandidates = this.createCandidatesForModel(
           model,
           5000,
@@ -1085,6 +1161,7 @@ export abstract class BaseModelRunner {
     verbose?: boolean
   ): void {
     const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
+    const requiredTypeId = this.RequiredModelTypeID();
 
     // Add models from parent configs (skip index 0 which is the direct config, already handled)
     for (let i = 1; i < chain.length; i++) {
@@ -1102,6 +1179,13 @@ export abstract class BaseModelRunner {
       for (const pm of parentModels) {
         const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
         if (model && model.IsActive) {
+          if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+            const modelTypeName = this.modelTypeName(model.AIModelTypeID);
+            LogStatus(
+              `Skipping model "${model.Name}" for prompt "${prompt.Name}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
+            );
+            continue;
+          }
           // Decrease base priority for each level up the chain (3000, 2500, 2000, etc.)
           const basePriority = 3000 - (i * 500);
           const modelCandidates = this.createCandidatesForModel(
@@ -1130,6 +1214,13 @@ export abstract class BaseModelRunner {
     for (const pm of nullConfigModels) {
       const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
       if (model && model.IsActive) {
+        if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+          const modelTypeName = this.modelTypeName(model.AIModelTypeID);
+          LogStatus(
+            `Skipping model "${model.Name}" for prompt "${prompt.Name}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
+          );
+          continue;
+        }
         const modelCandidates = this.createCandidatesForModel(
           model,
           1000, // Lowest priority tier
@@ -1168,9 +1259,10 @@ export abstract class BaseModelRunner {
     prompt: MJAIPromptEntityExtended,
     preferredVendorName?: string
   ): MJAIModelEntityExtended[] {
+    const requiredTypeId = this.RequiredModelTypeID();
     return AIEngine.Instance.Models.filter(
       m => m.IsActive &&
-           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID)) &&
+           UUIDsEqual(m.AIModelTypeID, requiredTypeId) &&
            (!preferredVendorName ||
             m.ModelVendors.some(mv =>
               mv.Status === 'Active' &&
