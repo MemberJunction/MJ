@@ -24,6 +24,7 @@ import { BaseEntity, BaseEntityEvent, CompositeKey } from '@memberjunction/core'
 import { MJGlobal, MJEventType } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { NormalizeClonePresets, type CloneRequestOptions } from '@memberjunction/record-cloning-base';
 import type {
     RecordCloneKey,
     RecordCloneDescribeOutput,
@@ -966,29 +967,15 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     // ── Internals ────────────────────────────────────────────────────────
 
-    /** Label and description of each preset, by key, from `Clone.Presets` in array or legacy keyed form. */
+    /** Label and description of each preset, by key, read the way the engine reads `Clone.Presets`. */
     private static presetLabels(presets: unknown): Record<string, { Label: string; Description?: string }> {
-        const labels: Record<string, { Label: string; Description?: string }> = {};
-        if (!presets || typeof presets !== 'object') return labels;
-        const entries: Array<[string | undefined, unknown]> = Array.isArray(presets)
-            ? presets.map((p) => [(p as { Key?: string })?.Key, p])
-            : Object.entries(presets as Record<string, unknown>);
-        for (const [key, raw] of entries) {
-            if (!key) continue;
-            const p = raw as { Label?: string; Description?: string } | undefined;
-            labels[key] = { Label: p?.Label || key, Description: p?.Description };
-        }
-        return labels;
+        return Object.fromEntries(NormalizeClonePresets(presets).map((p) => [p.Key, { Label: p.Label, Description: p.Description }]));
     }
 
-    /** Options of the named preset, from `Clone.Presets` in array or legacy keyed form. */
-    private static presetOptions(presets: unknown, key: string | undefined): Record<string, unknown> {
-        if (!key || !presets || typeof presets !== 'object') return {};
-        const found = Array.isArray(presets)
-            ? presets.find((p) => (p as { Key?: string })?.Key === key)
-            : (presets as Record<string, unknown>)[key];
-        const options = (found as { Options?: unknown } | undefined)?.Options;
-        return options && typeof options === 'object' ? (options as Record<string, unknown>) : {};
+    /** Options of the named preset, read the way the engine reads `Clone.Presets`. */
+    private static presetOptions(presets: unknown, key: string | undefined): Partial<CloneRequestOptions> {
+        if (!key) return {};
+        return NormalizeClonePresets(presets).find((p) => p.Key === key)?.Options ?? {};
     }
 
     /** Branch overrides in the shape the operation accepts (labels stripped), or undefined when there are none. */
@@ -1079,7 +1066,10 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
         const rootNode = this.ActivePlan.Nodes.find((n) => n.Depth === 0 || n.ParentKey === null);
         if (rootNode) {
-            const nameChange = rootNode.FieldChanges.find((fc) => fc.Kind === 'naming_strategy' || fc.Field.toLowerCase() === 'name');
+            // The value the server will apply is the last change on the name field (its rename, when
+            // the naming strategy made one), not the first, which is the plain copy of the source.
+            const nameField = (this.ProviderToUse?.EntityByName(this.EffectiveEntityName)?.NameField?.Name ?? 'Name').toLowerCase();
+            const nameChange = [...rootNode.FieldChanges].reverse().find((fc) => fc.Field.toLowerCase() === nameField);
             if (nameChange) {
                 this.RootRecordName = String(nameChange.NewValue);
                 this.NamingStrategyReason = nameChange.Reason || 'Suggested by naming strategy';

@@ -109,7 +109,7 @@ import type { CloneTreeNodeViewModel, CloneEdgePolicyChange } from './record-clo
             }
 
             <!-- Hierarchical Node Tree -->
-            <div class="tree-content" role="tree">
+            <div class="tree-content" role="list" aria-label="Records in the clone plan">
                 @if (TreeNodes.length === 0) {
                     <div class="empty-tree-message">
                         @if (SearchTerm) {
@@ -125,8 +125,8 @@ import type { CloneTreeNodeViewModel, CloneEdgePolicyChange } from './record-clo
                             [class.selected]="SelectedNodeKey === item.Node.Key"
                             [class.is-subtype]="item.Node.IsSubtypeRow"
                             [style.padding-left.px]="item.Level * 20 + 8"
-                            role="treeitem"
-                            [attr.aria-expanded]="item.Children.length > 0 ? item.Expanded : null"
+                            role="listitem"
+                            [attr.aria-level]="item.Level + 1"
                             (click)="OnSelectNode(item.Node)">
 
                             <!-- Expand/Collapse Chevron -->
@@ -136,6 +136,8 @@ import type { CloneTreeNodeViewModel, CloneEdgePolicyChange } from './record-clo
                                         type="button"
                                         class="chevron-btn"
                                         (click)="OnToggleExpand(item, $event)"
+                                        [attr.aria-expanded]="item.Expanded"
+                                        [attr.aria-label]="(item.Expanded ? 'Collapse ' : 'Expand ') + (item.Node.DisplayName || item.Node.EntityName)"
                                         [title]="item.Expanded ? 'Collapse' : 'Expand'">
                                         <i
                                             class="fa-solid"

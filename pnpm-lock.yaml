@@ -8340,6 +8340,9 @@ importers:
       '@memberjunction/ng-ui-components':
         specifier: 6.2.0-edge.0
         version: link:../ui-components
+      '@memberjunction/record-cloning-base':
+        specifier: 6.2.0-edge.0
+        version: link:../../../RecordCloning/base
       tslib:
         specifier: ^2.8.1
         version: 2.8.1

@@ -71,7 +71,7 @@ import type {
                                     @case ('boolean') {
                                         <div class="switch-field-row">
                                             <mj-switch
-                                                [id]="'field-' + field.FieldName"
+                                                [InputId]="'field-' + field.FieldName"
                                                 [ngModel]="!!PromptedValues[field.FieldName]"
                                                 (ngModelChange)="OnFieldChange(field.FieldName, $event)">
                                             </mj-switch>

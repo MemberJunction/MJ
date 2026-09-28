@@ -34,7 +34,8 @@ const MOCK_PLAN: RecordClonePlanOutput = {
                 ParentKey: null,
                 DisplayName: 'John Doe',
                 FieldChanges: [
-                    { Field: 'Name', OldValue: 'John Doe', NewValue: 'John Doe (Copy)', Kind: 'naming_strategy', Reason: 'Name made unique' },
+                    { Field: 'Name', OldValue: 'John Doe', NewValue: 'John Doe', Kind: 'Copy', Reason: 'Copied' },
+                    { Field: 'Name', OldValue: 'John Doe', NewValue: 'John Doe (Copy)', Kind: 'Rename', Reason: 'Name made unique' },
                 ],
                 Warnings: [],
                 Route: 'direct',
