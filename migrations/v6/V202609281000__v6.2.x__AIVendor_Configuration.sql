@@ -31,39 +31,27 @@
     `AIEngineBase.GetEffectiveModelConfiguration` reads `ModelDefaults` as the vendor layer
     whenever it is given a model-vendor row (the row's VendorID names the vendor).
 
-    Purely additive — no drops, no data changes, no CHECK constraints. Guarded so it is safe to
-    re-run on a database that already carries the column.
+    Purely additive — no drops, no data changes, no CHECK constraints.
 */
 
 -- ════════════════════════════════════════════════════════════════════════════════════
 -- 1. AIVendor gains a nullable JSON configuration bag
 -- ════════════════════════════════════════════════════════════════════════════════════
 
-IF COL_LENGTH('${flyway:defaultSchema}.AIVendor', 'Configuration') IS NULL
-BEGIN
-    ALTER TABLE [${flyway:defaultSchema}].[AIVendor]
-        ADD [Configuration] NVARCHAR(MAX) NULL;
-END
+ALTER TABLE [${flyway:defaultSchema}].[AIVendor]
+    ADD [Configuration] NVARCHAR(MAX) NULL;
 GO
 
 -- ════════════════════════════════════════════════════════════════════════════════════
 -- 2. Column description
 -- ════════════════════════════════════════════════════════════════════════════════════
 
-IF NOT EXISTS (
-    SELECT 1 FROM sys.extended_properties
-    WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.AIVendor')
-      AND minor_id = COLUMNPROPERTY(OBJECT_ID('${flyway:defaultSchema}.AIVendor'), 'Configuration', 'ColumnId')
-      AND name = N'MS_Description'
-)
-BEGIN
-    EXEC sp_addextendedproperty
-        @name = N'MS_Description',
-        @value = N'Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.',
-        @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-        @level1type = N'TABLE',  @level1name = 'AIVendor',
-        @level2type = N'COLUMN', @level2name = 'Configuration';
-END
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = 'AIVendor',
+    @level2type = N'COLUMN', @level2name = 'Configuration';
 GO
 
 
