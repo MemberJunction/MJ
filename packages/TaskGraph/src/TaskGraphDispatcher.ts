@@ -3277,6 +3277,20 @@ export class TaskGraphDispatcher implements IShutdownable {
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
+        // A node's input is a name → value object (`TaskNode.inputPayload: Record<string, unknown>`).
+        // `mergedPayload` below only merges objects, so anything else would be dropped without a word
+        // and the step would run with none of its inputs — how durable entity actions ran before MJ#4794
+        // (their redacted params were stored as an array). Rows written that way may still be queued, so
+        // refuse them loudly rather than run them empty.
+        if (inputPayload != null && (typeof inputPayload !== 'object' || Array.isArray(inputPayload))) {
+            const found = Array.isArray(inputPayload) ? 'an array' : `a ${typeof inputPayload}`;
+            const message =
+                `Task ${task.ID} has an InputPayload that is ${found}; expected a name → value object. ` +
+                `Its inputs cannot be mapped to parameters, so it was not run.`;
+            LogError(`[TaskGraphDispatcher] ${message}`);
+            return { Success: false, ErrorMessage: message };
+        }
+
         const payload = this.mergedPayload(inputPayload, dependencyOutputs);
         const config = task.ConfigurationObject;
 
