@@ -228,6 +228,12 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                 <!-- Review Step -->
                 @if (CurrentState === 'review' || CurrentStep === 'review') {
                     <div class="step-container" [class.step-hidden]="CurrentStep !== 'review'">
+                        @if (PlanChangedNotice) {
+                            <div class="plan-changed-notice" role="status">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span>{{ PlanChangedNotice }}</span>
+                            </div>
+                        }
                         <mj-clone-review
                             [Plan]="ActivePlan"
                             [RootName]="RootRecordName"
@@ -289,7 +295,7 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
                                 type="button"
                                 mjButton
                                 variant="primary"
-                                (click)="GoToStep('review')">
+                                (click)="BackToReview()">
                                 Back to Review
                             </button>
                             <button
@@ -306,6 +312,17 @@ const SCOPE_OPTION_KEYS: readonly ScopeOptionKey[] = ['MaxDepth', 'MaxRecords', 
         </div>
     `,
     styles: [`
+        .plan-changed-notice {
+            display: flex;
+            align-items: center;
+            gap: var(--mj-space-2);
+            margin-bottom: var(--mj-space-3);
+            padding: var(--mj-space-2) var(--mj-space-3);
+            border: 1px solid var(--mj-status-warning-border);
+            border-radius: var(--mj-radius-md);
+            background: var(--mj-status-warning-bg);
+            color: var(--mj-status-warning-text);
+        }
         .clone-panel-content {
             display: flex;
             flex-direction: column;
@@ -732,6 +749,9 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
             if (planOutput.Plan) {
                 this.PlanChanged.emit(planOutput.Plan);
             }
+        } catch (err) {
+            // A superseded request's failure says nothing about the plan on screen.
+            if (requestId === this.replanRequestId) throw err;
         } finally {
             if (requestId === this.replanRequestId) this.IsReplanning = false;
             this.cdr.markForCheck();
@@ -749,11 +769,17 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
         this.CurrentStep = step;
         this.CurrentState = step;
+        this.PlanChangedNotice = null;
         this.cdr.markForCheck();
 
-        if (step === 'review' && (this.HasUserEditedRootName || Object.keys(this.PromptedValues).length > 0 || this.retargets().length > 0)) {
-            this.ScopeOptions = this.buildOptionsWithValues();
-            void this.replanOrFail();
+        if (step === 'review') {
+            // Re-plan whenever the values differ from the ones the shown plan was built with,
+            // including a value the user cleared or a retarget set back to the original.
+            const next = this.buildOptionsWithValues();
+            if (this.planValuesKey(next) !== this.planValuesKey(this.ScopeOptions)) {
+                this.ScopeOptions = next;
+                void this.replanOrFail();
+            }
         }
     }
 
@@ -761,6 +787,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     public async ExecuteClone(): Promise<void> {
         if (!this.ActivePlan || this.ActivePlan.Blocked || this.IsReplanning) return;
 
+        this.PlanChangedNotice = null;
         this.CurrentState = 'executing';
         this.ExecutionProgress = {
             Percent: 10,
@@ -795,6 +822,17 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
                 };
                 this.raiseRecordCreatedEvent(completed);
                 this.CloneCompleted.emit(completed);
+            } else if (result.ResultCode === 'PLAN_CHANGED') {
+                // The records changed since review: show the fresh plan and ask for a new confirmation.
+                this.PlanChangedNotice = 'The records changed since you reviewed this plan. Review the updated plan and confirm again.';
+                this.CurrentStep = 'review';
+                this.CurrentState = 'plan_changed';
+                if (result.Plan) {
+                    this.ActivePlan = result.Plan;
+                    this.PlanChanged.emit(result.Plan);
+                } else {
+                    await this.replanOrFail();
+                }
             } else {
                 this.fail(result.ErrorMessage || 'Clone execution failed.', result.ResultCode);
             }
@@ -803,6 +841,18 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         } finally {
             this.cdr.markForCheck();
         }
+    }
+
+    /** Shown on Review after an Execute found the plan out of date. Cleared by the next Execute or step change. */
+    public PlanChangedNotice: string | null = null;
+
+    /** From the Failed state: back to Review with a fresh plan, since the old one may be why it failed. */
+    public BackToReview(): void {
+        this.CurrentStep = 'review';
+        this.CurrentState = 'review';
+        this.ScopeOptions = this.buildOptionsWithValues();
+        this.cdr.markForCheck();
+        void this.replanOrFail();
     }
 
     /** Key of the root clone once execution succeeded, as a record-id string. */
@@ -1121,20 +1171,22 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         const entInfo = this.ProviderToUse?.EntityByName(this.EffectiveEntityName);
         const nameField = entInfo?.NameField?.Name || 'Name';
         const retarget = this.retargets();
+        // Values come from the current Values step every time, never from an earlier request's
+        // options: a retarget set back, or a typed name that was cleared, must not linger.
+        const { FieldOverrides: _fields, PromptedValues: _prompts, Retarget: _retarget, Reason: _reason, ...scope } = this.ScopeOptions;
         return {
-            ...this.ScopeOptions,
+            ...scope,
             // Only a name the user typed overrides the server's naming, which avoids names already taken.
-            FieldOverrides: {
-                ...(this.ScopeOptions.FieldOverrides ?? {}),
-                ...(this.HasUserEditedRootName && this.RootRecordName ? { [nameField]: this.RootRecordName } : {}),
-            },
+            FieldOverrides: this.HasUserEditedRootName && this.RootRecordName.trim() ? { [nameField]: this.RootRecordName } : {},
             ...(retarget.length > 0 ? { Retarget: retarget } : {}),
-            PromptedValues: {
-                ...(this.ScopeOptions.PromptedValues ?? {}),
-                ...this.PromptedValues,
-            },
+            PromptedValues: { ...this.PromptedValues },
             Reason: this.CloneReason,
         };
+    }
+
+    /** The parts of the options that the Values step sets and that change the plan. */
+    private planValuesKey(options: RecordClonePlanOptions): string {
+        return JSON.stringify([options.FieldOverrides ?? {}, options.PromptedValues ?? {}, options.Retarget ?? []]);
     }
 
     private fail(message: string, resultCode?: string): void {

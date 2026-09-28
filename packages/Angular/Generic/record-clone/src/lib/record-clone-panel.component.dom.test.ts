@@ -296,25 +296,123 @@ describe('RecordClonePanelComponent (DOM)', () => {
         });
     });
 
-    it('emits CloneFailed with the server message when execution fails', async () => {
+    it('returns to Review with the fresh plan when Execute reports PLAN_CHANGED', async () => {
+        const fresh = { ...MOCK_PLAN.Plan!, Hash: 'plan-hash-2' };
         vi.spyOn(mockService, 'ExecuteClone').mockResolvedValue({
             ...MOCK_EXECUTE,
             Success: false,
             ResultCode: 'PLAN_CHANGED',
             ErrorMessage: 'The plan changed since review.',
+            Plan: fresh,
         });
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],
             inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
         });
-        await fixture.componentInstance.Start();
+        const panel = fixture.componentInstance;
+        await panel.Start();
 
         let failed: CloneFailedEvent | null = null;
-        fixture.componentInstance.CloneFailed.subscribe((e) => (failed = e));
-        await fixture.componentInstance.ExecuteClone();
+        panel.CloneFailed.subscribe((e) => (failed = e));
+        await panel.ExecuteClone();
+        fixture.detectChanges();
 
-        expect(fixture.componentInstance.CurrentState).toBe('failed');
-        expect(failed).toEqual({ EntityName: 'Users', Message: 'The plan changed since review.', ResultCode: 'PLAN_CHANGED' });
+        expect(panel.CurrentState).toBe('plan_changed');
+        expect(panel.CurrentStep).toBe('review');
+        expect(panel.ActivePlan?.Hash).toBe('plan-hash-2');
+        expect(failed).toBeNull();
+        expect(text(fixture, '.plan-changed-notice')).toContain('changed since you reviewed');
+    });
+
+    it('re-plans on PLAN_CHANGED when the server sends no plan', async () => {
+        vi.spyOn(mockService, 'ExecuteClone').mockResolvedValue({
+            ...MOCK_EXECUTE,
+            Success: false,
+            ResultCode: 'PLAN_CHANGED',
+        });
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        const before = vi.mocked(mockService.PlanClone).mock.calls.length;
+
+        await panel.ExecuteClone();
+
+        expect(vi.mocked(mockService.PlanClone).mock.calls.length).toBe(before + 1);
+        expect(panel.CurrentState).toBe('plan_changed');
+    });
+
+    it('emits CloneFailed with the server message when execution fails, and Back to Review re-plans', async () => {
+        vi.spyOn(mockService, 'ExecuteClone').mockResolvedValue({
+            ...MOCK_EXECUTE,
+            Success: false,
+            ResultCode: 'EXECUTION_FAILED',
+            ErrorMessage: 'Save failed.',
+        });
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+
+        let failed: CloneFailedEvent | null = null;
+        panel.CloneFailed.subscribe((e) => (failed = e));
+        await panel.ExecuteClone();
+
+        expect(panel.CurrentState).toBe('failed');
+        expect(failed).toEqual({ EntityName: 'Users', Message: 'Save failed.', ResultCode: 'EXECUTION_FAILED' });
+
+        const before = vi.mocked(mockService.PlanClone).mock.calls.length;
+        panel.BackToReview();
+        await Promise.resolve();
+        expect(panel.CurrentStep).toBe('review');
+        expect(vi.mocked(mockService.PlanClone).mock.calls.length).toBe(before + 1);
+    });
+
+    it('drops a retarget or typed name the user undid before the next re-plan', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        const retarget = { FieldName: 'CompanyID', DisplayName: 'Company', RelatedEntity: 'Companies', CurrentValue: 'co-1', NewValue: 'co-2' };
+        panel.RetargetFields = [retarget];
+        panel.OnRootNameChange('Jane (copy)');
+        panel.GoToStep('review');
+        await Promise.resolve();
+
+        panel.RetargetFields = [{ ...retarget, NewValue: 'co-1' }];
+        panel.OnRootNameChange('');
+        panel.GoToStep('review');
+        await Promise.resolve();
+
+        const sent = vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0].Options!;
+        expect(sent.Retarget).toBeUndefined();
+        expect(sent.FieldOverrides).toEqual({});
+    });
+
+    it('ignores the failure of a re-plan a newer one superseded', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        let rejectFirst!: (e: Error) => void;
+        vi.mocked(mockService.PlanClone)
+            .mockImplementationOnce(() => new Promise((_, reject) => (rejectFirst = reject)))
+            .mockResolvedValueOnce({ Plan: { ...MOCK_PLAN.Plan!, Hash: 'second' } });
+
+        const first = panel.Replan();
+        const second = panel.Replan();
+        await second;
+        rejectFirst(new Error('timeout'));
+        await expect(first).resolves.toBeUndefined();
+        expect(panel.ActivePlan?.Hash).toBe('second');
     });
 
     it('re-emits navigation requests and asks the host to close', () => {

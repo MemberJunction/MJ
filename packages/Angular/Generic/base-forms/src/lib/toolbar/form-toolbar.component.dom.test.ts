@@ -322,6 +322,18 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(f.componentInstance.IsClonePanelOpen).toBe(false);
     });
 
+    it('closes the slide-in when the form moves to another record of the same entity', async () => {
+      const { f } = renderClone(true);
+      await settle(f);
+      cloneBtn(f)!.click();
+      expect(f.componentInstance.IsClonePanelOpen).toBe(true);
+
+      f.componentInstance.Record = { ...CLONE_RECORD, PrimaryKey: { ToConcatenatedString: () => 'PK2' } } as unknown as BaseEntity;
+      await settle(f);
+
+      expect(f.componentInstance.IsClonePanelOpen).toBe(false);
+    });
+
     it('turns a clone navigation request into a record Navigate event', async () => {
       const { f } = renderClone(true);
       await settle(f);

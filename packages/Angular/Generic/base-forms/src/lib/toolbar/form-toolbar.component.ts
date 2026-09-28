@@ -1000,6 +1000,7 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
 
   /** The entity name the last clone capability check ran for. */
   private _cloneCheckedEntity: string | null = null;
+  private _cloneRecordKey: string | null = null;
 
   /** True when the Clone action should render for the current record. */
   public get ShowCloneAction(): boolean {
@@ -1042,6 +1043,13 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
    * without a server call.
    */
   private checkCloneCapability(): void {
+    // A panel opened for one record must not stay open over the next one the form loads.
+    const recordKey = this.Record?.PrimaryKey?.ToConcatenatedString() ?? null;
+    if (recordKey !== this._cloneRecordKey) {
+      this._cloneRecordKey = recordKey;
+      this.IsClonePanelOpen = false;
+    }
+
     const entityName = this.Config.ShowCloneButton ? this.Record?.EntityInfo?.Name ?? null : null;
     if (entityName === this._cloneCheckedEntity) return;
     this._cloneCheckedEntity = entityName;
