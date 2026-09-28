@@ -24,6 +24,27 @@ import {
 /**
  * Abstract base class for typed decision model implementations.
  * Subclasses wrap provider APIs to produce structured Likelihood, Choice, and Score answers.
+ *
+ * Implementations should:
+ * 1. Register with `@RegisterClass(BaseDecision, 'ProviderName')`
+ * 2. Implement the protected `DoDecide()` method
+ * 3. Honor `params.CancellationToken`, which the base does not check
+ *
+ * `Decide()` validates the request before calling `DoDecide()` and the answers after it,
+ * so a driver does not repeat those checks.
+ *
+ * Example:
+ * ```typescript
+ * @RegisterClass(BaseDecision, 'ExampleDecision')
+ * export class ExampleDecision extends BaseDecision {
+ *     protected async DoDecide(params: DecisionParams): Promise<DecisionResult> {
+ *         // Call the provider and map its output onto DecisionAnswer shapes
+ *     }
+ * }
+ *
+ * const decider = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, 'ExampleDecision', apiKey);
+ * const result = await decider.Decide(params);
+ * ```
  */
 export abstract class BaseDecision extends BaseModel {
     /**
@@ -100,6 +121,10 @@ export abstract class BaseDecision extends BaseModel {
      * Driver-specific implementation of the decision logic.
      * Must be implemented by concrete provider subclasses.
      * Returned probabilities must already be normalised, in range, and keyed correctly.
+     *
+     * The driver owns cancellation: `Decide()` passes `params.CancellationToken` through
+     * unchecked, so the driver should check it before calling the provider and hand it to
+     * the provider's HTTP client.
      *
      * @param params Decision parameters to evaluate.
      * @returns A Promise resolving to a DecisionResult.
