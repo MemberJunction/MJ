@@ -764,6 +764,7 @@ export class ClonePlanner {
             plannedNodesForCollisionCheck.push({
                 NodeKey: planNode.NodeKey ?? planNode.Key,
                 EntityName: planNode.EntityName,
+                ParentKey: planNode.ParentKey,
                 Values: fieldMappingResult.MappedValues,
             });
         }

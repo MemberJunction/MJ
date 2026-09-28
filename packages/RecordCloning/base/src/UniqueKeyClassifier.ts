@@ -201,9 +201,12 @@ export function DetectIntraPlanCollisions(
             const seenValues = new Map<string, PlannedRecordNode>();
 
             for (const node of entityNodes) {
-                // For parent-scoped uniques, prefix the fingerprint with parent key
+                // A parent-scoped unique only collides under one parent: the new value of its
+                // ScopeField when the row carries one, else the plan node the row was reached from.
+                const scoped = uq.ScopeField ? node.Values[uq.ScopeField] : undefined;
+                const parent = scoped ?? node.ParentKey;
                 const prefix =
-                    uq.Scope === 'Parent' ? `PARENT:${node.ParentKey ?? 'ROOT'}::` : '';
+                    uq.Scope === 'Parent' ? `PARENT:${String(parent ?? 'ROOT')}::` : '';
 
                 // Extract values of the unique fields
                 const valueParts: string[] = [];

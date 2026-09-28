@@ -112,6 +112,25 @@ describe('RecordCloneOperationsHandler', () => {
             });
         });
 
+        it('reports the policy a plan would apply: unlisted relationships Skip, NotCloneable children Skip', async () => {
+            const rels = [
+                mockChildRel,
+                { ID: 'rel-2', DisplayName: 'Notes', RelatedEntity: 'NoteEntity', RelatedEntityJoinField: 'ParentID', CloneConfig: null },
+                { ID: 'rel-3', DisplayName: 'Logs', RelatedEntity: 'AuditLog', RelatedEntityJoinField: 'ParentID', CloneConfig: null },
+            ] as unknown as EntityRelationshipInfo[];
+            const parent = { ...cloneable, RelatedEntities: rels, CloneConfig: { Enabled: true, Relationships: { AuditLog: { Policy: 'Deep' } } } } as unknown as EntityInfo;
+            const audit = { ...disabled, CloneConfig: { NotCloneable: true } } as unknown as EntityInfo;
+            const provider = { ...providerWith(true), EntityByName: (n: string) => (n === 'ParentEntity' ? parent : n === 'AuditLog' ? audit : null) } as unknown as IMetadataProvider;
+
+            const desc = await new RecordCloneOperationsHandler(provider).Describe({ EntityName: 'ParentEntity' }, mockUser);
+
+            expect(desc.Relationships.map((r) => [r.RelatedEntity, r.DefaultPolicy])).toEqual([
+                ['ChildEntity', 'Deep'],
+                ['NoteEntity', 'Skip'],
+                ['AuditLog', 'Skip'],
+            ]);
+        });
+
         it('lists presets written in the legacy keyed-object form instead of throwing', async () => {
             const legacy = { ...cloneable, CloneConfig: { Enabled: true, Presets: { 'deep-prompts': { Description: 'd' } } } } as unknown as EntityInfo;
             const provider = { ...providerWith(true), EntityByName: () => legacy } as unknown as IMetadataProvider;

@@ -57,8 +57,10 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
             JsonRemap: [
                 {
                     Field: 'RerankerConfiguration',
-                    Path: '$.rerankPromptId',
-                    EntityName: 'MJ: AI Prompts',
+                    Rules: [
+                        { Path: 'rerankPromptID', Mode: 'remap' as const, TargetEntityName: 'MJ: AI Prompts', OnMissing: 'reuse' as const },
+                        { Path: 'rerankerModelId', Mode: 'reuse' as const },
+                    ],
                 },
             ],
         },
@@ -426,7 +428,7 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
                     Status: 'Active',
                     ParentID: null,
                     OwnerUserID: 'original-owner-uuid',
-                    RerankerConfiguration: JSON.stringify({ rerankPromptId: 'prompt-original-9999' }),
+                    RerankerConfiguration: JSON.stringify({ rerankPromptID: 'prompt-original-9999' }),
                 };
             }
             if (entName === 'MJ: AI Agent Steps') {
@@ -527,7 +529,7 @@ describe('Phase 4.3: MJ: AI Agents Record Cloning Use Case', () => {
                             Status: 'Active',
                             ParentID: null,
                             OwnerUserID: 'original-owner-uuid',
-                            RerankerConfiguration: JSON.stringify({ rerankPromptId: 'prompt-original-9999' }),
+                            RerankerConfiguration: JSON.stringify({ rerankPromptID: 'prompt-original-9999' }),
                         },
                     ],
                 };

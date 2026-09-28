@@ -143,6 +143,16 @@ describe('UniqueKeyClassifier', () => {
             expect(collisions[0].NodeKeyB).toBe('Param::2');
         });
 
+        it('scopes a parent-unique by the new ScopeField value, so copies under two cloned parents do not collide', () => {
+            const nodes: PlannedRecordNode[] = [
+                { NodeKey: 'Setting::1', EntityName: 'AppSetting', ParentKey: 'App::a', Values: { ApplicationID: 'new-a', Name: 'Theme' } },
+                { NodeKey: 'Setting::2', EntityName: 'AppSetting', ParentKey: 'App::b', Values: { ApplicationID: 'new-b', Name: 'Theme' } },
+                { NodeKey: 'Setting::3', EntityName: 'AppSetting', ParentKey: 'App::a', Values: { ApplicationID: 'new-a', Name: 'Theme' } },
+            ];
+            const collisions = DetectIntraPlanCollisions(nodes, { AppSetting: [{ Fields: ['Name'], Scope: 'Parent', ScopeField: 'ApplicationID' }] });
+            expect(collisions.map((c) => [c.NodeKeyA, c.NodeKeyB])).toEqual([['Setting::1', 'Setting::3']]);
+        });
+
         it('returns empty array when there are no collisions', () => {
             const nodes: PlannedRecordNode[] = [
                 {

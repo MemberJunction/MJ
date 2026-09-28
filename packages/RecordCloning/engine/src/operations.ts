@@ -44,7 +44,7 @@ import {
     type RecordCloneGetLineageOutput,
     type RecordCloneLineageItem,
 } from '@memberjunction/core-entities';
-import { MaskSensitiveFieldChange, NormalizeClonePresets } from '@memberjunction/record-cloning-base';
+import { MaskSensitiveFieldChange, NormalizeClonePresets, ResolveEdgePolicy } from '@memberjunction/record-cloning-base';
 import type {
     ClonePlan,
     CloneRequestOptions,
@@ -215,13 +215,35 @@ export class RecordCloneOperationsHandler {
             return { ...base, CanClone: false, Reason: `Cloning '${entity.Name}' requires the '${authorization.Name}' authorization.` };
         }
 
+        // The same resolution the planner applies to a root's direct children, so the UI shows what
+        // a plan will do: unlisted relationships Skip, NotCloneable children Skip, a unique FK Deep.
         const relationships: RecordCloneDescribeRelationship[] = (entity.RelatedEntities ?? []).map((r) => {
-            const policy = r.CloneConfig ?? config.Relationships?.[r.RelatedEntity];
+            const child = md.EntityByName(r.RelatedEntity);
+            const childConfig = child?.CloneConfig;
+            const resolved = ResolveEdgePolicy({
+                FromKey: entity.Name,
+                ToKey: r.RelatedEntity,
+                Kind: 'Relationship',
+                ParentEntityName: entity.Name,
+                ChildEntityName: r.RelatedEntity,
+                JoinField: r.RelatedEntityJoinField,
+                RelationshipID: r.ID,
+                RelationshipConfig: r.CloneConfig ?? undefined,
+                ChildEntityConfig: {
+                    NotCloneable: childConfig?.NotCloneable === true,
+                    NotCloneableReason: childConfig?.NotCloneableReason,
+                    AllowCreateAPI: child?.AllowCreateAPI,
+                },
+                RootEntityConfig: { Relationships: config.Relationships },
+                IsUniqueFK: child?.Fields.find((f) => f.Name === r.RelatedEntityJoinField)?.IsUnique,
+                CurrentDepth: 1,
+                MaxDepth: config.MaxDepth ?? 3,
+            });
             return {
                 Name: r.DisplayName || r.RelatedEntity,
                 RelatedEntity: r.RelatedEntity,
-                DefaultPolicy: policy?.Policy ?? 'Deep',
-                Locked: policy?.Locked ?? false,
+                DefaultPolicy: resolved.Policy,
+                Locked: resolved.Locked,
             };
         });
 
