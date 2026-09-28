@@ -11,7 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { MJTaskEntity } from '@memberjunction/core-entities';
-import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
+import { ParseTaskInputPayload, TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import type { TaskActionRunner } from '../types';
 
 /** What `runTaskBody` reads off a `Task` row on the action path — nothing more. */
@@ -116,5 +116,22 @@ describe('runTaskBody: InputPayload shape guard', () => {
         } finally {
             loopSpy.mockRestore();
         }
+    });
+});
+
+describe('ParseTaskInputPayload: an unparseable InputPayload is a refusal, not an absent input', () => {
+    it('parses a JSON object', () => {
+        expect(ParseTaskInputPayload('T-1', '{"a":1}')).toEqual({ Payload: { a: 1 } });
+    });
+
+    it('treats a missing payload as no input', () => {
+        expect(ParseTaskInputPayload('T-1', null)).toEqual({ Payload: null });
+        expect(ParseTaskInputPayload('T-1', '')).toEqual({ Payload: null });
+    });
+
+    it('refuses malformed JSON with a message naming the task, instead of running with no input', () => {
+        const result = ParseTaskInputPayload('T-1', '{not json');
+        expect('Payload' in result).toBe(false);
+        expect('ErrorMessage' in result && result.ErrorMessage).toMatch(/Task T-1.*InputPayload.*not valid JSON/i);
     });
 });

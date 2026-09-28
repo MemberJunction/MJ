@@ -158,6 +158,29 @@ function asRunQueryProvider(provider: IMetadataProvider): IRunQueryProvider | un
 function isNameValuePayload(inputPayload: unknown): inputPayload is Record<string, unknown> | null {
     return inputPayload == null || (typeof inputPayload === 'object' && !Array.isArray(inputPayload));
 }
+
+/**
+ * Parses a task's stored `InputPayload`, telling an ABSENT input apart from an UNREADABLE one.
+ *
+ * Both used to come out as `null`, and `null` is a legitimate "this node takes no input" — so a row
+ * whose payload could not be parsed ran with none of its inputs, the same silent outcome the shape
+ * guard in `runTaskBody` refuses for an array. A string that is not JSON reaches here through
+ * `TaskGraph.RetryTask` / `UpdateTaskInput`, which store a string payload verbatim.
+ */
+export function ParseTaskInputPayload(taskID: string, raw: string | null | undefined): { Payload: unknown } | { ErrorMessage: string } {
+    if (!raw) {
+        return { Payload: null };
+    }
+    try {
+        return { Payload: JSON.parse(raw) };
+    } catch (e) {
+        return {
+            ErrorMessage:
+                `Task ${taskID} has an InputPayload that is not valid JSON (${e instanceof Error ? e.message : String(e)}). ` +
+                `Its inputs cannot be mapped to parameters, so it was not run.`,
+        };
+    }
+}
 import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, TASK_TYPE_NAME, type TaskGraphParentMetadata } from './TaskGraphService';
 import {
     DEFAULT_DISPATCHER_CONFIG,
@@ -1104,14 +1127,17 @@ export class TaskGraphDispatcher implements IShutdownable {
             });
 
             const dependencyOutputs = await this.loadDependencyOutputs(provider, taskID);
-            let inputPayload: unknown = null;
-            if (task.InputPayload) {
-                try { inputPayload = JSON.parse(task.InputPayload); }
-                catch (e) { LogError(`[TaskGraphDispatcher] Task ${taskID} has malformed InputPayload: ${e}`); }
+            const parsed = ParseTaskInputPayload(taskID, task.InputPayload);
+            let result: TaskBodyOutcome;
+            if ('ErrorMessage' in parsed) {
+                // Refused through the normal Failed path below, like runTaskBody's shape guard — never
+                // run as though the node had no input.
+                LogError(`[TaskGraphDispatcher] ${parsed.ErrorMessage}`);
+                result = { Success: false, ErrorMessage: parsed.ErrorMessage };
+            } else {
+                const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
+                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress);
             }
-
-            const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
-            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs, onProgress);
 
             // ONLY THE CONFIRMED OWNER MUTATES THE GRAPH (R2-10).
             //
