@@ -58,8 +58,8 @@ One additional realtime primitive lives here that is *not* a `BaseModel` capabil
 | Type | Description |
 |------|-------------|
 | `ImageGenerationParams` / `ImageGenerationResult` | Image generation parameters and results |
-| `SummarizeParams` / `SummarizeResult` | Text summarization |
-| `ClassifyParams` / `ClassifyResult` | Text classification |
+| `SummarizeParams` / `SummarizeResult` | Text summarization (deprecated) |
+| `ClassifyParams` / `ClassifyResult` | Text classification (deprecated) |
 | `RerankParams` / `RerankResult` | Document reranking |
 | `DecisionParams` / `DecisionResult` | Typed decision parameters and structured results with probabilities |
 | `ModelUsage` | Token counts and cost tracking (prompt tokens, completion tokens, total cost, currency) |
@@ -186,10 +186,10 @@ export class MyProviderLLM extends BaseLLM {
         // Your API call here
     }
 
-    // Optional: implement text classification
+    // Required by BaseLLM but deprecated: new drivers should throw a "not supported" error
     public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> { /* ... */ }
 
-    // Optional: implement summarization
+    // Required by BaseLLM but deprecated: new drivers should throw a "not supported" error
     public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> { /* ... */ }
 
     // Optional: enable streaming by overriding these
