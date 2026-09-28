@@ -387,13 +387,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * runs `Validate()` and records its errors there), so there is no separate `Validate()` call.
      * When a subclass refused the write without recording anything, say so explicitly instead of
      * "unknown error", which is what hid MJ#4791.
+     *
+     * Only a NULL `LatestResult` proves the refusal happened before the provider (nothing was
+     * registered at all). A SUCCESS `LatestResult` is an earlier save on the same instance — the
+     * refusal registered nothing — so its text must never be reported as this failure's reason.
      */
     private describeSaveFailure(entity: BaseEntity): string {
-        const detail = entity.LatestResult?.CompleteMessage?.trim();
-        return detail
-            ? detail
-            : `no failure detail recorded (LatestResult ${entity.LatestResult ? 'empty' : 'null'}; ` +
-              `ResultHistory length ${entity.ResultHistory.length}) — the write was refused before reaching the provider`;
+        const latest = entity.LatestResult;
+        if (!latest) {
+            return `no failure detail recorded (LatestResult null; ResultHistory length ${entity.ResultHistory.length}) ` +
+                '— the write was refused before reaching the provider';
+        }
+        if (latest.Success) {
+            return 'no failure detail recorded (latest result entry is a prior success; ' +
+                `ResultHistory length ${entity.ResultHistory.length})`;
+        }
+        const detail = latest.CompleteMessage?.trim();
+        return detail || `no failure detail recorded (LatestResult empty; ResultHistory length ${entity.ResultHistory.length})`;
     }
 
     /**
@@ -2330,7 +2340,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         artifact.UserID = contextUser.ID;
         artifact.Visibility = 'Always';
         if (!(await artifact.Save())) {
-            const message = `SaveSessionChannelArtifact: artifact save failed: ${this.describeSaveFailure(artifact)}`;
+            const message = `SaveSessionChannelArtifact: artifact save failed for session ${session.ID}: ${this.describeSaveFailure(artifact)}`;
             LogError(message);
             return { Success: false, ErrorMessage: message, ConversationDetailLinked: false };
         }
@@ -2342,7 +2352,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         version.Content = contentJson;
         version.UserID = contextUser.ID;
         if (!(await version.Save())) {
-            const message = `SaveSessionChannelArtifact: artifact version save failed: ${this.describeSaveFailure(version)}`;
+            const message = `SaveSessionChannelArtifact: artifact version save failed for session ${session.ID} (artifact ${artifact.ID}): ${this.describeSaveFailure(version)}`;
             LogError(message);
             return { Success: false, ErrorMessage: message, ArtifactID: artifact.ID, ConversationDetailLinked: false };
         }
@@ -2700,12 +2710,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
-     * Persists a single transcript turn as a `Conversation Detail` stamped with the session's
-     * conversation, the mapped role, the turn text, the session id, and the owning user.
-     *
-     * @returns The boolean save result (logs `CompleteMessage` on failure).
-     */
-    /**
      * Stamps `RecordingStartedAt` (the recording `t0` alignment origin) + `RecordingMedia` on a
      * just-started session when the browser captured WITH consent. Best-effort: a parse/save failure
      * is logged and swallowed — a recording-metadata problem must never fail the session start.
@@ -2736,6 +2740,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
     }
 
+    /**
+     * Persists a single transcript turn as a `Conversation Detail` stamped with the session's
+     * conversation, the mapped role, the turn text, the session id, and the owning user.
+     *
+     * @returns The boolean save result. On failure it logs the session, the write user and the
+     * reason from {@link describeSaveFailure}.
+     */
     private async persistTranscriptTurn(
         session: MJAIAgentSessionEntity,
         role: string,
@@ -2833,8 +2844,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         //
         // `ResultType: 'entity_object'` hands back hydrated entities, but they do not carry the
         // context user the way `GetEntityObject(entity, user)` does — so `Save()` ran with no
-        // principal and failed with an EMPTY message ("unknown error"), which is what the elevation
-        // fix above looked like when it was still broken. The insert path beside this one has
+        // principal and failed with an EMPTY message ("unknown error"), which is what an empty-message
+        // failure here looked like before the re-load. The insert path beside this one has
         // always used `GetEntityObject`; this now matches it, which is also why they now succeed
         // and fail for the same reasons.
         const previous = await provider.GetEntityObject<MJConversationDetailEntity>(
@@ -2887,13 +2898,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Message: JSON-serialized tool facts) so that session review can reconstruct the action card dynamically
      * on load (Option 1) without polluting user-facing speech chat bubbles.
      *
-     * Writes as the CALLER, never the elevated run user (issue #4791). The caller owns the session
-     * (`loadOwnedActiveSession`'s ownership gate has already run, for every path that reaches this
-     * method) and therefore the conversation, and the anonymous/magic-link role carries Create on
-     * `MJ: Conversation Details`, scoped by its RLS filter to rows on conversations it owns. The
-     * System user is NOT the conversation owner, so `MJConversationDetailEntityExtended`'s owner
-     * gate refuses it outright. Measured on MJ#4791 (before the core-entities fix that now records
-     * the denial): `Save()` returned `false` with a NULL `LatestResult` and an empty
+     * Writes as the CALLER, never the elevated run user (issue #4791). Owning the session
+     * (`loadOwnedActiveSession`'s gate has already run on every path here) does NOT imply owning
+     * the conversation: the conversation id was client-supplied at session start. What authorizes
+     * this write is the save itself, evaluated for the caller — the conversation owner gate in
+     * `MJConversationDetailEntityExtended`, plus the caller's own entity permission and Create RLS
+     * on `MJ: Conversation Details` (for the magic-link role that RLS scopes by the invite's
+     * `ScopeResourceID`, and the role belongs to a downstream app, not MJ core). That is why
+     * writing as the caller is safe even though the conversation id originated client-side.
+     * Elevating to the System user would bypass RLS entirely, and the owner gate refuses it anyway
+     * because the System user is not the conversation owner. Measured on MJ#4791 (before the
+     * core-entities fix that now records the denial): `Save()` returned `false` with a NULL `LatestResult` and an empty
      * `ResultHistory` — indistinguishable from any other silent failure. Elevating this write is
      * what silently dropped both hidden tool-execution turns of a real magic-link session; the
      * denial itself still happens today, only its silence was fixed separately.

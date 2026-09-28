@@ -1,5 +1,5 @@
 /**
- * scoped-anon-elevation.checks.ts — the 'scoped-anon-elevation' bundle (SA1–SA5).
+ * scoped-anon-elevation.checks.ts — the 'scoped-anon-elevation' bundle (SA1–SA6).
  *
  * MJ issue #3371: the realtime relayed-tool path ran delegated work as the anonymous magic-link
  * visitor, whose role deliberately holds no grants on the AI run entities — so a scoped anonymous
@@ -21,7 +21,11 @@
  *    the system user it lands `Completed`,
  *  - SA5: usage CONTRAST through `AccumulatePromptRunUsage` — deltas are dropped under the
  *    anonymous principal (the "usage delta dropped" log symptom) and accumulate under the system
- *    user.
+ *    user,
+ *  - SA6 (MJ#4791): the elevation's BOUNDARY — hidden `realtime_tool_execution` conversation
+ *    details must NOT be elevated. Written as the system user, the conversation owner gate
+ *    (`MJConversationDetailEntityExtended`) refuses the row AND now reports why; written as the
+ *    conversation owner, the same row saves.
  *
  * WHAT IT DOES NOT RE-PROVE — the elevation ROUTING (which resolver/SessionManager seams swap the
  * identity, the widget-guest exclusion, fail-closed) is pinned by MJServer's unit tests
@@ -30,15 +34,25 @@
  * evaluation at import time, for coverage the unit tier already owns. The JWT→principal build is
  * likewise covered by MJServer's `magicLink.test.ts` — SA checks synthesize its exact output.
  *
- * Every fixture row is created and deleted (system-user, best-effort) inside the same check's
- * finally block, so the bundle is self-cleaning and needs no shared lifecycle.
+ * Every fixture row is created and deleted (best-effort) inside the same check's finally block, so
+ * the bundle is self-cleaning and needs no shared lifecycle. SA1–SA5 clean up as the system user;
+ * SA6 cleans up as the conversation owner, because the owner gate refuses the system user's Delete
+ * exactly as it refuses its Save.
  */
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJAIAgentRunEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import {
+    MJAIAgentRunEntity,
+    MJAIPromptRunEntity,
+    MJConversationDetailEntity,
+    MJConversationEntity,
+} from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { RealtimeClientSessionService } from '@memberjunction/ai-agents';
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck } from '@memberjunction/testing-integration';
+
+/** The reason `MJConversationDetailEntityExtended`'s owner gate records for a non-owner without a grant. */
+const CONVERSATION_ACCESS_DENIED = 'You do not have access to this conversation.';
 
 /** The per-session resource-scope id a scoped anonymous invite carries (any UUID works — the scope's presence is what gates elevation). */
 const SCOPE_RESOURCE_ID = 'A3371000-0000-4000-8000-000000000001';
@@ -83,6 +97,36 @@ async function buildAgentRunFixture(user: UserInfo, agentID: string): Promise<MJ
 }
 
 /**
+ * Creates (unsaved) the hidden tool-execution turn `persistDirectActionTurn` writes, under `user`.
+ * The same field values are built for every principal SA6 tries, so the principal is the only
+ * difference between the refused save and the accepted one.
+ */
+async function buildHiddenToolTurnFixture(
+    user: UserInfo,
+    conversationID: string,
+    ownerID: string,
+): Promise<MJConversationDetailEntity> {
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', user);
+    detail.NewRecord();
+    detail.ConversationID = conversationID;
+    detail.Role = 'AI';
+    detail.HiddenToUser = true;
+    detail.UserID = ownerID;
+    detail.Status = 'Complete';
+    detail.Message = JSON.stringify({
+        type: 'realtime_tool_execution',
+        callId: null,
+        toolName: 'scoped-anon-elevation.SA6',
+        argsJson: null,
+        resultJson: null,
+        success: true,
+        durationMs: 0,
+    });
+    return detail;
+}
+
+/**
  * Best-effort fixture cleanup — logged, never thrown.
  *
  * @param cleanupUser The principal to delete under: normally the system user, but callers on an
@@ -90,13 +134,15 @@ async function buildAgentRunFixture(user: UserInfo, agentID: string): Promise<MJ
  * system user being resolvable.
  */
 async function deleteFixture(
-    entityName: 'MJ: AI Agent Runs' | 'MJ: AI Prompt Runs',
+    entityName: 'MJ: AI Agent Runs' | 'MJ: AI Prompt Runs' | 'MJ: Conversation Details' | 'MJ: Conversations',
     id: string,
     cleanupUser: UserInfo,
 ): Promise<void> {
     try {
         const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
-        const record = await md.GetEntityObject<MJAIAgentRunEntity | MJAIPromptRunEntity>(entityName, cleanupUser);
+        const record = await md.GetEntityObject<
+            MJAIAgentRunEntity | MJAIPromptRunEntity | MJConversationDetailEntity | MJConversationEntity
+        >(entityName, cleanupUser);
         if (await record.Load(id) && !(await record.Delete())) {
             console.warn(`  ⚠ scoped-anon-elevation: fixture Delete failed for ${entityName} ${id}: `
                 + `${record.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -294,6 +340,77 @@ export const ScopedAnonElevationChecks: NamedCheck[] = [
             } finally {
                 if (promptRunID) {
                     await deleteFixture('MJ: AI Prompt Runs', promptRunID, sys);
+                }
+            }
+        },
+    },
+    {
+        Id: 'scoped-anon-elevation.SA6',
+        Name: 'SA6: a hidden realtime tool-execution turn is REFUSED (with a reason) as the system user and saved as the conversation owner',
+        /**
+         * The contract behind MJ#4791. The realtime resolver used to write these rows as the
+         * elevated system user; the conversation owner gate refused it, and — because the gate's
+         * denial was dropped on a new record — `Save()` returned false with a NULL `LatestResult`.
+         *
+         * PRINCIPAL CHOICE: the conversation is owned by `ctx.User`, the very user record SA1
+         * synthesizes the scoped anonymous principal over, so the conversation's owner IS the
+         * visitor's user id. The ACCEPTED save runs as `ctx.User` itself rather than the zero-role
+         * synthesized principal: SA1 proves that principal holds no entity grants in core MJ (the
+         * Create grant on `MJ: Conversation Details` belongs to a downstream app's role), and the owner
+         * gate compares only `conversation.UserID` to the saving user's id. The invariant is therefore
+         * "the owner passes the gate; the system user, as a non-owner without a grant, is refused
+         * WITH a reason". SKIPPED when there is no system user, or when the system user IS
+         * `ctx.User` (it would then be the owner and the contrast is meaningless).
+         */
+        Fn: async (ctx): Promise<void> => {
+            const sys = systemUser();
+            if (!sys || UUIDsEqual(sys.ID, ctx.User.ID)) {
+                console.warn('  ⚠ scoped-anon-elevation.SA6 SKIPPED — needs a system user distinct from the test user');
+                return;
+            }
+            const owner = ctx.User;
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', owner);
+            conversation.NewRecord();
+            conversation.Name = 'scoped-anon-elevation.SA6 fixture';
+            conversation.UserID = owner.ID;
+            let conversationID: string | undefined;
+            const detailIDs: string[] = [];
+            try {
+                Assert(await conversation.Save(),
+                    `fixture conversation create failed: ${conversation.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                conversationID = conversation.ID;
+
+                // Pre-fix write principal: the system user is refused by the owner gate, and the
+                // refusal is REPORTED (it used to leave a NULL LatestResult — "unknown error").
+                const asSystem = await buildHiddenToolTurnFixture(sys, conversationID, owner.ID);
+                const systemSaved = await asSystem.Save();
+                if (systemSaved) {
+                    detailIDs.push(asSystem.ID);
+                }
+                Assert(!systemSaved, 'the system user was ALLOWED to write a hidden tool turn on a conversation it does not own — '
+                    + 'the owner gate premise behind MJ#4791 does not hold here');
+                Assert(asSystem.LatestResult !== null && asSystem.LatestResult !== undefined,
+                    'the system user\'s refused save left LatestResult null — the owner gate\'s denial was dropped again (MJ#4791)');
+                AssertEqual(asSystem.LatestResult?.CompleteMessage, CONVERSATION_ACCESS_DENIED,
+                    'the system user\'s refused save should carry the owner gate\'s denial reason');
+
+                // The fix's principal: the conversation owner writes the same row.
+                const asOwner = await buildHiddenToolTurnFixture(owner, conversationID, owner.ID);
+                const ownerSaved = await asOwner.Save();
+                if (ownerSaved) {
+                    detailIDs.push(asOwner.ID);
+                }
+                Assert(ownerSaved,
+                    `the conversation owner's hidden tool turn save failed: ${asOwner.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                console.log('      → hidden tool turn refused with a reason as the system user, saved as the conversation owner');
+            } finally {
+                // As the owner: the owner gate refuses the system user's Delete just as it refuses its Save.
+                for (const detailID of detailIDs) {
+                    await deleteFixture('MJ: Conversation Details', detailID, owner);
+                }
+                if (conversationID) {
+                    await deleteFixture('MJ: Conversations', conversationID, owner);
                 }
             }
         },
