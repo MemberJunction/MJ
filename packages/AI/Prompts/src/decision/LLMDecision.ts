@@ -310,14 +310,15 @@ export class LLMDecision extends BaseDecision {
         key: string,
         rawVal: unknown
     ): { success: true; answer: LikelihoodAnswer } | { success: false; error: string } {
-        if (typeof rawVal !== 'number' || !Number.isFinite(rawVal)) {
+        const value = this.toFiniteNumber(rawVal);
+        if (value === undefined) {
             return {
                 success: false,
                 error: `Question '${key}': Likelihood value must be a finite number, got ${typeof rawVal === 'string' ? `"${rawVal}"` : String(rawVal)}`,
             };
         }
 
-        const probability = Math.max(0, Math.min(1, rawVal));
+        const probability = Math.max(0, Math.min(1, value));
         return {
             success: true,
             answer: {
@@ -432,7 +433,8 @@ export class LLMDecision extends BaseDecision {
         let sum = 0;
         for (const expectedKey of expectedKeys) {
             const itemVal = rawRecord[expectedKey];
-            const num = typeof itemVal === 'number' && Number.isFinite(itemVal) && itemVal >= 0 ? itemVal : 0;
+            const parsed = this.toFiniteNumber(itemVal);
+            const num = parsed !== undefined && parsed >= 0 ? parsed : 0;
             rawProbs[expectedKey] = num;
             sum += num;
         }
@@ -450,6 +452,21 @@ export class LLMDecision extends BaseDecision {
         }
 
         return { success: true, probabilities: normalized };
+    }
+
+    /**
+     * Reads a probability as a number. A chat model sometimes copies the quoted placeholder in
+     * `outputFormat` and writes `"0.1"` for `0.1`, so a string holding a finite number counts too.
+     */
+    private toFiniteNumber(value: unknown): number | undefined {
+        if (typeof value === 'number') {
+            return Number.isFinite(value) ? value : undefined;
+        }
+        if (typeof value === 'string' && value.trim() !== '') {
+            const parsed = Number(value.trim());
+            return Number.isFinite(parsed) ? parsed : undefined;
+        }
+        return undefined;
     }
 
     /**
