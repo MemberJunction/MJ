@@ -552,3 +552,4 @@
   resize: vertical;
 }
 .wfr-editor-error { color: var(--mj-status-error); font-size: var(--mj-font-size-xs); }
+.wfr-insp-failure { border-color: var(--mj-status-error); color: var(--mj-status-error); }
