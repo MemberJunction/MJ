@@ -46,26 +46,29 @@ Rules the layout keeps:
 
 All string literals involved (placeholder names, tag literals, block headings, markers) live in one place: [`packages/AI/Agents/src/constants.ts`](../packages/AI/Agents/src/constants.ts).
 
-## 3. Replace-in-place vs append-only: `PromptCacheStrategy`
+## 3. Replace-in-place vs append-only: `PrefixPromptCache`
 
 Two kinds of cache exist:
 
-| Strategy | Providers | Behaviour of the cache | What the agent does with the previous iteration's fragment |
+| `PrefixPromptCache` | Providers | Behaviour of the cache | What the agent does with the previous iteration's fragment |
 |---|---|---|---|
-| `block` (default when absent) | Anthropic (explicit breakpoints), Gemini (implicit), Cerebras (sliding) | Matches on block or segment boundaries inside the prompt | **Replaces it.** Only the latest fragment is attached; history stays compact. |
-| `prefix` | OpenAI automatic cache, xAI | Reuses a prior request only when that request's *entire* prompt is a byte prefix of the new one | **Retains it and appends the new one**, so each request is an exact prefix extension of the last. Costs a few hundred stale (cached) tokens per iteration. |
+| absent / `false` (block cache) | Anthropic (explicit breakpoints), Gemini (implicit), Cerebras (sliding) | Matches on block or segment boundaries inside the prompt | **Replaces it.** Only the latest fragment is attached; history stays compact. |
+| `true` (byte-prefix cache) | OpenAI automatic cache, xAI | Reuses a prior request only when that request's *entire* prompt is a byte prefix of the new one | **Retains it and appends the new one**, so each request is an exact prefix extension of the last. Costs a few hundred stale (cached) tokens per iteration. |
 
 Replacing the fragment on a prefix cache breaks the prefix right after the system prompt and caps the cached share there (measured: GPT 5.6 flat at 21K cached every iteration). Appending recovers the history (~93% cached).
 
-**Which provider is which is metadata, not code.** `PromptCacheStrategy` is a field of `LLMConfigurationSettings` in the model catalog's `ModelConfiguration` cascade:
+**Which provider is which is metadata, not code.** `PrefixPromptCache` is a boolean in `LLMConfigurationSettings` in the model catalog's `ModelConfiguration` cascade, which since 6.2 has a vendor layer:
 
 ```
 MJ: AI Model Types . ModelConfiguration      (type-wide default)
-  < MJ: AI Models . ModelConfiguration       (per model)
-    < MJ: AI Model Vendors . ModelConfiguration   (the inference provider's row — wins)
+  < MJ: AI Vendors . ModelConfiguration      (host-wide default for every model this vendor serves)
+    < MJ: AI Models . ModelConfiguration     (per model — the model's own word still beats the host's)
+      < MJ: AI Model Vendors . ModelConfiguration   (the inference provider's row — wins)
 ```
 
-`BaseAgent.ResolvePromptCacheStrategy(model, vendor)` finds the vendor's *inference-provider* model-vendor row and reads the effective configuration through `AIEngine.GetEffectiveModelConfiguration`. The 43 OpenAILLM and xAILLM inference rows ship seeded with `'prefix'`. A new host, or one model on a host that caches differently from the rest, is a metadata change in `metadata/ai-models/.ai-models.json`, never a code change. There is no vendor-name or driver-class matching anywhere.
+The vendor sits below the model on purpose: the same bag carries capability knobs that describe the model, and a host-wide default must not override what a model says about itself. The model-vendor row is where a host diverges for one model.
+
+`BaseAgent.ResolvePrefixPromptCache(model, vendor)` finds the vendor's *inference-provider* model-vendor row and reads the effective configuration through `AIEngine.GetEffectiveModelConfiguration`, which now folds in the vendor row named by that model-vendor row. `true` ships on the OpenAI and x.ai vendor rows in `metadata/ai-vendors`, so every model they serve inherits it and a new OpenAI model needs no seed of its own. A host that caches differently for one model sets the flag on that model-vendor row in `metadata/ai-models`. Nothing in code knows a provider's name.
 
 The mode is decided **once per run**: from a runtime model override, else from the first iteration's model selection, then frozen so a failover cannot flip the layout mid-run. On turn 1, before any selection is known, the layout is replace-in-place; if turn 2 resolves to append-only, turn 1's fragment is restored at the turn-1 boundary. The prompt's bound models are deliberately not consulted, because prompts bind several vendors for failover.
 
@@ -110,7 +113,7 @@ Known gaps: the thresholds are constants rather than metadata; a blocked call do
 ## 8. Checklist when you touch this
 
 - Changing the Loop template? Keep the `## Runtime State` pointer and do not reintroduce `_CURRENT_DATE`, `_CURRENT_PAYLOAD` or the three block headings; `loop-agent-system-prompt-snapshot.test.ts` pins this.
-- Adding a provider? Decide whether its cache is `prefix` or `block` and set `PromptCacheStrategy` on its inference model-vendor rows. Nothing in code needs to know its name.
+- Adding a provider? Decide whether its cache is a byte-prefix match and, if so, set `PrefixPromptCache: true` in the vendor row's `ModelConfiguration`; every model it serves inherits it. Override per model-vendor row only where a host diverges. Nothing in code needs to know its name.
 - Adding a placeholder that changes per iteration? Add it to `constants.ts` so `IsVolatileChildPrompt` and the template markers see it.
 - Writing a child prompt? Referencing the date or payload is fine; `auto` placement relocates it. Prefer not to, since relocation costs ~3K uncached tokens per call.
 - Adding an action that fails per resource (one URL, one record)? Make the failure message not look like a credential error, or the breaker's fatal rule will lock the whole tool out. `IT39` AP6 shows the contract.
