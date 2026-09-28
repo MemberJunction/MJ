@@ -218,6 +218,27 @@ describe('ClonePlanHash', () => {
         expect(planWith('AAAA-1111')).toBe(planWith('bbbb-2222'));
     });
 
+    it('does not depend on sibling order when sibling keys share the parent\'s minted ID', () => {
+        // Composite keys (ParentID, LineNo) under one cloned parent: both siblings' new keys hold
+        // the parent's new ID, so the token that value gets must not depend on which came last.
+        const sibling = (line: string): ClonePlanNode => ({
+            ...baseNode2,
+            Key: `Lines::${line}`,
+            NodeKey: `Lines::${line}`,
+            EntityName: 'Lines',
+            Action: 'Create',
+            SourceKey: { KeyValuePairs: [{ FieldName: 'ParentID', Value: 'p-1' }, { FieldName: 'LineNo', Value: line }] },
+            TargetKey: { KeyValuePairs: [{ FieldName: 'ParentID', Value: 'p-new' }, { FieldName: 'LineNo', Value: line }] },
+            FieldChanges: [{ Field: 'ParentID', Kind: 'Remap', OldValue: 'p-1', NewValue: 'p-new', Reason: '' }],
+        });
+        const parent: ClonePlanNode = { ...baseNode1, TargetKey: 'p-new', FieldChanges: [] };
+        const a = ComputePlanHash({ Nodes: [parent, sibling('1'), sibling('2')], Edges: [] });
+        const b = ComputePlanHash({ Nodes: [parent, sibling('2'), sibling('1')], Edges: [] });
+        const c = ComputePlanHash({ Nodes: [sibling('2'), sibling('1'), parent], Edges: [] });
+        expect(b).toBe(a);
+        expect(c).toBe(a);
+    });
+
     it('still changes when a remap points at an existing record instead of the new one', () => {
         const withRemap = (value: string) =>
             ComputePlanHash({

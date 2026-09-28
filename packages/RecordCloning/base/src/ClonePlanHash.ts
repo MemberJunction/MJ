@@ -30,10 +30,17 @@ function keyValues(key: CompositeKeyLike | string | null | undefined): string[] 
  */
 function mintedKeyTokens(nodes: ClonePlanNode[]): Map<string, string> {
     const tokens = new Map<string, string>();
-    for (const n of nodes) {
+    // Visit rows in a fixed order and keep the first name a value gets: when sibling keys share a
+    // minted value (a composite key holding the parent's new ID), the token must not depend on the
+    // order the walker loaded the siblings in.
+    const named = nodes
+        .map((n) => ({ n, name: `${n.EntityName}::${FormatCompositeKey(n.SourceKey)}` }))
+        .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const { n, name } of named) {
         const source = new Set(keyValues(n.SourceKey).map((v) => v.toLowerCase()));
         keyValues(n.TargetKey).forEach((value, i) => {
-            if (value && !source.has(value.toLowerCase())) tokens.set(value.toLowerCase(), `@new(${n.EntityName}::${FormatCompositeKey(n.SourceKey)}#${i})`);
+            const k = value?.toLowerCase();
+            if (k && !source.has(k) && !tokens.has(k)) tokens.set(k, `@new(${name}#${i})`);
         });
     }
     return tokens;
