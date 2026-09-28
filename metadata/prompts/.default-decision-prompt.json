@@ -23,6 +23,21 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Jev",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "D0E53C13-9BC5-4642-96AB-A5B73953536D"
+          },
+          "sync": {
+            "lastModified": "2026-09-28T23:29:29.931Z",
+            "checksum": "0264a219afa93af8bdcb342741edabef9b4bbd5676ac2ec3e0eccb912ef0bdd0"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=LLM Decision",
             "VendorID": "@lookup:MJ: AI Vendors.Name=MemberJunction",
             "Priority": 5

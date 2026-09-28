@@ -136,8 +136,9 @@ import {
     MiniMaxLLM,
 } from '@memberjunction/ai-minimax';
 
-// @memberjunction/ai-openrouter (1 classes)
+// @memberjunction/ai-openrouter (2 classes)
 import {
+    OpenRouterDecision,
     OpenRouterLLM,
 } from '@memberjunction/ai-openrouter';
 
@@ -1293,6 +1294,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
+    OpenRouterDecision,
     OpenRouterLLM,
     VertexLLM,
     xAILLM,
@@ -1455,11 +1457,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
-    MJContentItemAttributeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentItemAttributeEntity,
     MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
     MJContentItemEntity,
@@ -1659,11 +1661,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
-    MJSearchScopePermissionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
@@ -1863,11 +1865,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetVideoAnalyticsAction,
     HootSuiteBulkSchedulePostsAction,
     HootSuiteCreateScheduledPostAction,
-    HootSuiteDeleteScheduledPostAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteDeleteScheduledPostAction,
     HootSuiteGetAnalyticsAction,
     HootSuiteGetScheduledPostsAction,
     HootSuiteGetSocialProfilesAction,
@@ -2067,11 +2069,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
     MJUserEntityServer,
-    MJUserRoleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -2247,7 +2249,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 960;
+export const CLASS_REGISTRATIONS_COUNT = 961;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
