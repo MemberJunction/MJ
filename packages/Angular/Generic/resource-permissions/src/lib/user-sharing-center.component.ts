@@ -29,10 +29,41 @@ export type SharingCenterTab = 'shared-with-me' | 'shared-by-me';
  * around the same shape.
  */
 export interface SharingCenterDomainGroup {
+    /**
+     * The permission domain's identity: a LOOKUP KEY that drives Revoke resolution,
+     * audit-entity mapping, and icon selection in PermissionEngine. Never renamed.
+     */
     DomainName: string;
+    /** Business-friendly heading shown to the user (see `GetSharingDomainDisplayLabel`). */
+    Label: string;
     Icon: string;
     Rows: NormalizedPermission[];
     Expanded: boolean;
+}
+
+/**
+ * Display-only friendly headings for the built-in permission domains, used purely for
+ * the Sharing Center section labels. The underlying `DomainName` is a LOOKUP KEY (it
+ * drives Revoke resolution, audit-entity mapping, and icon selection in PermissionEngine)
+ * and MUST NOT be renamed. This map translates only what the user *reads*, never what
+ * the code *matches on*.
+ */
+export const SharingDomainDisplayLabels: Record<string, string> = {
+    'Dashboard Permissions': 'Dashboards',
+    'Artifact Permissions': 'Files',
+    'Collection Permissions': 'Collections',
+    'Access Control Rules': 'Rules',
+    'Resource Permissions': 'Shared items',
+};
+
+/**
+ * Returns a business-friendly heading for a permission domain. Falls back to the domain
+ * name with a trailing " Permissions" stripped (so an unmapped custom domain like
+ * "Widget Permissions" reads as "Widget"), then to the raw domain name.
+ */
+export function GetSharingDomainDisplayLabel(domainName: string): string {
+    return SharingDomainDisplayLabels[domainName]
+        ?? (domainName.replace(/\s+Permissions$/i, '').trim() || domainName);
 }
 
 /**
@@ -300,6 +331,7 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
         for (const [domainName, list] of bucket) {
             groups.push({
                 DomainName: domainName,
+                Label: GetSharingDomainDisplayLabel(domainName),
                 Icon: PermissionEngine.DomainIconFor(domainName),
                 Rows: list.sort((a, b) => (a.ResourceName ?? '').localeCompare(b.ResourceName ?? '')),
                 Expanded: list.length <= 10,
