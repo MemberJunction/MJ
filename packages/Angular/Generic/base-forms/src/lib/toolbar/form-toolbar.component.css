@@ -265,6 +265,9 @@
 }
 
 .mj-entity-badge {
+  /* A button now (keyboard-reachable); keep the badge look. */
+  font-family: inherit;
+  line-height: inherit;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -796,9 +799,37 @@
   color: var(--mj-brand-primary);
 }
 
-.mj-forms-menu-pin:disabled {
+/* Pinned, but past the cap on this form: dashed, so it reads as waiting for a free slot. */
+.mj-forms-menu-pin.pinned.over-cap {
+  outline: 1px dashed var(--mj-brand-primary);
+  outline-offset: -3px;
+}
+
+.mj-forms-menu-pin:disabled,
+.mj-forms-menu-pin[aria-disabled="true"] {
   opacity: 0.35;
   cursor: default;
+}
+
+/* Keyboard focus is a ring, not just the hover tint, on every panel control. */
+.mj-forms-menu-item:focus-visible,
+.mj-forms-menu-pin:focus-visible,
+.mj-forms-filter-chip-clear:focus-visible,
+.mj-entity-badge:focus-visible {
+  box-shadow: var(--mj-focus-ring);
+}
+
+/* The active form variant, on the View button, when it isn't the default form. */
+.mj-forms-variant-tag {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  border-radius: var(--mj-radius-sm);
+  background: var(--mj-bg-surface-active);
+  color: var(--mj-text-secondary);
+  font-size: var(--mj-text-xs);
 }
 
 .mj-forms-menu-sep {

@@ -308,7 +308,11 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const f = render({ Config: { ...DEFAULT_TOOLBAR_CONFIG, MaxPinnedActions: 2 } });
       openMore(f);
       const pinTags = btn(f, 'button[aria-label="Pin Tags"]') as HTMLButtonElement;
-      expect(pinTags.disabled).toBe(true);
+      // Reachable by keyboard, so its hint can be read, but pinning does nothing at the cap.
+      expect(pinTags.disabled).toBe(false);
+      expect(pinTags.getAttribute('aria-disabled')).toBe('true');
+      pinTags.click();
+      expect(UserInfoEngine.Instance.SetSettingDebounced).not.toHaveBeenCalled();
     });
 
     it('keeps custom items inline unless they opt in with Pinnable', () => {
@@ -334,7 +338,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       expect(pinnedTitles(f)).toEqual(['Edit this Record', 'Add to a list', 'View tags']);
       openMore(f);
       const pinFav = btn(f, 'button[aria-label="Pin Favorite"]') as HTMLButtonElement;
-      expect(pinFav.disabled).toBe(false);
+      expect(pinFav.getAttribute('aria-disabled')).toBeNull();
       pinFav.click();
       expect(save).toHaveBeenLastCalledWith(TOOLBAR_PINS_SETTING_KEY, JSON.stringify({ Version: 1, Pinned: ['clone', 'list', 'tags', 'favorite'] }));
     });
@@ -345,6 +349,7 @@ describe('MjFormToolbarComponent (DOM)', () => {
       const f = render();
       expect(pinnedTitles(f)).toContain('Make Favorite');
       stored = JSON.stringify({ Version: 1, Pinned: ['tags'] });
+      f.componentInstance.ngDoCheck(); // the next change-detection pass re-reads the setting
       expect(f.componentInstance.PinnedActionItems.map((i) => i.Key)).toEqual(['tags']);
     });
 
@@ -388,6 +393,69 @@ describe('MjFormToolbarComponent (DOM)', () => {
       f.detectChanges();
       expect(document.activeElement).toBe(btn(f, 'button[title="More actions"]'));
       f.nativeElement.remove();
+    });
+  });
+
+  describe('focus, names and listeners', () => {
+    it('returns focus to the More button after running an item that closes the panel', async () => {
+      const f = render();
+      document.body.appendChild(f.nativeElement);
+      openMore(f);
+      await tick();
+      (btn(f, '.mj-forms-menu-item[title="Refresh record"]') ?? btn(f, '.mj-forms-menu .mj-forms-menu-item'))!.click();
+      f.detectChanges();
+      expect(document.activeElement).toBe(btn(f, 'button[title="More actions"]'));
+      f.nativeElement.remove();
+    });
+
+    it('names an icon-only pinned button by its state, not a fixed label', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+      const f = render({ IsFavorite: true });
+      const favorite = queryAll(f, '.mj-forms-toolbar-group > .mj-forms-btn').find((b) => (b.getAttribute('aria-label') ?? '').includes('Favorite'));
+      expect(favorite).toBeDefined();
+      expect(favorite!.getAttribute('aria-label')).toBe(favorite!.getAttribute('title'));
+      expect(favorite!.getAttribute('aria-label')).toMatch(/Remove|Unfavorite|Favorited/i);
+      expect(favorite?.getAttribute('aria-label')).not.toBe('Favorite');
+    });
+
+    it('shows a pin past the cap as pinned, not as an unpinned action with a disabled pin', () => {
+      vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockImplementation((key: string) =>
+        key === TOOLBAR_PINS_SETTING_KEY ? JSON.stringify({ Version: 1, Pinned: ['favorite', 'history', 'list', 'tags'] }) : undefined
+      );
+      const f = render();
+      expect(f.componentInstance.PinnedActionItems.map((i) => i.Key)).toEqual(['favorite', 'history', 'list']);
+      openMore(f);
+      const tagsPin = btn(f, 'button[aria-label="Unpin Tags"]')!;
+      expect(tagsPin.getAttribute('aria-pressed')).toBe('true');
+      expect(tagsPin.classList).toContain('over-cap');
+      expect(tagsPin.getAttribute('title')).toContain('toolbar is full');
+    });
+
+    it('listens on the document only while a panel is open', () => {
+      const f = render();
+      const listeners = () => (f.componentInstance as unknown as { _unlistenDocument: unknown[] })._unlistenDocument.length;
+      expect(listeners()).toBe(0);
+      openMore(f);
+      expect(listeners()).toBe(2);
+      document.body.click();
+      f.detectChanges();
+      expect(f.componentInstance.MoreMenuOpen).toBe(false);
+      expect(listeners()).toBe(0);
+    });
+
+    it('clears the section search on the first Escape and closes the panel on the next', () => {
+      const f = render({ SearchFilter: 'addr' });
+      openView(f);
+      const out = capture(f.componentInstance.FilterChange);
+      const input = query(f, '.mj-forms-menu-search input') as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(out).toEqual(['']);
+      expect(f.componentInstance.ViewMenuOpen).toBe(true);
+    });
+
+    it('shows a non-default form variant on the View button', () => {
+      const f = render({ Variants: [{ ID: 'v1', Label: 'Admin layout', Scope: 'Role', Status: 'Active' }], CurrentVariantID: 'v1' });
+      expect(query(f, '.mj-forms-variant-tag')?.textContent).toContain('Admin layout');
     });
   });
 

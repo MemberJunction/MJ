@@ -80,7 +80,8 @@
      MAIN TOOLBAR (read mode only — hidden in edit mode)
      Inline actions (Edit + custom items), the user's pinned actions,
      a More menu for everything else, and a View menu for section and
-     layout controls. Pins are per user (UserInfoEngine), opt-in only.
+     layout controls. Pins are per user (UserInfoEngine); until a user
+     chooses, the configured defaults (Favorite and History) are pinned.
      ============================================ -->
 @if (!EditMode) {
   <div class="mj-forms-toolbar" [class.mj-forms-toolbar--sticky]="Config.StickyToolbar">
@@ -114,13 +115,15 @@
                     <span class="mj-forms-menu-label">{{ item.MenuLabel }}</span>
                     @if (item.Badge != null) { <span class="mj-forms-menu-badge">{{ item.Badge }}</span> }
                   </button>
+                  <!-- aria-disabled, not disabled: at the cap the button stays reachable, so its hint can be read. -->
                   <button class="mj-forms-menu-pin" type="button"
                     [class.pinned]="IsPinned(item.Key)"
-                    [disabled]="!IsPinned(item.Key) && !CanPinMore"
+                    [class.over-cap]="IsPinnedOverCap(item.Key)"
+                    [attr.aria-disabled]="!IsPinned(item.Key) && !CanPinMore ? 'true' : null"
                     [attr.aria-pressed]="IsPinned(item.Key)"
                     [attr.aria-label]="(IsPinned(item.Key) ? 'Unpin ' : 'Pin ') + item.MenuLabel"
-                    [title]="IsPinned(item.Key) ? 'Unpin from toolbar' : (CanPinMore ? 'Pin to toolbar' : 'Unpin another action first (' + MaxPinnedActions + ' max)')"
-                    (click)="TogglePin(item.Key, $event)">
+                    [title]="IsPinnedOverCap(item.Key) ? 'Pinned, but the toolbar is full (' + MaxPinnedActions + ' max): unpin another to show it, or click to unpin' : IsPinned(item.Key) ? 'Unpin from toolbar' : (CanPinMore ? 'Pin to toolbar' : 'Unpin another action first (' + MaxPinnedActions + ' max)')"
+                    (click)="TogglePin(item.Key)">
                     <i class="fa-solid fa-thumbtack"></i>
                   </button>
                 </div>
@@ -157,9 +160,14 @@
       <div class="mj-forms-menu-host" [class.open]="ViewMenuOpen">
         <button class="mj-forms-btn mj-forms-menu-trigger" type="button" data-menu-trigger="view"
           [attr.aria-expanded]="ViewMenuOpen" [attr.aria-controls]="MenuIdPrefix + '-view'"
-          title="Sections and layout" (click)="ToggleViewMenu()">
+          [title]="CurrentVariantID ? 'Sections and layout (form: ' + CurrentVariantLabel + ')' : 'Sections and layout'"
+          (click)="ToggleViewMenu()">
           <i class="fa-solid fa-sliders"></i>
           <span class="mj-forms-btn-text">View</span>
+          <!-- A non-default form variant stays visible while the panel is closed. -->
+          @if (CurrentVariantID) {
+            <span class="mj-forms-variant-tag">{{ CurrentVariantLabel }}</span>
+          }
         </button>
         @if (ViewMenuOpen) {
           <div class="mj-forms-menu mj-forms-menu--right" [id]="MenuIdPrefix + '-view'" role="group" aria-label="Sections and layout">
@@ -174,7 +182,7 @@
                     placeholder="Search sections..."
                     aria-label="Search sections">
                   @if (SearchFilter) {
-                    <button class="mj-clear-search" type="button" (click)="OnClearFilter()" title="Clear search">
+                    <button class="mj-clear-search" type="button" (click)="OnClearFilter()" aria-label="Clear section search" title="Clear search">
                       <i class="fa-solid fa-xmark"></i>
                     </button>
                   }
@@ -264,12 +272,12 @@
     <div class="mj-forms-hierarchy-row">
       <div class="mj-entity-hierarchy">
         @for (parent of ParentChain; track parent.ID) {
-          <a class="mj-entity-badge mj-entity-badge--parent"
+          <button type="button" class="mj-entity-badge mj-entity-badge--parent"
              [title]="'Navigate to parent: ' + parent.Name"
              (click)="OnParentBadgeClick(parent, $event)">
             <i class="fa-solid fa-arrow-up"></i>
             {{ parent.Name }}
-          </a>
+          </button>
           <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
         }
         <span class="mj-entity-badge mj-entity-badge--current">{{ EntityInfo?.Name }}</span>
@@ -297,7 +305,7 @@
     [class]="item.CssClass"
     [disabled]="item.Disabled || item.IsLoading"
     [title]="item.Description"
-    [attr.aria-label]="item.Text ? null : item.MenuLabel"
+    [attr.aria-label]="item.Text ? null : (item.Description || item.MenuLabel)"
     (click)="OnToolbarItemClick(item, $event)">
     @if (item.IsLoading) {
       <i class="fa-solid fa-spinner fa-spin"></i>
@@ -391,12 +399,12 @@
 <ng-template #descendantTreeTpl let-items="items">
   @if (items.length === 1) {
     <span class="mj-hierarchy-arrow"><i class="fa-solid fa-chevron-right"></i></span>
-    <a class="mj-entity-badge mj-entity-badge--child"
+    <button type="button" class="mj-entity-badge mj-entity-badge--child"
        [title]="'Navigate to: ' + items[0].EntityName"
        (click)="OnDescendantBadgeClick(items[0].EntityName, $event)">
       <i class="fa-solid fa-arrow-down"></i>
       {{ items[0].EntityName }}
-    </a>
+    </button>
     @if (items[0].Children.length > 0) {
       <ng-container [ngTemplateOutlet]="descendantTreeTpl"
         [ngTemplateOutletContext]="{ items: items[0].Children }"></ng-container>
@@ -405,12 +413,12 @@
     <div class="mj-descendant-chains">
       @for (item of items; track item.EntityName) {
         <div class="mj-descendant-chain">
-          <a class="mj-entity-badge mj-entity-badge--child"
+          <button type="button" class="mj-entity-badge mj-entity-badge--child"
              [title]="'Navigate to: ' + item.EntityName"
              (click)="OnDescendantBadgeClick(item.EntityName, $event)">
             <i class="fa-solid fa-arrow-down"></i>
             {{ item.EntityName }}
-          </a>
+          </button>
           @if (item.Children.length > 0) {
             <ng-container [ngTemplateOutlet]="descendantTreeTpl"
               [ngTemplateOutletContext]="{ items: item.Children }"></ng-container>
