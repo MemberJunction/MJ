@@ -606,6 +606,11 @@ export abstract class BaseModelRunner {
     return match.ID;
   }
 
+  /** The name of a model type for messages, or its ID when the engine doesn't know it. */
+  private modelTypeName(modelTypeId: string): string {
+    return AIEngine.Instance.ModelTypesByID.get(NormalizeUUID(modelTypeId))?.Name ?? modelTypeId;
+  }
+
   /**
    * Asserts that the prompt's configured model type matches the runner's required model type.
    * If `prompt.AIModelTypeID` is null or undefined, does not throw (the runner's required type applies).
@@ -619,9 +624,7 @@ export abstract class BaseModelRunner {
     }
     const requiredTypeId = this.RequiredModelTypeID();
     if (!UUIDsEqual(prompt.AIModelTypeID, requiredTypeId)) {
-      const promptTypeName = AIEngine.Instance.ModelTypesByID?.get(NormalizeUUID(prompt.AIModelTypeID))?.Name ??
-        AIEngine.Instance.ModelTypes.find(mt => UUIDsEqual(mt.ID, prompt.AIModelTypeID))?.Name ??
-        prompt.AIModelTypeID;
+      const promptTypeName = this.modelTypeName(prompt.AIModelTypeID);
       throw new Error(
         `Prompt "${prompt.Name}" requires model type "${promptTypeName}" (${prompt.AIModelTypeID}), but this runner requires "${this.RequiredModelType}" (${requiredTypeId})`
       );
@@ -668,7 +671,9 @@ export abstract class BaseModelRunner {
 
   /**
    * PHASE 1: Build candidates for explicitly specified model ID.
-   * Returns candidates for the single model if it's active and compatible with the runner's required type.
+   * Returns candidates for the single model if it's active. Throws if the model is of a different type
+   * than the runner requires: the caller asked for that model by ID, so running a different one instead
+   * would be wrong, and an empty result would surface only a generic "no candidates" message.
    */
   private buildCandidatesForExplicitModel(
     explicitModelId: string,
@@ -683,7 +688,9 @@ export abstract class BaseModelRunner {
     // Check model type compatibility against runner's required model type
     const requiredTypeId = this.RequiredModelTypeID();
     if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
-      return [];
+      throw new Error(
+        `Model override "${model.Name}" is type "${this.modelTypeName(model.AIModelTypeID)}", but this runner requires "${this.RequiredModelType}"`
+      );
     }
 
     const candidates = this.createCandidatesForModel(model, 20000, 'explicit', preferredVendorId);
@@ -961,9 +968,7 @@ export abstract class BaseModelRunner {
       if (!model || !model.IsActive) continue;
 
       if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
-        const modelTypeName = AIEngine.Instance.ModelTypesByID?.get(NormalizeUUID(model.AIModelTypeID))?.Name ??
-          AIEngine.Instance.ModelTypes.find(mt => UUIDsEqual(mt.ID, model.AIModelTypeID))?.Name ??
-          model.AIModelTypeID;
+        const modelTypeName = this.modelTypeName(model.AIModelTypeID);
         LogStatus(
           `Skipping model "${model.Name}" for prompt "${prompt?.Name ?? pm.PromptID}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
         );
@@ -1126,9 +1131,7 @@ export abstract class BaseModelRunner {
       const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
       if (model && model.IsActive) {
         if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
-          const modelTypeName = AIEngine.Instance.ModelTypesByID?.get(NormalizeUUID(model.AIModelTypeID))?.Name ??
-            AIEngine.Instance.ModelTypes.find(mt => UUIDsEqual(mt.ID, model.AIModelTypeID))?.Name ??
-            model.AIModelTypeID;
+          const modelTypeName = this.modelTypeName(model.AIModelTypeID);
           LogStatus(
             `Skipping model "${model.Name}" for prompt "${prompt?.Name ?? pm.PromptID}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
           );
@@ -1177,9 +1180,7 @@ export abstract class BaseModelRunner {
         const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
         if (model && model.IsActive) {
           if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
-            const modelTypeName = AIEngine.Instance.ModelTypesByID?.get(NormalizeUUID(model.AIModelTypeID))?.Name ??
-              AIEngine.Instance.ModelTypes.find(mt => UUIDsEqual(mt.ID, model.AIModelTypeID))?.Name ??
-              model.AIModelTypeID;
+            const modelTypeName = this.modelTypeName(model.AIModelTypeID);
             LogStatus(
               `Skipping model "${model.Name}" for prompt "${prompt.Name}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
             );
@@ -1214,9 +1215,7 @@ export abstract class BaseModelRunner {
       const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
       if (model && model.IsActive) {
         if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
-          const modelTypeName = AIEngine.Instance.ModelTypesByID?.get(NormalizeUUID(model.AIModelTypeID))?.Name ??
-            AIEngine.Instance.ModelTypes.find(mt => UUIDsEqual(mt.ID, model.AIModelTypeID))?.Name ??
-            model.AIModelTypeID;
+          const modelTypeName = this.modelTypeName(model.AIModelTypeID);
           LogStatus(
             `Skipping model "${model.Name}" for prompt "${prompt.Name}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
           );
