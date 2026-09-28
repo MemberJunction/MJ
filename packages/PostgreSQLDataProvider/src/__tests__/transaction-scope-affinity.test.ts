@@ -72,4 +72,18 @@ describe('PostgreSQLDataProvider — transaction scope affinity (#4786)', () => 
         expect(client.queries).not.toContain('SELECT 5 AS a');
         await provider.RollbackTransaction();
     });
+
+    it('savepoint SQL issued from an unrelated scope that settles the nested frame still reaches the transaction client', async () => {
+        const settle = gate();
+        const settler = (async () => { await settle.wait; await provider.RollbackTransaction(); })(); // predates the begin
+        await provider.BeginTransaction();
+        await provider.BeginTransaction();
+        settle.open();
+        await settler;
+        await provider.CommitTransaction();
+        const savepointSQL = client.queries.filter((q) => /SAVEPOINT/i.test(q));
+        expect(savepointSQL.some((q) => /^SAVEPOINT/i.test(q))).toBe(true);
+        expect(savepointSQL.some((q) => /^ROLLBACK TO SAVEPOINT/i.test(q))).toBe(true);
+        expect(pool.queries.filter((q) => /SAVEPOINT/i.test(q))).toEqual([]);
+    });
 });

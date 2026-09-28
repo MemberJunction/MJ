@@ -113,4 +113,18 @@ describe('SQLServerDataProvider — transaction scope affinity (#4786)', () => {
     expect(via('SELECT 4 AS B')).toBe(false);
     await provider.RollbackTransaction();
   });
+
+  it('savepoint SQL issued from an unrelated scope that settles the nested frame still reaches the transaction', async () => {
+    const settle = gate();
+    const settler = (async () => { await settle.wait; await provider.RollbackTransaction(); })(); // predates the begin
+    await provider.BeginTransaction();
+    await provider.BeginTransaction();
+    settle.open();
+    await settler;
+    await provider.CommitTransaction();
+
+    const savepointSQL = mssqlState.Queries.filter((q) => /(SAVE|ROLLBACK) TRANSACTION SavePoint_/i.test(q.sql));
+    expect(savepointSQL.map((q) => q.sql.match(/^\s*(\w+)/)?.[1]?.toUpperCase())).toEqual(['SAVE', 'ROLLBACK']);
+    expect(savepointSQL.every((q) => q.viaTransaction === true)).toBe(true);
+  });
 });
