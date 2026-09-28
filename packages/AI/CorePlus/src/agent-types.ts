@@ -1246,6 +1246,23 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     conversationId?: string;
 
     /**
+     * Optional history floor for a conversation run: the first moment of the conversation
+     * this run may read. Meaningful only with {@link conversationId}.
+     *
+     * The caller is responsible for `conversationMessages` starting there (the agent resolver
+     * loads them through `ConversationEngine.LoadWindowRowsFresh` with the same floor). The
+     * framework holds the floor everywhere else it reads the conversation on the run's behalf:
+     * - the conversation-history retrieval tools page only rows written at or after it;
+     * - the conversation's artifacts offered to the run are those of rows at or after it;
+     * - cross-turn compaction is skipped, since a summary folds in history from before it;
+     * - the previous turn's tool results are not carried forward, since they can quote history
+     *   from before it.
+     *
+     * Omitted (the default), the run reads the whole conversation, as before.
+     */
+    ConversationHistoryFrom?: Date;
+
+    /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
      * 1. Load the last run's FinalPayload
