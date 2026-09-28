@@ -19,7 +19,6 @@ import {
   LogStatusEx,
   IsVerboseLoggingEnabled,
   Metadata,
-  UserInfo,
   IMetadataProvider
 } from '@memberjunction/core';
 import {
@@ -30,8 +29,6 @@ import {
 import {
   MJAIPromptModelEntity,
   MJAIModelVendorEntity,
-  MJAIConfigurationEntity,
-  MJAIVendorEntity,
   MJAICredentialBindingEntity,
   MJCredentialEntity
 } from '@memberjunction/core-entities';
@@ -40,8 +37,7 @@ import {
   MJAIPromptEntityExtended,
   MJAIPromptRunEntityExtended,
   AIPromptParams,
-  ValidationAttempt,
-  AIModelSelectionInfo
+  ValidationAttempt
 } from '@memberjunction/ai-core-plus';
 import {
   ChatMessage,
@@ -150,12 +146,28 @@ export interface ResolvedScalarInferenceParams {
  *
  * `AIPromptRunner`, the chat runner, is built on it. Subclasses declare the model type they run
  * through {@link BaseModelRunner.RequiredModelType}.
+ *
+ * **Its protected API is still settling.** This class arrives in a short series of changes meant to
+ * ship in one release (#4767 through #4801). Until the series is complete, protected members may
+ * still be renamed or narrowed back to `private`, so do not subclass it from outside this package yet.
  */
 export abstract class BaseModelRunner {
   /**
-   * The model type this runner requires. A hard floor — AIPrompt.AIModelTypeID may narrow it
-   * or must match, and may never widen it. Declared here but not yet enforced: candidate
-   * selection does not read it.
+   * The model type this runner requires, as the **name** of an `MJ: AI Model Types` row: `'LLM'` for
+   * `AIPromptRunner`, `'Embeddings'` (`AIEngine.Instance.EmbeddingModelTypeName`) for an embeddings
+   * runner.
+   *
+   * The contract:
+   * - It is a name, not an ID, so a subclass can declare it without a metadata lookup. The base
+   *   resolves it to the type's ID through `AIEngine.Instance.ModelTypes` (a case-insensitive name
+   *   match) and compares each model's `AIModelTypeID` with that ID using `UUIDsEqual`. Names are
+   *   never compared with each other, and a name that matches no model type is an error.
+   * - It is a hard floor. `AIPrompt.AIModelTypeID` may equal it but never widen it, and a prompt whose
+   *   `AIModelTypeID` is null runs on the runner's type, not on any type.
+   *
+   * Declared but not yet enforced: candidate selection does not read it until the last change in this
+   * series (#4801), which implements the resolution and the floor above. Until then, a prompt with a
+   * null `AIModelTypeID` can still draw a model of any type.
    */
   public abstract get RequiredModelType(): string;
 
@@ -207,6 +219,14 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * The category {@link logError} records when the caller passes none. Override it so a runner's
+   * uncategorized errors are attributed to that runner rather than to the base.
+   */
+  protected get DefaultLogCategory(): string {
+    return 'BaseModelRunner';
+  }
+
+  /**
    * Helper method for enhanced error logging with metadata
    */
   protected logError(error: Error | string, options?: {
@@ -245,7 +265,7 @@ export abstract class BaseModelRunner {
     LogErrorEx({
       message: errorMessage,
       error: errorObj,
-      category: options?.category || 'AIPromptRunner',
+      category: options?.category || this.DefaultLogCategory,
       severity: options?.severity || 'error',
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined
     });

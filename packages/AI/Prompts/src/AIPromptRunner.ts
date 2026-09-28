@@ -1,20 +1,18 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
   type ModelVendorCandidate,
   type FailoverConfiguration,
   type FailoverAttempt,
-  type ResolvedScalarInferenceParams,
 } from './BaseModelRunner';
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -142,6 +140,11 @@ export class AIPromptRunner extends BaseModelRunner {
    */
   public override get RequiredModelType(): string {
     return 'LLM';
+  }
+
+  /** Keeps this runner's uncategorized errors logged under `AIPromptRunner`, as before the base class existed. */
+  protected override get DefaultLogCategory(): string {
+    return 'AIPromptRunner';
   }
 
   private _templateEngine: TemplateEngineServer;
