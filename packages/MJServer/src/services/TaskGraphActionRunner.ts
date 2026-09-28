@@ -83,6 +83,10 @@ export class TaskGraphActionRunner implements TaskActionRunner {
      * value, which is the honest consequence of choosing not to persist it, and the reason durable
      * dispatch is opt-in per binding rather than the default.
      *
+     * The name→value shape read here is written by `RedactParamsToRecord` (`@memberjunction/actions-base`)
+     * at deferral time — this method only rebuilds `ActionParam[]` from it, it does not re-apply any
+     * redaction rule.
+     *
      * Dependency outputs are merged underneath the task's own input so a node's explicit parameters
      * always win over an upstream node that happened to emit the same key.
      */
