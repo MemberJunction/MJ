@@ -18,7 +18,7 @@
       <label class="mj-clone-config-field mj-clone-config-field--wide">
         <span>Reason shown to users</span>
         <input class="mj-clone-config-input" type="text" [value]="Config.NotCloneableReason ?? ''" [disabled]="!EditMode"
-          (change)="Patch({ NotCloneableReason: $any($event.target).value })" />
+          (change)="Patch({ NotCloneableReason: InputValue($event) })" />
       </label>
     }
   </div>
@@ -72,7 +72,7 @@
     <label class="mj-clone-config-field">
       <span>Name template</span>
       <input class="mj-clone-config-input" type="text" placeholder="Copy of {Name}" [value]="Config.Naming?.Template ?? ''" [disabled]="!EditMode"
-        (change)="OnNamingChange({ Template: $any($event.target).value })" />
+        (change)="OnNamingChange({ Template: InputValue($event) })" />
     </label>
     <label class="mj-clone-config-field">
       <span>Strategy</span>
@@ -130,7 +130,7 @@
   @if (RelationshipRows.length > 0) {
     <div class="mj-clone-config-heading-row">
       <h4 class="mj-clone-config-heading">Related records</h4>
-      <button type="button" mjButton Variant="ghost" Size="sm" (click)="ShowAllRelationships = !ShowAllRelationships">
+      <button type="button" mjButton Variant="flat" Size="sm" (click)="ShowAllRelationships = !ShowAllRelationships">
         {{ ShowAllRelationships ? 'Show configured only' : 'Show all ' + RelationshipRows.length }}
       </button>
     </div>
@@ -169,7 +169,7 @@
   <details class="mj-clone-config-advanced">
     <summary>Advanced (JSON): Reset values, Rules, JsonRemap, Presets, Descendants and the rest</summary>
     <textarea class="mj-clone-config-json" rows="14" spellcheck="false" [value]="AdvancedJson" [disabled]="!EditMode"
-      aria-label="Clone configuration JSON" (change)="OnApplyJson($any($event.target).value)"></textarea>
+      aria-label="Clone configuration JSON" (change)="OnApplyJson(InputValue($event))"></textarea>
     @if (JsonError) {
       <p class="mj-clone-config-error">{{ JsonError }}</p>
     }
@@ -207,7 +207,7 @@
   <p class="mj-clone-config-muted">Plans a clone of one record with the <strong>saved</strong> configuration. Nothing is written.</p>
   <div class="mj-clone-config-preview-row">
     <input class="mj-clone-config-input" type="text" placeholder="Record ID" aria-label="Record ID to preview"
-      [value]="PreviewRecordId" (input)="PreviewRecordId = $any($event.target).value" (keydown.enter)="!IsPreviewing && PreviewPlanFor(PreviewRecordId)" />
+      [value]="PreviewRecordId" (input)="PreviewRecordId = InputValue($event)" (keydown.enter)="!IsPreviewing && PreviewPlanFor(PreviewRecordId)" />
     <button type="button" mjButton Variant="outline" Size="sm" [disabled]="!PreviewRecordId.trim() || IsPreviewing" (click)="PreviewPlanFor(PreviewRecordId)">
       @if (IsPreviewing) { <i class="fa-solid fa-spinner fa-spin"></i> } @else { <i class="fa-solid fa-diagram-project"></i> } Preview plan
     </button>

@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, Templa
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, CompositeKey, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RecordCloneService, type CloneCompletedEvent, type CloneNavigationEvent } from '@memberjunction/ng-record-clone';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -1065,8 +1065,9 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
         this.CanCloneEntity = describe.CanClone;
         this.cdr.markForCheck();
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         // A failed capability check hides the action; the server re-checks on every clone.
+        LogError(`Clone capability check failed for ${entityName}: ${err instanceof Error ? err.message : String(err)}`);
       });
   }
 

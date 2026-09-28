@@ -71,7 +71,7 @@ import type { CloneNavigationEvent } from './record-clone-types';
                             Execution Warnings ({{Result!.Warnings!.length}})
                         </span>
                         <ul class="warnings-list">
-                            @for (warn of Result!.Warnings; track warn.Code) {
+                            @for (warn of Result!.Warnings; track warn.Code + (warn.NodeKey || '') + $index) {
                                 <li>{{warn.Message}}</li>
                             }
                         </ul>

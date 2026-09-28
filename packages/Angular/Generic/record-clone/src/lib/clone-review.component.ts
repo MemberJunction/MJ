@@ -91,7 +91,7 @@ interface NodeFieldChangesSummary {
                         One or more constraints or validation rules prevent this record graph from being cloned:
                     </p>
                     <ul class="blocked-reasons-list">
-                        @for (warning of BlockingErrors; track warning.Code) {
+                        @for (warning of BlockingErrors; track warning.Code + (warning.NodeKey || '') + $index) {
                             <li>
                                 <strong>{{warning.Code}}:</strong> {{warning.Message}}
                                 @if (warning.NodeKey) {

@@ -193,6 +193,12 @@ export class EntityCloneConfigEditorComponent extends BaseAngularComponent {
     // ── Edits ────────────────────────────────────────────────────────────
 
     /** Sets top-level keys; an undefined, empty or default-equivalent value removes the key. */
+    /** The value of the input, select or textarea that raised a DOM event. */
+    public InputValue(event: Event): string {
+        const target = event.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+        return target?.value ?? '';
+    }
+
     public Patch(changes: Partial<IEntityCloneConfiguration>): void {
         const next: Record<string, unknown> = { ...this.Config };
         for (const [k, v] of Object.entries(changes)) {

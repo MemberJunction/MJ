@@ -537,7 +537,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
     /** Fires after every successful plan computation with the fresh plan. */
     @Output() PlanChanged = new EventEmitter<RecordClonePlanDetails>();
 
-    /** Fires once the clone commits. The panel also raises the standard BaseEntity `save` event so open grids refresh. */
+    /** Fires once the clone commits. The panel also raises one `remote-invalidate` event per written entity so open views refresh. */
     @Output() CloneCompleted = new EventEmitter<CloneCompletedEvent>();
 
     /** Fires when describe, plan or execute fails, with the message the panel shows. */
@@ -848,11 +848,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     /** Key of the root clone once execution succeeded, as a record-id string. */
     public get TargetRecordKey(): string | null {
-        const raw = this.ExecutionResult?.Roots?.[0]?.TargetKey;
-        if (!raw) return null;
-        return typeof raw === 'string'
-            ? raw
-            : (raw as CompositeKey)?.ToURLSegment?.() ?? (raw as CompositeKey)?.ToConcatenatedString?.() ?? String(raw);
+        return this.ExecutionResult?.Roots?.[0]?.TargetKey || null;
     }
 
     // ── Template handlers ────────────────────────────────────────────────
