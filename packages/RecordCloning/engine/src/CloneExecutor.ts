@@ -12,6 +12,7 @@ import {
     CompositeKey,
     DatabaseProviderBase,
     EntitySaveOptions,
+    IEntityDataProvider,
     IMetadataProvider,
     LogError,
     Metadata,
@@ -121,10 +122,8 @@ export class CloneExecutor {
         }
 
         // A clone is all or nothing (plan §6): refuse rather than run it without a transaction.
-        const transProvider = md as unknown as {
-            SupportsEntityTransactions?: boolean;
-            BeginEntityTransaction?(): Promise<import('@memberjunction/core').EntityTransactionScope>;
-        };
+        // Transactions are an IEntityDataProvider capability; the metadata provider is also the data provider.
+        const transProvider = md as unknown as Pick<IEntityDataProvider, 'SupportsEntityTransactions' | 'BeginEntityTransaction'>;
         if (transProvider.SupportsEntityTransactions !== true || typeof transProvider.BeginEntityTransaction !== 'function') {
             const message = 'This provider cannot run the clone in a transaction, so it was not started (a partial clone cannot be undone).';
             const logId = await this.WriteRefusalLog(plan, contextUser, message);

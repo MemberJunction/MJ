@@ -5,7 +5,6 @@
  * @see plans/record-cloning/README.md §11.3, §13.1
  */
 
-import { UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { IRecordProcessor, RecordProcessorContext, RecordProcessorRegistry, RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
 import { CloneEdgePolicy, CloneRequestOptions, RecordCloneRequest } from '@memberjunction/record-cloning-base';
@@ -35,7 +34,7 @@ export class CloneRecordProcessor implements IRecordProcessor {
         const provider = context.provider;
         const user = context.contextUser;
         const entityInfo =
-            provider.Entities.find((e) => UUIDsEqual(e.ID, record.EntityID)) ||
+            provider.EntityByID(record.EntityID) ||
             (this._config.EntityName ? provider.EntityByName(this._config.EntityName) : null);
 
         if (!entityInfo) {
@@ -117,8 +116,9 @@ export function RegisterCloneRecordProcessor(): void {
         if (context.Configuration) {
             try {
                 parsedConfig = JSON.parse(context.Configuration);
-            } catch {
-                // Ignore parse errors, fall back to empty config
+            } catch (err) {
+                // A malformed configuration must not turn into a clone with default scope.
+                throw new Error(`Clone record process configuration is not valid JSON: ${err instanceof Error ? err.message : String(err)}`);
             }
         }
         return new CloneRecordProcessor(parsedConfig);

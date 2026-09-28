@@ -161,7 +161,7 @@ describe('Phase 4.2: MJ: AI Prompts & MJ: Templates Record Cloning Use Case', ()
             } as EntityRelationshipInfo,
         ],
         GetUserPermisions: () => ({ CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }),
-        CloneConfiguration: promptCloneConfig,
+        CloneConfig: promptCloneConfig,
     };
 
     const entTemplates: Partial<EntityInfo> = {
@@ -205,7 +205,7 @@ describe('Phase 4.2: MJ: AI Prompts & MJ: Templates Record Cloning Use Case', ()
             } as EntityRelationshipInfo,
         ],
         GetUserPermisions: () => ({ CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }),
-        CloneConfiguration: templateCloneConfig,
+        CloneConfig: templateCloneConfig,
     };
 
     const entTemplateContents: Partial<EntityInfo> = {
@@ -455,7 +455,7 @@ describe('Phase 4.2: MJ: AI Prompts & MJ: Templates Record Cloning Use Case', ()
                 RelatedEntity: r.RelatedEntity,
                 RelatedEntityJoinField: r.RelatedEntityJoinField,
             })),
-            CloneConfiguration: promptCloneConfig,
+            CloneConfig: promptCloneConfig,
         };
 
         const promptErrors = CloneConfigValidator.Validate(promptMeta);
@@ -476,7 +476,7 @@ describe('Phase 4.2: MJ: AI Prompts & MJ: Templates Record Cloning Use Case', ()
                 RelatedEntity: r.RelatedEntity,
                 RelatedEntityJoinField: r.RelatedEntityJoinField,
             })),
-            CloneConfiguration: templateCloneConfig,
+            CloneConfig: templateCloneConfig,
         };
 
         const templateErrors = CloneConfigValidator.Validate(templateMeta);

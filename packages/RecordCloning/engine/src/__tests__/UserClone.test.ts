@@ -284,7 +284,7 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
             CanUpdate: true,
             CanDelete: true,
         }),
-        CloneConfiguration: userCloneConfig,
+        CloneConfig: userCloneConfig,
     };
 
     const userRolesEntity: Partial<EntityInfo> = {
@@ -444,7 +444,7 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
                 RelatedEntity: r.RelatedEntity,
                 RelatedEntityJoinField: r.RelatedEntityJoinField,
             })),
-            CloneConfiguration: userCloneConfig,
+            CloneConfig: userCloneConfig,
         });
 
         const errors = validationErrors.filter((e) => e.Severity === 'Error');

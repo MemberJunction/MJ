@@ -672,7 +672,7 @@ describe('Phase 4.6: MJ: Applications, MJ: Roles, MJ: Components, MJ: Record Pro
                     RelatedEntity: r.RelatedEntity,
                     RelatedEntityJoinField: r.RelatedEntityJoinField,
                 })),
-                CloneConfiguration: item.config,
+                CloneConfig: item.config,
             };
 
             const errors = CloneConfigValidator.Validate(validatorMeta);

@@ -24,7 +24,7 @@ import {
     RunView,
     UserInfo,
 } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import {
     RecordCloneDescribeOperation,
     RecordClonePlanOperation,
@@ -365,7 +365,7 @@ export class RecordCloneOperationsHandler {
 
         const toItem = (row: Record<string, unknown>, side: 'Source' | 'Target'): RecordCloneLineageItem => ({
             RecordID: String(row[`${side}RecordID`]),
-            EntityName: md.Entities.find((e) => UUIDsEqual(e.ID, String(row[`${side}EntityID`])))?.Name ?? 'Unknown',
+            EntityName: md.EntityByID(String(row[`${side}EntityID`]))?.Name ?? 'Unknown',
             ClonedAt: row.__mj_CreatedAt ? String(row.__mj_CreatedAt) : undefined,
             CloneLogID: cloneLogIdFromLinkMetadata(row.Metadata),
         });

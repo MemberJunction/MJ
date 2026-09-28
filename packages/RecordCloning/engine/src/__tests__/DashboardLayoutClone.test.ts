@@ -731,7 +731,7 @@ describe('Phase 4.5: MJ: Dashboards, MJ: User Views, MJ: Lists, MJ: Themes, MJ: 
                     RelatedEntity: r.RelatedEntity,
                     RelatedEntityJoinField: r.RelatedEntityJoinField,
                 })),
-                CloneConfiguration: item.config,
+                CloneConfig: item.config,
             };
 
             const errors = CloneConfigValidator.Validate(validatorMeta);

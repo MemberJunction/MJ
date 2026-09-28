@@ -72,7 +72,7 @@ describe('ClonePlanner', () => {
             CanUpdate: true,
             CanDelete: true,
         }),
-        CloneConfiguration: {
+        CloneConfig: {
             Enabled: true,
             MaxDepth: 3,
             MaxRecords: 100,
@@ -100,7 +100,7 @@ describe('ClonePlanner', () => {
             CanUpdate: true,
             CanDelete: true,
         }),
-        CloneConfiguration: {
+        CloneConfig: {
             Enabled: true,
         },
     };
@@ -161,7 +161,7 @@ describe('ClonePlanner', () => {
     });
 
     it('blocks a plan whose clone configuration is invalid, and only warns about unknown relationship keys', async () => {
-        const bad = { ...parentEntity, RelatedEntities: [], CloneConfiguration: { Enabled: true, MaxDepth: 1.5, Relationships: { 'No Such Entity': { Policy: 'Deep' } } } } as unknown as EntityInfo;
+        const bad = { ...parentEntity, RelatedEntities: [], CloneConfig: { Enabled: true, MaxDepth: 1.5, Relationships: { 'No Such Entity': { Policy: 'Deep' } } } } as unknown as EntityInfo;
         const provider = { ...mockProvider, Entities: [bad], EntityByName: (n: string) => (n === 'ParentEntity' ? bad : null) } as IMetadataProvider;
         mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] });
 
@@ -185,7 +185,7 @@ describe('ClonePlanner', () => {
                 { Name: 'CompanyID', IsPrimaryKey: false, Type: 'uniqueidentifier', RelatedEntity: 'Companies', RelatedEntityID: 'ent-co', IsSPParameter: () => true } as unknown as EntityFieldInfo,
                 { Name: 'OwnerID', IsPrimaryKey: false, Type: 'uniqueidentifier', RelatedEntity: 'Users', RelatedEntityID: 'ent-u', IsSPParameter: () => true } as unknown as EntityFieldInfo,
             ],
-            CloneConfiguration: { Enabled: true, UI: { RetargetFields: ['CompanyID'] } },
+            CloneConfig: { Enabled: true, UI: { RetargetFields: ['CompanyID'] } },
         } as unknown as EntityInfo;
         const provider = { ...mockProvider, Entities: [withFk], EntityByName: (n: string) => (n === 'ParentEntity' ? withFk : null) } as IMetadataProvider;
         mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'parent-1', Name: 'P', CompanyID: 'co-1', OwnerID: 'u-1' }] });
@@ -214,7 +214,7 @@ describe('ClonePlanner', () => {
                     ? { Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] }
                     : { Success: true, Results: [{ ID: 'child-1', Name: 'Original Child', ParentID: 'parent-1' }] };
             });
-            const withChildren = { ...parentEntity, CloneConfiguration: { Enabled: true, Relationships: { ChildEntity: { Policy: 'Deep' } } } } as unknown as EntityInfo;
+            const withChildren = { ...parentEntity, CloneConfig: { Enabled: true, Relationships: { ChildEntity: { Policy: 'Deep' } } } } as unknown as EntityInfo;
             const list = [withChildren, childEntity as EntityInfo];
             const provider = { ...mockProvider, Entities: list, EntityByName: (n: string) => list.find((e) => e.Name === n) ?? null } as IMetadataProvider;
             return new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
@@ -238,7 +238,7 @@ describe('ClonePlanner', () => {
             ],
             RelatedEntities: [{ ID: 'rel-sub', Type: 'One To Many', RelatedEntity: 'Folders', RelatedEntityID: 'ent-folder', RelatedEntityJoinField: 'ParentID' }],
             GetUserPermisions: () => ({ CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }),
-            CloneConfiguration: { Enabled: true, Relationships: { Folders: { Policy: 'Deep' } } },
+            CloneConfig: { Enabled: true, Relationships: { Folders: { Policy: 'Deep' } } },
         } as unknown as EntityInfo;
         const rows = [
             { ID: 'f-parent', Name: 'Root', ParentID: null },
@@ -420,7 +420,7 @@ describe('ClonePlanner', () => {
     it('blocks plan with REQUIRED_USER_TYPE_MISMATCH when user type is insufficient', async () => {
         const restrictedParent: EntityInfo = {
             ...parentEntity,
-            CloneConfiguration: {
+            CloneConfig: {
                 Enabled: true,
                 RequiredUserType: 'Owner',
             },
@@ -588,7 +588,7 @@ describe('ClonePlanner', () => {
             const onlySchema = GrantedCloneAuthorizations(false).map((a) =>
                 a.Name === 'Clone Records in Custom Schemas' ? ({ ...a, UserCanExecute: () => true } as typeof a) : a
             );
-            const withPreset = { ...parentEntity, CloneConfiguration: { Enabled: true, MaxDepth: 3, MaxRecords: 100, Presets: [{ Key: 'full', Label: 'Full', Options: { MaxDepth: 5, SoftLinks: 'include' } }] } } as EntityInfo;
+            const withPreset = { ...parentEntity, CloneConfig: { Enabled: true, MaxDepth: 3, MaxRecords: 100, Presets: [{ Key: 'full', Label: 'Full', Options: { MaxDepth: 5, SoftLinks: 'include' } }] } } as EntityInfo;
             const provider = { ...withAuths(onlySchema), EntityByName: (n: string) => (n === 'ParentEntity' ? withPreset : (childEntity as EntityInfo)) } as IMetadataProvider;
             mockTwoRows();
             const plan = await new ClonePlanner({ Provider: provider }).Plan({ ...request, Options: { Preset: 'full' } }, standardUser);
@@ -607,7 +607,7 @@ describe('ClonePlanner', () => {
         });
 
         it('refuses a root whose clone configuration is not enabled', async () => {
-            const disabledParent = { ...parentEntity, CloneConfiguration: { MaxDepth: 3 } } as EntityInfo;
+            const disabledParent = { ...parentEntity, CloneConfig: { MaxDepth: 3 } } as EntityInfo;
             const provider = {
                 ...mockProvider,
                 EntityByName: (name: string) => (name === 'ParentEntity' ? disabledParent : (childEntity as EntityInfo)),
@@ -621,7 +621,7 @@ describe('ClonePlanner', () => {
     it('skips server-generated children with warning', async () => {
         const parentWithHook: EntityInfo = {
             ...parentEntity,
-            CloneConfiguration: {
+            CloneConfig: {
                 Enabled: true,
                 Hooks: {
                     ServerGeneratedChildren: ['ChildEntity'],
@@ -671,7 +671,7 @@ describe('ClonePlanner', () => {
             ],
             RelatedEntities: [],
             GetUserPermisions: () => ({ CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true }),
-            CloneConfiguration: { Enabled: true },
+            CloneConfig: { Enabled: true },
         };
         const parentWithTags = {
             ...parentEntity,
@@ -691,7 +691,7 @@ describe('ClonePlanner', () => {
                     Type: 'One To Many',
                 } as EntityRelationshipInfo,
             ],
-            CloneConfiguration: { Enabled: true, Relationships: { ParentTags: { Policy: 'Deep' } } },
+            CloneConfig: { Enabled: true, Relationships: { ParentTags: { Policy: 'Deep' } } },
         } as EntityInfo;
         const list = [parentWithTags, junction as EntityInfo];
         const provider = {
@@ -730,7 +730,7 @@ describe('ClonePlanner', () => {
                     { Name: 'Name', IsPrimaryKey: false, Type: 'nvarchar', IsSPParameter: () => true } as EntityFieldInfo,
                 ],
                 RelatedEntities: [],
-                CloneConfiguration: { Enabled: true },
+                CloneConfig: { Enabled: true },
             } as unknown as EntityInfo;
             const subtypeProvider = { ...provider, EntityByName: (n: string) => (n === 'SubtypeEntity' ? subtype : null) } as IMetadataProvider;
             mockRunViewInstance.mockResolvedValue({ Success: true, Results: [{ ID: 'sub-1', Name: 'Sub' }] });

@@ -53,6 +53,7 @@ describe('RecordCloneOperationsHandler', () => {
             Authorizations: GrantedCloneAuthorizations(granted),
             Entities: entities,
             EntityByName: (n: string) => entities.find((e) => e.Name === n) ?? null,
+            EntityByID: (id: string) => entities.find((e) => e.ID === id),
         }) as unknown as IMetadataProvider;
 
     let handler: RecordCloneOperationsHandler;

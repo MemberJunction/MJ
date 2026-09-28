@@ -1129,7 +1129,7 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
                     RelatedEntity: r.RelatedEntity,
                     RelatedEntityJoinField: r.RelatedEntityJoinField,
                 })),
-                CloneConfiguration: actionCloneConfig,
+                CloneConfig: actionCloneConfig,
             },
             allEntities.map((e) => ({ Name: e.Name, Fields: e.Fields! }))
         );
@@ -1143,7 +1143,7 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
                     RelatedEntity: r.RelatedEntity,
                     RelatedEntityJoinField: r.RelatedEntityJoinField,
                 })),
-                CloneConfiguration: queryCloneConfig,
+                CloneConfig: queryCloneConfig,
             },
             allEntities.map((e) => ({ Name: e.Name, Fields: e.Fields! }))
         );
@@ -1157,7 +1157,7 @@ describe('Phase 4.4: MJ: Actions, MJ: Queries, MJ: Scheduled Jobs Record Cloning
                     RelatedEntity: r.RelatedEntity,
                     RelatedEntityJoinField: r.RelatedEntityJoinField,
                 })),
-                CloneConfiguration: scheduledJobCloneConfig,
+                CloneConfig: scheduledJobCloneConfig,
             },
             allEntities.map((e) => ({ Name: e.Name, Fields: e.Fields! }))
         );

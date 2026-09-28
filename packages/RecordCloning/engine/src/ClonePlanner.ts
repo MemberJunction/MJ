@@ -39,6 +39,8 @@ import {
     NameCollisionPrefix,
     NameTemplateOptions,
     RowMatchesExclusion,
+    type CloneFieldMappingContext,
+    type UniqueKeyDefinition,
 } from '@memberjunction/record-cloning-base';
 import { EscapeSQLString } from '@memberjunction/global';
 import { CloneAuthorizer } from './CloneAuthorization';
@@ -102,7 +104,7 @@ export class ClonePlanner {
         const warnings: CloneWarning[] = [];
         let planBlocked = false;
 
-        const rootConfig = rootEntityInfo.CloneConfig ?? (rootEntityInfo as unknown as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration }).CloneConfiguration ?? null;
+        const rootConfig = rootEntityInfo.CloneConfig ?? null;
         const authorizer = new CloneAuthorizer(md);
 
         // The configuration is checked here, not only in the Entities form: an invalid bag (a bad
@@ -283,7 +285,7 @@ export class ClonePlanner {
 
                     // Check server-generated children on parent
                     const sourceEnt = md.EntityByName(candidate.SourceEntityName);
-                    const parentConfig = sourceEnt?.CloneConfig ?? (sourceEnt as unknown as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration }).CloneConfiguration ?? null;
+                    const parentConfig = sourceEnt?.CloneConfig ?? null;
                     if (parentConfig?.Hooks?.ServerGeneratedChildren?.includes(candidate.TargetEntityName)) {
                         warnings.push({
                             Code: 'SERVER_GENERATED_CHILD_SKIPPED',
@@ -298,8 +300,8 @@ export class ClonePlanner {
                         return 'Skip';
                     }
 
-                    const relPolicy = candidate.Relationship?.CloneConfig ?? (candidate.Relationship as { CloneConfiguration?: import('@memberjunction/core').ICloneRelationshipPolicy } | null | undefined)?.CloneConfiguration ?? undefined;
-                    const targetConfig = targetEntity?.CloneConfig ?? (targetEntity as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration } | null | undefined)?.CloneConfiguration ?? null;
+                    const relPolicy = candidate.Relationship?.CloneConfig ?? undefined;
+                    const targetConfig = targetEntity?.CloneConfig ?? null;
 
                     // Up a hierarchy is the parent the row hangs from: a pointer to keep, never a
                     // subtree to copy. Configuration keys name the downward relationship, so they don't apply.
@@ -520,7 +522,7 @@ export class ClonePlanner {
         }
 
         // Naming for each row, and the names already taken, so a repeat clone doesn't collide at save.
-        const cloneConfigOf = (e: EntityInfo) => e.CloneConfig ?? (e as unknown as { CloneConfiguration?: IEntityCloneConfiguration }).CloneConfiguration ?? null;
+        const cloneConfigOf = (e: EntityInfo) => e.CloneConfig ?? null;
         const namingFor = (depNode: DependencyNode): NameTemplateOptions => {
             if (depNode.Depth === 0) {
                 return {
@@ -629,7 +631,7 @@ export class ClonePlanner {
                     ExistingNamesByField: existingNames.get(depNode.EntityName),
                 },
                 FieldRules: (() => {
-                    const entConfig = entInfo.CloneConfig ?? (entInfo as unknown as { CloneConfiguration?: import('@memberjunction/core').IEntityCloneConfiguration }).CloneConfiguration ?? null;
+                    const entConfig = entInfo.CloneConfig ?? null;
                     const descConfig = !isRoot ? rootConfig?.Descendants?.[depNode.EntityName] : undefined;
 
                     const entOwnership = entConfig?.Fields?.Ownership || (entConfig as { Ownership?: string[] } | null)?.Ownership;
@@ -677,7 +679,7 @@ export class ClonePlanner {
                         Ownership: combinedOwnership.length > 0 ? combinedOwnership : undefined,
                         ServerAllocated: combinedServerAllocated.length > 0 ? combinedServerAllocated : undefined,
                         PromptFor: combinedPromptFor.length > 0 ? combinedPromptFor : undefined,
-                        Rules: (descConfig?.Fields?.Rules ?? entConfig?.Fields?.Rules) as import('@memberjunction/record-cloning-base').CloneFieldMappingContext['FieldRules']['Rules'],
+                        Rules: (descConfig?.Fields?.Rules ?? entConfig?.Fields?.Rules) as CloneFieldMappingContext['FieldRules']['Rules'],
                         JsonRemap: entConfig?.Fields?.JsonRemap,
                     };
                 })(),
@@ -770,14 +772,14 @@ export class ClonePlanner {
         }
 
         // Intra-plan collision detection across siblings
-        const uniqueKeysByEntity: Record<string, import('@memberjunction/record-cloning-base').UniqueKeyDefinition[]> = {};
+        const uniqueKeysByEntity: Record<string, UniqueKeyDefinition[]> = {};
         for (const depNode of flatGraphNodes) {
             const nodeKey = `${depNode.EntityName}::${depNode.RecordID}`;
             if (referenceNodeKeys.has(nodeKey)) {
                 continue;
             }
             if (!uniqueKeysByEntity[depNode.EntityName]) {
-                const uqs: import('@memberjunction/record-cloning-base').UniqueKeyDefinition[] = [];
+                const uqs: UniqueKeyDefinition[] = [];
                 if (depNode.EntityInfo.CloneConfig?.Fields?.UniqueKeys && depNode.EntityInfo.CloneConfig.Fields.UniqueKeys.length > 0) {
                     uqs.push(...depNode.EntityInfo.CloneConfig.Fields.UniqueKeys);
                 } else {

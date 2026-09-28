@@ -10,6 +10,7 @@
 import {
     BaseEntity,
     IMetadataProvider,
+    LogError,
     Metadata,
     RelatedRecordCollection,
     UserInfo,
@@ -183,8 +184,10 @@ export class CloneMaterializer {
                 Source: 'database',
                 ReadOnly: false,
             });
-        } catch {
-            // If already declared or dynamic declaration disallowed, fall back to sidecar
+        } catch (err) {
+            // The row still saves, but after the parent's transaction step rather than inside its
+            // save (the sidecar route). Say so: it is the line between the two routes.
+            LogError(`[RecordCloning] Could not declare ${childEntityName} rows as a collection of ${parent.EntityInfo?.Name ?? 'the parent'}; saving them as sidecars: ${err instanceof Error ? err.message : String(err)}`);
             return null;
         }
     }
