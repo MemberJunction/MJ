@@ -19,7 +19,7 @@ import {
     WalkOptions,
     WalkStats,
 } from './types';
-import { escapeSqlString, SqlIn } from './sql';
+import { escapeSqlString } from './sql';
 import { BuildCompositeKeyFromRecord } from './keys';
 import { SortNodesTopologically } from './sort';
 import { SYSTEM_FK_SKIP_PATTERNS } from './constants';
@@ -1081,7 +1081,6 @@ export class DependencyGraphWalker {
             FollowHierarchies: options.FollowHierarchies ?? false,
             ListNonCuratedInbound: options.ListNonCuratedInbound ?? false,
             EdgePolicy: options.EdgePolicy ?? null as unknown as (edge: GraphEdgeCandidate) => EdgePolicyDecision,
-            BatchChildLoads: options.BatchChildLoads ?? true,
         };
     }
 }

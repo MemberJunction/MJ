@@ -1,8 +1,8 @@
 /**
  * Characterization: the extracted walker's default walk (the options VersionHistory passes) returns
  * the same tree as VersionHistory's walker did before the extraction. Both run over one in-memory
- * database answered by a RunView mock that evaluates the filters they send, so the new walker's
- * batched child loads and the old one's per-parent loads are compared on results, not on queries.
+ * database answered by a RunView mock that evaluates the filters they send, so the two are compared
+ * on results, not on the exact queries.
  */
 import { describe, it, expect, vi } from 'vitest';
 import type { EntityInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';

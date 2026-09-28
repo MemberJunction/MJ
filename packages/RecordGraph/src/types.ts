@@ -140,8 +140,6 @@ export interface WalkOptions {
     ListNonCuratedInbound?: boolean;
     /** Called per candidate edge before traversal; returning Skip prunes the walk, Reference records the target without recursing, Deep recurses. */
     EdgePolicy?: (edge: GraphEdgeCandidate) => EdgePolicyDecision;
-    /** Batch children per (entity, join field) across all parents at a depth level: one query per relationship per level instead of one per parent. Default true. */
-    BatchChildLoads?: boolean;
 }
 
 /**
