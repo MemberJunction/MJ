@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderComponentFixture, query, text, capture, click } from '@memberjunction/ng-test-utils';
+import { RenderComponentFixture, Query, QueryAll, Text, Capture, Click } from '@memberjunction/ng-test-utils';
 import { RealtimeSessionTimelineCardComponent } from './realtime-session-timeline-card.component';
 import type {
   RealtimeSessionTimelineGroup,
@@ -7,13 +7,15 @@ import type {
 } from '../../utils/realtime-session-timeline';
 
 /**
- * DOM spec for <mj-realtime-session-timeline-card> — the ONE collapsed element a
- * realtime session becomes in the conversation message list. Pure inputs → template:
- * covers the agent-aware title, the status/close-reason chip states (+ error/live
- * styling), turn-count pluralization, the last-turn preview role mapping, and the
- * OpenRequested emission from both the Open button and the whole-card click.
+ * DOM spec for <mj-realtime-session-timeline-card> — the ONE collapsed element a realtime session
+ * becomes in the conversation message list. Pure inputs → template: covers the header (title and
+ * start time), the status pill and its tone, the duration and message count, who said the quoted
+ * line, the error and live states, and the OpenRequested emission from both the button and the
+ * bubble.
  */
 describe('RealtimeSessionTimelineCardComponent (DOM)', () => {
+  const VIEWER_ID = 'AAAA1111-0000-0000-0000-000000000001';
+
   const makeGroup = (overrides: Partial<RealtimeSessionTimelineGroup> = {}): RealtimeSessionTimelineGroup => ({
     SessionID: 'sess-1',
     StartedAt: new Date('2026-05-01T10:00:00'),
@@ -31,75 +33,100 @@ describe('RealtimeSessionTimelineCardComponent (DOM)', () => {
     Status: 'Closed',
     CloseReason: 'Explicit',
     ClosedAt: new Date('2026-05-01T10:20:00'),
+    StartedAt: new Date('2026-05-01T10:00:00'),
+    UserID: VIEWER_ID,
+    UserName: 'Barnatt',
     ...overrides,
   });
 
-  const render = (group: RealtimeSessionTimelineGroup, meta: RealtimeSessionTimelineMeta | null = null, userName?: string) =>
-    renderComponentFixture(RealtimeSessionTimelineCardComponent, {
-      inputs: { Group: group, Meta: meta, ...(userName ? { UserName: userName } : {}) },
+  const render = (
+    group: RealtimeSessionTimelineGroup,
+    meta: RealtimeSessionTimelineMeta | null = null,
+    currentUserID: string | null = null
+  ) =>
+    RenderComponentFixture(RealtimeSessionTimelineCardComponent, {
+      inputs: { Group: group, Meta: meta, CurrentUserID: currentUserID },
     });
 
-  it('renders the generic title when no meta is available, and no status chip', () => {
+  it('renders "Voice call" with no status when no meta is available', () => {
     const f = render(makeGroup());
-    expect(text(f, '.session-card__title')).toBe('Realtime session');
-    expect(query(f, '.session-card__chip')).toBeNull();
+    expect(Text(f, '.call__title')).toBe('Voice call');
+    expect(Query(f, '.call__status')).toBeNull();
   });
 
-  it('renders the agent-aware title when the meta carries an agent name', () => {
+  it('names the agent in the header and shows when the call started', () => {
     const f = render(makeGroup(), makeMeta());
-    expect(text(f, '.session-card__title')).toBe('Realtime session · Sage');
+    expect(Text(f, '.call__title')).toBe('Voice call with Sage');
+    expect(Text(f, '.call__time')).toContain('10:00');
   });
 
-  it('shows a humanized close-reason chip for a closed session', () => {
-    expect(text(render(makeGroup(), makeMeta({ CloseReason: 'Explicit' })), '.session-card__chip')).toBe('Ended');
-    expect(text(render(makeGroup(), makeMeta({ CloseReason: 'Janitor' })), '.session-card__chip')).toBe('Timed out');
-    expect(text(render(makeGroup(), makeMeta({ CloseReason: null })), '.session-card__chip')).toBe('Closed');
+  it('shows a humanized status with its tone for a closed call', () => {
+    const ended = Query(render(makeGroup(), makeMeta({ CloseReason: 'Explicit' })), '.call__status');
+    expect(ended?.textContent?.trim()).toBe('Ended');
+    expect(ended?.getAttribute('data-tone')).toBe('neutral');
+    expect(Text(render(makeGroup(), makeMeta({ CloseReason: 'Janitor' })), '.call__status')).toBe('Timed out');
+    expect(Text(render(makeGroup(), makeMeta({ CloseReason: null })), '.call__status')).toBe('Closed');
   });
 
-  it('styles an error close with the error chip modifier', () => {
+  it('marks an error close on the status and the icon', () => {
     const f = render(makeGroup(), makeMeta({ CloseReason: 'Error' }));
-    const chip = query(f, '.session-card__chip');
-    expect(chip?.textContent?.trim()).toBe('Error');
-    expect(chip?.classList.contains('session-card__chip--error')).toBe(true);
+    expect(Query(f, '.call__status')?.getAttribute('data-tone')).toBe('error');
+    expect(Query(f, '.call')?.classList.contains('call--error')).toBe(true);
+    expect(Query(f, '.call__icon i')?.classList.contains('fa-phone-slash')).toBe(true);
   });
 
-  it('shows a Live chip with the live modifier for an active session', () => {
-    const f = render(makeGroup(), makeMeta({ Status: 'Active', CloseReason: null }));
-    const chip = query(f, '.session-card__chip');
-    expect(chip?.textContent?.trim()).toBe('Live');
-    expect(chip?.classList.contains('session-card__chip--live')).toBe(true);
+  it('marks a live call, drops the duration and offers to view it', () => {
+    const f = render(makeGroup(), makeMeta({ Status: 'Active', CloseReason: null, ClosedAt: null }));
+    expect(Text(f, '.call__status')).toBe('Live');
+    expect(Query(f, '.call__status')?.getAttribute('data-tone')).toBe('live');
+    expect(Query(f, '.call')?.classList.contains('call--live')).toBe(true);
+    expect(Query(f, '.call__duration')).toBeNull();
+    expect(Text(f, '.call__open')).toBe('View call');
   });
 
-  it('pluralizes the turn count', () => {
-    expect(text(render(makeGroup({ TurnCount: 1 })), '.session-card__turns')).toBe('1 turn');
-    expect(text(render(makeGroup({ TurnCount: 4 })), '.session-card__turns')).toBe('4 turns');
+  it('shows how long the call ran and how much was said', () => {
+    const f = render(makeGroup(), makeMeta());
+    expect(Text(f, '.call__duration')).toBe('20 min');
+    expect(Text(f, '.call__count')).toBe('4 messages');
+    expect(Text(render(makeGroup({ TurnCount: 1 })), '.call__count')).toBe('1 message');
   });
 
-  it('renders the last-turn preview with the mapped speaker name', () => {
-    const userTurn = render(makeGroup({ LastTurnRole: 'User', LastTurnPreview: 'thanks!' }), null, 'Barnatt');
-    expect(text(userTurn, '.session-card__preview-role')).toBe('Barnatt:');
-    const agentTurn = render(makeGroup());
-    expect(text(agentTurn, '.session-card__preview-role')).toBe('Agent:');
-    expect(text(agentTurn, '.session-card__preview')).toContain('Here is the summary you asked for.');
+  it('quotes the last line under the name of whoever said it', () => {
+    const agentLine = render(makeGroup(), makeMeta());
+    expect(Text(agentLine, '.call__speaker')).toBe('Sage');
+    expect(Text(agentLine, '.call__quote-text')).toBe('Here is the summary you asked for.');
+
+    const ownLine = render(makeGroup({ LastTurnRole: 'User', LastTurnPreview: 'thanks!' }), makeMeta(), VIEWER_ID);
+    expect(Text(ownLine, '.call__speaker')).toBe('You');
+
+    const theirLine = render(makeGroup({ LastTurnRole: 'User', LastTurnPreview: 'thanks!' }), makeMeta(), 'SOMEONE-ELSE');
+    expect(Text(theirLine, '.call__speaker')).toBe('Barnatt');
   });
 
-  it('omits the preview block when there is no last turn', () => {
+  it('omits the quote when there is no last line', () => {
     const f = render(makeGroup({ LastTurnPreview: null, LastTurnRole: null }));
-    expect(query(f, '.session-card__preview')).toBeNull();
+    expect(Query(f, '.call__quote')).toBeNull();
   });
 
-  it('emits OpenRequested exactly once with the session id when the Open button is clicked', () => {
+  it('labels the whole row for screen readers and keeps the icons out of it', () => {
+    const f = render(makeGroup(), makeMeta());
+    expect(Query(f, '.call')?.getAttribute('aria-label')).toBe('Voice call with Sage, Ended, 20 min, 4 messages');
+    expect(Query(f, '.call__icon')?.getAttribute('aria-hidden')).toBe('true');
+    expect(QueryAll(f, '.call__fact i').every(i => i.getAttribute('aria-hidden') === 'true')).toBe(true);
+  });
+
+  it('emits OpenRequested exactly once with the session id when the button is clicked', () => {
     const f = render(makeGroup());
-    const opened = capture(f.componentInstance.OpenRequested);
-    click(f, '.session-card__open');
-    // stopPropagation on the button click keeps the whole-card handler from double-firing
+    const opened = Capture(f.componentInstance.OpenRequested);
+    Click(f, '.call__open');
+    // stopPropagation on the button click keeps the bubble's handler from double-firing
     expect(opened).toEqual(['sess-1']);
   });
 
-  it('emits OpenRequested when the card body itself is clicked', () => {
+  it('emits OpenRequested when the bubble itself is clicked', () => {
     const f = render(makeGroup());
-    const opened = capture(f.componentInstance.OpenRequested);
-    click(f, '.session-card');
+    const opened = Capture(f.componentInstance.OpenRequested);
+    Click(f, '.call__bubble');
     expect(opened).toEqual(['sess-1']);
   });
 });
