@@ -48,7 +48,36 @@ pattern most of the new consumers share.
 | 0.4 Deprecate `ClassifyText` / `SummarizeText` | #4714 | Merged |
 | 0.8 An unevaluable `While` condition fails | #4765 | In review |
 | 1.1 `BaseDecision` | #4776 | In review |
-| 1.4 `LLMDecision` | not yet opened | Specified; code not started |
+| 1.2 The `Decision` model type and configuration section | #4811 | In review |
+| 1.4 `LLMDecision` and its `LLM Decision` prompt | #4812 | In review, stacked on #4776. Live on Cerebras: about 400 ms and $0.0004 per decision. |
+
+### 0.2 The wrap-up milestone (2026-09-28)
+
+Amith asked for the Jev work to be finished first. The milestone is **"MJ agents can call Jev"**,
+and it lands as one PR from `train/typed-decisions`, which merges the in-review PRs above.
+
+| Piece | Task | What it gives |
+|---|---|---|
+| `AIDecisionRunner` | 1.3 | Model selection, failover and prompt-run telemetry for decisions |
+| `OpenRouterDecision` | 2.3 | The native Jev driver, through OpenRouter's Decisions API, pinned to a dated version |
+| `Run Decision` action | 1.6 | Agents and flows call a decision as a step |
+| `finishIf` on actions and sub-agents | 4.6 | A loop agent ends its run after an action or sub-agent without another LLM turn |
+| `decisions` in the loop response | 4.7 | A loop agent asks typed questions at no turn cost, as it uses scratchpad |
+| Metadata | — | The `Jev` and `LLM Decision` models, the `Default Decision` prompt, the action |
+
+**Amith's direction on loop agents:** "loop agents just having this available will start using it
+like how they started using scratchpad." So Tasks 4.6 and 4.7 move out of Phase 4 and into the
+milestone, and are **on by default** for loop agents, as scratchpad is. Their safety comes from the
+design, not from being switched off:
+- a gate can only end a run early, never start work;
+- it needs every action to have succeeded and every answer to clear a high threshold;
+- anything else takes today's path;
+- every gate is logged as a `Decision` step, so its false-finish rate can be measured from
+  production runs.
+
+The Flow agent `Decision` step type (Task 4.3) remains a later phase. Until then, a Flow agent
+calls the `Run Decision` action.
+
 
 **What building Phase 0 corrected in this plan.** The sections below are updated to match.
 
@@ -1496,6 +1525,11 @@ below-threshold → `unevaluable` → the group holds rather than guessing.
 
 ### Task 4.6 — Pre-declared post-action gates in the loop agent
 
+> **Moved into the wrap-up milestone (§0.2), and extended to sub-agents.** `finishIf` may be
+> attached to `nextStep.subAgent` as well as to `nextStep.actions`. After the sub-agent returns, the
+> same check runs against its result. It is on by default for loop agents, with a conservative
+> threshold (0.9 per question) set per agent, until Task 2.4's calibration replaces it.
+
 This is Amith's example. The big model, when it asks for an action, also writes down in advance
 what a good result looks like: *"if this action has a good result, stop."* After the action runs, a
 decision model checks the result against that description, and the loop ends **without another LLM
@@ -1562,7 +1596,27 @@ declared `taskComplete` without further actions are the cases a gate should have
 
 Then turn it on per agent, behind a flag.
 
-**Prerequisite:** Phase 2's calibration. Like Task 3.4, it gates control flow on a probability.
+**Prerequisite:** none for the milestone, which uses the conservative threshold above. Phase 2's
+calibration then sets the threshold from data. Like Task 3.4, it gates control flow on a
+probability.
+
+### Task 4.7 — General decisions from the loop agent *(wrap-up milestone)*
+
+This is Amith's second loop-agent route: the agent **asks for a decision** whenever a judgment suits
+one. It uses the same mechanics as `scratchpad` and `artifactToolCalls`.
+- **The envelope.** An optional `decisions` field on `LoopAgentResponse`: a list of requests, each
+  a state (text, or a reference into the payload) plus typed questions.
+- **Inline, at zero turn cost.** The framework answers them on the same turn through
+  `AIDecisionRunner`, and injects the answers into the next turn's prompt, as artifact tool results
+  are injected.
+- **Why the agent would use it:**
+  - to judge many items at once, which is cheap for a decision model and costly in the agent's own
+    reasoning;
+  - to get a consistent, logged judgment instead of prose;
+  - to settle a routing or classification question with probabilities the agent can compare.
+- **Gated like scratchpad.** Prompt params include it in the response type and the system prompt.
+  It is on by default for loop agents.
+- **Measure adoption and channel effects** on the Prompt Eval corpus (§5, channel effects).
 
 ---
 
