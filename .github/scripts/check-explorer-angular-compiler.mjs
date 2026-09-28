@@ -38,9 +38,19 @@
  *   - @angular/platform-browser-dynamic — a RUNTIME dependency (src/main.ts bootstraps via
  *     platformBrowserDynamic()), so this is a runtime peer, not merely a build-time one.
  *   - @angular/compiler-cli — a devDependency (the AOT/JIT compiler `ng build` invokes).
- * Angular declares both peers at an EXACT version equal to the package's own version, so
- * this guard also requires exact-pin equality: a caret/tilde range on any of the three
- * reintroduces the very ERESOLVE conflict that triggers the --legacy-peer-deps retry.
+ * Angular declares both peers at an EXACT version equal to the package's own version (and
+ * @angular/core declares it too, as an optional exact peer), so this guard also requires the
+ * spec of "@angular/compiler" to be IDENTICAL to those of platform-browser-dynamic,
+ * compiler-cli and core. What matters is that they resolve to one version, not that they are
+ * exact pins — measured on npm 11 against 21.2.22..21.2.24:
+ *   - the same `^21.2.0` (or `~21.2.0`) on all four resolves all four to 21.2.24: clean.
+ *   - `^21.2.22` on compiler beside `21.2.22` on the rest resolves cleanly under plain npm, but
+ *     the --legacy-peer-deps retry installs compiler 21.2.24 beside core 21.2.22 — a skewed JIT
+ *     compiler, with no error.
+ *   - core `21.2.23` beside everything else at `21.2.22` is an ERESOLVE (platform-browser-dynamic
+ *     peers core exactly), i.e. exactly the conflict that triggers the retry.
+ * Identical specs are a sufficient condition for one resolved version; the gate does not try to
+ * decide whether two DIFFERENT specs happen to intersect.
  *
  * Note for anyone diffing against the shipped distribution: the distribution's
  * apps/MJExplorer/package.json is NOT a byte-for-byte copy of this manifest.
@@ -48,8 +58,8 @@
  * copy) and re-emits it via removePortFlagsFromPackageJson() — only `scripts` is
  * rewritten. Dependency content is preserved verbatim; the bytes are not.
  *
- * Why this is a standalone script + workflow instead of a vitest test in MJInstaller: see
- * the header comment in .github/workflows/ci-explorer-angular-compiler.yml.
+ * Runs in test.yml's `guards` job ("MJExplorer @angular/compiler guard"); that step's comment
+ * explains why it is a script there rather than a vitest test in MJInstaller.
  *
  * ── USAGE ───────────────────────────────────────────────────────────────────────
  *   node check-explorer-angular-compiler.mjs                    # checks packages/MJExplorer/package.json
@@ -66,7 +76,7 @@ import { fileURLToPath } from 'node:url';
 const PEER_NAME = '@angular/compiler';
 const RUNTIME_PEER_OF = '@angular/platform-browser-dynamic';
 const BUILD_PEER_OF = '@angular/compiler-cli';
-const EXACT_PIN_RE = /^\d+\.\d+\.\d+$/;
+const FRAMEWORK_CORE = '@angular/core';
 
 /** F3: read the union of dependencies + devDependencies — assert the FACT, not the section. */
 export function unionDeclaredDeps(manifest) {
@@ -102,7 +112,7 @@ function conflictingDeclarations(manifest, names) {
 }
 
 /**
- * Evaluate the three assertions against an already-parsed manifest object. Pure function —
+ * Evaluate the assertions against an already-parsed manifest object. Pure function —
  * no filesystem, no process — so it is directly self-testable against in-memory fixtures.
  * Returns { ok, errors }; errors is empty iff ok.
  */
@@ -115,6 +125,7 @@ export function evaluateManifest(manifest) {
         PEER_NAME,
         RUNTIME_PEER_OF,
         BUILD_PEER_OF,
+        FRAMEWORK_CORE,
     ])) {
         errors.push(
             `${name} is declared twice with conflicting specs: dependencies '${inDependencies}' vs ` +
@@ -140,22 +151,15 @@ export function evaluateManifest(manifest) {
         return { ok: false, errors };
     }
 
-    if (!EXACT_PIN_RE.test(compiler)) {
-        errors.push(
-            `${PEER_NAME} is declared as '${compiler}', not an exact pin (expected to match /^\\d+\\.\\d+\\.\\d+$/).\n` +
-                `    Angular declares this peer at an exact version; a caret or tilde range reintroduces\n` +
-                `    the ERESOLVE conflict that triggers the --legacy-peer-deps retry.`
-        );
-    }
-
-    for (const peerName of [RUNTIME_PEER_OF, BUILD_PEER_OF]) {
+    for (const peerName of [RUNTIME_PEER_OF, BUILD_PEER_OF, FRAMEWORK_CORE]) {
         const peerVersion = declared[peerName];
         if (peerVersion !== undefined && peerVersion !== compiler) {
             errors.push(
                 `${PEER_NAME}@${compiler} does not match ${peerName}@${peerVersion}.\n` +
-                    `    Angular declares '${PEER_NAME}' as an exact-version peer of '${peerName}' —\n` +
-                    `    skew between them reintroduces the ERESOLVE conflict that triggers\n` +
-                    `    --legacy-peer-deps.`
+                    `    '${peerName}' peers '${PEER_NAME}' at its own exact version, so the two specs\n` +
+                    `    must be identical to resolve to one version. Different specs either ERESOLVE —\n` +
+                    `    which sends a host's install down the --legacy-peer-deps retry — or, under that\n` +
+                    `    retry, float to different versions with no error at all.`
             );
         }
     }
@@ -182,9 +186,8 @@ const PASSING_MANIFEST = {
  *
  * `expectedMarker` is a substring of the error the fixture is NAMED after, and it is what makes the
  * label true. Asserting `ok` alone lets any rule stand in for any other: the caret fixture also
- * skews from both peers, and the missing-compiler fixture falls through to
- * EXACT_PIN_RE.test(undefined) — so deleting either the pin rule or the missing-declaration branch
- * left every fixture green. Mutation-tested: with the marker, both mutants die.
+ * skews from both peers, so deleting either skew anchor left every fixture green. With the
+ * marker, each rule has a fixture that only it can satisfy.
  * `null` on a passing fixture means "expect no errors at all".
  */
 export const SELF_TEST_FIXTURES = [
@@ -215,22 +218,48 @@ export const SELF_TEST_FIXTURES = [
     ],
     ['fails when @angular/compiler is missing entirely', false, { dependencies: {}, devDependencies: {} }, 'is not declared'],
     [
-        'fails on a caret range',
+        'passes on the same caret range everywhere (resolves to one version, no ERESOLVE)',
+        true,
+        {
+            dependencies: {
+                '@angular/core': '^21.2.0',
+                '@angular/compiler': '^21.2.0',
+                '@angular/platform-browser-dynamic': '^21.2.0',
+            },
+            devDependencies: { '@angular/compiler-cli': '^21.2.0' },
+        },
+        null,
+    ],
+    [
+        'passes on the same tilde range everywhere (the ~17.2.2 shape this repo shipped)',
+        true,
+        {
+            dependencies: {
+                '@angular/core': '~17.2.2',
+                '@angular/compiler': '~17.2.2',
+                '@angular/platform-browser-dynamic': '~17.2.2',
+            },
+            devDependencies: { '@angular/compiler-cli': '~17.2.2' },
+        },
+        null,
+    ],
+    [
+        'fails on a caret compiler beside exact-pinned peers',
         false,
         {
             dependencies: { '@angular/platform-browser-dynamic': '21.2.22' },
             devDependencies: { '@angular/compiler': '^21.2.22', '@angular/compiler-cli': '21.2.22' },
         },
-        'not an exact pin',
+        'does not match @angular/platform-browser-dynamic',
     ],
     [
-        'fails on a tilde range',
+        'fails on a tilde compiler beside an exact-pinned peer',
         false,
         {
             dependencies: {},
             devDependencies: { '@angular/compiler': '~21.2.22', '@angular/compiler-cli': '21.2.22' },
         },
-        'not an exact pin',
+        'does not match @angular/compiler-cli',
     ],
     [
         'fails when skewed from @angular/platform-browser-dynamic',
@@ -258,6 +287,19 @@ export const SELF_TEST_FIXTURES = [
             devDependencies: { '@angular/compiler': '21.2.22', '@angular/compiler-cli': '21.2.23' },
         },
         'does not match @angular/compiler-cli',
+    ],
+    [
+        'fails when skewed from @angular/core (a core-only bump)',
+        false,
+        {
+            dependencies: {
+                '@angular/core': '21.2.23',
+                '@angular/compiler': '21.2.22',
+                '@angular/platform-browser-dynamic': '21.2.22',
+            },
+            devDependencies: { '@angular/compiler-cli': '21.2.22' },
+        },
+        'does not match @angular/core',
     ],
 ];
 
@@ -326,7 +368,7 @@ function main() {
         process.exit(1);
     }
 
-    console.log(`✅ ${manifestPath}: ${PEER_NAME} is declared, exact-pinned, and matches its peers.`);
+    console.log(`✅ ${manifestPath}: ${PEER_NAME} is declared and its spec matches its peers.`);
 }
 
 const isEntry = () => {
