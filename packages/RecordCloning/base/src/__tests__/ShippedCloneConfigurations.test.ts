@@ -110,4 +110,22 @@ describe('shipped clone configurations', () => {
         }
         expect(contradictions).toEqual([]);
     });
+
+    it('names the join field for a Deep child that has more than one foreign key to the same parent', () => {
+        // A bare child name matches every FK: "MJ: AI Agent Steps" would follow SubAgentID too and
+        // re-stamp a parent agent's step onto the copy. Such children must be keyed "<Child>.<JoinField>".
+        const multi: { Children: Record<string, unknown> } = JSON.parse(readFileSync(resolve(__dirname, 'fixtures/multi-fk-children.json'), 'utf8'));
+        const ambiguous: string[] = [];
+        for (const r of enabledRoots) {
+            const config = r.fields.Configuration!.Clone!;
+            const edges = [
+                ...Object.entries(config.Relationships ?? {}),
+                ...(config.Presets ?? []).flatMap((p) => Object.entries(p.Relationships ?? {})),
+            ];
+            for (const [key, rel] of edges) {
+                if (rel?.Policy === 'Deep' && !key.includes('.') && key in multi.Children) ambiguous.push(`${r.fields.Name} -> ${key}`);
+            }
+        }
+        expect(ambiguous).toEqual([]);
+    });
 });

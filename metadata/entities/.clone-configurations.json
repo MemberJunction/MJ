@@ -382,7 +382,7 @@
             ]
           },
           "Relationships": {
-            "MJ: AI Agents": {
+            "MJ: AI Agents.ParentID": {
               "Policy": "Deep"
             },
             "MJ: AI Agent Prompts": {
@@ -391,13 +391,13 @@
             "MJ: AI Agent Actions": {
               "Policy": "Deep"
             },
-            "MJ: AI Agent Steps": {
+            "MJ: AI Agent Steps.AgentID": {
               "Policy": "Deep"
             },
-            "MJ: AI Agent Step Paths": {
+            "MJ: AI Agent Step Paths.OriginStepID": {
               "Policy": "Deep"
             },
-            "MJ: AI Agent Relationships": {
+            "MJ: AI Agent Relationships.AgentID": {
               "Policy": "Deep"
             },
             "MJ: AI Agent Artifact Types": {
@@ -425,7 +425,7 @@
             "MJ: AI Agent Personas": {
               "Policy": "Deep"
             },
-            "MJ: AI Agent Co Agents": {
+            "MJ: AI Agent Co Agents.CoAgentID": {
               "Policy": "Deep"
             },
             "MJ: AI Agent Data Sources": {
@@ -1419,7 +1419,7 @@
             ]
           },
           "Relationships": {
-            "MJ: Entity Permissions": {
+            "MJ: Entity Permissions.RoleID": {
               "Policy": "Deep"
             },
             "MJ: Query Permissions": {
@@ -1449,7 +1449,7 @@
             "MJ: MCP Server Connection Permissions": {
               "Policy": "Deep"
             },
-            "MJ: Resource Permissions": {
+            "MJ: Resource Permissions.RoleID": {
               "Policy": "Deep"
             },
             "MJ: User Roles": {
@@ -1506,7 +1506,7 @@
             ]
           },
           "Relationships": {
-            "MJ: Component Dependencies": {
+            "MJ: Component Dependencies.ComponentID": {
               "Policy": "Deep"
             },
             "MJ: Component Library Links": {
