@@ -2,12 +2,19 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
  * One logical caller's claim on one provider's ambient transaction. `Epoch` is null while the begin
- * that created it is still in flight, and names the transaction once that begin succeeds.
+ * that created it is still in flight, names the transaction once that begin succeeds, and is
+ * {@link RELEASED_EPOCH} once a begin that never bound it failed.
  */
 export interface TransactionMembership {
     readonly Owner: TransactionAffinity;
     Epoch: number | null;
 }
+
+/**
+ * Epoch of a claim whose begin failed. Real epochs start at 1 and the open epoch is never 0, so a
+ * released membership matches no transaction and `Claim()` never reuses it.
+ */
+const RELEASED_EPOCH = 0;
 
 /**
  * Process-wide, keyed by owner inside the store: an async context can be inside transactions on
@@ -29,8 +36,11 @@ const memberships = new AsyncLocalStorage<readonly TransactionMembership[]>();
  * The transaction is identified by an epoch that is replaced on every outermost begin and cleared when
  * the transaction ends, so a membership outlives its transaction harmlessly: it simply stops matching.
  *
- * Limit: `Claim()` must run in the synchronous prefix of the call the caller awaits. A begin reached
- * after an `await` inside a helper does not make the helper's caller a member.
+ * Limits: `Claim()` must run in the synchronous prefix of the call the caller awaits — a begin reached
+ * after an `await` inside a helper does not make the helper's caller a member. Conversely, a claim
+ * in the synchronous prefix of work the caller does NOT await (a fire-and-forget call, a synchronous
+ * event listener) lands in the caller's context too, making the launcher (the emitter) a member.
+ * Work the provider launches itself runs under {@link RunDetached}, which contains it.
  */
 export class TransactionAffinity {
     private _epoch: number | null = null;
@@ -71,15 +81,31 @@ export class TransactionAffinity {
         this._epoch = null;
     }
 
-    /** Make a claimed membership part of the open transaction (as its opener, or joining it). */
+    /**
+     * Make a claimed membership part of the open transaction (as its opener, or joining it). A begin
+     * that claimed the same pending membership before another begin released it (two begins queued
+     * from one scope) still binds it: that scope did ask for a transaction.
+     */
     public Bind(membership: TransactionMembership): void {
-        if (membership.Owner !== this) {
-            throw new Error('TransactionAffinity.Bind: the membership was claimed on another TransactionAffinity');
-        }
+        this.assertOwned(membership, 'Bind');
         if (this._epoch === null) {
             throw new Error('TransactionAffinity.Bind: there is no open transaction to bind the membership to');
         }
         membership.Epoch = this._epoch;
+    }
+
+    /**
+     * A begin failed: kill the claim it made if nothing bound it. A pending membership is shared by
+     * reference with everything the claiming scope forked since the claim (pollers, timers), so left
+     * pending it would be reused by that scope's next begin and retroactively make all of that work
+     * part of a transaction it never asked for. A membership already bound to the open transaction
+     * is left alone: a member whose nested begin failed is still a member.
+     */
+    public Release(membership: TransactionMembership): void {
+        this.assertOwned(membership, 'Release');
+        if (membership.Epoch === null) {
+            membership.Epoch = RELEASED_EPOCH;
+        }
     }
 
     /**
@@ -98,6 +124,12 @@ export class TransactionAffinity {
     /** Run `fn` with no membership on this owner — work that must not ride the caller's transaction. */
     public RunDetached<T>(fn: () => Promise<T>): Promise<T> {
         return memberships.run(this.otherOwnersMemberships(), fn);
+    }
+
+    private assertOwned(membership: TransactionMembership, operation: string): void {
+        if (membership.Owner !== this) {
+            throw new Error(`TransactionAffinity.${operation}: the membership was claimed on another TransactionAffinity`);
+        }
     }
 
     private findMembership(): TransactionMembership | undefined {

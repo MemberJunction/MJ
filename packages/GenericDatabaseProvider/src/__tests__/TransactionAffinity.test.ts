@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { EventEmitter } from 'node:events';
 import { TransactionAffinity } from '../TransactionAffinity';
 
 const tick = (): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, 1));
@@ -133,5 +134,66 @@ describe('TransactionAffinity (#4786)', () => {
         async function openAfterAwait(): Promise<void> { await tick(); await begin(a, true); }
         await openAfterAwait();
         expect(a.IsCallerMember).toBe(false);
+    });
+
+    it('LIMIT: an un-awaited call that claims synchronously makes the LAUNCHER a member', async () => {
+        // Async context flows down into a call and back up out of its synchronous prefix, so the
+        // claim lands in the launcher's context even though the launcher never awaits the begin.
+        const a = new TransactionAffinity();
+        void begin(a, true);
+        await tick();
+        await tick();
+        expect(a.CurrentEpoch).not.toBeNull();
+        expect(a.IsCallerMember).toBe(true);
+    });
+
+    it('LIMIT: an event listener that claims synchronously makes the EMITTER a member', async () => {
+        const a = new TransactionAffinity();
+        const emitter = new EventEmitter();
+        emitter.on('saved', () => { void begin(a, true); });
+        emitter.emit('saved');
+        await tick();
+        await tick();
+        expect(a.IsCallerMember).toBe(true);
+    });
+
+    it('a claim inside a callback the launcher only scheduled, or inside RunDetached, stays in that scope', async () => {
+        const scheduled = new TransactionAffinity();
+        setImmediate(() => { void begin(scheduled, true); });
+        const detached = new TransactionAffinity();
+        void detached.RunDetached(() => begin(detached, true));
+        await tick();
+        await tick();
+        expect(scheduled.CurrentEpoch).not.toBeNull();
+        expect(scheduled.IsCallerMember).toBe(false);
+        expect(detached.CurrentEpoch).not.toBeNull();
+        expect(detached.IsCallerMember).toBe(false);
+    });
+
+    it('Release makes a pending claim dead: the scope\'s next Claim is fresh and the dead one never matches', async () => {
+        const a = new TransactionAffinity();
+        const failed = a.Claim();
+        a.Release(failed);
+        const fresh = a.Claim();
+        expect(fresh).not.toBe(failed);
+        a.OpenEpoch();
+        a.Bind(fresh);
+        expect(a.IsCallerMember).toBe(true);
+        expect(failed.Epoch).not.toBe(a.CurrentEpoch);
+    });
+
+    it('Release leaves a membership already bound to the open transaction alone', async () => {
+        const a = new TransactionAffinity();
+        await begin(a, true);
+        const bound = a.Claim();
+        a.Release(bound);
+        expect(a.IsCallerMember).toBe(true);
+        expect(a.Claim()).toBe(bound);
+    });
+
+    it('Release rejects a membership claimed on another owner', () => {
+        const a = new TransactionAffinity();
+        const b = new TransactionAffinity();
+        expect(() => a.Release(b.Claim())).toThrow(/another TransactionAffinity/i);
     });
 });

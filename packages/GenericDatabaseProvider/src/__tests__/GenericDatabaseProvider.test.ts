@@ -2213,6 +2213,170 @@ describe('GenericDatabaseProvider transaction scope affinity (#4786)', () => {
         await tick();
         expect(ran).toEqual([]);
     });
+
+    it('a non-member\'s post-commit task starts now, as a non-member, and the owner\'s commit does not await it', async () => {
+        const p = new AffinityProvider();
+        const registered = gate();
+        const taskMayFinish = gate();
+        let memberInsideTask: boolean | undefined;
+        let finished = false;
+        const unrelated = (async () => {
+            await registered.wait;
+            p.RunAfterCommit(async () => {
+                memberInsideTask = p.CallerIsMember;
+                await taskMayFinish.wait;
+                finished = true;
+            }, 'unrelated task');
+        })();
+        await p.BeginTransaction();
+        registered.open();
+        await unrelated;
+        await tick();
+        expect(p.TransactionDepth).toBe(1); // the owner's transaction is still open...
+        expect(memberInsideTask).toBe(false); // ...and the task already started, outside it
+        await p.CommitTransaction(); // resolves while the task is still blocked
+        expect(finished).toBe(false);
+        taskMayFinish.open();
+        await tick();
+        expect(finished).toBe(true);
+    });
+
+    it('a non-member\'s post-commit task is not stranded by the open transaction\'s failed commit', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new (class extends AffinityProvider {
+                protected override async CommitPhysicalTransaction(): Promise<void> {
+                    throw new Error('commit failed');
+                }
+            })();
+            const ran: string[] = [];
+            const registered = gate();
+            const unrelated = (async () => {
+                await registered.wait;
+                p.RunAfterCommit(async () => { ran.push('unrelated'); }, 'unrelated task');
+            })();
+            await p.BeginTransaction();
+            registered.open();
+            await unrelated;
+            await expect(p.CommitTransaction()).rejects.toThrow('commit failed');
+            await tick();
+            expect(ran).toEqual(['unrelated']);
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('a post-commit task that begins in its synchronous prefix does not make the registering caller a member', async () => {
+        const p = new AffinityProvider();
+        const taskMayCommit = gate();
+        const taskDone = gate();
+        p.RunAfterCommit(async () => {
+            await p.BeginTransaction(); // claims before its first await — inside the task's own scope
+            await taskMayCommit.wait;
+            await p.CommitTransaction();
+            taskDone.open();
+        }, 'self-transacting task');
+        await tick();
+        expect(p.TransactionDepth).toBe(1); // the task's transaction is open...
+        expect(p.CallerIsMember).toBe(false); // ...and the caller that registered it is not in it
+        taskMayCommit.open();
+        await taskDone.wait;
+    });
+
+    it('reports a foreign join once per transaction, however many foreign scopes join it', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new AffinityProvider();
+            /** A scope created before the owner begins: it begins on `start`, commits its frame on `end`. */
+            function foreignScope(): { start: () => void; end: () => void; done: Promise<void> } {
+                const start = gate();
+                const end = gate();
+                const done = (async () => {
+                    await start.wait;
+                    await p.BeginTransaction();
+                    await end.wait;
+                    await p.CommitTransaction();
+                })();
+                return { start: start.open, end: end.open, done };
+            }
+            const a = foreignScope();
+            const b = foreignScope();
+            await p.BeginTransaction();
+            a.start();
+            await tick();
+            b.start();
+            await tick();
+            expect(p.TransactionDepth).toBe(3);
+            expect(reports4786(errorSpy)).toHaveLength(1);
+            b.end(); // LIFO: the innermost frame settles first
+            await b.done;
+            a.end();
+            await a.done;
+            await p.CommitTransaction();
+            expect(p.TransactionDepth).toBe(0);
+
+            // A new transaction is a new epoch: its first foreign join is reported again.
+            const c = foreignScope();
+            await p.BeginTransaction();
+            c.start();
+            await tick();
+            expect(p.TransactionDepth).toBe(2);
+            expect(reports4786(errorSpy)).toHaveLength(2);
+            c.end();
+            await c.done;
+            await p.CommitTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('a failed begin leaves no reusable claim: work forked after it is not a member of the next transaction', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new (class extends AffinityProvider {
+                public failNextBegin = true;
+                protected override async BeginPhysicalTransaction(): Promise<void> {
+                    if (this.failNextBegin) {
+                        this.failNextBegin = false;
+                        throw new Error('begin failed');
+                    }
+                    await super.BeginPhysicalTransaction();
+                }
+            })();
+            await expect(p.BeginTransaction()).rejects.toThrow('begin failed');
+            const forkedMayCheck = gate();
+            const forked = (async () => { await forkedMayCheck.wait; return p.CallerIsMember; })(); // e.g. a poller
+            await p.BeginTransaction();
+            expect(p.CallerIsMember).toBe(true);
+            forkedMayCheck.open();
+            expect(await forked).toBe(false);
+            await p.RollbackTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
+
+    it('a member whose nested begin fails stays a member of its transaction', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+        try {
+            const p = new AffinityProvider();
+            await p.BeginTransaction();
+            const orig = p.ExecuteSQL.bind(p);
+            p.ExecuteSQL = async <T,>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> => {
+                if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION')) {
+                    throw new Error('savepoint failed');
+                }
+                return orig<T>(sql, params, options);
+            };
+            await expect(p.BeginTransaction()).rejects.toThrow('savepoint failed');
+            expect(p.TransactionDepth).toBe(1);
+            expect(p.CallerIsMember).toBe(true);
+            p.ExecuteSQL = orig;
+            await p.RollbackTransaction();
+        } finally {
+            errorSpy.mockRestore();
+        }
+    });
 });
 
 describe('GenericDatabaseProvider save-call variable suffix (loom #12 WP3)', () => {
@@ -2561,41 +2725,27 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         await p.BeginTransaction();
         p.RunAfterCommit(r.task('unrelated-open'), 'unrelated-open', token);
         expect(p.PendingPostCommitTaskCount).toBe(0);
-        await p.RollbackTransaction();
         await settle();
+        expect(r.ran).toEqual(['unrelated-open']); // before the open transaction settles
+        await p.RollbackTransaction();
         expect(r.ran).toEqual(['unrelated-open']);
     });
 
-    it('a task whose own transaction committed waits for an unrelated open one, then runs', async () => {
-        // Running it inside the unrelated transaction would enlist its writes in that transaction.
-        const p = new RecordingProvider();
-        const r = recorder();
+    it('a task whose own transaction committed runs now, outside the transaction open when it registers', async () => {
+        // Detached, so its writes run on the pool and cannot be rolled back with that transaction (#4786).
+        const p = new AffinityProvider();
         await p.BeginTransaction();
         const token = p.CapturePostCommitToken();
         await p.CommitTransaction();
 
-        await p.BeginTransaction();                       // an unrelated transaction opens
-        p.RunAfterCommit(r.task('late'), 'late', token);  // ...and only now does the task register
+        await p.BeginTransaction();                       // another transaction opens
+        let memberInsideTask: boolean | undefined;
+        p.RunAfterCommit(async () => { memberInsideTask = p.CallerIsMember; }, 'late', token);
         await settle();
-        expect(r.ran).toEqual([]);
-        expect(p.PendingIdlePostCommitTaskCount).toBe(1);
-
-        await p.RollbackTransaction();                    // it ends — either way the task is owed
-        expect(r.ran).toEqual(['late']);
-        expect(p.PendingIdlePostCommitTaskCount).toBe(0);
-    });
-
-    it('the same, when the unrelated transaction commits', async () => {
-        const p = new RecordingProvider();
-        const r = recorder();
-        await p.BeginTransaction();
-        const token = p.CapturePostCommitToken();
-        await p.CommitTransaction();
-
-        await p.BeginTransaction();
-        p.RunAfterCommit(r.task('late'), 'late', token);
-        await p.CommitTransaction();
-        expect(r.ran).toEqual(['late']);
+        expect(p.TransactionDepth).toBe(1);               // still open...
+        expect(memberInsideTask).toBe(false);             // ...and the task already ran, not in it
+        expect(p.PendingIdlePostCommitTaskCount).toBe(0); // deprecated: there is no idle queue any more
+        await p.RollbackTransaction();
     });
 
     it('captured in a savepoint that was then rolled back: dropped even though the outer commits', async () => {
@@ -2627,9 +2777,9 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         expect(r.ran).toEqual([]);
     });
 
-    it('follows the token epoch, not a NEW transaction: old epoch committed -> owed, and run once idle', async () => {
-        // The task is owed because ITS transaction committed. It is not run inside the unrelated
-        // one, whose rollback would take the task's own writes with it.
+    it('follows the token epoch, not a NEW transaction: old epoch committed -> owed, and runs even if the new one rolls back', async () => {
+        // The task is owed because ITS transaction committed. It is not queued on the new one,
+        // whose rollback would otherwise drop it.
         const p = new RecordingProvider();
         const r = recorder();
         await p.BeginTransaction();
@@ -2637,10 +2787,9 @@ describe('GenericDatabaseProvider RunAfterCommit with a PostCommitToken (late re
         await p.CommitTransaction();
         await p.BeginTransaction();
         p.RunAfterCommit(r.task('late'), 'late', token);
-        await settle();
-        expect(r.ran).toEqual([]);
         expect(p.PendingPostCommitTaskCount).toBe(0);
         await p.RollbackTransaction();
+        await settle();
         expect(r.ran).toEqual(['late']);
     });
 

@@ -5819,13 +5819,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * release hands them to the enclosing frame.
      */
     private _postCommitTasks: PostCommitEntry[] = [];
-    /**
-     * Tasks whose own transaction already settled, held back because an UNRELATED transaction is
-     * open on this instance. Running them now would enlist their writes in it — on one connection,
-     * that means a rollback of work that has nothing to do with them. Drained when this provider
-     * goes idle, whichever way that transaction ends.
-     */
-    private _idlePostCommitTasks: PostCommitEntry[] = [];
     /** Identity of each open frame and the fate of recent transactions, for {@link PostCommitToken}s. */
     private readonly _frameTracker = new TransactionFrameTracker();
     /** Which async scope the open transaction belongs to (#4786). See {@link IsCallerInAmbientTransaction}. */
@@ -5861,12 +5854,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Metadata reads are not part of anyone's unit of work, so wait for the transaction to end
      * before starting one (#4486).
      *
-     * This narrows the window rather than closing it: the check runs when the timer fires, and
-     * the batch is issued several round trips later, so a transaction that begins in between
-     * is still joined. That case is now harmless to the process — the batch fails, the dataset
-     * reports it, and the loaded metadata stays — but the refresh itself is lost until the next
-     * member write. Running the metadata batch on the pool regardless of the ambient
-     * transaction is #4514 (alongside #4454, the commit-side half of the same window).
+     * Under scope affinity (#4786) the timer inherits the membership of the code that scheduled it
+     * (re-arms included), so the refresh can only ever join the transaction whose scope scheduled
+     * it — and only if that transaction is still open when the batch is issued, several round trips
+     * after this check ran. It never joins a transaction someone else begins later. That remaining
+     * window is harmless to the process — the batch fails, the dataset reports it, and the loaded
+     * metadata stays — but the refresh itself is lost until the next member write. The check is
+     * instance-wide, so an unrelated transaction also defers the refresh. Running the metadata
+     * batch on the pool regardless of the ambient transaction is #4514 (alongside #4454, the
+     * commit-side half of the same window).
      */
     protected override get MetadataMemberRefreshMustWait(): boolean {
         return this.CurrentTransactionDepth > 0 || this.HasPhysicalTransaction;
@@ -5961,7 +5957,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Queue `task` until the outermost commit of the caller's transaction, or start it now when
      * there is none. See {@link DatabaseProviderBase.RunAfterCommit} for the contract. Work
      * registered by a caller outside the open transaction's scope (#4786) is not tied to that
-     * transaction: it runs once this provider is idle, whichever way that transaction ends.
+     * transaction: it starts now, detached, on the pool, whether or not that transaction is open.
      *
      * - Queued tasks run once, in registration order, after the outermost commit succeeds and the
      *   transaction lock is released — so a task may begin its own transaction. The committer
@@ -5975,19 +5971,20 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      *   token was captured in, rolled back — including a savepoint rolled back inside a transaction
      *   that went on to commit — or if the token matches nothing this provider knows; otherwise it
      *   is queued at the deepest captured frame that is still open. A token captured outside any
-     *   transaction always runs. "Runs" means immediately when this provider is idle, and otherwise
-     *   once it is: a task must never have its own writes rolled back by an unrelated transaction.
+     *   transaction always runs.
+     * - "Starts now" means fire-and-forget under {@link TransactionAffinity.RunDetached}: the task is
+     *   in no transaction on this provider (its statements run on the pool), the caller never awaits
+     *   it, and a `BeginTransaction` in the task's synchronous prefix stays in the task's own scope.
+     *   If the task begins a transaction while another is open on this instance, it joins that one as
+     *   a savepoint (logged) — a task that needs its own transaction belongs on an independent instance.
      */
     public override RunAfterCommit(task: PostCommitTask, description: string = 'post-commit task', token?: PostCommitToken): void {
         if (token) {
             this.registerPostCommitTaskWithToken(task, description, token);
             return;
         }
-        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
-            super.RunAfterCommit(task, description);
-            return;
-        }
         if (!this.IsCallerInAmbientTransaction()) {
+            // No transaction open, or not the caller's: either way the task is not tied to one.
             this.runDetachedTask(task, description);
             return;
         }
@@ -6035,36 +6032,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         return this._postCommitTasks.length;
     }
 
-    /** Number of tasks waiting only for this provider to go idle. */
+    /**
+     * @deprecated Always 0. Post-commit work not tied to the caller's transaction used to be held
+     * until this provider went idle; with scope affinity (#4786) it starts immediately on the pool, so
+     * there is no idle queue left to count. Kept for one release.
+     */
     public get PendingIdlePostCommitTaskCount(): number {
-        return this._idlePostCommitTasks.length;
+        return 0;
     }
 
     /**
-     * Run work whose own transaction has already settled. Immediate when this provider is idle;
-     * otherwise held until it is, so the task's writes cannot join — and be rolled back with — a
-     * transaction it has nothing to do with.
+     * Start work that is not tied to the caller's transaction now, fire-and-forget; never throws.
+     * Detached so it is in no transaction on this provider — its statements run on the pool, even
+     * while an unrelated transaction is open — and so a begin in its synchronous prefix cannot make
+     * the caller a member (see {@link TransactionAffinity.Claim}).
      */
     private runDetachedTask(task: PostCommitTask, description: string): void {
-        if (this._transactionDepth === 0 && !this.HasPhysicalTransaction) {
-            super.RunAfterCommit(task, description);
-            return;
-        }
-        this._idlePostCommitTasks.push({ Task: task, Description: description, Depth: 0 });
-    }
-
-    /** Run everything that was waiting for this provider to go idle. Never throws. */
-    private async drainIdlePostCommitTasks(): Promise<void> {
-        if (this._idlePostCommitTasks.length === 0 || this._transactionDepth > 0 || this.HasPhysicalTransaction) {
-            return;
-        }
-        const tasks = this._idlePostCommitTasks;
-        this._idlePostCommitTasks = [];
-        LogStatus(`Running ${tasks.length} post-commit task(s) held back by an unrelated transaction`);
-        for (const entry of tasks) {
-            // The drainer's membership is not the task's: the task must not ride the drainer's transaction.
-            await this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(entry.Task, entry.Description));
-        }
+        void this._affinity.RunDetached(() => this.RunPostCommitTaskSafely(task, description));
     }
 
     /** Run tasks detached from a committed transaction, one at a time, in order. Never throws. */
@@ -6141,13 +6125,19 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public async ResetTransactionState(): Promise<void> {
         await this.WithTransactionLock(() => this.abandonDoomedTransaction());
-        await this.drainIdlePostCommitTasks();
     }
 
     public async BeginTransaction(): Promise<void> {
         // Claimed before the first await (the lock's): see TransactionAffinity.Claim for why.
         const membership = this._affinity.Claim();
-        return this.WithTransactionLock(() => this.beginTransactionCore(membership));
+        try {
+            await this.WithTransactionLock(() => this.beginTransactionCore(membership));
+        } catch (e) {
+            // Every failure path, including a begin refused while doomed. A no-op for a membership
+            // already bound (a member's failed nested begin): see TransactionAffinity.Release.
+            this._affinity.Release(membership);
+            throw e;
+        }
     }
 
     public async CommitTransaction(): Promise<void> {
@@ -6161,12 +6151,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             await this.runPostCommitTasks(committedTasks);
             await this.AfterPhysicalCommit();
         }
-        await this.drainIdlePostCommitTasks();
     }
 
     public async RollbackTransaction(): Promise<void> {
         await this.WithTransactionLock(() => this.rollbackTransactionCore());
-        await this.drainIdlePostCommitTasks();
     }
 
     private async beginTransactionCore(membership: TransactionMembership): Promise<void> {
@@ -6224,7 +6212,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * instance: its savepoint commits only if the owner commits, and settling out of order corrupts both.
      * Joining keeps pre-#4786 behaviour — waiting for the owner instead can deadlock when the owner is
      * itself waiting on this work (a coalesced entity-action rerun) — so it is reported, once per
-     * transaction, instead of silently happening.
+     * transaction, instead of silently happening. The joiner stays bound to the owner's transaction
+     * after its own savepoint is released: its later plain statements keep running on that
+     * transaction until the owner ends it.
      */
     private bindJoiningMembership(membership: TransactionMembership): void {
         const epoch = this._affinity.CurrentEpoch;
@@ -6233,7 +6223,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             LogError(
                 `${this.constructor.name}: a transaction was begun by code outside the async scope of the transaction ` +
                 `already open on this provider instance, so it joins that transaction as a savepoint. Its writes now ` +
-                `commit or roll back with a unit of work it is not part of. Run independent units of work on ` +
+                `commit or roll back with a unit of work it is not part of, and its later statements keep running ` +
+                `in that transaction until its owner ends it. Run independent units of work on ` +
                 `CreateIndependentInstance() or a per-request provider (#4786).`,
             );
         }
@@ -6241,8 +6232,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /** Savepoint SQL is the provider's own bookkeeping: it must reach the handle whichever scope settles the frame. */
-    private executeTransactionControlSQL(sql: string, description: string): Promise<unknown> {
-        return this._affinity.RunAsMember(() => this.ExecuteSQL(sql, undefined, { description, ignoreLogging: true }));
+    private async executeTransactionControlSQL(sql: string, description: string): Promise<void> {
+        await this._affinity.RunAsMember(() => this.ExecuteSQL(sql, undefined, { description, ignoreLogging: true }));
     }
 
     private async createSavepoint(savepointName: string): Promise<void> {
