@@ -8,7 +8,7 @@ import { ComputerUseAuthConfig } from './auth.js';
 import { BrowserConfig } from './browser.js';
 import type { BrowserAction, ContextSeed } from './browser.js';
 import { ComputerUseTool } from './tools.js';
-import type { AIAPIKey } from '@memberjunction/ai';
+import type { AIAPIKeyResolver } from '@memberjunction/ai';
 import type { JudgeFrequency } from './judge.js';
 import type { AppProfile } from './app-profile.js';
 import { GoalPostcondition } from './trace.js';
@@ -140,12 +140,18 @@ export class RunComputerUseParams {
     public JudgeModel?: ModelConfig;
 
     /**
-     * Runtime API keys for this run, when it was started from an agent run that carries them
-     * (`ExecuteAgentParams.apiKeys`). The controller and judge LLMs resolve against these first and
-     * fall back to the platform key per driver class — the same precedence every prompt follows.
-     * Absent ⇒ platform keys, which is every run that does not supply them.
+     * Key-resolution seam for the controller and judge LLMs this engine instantiates itself — the
+     * direct-LLM path, taken when the caller pins `ControllerModel` / `JudgeModel`. Asked for ONE
+     * driver class; its answer is used when it has one, else the platform key — the same order as
+     * `GetAIAPIKey` (a run's key, then the environment's), which for prompts is only the legacy
+     * tier: MJ Credentials are not consulted here. A resolver rather than a key list, so the engine
+     * can ask for the class it needs without holding the caller's credentials.
+     *
+     * **Not wired in MJ yet.** `ComputerUseAction` does not set it, and `MJComputerUseEngine`'s
+     * default path runs the controller and judge through stored prompts via `AIPromptRunner`, which
+     * does not consult it. Absent ⇒ platform keys, which is every run today that does not set it.
      */
-    public APIKeys?: AIAPIKey[];
+    public APIKeyResolver?: AIAPIKeyResolver;
 
     /** Tools the LLM can invoke during execution */
     public Tools?: ComputerUseTool[];
