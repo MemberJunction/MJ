@@ -24,6 +24,7 @@ Every AI capability is represented by an abstract base class. Provider packages 
 | `BaseAudio` | Text-to-speech and speech-to-text | `TextToSpeech()`, `SpeechToText()` |
 | `BaseVideo` | Video generation from text/images | `GenerateVideo()` |
 | `BaseReranker` | Document reranking for retrieval | `Rerank()` |
+| `BaseDecision` | Typed decisions (Likelihood, Choice, Score) with a probability per answer | `Decide()` |
 | `BaseRealtimeModel` | Live, full-duplex, tool-calling realtime sessions (voice) | `StartSession()`, `CreateClientSession()` |
 
 All inherit from `BaseModel`, which manages API key storage and provides the `@RegisterClass` integration point.
@@ -60,6 +61,7 @@ One additional realtime primitive lives here that is *not* a `BaseModel` capabil
 | `SummarizeParams` / `SummarizeResult` | Text summarization |
 | `ClassifyParams` / `ClassifyResult` | Text classification |
 | `RerankParams` / `RerankResult` | Document reranking |
+| `DecisionParams` / `DecisionResult` | Typed decision parameters and structured results with probabilities |
 | `ModelUsage` | Token counts and cost tracking (prompt tokens, completion tokens, total cost, currency) |
 | `BaseResult` | Common result base with success flag, timing, and error info |
 | `FileCapabilities` | Declares which non-text inputs a provider accepts: `SupportedMimeTypes` (e.g. `image/png`, `audio/mp3`, supports `image/*` wildcards), `MaxFileSize`, `MaxFilesPerRequest`, `HasFileAPI`. Returned by `GetFileCapabilities()` on `BaseLLM` (file inputs to chat) and `BaseEmbeddings` (media inputs to `EmbedContent`); `null` means text-only |
