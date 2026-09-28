@@ -87,6 +87,14 @@ describe('UserSharingCenterComponent (DOM, data-bound)', () => {
     expect(text(f, '.mj-accordion-badge')).toBe('2');
   });
 
+  it('falls back to the raw DomainName as the heading when a consumer-built group omits Label', () => {
+    // Label is optional on the exported shape so external custom layouts keep compiling.
+    const f = render({}, (c) => {
+      c.SharedWithMe = [group({ Label: undefined })];
+    });
+    expect(text(f, '.group-name')).toBe('Dashboard Permissions');
+  });
+
   it('renders one row per permission in an expanded group', () => {
     const f = render({}, (c) => {
       c.SharedWithMe = [group({ Rows: [permission(), permission({ SourceRecordID: 'perm2' })], Expanded: true })];
@@ -196,6 +204,10 @@ describe('GetSharingDomainDisplayLabel', () => {
 
   it('normalizes whitespace before the map lookup, so a padded built-in still maps', () => {
     expect(GetSharingDomainDisplayLabel('  Dashboard Permissions ')).toBe('Dashboards');
+  });
+
+  it('returns the trimmed name on the raw fallback, so padding never reaches the heading', () => {
+    expect(GetSharingDomainDisplayLabel('  Something Custom ')).toBe('Something Custom');
   });
 
   it('does not treat inherited Object.prototype members as map hits', () => {

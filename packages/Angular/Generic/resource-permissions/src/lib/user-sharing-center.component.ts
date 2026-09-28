@@ -66,9 +66,9 @@ export const SharingDomainDisplayLabels: Record<string, string> = {
  */
 export function GetSharingDomainDisplayLabel(domainName: string): string {
     const trimmed = domainName.trim();
-    // hasOwn, not a bare index: DomainName is user-authored for custom domains, and a plain
-    // object lookup would return inherited Object.prototype members for names like "constructor".
-    if (Object.hasOwn(SharingDomainDisplayLabels, trimmed)) {
+    // Own-property check, not a bare index: DomainName is user-authored for custom domains, and a
+    // plain object lookup would return inherited Object.prototype members for names like "constructor".
+    if (Object.prototype.hasOwnProperty.call(SharingDomainDisplayLabels, trimmed)) {
         return SharingDomainDisplayLabels[trimmed];
     }
     // Plain string ops rather than /\s+Permissions$/i: a whitespace run before an anchored
@@ -80,7 +80,7 @@ export function GetSharingDomainDisplayLabel(domainName: string): string {
             return stripped;
         }
     }
-    return domainName;
+    return trimmed || domainName;
 }
 
 /**
