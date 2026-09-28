@@ -32,6 +32,7 @@ import {
 import { CloneMaterializer } from './CloneMaterializer';
 import { ComputeClonePlanHash } from './ClonePlanHash';
 import { ToRecordKeyString } from './CloneKeys';
+import { CloneAuthorizer } from './CloneAuthorization';
 
 /** Entities the executor writes provenance to. */
 const PROVENANCE_ENTITIES = ['MJ: Record Clone Logs', 'MJ: Record Clone Log Items', 'MJ: Record Links'];
@@ -396,11 +397,15 @@ export class CloneExecutor {
     private async writeAudit(plan: ClonePlan, contextUser: UserInfo, success: boolean, cloneLogId: string, rootTargetId: string | null, error: string | null): Promise<void> {
         const md = this.Provider as IMetadataProvider & { CreateAuditLogRecord?: DatabaseProviderBase['CreateAuditLogRecord'] };
         if (typeof md.CreateAuditLogRecord !== 'function') return;
-        const entityId = md.EntityByName(plan.RootEntityName ?? '')?.ID;
-        if (!entityId) return;
+        const entity = md.EntityByName(plan.RootEntityName ?? '');
+        if (!entity) return;
+        // Audited when the entity's clone authorization asks for it (every shipped one does).
+        const authorization = new CloneAuthorizer(md).EntityAuthorization(entity);
+        if (authorization?.UseAuditLog !== true) return;
+        const entityId = entity.ID;
         await md.CreateAuditLogRecord(
             contextUser,
-            null,
+            authorization.Name,
             'Record Cloned',
             success ? 'Success' : 'Failed',
             JSON.stringify({ CloneLogID: cloneLogId, SourceRecordID: ToRecordKeyString(plan.RootSourceKey), TargetRecordID: rootTargetId, Error: error }),

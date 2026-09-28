@@ -21,6 +21,16 @@ describe('RecordCloneEngine.Clone', () => {
         expect(res.Counts?.Create).toBe(2);
     });
 
+    it('masks encrypted values in the plan a dry run returns', async () => {
+        const secretPlan = {
+            ...plan(),
+            Nodes: [{ NodeKey: 'n', EntityName: 'X', FieldChanges: [{ Field: 'APIKey', Kind: 'Copy', OldValue: 'k-123', NewValue: 'k-123', Reason: '', Sensitive: true }] }],
+        };
+        vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(secretPlan as never);
+        const res = await new RecordCloneEngine({} as IMetadataProvider).Clone({ EntityName: 'X', SourceRecordKey: 'x-1', Options: { DryRun: true } }, user);
+        expect(JSON.stringify(res.Plan)).not.toContain('k-123');
+    });
+
     it('reports a blocked dry run as BLOCKED', async () => {
         vi.spyOn(ClonePlanner.prototype, 'Plan').mockResolvedValue(plan(true) as never);
         const res = await new RecordCloneEngine({} as IMetadataProvider).Clone({ EntityName: 'X', SourceRecordKey: 'x-1', Options: { DryRun: true } }, user);

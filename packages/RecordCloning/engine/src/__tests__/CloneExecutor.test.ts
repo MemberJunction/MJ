@@ -10,6 +10,7 @@ import {
 import { CloneExecutor } from '../CloneExecutor';
 import { ClonePlan } from '@memberjunction/record-cloning-base';
 import { ComputeClonePlanHash } from '../ClonePlanHash';
+import { ENCRYPTED_SENTINEL } from '@memberjunction/global';
 import { GrantedCloneAuthorizations } from './helpers/cloneAuthorizations';
 
 class MockEntity extends BaseEntity {
@@ -226,7 +227,7 @@ describe('CloneExecutor', () => {
             Blocked: false, Warnings: [], Nodes: nodes, Edges: [], Excluded: [],
         } as unknown as ClonePlan;
     };
-    type Row = { Status?: string; LinkType?: string; Metadata?: string; StartedAt?: Date; ErrorMessage?: string; RecordCloneLogID?: string; FieldChangesJSON?: string };
+    type Row = { Status?: string; LinkType?: string; Metadata?: string; StartedAt?: Date; ErrorMessage?: string; RecordCloneLogID?: string; FieldChangesJSON?: string; PlanJSON?: string; Name?: string };
     const rows = () => savedEntities as unknown as Row[];
 
     it('writes the clone log, one log item per row and a ClonedFrom link', async () => {
@@ -242,6 +243,59 @@ describe('CloneExecutor', () => {
         expect(JSON.parse(item!.FieldChangesJSON!)).toHaveLength(1);
         const link = rows().find((e) => e.LinkType === 'ClonedFrom');
         expect(JSON.parse(link!.Metadata!)).toEqual({ CloneLogID: result.CloneLogID });
+    });
+
+    it('writes the real value to the clone but only the sentinel to the log PlanJSON', async () => {
+        const plan = rootOnlyPlan();
+        plan.Nodes[0].FieldChanges = [{ Field: 'Name', Kind: 'Copy', OldValue: 'top-secret', NewValue: 'top-secret', Reason: '', Sensitive: true }];
+        plan.PlanHash = ComputeClonePlanHash({ Nodes: plan.Nodes, Edges: [], Excluded: [] });
+
+        const result = await new CloneExecutor({ Provider: provenanceProvider() }).Execute(plan, mockUser);
+
+        expect(result.Success).toBe(true);
+        const log = rows().find((e) => e.Status === 'Complete');
+        expect(log?.PlanJSON).toBeTruthy();
+        expect(log!.PlanJSON).not.toContain('top-secret');
+        expect(log!.PlanJSON).toContain(ENCRYPTED_SENTINEL);
+        const item = rows().find((e) => e.Status === 'Created');
+        expect(item?.FieldChangesJSON ?? '').not.toContain('top-secret');
+        expect(savedEntities.find((e) => e.EntityInfo?.Name === 'ParentEntity')?.Get('Name')).toBe('top-secret');
+    });
+
+    it('rolls the clone back when its provenance cannot be saved', async () => {
+        const commit = vi.fn(async () => {});
+        const rollback = vi.fn(async () => {});
+        const base = provenanceProvider();
+        const provider = {
+            ...base,
+            BeginEntityTransaction: async () => ({ Commit: commit, Rollback: rollback }),
+            GetEntityObject: async <T extends BaseEntity>(entityName: string): Promise<T> => {
+                const ent = await base.GetEntityObject<T>(entityName);
+                if (entityName === 'MJ: Record Links') vi.spyOn(ent, 'Save').mockResolvedValue(false);
+                return ent;
+            },
+        } as unknown as IMetadataProvider;
+
+        const result = await new CloneExecutor({ Provider: provider }).Execute(rootOnlyPlan(), mockUser);
+
+        expect(result.Success).toBe(false);
+        expect(rollback).toHaveBeenCalledOnce();
+        expect(commit).not.toHaveBeenCalled();
+    });
+
+    it('writes the Record Cloned audit row only when the clone authorization uses the audit log', async () => {
+        const run = async (useAuditLog: boolean) => {
+            const audit = vi.fn(async () => null);
+            const authorizations = GrantedCloneAuthorizations().map((a) => Object.assign(a, { UseAuditLog: useAuditLog }));
+            const provider = { ...provenanceProvider(), Authorizations: authorizations, CreateAuditLogRecord: audit } as unknown as IMetadataProvider;
+            await new CloneExecutor({ Provider: provider }).Execute(rootOnlyPlan(), mockUser);
+            return audit;
+        };
+
+        const audited = await run(true);
+        expect(audited).toHaveBeenCalledOnce();
+        expect(audited.mock.calls[0]).toEqual(expect.arrayContaining(['Clone Records in Custom Schemas', 'Record Cloned', 'Success']));
+        expect(await run(false)).not.toHaveBeenCalled();
     });
 
     it('records a failed clone in an Error log written after the rollback', async () => {

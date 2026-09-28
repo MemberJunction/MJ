@@ -82,6 +82,11 @@ export class CloneAuthorizer {
         return this.evaluator.UserCanExecuteWithAncestors(auth, user, this.provider.Authorizations ?? []);
     }
 
+    /** The authorization a clone of `entity` is checked against, or undefined when it isn't seeded. */
+    public EntityAuthorization(entity: EntityInfo): AuthorizationInfo | undefined {
+        return this.find(this.ResolveAuthorizationName(entity));
+    }
+
     private find(name: string): AuthorizationInfo | undefined {
         const target = name.trim().toLowerCase();
         return (this.provider.Authorizations ?? []).find((a) => a.Name?.trim().toLowerCase() === target);

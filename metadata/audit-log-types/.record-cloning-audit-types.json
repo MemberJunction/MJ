@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Record Cloned",
-      "Description": "A record cloning operation was executed or evaluated. Emitted when the record clone authorization has UseAuditLog=1.",
+      "Description": "A record clone was executed or refused: one row per Execute (Success or Failed), written when the entity's clone authorization has UseAuditLog=1, as every shipped one does.",
       "ParentID": null,
       "AuthorizationID": null
     },

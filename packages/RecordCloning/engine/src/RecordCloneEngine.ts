@@ -8,6 +8,7 @@
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import {
     ClonePlan,
+    MaskSensitivePlan,
     RecordCloneRequest,
     RecordCloneResult,
 } from '@memberjunction/record-cloning-base';
@@ -46,7 +47,8 @@ export class RecordCloneEngine {
                 Created: [],
                 Counts: plan.Counts,
                 Warnings: plan.Warnings,
-                Plan: plan,
+                // The caller only reads this plan, so encrypted values leave masked, as on the wire.
+                Plan: MaskSensitivePlan(plan),
             };
         }
         return this._executor.Execute(plan, user);
