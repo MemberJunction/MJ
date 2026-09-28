@@ -912,7 +912,9 @@ export class ClonePlanner {
 
     /**
      * Drops rows matching their relationship's `ExcludeRows`, with every row discovered beneath them.
-     * The root's `Relationships` entry wins over the relationship's own bag. One Info warning per relationship.
+     * The rule is looked up in the same order as the edge's policy (`ResolveEdgePolicy`): the
+     * relationship's own bag, then the root's entry by relationship ID, `Child.JoinField`, then
+     * `Child`. One Info warning per relationship.
      */
     private dropExcludedRows(
         nodes: DependencyNode[],
@@ -922,7 +924,8 @@ export class ClonePlanner {
     ): DependencyNode[] {
         const dropped = new Set<string>();
         const counts = new Map<string, number>();
-        const isDropped = (key: string) => dropped.has(key) || dropped.has(key.split('::')[1] ?? '');
+        // Keyed by entity and record, as the walker's edge keys are: a bare record ID can repeat across entities.
+        const isDropped = (key: string) => dropped.has(key);
         const kept: DependencyNode[] = [];
 
         for (const node of nodes) {
@@ -931,17 +934,18 @@ export class ClonePlanner {
                 kept.push(node);
                 continue;
             }
+            const relationships = rootConfig?.Relationships;
             const rules: ICloneRowExclusion[] | undefined =
-                rootConfig?.Relationships?.[`${edge.TargetEntityName}.${edge.JoinField}`]?.ExcludeRows ??
-                rootConfig?.Relationships?.[edge.TargetEntityName]?.ExcludeRows ??
-                edge.Relationship?.CloneConfig?.ExcludeRows;
+                edge.Relationship?.CloneConfig?.ExcludeRows ??
+                (edge.Relationship?.ID ? relationships?.[edge.Relationship.ID]?.ExcludeRows : undefined) ??
+                relationships?.[`${edge.TargetEntityName}.${edge.JoinField}`]?.ExcludeRows ??
+                relationships?.[edge.TargetEntityName]?.ExcludeRows;
             const matched = RowMatchesExclusion(node.RecordData ?? {}, rules);
             if (!matched && !isDropped(edge.FromKey)) {
                 kept.push(node);
                 continue;
             }
             dropped.add(`${node.EntityName}::${node.RecordID}`);
-            dropped.add(node.RecordID);
             excludedNodes.push({
                 EntityName: node.EntityName,
                 SourceKey: node.RecordID,
