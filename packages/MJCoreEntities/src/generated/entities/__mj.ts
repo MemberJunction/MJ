@@ -50409,6 +50409,18 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How this serving path's prompt cache matches a new request against an
+     * earlier one. `'prefix'` — the cache reuses a prior request only when that request's ENTIRE
+     * prompt is a byte prefix of the new one (OpenAI's automatic cache, xAI), so per-iteration
+     * framework state must be appended, never replaced. `'block'` — the cache works on block or
+     * segment boundaries (Anthropic breakpoints, Gemini implicit cache, Cerebras sliding cache), so a
+     * trailing per-iteration message can be replaced in place. Absent means `'block'`, the safe
+     * default. Set `'prefix'` on the MODEL-VENDOR row of the inference provider, so a host serving
+     * many models can answer per model. Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PromptCacheStrategy?: 'prefix' | 'block' | null;
 }
 
 /**
@@ -50832,6 +50844,18 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How this serving path's prompt cache matches a new request against an
+     * earlier one. `'prefix'` — the cache reuses a prior request only when that request's ENTIRE
+     * prompt is a byte prefix of the new one (OpenAI's automatic cache, xAI), so per-iteration
+     * framework state must be appended, never replaced. `'block'` — the cache works on block or
+     * segment boundaries (Anthropic breakpoints, Gemini implicit cache, Cerebras sliding cache), so a
+     * trailing per-iteration message can be replaced in place. Absent means `'block'`, the safe
+     * default. Set `'prefix'` on the MODEL-VENDOR row of the inference provider, so a host serving
+     * many models can answer per model. Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PromptCacheStrategy?: 'prefix' | 'block' | null;
 }
 
 /**
@@ -51447,6 +51471,18 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How this serving path's prompt cache matches a new request against an
+     * earlier one. `'prefix'` — the cache reuses a prior request only when that request's ENTIRE
+     * prompt is a byte prefix of the new one (OpenAI's automatic cache, xAI), so per-iteration
+     * framework state must be appended, never replaced. `'block'` — the cache works on block or
+     * segment boundaries (Anthropic breakpoints, Gemini implicit cache, Cerebras sliding cache), so a
+     * trailing per-iteration message can be replaced in place. Absent means `'block'`, the safe
+     * default. Set `'prefix'` on the MODEL-VENDOR row of the inference provider, so a host serving
+     * many models can answer per model. Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PromptCacheStrategy?: 'prefix' | 'block' | null;
 }
 
 /**
@@ -52766,6 +52802,18 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How this serving path's prompt cache matches a new request against an
+     * earlier one. `'prefix'` — the cache reuses a prior request only when that request's ENTIRE
+     * prompt is a byte prefix of the new one (OpenAI's automatic cache, xAI), so per-iteration
+     * framework state must be appended, never replaced. `'block'` — the cache works on block or
+     * segment boundaries (Anthropic breakpoints, Gemini implicit cache, Cerebras sliding cache), so a
+     * trailing per-iteration message can be replaced in place. Absent means `'block'`, the safe
+     * default. Set `'prefix'` on the MODEL-VENDOR row of the inference provider, so a host serving
+     * many models can answer per model. Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PromptCacheStrategy?: 'prefix' | 'block' | null;
 }
 
 /**
@@ -55304,6 +55352,18 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How this serving path's prompt cache matches a new request against an
+     * earlier one. `'prefix'` — the cache reuses a prior request only when that request's ENTIRE
+     * prompt is a byte prefix of the new one (OpenAI's automatic cache, xAI), so per-iteration
+     * framework state must be appended, never replaced. `'block'` — the cache works on block or
+     * segment boundaries (Anthropic breakpoints, Gemini implicit cache, Cerebras sliding cache), so a
+     * trailing per-iteration message can be replaced in place. Absent means `'block'`, the safe
+     * default. Set `'prefix'` on the MODEL-VENDOR row of the inference provider, so a host serving
+     * many models can answer per model. Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PromptCacheStrategy?: 'prefix' | 'block' | null;
 }
 
 /**

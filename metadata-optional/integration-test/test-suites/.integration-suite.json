@@ -1166,15 +1166,15 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT95 - Trailing Runtime State",
-            "Sequence": 71,
+            "Sequence": 48,
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "86CEB359-44F9-4DD4-983F-F6753E385F39"
           },
           "sync": {
-            "lastModified": "2026-09-27T22:46:55.643Z",
-            "checksum": "3e7320babb839c5733eaa972e17951859acd3482847aa79dd169fd547df494bf"
+            "lastModified": "2026-09-28T02:53:02.944Z",
+            "checksum": "c8fe24f700b8f3e4646ff8a29a121c7def7d5176b6c228dfa0fd0ed2eb74d782"
           }
         },
         {
