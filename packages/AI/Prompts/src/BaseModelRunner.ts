@@ -260,7 +260,7 @@ export abstract class BaseModelRunner {
    * @param modelVendor The model vendor to check
    * @returns true if the vendor is an inference provider
    */
-  protected isInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean {
+  protected IsInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean {
     return AIEngine.Instance.IsInferenceProvider(modelVendor);
   }
 
@@ -296,7 +296,7 @@ export abstract class BaseModelRunner {
    * @param params - The prompt execution parameters containing contextUser and optional credentialId
    * @returns The API key/configuration string to pass to the LLM constructor
    */
-  protected async resolveCredentialForExecution(
+  protected async ResolveCredentialForExecution(
     driverClass: string,
     promptId: string | undefined,
     modelId: string | undefined,
@@ -529,7 +529,7 @@ export abstract class BaseModelRunner {
    * @param params - The prompt execution parameters
    * @returns true if credentials are available, false otherwise
    */
-  protected hasCredentialsAvailable(
+  protected HasCredentialsAvailable(
     driverClass: string,
     promptId: string | undefined,
     modelId: string | undefined,
@@ -597,7 +597,7 @@ export abstract class BaseModelRunner {
    * @param preferredVendorId - Preferred vendor ID
    * @returns Ordered array of model-vendor candidates (highest priority first)
    */
-  protected buildModelVendorCandidates(
+  protected BuildModelVendorCandidates(
     prompt: MJAIPromptEntityExtended,
     explicitModelId?: string,
     configurationId?: string,
@@ -937,7 +937,7 @@ export abstract class BaseModelRunner {
     const modelVendor = model.ModelVendors.find(
       mv => UUIDsEqual(mv.VendorID, promptModel.VendorID) &&
             mv.Status === 'Active' &&
-            this.isInferenceProvider(mv)
+            this.IsInferenceProvider(mv)
     );
 
     if (!modelVendor) return null;
@@ -967,7 +967,7 @@ export abstract class BaseModelRunner {
     const vendors = model.ModelVendors
       .filter(mv =>
         mv.Status === 'Active' &&
-        this.isInferenceProvider(mv)
+        this.IsInferenceProvider(mv)
       )
       .sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
 
@@ -1175,7 +1175,7 @@ export abstract class BaseModelRunner {
             m.ModelVendors.some(mv =>
               mv.Status === 'Active' &&
               mv.Vendor === preferredVendorName &&
-              this.isInferenceProvider(mv)
+              this.IsInferenceProvider(mv)
             ))
     );
   }
@@ -1238,7 +1238,7 @@ export abstract class BaseModelRunner {
     // Uses the model's precomputed ModelVendors (grouped at engine load) rather than scanning
     // the global ModelVendors array.
     const modelVendors = model.ModelVendors
-      .filter(mv => mv.Status === 'Active' && this.isInferenceProvider(mv))
+      .filter(mv => mv.Status === 'Active' && this.IsInferenceProvider(mv))
       .sort((a, b) => b.Priority - a.Priority);
 
     // First, add preferred vendor if it exists
@@ -1404,7 +1404,7 @@ export abstract class BaseModelRunner {
       } else {
         // Fallback: grab the highest priority AI Model Vendor record for this model (inference providers only)
         const modelVendors = model.ModelVendors
-          .filter((mv) => mv.Status === 'Active' && this.isInferenceProvider(mv))
+          .filter((mv) => mv.Status === 'Active' && this.IsInferenceProvider(mv))
           .sort((a, b) => b.Priority - a.Priority);
         
         if (modelVendors.length > 0) {
@@ -1661,7 +1661,7 @@ export abstract class BaseModelRunner {
     return delay;
   }
 
-  protected async applyRetryDelay(prompt: MJAIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
+  protected async ApplyRetryDelay(prompt: MJAIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
     const delay = this.calculateRetryDelay(prompt, attemptNumber, suggestedDelaySeconds);
     const delaySeconds = (delay / 1000).toFixed(1);
     LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
@@ -1765,7 +1765,7 @@ export abstract class BaseModelRunner {
 
       // Apply backoff delay before retry
       if (attemptNumber < maxAttempts) {
-        await this.applyRetryDelay(prompt, rateLimitRetryCount, errorAnalysis.suggestedRetryDelaySeconds);
+        await this.ApplyRetryDelay(prompt, rateLimitRetryCount, errorAnalysis.suggestedRetryDelaySeconds);
       }
 
       return true; // Signal to continue with same model/vendor
