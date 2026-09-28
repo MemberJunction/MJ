@@ -1314,6 +1314,19 @@ describe('ConversationEngine', () => {
             expect(window).toHaveLength(2);
             expect(window[0].metadata?.isConversationSummary).toBeUndefined();
         });
+
+        it('honours a history floor: rows before it and the summary are left out', async () => {
+            enqueueWindowRows([
+                { ...makeRow('d-1', 1, 'User', 'before'), __mj_CreatedAt: '2026-09-01T11:00:00.000Z' },
+                { ...makeRow('d-2', 2, 'AI', 'boundary', 'summary of before'), __mj_CreatedAt: '2026-09-01T12:30:00.000Z' },
+                { ...makeRow('d-3', 3, 'User', 'after'), __mj_CreatedAt: '2026-09-01T13:00:00.000Z' },
+            ]);
+            const window = await engine.GetAgentContextWindow('conv-1', contextUser, {
+                historyFrom: new Date('2026-09-01T12:00:00.000Z'),
+            });
+            expect(window.map((m) => m.content)).toEqual(['boundary', 'after']);
+            expect(window.every((m) => !m.metadata?.isConversationSummary)).toBe(true);
+        });
     });
 
     describe('SaveConversation', () => {
@@ -1792,6 +1805,82 @@ describe('ConversationEngine', () => {
             // With the boundary row excluded, no summary participates → plain passthrough
             expect(window.every(m => !m.metadata?.isConversationSummary)).toBe(true);
             expect(window.map(m => m.content)).toEqual(['m1', 'm2']);
+        });
+
+        describe('history floor (historyFrom)', () => {
+            const floor = new Date('2026-09-01T12:00:00.000Z');
+            const dated = (sequence: number, createdAt: Date | string | null, summary?: string) => ({
+                ...row(sequence, sequence % 2 ? 'User' : 'AI', `m${sequence}`, summary),
+                __mj_CreatedAt: createdAt,
+            });
+
+            it('drops rows written before the floor and keeps the row written exactly at it', () => {
+                const window = ConversationEngine.AssembleContextWindow([
+                    dated(1, '2026-09-01T11:59:59.999Z'),
+                    dated(2, new Date('2026-09-01T12:00:00.000Z')),
+                    dated(3, '2026-09-01T12:00:00.001Z'),
+                ], { historyFrom: floor });
+                expect(window.map(m => m.content)).toEqual(['m2', 'm3']);
+            });
+
+            it('uses no summary, even one written after the floor (it folds in history from before it)', () => {
+                const window = ConversationEngine.AssembleContextWindow([
+                    dated(1, '2026-09-01T11:00:00.000Z'),
+                    dated(2, '2026-09-01T12:30:00.000Z', 'SUMMARY of 1'),
+                    dated(3, '2026-09-01T13:00:00.000Z'),
+                ], { historyFrom: floor });
+                expect(window.every(m => !m.metadata?.isConversationSummary)).toBe(true);
+                expect(window.map(m => m.content)).toEqual(['m2', 'm3']);
+            });
+
+            it('caps to the most recent maxTailMessages rows at or after the floor', () => {
+                const rows = [1, 2, 3, 4, 5].map(n => dated(n, `2026-09-01T1${n}:00:00.000Z`, n === 4 ? 'SUMMARY' : undefined));
+                const window = ConversationEngine.AssembleContextWindow(rows, { historyFrom: floor, maxTailMessages: 2 });
+                expect(window.map(m => m.content)).toEqual(['m4', 'm5']);
+            });
+
+            it('drops a row whose timestamp is missing or unreadable', () => {
+                const window = ConversationEngine.AssembleContextWindow([
+                    dated(1, null),
+                    dated(2, 'not a date'),
+                    { ...row(3, 'User', 'm3') },
+                    dated(4, '2026-09-02T00:00:00.000Z'),
+                ], { historyFrom: floor });
+                expect(window.map(m => m.content)).toEqual(['m4']);
+            });
+
+            it('without a floor, ignores timestamps entirely (unchanged behaviour)', () => {
+                const window = ConversationEngine.AssembleContextWindow([dated(1, null), dated(2, 'not a date')]);
+                expect(window.map(m => m.content)).toEqual(['m1', 'm2']);
+            });
+        });
+    });
+
+    describe('LoadWindowRowsFresh', () => {
+        it('loads the whole conversation, with the window fields including __mj_CreatedAt', async () => {
+            await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser);
+            expect(runViewParamsLog).toHaveLength(1);
+            expect(runViewParamsLog[0].ExtraFilter).toBe(`ConversationID='conv-1'`);
+            expect(runViewParamsLog[0].Fields).toContain('__mj_CreatedAt');
+        });
+
+        it('applies a history floor in the query, so earlier rows never leave the database', async () => {
+            const floor = new Date('2026-09-01T12:00:00.000Z');
+            await ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser, undefined, floor);
+            expect(runViewParamsLog[0].ExtraFilter).toBe(`ConversationID='conv-1' AND __mj_CreatedAt >= '2026-09-01T12:00:00.000Z'`);
+        });
+
+        it('fails before querying when the floor is an invalid date', async () => {
+            await expect(ConversationEngine.LoadWindowRowsFresh('conv-1', contextUser, undefined, new Date('nope'))).rejects.toThrow(RangeError);
+            expect(runViewParamsLog).toHaveLength(0);
+        });
+    });
+
+    describe('HistoryFromFilter', () => {
+        it('writes an ISO-8601 comparison against __mj_CreatedAt, or a named column', () => {
+            const floor = new Date('2026-09-01T12:00:00.000Z');
+            expect(ConversationEngine.HistoryFromFilter(floor)).toBe(`__mj_CreatedAt >= '2026-09-01T12:00:00.000Z'`);
+            expect(ConversationEngine.HistoryFromFilter(floor, 'cd.__mj_CreatedAt')).toBe(`cd.__mj_CreatedAt >= '2026-09-01T12:00:00.000Z'`);
         });
     });
 
