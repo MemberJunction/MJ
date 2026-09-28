@@ -49,7 +49,7 @@ export const handler = CreateSqsLambdaHandler(() => new ArchiveEmailEvent());
 
 ### Handler rules
 
-The full version is the consumer guide (`plans/work-queue-1/10-consumer-guide.md`); the short version:
+The full version is the consumer guide (`guides/WORK_QUEUE_CONSUMER_GUIDE.md`); the short version:
 
 - **Be idempotent.** Delivery is at least once, and `MessageID` is stable across redeliveries and replays — use it (or
   your own natural key) as the idempotency key.

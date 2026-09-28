@@ -69,5 +69,5 @@ this package changes.
 Copy `HelloWorldHandler`: extend `BaseWorkHandler<TPayload>` from `@memberjunction/work-queue-engine`, decorate
 with `@RegisterClass(BaseWorkHandler, '<your.key>')`, and make sure the package is in the host's class manifest
 (`mj codegen manifest`) so the ClassFactory can resolve the key. The engine README's "Writing a handler" section
-and the consumer guide (`plans/work-queue-1/10-consumer-guide.md`) cover idempotency, long-running work and the
+and the consumer guide (`guides/WORK_QUEUE_CONSUMER_GUIDE.md`) cover idempotency, long-running work and the
 abort reasons.

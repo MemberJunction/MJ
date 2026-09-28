@@ -6,7 +6,7 @@ and the `WorkQueue.*` Remote Operations. Browser-safe metadata (`WorkQueueEngine
 topology validation) lives in `@memberjunction/work-queue-base`; transport-neutral contracts and the consumer
 runtime live in `@memberjunction/work-queue-core`.
 
-Design and contract: `plans/work-queue-1/02-implementation-overview.md` and `03-interfaces-and-tables.md`.
+Design and contract: `02-implementation-overview.md` and `03-interfaces-and-tables.md` under `plans/work-queue-1/` on the `spec/work-queue` branch; the handler author's rules are in `guides/WORK_QUEUE_CONSUMER_GUIDE.md`.
 
 ## What is in the box
 
@@ -132,7 +132,7 @@ Rules: handlers must be idempotent; use `this.Provider` / `this.ContextUser` (th
 call; honor `context.Signal` and stop when it aborts; any other thrown error retries with backoff. With the default
 `HeartbeatMode = 'Auto'` the runtime renews the lease itself, every `min(LeaseSeconds / 3, 30 s)`. The full guidance
 — idempotency keys, long-running work, abort reasons, publishing in order, filters — is in the consumer guide,
-`plans/work-queue-1/10-consumer-guide.md`.
+`guides/WORK_QUEUE_CONSUMER_GUIDE.md`.
 
 A handler class must be **loaded** in the process that runs it: MJ resolves `HandlerKey` through the ClassFactory,
 so the package that declares the handler has to appear in the host's class manifest (`mj codegen manifest`) or be
