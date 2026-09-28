@@ -50327,8 +50327,9 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
+ *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -50762,8 +50763,9 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
+ *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -51389,8 +51391,9 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
+ *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -52720,8 +52723,9 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
+ *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -55270,8 +55274,9 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
+ *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -58414,8 +58419,9 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
+ *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
