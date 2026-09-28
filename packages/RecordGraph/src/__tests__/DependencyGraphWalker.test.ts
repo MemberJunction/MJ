@@ -310,6 +310,66 @@ describe('DependencyGraphWalker', () => {
             mockRunViewInstance.mockReset();
         });
 
+        describe('non-curated inbound FKs, the system-FK skip list and the depth cap', () => {
+            const project = {
+                ID: 'ent-project', Name: 'Projects', TrackRecordChanges: true,
+                PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
+                Fields: [{ Name: 'ID', PrimaryKey: true }], RelatedEntities: [],
+            } as unknown as EntityInfo;
+            // No EntityRelationship row points Notes at Projects: only the FK columns do.
+            const notes = {
+                ID: 'ent-notes', Name: 'Notes', TrackRecordChanges: true,
+                PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' },
+                Fields: [
+                    { Name: 'ID', PrimaryKey: true },
+                    { Name: 'ProjectID', RelatedEntityID: 'ent-project' },
+                    { Name: 'CreatedByUserID', RelatedEntityID: 'ent-project' },
+                ],
+                RelatedEntities: [],
+            } as unknown as EntityInfo;
+            const provider = {
+                Entities: [project, notes],
+                EntityByName: (n: string) => [project, notes].find((e) => e.Name === n) ?? null,
+                EntityByID: (id: string) => [project, notes].find((e) => e.ID === id),
+            } as unknown as IMetadataProvider;
+            const filters: string[] = [];
+
+            beforeEach(() => {
+                filters.length = 0;
+                mockRunViewInstance.mockImplementation(async (params: { EntityName: string; ExtraFilter?: string }) => {
+                    filters.push(`${params.EntityName}: ${params.ExtraFilter ?? ''}`);
+                    if (params.EntityName === 'Projects') return { Success: true, Results: [{ ID: 'p-1' }] };
+                    if (params.EntityName === 'Notes' && (params.ExtraFilter ?? '').includes('[ProjectID]')) {
+                        return { Success: true, Results: [{ ID: 'n-1', ProjectID: 'p-1' }] };
+                    }
+                    return { Success: true, Results: [] };
+                });
+            });
+
+            const walk = async (options: Record<string, unknown>) => {
+                const { CompositeKey } = await import('@memberjunction/core');
+                return new DependencyGraphWalker(provider).WalkDependents('Projects', new CompositeKey([{ FieldName: 'ID', Value: 'p-1' }]), options, mockUser);
+            };
+
+            it('lists nothing through non-curated FKs unless ListNonCuratedInbound is on', async () => {
+                const root = await walk({ EdgePolicy: () => 'Deep' });
+                expect(root.Children).toHaveLength(0);
+                expect(filters.some((f) => f.startsWith('Notes'))).toBe(false);
+            });
+
+            it('follows a non-curated inbound FK when asked, and never the system FKs', async () => {
+                const root = await walk({ ListNonCuratedInbound: true, EdgePolicy: () => 'Deep' });
+                expect(root.Children.map((c) => [c.EntityName, c.DiscoveringEdge?.Kind, c.DiscoveringEdge?.JoinField])).toEqual([['Notes', 'InboundFK', 'ProjectID']]);
+                expect(filters.some((f) => f.includes('CreatedByUserID'))).toBe(false);
+            });
+
+            it('stops at MaxDepth', async () => {
+                const root = await walk({ ListNonCuratedInbound: true, EdgePolicy: () => 'Deep', MaxDepth: 0 });
+                expect(root.Children).toHaveLength(0);
+                expect(filters.filter((f) => f.startsWith('Notes'))).toEqual([]);
+            });
+        });
+
         it('follows hierarchy self-references only when FollowHierarchies is true', async () => {
             const hierarchyEntity: Partial<EntityInfo> = {
                 ID: 'ent-hier-id',
