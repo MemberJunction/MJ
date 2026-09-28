@@ -1,11 +1,16 @@
 /**
  * End-to-end-in-miniature regression test for #4794.
  *
- * The bug: the deferral persisted a durable entity action's redacted params as a `LoggedParam[]`
- * ARRAY (`RedactParamsToJSON`'s shape), but `TaskGraphActionRunner.buildParams` reads
- * `Task.InputPayload` as a name→value RECORD. `Object.assign(merged, arrayValue)` treats an array's
- * indices as keys, so every declared parameter name was lost and replaced with `'0'`, `'1'`, ... —
- * the action received none of its real inputs.
+ * The bug: `BuildDurableDeferral` persisted a durable entity action's redacted params as a
+ * `LoggedParam[]` ARRAY (`RedactParamsToJSON`'s shape), while `TaskGraphActionRunner.buildParams`
+ * reads `Task.InputPayload` back as a name→value RECORD. Every released build with durable dispatch
+ * (v6.1.0 onward, including 6.1.4) hit the same real-world failure: `TaskGraphDispatcher`'s
+ * `mergedPayload` only merges plain objects, so it silently dropped the array before `buildParams`
+ * ever saw it, and the action ran with NONE of its declared inputs. `buildParams` itself has no such
+ * guard — `Object.assign(merged, arrayValue)` treats an array's indices as keys — so params named
+ * `'0'`, `'1'`, ... would only appear if the array reached it directly, bypassing the dispatcher's
+ * drop. That narrower path is exactly what this test exercises, by calling `RunActionForTask`
+ * on its own rather than through the dispatcher.
  *
  * This test proves the whole pipe, not just the writer or the reader in isolation: build the
  * payload exactly as the deferral does (`RedactParamsToRecord`), push it through the same
@@ -13,7 +18,7 @@
  * `Task.InputPayload`, then run it through the real `TaskGraphActionRunner` and assert the action
  * receives its declared parameters BY NAME.
  */
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@memberjunction/actions', () => ({
     ActionEngineServer: {
@@ -27,7 +32,7 @@ vi.mock('@memberjunction/actions', () => ({
 
 import { ActionEngineServer } from '@memberjunction/actions';
 import { RedactParamsToRecord, ActionParam } from '@memberjunction/actions-base';
-import type { MJActionParamEntity, MJEntityActionParamEntity } from '@memberjunction/core-entities';
+import type { MJActionExecutionLogEntity, MJActionParamEntity, MJEntityActionParamEntity } from '@memberjunction/core-entities';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { TaskActionRunParams } from '@memberjunction/task-graph';
 import { TaskGraphActionRunner } from '../services/TaskGraphActionRunner';
@@ -77,16 +82,15 @@ describe('TaskGraphActionRunner — durable payload round-trips by param name (#
     beforeEach(() => {
         // vitest's `restoreMocks: true` clears mock implementations before every test, including
         // the ones assigned inside the `vi.mock` factory above — so the return value is (re)armed here.
-        (ActionEngineServer.Instance.Config as Mock).mockResolvedValue(undefined);
-        (ActionEngineServer.Instance.RunAction as Mock).mockResolvedValue({
+        vi.mocked(ActionEngineServer.Instance.Config).mockResolvedValue(undefined);
+        vi.mocked(ActionEngineServer.Instance.RunAction, { partial: true }).mockResolvedValue({
             Success: true,
             Params: [],
-            LogEntry: { ID: 'L1' },
+            LogEntry: { ID: 'L1' } as MJActionExecutionLogEntity,
         });
     });
 
     it('delivers RedactParamsToRecord\'s output to the action by name, after a JSON round trip', async () => {
-        // Exactly what the deferral writes, then exactly what TaskGraphService's JSON column does to it.
         // Exactly what the deferral writes, then exactly what TaskGraphService's JSON column does to it.
         const stored = JSON.parse(JSON.stringify(RedactParamsToRecord(RUNTIME_PARAMS, ACTION_PARAMS, ENTITY_ACTION_PARAMS)));
 
@@ -95,7 +99,7 @@ describe('TaskGraphActionRunner — durable payload round-trips by param name (#
         expect(result.Success).toBe(true);
         expect(result.ActionLogID).toBe('L1');
 
-        const runActionCall = (ActionEngineServer.Instance.RunAction as Mock).mock.calls[0][0];
+        const runActionCall = vi.mocked(ActionEngineServer.Instance.RunAction).mock.calls[0][0];
         const sentParams = runActionCall.Params as ActionParam[];
 
         // The three logged declared names arrive, order-insensitive, with their values intact.

@@ -43,12 +43,15 @@ export type DurableEntityActionRequest = {
      * Typed as a `Record<string, unknown>` rather than `ActionParam[]` / `LoggedParam[]`
      * deliberately: `Task.InputPayload` is persistent, user-visible storage, and the #3408 §5.7
      * invariant is that no path writes a raw `ActionParam[]` there. It also isn't the array/log
-     * shape `RedactParams`/`RedactParamsToJSON` produce — the durable dispatcher (`TaskGraphActionRunner`)
-     * reads this payload back **by parameter name** to re-hydrate a run, so a positional array here
-     * is silently wrong rather than loudly wrong: it round-trips through `JSON.stringify`/`JSON.parse`
-     * without error and only fails when the action receives params named `"0"`, `"1"`, … instead of
-     * their real names (MJ#4794). Taking the redacted record shape at the boundary is what makes
-     * violating that invariant require changing this type rather than forgetting a call.
+     * shape `RedactParams`/`RedactParamsToJSON` produce — a positional array here is silently
+     * wrong rather than loudly wrong: it round-trips through `JSON.stringify`/`JSON.parse` without
+     * error, and every released build with durable dispatch (v6.1.0 onward, including 6.1.4) hit
+     * the same failure — `TaskGraphDispatcher`'s `mergedPayload` only merges plain objects, so it
+     * silently dropped the array and the action ran with NONE of its inputs. Params named `"0"`,
+     * `"1"`, … instead of their real names would only appear if the array reached
+     * `TaskGraphActionRunner.buildParams` directly, bypassing that drop (MJ#4794). Taking the
+     * redacted record shape at the boundary is what makes violating that invariant require
+     * changing this type rather than forgetting a call.
      */
     RedactedParams: Record<string, unknown>;
     ContextUser: UserInfo;
