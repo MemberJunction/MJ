@@ -47,7 +47,7 @@ class TestModelRunner extends BaseModelRunner {
     return 'LLM';
   }
 
-  public override hasCredentialsAvailable(
+  public override HasCredentialsAvailable(
     driverClass: string,
     _promptId: string,
     _modelId: string,

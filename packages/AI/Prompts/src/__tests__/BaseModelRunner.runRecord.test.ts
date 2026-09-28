@@ -4,6 +4,7 @@ import type {
   MJAIModelEntityExtended,
   MJAIPromptRunEntityExtended,
   AIPromptParams,
+  AIModelSelectionInfo,
 } from '@memberjunction/ai-core-plus';
 import type { IMetadataProvider } from '@memberjunction/core';
 import { BaseModelRunner } from '../BaseModelRunner';
@@ -42,6 +43,8 @@ class FakePromptRun {
   public Result?: string;
   public LatestResult: { CompleteMessage: string } | null = null;
   public saveCount = 0;
+  /** The row as each Save() wrote it: a copy of the fields at the moment of the save. */
+  public savedRows: Array<Record<string, unknown>> = [];
   [k: string]: unknown;
 
   private static seq = 0;
@@ -51,12 +54,23 @@ class FakePromptRun {
   }
   async Save(): Promise<boolean> {
     this.saveCount++;
+    const { savedRows, saveCount, LatestResult, ...row } = this;
+    this.savedRows.push({ ...row });
     return true;
   }
 }
 
+interface LogErrorOptions {
+  category?: string;
+  metadata?: Record<string, unknown>;
+  prompt?: MJAIPromptEntityExtended;
+  model?: MJAIModelEntityExtended;
+  severity?: 'warning' | 'error' | 'critical';
+  maxErrorLength?: number;
+}
+
 class TestModelRunner extends BaseModelRunner {
-  public loggedErrors: Array<{ error: Error | string; options?: Record<string, unknown> }> = [];
+  public loggedErrors: Array<{ error: Error | string; options?: LogErrorOptions }> = [];
 
   public override get RequiredModelType(): string {
     return 'LLM';
@@ -68,10 +82,10 @@ class TestModelRunner extends BaseModelRunner {
     params: AIPromptParams,
     startTime: Date,
     vendorId?: string,
-    modelSelectionInfo?: unknown,
+    modelSelectionInfo?: AIModelSelectionInfo,
     applyRequestFields?: (promptRun: MJAIPromptRunEntityExtended) => void
   ): Promise<MJAIPromptRunEntityExtended> {
-    return this.createRunRecord(
+    return this.CreateRunRecord(
       prompt,
       model,
       params,
@@ -84,24 +98,15 @@ class TestModelRunner extends BaseModelRunner {
 
   public invokeFinalizeRunRecord(
     promptRun: MJAIPromptRunEntityExtended,
+    success: boolean,
     endTime: Date,
     executionTimeMS: number,
     applyResultFields: (promptRun: MJAIPromptRunEntityExtended) => void
   ): Promise<void> {
-    return this.finalizeRunRecord(promptRun, endTime, executionTimeMS, applyResultFields);
+    return this.FinalizeRunRecord(promptRun, success, endTime, executionTimeMS, applyResultFields);
   }
 
-  protected override logError(
-    error: Error | string,
-    options?: {
-      category?: string;
-      metadata?: Record<string, unknown>;
-      prompt?: MJAIPromptEntityExtended;
-      model?: MJAIModelEntityExtended;
-      severity?: 'warning' | 'error' | 'critical';
-      maxErrorLength?: number;
-    }
-  ): void {
+  protected override logError(error: Error | string, options?: LogErrorOptions): void {
     this.loggedErrors.push({ error, options });
     super.logError(error, options);
   }
@@ -129,7 +134,7 @@ describe('BaseModelRunner run record lifecycle', () => {
     } as unknown as IMetadataProvider;
   };
 
-  it('createRunRecord initializes the generic fields', async () => {
+  it('CreateRunRecord initializes the generic fields', async () => {
     const runner = new TestModelRunner();
     const prompt = createMockPrompt({ ID: 'prompt-abc' });
     const model = createMockModel({ ID: 'model-xyz' });
@@ -137,6 +142,7 @@ describe('BaseModelRunner run record lifecycle', () => {
     const fakeProvider = createFakeProvider();
 
     const params: AIPromptParams = {
+      prompt,
       agentId: 'agent-789',
       parentPromptRunId: 'parent-run-111',
       rerunFromPromptRunID: 'rerun-run-222',
@@ -165,51 +171,57 @@ describe('BaseModelRunner run record lifecycle', () => {
     await runner.WaitForPendingPromptRunSaves();
   });
 
-  it('createRunRecord invokes the applyRequestFields callback before enqueuing the save', async () => {
+  it('CreateRunRecord: the fields applyRequestFields sets are on the row the INSERT saves', async () => {
     const runner = new TestModelRunner();
-    const prompt = createMockPrompt();
-    const model = createMockModel();
-    const startTime = new Date();
     const fakeProvider = createFakeProvider();
-
-    let callbackRanBeforeInsert = false;
     const applyRequestFields = vi.fn((promptRun: MJAIPromptRunEntityExtended) => {
-      const fake = promptRun as unknown as FakePromptRun;
-      // Before save has occurred, saveCount should be 0
-      callbackRanBeforeInsert = fake.saveCount === 0;
-      fake['CustomRequestHeader'] = 'chat-specific-val';
+      (promptRun as unknown as FakePromptRun)['CustomRequestHeader'] = 'chat-specific-val';
     });
-
+    // The INSERT is queued fire-and-forget, then the caller's onPromptRunCreated is awaited. Here it
+    // yields to the event loop, as real I/O would, so the INSERT has been written by the time it
+    // returns: a callback moved past that await, or deferred by an await of its own, misses the row.
     const params: AIPromptParams = {
+      prompt: createMockPrompt(),
       provider: fakeProvider,
+      onPromptRunCreated: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
     };
 
     const run = await runner.invokeCreateRunRecord(
-      prompt,
-      model,
+      createMockPrompt(),
+      createMockModel(),
       params,
-      startTime,
+      new Date(),
       undefined,
       undefined,
       applyRequestFields
     );
+    await runner.WaitForPendingPromptRunSaves();
 
     expect(applyRequestFields).toHaveBeenCalledTimes(1);
     expect(applyRequestFields).toHaveBeenCalledWith(run);
-    expect(callbackRanBeforeInsert).toBe(true);
-    expect((run as unknown as FakePromptRun)['CustomRequestHeader']).toBe('chat-specific-val');
-
-    await runner.WaitForPendingPromptRunSaves();
+    const insertedRow = (run as unknown as FakePromptRun).savedRows[0];
+    expect(insertedRow).toBeDefined();
+    expect(insertedRow['CustomRequestHeader']).toBe('chat-specific-val');
+    // ...alongside the shared fields, in the same single INSERT.
+    expect(insertedRow['Status']).toBe('Running');
+    expect((run as unknown as FakePromptRun).saveCount).toBe(1);
   });
 
-  it('finalizeRunRecord updates CompletedAt, ExecutionTimeMS, invokes applyResultFields, and computes rollup fields', async () => {
+  it('FinalizeRunRecord sets timing and outcome before applyResultFields, then computes the rollups', async () => {
     const runner = new TestModelRunner();
     const fakeRun = new FakePromptRun() as unknown as MJAIPromptRunEntityExtended;
     const endTime = new Date('2026-03-15T12:05:00.000Z');
     const executionTimeMS = 1500;
 
+    let seenByCallback: Record<string, unknown> = {};
     const applyResultFields = vi.fn((promptRun: MJAIPromptRunEntityExtended) => {
-      promptRun.Success = true;
+      seenByCallback = {
+        CompletedAt: promptRun.CompletedAt,
+        ExecutionTimeMS: promptRun.ExecutionTimeMS,
+        Success: promptRun.Success,
+        Status: promptRun.Status,
+        TokensUsedRollup: promptRun.TokensUsedRollup,
+      };
       promptRun.Result = 'Generated test output';
       promptRun.TokensPrompt = 250;
       promptRun.TokensCompletion = 75;
@@ -219,13 +231,22 @@ describe('BaseModelRunner run record lifecycle', () => {
       promptRun.Cost = 0.0015;
     });
 
-    await runner.invokeFinalizeRunRecord(fakeRun, endTime, executionTimeMS, applyResultFields);
+    await runner.invokeFinalizeRunRecord(fakeRun, true, endTime, executionTimeMS, applyResultFields);
     await runner.WaitForPendingPromptRunSaves();
 
     expect(applyResultFields).toHaveBeenCalledTimes(1);
+    // Timing and outcome are already on the row when the callback runs; the rollups are not yet.
+    expect(seenByCallback).toEqual({
+      CompletedAt: endTime,
+      ExecutionTimeMS: 1500,
+      Success: true,
+      Status: 'Completed',
+      TokensUsedRollup: undefined,
+    });
     expect(fakeRun.CompletedAt).toEqual(endTime);
     expect(fakeRun.ExecutionTimeMS).toBe(1500);
     expect(fakeRun.Success).toBe(true);
+    expect(fakeRun.Status).toBe('Completed');
     expect(fakeRun.Result).toBe('Generated test output');
     expect(fakeRun.TokensPromptRollup).toBe(250);
     expect(fakeRun.TokensCompletionRollup).toBe(75);
@@ -235,7 +256,21 @@ describe('BaseModelRunner run record lifecycle', () => {
     expect(fakeRun.TotalCost).toBe(0.0015);
   });
 
-  it('finalizeRunRecord handles errors inside the update callback by logging to logError with category PromptRunUpdate without throwing', async () => {
+  it('FinalizeRunRecord with success=false ends the row Failed, without the callback setting it', async () => {
+    const runner = new TestModelRunner();
+    const fakeRun = new FakePromptRun() as unknown as MJAIPromptRunEntityExtended;
+
+    await runner.invokeFinalizeRunRecord(fakeRun, false, new Date(), 10, () => undefined);
+    await runner.WaitForPendingPromptRunSaves();
+
+    expect(fakeRun.Success).toBe(false);
+    expect(fakeRun.Status).toBe('Failed');
+    const updatedRow = (fakeRun as unknown as FakePromptRun).savedRows[0];
+    expect(updatedRow['Status']).toBe('Failed');
+    expect(updatedRow['Success']).toBe(false);
+  });
+
+  it('FinalizeRunRecord handles errors inside the update callback by logging to logError with category PromptRunUpdate without throwing', async () => {
     const runner = new TestModelRunner();
     const fakeRun = new FakePromptRun();
     fakeRun.ID = 'failed-run-999';
@@ -248,9 +283,9 @@ describe('BaseModelRunner run record lifecycle', () => {
       throw errorToThrow;
     });
 
-    // finalizeRunRecord should NOT throw even if applyResultFields throws
+    // FinalizeRunRecord should NOT throw even if applyResultFields throws
     await expect(
-      runner.invokeFinalizeRunRecord(fakeRunEntity, endTime, executionTimeMS, applyResultFields)
+      runner.invokeFinalizeRunRecord(fakeRunEntity, true, endTime, executionTimeMS, applyResultFields)
     ).resolves.not.toThrow();
 
     await runner.WaitForPendingPromptRunSaves();
@@ -262,5 +297,9 @@ describe('BaseModelRunner run record lifecycle', () => {
     expect(logged).toBeDefined();
     expect(logged?.error).toBe(errorToThrow);
     expect(logged?.options?.metadata?.promptRunId).toBe('failed-run-999');
+    // The outcome was written before the callback threw, so the row still leaves 'Running'.
+    expect(fakeRunEntity.Status).toBe('Completed');
+    expect(fakeRunEntity.Success).toBe(true);
+    expect(fakeRunEntity.TokensUsedRollup).toBeUndefined();
   });
 });
