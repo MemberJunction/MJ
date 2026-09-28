@@ -20,11 +20,13 @@ npm install @memberjunction/record-graph
 Walks an entity record's relationships to discover all dependent and referenced records.
 
 ```typescript
-import { DependencyGraphWalker, WalkOptions } from '@memberjunction/record-graph';
+import { CompositeKey } from '@memberjunction/core';
+import { DependencyGraphWalker } from '@memberjunction/record-graph';
 
-const walker = new DependencyGraphWalker();
+const walker = new DependencyGraphWalker(provider); // provider is optional; defaults to Metadata.Provider
+const userKey = CompositeKey.FromID(userId);
 const rootNode = await walker.WalkDependents(
-  'Users',
+  'MJ: Users',
   userKey,
   {
     MaxDepth: 3,
@@ -32,7 +34,7 @@ const rootNode = await walker.WalkDependents(
     IncludeSubtypes: true,            // Include IS-A subtype rows
     FollowHierarchies: true,          // Recurse self-referencing hierarchy fields
     EdgePolicy: (candidate) => {
-      if (candidate.TargetEntityName === 'AuditLogs') return 'Skip';
+      if (candidate.TargetEntityName === 'MJ: Audit Logs') return 'Skip';
       if (candidate.Kind === 'ForwardFK') return 'Reference';
       return 'Deep';
     },
@@ -48,7 +50,7 @@ const flatNodes = walker.FlattenTopological(rootNode);
 - **Reverse Walk (Owned Children)**: Curated One-To-Many relationships (`EntityRelationshipInfo`) are walked with full discovery (both reverse and forward), discovering all dependent child records.
 - **Forward Walk (Referenced Records)**: Foreign key fields are walked in `forward-only` mode so referenced entities (e.g., shared lookup tables) do not traverse their own children, preventing graph explosion.
 - **Subtypes (`IncludeSubtypes`)**: Discovers IS-A subtype rows via `FindISAChildEntities`.
-- **Hierarchies (`FollowHierarchies`)**: Allows controlled recursion on fields marked with `IsHierarchy: true`.
+- **Hierarchies (`FollowHierarchies`)**: Allows controlled recursion on fields whose `Configuration.Hierarchy.IsHierarchy` is true.
 - **Soft Links (`IncludeSoftLinks`)**: Traverses polymorphic `EntityID`/`RecordID` pairs via `EntityIDFieldName`.
 - **Non-Curated Inbound FKs (`ListNonCuratedInbound`)**: Discovers database foreign keys pointing to the record that lack a curated `EntityRelationship`.
 - **Edge Policy (`EdgePolicy`)**: Pre-traversal callback returning `'Deep'`, `'Reference'`, or `'Skip'`.
@@ -72,7 +74,7 @@ const flatNodes = walker.FlattenTopological(rootNode);
 
 ### 4. Collection Resolver (`collection-resolver.ts`)
 
-- `resolveCollectionRelationship(entityInfo, colName)`:
+- `ResolveCollectionRelationship(entityInfo, colName)` (`resolveCollectionRelationship` is a deprecated alias):
   Resolves a collection name to its matching relationship on the entity using strict 4-tier rule strength:
   1. Explicit collection name in `RelatedRecordCollection` JSON (`"Name": "..."`)
   2. Relationship `DisplayName`
@@ -81,5 +83,6 @@ const flatNodes = walker.FlattenTopological(rootNode);
 
 ### 5. SQL & Key Utilities (`sql.ts`, `keys.ts`)
 
-- `escapeSqlString`, `sqlEquals`, `sqlContains`, `sqlIn`, `sqlNotIn`: Safe SQL filter builders.
-- `buildCompositeKeyFromRecord`, `buildPrimaryKeyForLoad`, `buildIdKey`: CompositeKey construction utilities.
+- `SqlEquals`, `SqlContains`, `SqlIn`, `SqlNotIn`: Safe SQL filter builders (they escape with `EscapeSQLString` from `@memberjunction/global`).
+- `BuildCompositeKeyFromRecord`, `BuildPrimaryKeyForLoad`, `BuildIdKey`: CompositeKey construction utilities.
+- The camelCase names (`sqlEquals`, `buildIdKey`, …) and `escapeSqlString` are deprecated aliases. Use `EscapeSQLString` from `@memberjunction/global` directly.
