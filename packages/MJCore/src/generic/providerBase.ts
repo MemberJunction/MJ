@@ -579,6 +579,41 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     private _metadataReadsJoinTransaction = false;
 
+    /**
+     * The MJ_Metadata dataset items (code + entity name) as of the last full load. The remote
+     * timestamps ({@link GetLatestMetadataUpdates}) are keyed by entity name while a dataset
+     * read is scoped by item code, so this is the bridge that lets a staleness check be turned
+     * into a scoped reload (see {@link PartialRefreshItemCodes}).
+     */
+    private _metadataDatasetItems: ReadonlyArray<{ Code: string; EntityName: string }> | null = null;
+
+    /**
+     * MJ_Metadata item codes that may be reloaded on their own, without rebuilding the rest of
+     * the metadata graph: the saved-query family. Those rows are written continuously by agents
+     * (a query is persisted per analysis step), and every write moves the timestamps of these
+     * items. Before this list existed, each such write cost a FULL reload — every EntityInfo and
+     * EntityFieldInfo rebuilt (hundreds of MB on a large schema) to pick up a few QueryInfo rows;
+     * on a busy server that was a fresh half-gigabyte graph per refresh window until the process
+     * hit its memory guard.
+     *
+     * Membership rule: an item qualifies only when no OTHER metadata class embeds or memoizes its
+     * rows at construction. The query classes reference each other lazily through the provider
+     * (`QueryInfo.Fields` filters `QueryFields` on first use), so they can be swapped as a set;
+     * entity metadata cannot (EntityInfo owns its fields, permissions and relationships).
+     * The family is always reloaded together — see {@link PartialRefreshItemCodes}.
+     * Intersected with {@link AllMetadataArrays} so the list is valid for whatever this build knows.
+     */
+    public static get PartialRefreshMetadataItemCodes(): ReadonlyArray<string> {
+        const known = new Set(AllMetadataArrays.map(m => m.key.substring(3))); // 'AllQueries' → 'Queries'
+        return ProviderBase._queryFamilyItemCodes.filter(code => known.has(code));
+    }
+    private static readonly _queryFamilyItemCodes: ReadonlyArray<string> = [
+        'QueryCategories', 'Queries', 'QueryFields', 'QueryPermissions', 'QueryEntities', 'QueryParameters', 'QueryDependencies', 'QuerySQLs',
+    ];
+
+    /** The synthetic roll-up row {@link GetLatestMetadataUpdates} appends to the per-entity timestamps. */
+    private static readonly _allMetadataTypeName = 'All Entity Metadata';
+
     /** Debounce timer for {@link scheduleMetadataMemberRefresh}. */
     private _metadataMemberRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -600,6 +635,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return; // a failed/empty load must not erase a previously recorded set
         }
         this._metadataDatasetEntityNames = names;
+        this._metadataDatasetItems = (dataset.Results ?? [])
+            .filter(item => item.Code && item.EntityName)
+            .map(item => ({ Code: item.Code, EntityName: item.EntityName }));
         this.ensureInflightViewInvalidation();
     }
 
@@ -751,6 +789,21 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return true;
         }
         this._metadataMemberRefreshWaits = 0;
+        // The writer holds positive evidence, so the timestamps are re-read from the authoritative
+        // status query. When they attribute the change entirely to the saved-query family (see
+        // PartialRefreshMetadataItemCodes) only that family is reloaded, cache layers bypassed as a
+        // hard refresh would. Anything that cannot be attributed — another item moved, the status
+        // read failed, or it claims nothing changed — keeps the base policy: a HARD Refresh().
+        let scoped = false;
+        try {
+            scoped = this.AllowRefresh && await this.RefreshRemoteMetadataTimestamps() && this.PartialRefreshItemCodes() !== null;
+        }
+        catch (e) {
+            LogError(`Metadata refresh after a member-entity change could not read the timestamps; running a full refresh: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        if (scoped) {
+            return this.ReloadMetadata(true, undefined, true);
+        }
         return this.Refresh();
     }
 
@@ -4724,40 +4777,60 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const graphIsEmpty = !this._localMetadata?.AllEntities?.length;
         if (hardRefresh || await this.CheckToSeeIfRefreshNeeded(providerToUse, graphIsEmpty)) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
+            return this.ReloadMetadata(hardRefresh, providerToUse);
+        }
 
-            // first, make sure we reset the flag to false so that if another call to this function happens
-            // while we are waiting for the async call to finish, we dont do it again
-            this._refresh = false;
+        return true;
+    }
 
-            // SINGLE-FLIGHT: at most one full metadata reload runs at a time. Without this, a
-            // second refresh request arriving while a reload is still awaiting its queries starts
-            // a CONCURRENT reload, and whichever finishes LAST wins the atomic swap — an older
-            // snapshot can overwrite a newer one. A joiner must not simply await and return,
-            // either: the in-flight reload's queries may predate the write that prompted the
-            // joiner, so it flags ONE follow-up; the loop below reruns after the current pass,
-            // guaranteeing the final swap comes from a read that started after the last request.
-            if (this._metadataReloadInFlight) {
-                this._metadataReloadQueued = true;
-                await this._metadataReloadInFlight;
-                return true;
-            }
-            this._metadataReloadInFlight = (async () => {
-                let effectiveHardRefresh = hardRefresh;
-                do {
-                    this._metadataReloadQueued = false;
+    /**
+     * Reloads this provider's metadata. Single-flight: at most one reload runs at a time, and a
+     * request arriving mid-reload queues exactly one follow-up pass.
+     * @param hardRefresh - re-read the remote timestamps first and bypass every cache layer
+     * @param scopedFirst - try the scoped reload of the saved-query family (see
+     * {@link PartialRefreshMetadataItemCodes}) before the full one. Defaults to true unless
+     * hardRefresh: an explicit Refresh() is always a full reload.
+     */
+    protected async ReloadMetadata(hardRefresh: boolean, providerToUse?: IMetadataProvider, scopedFirst: boolean = !hardRefresh): Promise<boolean> {
+        // first, make sure we reset the flag to false so that if another call to this function happens
+        // while we are waiting for the async call to finish, we dont do it again
+        this._refresh = false;
 
-                    // The local timestamps must describe the snapshot about to be loaded. On the
-                    // hard-refresh path the staleness check was SKIPPED, so the cached remote
-                    // timestamps predate this pass — copying them as-is would make the next
-                    // periodic check see a mismatch and reload once more for nothing. Re-read
-                    // them (one cheap status query, authoritative) BEFORE the load, not after:
-                    // a write landing DURING the load then leaves the stamped timestamps looking
-                    // stale and the next tick reloads — the safe direction. Reading after could
-                    // stamp the snapshot as containing a write it does not.
-                    if (effectiveHardRefresh) {
-                        await this.RefreshRemoteMetadataTimestamps(providerToUse);
-                    }
+        // SINGLE-FLIGHT: at most one full metadata reload runs at a time. Without this, a
+        // second refresh request arriving while a reload is still awaiting its queries starts
+        // a CONCURRENT reload, and whichever finishes LAST wins the atomic swap — an older
+        // snapshot can overwrite a newer one. A joiner must not simply await and return,
+        // either: the in-flight reload's queries may predate the write that prompted the
+        // joiner, so it flags ONE follow-up; the loop below reruns after the current pass,
+        // guaranteeing the final swap comes from a read that started after the last request.
+        if (this._metadataReloadInFlight) {
+            this._metadataReloadQueued = true;
+            await this._metadataReloadInFlight;
+            return true;
+        }
+        this._metadataReloadInFlight = (async () => {
+            let effectiveHardRefresh = hardRefresh;
+            let tryScoped = scopedFirst;
+            do {
+                this._metadataReloadQueued = false;
 
+                // The local timestamps must describe the snapshot about to be loaded. On the
+                // hard-refresh path the staleness check was SKIPPED, so the cached remote
+                // timestamps predate this pass — copying them as-is would make the next
+                // periodic check see a mismatch and reload once more for nothing. Re-read
+                // them (one cheap status query, authoritative) BEFORE the load, not after:
+                // a write landing DURING the load then leaves the stamped timestamps looking
+                // stale and the next tick reloads — the safe direction. Reading after could
+                // stamp the snapshot as containing a write it does not.
+                if (effectiveHardRefresh) {
+                    await this.RefreshRemoteMetadataTimestamps(providerToUse);
+                }
+
+                // SCOPED FIRST: when the staleness is attributable entirely to the saved-query family
+                // (see PartialRefreshMetadataItemCodes), reload just that family and keep every other
+                // array as is. Anything else — or a failed scoped read — takes the full reload below.
+                const scopedDone = tryScoped && await this.TryPartialMetadataReload(providerToUse);
+                if (!scopedDone) {
                     // Fetch new metadata without clearing current metadata
                     // This ensures readers always see valid data (old until new is ready)
                     const start = new Date().getTime();
@@ -4772,17 +4845,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         // GetAllMetadata failed - log error but keep existing metadata
                         LogError('GetAllMetadata() returned undefined - metadata not updated');
                     }
-                    // A queued follow-up exists only because another refresh request arrived
-                    // mid-reload; rerun hard so the re-read cannot be served by any cache layer.
-                    effectiveHardRefresh = true;
-                } while (this._metadataReloadQueued);
-            })();
-            try {
-                await this._metadataReloadInFlight;
-            }
-            finally {
-                this._metadataReloadInFlight = null;
-            }
+                }
+                // A queued follow-up exists only because another refresh request arrived
+                // mid-reload; rerun hard so the re-read cannot be served by any cache layer.
+                effectiveHardRefresh = true;
+                // The follow-up re-reads the timestamps first, so it may still be attributed to the
+                // saved-query family — and a scoped read never trusts a cache layer either.
+                tryScoped = true;
+            } while (this._metadataReloadQueued);
+        })();
+        try {
+            await this._metadataReloadInFlight;
+        }
+        finally {
+            this._metadataReloadInFlight = null;
         }
 
         return true;
@@ -4800,6 +4876,120 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         this.UpdateLocalMetadata(res);
         this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps; // we just used the server to get all the stuff
         await this.SaveLocalMetadataToStorage();
+    }
+
+    /**
+     * Decides whether the current staleness can be served by a scoped reload of the saved-query
+     * family. Compares local and remote timestamps item by item (the same test as
+     * {@link LocalMetadataObsolete}) and maps each stale entity back to its MJ_Metadata item code.
+     * @returns the family's item codes (the whole family — the query classes are swapped as a set)
+     * when every stale item belongs to it; null when anything else is stale, nothing is, or the
+     * inputs needed to attribute the change are missing — the full reload is then the answer.
+     */
+    protected PartialRefreshItemCodes(): string[] | null {
+        const items = this._metadataDatasetItems;
+        const local = this.LatestLocalMetadata;
+        const remote = this.LatestRemoteMetadata;
+        if (!items?.length || !this._localMetadata?.AllEntities?.length || !local?.length || !remote?.length) {
+            return null;
+        }
+        const family = new Set(ProviderBase.PartialRefreshMetadataItemCodes);
+        const norm = (v: string | null | undefined) => (v ?? '').trim().toLowerCase();
+        const rollup = norm(ProviderBase._allMetadataTypeName);
+        let stale = 0;
+        for (const r of remote) {
+            if (norm(r.Type) === rollup) {
+                continue; // the roll-up moves with any item; the per-item rows decide
+            }
+            const l = local.find(m => norm(m.Type) === norm(r.Type));
+            if (l && !ProviderBase.MetadataStampChanged(l, r)) {
+                continue;
+            }
+            const owners = items.filter(i => norm(i.EntityName) === norm(r.Type));
+            if (owners.length === 0 || owners.some(o => !family.has(o.Code))) {
+                return null; // something outside the family moved, or a new item appeared
+            }
+            stale++;
+        }
+        if (local.some(l => norm(l.Type) !== rollup && !remote.some(r => norm(r.Type) === norm(l.Type)))) {
+            return null; // an item left the dataset
+        }
+        if (stale === 0) {
+            return null; // nothing attributable — the caller's own policy decides
+        }
+        const codes = [...new Set(items.map(i => i.Code).filter(c => family.has(c)))];
+        return codes.length > 0 ? codes : null;
+    }
+
+    private static MetadataStampChanged(local: MetadataInfo, remote: MetadataInfo): boolean {
+        if (!local.UpdatedAt && !remote.UpdatedAt) {
+            return false;
+        }
+        if (!local.UpdatedAt || !remote.UpdatedAt) {
+            return true;
+        }
+        return new Date(local.UpdatedAt).getTime() !== new Date(remote.UpdatedAt).getTime() || local.RowCount !== remote.RowCount;
+    }
+
+    /**
+     * Reloads only the saved-query family of MJ_Metadata and swaps it into the current metadata,
+     * keeping every other array — and every object in them — as is. The dataset definition is
+     * reused verbatim (same columns, where clauses and post-processing): every other item is
+     * requested with a `1=0` filter, so it reads nothing. Always bypasses cache layers — the read
+     * is small, and a cached answer is exactly what a staleness check cannot trust.
+     * @returns true when the scoped reload was applied; false when it does not apply or any part
+     * of it failed — the caller then runs the full reload, so a failure never leaves stale queries.
+     */
+    protected async TryPartialMetadataReload(providerToUse?: IMetadataProvider): Promise<boolean> {
+        const codes = this.PartialRefreshItemCodes();
+        const current = this._localMetadata;
+        const items = this._metadataDatasetItems;
+        if (!codes || !current || !items) {
+            return false;
+        }
+        try {
+            const keep = new Set(codes);
+            const skipOthers: DatasetItemFilterType[] = items
+                .filter(item => !keep.has(item.Code))
+                .map(item => ({ ItemCode: item.Code, Filter: '1=0' }));
+            const start = Date.now();
+            const d = await this.GetDatasetByName(ProviderBase._mjMetadataDatasetName, skipOthers, this.CurrentUser, providerToUse, true);
+            if (!d?.Success) {
+                LogStatusEx({ message: `[Metadata] Scoped reload of ${codes.join(', ')} failed (${d?.Status ?? 'no result'}); running the full reload`, verboseOnly: false });
+                return false;
+            }
+            const simple: Record<string, unknown[]> = {};
+            for (const code of codes) {
+                const item = d.Results?.find(r => r.Code === code);
+                if (!item || item.Success === false || !Array.isArray(item.Results)) {
+                    LogStatusEx({ message: `[Metadata] Scoped reload: item ${code} ${item ? `failed (${item.Status ?? 'no rows'})` : 'missing'}; running the full reload`, verboseOnly: false });
+                    return false;
+                }
+                simple[code] = item.Results;
+            }
+            const reloaded = MetadataFromSimpleObjectWithoutUser(simple, this);
+            if (!reloaded) {
+                return false;
+            }
+            const next = new AllMetadata();
+            next.CurrentUser = current.CurrentUser;
+            const target = next as unknown as Record<string, unknown>;
+            const kept = current as unknown as Record<string, unknown>;
+            const fresh = reloaded as unknown as Record<string, unknown>;
+            for (const m of AllMetadataArrays) {
+                target[m.key] = keep.has(m.key.substring(3)) ? fresh[m.key] : kept[m.key];
+            }
+            // Adopted like every other server snapshot. _configLoadedFromServer is NOT set: this read
+            // fetched no current user (the existing one is carried over), so the next pre-validation
+            // must still run its check.
+            await this.adoptServerMetadata(next);
+            LogStatusEx({ message: `[Metadata] Reloaded ${codes.join(', ')} only in ${Date.now() - start} ms; the rest of the metadata is unchanged`, verboseOnly: true });
+            return true;
+        }
+        catch (e) {
+            LogError(`[Metadata] Scoped reload failed; running the full reload: ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+        }
     }
 
     /**
@@ -5495,8 +5685,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns True if refresh was successful or not needed
      */
     public async RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
-        if (await this.CheckToSeeIfRefreshNeeded(providerToUse, bypassMinCheckInterval))
+        if (await this.CheckToSeeIfRefreshNeeded(providerToUse, bypassMinCheckInterval)) {
+            // Stale only in the saved-query family → reload just that family (fresh timestamps, no
+            // cache layer), falling back to the full hard reload if the scoped read fails.
+            if (this.PartialRefreshItemCodes() !== null)
+                return this.ReloadMetadata(true, providerToUse, true);
             return this.Refresh(providerToUse);
+        }
         else
             return true;
     }
