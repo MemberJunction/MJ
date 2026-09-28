@@ -338,6 +338,35 @@ export class CloneConfigValidator {
             }
         }
 
+        errors.push(...CloneConfigValidator.unhonoredKeys(entity.Name, config));
         return errors;
+    }
+
+    /**
+     * Keys the configuration schema defines but this release of the engine does not act on. Each
+     * is a warning, so a config author does not rely on it silently.
+     */
+    private static unhonoredKeys(entityName: string, config: NonNullable<CloneConfigEntityMeta['CloneConfiguration']>): CloneConfigValidationError[] {
+        const raw = config as Record<string, unknown>;
+        const at = (value: unknown, key: string): unknown => (value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined);
+        const found: string[] = [];
+        if (raw.CreationPath !== undefined) found.push('CreationPath');
+        if (raw.Embeddings === 'regenerate') found.push('Embeddings');
+        if (at(raw.Naming, 'Fields') !== undefined) found.push('Naming.Fields');
+        for (const key of ['PreSaveOverrides', 'RestoreAfterSave', 'PostCloneAction']) {
+            if (at(raw.Hooks, key) !== undefined) found.push(`Hooks.${key}`);
+        }
+        if (at(raw.Fields, 'ClearTogether') !== undefined) found.push('Fields.ClearTogether');
+        for (const [name, policy] of Object.entries((raw.Relationships as Record<string, unknown> | undefined) ?? {})) {
+            for (const key of ['PreserveSequence', 'IncludeWhen']) {
+                if (at(policy, key) !== undefined) found.push(`Relationships[${name}].${key}`);
+            }
+        }
+        return found.map((path) => ({
+            EntityName: entityName,
+            PropertyPath: path,
+            Message: `'${path}' is not honored in this release of record cloning; it has no effect.`,
+            Severity: 'Warning' as const,
+        }));
     }
 }

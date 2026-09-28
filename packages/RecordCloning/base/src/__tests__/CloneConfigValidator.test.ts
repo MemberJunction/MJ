@@ -200,6 +200,18 @@ describe('CloneConfigValidator', () => {
             expect(bad.map((e) => e.PropertyPath)).toEqual(['Fields.JsonRemap[UIConfig].Rules']);
         });
 
+        it('warns, without blocking, on keys this release does not honor', () => {
+            const found = withConfig({
+                Enabled: true,
+                Naming: { Fields: ['Name'] },
+                Hooks: { PostCloneAction: 'Notify' },
+                Relationships: { Anything: { Policy: 'Deep', PreserveSequence: true } },
+            } as CloneConfigEntityMeta['CloneConfiguration']);
+            const unhonored = found.filter((e) => e.Message.includes('not honored'));
+            expect(unhonored.map((e) => e.PropertyPath)).toEqual(['Naming.Fields', 'Hooks.PostCloneAction', 'Relationships[Anything].PreserveSequence']);
+            expect(unhonored.every((e) => e.Severity === 'Warning')).toBe(true);
+        });
+
         it('reports a JsonRemap entry without a Field instead of throwing', () => {
             const found = withConfig({ Enabled: true, Fields: { JsonRemap: [{} as never], Strict: true } });
             expect(found.some((e) => e.PropertyPath === 'Fields.JsonRemap')).toBe(true);

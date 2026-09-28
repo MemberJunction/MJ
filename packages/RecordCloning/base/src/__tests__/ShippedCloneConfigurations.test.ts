@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { IEntityCloneConfiguration } from '@memberjunction/core';
 import { ResolveEdgePolicy } from '../ClonePolicyResolver';
 import { ApplyJsonRemap, type JsonRemapRule } from '../JsonRemapEngine';
+import { CloneConfigValidator, type CloneConfigEntityMeta } from '../CloneConfigValidator';
 
 /**
  * Guards the clone configurations MJ ships in metadata/entities/.clone-configurations.json.
@@ -23,6 +24,15 @@ const enabledRoots = shipped.filter((r) => r.fields.Configuration?.Clone?.Enable
 describe('shipped clone configurations', () => {
     it('ships at least the core cloneable roots', () => {
         expect(enabledRoots.map((r) => r.fields.Name)).toEqual(expect.arrayContaining(['MJ: Users', 'MJ: AI Agents', 'MJ: AI Prompts', 'MJ: Actions']));
+    });
+
+    it('uses no key this release does not honor', () => {
+        const unhonored = shipped.flatMap((r) =>
+            CloneConfigValidator.Validate({ Name: r.fields.Name, Fields: [], CloneConfiguration: r.fields.Configuration?.Clone as CloneConfigEntityMeta['CloneConfiguration'] })
+                .filter((e) => e.Message.includes('not honored'))
+                .map((e) => `${r.fields.Name}: ${e.PropertyPath}`)
+        );
+        expect(unhonored).toEqual([]);
     });
 
     it('gives every JsonRemap entry a Field and Rules or a Preset', () => {

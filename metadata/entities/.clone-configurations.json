@@ -47,10 +47,7 @@
           "MaxDepth": 2,
           "MaxRecords": 500,
           "Naming": {
-            "Strategy": "prompt",
-            "Fields": [
-              "Email"
-            ]
+            "Strategy": "prompt"
           },
           "Fields": {
             "Strict": true,
