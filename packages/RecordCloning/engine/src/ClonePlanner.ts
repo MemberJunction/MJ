@@ -39,6 +39,7 @@ import {
     NameCollisionPrefix,
     NameTemplateOptions,
     RowMatchesExclusion,
+    BagEntry,
     type CloneFieldMappingContext,
     type UniqueKeyDefinition,
 } from '@memberjunction/record-cloning-base';
@@ -397,7 +398,7 @@ export class ClonePlanner {
         }
 
         // Flatten graph nodes, leaving out rows a relationship's ExcludeRows names (and everything under them)
-        const flatGraphNodes = this.dropExcludedRows(walker.FlattenTopological(rootNode), rootConfig, excludedNodes, warnings);
+        const flatGraphNodes = this.dropExcludedRows(walker.FlattenTopological(rootNode), rootConfig, entityName, excludedNodes, warnings);
 
         // Build concrete edges connecting discovered graph nodes
         const edges: ClonePlanEdge[] = [];
@@ -546,10 +547,10 @@ export class ClonePlanner {
                     Context: { UserName: contextUser.Name },
                 };
             }
-            const template = rootConfig?.Descendants?.[depNode.EntityName]?.Naming?.Template || cloneConfigOf(depNode.EntityInfo)?.Naming?.Template;
+            const template = BagEntry(rootConfig?.Descendants, depNode.EntityName)?.Naming?.Template || cloneConfigOf(depNode.EntityInfo)?.Naming?.Template;
             return {
                 Template: template,
-                Strategy: rootConfig?.Descendants?.[depNode.EntityName]?.Naming?.Strategy || cloneConfigOf(depNode.EntityInfo)?.Naming?.Strategy || (template ? 'suffix' : 'none'),
+                Strategy: BagEntry(rootConfig?.Descendants, depNode.EntityName)?.Naming?.Strategy || cloneConfigOf(depNode.EntityInfo)?.Naming?.Strategy || (template ? 'suffix' : 'none'),
                 Context: { UserName: contextUser.Name },
             };
         };
@@ -647,7 +648,7 @@ export class ClonePlanner {
                 },
                 FieldRules: (() => {
                     const entConfig = entInfo.CloneConfig ?? null;
-                    const descConfig = !isRoot ? rootConfig?.Descendants?.[depNode.EntityName] : undefined;
+                    const descConfig = !isRoot ? BagEntry(rootConfig?.Descendants, depNode.EntityName) : undefined;
 
                     const entOwnership = entConfig?.Fields?.Ownership || (entConfig as { Ownership?: string[] } | null)?.Ownership;
                     const descOwnership = descConfig?.Fields?.Ownership || (descConfig as { Ownership?: string[] } | undefined)?.Ownership;
@@ -922,6 +923,7 @@ export class ClonePlanner {
     private dropExcludedRows(
         nodes: DependencyNode[],
         rootConfig: IEntityCloneConfiguration | null,
+        rootEntityName: string,
         excludedNodes: Array<{ EntityName: string; SourceKey: string; Reason: string }>,
         warnings: CloneWarning[]
     ): DependencyNode[] {
@@ -937,12 +939,18 @@ export class ClonePlanner {
                 kept.push(node);
                 continue;
             }
-            const relationships = rootConfig?.Relationships;
+            // Same chain as ResolveEdgePolicy: the relationship's own bag, the root's entry (by
+            // relationship ID, Child.JoinField, Child), then, below the root, the parent entity's own
+            // entry. Descendants entries carry field rules, not row exclusions.
+            const entryIn = (bag: Record<string, { ExcludeRows?: ICloneRowExclusion[] }> | undefined) =>
+                (edge.Relationship?.ID ? BagEntry(bag, edge.Relationship.ID)?.ExcludeRows : undefined) ??
+                BagEntry(bag, `${edge.TargetEntityName}.${edge.JoinField}`)?.ExcludeRows ??
+                BagEntry(bag, edge.TargetEntityName)?.ExcludeRows;
+            const parentBag = edge.SourceEntityName !== rootEntityName ? this.Provider.EntityByName(edge.SourceEntityName)?.CloneConfig?.Relationships : undefined;
             const rules: ICloneRowExclusion[] | undefined =
                 edge.Relationship?.CloneConfig?.ExcludeRows ??
-                (edge.Relationship?.ID ? relationships?.[edge.Relationship.ID]?.ExcludeRows : undefined) ??
-                relationships?.[`${edge.TargetEntityName}.${edge.JoinField}`]?.ExcludeRows ??
-                relationships?.[edge.TargetEntityName]?.ExcludeRows;
+                entryIn(rootConfig?.Relationships) ??
+                entryIn(parentBag);
             const matched = RowMatchesExclusion(node.RecordData ?? {}, rules);
             if (!matched && !isDropped(edge.FromKey)) {
                 kept.push(node);

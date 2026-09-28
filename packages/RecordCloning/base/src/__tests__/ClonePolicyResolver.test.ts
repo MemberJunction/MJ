@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ResolveEdgePolicy, EdgePolicyResolutionContext } from '../ClonePolicyResolver';
+import { BagEntry, ResolveEdgePolicy, EdgePolicyResolutionContext } from '../ClonePolicyResolver';
 
 describe('ClonePolicyResolver', () => {
     const baseContext: EdgePolicyResolutionContext = {
@@ -209,5 +209,17 @@ describe('ClonePolicyResolver', () => {
         expect(ResolveEdgePolicy(notCloneable).Warnings).toEqual([]);
         expect(ResolveEdgePolicy({ ...notCloneable, RootEntityConfig: { Relationships: { OrderDetails: { Policy: 'Deep' } } } }).Warnings[0].Code).toBe('NOT_CLONEABLE');
         expect(ResolveEdgePolicy({ ...notCloneable, RequestOverrides: [{ RelationshipID: 'rel-orders-details', Policy: 'Deep' }] }).Warnings[0].Code).toBe('NOT_CLONEABLE');
+    });
+
+    it('matches relationship keys ignoring case, as the validator does', () => {
+        const res = ResolveEdgePolicy({
+            FromKey: 'A::1', ToKey: 'S::2', Kind: 'Relationship',
+            ParentEntityName: 'MJ: AI Agents', ChildEntityName: 'MJ: AI Agent Steps', JoinField: 'AgentID',
+            CurrentDepth: 1, MaxDepth: 3,
+            RootEntityConfig: { Relationships: { 'mj: ai agent steps.agentid': { Policy: 'Deep' } } },
+        });
+        expect(res.Policy).toBe('Deep');
+        expect(BagEntry({ Alpha: 1 }, 'ALPHA')).toBe(1);
+        expect(BagEntry({ Alpha: 1 }, 'Beta')).toBeUndefined();
     });
 });

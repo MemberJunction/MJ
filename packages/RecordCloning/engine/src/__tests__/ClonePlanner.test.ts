@@ -239,6 +239,26 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('drops rows an ExcludeRows rule names under a qualified, miscased relationship key', async () => {
+        mockRunViewInstance.mockImplementation(async (params: { EntityName: string }) =>
+            params.EntityName === 'ParentEntity'
+                ? { Success: true, Results: [{ ID: 'parent-1', Name: 'Original Parent' }] }
+                : { Success: true, Results: [{ ID: 'child-1', Name: 'keep me', ParentID: 'parent-1' }, { ID: 'child-2', Name: 'mobile.token', ParentID: 'parent-1' }] });
+        const cfg = {
+            ...parentEntity,
+            CloneConfig: { Enabled: true, Relationships: { 'ChildEntity.parentid': { Policy: 'Deep', ExcludeRows: [{ Field: 'Name', StartsWith: ['mobile.'] }] } } },
+        } as unknown as EntityInfo;
+        const list = [cfg, childEntity as EntityInfo];
+        const provider = { ...mockProvider, Entities: list, EntityByName: (n: string) => list.find((e) => e.Name === n) ?? null } as IMetadataProvider;
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+
+        const children = plan.Nodes.filter((n) => n.EntityName === 'ChildEntity').map((n) => n.DisplayName);
+        expect(children).toEqual(['keep me']);
+        expect(plan.Warnings.some((w) => w.Code === 'ROWS_EXCLUDED')).toBe(true);
+        mockRunViewInstance.mockReset();
+    });
+
     it('clones a child node with its subtree, keeping its parent as a reference and leaving siblings out', async () => {
         const folder = {
             ID: 'ent-folder', Name: 'Folders', BaseView: 'vwFolders', TrackRecordChanges: true, AllowCreateAPI: true,

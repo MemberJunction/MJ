@@ -24,7 +24,7 @@ import {
     RunView,
     UserInfo,
 } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     RecordCloneDescribeOperation,
     RecordClonePlanOperation,
@@ -46,6 +46,7 @@ import {
 } from '@memberjunction/core-entities';
 import { MaskSensitiveFieldChange, NormalizeClonePresets, ResolveEdgePolicy } from '@memberjunction/record-cloning-base';
 import type {
+    CloneEdgeKind,
     ClonePlan,
     CloneRequestOptions,
     CompositeKeyLike,
@@ -220,10 +221,14 @@ export class RecordCloneOperationsHandler {
         const relationships: RecordCloneDescribeRelationship[] = (entity.RelatedEntities ?? []).map((r) => {
             const child = md.EntityByName(r.RelatedEntity);
             const childConfig = child?.CloneConfig;
+            const joinField = child?.Fields.find((f) => f.Name.toLowerCase() === (r.RelatedEntityJoinField ?? '').toLowerCase());
+            // Classified as the walker does: a self-relationship is a hierarchy, a declared
+            // related-record collection a collection; both have their own defaults.
+            const kind: CloneEdgeKind = UUIDsEqual(r.RelatedEntityID, entity.ID) ? 'Hierarchy' : r.RelatedRecordCollection ? 'Collection' : 'Relationship';
             const resolved = ResolveEdgePolicy({
                 FromKey: entity.Name,
                 ToKey: r.RelatedEntity,
-                Kind: 'Relationship',
+                Kind: kind,
                 ParentEntityName: entity.Name,
                 ChildEntityName: r.RelatedEntity,
                 JoinField: r.RelatedEntityJoinField,
@@ -235,7 +240,8 @@ export class RecordCloneOperationsHandler {
                     AllowCreateAPI: child?.AllowCreateAPI,
                 },
                 RootEntityConfig: { Relationships: config.Relationships },
-                IsUniqueFK: child?.Fields.find((f) => f.Name === r.RelatedEntityJoinField)?.IsUnique,
+                IsUniqueFK: joinField?.IsUnique,
+                IsHierarchyField: joinField?.IsHierarchy === true,
                 CurrentDepth: 1,
                 MaxDepth: config.MaxDepth ?? 3,
             });

@@ -91,10 +91,10 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
 
     const configuredPolicy =
         ctx.RelationshipConfig?.Policy ??
-        (ctx.RelationshipID ? ctx.RootEntityConfig?.Relationships?.[ctx.RelationshipID]?.Policy : undefined) ??
-        ctx.RootEntityConfig?.Relationships?.[`${ctx.ChildEntityName}.${ctx.JoinField}`]?.Policy ??
-        ctx.RootEntityConfig?.Relationships?.[ctx.ChildEntityName]?.Policy ??
-        ctx.RootEntityConfig?.Descendants?.[ctx.ChildEntityName]?.Policy ??
+        (ctx.RelationshipID ? BagEntry(ctx.RootEntityConfig?.Relationships, ctx.RelationshipID)?.Policy : undefined) ??
+        BagEntry(ctx.RootEntityConfig?.Relationships, `${ctx.ChildEntityName}.${ctx.JoinField}`)?.Policy ??
+        BagEntry(ctx.RootEntityConfig?.Relationships, ctx.ChildEntityName)?.Policy ??
+        BagEntry(ctx.RootEntityConfig?.Descendants, ctx.ChildEntityName)?.Policy ??
         parentRelationship(ctx)?.Policy;
 
     // TIER 0 / EXCLUSION. Explicit NotCloneable and AllowCreateAPI=false win unconditionally.
@@ -192,9 +192,9 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
     // 5. Root Entity Bag (Relationships & Descendants)
     if (ctx.RootEntityConfig) {
         const relMatch =
-            (ctx.RelationshipID && ctx.RootEntityConfig.Relationships?.[ctx.RelationshipID]) ||
-            ctx.RootEntityConfig.Relationships?.[`${ctx.ChildEntityName}.${ctx.JoinField}`] ||
-            ctx.RootEntityConfig.Relationships?.[ctx.ChildEntityName];
+            (ctx.RelationshipID && BagEntry(ctx.RootEntityConfig.Relationships, ctx.RelationshipID)) ||
+            BagEntry(ctx.RootEntityConfig.Relationships, `${ctx.ChildEntityName}.${ctx.JoinField}`) ||
+            BagEntry(ctx.RootEntityConfig.Relationships, ctx.ChildEntityName);
         if (relMatch) {
             if (relMatch.Locked) locked = true;
             if (relMatch.Policy) {
@@ -203,7 +203,7 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
             }
         }
 
-        const descMatch = ctx.RootEntityConfig.Descendants?.[ctx.ChildEntityName];
+        const descMatch = BagEntry(ctx.RootEntityConfig.Descendants, ctx.ChildEntityName);
         if (descMatch) {
             if (descMatch.Locked) locked = true;
             if (descMatch.Policy) {
@@ -286,7 +286,20 @@ export function ResolveEdgePolicy(ctx: EdgePolicyResolutionContext): EdgePolicyR
 function parentRelationship(ctx: EdgePolicyResolutionContext): { Policy?: CloneEdgePolicy; Locked?: boolean } | undefined {
     const rels = ctx.ParentEntityConfig?.Relationships;
     if (!rels) return undefined;
-    return (ctx.RelationshipID ? rels[ctx.RelationshipID] : undefined) ?? rels[`${ctx.ChildEntityName}.${ctx.JoinField}`] ?? rels[ctx.ChildEntityName];
+    return (ctx.RelationshipID ? BagEntry(rels, ctx.RelationshipID) : undefined) ?? BagEntry(rels, `${ctx.ChildEntityName}.${ctx.JoinField}`) ?? BagEntry(rels, ctx.ChildEntityName);
+}
+
+/**
+ * An entry of a `Relationships` or `Descendants` bag by key, ignoring case, as the validator
+ * matches keys: a miscased column (`AgentId` for `AgentID`) must not validate clean and then
+ * silently fall back to the default policy.
+ */
+export function BagEntry<T>(bag: Record<string, T> | undefined | null, key: string | undefined | null): T | undefined {
+    if (!bag || !key) return undefined;
+    if (key in bag) return bag[key];
+    const target = key.toLowerCase();
+    const found = Object.keys(bag).find((k) => k.toLowerCase() === target);
+    return found === undefined ? undefined : bag[found];
 }
 
 /** Whether anything asks for this edge to be copied: configuration, the edge kind's default, a preset or the request. */

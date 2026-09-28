@@ -132,6 +132,25 @@ describe('RecordCloneOperationsHandler', () => {
             ]);
         });
 
+        it('classifies self-relationships and collections as the walker does', async () => {
+            const rels = [
+                { ID: 'rel-self', DisplayName: 'Children', RelatedEntity: 'ParentEntity', RelatedEntityID: 'ent-ops-1', RelatedEntityJoinField: 'ParentID', CloneConfig: null },
+                { ID: 'rel-coll', DisplayName: 'Lines', RelatedEntity: 'LineEntity', RelatedEntityID: 'ent-line', RelatedEntityJoinField: 'OwnerID', RelatedRecordCollection: '{"Name":"Lines"}', CloneConfig: null },
+            ] as unknown as EntityRelationshipInfo[];
+            const parent = {
+                ...cloneable,
+                Fields: [{ Name: 'ID', IsPrimaryKey: true }, { Name: 'ParentID', IsHierarchy: true }],
+                RelatedEntities: rels,
+                CloneConfig: { Enabled: true },
+            } as unknown as EntityInfo;
+            const line = { ID: 'ent-line', Name: 'LineEntity', Fields: [{ Name: 'OwnerID' }], CloneConfig: null } as unknown as EntityInfo;
+            const provider = { ...providerWith(true), EntityByName: (n: string) => (n === 'ParentEntity' ? parent : n === 'LineEntity' ? line : null) } as unknown as IMetadataProvider;
+
+            const desc = await new RecordCloneOperationsHandler(provider).Describe({ EntityName: 'ParentEntity' }, mockUser);
+
+            expect(desc.Relationships.map((r) => [r.Name, r.DefaultPolicy])).toEqual([['Children', 'Deep'], ['Lines', 'Deep']]);
+        });
+
         it('lists presets written in the legacy keyed-object form instead of throwing', async () => {
             const legacy = { ...cloneable, CloneConfig: { Enabled: true, Presets: { 'deep-prompts': { Description: 'd' } } } } as unknown as EntityInfo;
             const provider = { ...providerWith(true), EntityByName: () => legacy } as unknown as IMetadataProvider;
