@@ -27,6 +27,7 @@ import {
 
 import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import { EscapeSQLString } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
@@ -1342,7 +1343,7 @@ SELECT * FROM delete_result`;
         const sourceVal = source ?? 'Internal';
         // Named only when set, like the other sites: see changeContextSQL.
         const changeContextColumn = changeContext ? ', "ChangeContext"' : '';
-        const changeContextValue = changeContext ? `,\n    '${changeContext.replace(/'/g, "''")}'::text` : '';
+        const changeContextValue = changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : '';
 
         return `
 INSERT INTO ${this._schemaName}."RecordChange"

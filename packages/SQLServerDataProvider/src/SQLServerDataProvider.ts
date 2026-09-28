@@ -81,7 +81,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
@@ -1420,7 +1420,7 @@ export class SQLServerDataProvider
       : payload.source === 'Clone'
       ? `,
                                                                                         @Source='Clone',
-                                                                                        @ChangeContext=N'${(payload.changeContext ?? '').replace(/'/g, "''")}'`
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
     const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
                                                                                         @RecordID=@ID,
@@ -1628,7 +1628,7 @@ export class SQLServerDataProvider
       : payload.source === 'Clone'
       ? `,
                                                                                         @Source='Clone',
-                                                                                        @ChangeContext=N'${(payload.changeContext ?? '').replace(/'/g, "''")}'`
+                                                                                        @ChangeContext=N'${EscapeSQLString(payload.changeContext)}'`
       : '';
 
     return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
@@ -2507,7 +2507,7 @@ export class SQLServerDataProvider
     const lineageClause = source === 'Clone'
       ? `,
         @Source='Clone',
-        @ChangeContext=N'${(changeContext ?? '').replace(/'/g, "''")}'`
+        @ChangeContext=N'${EscapeSQLString(changeContext)}'`
       : '';
 
     return `

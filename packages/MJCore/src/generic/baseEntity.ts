@@ -683,6 +683,14 @@ export interface CloneContext {
 }
 
 /**
+ * The `ChangeContext` JSON a clone writes on its Record Change rows (`IRecordChangeContext`,
+ * Kind 'Clone'). The one serializer every provider path uses, so the shape can't drift.
+ */
+export function SerializeCloneChangeContext(context: CloneContext): string {
+    return JSON.stringify({ Version: 1, Kind: 'Clone', Clone: context });
+}
+
+/**
  * Discriminator for the `Source` column of a RecordChange row.
  *
  * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call

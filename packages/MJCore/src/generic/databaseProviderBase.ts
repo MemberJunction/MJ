@@ -1,7 +1,7 @@
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
-import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext } from "./baseEntity";
+import { BaseEntity, BaseEntityResult, CloneContext, RecordChangePayload, RecordChangeSource, RestoreContext, SerializeCloneChangeContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
 import { DispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
@@ -1158,6 +1158,9 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
+                undefined,
+                entity.CloneContext ? 'Clone' : 'Internal',
+                entity.CloneContext ? SerializeCloneChangeContext(entity.CloneContext) : null,
             );
         }
         return null;
@@ -2188,14 +2191,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             : (!oldData ? 'Record Created' : 'Record Deleted');
 
         const source: RecordChangeSource = restoreContext ? 'Restore' : cloneContext ? 'Clone' : 'Internal';
-        let changeContext: string | null = null;
-        if (cloneContext) {
-            changeContext = JSON.stringify({
-                Version: 1,
-                Kind: 'Clone',
-                Clone: cloneContext,
-            });
-        }
+        const changeContext = cloneContext ? SerializeCloneChangeContext(cloneContext) : null;
 
         return {
             entityID: entityInfo.ID,
