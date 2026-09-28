@@ -7,6 +7,10 @@
 -- 3. RecordProcess.WorkType: Adds 'Clone' to allow batch record cloning via Record Processes
 --
 -- Design plan: plans/record-cloning/README.md §10.5, §11.3
+--
+-- The JSONType of RecordCloneLog.PlanJSON (IClonePlan) is set by metadata, not here:
+-- metadata/entities/.entity-field-jsontype-record-clone-plan.json, applied by
+-- `mj sync push`. Until then CodeGen treats the column as plain text.
 -- =====================================================================================
 
 CREATE TABLE [${flyway:defaultSchema}].[RecordCloneLog] (
@@ -293,6 +297,7 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'RecordCloneLogItem',
     @level2type = N'COLUMN', @level2name = N'FieldChangesJSON';
 GO
+
 
 
 

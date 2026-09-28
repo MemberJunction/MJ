@@ -14,6 +14,10 @@
 --
 -- 3. spCreateRecordChange_Internal update
 --    Recreates the internal change-logging procedure with @ChangeContext.
+--
+-- The JSONType of ChangeContext (IRecordChangeContext) is set by metadata, not here:
+-- metadata/entities/.entity-field-jsontype-record-change-context.json, applied by
+-- `mj sync push`. Until then CodeGen treats the column as plain text.
 -- =============================================================================
 
 -------------------------------------------------------------------------------
@@ -224,9 +228,6 @@ GO
             [IsPrimaryKey],
             [IsUnique],
             [RelatedEntityDisplayType],
-            [JSONType],
-            [JSONTypeIsArray],
-            [JSONTypeDefinition],
             [__mj_CreatedAt],
             [__mj_UpdatedAt]
          )
@@ -257,9 +258,6 @@ GO
             0,
             0,
             'Search',
-            'IRecordChangeContext',
-            0,
-            '@file:JSONType-interfaces/IRecordChangeContext.ts',
             GETUTCDATE(),
             GETUTCDATE()
          )
