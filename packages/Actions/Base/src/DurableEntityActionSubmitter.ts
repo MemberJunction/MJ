@@ -36,12 +36,19 @@ export type DurableEntityActionRequest = {
     /** Which lifecycle event fired — `AfterCreate` / `AfterUpdate` / `AfterDelete`. */
     InvocationType: string;
     /**
-     * The action's input parameters, **already redacted**.
+     * The action's input parameters, **already redacted** — the name → value record produced by
+     * {@link RedactParamsToRecord} in `./ParamRedaction`. A parameter suppressed by any redaction
+     * rule is omitted entirely, not present with an `undefined` or placeholder value.
      *
-     * Typed as JSON-safe rather than as `ActionParam[]` deliberately: `Task.InputPayload` is
-     * persistent, user-visible storage, and the #3408 §5.7 invariant is that no path writes a raw
-     * `ActionParam[]` there. Taking the redacted shape at the boundary is what makes violating it
-     * require changing this type rather than forgetting a call.
+     * Typed as a `Record<string, unknown>` rather than `ActionParam[]` / `LoggedParam[]`
+     * deliberately: `Task.InputPayload` is persistent, user-visible storage, and the #3408 §5.7
+     * invariant is that no path writes a raw `ActionParam[]` there. It also isn't the array/log
+     * shape `RedactParams`/`RedactParamsToJSON` produce — the durable dispatcher (`TaskGraphActionRunner`)
+     * reads this payload back **by parameter name** to re-hydrate a run, so a positional array here
+     * is silently wrong rather than loudly wrong: it round-trips through `JSON.stringify`/`JSON.parse`
+     * without error and only fails when the action receives params named `"0"`, `"1"`, … instead of
+     * their real names (MJ#4794). Taking the redacted record shape at the boundary is what makes
+     * violating that invariant require changing this type rather than forgetting a call.
      */
     RedactedParams: Record<string, unknown>;
     ContextUser: UserInfo;
