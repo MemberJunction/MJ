@@ -16,9 +16,7 @@ When creating or editing metadata JSON files, **NEVER** include the following fi
 The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 
 ### 1b. Release-Time Metadata Sync — NO Per-PR Metadata_Sync Migrations
-**Metadata reaches an install only through migrations.** `mj migrate`, and `mj app install` / upgrade for Open Apps, run the migrations folder and nothing else. There is no "metadata phase", by design, and none should be added. A record that exists only as JSON under `metadata/` is not on anyone else's database until a release materializes it as SQL.
-
-**Individual PRs never ship metadata migration SQL.** Turning metadata JSON into SQL is a separate step the build engineer runs at release time, producing one metadata migration per release that holds the net change relative to the last release, for MJ and for each Open App. So a PR that changes metadata JSON without a `*__Metadata_Sync.sql` is correct, and neither human nor AI reviewers should flag the missing file as a defect.
+**Installs receive metadata only through migrations, and individual PRs never ship metadata migration SQL** (so reviewers should not flag its absence). The full model, the Open App recipe, and how to diagnose rows missing after a fresh install: [Release Metadata Migrations](../guides/RELEASE_METADATA_MIGRATIONS_GUIDE.md).
 
 **Do NOT hand-author `*__Metadata_Sync.sql` migrations for metadata changes** (new AI models, prompts, agents, etc.). The release workflow is:
 
@@ -28,10 +26,6 @@ The `sync` blocks will be automatically added/updated when `mj sync push` runs.
 4. **Post-Sync Verification**: After applying a new `Metadata_Sync` migration to a from-nothing database, verify that `SELECT COUNT(*) FROM [__mj].[EntityField] WHERE ID IN (<ids in file>)` matches the count of `-- Save MJ: Entity Fields` blocks. `spUpdateEntityField` is a full-row procedure that silently no-ops when an ID is absent rather than throwing a SQL error.
 
 Hand-authoring per-PR sync migrations duplicates this step, creates many small migrations instead of one per build, and risks drift from the real push output.
-
-**Open Apps follow the same model.** The build engineer's recipe for an app release: on a fresh database, `mj app install` the app's **last published release**; run `mj migrate` for the app's migrations folder to apply everything merged since that release; then `mj sync push` all of the app's metadata with SQL logging enabled. No CodeGen step, for the reason above. The log is exactly the net differential that made the database match the JSON. Rename it `V<UTC stamp>__v<next version>__Metadata_Sync.sql` and put it in the app's `migrations/`; it ships with the release, and `mj migrate` applies it on install and upgrade. One generation per release (split into parts only for file size).
-
-**Diagnosing rows missing after a fresh install.** The cause is not the installer. Find the releases that shipped no `Metadata_Sync` migration after the records were added; the fix is a new release of that package with its differential migration, owned by the build engineer. Say it that way ("vX.Y shipped without its metadata migration"). Do not propose an installer change, a post-install `mj sync push` step, or a workaround script.
 
 ### 1c. JSON-Type Fields: Author as Native JSON Objects (Never Escaped Strings)
 When setting JSON-type values (such as `Configuration`, `DisplayComponentConfiguration`, `RelatedRecordCollection`, etc.) in metadata JSON files:
