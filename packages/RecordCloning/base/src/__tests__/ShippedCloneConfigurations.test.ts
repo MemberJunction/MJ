@@ -26,6 +26,34 @@ describe('shipped clone configurations', () => {
         expect(enabledRoots.map((r) => r.fields.Name)).toEqual(expect.arrayContaining(['MJ: Users', 'MJ: AI Agents', 'MJ: AI Prompts', 'MJ: Actions']));
     });
 
+    it('classifies every writable column of a Strict entity, so a new CodeGen column fails the build (drift guard)', () => {
+        // The generated class has a setter for each writable base-table column; views and
+        // read-only fields have getters only.
+        const generated = readFileSync(resolve(__dirname, '../../../../MJCoreEntities/src/generated/entities/__mj.ts'), 'utf8');
+        const writableColumns = (entityName: string): string[] => {
+            const start = generated.indexOf(`@RegisterClass(BaseEntity, '${entityName}')`);
+            expect(start, `${entityName} has no generated class`).toBeGreaterThan(-1);
+            const body = generated.slice(start, generated.indexOf('\n}\n', start));
+            return [...body.matchAll(/^    set (\w+)\(/gm)].map((m) => m[1]);
+        };
+        const strict = shipped.filter((r) => r.fields.Configuration?.Clone?.Fields?.Strict === true);
+        expect(strict.length).toBeGreaterThan(0);
+        for (const r of strict) {
+            const fields = writableColumns(r.fields.Name).map((Name) => ({
+                Name,
+                IsPrimaryKey: Name === 'ID',
+                IsCreatedAtField: Name === '__mj_CreatedAt',
+                IsUpdatedAtField: Name === '__mj_UpdatedAt',
+            }));
+            const drift = CloneConfigValidator.Validate({
+                Name: r.fields.Name,
+                Fields: fields,
+                CloneConfiguration: r.fields.Configuration!.Clone as CloneConfigEntityMeta['CloneConfiguration'],
+            }).filter((e) => e.Message.startsWith('Strict mode'));
+            expect(drift.map((e) => e.Message)).toEqual([]);
+        }
+    });
+
     it('uses no key this release does not honor', () => {
         const unhonored = shipped.flatMap((r) =>
             CloneConfigValidator.Validate({ Name: r.fields.Name, Fields: [], CloneConfiguration: r.fields.Configuration?.Clone as CloneConfigEntityMeta['CloneConfiguration'] })
