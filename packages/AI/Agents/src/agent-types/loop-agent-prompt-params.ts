@@ -221,9 +221,10 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
  * extension of the last (~93% measured).
  *
  * - `'auto'` (default): append-only when the model catalog says the serving path's cache is a
- *   byte-prefix cache — the `PromptCacheStrategy` knob in `ModelConfiguration.LLM`, resolved
- *   through the catalog cascade (Model Types < Models < Model Vendors, the inference provider's
- *   model-vendor row winning) equals `'prefix'` — otherwise replace-in-place. Nothing about a
+ *   byte-prefix cache — the `PrefixPromptCache` flag in `ModelConfiguration.LLM`, resolved
+ *   through the catalog cascade (Model Types < Vendors < Models < Model Vendors, the vendor row
+ *   supplying the host-wide default and the inference provider's model-vendor row winning) is
+ *   `true` — otherwise replace-in-place. Nothing about a
  *   provider is hard-coded: a new host, or one model on a host that caches differently from the
  *   rest, is a metadata change. The answer is taken from a runtime model override, else the FIRST
  *   iteration's model selection, and then frozen for the rest of the run so a failover cannot flip
@@ -232,11 +233,11 @@ export type SpecializationPlacement = 'auto' | 'systemPrompt' | 'trailingMessage
  *   deferring loses nothing. The prompt's bound models are deliberately not consulted: prompts
  *   commonly bind several vendors for failover.
  * - `'appendOnly'`: always retain prior fragments. Use this for a serving path whose catalog rows
- *   carry no strategy yet — an OpenAI-compatible gateway, say — until its metadata is filled in.
+ *   carry no flag yet — an OpenAI-compatible gateway, say — until its metadata is filled in.
  * - `'replace'`: always replace. Use this to keep context compact on a run whose catalog rows say
- *   `'prefix'` but where context growth matters more than cache hits.
+ *   `true` but where context growth matters more than cache hits.
  *
- * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.ResolvePromptCacheStrategy`.
+ * Resolved by `BaseAgent.shouldUseAppendOnlyTrailingState` via `BaseAgent.ResolvePrefixPromptCache`.
  */
 export type TrailingStateMode = 'auto' | 'appendOnly' | 'replace';
 

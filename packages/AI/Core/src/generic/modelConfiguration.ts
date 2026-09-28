@@ -1,13 +1,14 @@
 /**
  * The canonical AI configuration shapes + the pure cascade resolvers.
  *
- * The AI stack carries `nvarchar(max)` JSONType configuration bags at five levels, in two cascades.
+ * The AI stack carries `nvarchar(max)` JSONType configuration bags at six levels, in two cascades.
  * The MODEL CATALOG cascade describes the model:
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
+ *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  * ```
  *
  * The PROMPT cascade describes what a given prompt asks for, and layers on top of the catalog:
@@ -231,22 +232,6 @@ export interface RealtimeToolingSettings {
  * incompatible. Unknown keys in stored JSON still round-trip fine at runtime — the parse is
  * tolerant; what is lost is only a compile-time affordance nothing needs.
  */
-/**
- * How a provider's prompt cache decides whether a new request can reuse an earlier one.
- *
- * - `'prefix'` — the cache reuses a prior request only when that request's ENTIRE prompt is a byte
- *   prefix of the new one (OpenAI's automatic cache, xAI). Anything the framework appends per
- *   iteration must therefore be APPENDED, never replaced, or the reusable prefix ends at the system
- *   prompt.
- * - `'block'` — the cache works on block or segment boundaries inside the prompt (Anthropic's
- *   explicit breakpoints, Gemini's implicit cache, Cerebras's sliding cache), so a trailing
- *   per-iteration message can be replaced in place and the history before it still hits.
- *
- * Consumed by the loop agent's trailing runtime-state layout: see `TrailingStateMode` in
- * `@memberjunction/ai-agents`.
- */
-export type PromptCacheStrategy = 'prefix' | 'block';
-
 export interface LLMConfigurationSettings {
     /**
      * **Catalog layers only.** Whether this model — or this vendor's serving of it — supports native
@@ -290,17 +275,23 @@ export interface LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
-     * **Catalog layers only.** How this serving path's prompt cache matches a new request against an
-     * earlier one — see {@link PromptCacheStrategy}. Absent means `'block'`: the safe default, since a
-     * replace-in-place trailing message costs a block-cache provider nothing, whereas append-only on
-     * a block-cache provider only grows the context.
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI). Per-iteration framework state must then be appended, never
+     * replaced, or the reusable prefix ends at the system prompt. Absent or `false` means a block or
+     * segment cache (Anthropic's explicit breakpoints, Gemini's implicit cache, Cerebras's sliding
+     * cache), where a trailing per-iteration message can be replaced in place — the safe default,
+     * since replace-in-place costs a block-cache provider nothing whereas append-only only grows the
+     * context.
      *
-     * Set `'prefix'` on the MODEL-VENDOR row of an inference provider whose cache is an exact
-     * byte-prefix match (OpenAI, xAI). Model Vendors win over Models and Model Types in the cascade,
-     * so a host that serves many models (Fireworks, Cerebras, Azure, Bedrock) can carry a per-model
-     * answer that differs from the developer's own serving of the same model.
+     * Set `true` on the VENDOR row of a prefix-cache provider so every model it serves inherits it;
+     * a MODEL-VENDOR row overrides it, so a host that serves many models (Fireworks, Cerebras, Azure,
+     * Bedrock) can carry a per-model answer that differs from the vendor default.
+     *
+     * Consumed by the loop agent's trailing runtime-state layout: see `TrailingStateMode` in
+     * `@memberjunction/ai-agents`.
      */
-    PromptCacheStrategy?: PromptCacheStrategy | null;
+    PrefixPromptCache?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -378,7 +369,7 @@ export function ParseModelConfiguration(json: string | null | undefined): AIMode
 
 /**
  * Resolves the EFFECTIVE model configuration by deep-merging the catalog layers, base first —
- * type default < model < model-vendor. Merge semantics are identical to the realtime config
+ * type default < vendor default < model < model-vendor. Merge semantics are identical to the realtime config
  * cascade (`DeepMergeConfigs` in `@memberjunction/ai-agents` — duplicated here because package
  * layering runs the other way):
  *
@@ -426,11 +417,11 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
 }
 
 /**
- * The {@link PromptCacheStrategy} an effective model configuration declares, or `null` when no
- * catalog layer set one. Read through {@link ResolveEffectiveModelConfiguration} (or
- * `AIEngineBase.GetEffectiveModelConfiguration`) so the model-vendor row's answer wins.
+ * Whether an effective model configuration declares a byte-prefix prompt cache
+ * (`LLM.PrefixPromptCache === true`). Absent, `null` or `false` all mean a block cache. Read through
+ * {@link ResolveEffectiveModelConfiguration} (or `AIEngineBase.GetEffectiveModelConfiguration`) so
+ * the most specific layer's answer wins.
  */
-export function GetPromptCacheStrategy(config: AIModelConfiguration | null | undefined): PromptCacheStrategy | null {
-    const value = config?.LLM?.PromptCacheStrategy;
-    return value === 'prefix' || value === 'block' ? value : null;
+export function IsPrefixPromptCache(config: AIModelConfiguration | null | undefined): boolean {
+    return config?.LLM?.PrefixPromptCache === true;
 }

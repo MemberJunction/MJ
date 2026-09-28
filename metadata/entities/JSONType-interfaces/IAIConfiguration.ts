@@ -12,8 +12,9 @@
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
- *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *   < MJ: AI Vendors . ModelConfiguration     (host-wide default for every model this vendor serves)
+ *     < MJ: AI Models . ModelConfiguration    (per-model — the model's own word still beats the host's)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -102,16 +103,16 @@ export interface LLMConfigurationSettings {
     NativeToolResults?: boolean | null;
 
     /**
-     * **Catalog layers only.** How this serving path's prompt cache matches a new request against an
-     * earlier one. `'prefix'` — the cache reuses a prior request only when that request's ENTIRE
-     * prompt is a byte prefix of the new one (OpenAI's automatic cache, xAI), so per-iteration
-     * framework state must be appended, never replaced. `'block'` — the cache works on block or
-     * segment boundaries (Anthropic breakpoints, Gemini implicit cache, Cerebras sliding cache), so a
-     * trailing per-iteration message can be replaced in place. Absent means `'block'`, the safe
-     * default. Set `'prefix'` on the MODEL-VENDOR row of the inference provider, so a host serving
-     * many models can answer per model. Consumed by the loop agent's trailing runtime-state layout.
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` on the VENDOR row of a prefix-cache provider so every
+     * model it serves inherits it; a MODEL-VENDOR row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
      */
-    PromptCacheStrategy?: 'prefix' | 'block' | null;
+    PrefixPromptCache?: boolean | null;
 }
 
 /**

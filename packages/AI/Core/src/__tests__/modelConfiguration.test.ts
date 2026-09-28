@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
-    GetPromptCacheStrategy,
+    IsPrefixPromptCache,
     ParseModelConfiguration,
     ResolveEffectiveModelConfiguration,
 } from '../generic/modelConfiguration';
@@ -229,31 +229,33 @@ describe('LLM control-flow knobs', () => {
     });
 });
 
-describe('GetPromptCacheStrategy — the catalog answers "is this serving path a byte-prefix cache?"', () => {
-    it('returns null when no layer declares a strategy (callers treat null as block / replace-in-place)', () => {
-        expect(GetPromptCacheStrategy(null)).toBeNull();
-        expect(GetPromptCacheStrategy(undefined)).toBeNull();
-        expect(GetPromptCacheStrategy({})).toBeNull();
-        expect(GetPromptCacheStrategy({ LLM: {} })).toBeNull();
-        expect(GetPromptCacheStrategy({ LLM: { PromptCacheStrategy: null } })).toBeNull();
+describe('IsPrefixPromptCache — the catalog answers "is this serving path a byte-prefix cache?"', () => {
+    it('is false when no layer declares the flag (callers then replace in place)', () => {
+        expect(IsPrefixPromptCache(null)).toBe(false);
+        expect(IsPrefixPromptCache(undefined)).toBe(false);
+        expect(IsPrefixPromptCache({})).toBe(false);
+        expect(IsPrefixPromptCache({ LLM: {} })).toBe(false);
+        expect(IsPrefixPromptCache({ LLM: { PrefixPromptCache: null } })).toBe(false);
+        expect(IsPrefixPromptCache({ LLM: { PrefixPromptCache: false } })).toBe(false);
     });
 
-    it('returns only the two known values; an unknown string in stored JSON is treated as absent', () => {
-        expect(GetPromptCacheStrategy({ LLM: { PromptCacheStrategy: 'prefix' } })).toBe('prefix');
-        expect(GetPromptCacheStrategy({ LLM: { PromptCacheStrategy: 'block' } })).toBe('block');
-        const stored = ParseModelConfiguration('{"LLM":{"PromptCacheStrategy":"sliding"}}');
-        expect(GetPromptCacheStrategy(stored)).toBeNull();
+    it('is true only for a literal true; a truthy string in stored JSON is not a flag', () => {
+        expect(IsPrefixPromptCache({ LLM: { PrefixPromptCache: true } })).toBe(true);
+        const stored = ParseModelConfiguration('{"LLM":{"PrefixPromptCache":"yes"}}');
+        expect(IsPrefixPromptCache(stored)).toBe(false);
     });
 
-    it("the model-vendor row's strategy wins over the model's, and the model's over the type's", () => {
-        const type: AIModelConfiguration = { LLM: { PromptCacheStrategy: 'block' } };
-        const model: AIModelConfiguration = { LLM: { PromptCacheStrategy: 'prefix', SupportsNativeToolCalling: true } };
-        const vendor: AIModelConfiguration = { LLM: { PromptCacheStrategy: 'block' } };
+    it("the most specific layer wins in both directions: a vendor default is overridden by the model-vendor row, and vice versa, without wiping sibling knobs", () => {
+        const type: AIModelConfiguration = { LLM: { PrefixPromptCache: false } };
+        const vendor: AIModelConfiguration = { LLM: { PrefixPromptCache: true } };
+        const model: AIModelConfiguration = { LLM: { SupportsNativeToolCalling: true } };
+        const modelVendor: AIModelConfiguration = { LLM: { PrefixPromptCache: false } };
 
-        expect(GetPromptCacheStrategy(ResolveEffectiveModelConfiguration(type, model))).toBe('prefix');
-        const effective = ResolveEffectiveModelConfiguration(type, model, vendor);
-        expect(GetPromptCacheStrategy(effective)).toBe('block');
-        // ...without wiping the model's other knobs: this is a per-key merge, not a replace.
-        expect(effective?.LLM?.SupportsNativeToolCalling).toBe(true);
+        // Type < Vendor < Model < ModelVendor
+        expect(IsPrefixPromptCache(ResolveEffectiveModelConfiguration(type, vendor))).toBe(true);
+        expect(IsPrefixPromptCache(ResolveEffectiveModelConfiguration(type, vendor, model))).toBe(true); // model is silent: inherits the vendor
+        const effective = ResolveEffectiveModelConfiguration(type, vendor, model, modelVendor);
+        expect(IsPrefixPromptCache(effective)).toBe(false); // the serving row overrides the vendor default
+        expect(effective?.LLM?.SupportsNativeToolCalling).toBe(true); // ...without wiping the model's other knobs
     });
 });

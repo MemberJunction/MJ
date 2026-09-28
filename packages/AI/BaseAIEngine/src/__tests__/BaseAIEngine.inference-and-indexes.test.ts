@@ -261,3 +261,48 @@ describe('AIEngineBase — inference-provider helpers & lookup indexes', () => {
         });
     });
 });
+
+describe('AIEngineBase.GetEffectiveModelConfiguration — the four-layer cascade', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (AIEngineBase as unknown as { _instance: unknown })._instance = undefined;
+        seedVendorTypes();
+        set('_modelTypes', [{ ID: INFERENCE_TYPE_ID, Name: 'LLM', ModelConfiguration: '{"LLM":{"PrefixPromptCache":false,"NativeToolResults":true}}' }]);
+        set('_vendors', [
+            { ID: VENDOR_OPENAI, Name: 'OpenAI', ModelConfiguration: '{"LLM":{"PrefixPromptCache":true}}' },
+            { ID: VENDOR_GROQ, Name: 'Groq' },
+        ]);
+        set('_models', [
+            { ID: MODEL_A, Name: 'Model A', AIModelTypeID: INFERENCE_TYPE_ID, ModelConfiguration: '{"LLM":{"SupportsNativeToolCalling":true}}', ModelVendors: [] },
+            { ID: MODEL_B, Name: 'Model B', AIModelTypeID: INFERENCE_TYPE_ID, ModelConfiguration: '{"LLM":{"PrefixPromptCache":false}}', ModelVendors: [] },
+        ]);
+        set('_modelVendors', [
+            inferenceMV(MODEL_A, VENDOR_OPENAI),
+            { ...inferenceMV(MODEL_A, VENDOR_GROQ), ModelConfiguration: '{"LLM":{"PrefixPromptCache":false}}' },
+            inferenceMV(MODEL_B, VENDOR_OPENAI),
+        ]);
+    });
+
+    it('a model-vendor row with nothing set inherits the VENDOR default (the gap a per-row seed would leave open)', () => {
+        const cfg = AIEngineBase.Instance.GetEffectiveModelConfiguration(MODEL_A, `${MODEL_A}:${VENDOR_OPENAI}`);
+        expect(cfg?.LLM?.PrefixPromptCache).toBe(true);           // from the OpenAI vendor row
+        expect(cfg?.LLM?.SupportsNativeToolCalling).toBe(true);   // the model's own knob survives the merge
+        expect(cfg?.LLM?.NativeToolResults).toBe(true);           // the type default survives too
+    });
+
+    it('the model-vendor row overrides the vendor default for one model on that host', () => {
+        const cfg = AIEngineBase.Instance.GetEffectiveModelConfiguration(MODEL_A, `${MODEL_A}:${VENDOR_GROQ}`);
+        expect(cfg?.LLM?.PrefixPromptCache).toBe(false);
+    });
+
+    it("the model's own bag beats the vendor default (Type < Vendor < Model < ModelVendor)", () => {
+        const cfg = AIEngineBase.Instance.GetEffectiveModelConfiguration(MODEL_B, `${MODEL_B}:${VENDOR_OPENAI}`);
+        expect(cfg?.LLM?.PrefixPromptCache).toBe(false);          // Model B says false; OpenAI's true does not override it
+    });
+
+    it('without a model-vendor row there is no vendor, so the cascade is type < model as before', () => {
+        const cfg = AIEngineBase.Instance.GetEffectiveModelConfiguration(MODEL_A);
+        expect(cfg?.LLM?.PrefixPromptCache).toBe(false);          // only the type default speaks
+        expect(cfg?.LLM?.SupportsNativeToolCalling).toBe(true);
+    });
+});

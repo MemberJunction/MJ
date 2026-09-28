@@ -45,14 +45,19 @@
     "fields": {
       "Name": "OpenAI",
       "Description": "AI Vendor",
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "ModelConfiguration": {
+        "LLM": {
+          "PrefixPromptCache": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-02-12T19:47:36.254Z",
-      "checksum": "648a037376385a26c9300f4cec4f1569eaa85a23dfa6829eb92eae6d7a866458"
+      "lastModified": "2026-09-28T17:25:44.845Z",
+      "checksum": "1a04d7f4f793960ee8394be669d3211304399fe4c264dd36a0ef15abb66d5b67"
     }
   },
   {
@@ -225,14 +230,19 @@
     "fields": {
       "Name": "x.ai",
       "Description": "x.ai is the creator of the Grok series of large language models that power various AI applications including coding assistance and general reasoning.",
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "ModelConfiguration": {
+        "LLM": {
+          "PrefixPromptCache": true
+        }
+      }
     },
     "primaryKey": {
       "ID": "5483D98F-1F4E-40F4-91FC-EAA8EFDC90F1"
     },
     "sync": {
-      "lastModified": "2026-02-12T19:47:36.276Z",
-      "checksum": "7a3f1a96a532c9968eb70c14e73b73d59155c69d63ac0482277e07cbc4b20c26"
+      "lastModified": "2026-09-28T17:25:44.879Z",
+      "checksum": "e6bb92cc14b6bcd1dda3a2ef8b777a03d44b23e43fe619025b73328668622383"
     }
   },
   {

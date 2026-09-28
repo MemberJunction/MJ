@@ -9,7 +9,7 @@
  *         the real template engine — the lookup that was silently broken by name-vs-ID;
  *   TRS2  buildVolatileStateMessage against the real system prompt renders the three state blocks
  *         from the real system placeholders (today's date, not a fixture);
- *   TRS3  the trailing-state mode comes from the model CATALOG (PromptCacheStrategy on the
+ *   TRS3  the trailing-state mode comes from the model CATALOG (PrefixPromptCache on the
  *         inference provider's model-vendor row), not from names or driver classes;
  *   TRS4  specialization placement is decided from the child prompts' UNRENDERED template text as
  *         stored in the database — every Active Loop agent's child template resolves by ID;
@@ -58,7 +58,7 @@ interface TrailingStateInternals {
     buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended): Promise<VolatileMessage | null>;
     assembleOutgoingMessages(history: ChatMessage[], fragment: VolatileMessage, isAppendOnly?: boolean): ChatMessage[];
     shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
-    ResolvePromptCacheStrategy(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): 'prefix' | 'block' | null;
+    ResolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean;
 }
 
 /** Anthropic driver keyhole: the protected formatter whose breakpoint placement TRS6 asserts. */
@@ -182,7 +182,7 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
     },
     {
         Id: 'trailing-runtime-state.TRS3',
-        Name: "TRS3: trailing-state mode comes from the catalog — a model served by OpenAILLM resolves PromptCacheStrategy 'prefix' (append-only); one served by AnthropicLLM resolves none (replace)",
+        Name: "TRS3: trailing-state mode comes from the catalog — a model served by OpenAILLM inherits PrefixPromptCache=true from its vendor row (append-only); one served by AnthropicLLM resolves false (replace)",
         Fn: async (ctx): Promise<void> => {
             const engine = await configuredEngine(ctx);
             const loop = loopAgentType(engine, 'TRS3');
@@ -196,14 +196,14 @@ export const TrailingRuntimeStateChecks: NamedCheck[] = [
             const promptParams = promptParamsFor(ctx, loop.systemPrompt);
 
             const a = agentInternals(ctx);
-            AssertEqual(a.ResolvePromptCacheStrategy(openai.model, openai.vendor), 'prefix',
-                `'${openai.model.Name}' on ${openai.vendor.Name} must resolve PromptCacheStrategy 'prefix' from ModelConfiguration — metadata/ai-models has not been pushed, or the row lost its bag`);
+            AssertEqual(a.ResolvePrefixPromptCache(openai.model, openai.vendor), true,
+                `'${openai.model.Name}' on ${openai.vendor.Name} must resolve PrefixPromptCache=true through the cascade (vendor row default) — metadata/ai-vendors has not been pushed, or the vendor row lost its bag`);
             a._lastModelSelectionInfo = { ModelSelected: openai.model, vendorSelected: openai.vendor };
             AssertEqual(a.shouldUseAppendOnlyTrailingState(promptParams), true, 'a prefix-cache serving path runs append-only');
 
             const b = agentInternals(ctx);
-            AssertEqual(b.ResolvePromptCacheStrategy(anthropic.model, anthropic.vendor), null,
-                `'${anthropic.model.Name}' on ${anthropic.vendor.Name} must declare no strategy (block-cache provider)`);
+            AssertEqual(b.ResolvePrefixPromptCache(anthropic.model, anthropic.vendor), false,
+                `'${anthropic.model.Name}' on ${anthropic.vendor.Name} must resolve false (block-cache provider, no flag anywhere in its cascade)`);
             b._lastModelSelectionInfo = { ModelSelected: anthropic.model, vendorSelected: anthropic.vendor };
             AssertEqual(b.shouldUseAppendOnlyTrailingState(promptParams), false, 'a block-cache serving path runs replace-in-place');
 

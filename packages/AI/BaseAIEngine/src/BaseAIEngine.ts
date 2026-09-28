@@ -1410,7 +1410,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * Resolves the EFFECTIVE {@link AIModelConfiguration} for a model (optionally scoped to one of
      * its vendor rows) by walking the catalog cascade base-first:
      *
-     * `AIModelType.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIModelVendor.ModelConfiguration`
+     * `AIModelType.ModelConfiguration` < `AIVendor.ModelConfiguration` < `AIModel.ModelConfiguration` < `AIModelVendor.ModelConfiguration`
+     *
+     * The vendor layer is the host-wide default for every model that vendor serves. It sits BELOW
+     * the model's own bag on purpose: the bag also carries capability knobs that describe the model,
+     * and a host-wide default must not override what a model says about itself; the model-vendor
+     * row is where a host diverges for one model. The vendor layer only contributes when a
+     * model-vendor row is supplied, because that row's `VendorID` is what names the vendor.
      *
      * Each layer's JSON column is parsed TOLERANTLY (a malformed/absent layer contributes nothing)
      * and the layers deep-merge per key, so a vendor row overriding one knob inherits everything
@@ -1429,13 +1435,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return null;
         }
         const modelType = model.AIModelTypeID ? this.ModelTypesByID.get(NormalizeUUID(model.AIModelTypeID)) : undefined;
-        const vendor = vendorModelVendorID
+        const modelVendor = vendorModelVendorID
             ? (this.ModelVendorsByModelID.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.ID, vendorModelVendorID))
             : undefined;
+        const vendor = modelVendor?.VendorID ? this.VendorsByID.get(NormalizeUUID(modelVendor.VendorID)) : undefined;
         return ResolveEffectiveModelConfiguration(
             ParseModelConfiguration(modelType?.ModelConfiguration),
-            ParseModelConfiguration(model.ModelConfiguration),
             ParseModelConfiguration(vendor?.ModelConfiguration),
+            ParseModelConfiguration(model.ModelConfiguration),
+            ParseModelConfiguration(modelVendor?.ModelConfiguration),
         );
     }
 

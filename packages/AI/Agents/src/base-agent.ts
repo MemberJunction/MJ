@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, GetPromptCacheStrategy, IRealtimeSession, JSONObject, PromptCacheStrategy, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, IsPrefixPromptCache, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { LoopAgentTypePromptParams } from './agent-types/loop-agent-prompt-params';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, NormalizeUUID, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
@@ -4631,9 +4631,9 @@ export class BaseAgent {
      * achieving ~93% cache hit rate. Providers with block-level or sliding caching (Gemini, Cerebras)
      * use replace-in-place to keep context compact.
      *
-     * Which providers are which is METADATA, not code: the `PromptCacheStrategy` knob in the model
-     * catalog's `ModelConfiguration` cascade (Model Types < Models < Model Vendors), read through
-     * {@link ResolvePromptCacheStrategy}. `'prefix'` means append-only; anything else means replace.
+     * Which providers are which is METADATA, not code: the `PrefixPromptCache` flag in the model
+     * catalog's `ModelConfiguration` cascade (Model Types < Vendors < Models < Model Vendors), read
+     * through {@link ResolvePrefixPromptCache}. `true` means append-only; anything else means replace.
      *
      * Decided ONCE per run. An explicit `trailingStateMode` or a runtime model override answers
      * immediately. Otherwise the answer is frozen at the first model selection and reused for every
@@ -4663,7 +4663,7 @@ export class BaseAgent {
         if (promptParams.override?.modelId) {
             const model = AIEngine.Instance?.ModelsByID?.get(NormalizeUUID(promptParams.override.modelId));
             const vendor = promptParams.override.vendorId ? AIEngine.Instance?.VendorsByID?.get(NormalizeUUID(promptParams.override.vendorId)) : undefined;
-            return this.ResolvePromptCacheStrategy(model, vendor) === 'prefix';
+            return this.ResolvePrefixPromptCache(model, vendor);
         }
 
         if (this._resolvedTrailingStateMode !== undefined) {
@@ -4672,7 +4672,7 @@ export class BaseAgent {
         if (this._lastModelSelectionInfo) {
             const model = this._lastModelSelectionInfo.ModelSelected;
             const vendor = this._lastModelSelectionInfo.vendorSelected;
-            this._resolvedTrailingStateMode = this.ResolvePromptCacheStrategy(model, vendor) === 'prefix';
+            this._resolvedTrailingStateMode = this.ResolvePrefixPromptCache(model, vendor);
             return this._resolvedTrailingStateMode;
         }
 
@@ -4681,25 +4681,26 @@ export class BaseAgent {
     }
 
     /**
-     * The {@link PromptCacheStrategy} declared for a model as served by a vendor, read from the model
-     * catalog's `ModelConfiguration` cascade — `AIModelType < AIModel < AIModelVendor` — via
-     * `AIEngine.GetEffectiveModelConfiguration`. The most specific layer is the INFERENCE-PROVIDER
-     * model-vendor row for `vendor`; when the vendor is unknown, or has no inference row for this
-     * model, the model and type layers still answer. Returns null when no layer declares a strategy,
-     * which callers treat as `'block'` (replace-in-place).
+     * Whether a model, as served by a vendor, sits behind a byte-prefix prompt cache
+     * (`LLM.PrefixPromptCache`), read from the model catalog's `ModelConfiguration` cascade —
+     * `AIModelType < AIVendor < AIModel < AIModelVendor` — via `AIEngine.GetEffectiveModelConfiguration`.
+     * The most specific layer is the INFERENCE-PROVIDER model-vendor row for `vendor`, whose vendor
+     * row supplies the host-wide default; when the vendor is unknown, or has no inference row for this
+     * model, the model and type layers still answer. False when no layer declares it, which callers
+     * treat as a block cache (replace-in-place).
      *
      * Extension point: a subclass with out-of-catalog knowledge (an OpenAI-compatible gateway whose
-     * rows carry no strategy, say) can override this rather than the mode decision above.
+     * rows carry no flag, say) can override this rather than the mode decision above.
      */
-    protected ResolvePromptCacheStrategy(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): PromptCacheStrategy | null {
+    protected ResolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
         if (!model) {
-            return null;
+            return false;
         }
         const engine = AIEngine.Instance;
         const modelVendor = vendor
             ? (engine.ModelVendorsByModelID?.get(NormalizeUUID(model.ID)) ?? []).find(mv => UUIDsEqual(mv.VendorID, vendor.ID) && engine.IsInferenceProvider(mv))
             : undefined;
-        return GetPromptCacheStrategy(engine.GetEffectiveModelConfiguration(model.ID, modelVendor?.ID));
+        return IsPrefixPromptCache(engine.GetEffectiveModelConfiguration(model.ID, modelVendor?.ID));
     }
 
     /**

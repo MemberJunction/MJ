@@ -21,11 +21,11 @@ const templates = vi.hoisted(() => ({ byId: new Map<string, string>() }));
  * (type < model < model-vendor, deep-merged per key). Tests seed it per case.
  */
 interface CatalogModel { ID: string; Name: string; ModelConfiguration?: string }
-interface CatalogVendor { ID: string; Name: string }
+interface CatalogVendor { ID: string; Name: string; ModelConfiguration?: string }
 interface CatalogModelVendor { ID: string; VendorID: string; TypeID: 'inference' | 'developer'; ModelConfiguration?: string }
 const catalog = vi.hoisted(() => ({
     models: new Map<string, { ID: string; Name: string; ModelConfiguration?: string }>(),
-    vendors: new Map<string, { ID: string; Name: string }>(),
+    vendors: new Map<string, { ID: string; Name: string; ModelConfiguration?: string }>(),
     modelVendors: new Map<string, Array<{ ID: string; VendorID: string; TypeID: 'inference' | 'developer'; ModelConfiguration?: string }>>(),
     reset(): void { this.models.clear(); this.vendors.clear(); this.modelVendors.clear(); },
 }));
@@ -44,7 +44,9 @@ vi.mock('@memberjunction/aiengine', () => ({
                 const model = catalog.models.get(modelID);
                 if (!model) { return null; }
                 const row = modelVendorID ? (catalog.modelVendors.get(modelID) ?? []).find(mv => mv.ID === modelVendorID) : undefined;
-                const layers = [model.ModelConfiguration, row?.ModelConfiguration].filter((j): j is string => typeof j === 'string').map(j => JSON.parse(j) as { LLM?: Record<string, unknown> });
+                const vendor = row ? catalog.vendors.get(row.VendorID) : undefined;
+                // Type < Vendor < Model < ModelVendor, as the real engine resolves it
+                const layers = [vendor?.ModelConfiguration, model.ModelConfiguration, row?.ModelConfiguration].filter((j): j is string => typeof j === 'string').map(j => JSON.parse(j) as { LLM?: Record<string, unknown> });
                 if (layers.length === 0) { return null; }
                 return { LLM: Object.assign({}, ...layers.map(l => l.LLM ?? {})) };
             },
@@ -409,19 +411,19 @@ describe('BaseAgent.assembleOutgoingMessages', () => {
 describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
     beforeEach(() => catalog.reset());
 
-    /** Seeds one model with a developer row and an inference row for `vendor`, each optionally carrying a strategy. */
+    /** Seeds one model with a developer row and an inference row for `vendor`, each optionally carrying the flag. */
     function seed(
         modelID: string,
         vendorID: string,
-        strategies: { model?: string | null; inferenceRow?: string | null; developerRow?: string | null } = {}
+        flags: { vendor?: boolean | null; model?: boolean | null; inferenceRow?: boolean | null; developerRow?: boolean | null } = {}
     ): { model: CatalogModel; vendor: CatalogVendor } {
-        const bag = (strategy: string | null | undefined): string | undefined =>
-            strategy === undefined ? undefined : JSON.stringify({ LLM: { PromptCacheStrategy: strategy } });
-        const model: CatalogModel = { ID: modelID, Name: modelID, ModelConfiguration: bag(strategies.model) };
-        const vendor: CatalogVendor = { ID: vendorID, Name: vendorID };
+        const bag = (flag: boolean | null | undefined): string | undefined =>
+            flag === undefined ? undefined : JSON.stringify({ LLM: { PrefixPromptCache: flag } });
+        const model: CatalogModel = { ID: modelID, Name: modelID, ModelConfiguration: bag(flags.model) };
+        const vendor: CatalogVendor = { ID: vendorID, Name: vendorID, ModelConfiguration: bag(flags.vendor) };
         const rows: CatalogModelVendor[] = [
-            { ID: `${modelID}:${vendorID}:developer`, VendorID: vendorID, TypeID: 'developer', ModelConfiguration: bag(strategies.developerRow) },
-            { ID: `${modelID}:${vendorID}:inference`, VendorID: vendorID, TypeID: 'inference', ModelConfiguration: bag(strategies.inferenceRow) },
+            { ID: `${modelID}:${vendorID}:developer`, VendorID: vendorID, TypeID: 'developer', ModelConfiguration: bag(flags.developerRow) },
+            { ID: `${modelID}:${vendorID}:inference`, VendorID: vendorID, TypeID: 'inference', ModelConfiguration: bag(flags.inferenceRow) },
         ];
         catalog.models.set(modelID, model);
         catalog.vendors.set(vendorID, vendor);
@@ -438,23 +440,23 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
     it('returns false when trailingStateMode is explicitly replace, whatever the catalog says', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({ trailingStateMode: 'replace' });
-        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
+        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: true });
         a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
     });
 
-    it("append-only when the inference provider's model-vendor row declares PromptCacheStrategy 'prefix'", () => {
+    it("append-only when the inference provider's model-vendor row declares PrefixPromptCache true", () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
-        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
+        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: true });
         a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
     });
 
-    it('replace-in-place when no catalog layer declares a strategy: names and driver classes are never consulted', () => {
+    it('replace-in-place when no catalog layer declares the flag: names and driver classes are never consulted', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
-        // A model whose NAME says GPT, served by a block-cache host with no strategy set: replace.
+        // A model whose NAME says GPT, served by a block-cache host with no flag set: replace.
         const { model, vendor } = seed('GPT-OSS-120B', 'cerebras');
         a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
@@ -466,26 +468,40 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
     });
 
+    it('a vendor-row default is inherited by every model it serves, and a model-vendor row can still override it', () => {
+        const { promptParams } = makeInputs({});
+        // Nothing on the model or its rows: the vendor's true flows through.
+        const a = agentUnderTest();
+        const inherited = seed('gpt-new', 'openai', { vendor: true });
+        a._lastModelSelectionInfo = { ModelSelected: inherited.model, vendorSelected: inherited.vendor };
+        expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
+        // The same vendor serving one model differently: the row overrides the default.
+        const b = agentUnderTest();
+        const overridden = seed('gpt-legacy', 'openai', { vendor: true, inferenceRow: false });
+        b._lastModelSelectionInfo = { ModelSelected: overridden.model, vendorSelected: overridden.vendor };
+        expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
+    });
+
     it("the inference provider's row wins over the model's own bag, in both directions", () => {
         const { promptParams } = makeInputs({});
 
-        // The model developer's serving is a prefix cache; this host's serving of the same model is not.
+        // The model's own bag says prefix cache; this host's serving of the same model says not.
         const a = agentUnderTest();
-        const hosted = seed('gpt-oss', 'cerebras', { model: 'prefix', inferenceRow: 'block' });
+        const hosted = seed('gpt-oss', 'cerebras', { model: true, inferenceRow: false });
         a._lastModelSelectionInfo = { ModelSelected: hosted.model, vendorSelected: hosted.vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
 
         // The reverse: model says block, this host says prefix.
         const b = agentUnderTest();
-        const own = seed('gpt-oss', 'openai', { model: 'block', inferenceRow: 'prefix' });
+        const own = seed('gpt-oss', 'openai', { model: false, inferenceRow: true });
         b._lastModelSelectionInfo = { ModelSelected: own.model, vendorSelected: own.vendor };
         expect(b.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
     });
 
-    it("a strategy on the vendor's DEVELOPER row is ignored: only the inference row serves requests", () => {
+    it("a flag on the vendor's DEVELOPER row is ignored: only the inference row serves requests", () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
-        const { model, vendor } = seed('gpt-5', 'openai', { developerRow: 'prefix' });
+        const { model, vendor } = seed('gpt-5', 'openai', { developerRow: true });
         a._lastModelSelectionInfo = { ModelSelected: model, vendorSelected: vendor };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(false);
     });
@@ -493,14 +509,14 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
     it('falls back to the model and type layers when the selection carries no vendor', () => {
         const a = agentUnderTest();
         const { promptParams } = makeInputs({});
-        const { model } = seed('grok-4', 'xai', { model: 'prefix' });
+        const { model } = seed('grok-4', 'xai', { model: true });
         a._lastModelSelectionInfo = { ModelSelected: model };
         expect(a.shouldUseAppendOnlyTrailingState(promptParams)).toBe(true);
     });
 
     it('a runtime model override answers immediately from the catalog; a vendor-only override defers to the first selection', () => {
         const { promptParams } = makeInputs({});
-        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
+        const { model, vendor } = seed('gpt-5', 'openai', { inferenceRow: true });
 
         const a = agentUnderTest();
         promptParams.override = { modelId: model.ID, vendorId: vendor.ID };
@@ -519,7 +535,7 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
         const { promptParams } = makeInputs({});
         // Even with a prefix-cache model bound to the prompt, turn 1 must not guess append-only:
         // prompts bind several vendors for failover and the run may select any of them.
-        seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
+        seed('gpt-5', 'openai', { inferenceRow: true });
         const engine = AIEngine.Instance as unknown as EngineCatalogMock;
         engine.PromptModels = [{ PromptID: 'prompt-1', ModelID: 'gpt-5' }];
         promptParams.prompt = { ID: 'prompt-1' } as unknown as MJAIPromptEntityExtended;
@@ -534,7 +550,7 @@ describe('BaseAgent.shouldUseAppendOnlyTrailingState', () => {
 
     it('freezes the mode at the first model selection: a later vendor change never flips it', () => {
         const { promptParams } = makeInputs({});
-        const prefix = seed('gpt-5', 'openai', { inferenceRow: 'prefix' });
+        const prefix = seed('gpt-5', 'openai', { inferenceRow: true });
         const block = seed('claude', 'anthropic');
 
         // Prefix first → append-only for the rest of the run, even after a failover to a block-cache host
