@@ -480,6 +480,26 @@ describe('RecordClonePanelComponent (DOM)', () => {
         expect(sent.FieldOverrides).toEqual({});
     });
 
+    it('does not resend an undone retarget on a Scope-step re-plan', async () => {
+        const fixture = renderComponentFixture(RecordClonePanelComponent, {
+            providers: [{ provide: RecordCloneService, useValue: mockService }],
+            inputs: { AutoStart: false, EntityName: 'Users', RecordKey: 'u-1' },
+        });
+        const panel = fixture.componentInstance;
+        await panel.Start();
+        const retarget = { FieldName: 'CompanyID', DisplayName: 'Company', RelatedEntity: 'Companies', CurrentValue: 'co-1', NewValue: 'co-2' };
+        panel.RetargetFields = [retarget];
+        panel.GoToStep('review');
+        await Promise.resolve();
+
+        panel.RetargetFields = [{ ...retarget, NewValue: 'co-1' }];
+        panel.OnScopeOptionsChanged({ ...panel.ScopeOptions, MaxDepth: 1 });
+        await Promise.resolve();
+
+        const sent = vi.mocked(mockService.PlanClone).mock.calls.at(-1)![0].Options!;
+        expect(sent.Retarget).toBeUndefined();
+    });
+
     it('ignores the failure of a re-plan a newer one superseded', async () => {
         const fixture = renderComponentFixture(RecordClonePanelComponent, {
             providers: [{ provide: RecordCloneService, useValue: mockService }],

@@ -21,7 +21,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { BaseEntity, BaseEntityEvent, CompositeKey } from '@memberjunction/core';
-import { MJGlobal, MJEventType } from '@memberjunction/global';
+import { MJGlobal, MJEventType, type FieldRuleSet } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { NormalizeClonePresets, type CloneRequestOptions } from '@memberjunction/record-cloning-base';
@@ -877,7 +877,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
      * Picking a preset clears earlier scope changes so the preset's options apply.
      */
     public OnScopeOptionsChanged(options: RecordClonePlanOptions): void {
-        const next: RecordClonePlanOptions = { ...this.ScopeOptions };
+        const next: RecordClonePlanOptions = this.scopeWithCurrentValues();
         if (options.Preset !== this.SelectedPreset) {
             for (const k of SCOPE_OPTION_KEYS) delete next[k];
             next.Preset = options.Preset;
@@ -913,7 +913,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
 
     /** Drops every scope and branch override so the entity's configured scope applies again. */
     public OnResetScopeToDefaults(): void {
-        const next: RecordClonePlanOptions = { ...this.ScopeOptions };
+        const next: RecordClonePlanOptions = this.scopeWithCurrentValues();
         for (const k of SCOPE_OPTION_KEYS) delete next[k];
         this.ScopeOptions = next;
         this.EdgeOverrides = [];
@@ -1082,7 +1082,7 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         const entInfo = this.ProviderToUse?.EntityByName(this.EffectiveEntityName);
         const cfg = entInfo?.CloneConfig;
         const nameField = (entInfo?.NameField?.Name ?? 'Name').toLowerCase();
-        const ruleTargets = (cfg?.Fields?.Rules as { Rules?: Array<{ TargetField?: string; Field?: string }> } | undefined)?.Rules ?? [];
+        const ruleTargets: Array<{ TargetField?: string; Field?: string }> = (cfg?.Fields?.Rules as FieldRuleSet | undefined)?.Rules ?? [];
         const governed = ruleTargets.some((r) => (r.TargetField || r.Field || '').toLowerCase() === nameField)
             || Object.keys(cfg?.Fields?.Reset ?? {}).some((k) => k.toLowerCase() === nameField);
         const editable = cfg?.UserEditable ?? 'all';
@@ -1183,6 +1183,18 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         return this.RetargetFields
             .filter((r) => r.NewValue && r.NewValue !== r.CurrentValue)
             .map((r) => ({ EntityName: this.EffectiveEntityName, Field: r.FieldName, Value: r.NewValue as string }));
+    }
+
+    /**
+     * The scope options plus the Values step's current values, leaving out the ones that are empty:
+     * a Scope-step re-plan then carries no stale name or retarget, and nothing the user hasn't set.
+     */
+    private scopeWithCurrentValues(): RecordClonePlanOptions {
+        const next = this.buildOptionsWithValues();
+        if (Object.keys(next.FieldOverrides ?? {}).length === 0) delete next.FieldOverrides;
+        if (Object.keys(next.PromptedValues ?? {}).length === 0) delete next.PromptedValues;
+        if (!next.Reason) delete next.Reason;
+        return next;
     }
 
     private buildOptionsWithValues(): RecordClonePlanOptions {

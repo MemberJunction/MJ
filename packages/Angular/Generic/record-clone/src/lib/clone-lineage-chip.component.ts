@@ -439,7 +439,8 @@ export class CloneLineageChipComponent extends BaseAngularComponent implements O
     }
 
     public OnNavigate(item: RecordCloneLineageItem): void {
-        this.ClosePopover();
+        // Back to the chip: the host may open the record in another tab, leaving this page as it was.
+        this.ClosePopover(true);
         this.NavigateToRecord.emit({
             Kind: 'record',
             EntityName: item.EntityName,
