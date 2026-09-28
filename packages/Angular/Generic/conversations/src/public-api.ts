@@ -10,6 +10,9 @@ export * from './lib/models/conversation-state.model';
 export * from './lib/models/notification.model';
 export * from './lib/models/lazy-artifact-info';
 export * from './lib/models/navigation-request.model';
+// Host rules for an agent turn: reply mode, routes, and the host turn handler contract
+export * from './lib/models/agent-turn.model';
+export * from './lib/utils/agent-turn-routing';
 
 // Services - State
 export * from './lib/services/data-cache.service';
@@ -115,6 +118,9 @@ export * from './lib/components/shared/user-picker.component';
 export * from './lib/components/tasks/tasks-dropdown.component';
 export * from './lib/components/thread/thread-panel.component';
 export * from './lib/directives/search-shortcut.directive';
+// SearchResult / SearchResultType are the payload of SearchPanelComponent's
+// ResultSelected output, so consumers cannot type a handler without them.
+export type { SearchResult, SearchResultType } from './lib/services/search.service';
 
 // PR 2c — Widget extension surface (slots, events, design tokens)
 export * from './lib/services/conversations-runtime-bootstrap.service';

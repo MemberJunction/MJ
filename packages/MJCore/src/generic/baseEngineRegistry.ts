@@ -76,8 +76,10 @@ export interface CachedEntityMatch<T extends BaseEntity = BaseEntity> {
      * The engine's full property config for this entity — `EntityName`,
      * `PropertyName`, `Filter`, `OrderBy`, `ResultType`, etc. Inspect this to
      * decide whether the cache fits your needs (e.g. check `Filter`/`ResultType`).
+     * For a `BaseEngine` it's the engine's own config object, not a copy: read it,
+     * don't change it.
      */
-    config: BaseEnginePropertyConfig;
+    config: Readonly<BaseEnginePropertyConfig>;
     /**
      * **Live reference** to the engine's cached array for this entity — NOT a
      * copy. Reading is cheap; do not mutate it. When the config's `ResultType`
@@ -333,6 +335,22 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
             return Boolean((engine as { Loaded: boolean }).Loaded);
         }
         return false;
+    }
+
+    /**
+     * An engine's property configs, without copying them where the engine allows it. A
+     * `BaseEngine` exposes its own array as `ReadonlyConfigs`; its `Configs` getter deep-copies on
+     * every read. An engine that doesn't extend `BaseEngine` is read through `Configs`.
+     *
+     * @returns The configs, or null when the engine declares none.
+     */
+    private readEngineConfigs(engineObj: Record<string, unknown>): ReadonlyArray<Readonly<BaseEnginePropertyConfig>> | null {
+        const own = engineObj['ReadonlyConfigs'];
+        if (Array.isArray(own)) {
+            return own;
+        }
+        const copy = engineObj['Configs'];
+        return Array.isArray(copy) ? copy : null;
     }
 
     /**
@@ -642,6 +660,9 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * - The returned `records` is the engine's *live* array — read it, don't
      *   mutate it. For `'simple'` configs the rows are plain objects, not
      *   `BaseEntity` instances (check `config.ResultType` if you need ORM rows).
+     * - A `BaseEngine`'s configs are read through `ReadonlyConfigs`, without the
+     *   copy `Configs` makes, so `config` is the engine's own object. This runs for
+     *   every record an IsA parent with an opted-in `SubtypeSelector` loads.
      *
      * @param entityName     Entity to look up (case-insensitive, whitespace-trimmed).
      * @param options.unfilteredOnly  When true, omit any cache that has a `Filter`
@@ -664,10 +685,10 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
             if (!this.checkEngineLoaded(engine)) continue;
 
             const engineObj = engine as Record<string, unknown>;
-            const configs = engineObj['Configs'];
-            if (!Array.isArray(configs)) continue;
+            const configs = this.readEngineConfigs(engineObj);
+            if (!configs) continue;
 
-            for (const cfg of configs as BaseEnginePropertyConfig[]) {
+            for (const cfg of configs) {
                 // Only entity configs (Type defaults to 'entity') with a matching EntityName.
                 if ((cfg.Type ?? 'entity') !== 'entity') continue;
                 if (!cfg.EntityName || cfg.EntityName.trim().toLowerCase() !== target) continue;

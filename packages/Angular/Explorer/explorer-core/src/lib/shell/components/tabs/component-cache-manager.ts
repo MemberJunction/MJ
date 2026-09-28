@@ -88,16 +88,40 @@ export class ComponentCacheManager {
    * Generate a unique cache key from resource identity.
    * This is the ONE canonical key format used by ALL cache operations.
    *
-   * `discriminator` is appended into the recordId slot only when recordId is empty.
-   * It exists to prevent collisions between distinct "new record" tabs that share
-   * an empty recordId — e.g., a new MJ:Companies form and a new MJ:Employees form
-   * would otherwise both cache at `appId::RecordResource::__no_record__` and clobber
-   * each other. Passing the entity name as discriminator keeps them separate.
+   * `discriminator` is appended into the recordId slot when the recordId alone does not
+   * identify the resource:
+   * - **Empty recordId** — distinct "new record" tabs, e.g. a new MJ:Companies form and a new
+   *   MJ:Employees form, would otherwise both cache at `appId::RecordResource::__no_record__`
+   *   and clobber each other.
+   * - **The `'dynamic'` view marker** — `NavigationService.OpenDynamicView` stamps every
+   *   dynamic view with that same recordId, so without the entity every dynamic view in an app
+   *   shares one key. A reload from `#Accounts` to `#Contacts` would then get a cache hit on the
+   *   Accounts component, which never has its `Data` rebound, so the tab keeps showing Accounts
+   *   and the tab-container's entity check fires again on every emission.
+   *
+   * Passing the entity name as discriminator keeps them separate. Whatever the tab-container's
+   * reload check compares has to be part of this key, or a reload is handed back the component
+   * it just detached.
    */
   private getCacheKey(resourceType: string, recordId: string, appId: string, discriminator?: string): string {
-    const normalizedRecordId = recordId
-      || (discriminator ? `__new__::${discriminator}` : '__no_record__');
+    let normalizedRecordId: string;
+    if (!recordId) {
+      normalizedRecordId = discriminator ? `__new__::${discriminator}` : '__no_record__';
+    } else if (discriminator && ComponentCacheManager.IsDynamicViewMarker(recordId)) {
+      normalizedRecordId = `dynamic::${discriminator}`;
+    } else {
+      normalizedRecordId = recordId;
+    }
     return `${appId}::${resourceType}::${normalizedRecordId}`;
+  }
+
+  /**
+   * Whether a recordId is the `'dynamic'` marker `NavigationService.OpenDynamicView` stamps on a
+   * dynamic view, which is not a saved-view ID. Matched the way `ViewResourceComponent` matches it
+   * (trimmed, case-insensitive), so the cache and the view agree on what counts as dynamic.
+   */
+  public static IsDynamicViewMarker(recordId: string | null | undefined): boolean {
+    return typeof recordId === 'string' && recordId.trim().toLowerCase() === 'dynamic';
   }
 
   /**

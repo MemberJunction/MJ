@@ -404,7 +404,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   /**
    * Searchable display names of every field, read live rather than from the {@link FieldNames}
    * cache — only needed once a hosted field exists, because its name lands after registration
-   * (see {@link RefreshFieldNames}).
+   * (see {@link refreshFieldNames}).
    */
   private liveFieldNames(): string {
     if (this.hostedFields.size === 0) return '';
