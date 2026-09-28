@@ -593,7 +593,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // Junction-link any artifacts the delegated run produced into the session's conversation
         // history (best-effort) — so chat, session review, and resume carryover can all see them.
         // Runs as `runUser`: the junction entity is not among an anonymous caller's relay grants.
-        await this.linkDelegatedArtifactsToConversation(session, Artifacts, runUser, provider);
+        // The hidden anchor detail it may need to create, though, is written by the CALLER (#4791)
+        // — same reason `persistDirectActionTurn` is: the System user is not the conversation owner.
+        await this.linkDelegatedArtifactsToConversation(session, Artifacts, runUser, contextUser, provider);
 
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return ResultJson;
@@ -2383,13 +2385,22 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * queries (which scan junctions across ALL details) still surface the artifact. This is the
      * least-invasive correct anchor — no fake visible message, no orphaned artifact.
      *
+     * TWO PRINCIPALS, deliberately: the lookup (`findLatestSessionDetailID`) and the junction row
+     * itself (`saveDetailArtifactJunction`, `MJ: Conversation Detail Artifacts`) run as `runUser`
+     * (elevated for a scoped-anonymous caller) — that junction entity is outside an anonymous
+     * caller's relay grants. The hidden ANCHOR `Conversation Detail` this may need to create runs as
+     * `callerUser` instead: like every other `MJ: Conversation Details` write, the System user is
+     * refused because it is not the conversation's owner (see {@link persistDirectActionTurn},
+     * issue #4791) — only the actual caller can create it.
+     *
      * Strictly best-effort: every failure path logs and returns; a relayed tool call NEVER fails
      * because history linking did.
      */
     private async linkDelegatedArtifactsToConversation(
         session: MJAIAgentSessionEntity,
         artifacts: DelegatedRunArtifact[] | undefined,
-        contextUser: UserInfo,
+        runUser: UserInfo,
+        callerUser: UserInfo,
         provider: IMetadataProvider,
     ): Promise<void> {
         if (!artifacts || artifacts.length === 0 || !session.ConversationID) {
@@ -2397,13 +2408,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         try {
             const detailID =
-                (await this.findLatestSessionDetailID(session, contextUser, provider)) ??
-                (await this.createHiddenSessionAnchorDetail(session, contextUser, provider));
+                (await this.findLatestSessionDetailID(session, runUser, provider)) ??
+                (await this.createHiddenSessionAnchorDetail(session, callerUser, provider));
             if (!detailID) {
                 return; // anchor unavailable — logged in the helpers
             }
             for (const artifact of artifacts) {
-                await this.saveDetailArtifactJunction(detailID, artifact.ArtifactVersionID, contextUser, provider);
+                await this.saveDetailArtifactJunction(detailID, artifact.ArtifactVersionID, runUser, provider);
             }
         } catch (error) {
             LogError(`ExecuteRealtimeSessionTool: delegated-artifact history link failed: ${(error as Error).message}`);
@@ -2780,8 +2791,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         // ⚠️ ELEVATING INSTEAD WAS TRIED AND IS A TRAP. `ResolveScopedAnonymousRunUser` returns
         // `UserCache.GetSystemUser()`, which on this deployment resolves to the unconfigured
         // placeholder `not.set@nowhere.com` ("Configured provisioning user not found; falling back
-        // to an Owner"). Saving as a user that does not exist returns false with a NULL
-        // `LatestResult` — indistinguishable from a permission denial, and just as silent.
+        // to an Owner"). That user EXISTS — it is not a missing/invalid principal — and even carries
+        // full CRUD on `MJ: Conversation Details`. It is refused anyway: measured on MJ#4791 against
+        // the real DB, `MJConversationDetailEntityExtended`'s owner gate accepts only the
+        // conversation's OWNER or an Edit/Owner Resource Permission grantee, and the System user is
+        // neither. `Save()` returns false with a NULL `LatestResult` — indistinguishable from a
+        // permission denial, and just as silent.
         const writeUser = contextUser;
         const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJConversationDetailEntity>(
@@ -2855,6 +2870,17 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Stored as stable facts (Role: 'AI', HiddenToUser: true, ExternalID: callId, CompletionTime: durationMs,
      * Message: JSON-serialized tool facts) so that session review can reconstruct the action card dynamically
      * on load (Option 1) without polluting user-facing speech chat bubbles.
+     *
+     * Writes as the CALLER, never the elevated run user (issue #4791). The caller owns the session
+     * (`loadOwnedActiveSession`'s ownership gate has already run, for every path that reaches this
+     * method) and therefore the conversation, and the anonymous/magic-link role carries Create on
+     * `MJ: Conversation Details`, scoped by its RLS filter to rows on conversations it owns. The
+     * System user is NOT the conversation owner, so `MJConversationDetailEntityExtended`'s owner
+     * gate refuses it outright — measured on MJ#4791 against the real DB: `Save()` returns `false`
+     * with a NULL `LatestResult`, and `ResultHistory` stays empty. Elevating this write silently
+     * dropped both hidden tool-execution turns of a real magic-link session.
+     * `ResolveScopedAnonymousRunUser` elevates AI-**run**-entity writes only (prompt runs, agent
+     * runs, the relayed dispatch itself) — never this one.
      */
     private async persistDirectActionTurn(
         session: MJAIAgentSessionEntity,
@@ -2870,10 +2896,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return false;
         }
         try {
-            const writeUser = ResolveScopedAnonymousRunUser(contextUser);
             const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
                 CONVERSATION_DETAIL_ENTITY,
-                writeUser,
+                contextUser,
             );
             detail.NewRecord();
             detail.ConversationID = session.ConversationID;

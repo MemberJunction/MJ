@@ -2880,6 +2880,44 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         expect(executeRelayedToolMock.mock.calls[0][1]).toBe(ANON_USER);
     });
 
+    it('writes the hidden direct-action tool turn (ExecuteRealtimeSessionTool) as the CALLER, not the system user (#4791)', async () => {
+        const detail = makeSessionEntity({ ID: 'detail-1' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) =>
+                name === 'MJ: Conversation Details' ? detail : makeSessionEntity({ UserID: 'anon-1' }),
+            ),
+        };
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"success":true}', Success: true });
+        const resolver = makeAnonResolver();
+
+        await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'Some Direct Action', '{}', makeCtx(), makePubSub(),
+        );
+
+        // The dispatch itself still runs elevated (SYSTEM_USER)…
+        expect(executeRelayedToolMock.mock.calls[0][1]).toBe(SYSTEM_USER);
+        // …but the hidden Conversation Detail turn is written as the CALLER, never the system user.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
+        expect(detail.Save).toHaveBeenCalled();
+        expect(detail.UserID).toBe('anon-1');
+    });
+
+    it('writes the direct-action tool turn as the caller unchanged for a normal authenticated user', async () => {
+        const detail = makeSessionEntity({ ID: 'detail-2' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => (name === 'MJ: Conversation Details' ? detail : makeSessionEntity())),
+        };
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"success":true}', Success: true });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'Some Direct Action', '{}', makeCtx(), makePubSub(),
+        );
+
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', USER);
+    });
+
     it('accumulates relayed usage onto the prompt run under the SYSTEM user', async () => {
         const session = makeSessionEntity({
             UserID: 'anon-1',
@@ -2940,6 +2978,32 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
 
         expect(ok).toBe(true);
         expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Prompt Runs', SYSTEM_USER);
+    });
+
+    it('writes the hidden co-agent tool turn (RelayRealtimeToolTurn) as the CALLER (#4791)', async () => {
+        const session = makeSessionEntity({
+            UserID: 'anon-1',
+            Config_: JSON.stringify({ targetAgentID: 'target-1', promptRunID: 'prompt-run-1' }),
+        });
+        const promptRun = makeSessionEntity({ ID: 'prompt-run-1', Messages: null });
+        const detail = makeSessionEntity({ ID: 'detail-3' });
+        currentProvider = {
+            GetEntityObject: vi.fn(async (name: string) => {
+                if (name === 'MJ: AI Prompt Runs') return promptRun;
+                if (name === 'MJ: Conversation Details') return detail;
+                return session;
+            }),
+        };
+        const resolver = makeAnonResolver();
+
+        const ok = await resolver.RelayRealtimeToolTurn('session-1', 'browser_navigate', makeCtx(), '{"url":"x"}');
+
+        expect(ok).toBe(true);
+        // The co-agent run mirror stays SYSTEM…
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: AI Prompt Runs', SYSTEM_USER);
+        // …but the hidden Conversation Detail tool-turn is written as the CALLER, never SYSTEM.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
+        expect(getEntityObjectSpy()).not.toHaveBeenCalledWith('MJ: Conversation Details', SYSTEM_USER);
     });
 
     it('prepares the session with observability under the SYSTEM user while UserID stays the visitor', async () => {
@@ -3003,6 +3067,9 @@ describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3
         // The junction write (an entity the anon role does NOT hold) runs as the SYSTEM user.
         expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Detail Artifacts', SYSTEM_USER);
         expect(junctions).toHaveLength(1);
+        // The hidden anchor `Conversation Detail` is written as the CALLER (#4791) — like every
+        // other `MJ: Conversation Details` write, the System user is refused as not the owner.
+        expect(getEntityObjectSpy()).toHaveBeenCalledWith('MJ: Conversation Details', ANON_USER);
         // The hidden anchor is attributed to the SESSION owner, not the elevated principal.
         expect(anchors).toHaveLength(1);
         expect(anchors[0].UserID).toBe('anon-1');
