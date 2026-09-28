@@ -163,6 +163,26 @@ describe('CloneFieldMapper', () => {
         expect(rule?.Sensitive).toBe(true);
     });
 
+    it('moves a hierarchy root to NewParentKey only where request edits are allowed', () => {
+        const base = {
+            EntityName: 'Folders',
+            Fields: [{ Name: 'ParentID', IsPrimaryKey: false }, { Name: 'Name', IsPrimaryKey: false }],
+            SourceRecord: { ParentID: 'p-old', Name: 'F' },
+            CurrentUserId: 'cloner',
+            IsRoot: true,
+            HierarchyParentField: 'ParentID',
+            NewParentKey: 'p-new',
+        };
+        expect(MapFieldsForClone(base).MappedValues.ParentID).toBe('p-new');
+
+        const locked = MapFieldsForClone({ ...base, RequestFieldsEditable: false });
+        expect(locked.MappedValues.ParentID).toBe('p-old');
+        expect(locked.IgnoredRequestValues.map((i) => i.Field)).toEqual(['ParentID']);
+
+        const reset = MapFieldsForClone({ ...base, FieldRules: { Reset: { ParentID: null } } });
+        expect(reset.MappedValues.ParentID).toBeNull();
+    });
+
     it('never lets a request override a field the configuration resets or stamps', () => {
         const result = MapFieldsForClone({
             EntityName: 'MJ: Users',

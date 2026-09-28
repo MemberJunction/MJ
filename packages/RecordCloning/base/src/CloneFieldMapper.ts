@@ -111,7 +111,12 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
     const keyMap = ctx.KeyMap || {};
     const fieldRules = ctx.FieldRules || {};
     const fls = ctx.FLS || {};
-    const reqOverrides = ctx.RequestOverrides || {};
+    // A requested new parent for a hierarchy root is a request value like any other, so it passes
+    // the same UserEditable and governed-field checks (stage 11).
+    const reqOverrides: Record<string, unknown> = {
+        ...(ctx.RequestOverrides || {}),
+        ...(ctx.IsRoot && ctx.HierarchyParentField && ctx.NewParentKey !== undefined ? { [ctx.HierarchyParentField]: ctx.NewParentKey } : {}),
+    };
     const promptedValues = ctx.PromptedValues || {};
 
     // 1. Stage 1: Excluded (PKs, CreatedAt, UpdatedAt, SoftDelete, Configured Exclude)
@@ -307,17 +312,8 @@ export function MapFieldsForClone(ctx: CloneFieldMappingContext): CloneFieldMapp
         if (ctx.HierarchyParentField && field.Name === ctx.HierarchyParentField) {
             const oldParent = values[field.Name];
             if (ctx.IsRoot) {
-                // The copy stays under the same parent unless the request moves it (null = top level).
-                if (ctx.NewParentKey !== undefined) {
-                    values[field.Name] = ctx.NewParentKey;
-                    changes.push({
-                        Field: field.Name,
-                        Kind: 'Reset',
-                        OldValue: oldParent,
-                        NewValue: ctx.NewParentKey,
-                        Reason: 'Hierarchy root moved to the requested parent.',
-                    });
-                }
+                // The copy stays under the same parent; a requested move (NewParentKey, null = top
+                // level) is applied with the request overrides in stage 11.
             } else if (oldParent && String(oldParent) in keyMap) {
                 const newParent = keyMap[String(oldParent)];
                 values[field.Name] = newParent;
