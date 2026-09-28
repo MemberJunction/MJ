@@ -11,7 +11,7 @@ import {
     EntityActionResult,
     IsEntityActionInScope,
     MJActionEntityExtended,
-    RedactParamsToJSON,
+    RedactParamsToRecord,
     ResolveEntityActionScopeResolver,
     RunActionParams,
 } from "@memberjunction/actions-base";
@@ -240,11 +240,10 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
                 RecordID: params.EntityObject.PrimaryKey.ToConcatenatedString(),
                 InvocationType: params.InvocationType.Name,
                 // Persistent, user-visible storage: nothing writes a raw ActionParam[] there. Redacted
-                // through the same helper ActionExecutionLog.Params goes through, so the binding's
-                // LogValue rows decide what survives.
-                RedactedParams: SafeJSONParse<Record<string, unknown>>(
-                    RedactParamsToJSON(runParams.Params, [...action.Params.Items], params.EntityAction.Params),
-                ) ?? {},
+                // through the same rules ActionExecutionLog.Params goes through, so the binding's
+                // LogValue rows decide what survives — but stored by name, not as an array, because
+                // TaskGraphActionRunner re-hydrates this payload into a run by parameter name.
+                RedactedParams: RedactParamsToRecord(runParams.Params, [...action.Params.Items], params.EntityAction.Params),
                 ContextUser: params.ContextUser,
             });
 
