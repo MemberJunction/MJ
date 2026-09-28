@@ -13463,19 +13463,23 @@ The context is now within limits. Please retry your request with the recovered c
     ): Promise<BaseAgentNextStep> {
         const forEach = previousDecision.forEach as ForEachOperation;
         if (!forEach) {
+            // Not reported to the model: a Loop agent never gets here, because LoopAgentType turns a
+            // ForEach step with no details into a Retry whose errorMessage the model is shown.
             return this.createFailedStep('ForEach configuration missing', previousDecision);
         }
 
         const validationMessage = this.validateForEachOperation(forEach);
         if (validationMessage) {
-            return this.createFailedStep(`ForEach configuration invalid: ${validationMessage}`, previousDecision);
+            return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `ForEach configuration invalid: ${validationMessage}`,
+                                                     previousDecision, params, forEach.action?.name);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
         const collection = this.getCollectionFromPayload(currentPayload, forEach.collectionPath);
 
         if (!collection) {
-            return this.createFailedStep(`Collection path "${forEach.collectionPath}" not an array`, previousDecision);
+            return this.failLoopBeforeFirstIteration('ForEach', forEach.collectionPath, `Collection path "${forEach.collectionPath}" not an array`,
+                                                     previousDecision, params, forEach.action?.name);
         }
 
         const loopStepEntity = await this.createForEachLoopStep(forEach, collection, currentPayload, params);
@@ -13938,6 +13942,28 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Fails a loop that never ran an iteration, and tells the model why.
+     *
+     * A Loop agent answers a Failed step by prompting again (`HandleStepFallback` returns null), and
+     * nothing on that path reads the step's `errorMessage`. Without the injected message the model
+     * gets another turn with no idea its loop failed, and is likely to emit the same loop again.
+     * Flow agents don't inject loop results, so for them this is just the Failed step.
+     */
+    private failLoopBeforeFirstIteration(
+        loopType: 'ForEach' | 'While',
+        collectionOrCondition: string,
+        errorMessage: string,
+        previousDecision: BaseAgentNextStep,
+        params: ExecuteAgentParams,
+        actionName?: string
+    ): BaseAgentNextStep {
+        if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
+            this.injectLoopResultsMessage(loopType, collectionOrCondition, [], [{ index: 0, message: errorMessage }], params, actionName);
+        }
+        return this.createFailedStep(errorMessage, previousDecision);
+    }
+
+    /**
      * One loop error as readable text. Joining the error objects directly wrote "[object Object]"
      * into the step's ErrorMessage. Falls back to JSON when an iteration threw something with no
      * message (a thrown non-Error).
@@ -14132,12 +14158,15 @@ The context is now within limits. Please retry your request with the recovered c
     ): Promise<BaseAgentNextStep> {
         const whileOp = previousDecision.while as WhileOperation;
         if (!whileOp) {
+            // Not reported to the model: a Loop agent never gets here, because LoopAgentType turns a
+            // While step with no details into a Retry whose errorMessage the model is shown.
             return this.createFailedStep('While configuration missing', previousDecision);
         }
 
         const validationMessage = this.validateWhileOperation(whileOp);
         if (validationMessage) {
-            return this.createFailedStep(`While configuration invalid: ${validationMessage}`, previousDecision);
+            return this.failLoopBeforeFirstIteration('While', whileOp.condition, `While configuration invalid: ${validationMessage}`,
+                                                     previousDecision, params, whileOp.action?.name);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
@@ -14312,14 +14341,16 @@ The context is now within limits. Please retry your request with the recovered c
                                       this.formatLoopErrors(loopResults.errors),
                                       loopResults);
 
+        // Inject before the early return below: a Loop agent re-prompts after a Failed step, and the
+        // loop-results message (the condition error, under Errors) is the only way the model learns why.
+        if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
+            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name);
+        }
+
         // A condition that never evaluated means the loop never ran: fail the step rather than
         // report a completed zero-iteration loop.
         if (loopResults.conditionError && loopResults.iterations === 0) {
             return this.createFailedStep(loopResults.conditionError, previousDecision);
-        }
-
-        if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name);
         }
 
         const retryInstructions = loopResults.conditionError
