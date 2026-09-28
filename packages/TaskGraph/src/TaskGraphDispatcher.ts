@@ -145,6 +145,19 @@ function asRunQueryProvider(provider: IMetadataProvider): IRunQueryProvider | un
     const candidate = provider as unknown as Partial<IRunQueryProvider>;
     return typeof candidate.RunQuery === 'function' ? (candidate as IRunQueryProvider) : undefined;
 }
+
+/**
+ * True when a task's `InputPayload` is a well-formed name → value object, or absent entirely.
+ *
+ * A type predicate rather than a plain boolean check so `runTaskBody`'s `if (!isNameValuePayload(...))
+ * return ...` narrows `inputPayload` for the rest of the method — including the call into
+ * `mergedPayload` — instead of leaving it `unknown` and inviting a second, possibly-divergent
+ * array/scalar check downstream (MJ#4794 was exactly that: a shape decision duplicated in two
+ * places that disagreed).
+ */
+function isNameValuePayload(inputPayload: unknown): inputPayload is Record<string, unknown> | null {
+    return inputPayload == null || (typeof inputPayload === 'object' && !Array.isArray(inputPayload));
+}
 import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, TASK_TYPE_NAME, type TaskGraphParentMetadata } from './TaskGraphService';
 import {
     DEFAULT_DISPATCHER_CONFIG,
@@ -3277,12 +3290,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
-        // A node's input is a name → value object (`TaskNode.inputPayload: Record<string, unknown>`).
+        // A node's input is a name → value object (`TaskGraphSpecNode.inputPayload: Record<string, unknown>`).
         // `mergedPayload` below only merges objects, so anything else would be dropped without a word
         // and the step would run with none of its inputs — how durable entity actions ran before MJ#4794
         // (their redacted params were stored as an array). Rows written that way may still be queued, so
-        // refuse them loudly rather than run them empty.
-        if (inputPayload != null && (typeof inputPayload !== 'object' || Array.isArray(inputPayload))) {
+        // refuse them loudly rather than run them empty. This is also the only place that narrows
+        // `inputPayload`'s type: everything downstream (`mergedPayload` included) receives the narrowed
+        // `Record<string, unknown> | null`, so the array/scalar case cannot recur as a second, divergent
+        // check further down the call chain.
+        if (!isNameValuePayload(inputPayload)) {
             const found = Array.isArray(inputPayload) ? 'an array' : `a ${typeof inputPayload}`;
             const message =
                 `Task ${task.ID} has an InputPayload that is ${found}; expected a name → value object. ` +
@@ -4126,16 +4142,21 @@ export class TaskGraphDispatcher implements IShutdownable {
      * than the flow it was compiled from. Merging in dependency order restores the accumulation.
      *
      * Later prerequisites win on a key collision, matching a flow's own last-write-wins behaviour.
+     *
+     * `inputPayload` arrives pre-narrowed: `runTaskBody`'s guard is the only place that decides
+     * whether it is a name → value object, so this method trusts that decision rather than
+     * re-checking it. `dependencyOutputs` is a separate input with no equivalent guard upstream, so
+     * its per-entry object/array check stays here.
      */
-    private mergedPayload(inputPayload: unknown, dependencyOutputs: Map<string, unknown>): Record<string, unknown> {
+    private mergedPayload(inputPayload: Record<string, unknown> | null, dependencyOutputs: Map<string, unknown>): Record<string, unknown> {
         const merged: Record<string, unknown> = {};
         for (const output of dependencyOutputs.values()) {
             if (output && typeof output === 'object' && !Array.isArray(output)) {
                 Object.assign(merged, output as Record<string, unknown>);
             }
         }
-        if (inputPayload && typeof inputPayload === 'object' && !Array.isArray(inputPayload)) {
-            Object.assign(merged, inputPayload as Record<string, unknown>);
+        if (inputPayload) {
+            Object.assign(merged, inputPayload);
         }
         return merged;
     }
