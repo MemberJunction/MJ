@@ -314,6 +314,38 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('refuses to copy IS-A subtype rows until their save recipe exists', async () => {
+        const base = { ...parentEntity, RelatedEntities: [] } as EntityInfo;
+        const subtype = {
+            ...parentEntity, ID: 'ent-sub', Name: 'SubEntity', RelatedEntities: [],
+            Fields: [
+                { Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', RelatedEntityID: 'ent-parent-id', RelatedEntity: 'ParentEntity', IsSPParameter: () => true },
+                { Name: 'Extra', IsPrimaryKey: false, Type: 'nvarchar', IsSPParameter: () => true },
+            ],
+        } as unknown as EntityInfo;
+        const list = [base, subtype];
+        const provider = {
+            ...mockProvider, Entities: list,
+            EntityByName: (n: string) => list.find((e) => e.Name === n) ?? null,
+            FindISAChildEntities: async () => [{ ChildEntityName: 'SubEntity' }],
+        } as unknown as IMetadataProvider;
+        mockRunViewInstance.mockImplementation(async (params: { EntityName: string; Fields?: string[] }) =>
+            params.Fields ? { Success: true, Results: [] }
+                : params.EntityName === 'SubEntity' ? { Success: true, Results: [{ ID: 'parent-1', Extra: 'x' }] }
+                : { Success: true, Results: [{ ID: 'parent-1', Name: 'P' }] }
+        );
+
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' } }, standardUser);
+
+        expect(plan.Warnings.some((w) => w.Code === 'EDGE_KIND_UNSUPPORTED')).toBe(true);
+        expect(plan.Blocked).toBe(true);
+
+        const excluded = await new ClonePlanner({ Provider: provider }).Plan(
+            { EntityName: 'ParentEntity', SourceRecordKey: { ID: 'parent-1' }, Options: { Subtypes: 'exclude' } }, standardUser);
+        expect(excluded.Warnings.some((w) => w.Code === 'EDGE_KIND_UNSUPPORTED')).toBe(false);
+        mockRunViewInstance.mockReset();
+    });
+
     it('computes valid clone plan with pre-minted target keys and stable hash', async () => {
         const planner = new ClonePlanner({ Provider: mockProvider });
 

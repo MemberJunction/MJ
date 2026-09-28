@@ -103,7 +103,9 @@ export type CloneWarningCode =
     /** No free name fits a renamed column (it is too short, or every candidate is taken); the plan is blocked. */
     | 'NAME_UNAVAILABLE'
     /** The root record wasn't found or the cloner can't read it; the plan is blocked. */
-    | 'SOURCE_NOT_FOUND';
+    | 'SOURCE_NOT_FOUND'
+    /** A Deep IS-A subtype or embedded edge: those rows need a save recipe this release doesn't have; the plan is blocked. */
+    | 'EDGE_KIND_UNSUPPORTED';
 
 /**
  * Warning or notification emitted by the planning or execution engine.

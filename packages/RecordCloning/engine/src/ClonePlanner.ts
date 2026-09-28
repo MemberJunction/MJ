@@ -698,6 +698,19 @@ export class ClonePlanner {
                 NewParentKey: isRoot ? request.Options?.NewParentKey : undefined,
             });
 
+            // IS-A subtype and embedded rows need their own save recipe (AttachToParent, the owner's
+            // FK), which this release doesn't implement: routing them through a collection would
+            // insert a second parent row or write a column the peer doesn't have. Refuse instead.
+            if (disc && (disc.Kind === 'IsASubtype' || disc.Kind === 'Embedded') && viaEdge?.Policy === 'Deep') {
+                warnings.push({
+                    Code: 'EDGE_KIND_UNSUPPORTED',
+                    Severity: 'Error',
+                    NodeKey: nodeKey,
+                    Message: `Copying ${disc.Kind === 'IsASubtype' ? 'IS-A subtype' : 'embedded'} rows ('${depNode.EntityName}') isn't supported yet. Set Subtypes to exclude, or that relationship to Reference or Skip.`,
+                });
+                planBlocked = true;
+            }
+
             // Prompted fields are the ones the user must supply (Email on a user clone): without a
             // value the copy would carry the source's, so the plan can't run until they're entered.
             if (isRoot) {
