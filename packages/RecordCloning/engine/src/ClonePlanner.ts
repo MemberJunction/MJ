@@ -367,6 +367,18 @@ export class ClonePlanner {
             contextUser
         );
 
+        // A root the walker couldn't load (a wrong ID, row-level security, no read permission) comes
+        // back empty. Planning it anyway would create a row from defaults and link it to a source
+        // that isn't there, so refuse. The message doesn't say which, so it can't reveal a hidden row.
+        if (!rootNode.RecordData || Object.keys(rootNode.RecordData).length === 0) {
+            warnings.push({
+                Code: 'SOURCE_NOT_FOUND',
+                Severity: 'Error',
+                Message: `The '${entityName}' record to clone wasn't found, or you can't read it.`,
+            });
+            planBlocked = true;
+        }
+
         // Flatten graph nodes, leaving out rows a relationship's ExcludeRows names (and everything under them)
         const flatGraphNodes = this.dropExcludedRows(walker.FlattenTopological(rootNode), rootConfig, excludedNodes, warnings);
 

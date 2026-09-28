@@ -128,4 +128,26 @@ describe('shipped clone configurations', () => {
         }
         expect(ambiguous).toEqual([]);
     });
+
+    describe('MJ: Users keeps personal data out of a clone', () => {
+        const users = byName.get('MJ: Users')!;
+        const settings = users.Relationships?.['MJ: User Settings'];
+
+        it('skips User Settings unless a preset opts in, and only with-settings does', () => {
+            expect(settings?.Policy).toBe('Skip');
+            const res = ResolveEdgePolicy({
+                FromKey: 'MJ: Users::1', ToKey: 'MJ: User Settings::2', Kind: 'Relationship',
+                ParentEntityName: 'MJ: Users', ChildEntityName: 'MJ: User Settings', JoinField: 'UserID',
+                CurrentDepth: 1, MaxDepth: 5, RootEntityConfig: users,
+            });
+            expect(res.Policy).toBe('Skip');
+            const deepPresets = (users.Presets ?? []).filter((p) => p.Relationships?.['MJ: User Settings']?.Policy === 'Deep').map((p) => p.Key);
+            expect(deepPresets).toEqual(['with-settings']);
+        });
+
+        it('never copies device tokens, chat drafts or recording consent, even with with-settings', () => {
+            const prefixes = (settings?.ExcludeRows ?? []).filter((r) => r.Field === 'Setting').flatMap((r) => r.StartsWith ?? []);
+            expect(prefixes).toEqual(expect.arrayContaining(['mobile.', 'mj.chat.drafts', 'mj.realtimeVoice.recordingConsent']));
+        });
+    });
 });

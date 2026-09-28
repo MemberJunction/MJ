@@ -101,7 +101,9 @@ export type CloneWarningCode =
     /** The root entity's clone configuration failed validation; the plan is blocked. */
     | 'CONFIG_INVALID'
     /** No free name fits a renamed column (it is too short, or every candidate is taken); the plan is blocked. */
-    | 'NAME_UNAVAILABLE';
+    | 'NAME_UNAVAILABLE'
+    /** The root record wasn't found or the cloner can't read it; the plan is blocked. */
+    | 'SOURCE_NOT_FOUND';
 
 /**
  * Warning or notification emitted by the planning or execution engine.

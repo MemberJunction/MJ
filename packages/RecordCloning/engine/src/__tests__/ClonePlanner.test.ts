@@ -304,6 +304,16 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockReset();
     });
 
+    it('blocks with SOURCE_NOT_FOUND when the root record is missing or unreadable', async () => {
+        const noChildren = { ...parentEntity, RelatedEntities: [] } as EntityInfo;
+        const provider = { ...mockProvider, Entities: [noChildren], EntityByName: (n: string) => (n === 'ParentEntity' ? noChildren : null) } as IMetadataProvider;
+        mockRunViewInstance.mockResolvedValue({ Success: true, Results: [] });
+        const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'no-such-id' } }, standardUser);
+        expect(plan.Warnings.some((w) => w.Code === 'SOURCE_NOT_FOUND')).toBe(true);
+        expect(plan.Blocked).toBe(true);
+        mockRunViewInstance.mockReset();
+    });
+
     it('computes valid clone plan with pre-minted target keys and stable hash', async () => {
         const planner = new ClonePlanner({ Provider: mockProvider });
 

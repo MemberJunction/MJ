@@ -15,7 +15,7 @@ It has **zero database dependencies** and **no server-only dependencies**, makin
    - `ClonePlan`, `ClonePlanNode`, `ClonePlanEdge`
    - `CloneFieldChange`, `CloneWarning`, `RecordCloneResult`
 2. **Deterministic Plan Hash (`ClonePlanHash.ts`)**:
-   - Computes a canonical SHA-256 hash over nodes, edges, actions, and field transformations (ignoring generated target keys).
+   - Builds the canonical form of a plan (nodes, edges, actions, field transformations; generated target keys ignored). The engine hashes it with SHA-256, so this package stays dependency-free.
 3. **8-Tier Policy Precedence (`ClonePolicyResolver.ts`)**:
    - Evaluates whether an edge is traversed as `Deep`, `Reference`, or `Skip` based on built-ins, database constraints, entity config, relationship config, presets, and request overrides.
 4. **Name Template Engine (`NameTemplate.ts`)**:
@@ -25,6 +25,6 @@ It has **zero database dependencies** and **no server-only dependencies**, makin
 6. **JSON Remap Engine (`JsonRemapEngine.ts`)**:
    - Rewrites nested JSON documents and structures, with built-in presets (`dashboard-ui-config`, `scheduled-job-configuration`).
 7. **Field Mapping Pipeline (`CloneFieldMapper.ts`)**:
-   - 12-stage pure field transformation pipeline.
+   - Pure, ordered field transformation pipeline (exclude, copy, reset, ownership, rename, FK and JSON remap, overrides, prompted values, rules).
 8. **Configuration Validator (`CloneConfigValidator.ts`)**:
    - Validates `.clone-configurations.json` metadata rules.
