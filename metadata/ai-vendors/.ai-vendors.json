@@ -442,5 +442,15 @@
       "lastModified": "2026-09-15T13:56:42.685Z",
       "checksum": "ffcb145b12e3690546bdd56181db4092ed845f55c858f1e2657aa6efd72ff7c5"
     }
+  },
+  {
+    "fields": {
+      "Name": "Xiaomi",
+      "Description": "Chinese consumer-electronics manufacturer whose AI division develops the open-weight MiMo model family. The MiMo V2.6 generation (Pro, Flash and a Pro-UltraSpeed serving variant, all released 2026-09-22) is MIT-licensed and natively omnimodal, with a 1M-token context. Xiaomi serves an OpenAI-compatible first-party API authenticated with an API key; MJ currently reaches MiMo models through OpenRouter rather than Xiaomi direct, because no Xiaomi driver class exists yet. This vendor row therefore records Model Developer attribution only.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "8D69D59B-6F29-4FE6-BD31-EBB908768871"
+    }
   }
 ]
