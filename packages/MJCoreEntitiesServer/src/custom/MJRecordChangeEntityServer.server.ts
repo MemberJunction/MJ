@@ -3,6 +3,7 @@ import {
     EntityPermissionType,
     Metadata,
     AuthorizationEvaluator,
+    type AuthorizationInfo,
     type IMetadataProvider,
 } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
@@ -20,6 +21,12 @@ import { MJRecordChangeEntity } from '@memberjunction/core-entities';
  *
  * Any other update is strictly forbidden to protect audit trail integrity.
  */
+/** Authorizations from the entity's provider when it also serves metadata (the server providers do), else from the global metadata. */
+function authorizationsOf(provider: unknown): AuthorizationInfo[] {
+    const fromProvider = (provider as Partial<IMetadataProvider> | null | undefined)?.Authorizations;
+    return Array.isArray(fromProvider) ? fromProvider : new Metadata().Authorizations;
+}
+
 @RegisterClass(BaseEntity, 'MJ: Record Changes')
 export class MJRecordChangeEntityServer extends MJRecordChangeEntity {
     public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
@@ -47,10 +54,10 @@ export class MJRecordChangeEntityServer extends MJRecordChangeEntity {
             }
 
             // Must hold "Record Changes: Annotate" authorization (evaluated with ancestors)
-            const md = (this.ProviderToUse as unknown as IMetadataProvider | undefined) ?? new Metadata();
-            const auth = md.Authorizations.find((a) => a.Name === 'Record Changes: Annotate');
+            const authorizations = authorizationsOf(this.ProviderToUse);
+            const auth = authorizations.find((a) => a.Name === 'Record Changes: Annotate');
             const evaluator = new AuthorizationEvaluator();
-            const allowed = auth ? evaluator.UserCanExecuteWithAncestors(auth, u, md.Authorizations) : false;
+            const allowed = auth ? evaluator.UserCanExecuteWithAncestors(auth, u, authorizations) : false;
 
             if (!allowed) {
                 if (throwError) {
