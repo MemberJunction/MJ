@@ -4,20 +4,26 @@
 
 The My Profile dialog fits the screen and scrolls.
 
-The identity card sized itself with `height: 100%` through four ancestors, the outermost of which is
-`.mj-dialog-container` — opened by `ProfileDialogService` with a width and no height, so it keeps
-`height: auto` and only `max-height: 90vh`. A percentage height resolves against a definite
-containing block and `max-height` does not make one, so on the block path the card's height computed
-to `auto`, it grew past the viewport, and its own `overflow: hidden` CLIPPED the excess rather than
-letting the scroll region inside it take over. The lower half of the card — the notification
-channels, the footer, Sign out — was unreachable on a short window.
+`ProfileDialogService` opens the dialog with a width and no height, so `.mj-dialog-container` is
+`height: auto` with `max-height: 90vh`, and the boxes between it and the card are shrinkable flex
+items. That already bounded the card at 90vh. What it could not bound was `.mj-profile__main`: the
+card was `display: block`, so `__main`'s `height: 100%` had no definite height to resolve against,
+computed to `auto`, and grew to its full content. The card's `overflow: hidden` then clipped the
+bottom of it — the notification channels, the footer, Sign out — with nothing left to scroll.
 
-The card now bounds itself at `100dvh` (with `100vh` first as the fallback) so it cannot exceed the
-screen whatever an ancestor resolves to, and lays its children out with flex instead of percentages.
-`.mj-profile__main` takes `flex: 1; min-height: 0` in place of `height: 100%`, which is what lets it
-shrink below its content so the regions that already declare `flex: 1; min-height: 0; overflow-y:
-auto` — `.mj-profile__section` and `.mj-profile__panel-body` — actually get a bounded height to
-scroll within.
+The fix is a flex chain. The card is now a flex column, `.mj-profile__main` takes `flex: 1;
+min-height: 0` in place of `height: 100%`, and one new `.mj-profile__scroll` region (`flex: 1;
+min-height: 0; overflow-y: auto`) wraps the field list and the Command Palette and Notifications
+sections. The hero, avatar, identity and footer hold their size, the footer stays pinned, and only
+the settings rows scroll. The sections no longer scroll on their own: as two peer scrollers they
+split the leftover height, each shrank to its padding on a short window, and Sign out went out of
+reach again. With one region the only floor left is the fixed parts themselves — hero, avatar,
+identity and footer — so the footer clips only on a window shorter than roughly 335px.
+
+The card also caps itself at `max-height: 100dvh` (`100vh` first as the fallback), but that is only
+a backstop. On desktop it never binds, because the container's 90vh is tighter. It can bind on a
+phone, where the dialog forces the container to `height: 100vh` and a dynamic browser toolbar can
+make `100dvh` shorter.
 
 This is the same failure #4351 fixed for the user menu, one layer out: that was the dropdown under
 the avatar, this is the dialog it opens.

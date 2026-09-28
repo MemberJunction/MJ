@@ -97,95 +97,98 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
             }
         </div>
 
-        <div class="mj-profile__field-list">
-            <div class="mj-profile__field">
-                <div class="mj-profile__field-icon"><i class="fa-solid fa-id-badge"></i></div>
-                <div class="mj-profile__field-body">
-                    <div class="mj-profile__field-label">Account</div>
-                    <div class="mj-profile__field-value">
-                        {{ AccountType }} · {{ AccountStatus }}
-                        @if (MemberSince) {
-                            <span class="mj-profile__field-muted"> · {{ MemberSince }}</span>
-                        }
-                    </div>
-                </div>
-            </div>
-
-            <button class="mj-profile__field mj-profile__field--button" type="button" (click)="OpenPanel('theme')">
-                <div class="mj-profile__field-icon"><i class="fa-solid fa-palette"></i></div>
-                <div class="mj-profile__field-body">
-                    <div class="mj-profile__field-label">Theme</div>
-                    <div class="mj-profile__field-value">{{ ThemeLabel }}</div>
-                </div>
-                <i class="fa-solid fa-chevron-right mj-profile__field-chev"></i>
-            </button>
-        </div>
-
-        @if (OmnibarAvailable) {
-            <div class="mj-profile__section">
-                <div class="mj-profile__section-head">
-                    <h4>Command Palette</h4>
-                </div>
-                <div class="mj-profile__channels">
-                    <button type="button"
-                            class="mj-profile__channel"
-                            data-testid="omnibar-toggle"
-                            [class.mj-profile__channel--on]="OmnibarEnabled"
-                            [disabled]="SavingOmnibar"
-                            (click)="ToggleOmnibar()">
-                        <div class="mj-profile__channel-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
-                        <div class="mj-profile__channel-label">
-                            Unified command palette
-                            <div class="mj-profile__channel-hint">{{ OmnibarShortcutLabel }} — search, records, agents &amp; commands in one bar</div>
-                        </div>
-                        <div class="mj-profile__channel-state">
-                            @if (SavingOmnibar) {
-                                <i class="fa-solid fa-spinner fa-spin"></i>
-                            } @else {
-                                <span class="mj-profile__switch" [class.mj-profile__switch--on]="OmnibarEnabled">
-                                    <span class="mj-profile__switch-knob"></span>
-                                </span>
+        <!-- The one scroll region: hero, avatar, identity and footer stay put; only the settings rows scroll. -->
+        <div class="mj-profile__scroll">
+            <div class="mj-profile__field-list">
+                <div class="mj-profile__field">
+                    <div class="mj-profile__field-icon"><i class="fa-solid fa-id-badge"></i></div>
+                    <div class="mj-profile__field-body">
+                        <div class="mj-profile__field-label">Account</div>
+                        <div class="mj-profile__field-value">
+                            {{ AccountType }} · {{ AccountStatus }}
+                            @if (MemberSince) {
+                                <span class="mj-profile__field-muted"> · {{ MemberSince }}</span>
                             }
                         </div>
-                    </button>
+                    </div>
                 </div>
-            </div>
-        }
 
-        <div class="mj-profile__section">
-            <div class="mj-profile__section-head">
-                <h4>Notifications</h4>
-                @if (UnreadCount > 0) {
-                    <span class="mj-profile__unread">{{ UnreadCount }} unread</span>
-                }
+                <button class="mj-profile__field mj-profile__field--button" type="button" (click)="OpenPanel('theme')">
+                    <div class="mj-profile__field-icon"><i class="fa-solid fa-palette"></i></div>
+                    <div class="mj-profile__field-body">
+                        <div class="mj-profile__field-label">Theme</div>
+                        <div class="mj-profile__field-value">{{ ThemeLabel }}</div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right mj-profile__field-chev"></i>
+                </button>
             </div>
-            @if (LoadingNotifications) {
-                <div class="mj-profile__channels-loading">
-                    <i class="fa-solid fa-spinner fa-spin"></i> Loading…
-                </div>
-            } @else {
-                <div class="mj-profile__channels">
-                    @for (ch of Channels; track ch.key) {
+
+            @if (OmnibarAvailable) {
+                <div class="mj-profile__section">
+                    <div class="mj-profile__section-head">
+                        <h4>Command Palette</h4>
+                    </div>
+                    <div class="mj-profile__channels">
                         <button type="button"
                                 class="mj-profile__channel"
-                                [class.mj-profile__channel--on]="ch.enabled"
-                                [disabled]="ch.saving"
-                                (click)="ToggleChannel(ch)">
-                            <div class="mj-profile__channel-icon"><i [class]="ch.icon"></i></div>
-                            <div class="mj-profile__channel-label">{{ ch.label }}</div>
+                                data-testid="omnibar-toggle"
+                                [class.mj-profile__channel--on]="OmnibarEnabled"
+                                [disabled]="SavingOmnibar"
+                                (click)="ToggleOmnibar()">
+                            <div class="mj-profile__channel-icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+                            <div class="mj-profile__channel-label">
+                                Unified command palette
+                                <div class="mj-profile__channel-hint">{{ OmnibarShortcutLabel }} — search, records, agents &amp; commands in one bar</div>
+                            </div>
                             <div class="mj-profile__channel-state">
-                                @if (ch.saving) {
+                                @if (SavingOmnibar) {
                                     <i class="fa-solid fa-spinner fa-spin"></i>
                                 } @else {
-                                    <span class="mj-profile__switch" [class.mj-profile__switch--on]="ch.enabled">
+                                    <span class="mj-profile__switch" [class.mj-profile__switch--on]="OmnibarEnabled">
                                         <span class="mj-profile__switch-knob"></span>
                                     </span>
                                 }
                             </div>
                         </button>
-                    }
+                    </div>
                 </div>
             }
+
+            <div class="mj-profile__section">
+                <div class="mj-profile__section-head">
+                    <h4>Notifications</h4>
+                    @if (UnreadCount > 0) {
+                        <span class="mj-profile__unread">{{ UnreadCount }} unread</span>
+                    }
+                </div>
+                @if (LoadingNotifications) {
+                    <div class="mj-profile__channels-loading">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+                    </div>
+                } @else {
+                    <div class="mj-profile__channels">
+                        @for (ch of Channels; track ch.key) {
+                            <button type="button"
+                                    class="mj-profile__channel"
+                                    [class.mj-profile__channel--on]="ch.enabled"
+                                    [disabled]="ch.saving"
+                                    (click)="ToggleChannel(ch)">
+                                <div class="mj-profile__channel-icon"><i [class]="ch.icon"></i></div>
+                                <div class="mj-profile__channel-label">{{ ch.label }}</div>
+                                <div class="mj-profile__channel-state">
+                                    @if (ch.saving) {
+                                        <i class="fa-solid fa-spinner fa-spin"></i>
+                                    } @else {
+                                        <span class="mj-profile__switch" [class.mj-profile__switch--on]="ch.enabled">
+                                            <span class="mj-profile__switch-knob"></span>
+                                        </span>
+                                    }
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
         </div>
 
         <div class="mj-profile__footer">
@@ -267,20 +270,27 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
     width: 100%;
     height: 100%;
 }
-/* The card fills its host when the host has a height, and caps itself at the viewport when it does
-   not. Both halves are load-bearing.
+/* A flex column, so the dialog's height bound reaches the one scroll region inside the card.
 
-   MJDialogService is opened here with a width and no height, so .mj-dialog-container keeps
-   height:auto with only max-height:90vh. A percentage height resolves against a definite containing
-   block, and max-height does not make one -- so on the block path the height:100% below computed to
-   auto, the card grew past the screen, and overflow:hidden on this element CLIPPED the excess
-   instead of letting the scroll region inside it take over. The lower half of the card was
-   unreachable: the exact shape #4351 fixed for the user menu, one layer out.
+   ProfileDialogService opens the dialog with a width and no height, so .mj-dialog-container is
+   height:auto with max-height:90vh, and every box between it and this card is a shrinkable flex item
+   (.mj-dialog-body and the host div inside it, both min-height:0). That chain already bounds the card
+   at 90vh. What it could not bound was .mj-profile__main: while this element was display:block,
+   __main's height:100% had nothing definite to resolve against, so it computed to auto, grew to its
+   full content, and overflow:hidden here clipped the bottom of the card -- notification channels,
+   footer, Sign out -- with nothing left to scroll. The same shape #4351 fixed for the user menu, one
+   layer out.
 
-   max-height:100dvh bounds it regardless of what any ancestor resolves to (100vh first as the
-   fallback for engines without dvh), and display:flex makes the children below size by FLEX rather
-   than by percentage -- flex distributes definite sizes down, which is what the scroll regions
-   (.mj-profile__section, .mj-profile__panel-body) already assume with flex:1 and min-height:0. */
+   The flex chain is the fix: display:flex here, flex:1 + min-height:0 on __main, and flex:1 +
+   min-height:0 + overflow-y:auto on __scroll. Flex hands the bounded height down; a percentage could
+   not. Do not trade it for a max-height -- a max-height gives no child percentage a definite size to
+   resolve against, so the clip would come back.
+
+   max-height:100dvh (100vh first, for engines without dvh) is only a backstop. On desktop it never
+   binds: the container's 90vh is tighter. It can bind on a phone (<768px wide), where the dialog
+   forces the container to height:100vh and a mobile browser's dynamic toolbar can make 100dvh
+   shorter. A max-height can only shorten the card, so there it can only lift the footer, never
+   push it down. */
 .mj-profile {
     display: flex;
     flex-direction: column;
@@ -312,10 +322,9 @@ type ProfilePanel = 'none' | 'photo' | 'theme';
 .mj-profile--panel-open .mj-profile__close { opacity: 0; pointer-events: none; }
 
 /* ============ MAIN VIEW ============ */
-/* flex:1 with min-height:0 rather than height:100%: the parent is now a flex column, so this claims
-   the space the hero and footer do not take, and min-height:0 is what allows it to shrink below its
-   content -- without it a flex item's automatic minimum size refuses to, and the scroll region
-   inside would never be constrained enough to scroll. */
+/* flex:1 with min-height:0 rather than height:100%: the card is a flex column, so this takes the
+   card's bounded height, and min-height:0 lets it shrink below its content -- without it a flex
+   item's automatic minimum size refuses to, and __scroll would never be short enough to scroll. */
 .mj-profile__main {
     display: flex;
     flex-direction: column;
@@ -446,9 +455,18 @@ img.mj-profile__avatar { background: var(--mj-bg-surface-card); }
     color: #047857;
 }
 
+/* The only flex-grow and the only scroller in __main. Hero, avatar, identity and footer hold their
+   size; this takes whatever height they leave and scrolls the settings rows inside it. One region,
+   not one per section: peer scrollers split the leftover height between them and each shrinks to
+   its own padding on a short window. */
+.mj-profile__scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
 .mj-profile__field-list {
     padding: 0 24px;
-    flex-shrink: 0;
 }
 .mj-profile__field {
     display: flex;
@@ -514,9 +532,6 @@ img.mj-profile__avatar { background: var(--mj-bg-surface-card); }
 
 .mj-profile__section {
     padding: 16px 24px 8px;
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
 }
 .mj-profile__section-head {
     display: flex;
