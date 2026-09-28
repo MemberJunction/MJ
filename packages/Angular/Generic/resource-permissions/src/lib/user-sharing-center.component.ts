@@ -62,8 +62,22 @@ export const SharingDomainDisplayLabels: Record<string, string> = {
  * "Widget Permissions" reads as "Widget"), then to the raw domain name.
  */
 export function GetSharingDomainDisplayLabel(domainName: string): string {
-    return SharingDomainDisplayLabels[domainName]
-        ?? (domainName.replace(/\s+Permissions$/i, '').trim() || domainName);
+    const mapped = SharingDomainDisplayLabels[domainName];
+    if (mapped) {
+        return mapped;
+    }
+    // Plain string ops rather than /\s+Permissions$/i: a whitespace run before an anchored
+    // literal backtracks quadratically on adversarial input (CodeQL js/polynomial-redos), and
+    // DomainName is user-authored for custom domains.
+    const trimmed = domainName.trim();
+    const suffix = ' permissions';
+    if (trimmed.toLowerCase().endsWith(suffix)) {
+        const stripped = trimmed.slice(0, -suffix.length).trimEnd();
+        if (stripped) {
+            return stripped;
+        }
+    }
+    return domainName;
 }
 
 /**
