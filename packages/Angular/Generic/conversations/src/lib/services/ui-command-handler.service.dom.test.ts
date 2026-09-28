@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ComposeEmailCommand } from '@memberjunction/ai-core-plus';
-import { UICommandHandlerService } from './ui-command-handler.service';
+import { UICommandHandlerService, ActionableCommandRequest } from './ui-command-handler.service';
 import { DataCacheService } from './data-cache.service';
 
 /**
@@ -10,7 +10,8 @@ import { DataCacheService } from './data-cache.service';
  * The load-bearing assertion is the LENGTH FALLBACK: past the mailto limit the handler must NOT
  * open the mail client, because a client handed an over-long URL does not refuse it — it opens a
  * draft with the body silently truncated and the user sends half a message. It must instead emit
- * so the host can open the full draft artifact.
+ * so the host can open the full draft artifact, and tell the host whether the body reached the
+ * clipboard so the host's notice never claims a copy that did not happen.
  *
  * The service's only constructor dependency is DataCacheService, which has a no-arg constructor
  * and which the compose path never touches — so a real instance is passed directly rather than a
@@ -29,6 +30,18 @@ describe('UICommandHandlerService — compose:email', () => {
     ...over,
   });
 
+  /** jsdom has no navigator.clipboard; install (or remove) one for a single test. */
+  const setClipboard = (clipboard: Pick<Clipboard, 'writeText'> | undefined): void => {
+    Object.defineProperty(navigator, 'clipboard', { value: clipboard, configurable: true });
+  };
+
+  /** Subscribe to the host-facing emitter and collect what reaches the host. */
+  const captureRequests = (): ActionableCommandRequest[] => {
+    const requests: ActionableCommandRequest[] = [];
+    service.ActionableCommandRequested.subscribe((request) => requests.push(request));
+    return requests;
+  };
+
   beforeEach(() => {
     service = new UICommandHandlerService(new DataCacheService());
     clicked = [];
@@ -38,80 +51,114 @@ describe('UICommandHandlerService — compose:email', () => {
     });
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    setClipboard(undefined);
+  });
 
   it('opens the mail client for a draft within the limit', async () => {
-    const emitted = vi.fn();
-    service.actionableCommandRequested.subscribe(emitted);
+    const requests = captureRequests();
 
-    await service.executeActionableCommand(cmd());
+    await service.ExecuteActionableCommand(cmd());
 
     expect(clicked).toHaveLength(1);
     // `@` stays readable in the path (RFC 6068); only the query params are percent-encoded.
     expect(clicked[0]).toContain('mailto:bob@example.com');
     expect(clicked[0]).toContain('subject=Renewal');
     // Handled locally — the host must not also be asked to open anything.
-    expect(emitted).not.toHaveBeenCalled();
+    expect(requests).toHaveLength(0);
+  });
+
+  it('does not touch the clipboard for a draft within the limit', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    setClipboard({ writeText });
+
+    await service.ExecuteActionableCommand(cmd());
+
+    expect(writeText).not.toHaveBeenCalled();
   });
 
   it('removes the synthesized anchor from the document again', async () => {
-    await service.executeActionableCommand(cmd());
+    await service.ExecuteActionableCommand(cmd());
     expect(document.querySelectorAll('a[href^="mailto:"]')).toHaveLength(0);
   });
 
   it('never uses window.open (it strands an about:blank tab on a non-http scheme)', async () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
-    await service.executeActionableCommand(cmd());
+    await service.ExecuteActionableCommand(cmd());
     expect(open).not.toHaveBeenCalled();
   });
 
   describe('past the length limit', () => {
-    const tooLong = () => cmd({ body: 'word '.repeat(500) });
+    const tooLong = (over: Partial<ComposeEmailCommand> = {}) => cmd({ body: 'word '.repeat(500), ...over });
 
     it('does NOT open the mail client, rather than opening a truncated draft', async () => {
-      await service.executeActionableCommand(tooLong());
+      await service.ExecuteActionableCommand(tooLong());
       expect(clicked).toHaveLength(0);
     });
 
     it('emits so the host can open the full draft artifact instead', async () => {
-      const emitted = vi.fn();
-      service.actionableCommandRequested.subscribe(emitted);
+      const requests = captureRequests();
 
-      await service.executeActionableCommand(tooLong(), { conversationId: 'c1', conversationDetailId: 'd1' });
+      await service.ExecuteActionableCommand(tooLong(), { conversationId: 'c1', conversationDetailId: 'd1' });
 
-      expect(emitted).toHaveBeenCalledTimes(1);
-      const arg = emitted.mock.calls[0][0];
-      expect(arg.command.type).toBe('compose:email');
-      expect(arg.conversationId).toBe('c1');
-      expect(arg.conversationDetailId).toBe('d1');
+      expect(requests).toHaveLength(1);
+      expect(requests[0].command.type).toBe('compose:email');
+      expect(requests[0].conversationId).toBe('c1');
+      expect(requests[0].conversationDetailId).toBe('d1');
     });
 
-    it('copies the body so the text is not lost', async () => {
+    it('copies the body and tells the host the text is on the clipboard', async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
-      Object.assign(navigator, { clipboard: { writeText } });
+      setClipboard({ writeText });
+      const requests = captureRequests();
 
-      await service.executeActionableCommand(tooLong());
+      await service.ExecuteActionableCommand(tooLong());
 
       expect(writeText).toHaveBeenCalledWith(tooLong().body);
+      expect(requests[0].DraftCopiedToClipboard).toBe(true);
     });
 
-    it('still falls back when the clipboard is unavailable (plain HTTP, or denied by policy)', async () => {
-      Object.assign(navigator, { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
-      const emitted = vi.fn();
-      service.actionableCommandRequested.subscribe(emitted);
+    it('still falls back, and reports no copy, when the clipboard write is denied', async () => {
+      setClipboard({ writeText: vi.fn().mockRejectedValue(new Error('denied')) });
+      const requests = captureRequests();
 
-      await service.executeActionableCommand(tooLong());
+      await service.ExecuteActionableCommand(tooLong());
 
       expect(clicked).toHaveLength(0);
-      expect(emitted).toHaveBeenCalledTimes(1);
+      expect(requests).toHaveLength(1);
+      expect(requests[0].DraftCopiedToClipboard).toBe(false);
+    });
+
+    it('still falls back, and reports no copy, when there is no clipboard (plain HTTP)', async () => {
+      const requests = captureRequests();
+
+      await service.ExecuteActionableCommand(tooLong());
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0].DraftCopiedToClipboard).toBe(false);
+    });
+
+    it('reports no copy when the draft has no body to copy', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      setClipboard({ writeText });
+      const requests = captureRequests();
+
+      // Over the limit on recipients alone.
+      await service.ExecuteActionableCommand(
+        cmd({ body: undefined, to: Array.from({ length: 120 }, (_, i) => `person${i}@example.com`) })
+      );
+
+      expect(writeText).not.toHaveBeenCalled();
+      expect(requests).toHaveLength(1);
+      expect(requests[0].DraftCopiedToClipboard).toBe(false);
     });
   });
 
   it('leaves other command types alone', async () => {
-    const emitted = vi.fn();
-    service.actionableCommandRequested.subscribe(emitted);
+    const requests = captureRequests();
 
-    await service.executeActionableCommand({
+    await service.ExecuteActionableCommand({
       type: 'open:resource',
       label: 'Open',
       resourceType: 'Record',
@@ -119,6 +166,8 @@ describe('UICommandHandlerService — compose:email', () => {
     });
 
     expect(clicked).toHaveLength(0);
-    expect(emitted).toHaveBeenCalledTimes(1);
+    expect(requests).toHaveLength(1);
+    // The clipboard flag belongs to the compose:email fallback only.
+    expect(requests[0].DraftCopiedToClipboard).toBeUndefined();
   });
 });

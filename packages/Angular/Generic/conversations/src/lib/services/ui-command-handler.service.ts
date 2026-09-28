@@ -13,6 +13,13 @@ export interface ActionableCommandRequest {
   command: ActionableCommand;
   conversationId?: string | null;
   conversationDetailId?: string | null;
+  /**
+   * Set only on the compose:email over-length fallback: whether the draft body is now on the
+   * user's clipboard. The copy overwrites whatever the user had copied, so the host must say it
+   * happened, and must not claim it when this is false (no body, clipboard unavailable over plain
+   * HTTP, or denied by permissions policy).
+   */
+  DraftCopiedToClipboard?: boolean;
 }
 
 /**
@@ -31,7 +38,10 @@ export class UICommandHandlerService {
    *
    * open:resource is always emitted. compose:email is emitted ONLY as a fallback, when the draft
    * is too long for a mailto: URL and the host must open the draft artifact instead; a draft
-   * within the limit is handled here and never reaches the host. open:url is always handled here.
+   * within the limit is handled here and never reaches the host. On that fallback the host also
+   * owns telling the user why their mail client did not open, because only the host knows whether
+   * a draft artifact opened (see {@link ActionableCommandRequest.DraftCopiedToClipboard}).
+   * open:url is always handled here.
    */
   public ActionableCommandRequested = new EventEmitter<ActionableCommandRequest>();
 
@@ -73,13 +83,23 @@ export class UICommandHandlerService {
       return;
     }
 
+    const request: ActionableCommandRequest = {
+      command,
+      conversationId: origin?.conversationId ?? null,
+      conversationDetailId: origin?.conversationDetailId ?? null
+    };
+
     if (command.type === 'compose:email') {
-      const openedMailClient = this.handleComposeEmail(command);
-      if (openedMailClient) {
+      const { url, withinLimit } = BuildMailtoURL(command);
+      if (withinLimit) {
+        this.openMailto(url);
         return;
       }
-      // Too long for a mailto: URL. Deliberately falls through to the host, which opens the full
-      // Email Draft artifact instead of opening a truncated compose window.
+      // Too long for a mailto: URL. We do NOT open it: a mail client past its limit does not
+      // refuse the URL, it opens a draft with the body SILENTLY TRUNCATED and the user sends half
+      // a message without noticing. Falls through to the host, which opens the full draft
+      // artifact and tells the user what happened.
+      request.DraftCopiedToClipboard = await this.copyDraftBody(command);
     }
 
     // open:resource (and the compose:email fallback above) require app-specific navigation.
@@ -91,11 +111,7 @@ export class UICommandHandlerService {
     } else {
       console.log('📤 Emitting actionable command for host app:', command);
     }
-    this.ActionableCommandRequested.emit({
-      command,
-      conversationId: origin?.conversationId ?? null,
-      conversationDetailId: origin?.conversationDetailId ?? null
-    });
+    this.ActionableCommandRequested.emit(request);
   }
 
   /** @deprecated Use {@link ExecuteActionableCommand}. */
@@ -120,34 +136,34 @@ export class UICommandHandlerService {
   }
 
   /**
-   * Handle compose:email by opening the user's own mail client with the fields pre-filled.
+   * Best-effort copy of an over-length draft's body, so the text is not lost even when the host
+   * cannot open the draft artifact.
    *
-   * NOTHING IS SENT HERE. The agent drafted; the user sends. This only opens a compose window.
+   * Never rejects, so a clipboard that is unavailable (plain HTTP) or denied by permissions policy
+   * cannot stop the fallback. Nothing on the click path awaits before writeText is called, so it
+   * still runs inside the click's user activation; the fallback then awaits the outcome only so
+   * the host's notice can say whether the copy happened.
    *
-   * @returns true when the mail client was opened; false when the draft is too long for a
-   *          mailto: URL, in which case the caller must fall back to the host (which opens the
-   *          artifact). We do NOT open an over-long URL: a mail client past its limit does not
-   *          refuse it, it opens a draft with the body SILENTLY TRUNCATED and the user sends half
-   *          a message without noticing.
+   * @returns true only when the body is on the clipboard, so the host never claims a copy that
+   *          did not happen.
    */
-  private handleComposeEmail(command: ComposeEmailCommand): boolean {
-    const { url, withinLimit } = BuildMailtoURL(command);
-    if (!withinLimit) {
-      // Best-effort convenience so the text is not lost. Unavailable over plain HTTP and deniable
-      // by permissions policy, so it must never gate the fallback.
-      if (command.body) {
-        navigator.clipboard?.writeText(command.body).catch(() => {
-          /* clipboard unavailable — the artifact still carries the full draft */
-        });
-      }
+  private async copyDraftBody(command: ComposeEmailCommand): Promise<boolean> {
+    if (!command.body || !navigator.clipboard) {
       return false;
     }
-    this.openMailto(url);
-    return true;
+    try {
+      await navigator.clipboard.writeText(command.body);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
-   * Open a mailto: URL via a synthesized anchor click.
+   * Open the user's own mail client with a compose:email draft's fields pre-filled, via a
+   * synthesized anchor click.
+   *
+   * NOTHING IS SENT HERE. The agent drafted; the user sends. This only opens a compose window.
    *
    * Deliberately not window.open: Chrome treats window.open with a non-http scheme as a popup and
    * strands an about:blank tab behind the compose window.
