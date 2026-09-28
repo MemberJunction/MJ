@@ -400,11 +400,17 @@ export class CloneConfigValidator {
             if (at(raw.Hooks, key) !== undefined) found.push(`Hooks.${key}`);
         }
         if (at(raw.Fields, 'ClearTogether') !== undefined) found.push('Fields.ClearTogether');
-        for (const [name, policy] of Object.entries((raw.Relationships as Record<string, unknown> | undefined) ?? {})) {
-            for (const key of ['PreserveSequence', 'IncludeWhen']) {
-                if (at(policy, key) !== undefined) found.push(`Relationships[${name}].${key}`);
+        const scanRelationships = (bag: unknown, path: string) => {
+            for (const [name, policy] of Object.entries((bag as Record<string, unknown> | undefined) ?? {})) {
+                for (const key of ['PreserveSequence', 'IncludeWhen']) {
+                    if (at(policy, key) !== undefined) found.push(`${path}[${name}].${key}`);
+                }
             }
-        }
+        };
+        scanRelationships(raw.Relationships, 'Relationships');
+        (Array.isArray(raw.Presets) ? raw.Presets : []).forEach((preset, i) =>
+            scanRelationships(at(preset, 'Relationships'), `Presets[${String(at(preset, 'Key') ?? i)}].Relationships`)
+        );
         return found.map((path) => ({
             EntityName: entityName,
             PropertyPath: path,

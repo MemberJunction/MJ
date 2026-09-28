@@ -210,6 +210,8 @@ describe('CloneConfigValidator', () => {
             const unhonored = found.filter((e) => e.Message.includes('not honored'));
             expect(unhonored.map((e) => e.PropertyPath)).toEqual(['Naming.Fields', 'Hooks.PostCloneAction', 'Relationships[Anything].PreserveSequence']);
             expect(unhonored.every((e) => e.Severity === 'Warning')).toBe(true);
+            const inPreset = withConfig({ Enabled: true, Presets: [{ Key: 'p', Label: 'P', Relationships: { Anything: { Policy: 'Deep', IncludeWhen: 'x' } } }] } as CloneConfigEntityMeta['CloneConfiguration']);
+            expect(inPreset.filter((e) => e.Message.includes('not honored')).map((e) => e.PropertyPath)).toEqual(['Presets[p].Relationships[Anything].IncludeWhen']);
         });
 
         it('refuses prompt naming that leaves a rename field neither prompted nor set by a rule', () => {

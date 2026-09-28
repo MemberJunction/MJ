@@ -76,7 +76,9 @@ describe('shipped clone configurations', () => {
         const remap = byName.get('MJ: AI Agents')!.Fields!.JsonRemap!.find((j) => j.Field === 'RerankerConfiguration')!;
         const res = ApplyJsonRemap(
             { enabled: true, rerankPromptID: 'prompt-old', rerankerModelId: 'model-1' },
-            { Rules: remap.Rules as JsonRemapRule[], KeyMap: { 'prompt-old': 'prompt-new', 'model-1': 'model-other' } }
+            // The planner keys each cloned row both bare and as `Entity::key`; a bare match from
+            // another entity must not count.
+            { Rules: remap.Rules as JsonRemapRule[], KeyMap: { 'MJ: AI Prompts::prompt-old': 'prompt-new', 'model-1': 'model-other' } }
         );
         expect(res.Output).toEqual({ enabled: true, rerankPromptID: 'prompt-new', rerankerModelId: 'model-1' });
     });

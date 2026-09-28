@@ -234,8 +234,8 @@ export class ClonePlanner {
             planBlocked = true;
         }
 
-        if (planBlocked) {
-            return {
+        // Refused before anything is planned: an empty plan that still names the requested record.
+        const refusedPlan = (): ClonePlan => ({
                 PlanVersion: 1,
                 EffectiveOptions: effectiveOptions,
                 Hash: '',
@@ -254,8 +254,8 @@ export class ClonePlanner {
                 },
                 Warnings: warnings,
                 Blocked: true,
-            };
-        }
+        });
+        if (planBlocked) return refusedPlan();
 
         const key = new CompositeKey();
         if (sourceRecordKey instanceof CompositeKey) {
@@ -394,7 +394,8 @@ export class ClonePlanner {
                 Severity: 'Error',
                 Message: `The '${entityName}' record to clone wasn't found, or you can't read it.`,
             });
-            planBlocked = true;
+            // Nothing to map: planning on an empty row would only invent a Create node.
+            return refusedPlan();
         }
 
         // Flatten graph nodes, leaving out rows a relationship's ExcludeRows names (and everything under them)
@@ -723,6 +724,7 @@ export class ClonePlanner {
                     Message: `Copying ${disc.Kind === 'IsASubtype' ? 'IS-A subtype' : 'embedded'} rows ('${depNode.EntityName}') isn't supported yet. Set Subtypes to exclude, or that relationship to Reference or Skip.`,
                 });
                 planBlocked = true;
+                nodeBlocked = true;
             }
 
             // Prompted fields are the ones the user must supply (Email on a user clone): without a

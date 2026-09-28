@@ -284,8 +284,11 @@ function evaluateTerminal(
     }
 
     if (mode === 'remap') {
-        if (typeof val === 'string' && val in keyMap) {
-            return { action: 'update', newValue: keyMap[val] };
+        if (typeof val === 'string') {
+            // With a target entity, only that entity's clone counts: a bare key can belong to a row
+            // of another entity (integer keys repeat across tables).
+            const key = rule.TargetEntityName ? `${rule.TargetEntityName}::${val}` : val;
+            if (key in keyMap) return { action: 'update', newValue: keyMap[key] };
         }
         if (rule.OnMissing === 'drop') {
             return { action: 'drop' };

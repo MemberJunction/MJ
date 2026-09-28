@@ -158,6 +158,22 @@ describe('NameCollisionPrefix', () => {
         expect(NameCollisionPrefix('Project v1', { Strategy: 'increment' })).toBe('Project v');
     });
 
+    it('for increment in a short column, is a prefix of every candidate, so a second clone sees the first', () => {
+        const opts = { Strategy: 'increment' as const, MaxLength: 10 };
+        const first = TryFindNextAvailableName('Project v9', [], opts)!;
+        const prefix = NameCollisionPrefix('Project v9', opts);
+        expect(first.startsWith(prefix)).toBe(true);
+        const second = TryFindNextAvailableName('Project v9', [first], opts)!;
+        expect(second).not.toBe(first);
+        expect(second.startsWith(prefix)).toBe(true);
+    });
+
+    it('trims the text of a template without {Name} to fit the column', () => {
+        const name = TryFindNextAvailableName('Anything', [], { Template: 'Duplicated record', MaxLength: 10 });
+        expect(name).not.toBeNull();
+        expect(name!.length).toBeLessThanOrEqual(10);
+    });
+
     it('is empty when nothing is renamed', () => {
         expect(NameCollisionPrefix('Sales', { Strategy: 'none' })).toBe('');
     });

@@ -358,6 +358,9 @@ describe('ClonePlanner', () => {
         mockRunViewInstance.mockResolvedValue({ Success: true, Results: [] });
         const plan = await new ClonePlanner({ Provider: provider }).Plan({ EntityName: 'ParentEntity', SourceRecordKey: { ID: 'no-such-id' } }, standardUser);
         expect(plan.Warnings.some((w) => w.Code === 'SOURCE_NOT_FOUND')).toBe(true);
+        // Refused outright: no Create node invented from an empty row, and the record is still named.
+        expect(plan.Nodes).toEqual([]);
+        expect(plan.RootSourceKey).not.toBe('');
         expect(plan.Blocked).toBe(true);
         mockRunViewInstance.mockReset();
     });

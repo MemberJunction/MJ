@@ -43,8 +43,15 @@ export function NameCollisionPrefix(sourceName: string, options?: NameTemplateOp
     if (strategy === 'increment') {
         // "Project v1" -> "Project v": every increment keeps the text before its trailing number.
         const next = IncrementName(sourceName);
-        const [stem] = splitTrailingDigits(next.endsWith(')') ? next.slice(0, -1) : next);
-        return options?.MaxLength ? stem.slice(0, options.MaxLength) : stem;
+        const closing = next.endsWith(')') ? ')' : '';
+        const [stem] = splitTrailingDigits(closing ? next.slice(0, -1) : next);
+        if (!options?.MaxLength) return stem;
+        // Candidates cut the text before the marker to fit the counter (see TryFindNextAvailableName),
+        // so match on what survives the tightest cut: room for a four-digit counter.
+        const marker = /\s?[(vV]?$/.exec(stem)?.[0] ?? '';
+        const head = stem.slice(0, stem.length - marker.length);
+        const room = Math.max(0, options.MaxLength - (marker.length + 4 + closing.length));
+        return head.slice(0, room).trimEnd();
     }
     const template = options?.Template || 'Copy of {Name}';
     const beforeCounter = template.includes('{n}') ? template.slice(0, template.indexOf('{n}')) : template;
@@ -193,7 +200,11 @@ export function TryFindNextAvailableName(
         if (!maxLength || maxLength <= 0 || full.length <= maxLength) return full;
         // Shorten the name first...
         const room = sourceName.length - (full.length - maxLength);
-        if (room > 0) return withCounter(sourceName.slice(0, room).trimEnd());
+        if (room > 0) {
+            const shortened = withCounter(sourceName.slice(0, room).trimEnd());
+            // A template without {Name} doesn't get shorter with the name: fall through to trimming its text.
+            if (shortened.length <= maxLength) return shortened;
+        }
         // ...then the template's own text, keeping the counter.
         const bare = hasCounter ? RenderNameTemplate(template, { ...ctx, SourceRecordName: '', Counter: undefined }) : render('');
         return fitKeeping(bare, hasCounter ? String(n) : counter, maxLength);

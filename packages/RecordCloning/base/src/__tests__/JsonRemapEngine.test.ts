@@ -279,4 +279,12 @@ describe('JsonRemapEngine', () => {
             expect(result.DropCount).toBe(1);
         });
     });
+
+    it('with TargetEntityName, remaps only to that entity\'s clone', () => {
+        const rules = [{ Path: 'ref', Mode: 'remap' as const, TargetEntityName: 'MJ: AI Prompts' }];
+        const same = ApplyJsonRemap({ ref: '7' }, { Rules: rules, KeyMap: { '7': 'other-entity-copy', 'MJ: AI Prompts::7': 'prompt-copy' } });
+        expect(same.Output).toEqual({ ref: 'prompt-copy' });
+        const other = ApplyJsonRemap({ ref: '7' }, { Rules: rules, KeyMap: { '7': 'other-entity-copy' } });
+        expect(other.Output).toEqual({ ref: '7' });
+    });
 });
