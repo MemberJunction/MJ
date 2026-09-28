@@ -1,22 +1,23 @@
 # Bound data access, approval status and calendars
 
-**What this is.** A plan for five additions to MemberJunction core. Each is opt-in: with none of them used, every view, dashboard, query, agent and communication provider behaves exactly as today.
+**What this is.** A plan for six additions to MemberJunction core. Each is opt-in: with none of them used, every view, dashboard, query, agent and communication provider behaves exactly as today. The exception is A19, a fix: it changes what a person with a grant on a shared conversation may write.
 
 | # | Addition | For |
 |---|---|---|
 | A14 | Properties on user views | A view with declared inputs, some of which only the server may set |
-| A15 | Properties on dashboards, and an interactive component part | One property set once, mapped onto each part's own inputs, with a default at every level |
+| A15 | Properties on dashboards, and an interactive component part | One property set once, mapped onto each part's own inputs, with a default at every level, and changed by a selection in another part |
 | A16 | Bound, hidden action parameters for agents | An agent's tool call whose scope the model can't see or change |
 | A17 | Locked query parameters, server-set context variables, and an approval status | A query a caller can't re-aim, and a record of which definitions are approved |
 | A18 | Calendars in Communication, and a calendar view | Creating and syncing events with Outlook and Google Calendar from any record, and showing records on a calendar |
+| A19 | Who a conversation message is from | A shared conversation where nobody posts as someone else, or as the agent |
 
-**Why.** An app on MemberJunction often needs to hand a view, a dashboard, a query or an action to people and agents with some of its inputs fixed by the server. The first is [BizApps Collaboration](https://github.com/MemberJunction/bizapps-collaboration): a chapter's space shows the *Members* view with `Chapter` set to that chapter, a sponsor's space shows that sponsor's booth leads, and neither the viewer nor the space's agent can change which chapter or sponsor it is. MemberJunction has no way to say that today. Views can't declare inputs, dashboards can't pass context to their parts, every action parameter is described to the model, and any query parameter can be set by whoever calls it.
+**Why.** An app on MemberJunction often needs to hand a view, a dashboard, a query or an action to people and agents with some of its inputs fixed by the server. The first is [BizApps Collaboration](https://github.com/MemberJunction/bizapps-collaboration): a chapter's space shows the *Members* view with `Chapter` set to that chapter, a sponsor's space shows that sponsor's booth leads, and neither the viewer nor the space's agent can change which chapter or sponsor it is. MemberJunction has no way to say that today. Views can't declare inputs, dashboards can't pass context to their parts, every action parameter is described to the model, and any query parameter can be set by whoever calls it. A19 is a hole found while building Collaboration's chat: in any shared conversation, a person with an `Edit` grant can post as someone else, or as the agent.
 
 The item numbers are Collaboration's (its plan's § 6, in [bizapps-collaboration#8](https://github.com/MemberJunction/bizapps-collaboration/pull/8)), so its pull requests and this one cite the same things. No addition names Collaboration: each is generic. [§ 6.1](#61-a18-in-the-apps-meetings-in-bizapps-tasks-activities-in-bizapps-common) names two apps only to say how they use A18: bizapps-tasks tracks meetings on it, and bizapps-common's activity import stays beside it.
 
-**Checked against:** MJ `next` at `830c11c` (2026-09-27), and for § 6.1, bizapps-common's `next` at `df6bfc2` and bizapps-collaboration#8's plan. Paths are under `packages/`. `E:<line>` is a line of `MJCoreEntities/src/generated/entities/__mj.ts` at that commit. Lines move, so search by name.
+**Checked against:** MJ `next` at `830c11c` (2026-09-27), § 4.1 and § 7 at `9b8a84e` (the same day), and for § 6.1, bizapps-common's `next` at `df6bfc2` and bizapps-collaboration#8's plan. Paths are under `packages/`. `E:<line>` is a line of `MJCoreEntities/src/generated/entities/__mj.ts` at that commit. Lines move, so search by name.
 
-**Who does what.** The builder implements A14 to A18 in this pull request, in the order below, with each item's tests, once bizapps-collaboration#7 and #8 are done (Amith, 2026-09-27; Collaboration's D36). #8 merges first, with the grants that need these additions closed, and a follow-up there opens them once a release carries this pull request. The plan's author reviews it with a numbered punch list per push. § 6.1's app work isn't built here: bizapps-tasks builds it in its own code pull request (bizapps-collaboration#8's workstream T), citing § 6.1. It needs no plan pull request of its own.
+**Who does what.** The builder implements A14 to A19 in this pull request, in the order below, with each item's tests, once bizapps-collaboration#7 and #8 are done (Amith, 2026-09-27; Collaboration's D36). #8 merges first, with the grants that need these additions closed, and a follow-up there opens them once a release carries this pull request. The plan's author reviews it with a numbered punch list per push. § 6.1's app work isn't built here: bizapps-tasks builds it in its own code pull request (bizapps-collaboration#8's workstream T), citing § 6.1. It needs no plan pull request of its own.
 
 ## Contents
 
@@ -24,20 +25,23 @@ The item numbers are Collaboration's (its plan's § 6, in [bizapps-collaboration
 2. [A16. Bound, hidden action parameters for agents](#2-a16-bound-hidden-action-parameters-for-agents)
 3. [A14. Properties on user views](#3-a14-properties-on-user-views)
 4. [A15. Properties on dashboards, and an interactive component part](#4-a15-properties-on-dashboards-and-an-interactive-component-part)
+   - [4.1 Events and wires](#41-events-and-wires)
 5. [A17. Locked query parameters, server-set context variables, and an approval status](#5-a17-locked-query-parameters-server-set-context-variables-and-an-approval-status)
 6. [A18. Calendars in Communication, and a calendar view](#6-a18-calendars-in-communication-and-a-calendar-view)
    - [6.1 A18 in the apps: meetings in bizapps-tasks, activities in bizapps-common](#61-a18-in-the-apps-meetings-in-bizapps-tasks-activities-in-bizapps-common)
-7. [Rules for the work](#7-rules-for-the-work)
-8. [Design points to settle first](#8-design-points-to-settle-first)
+7. [A19. Who a conversation message is from](#7-a19-who-a-conversation-message-is-from)
+8. [Rules for the work](#8-rules-for-the-work)
+9. [Design points to settle first](#9-design-points-to-settle-first)
 
 ## 1. Order and delivery
 
 1. **A16,** the smallest and the most urgent: it's what stops a model choosing which record an action acts on.
-2. **A14,** then **A15**, which builds on A14's property shape and its defaults.
-3. **A17.**
-4. **A18.** bizapps-tasks then builds § 6.1 on the release that carries it.
+2. **A19,** which closes a hole in every shared conversation ([§ 7](#7-a19-who-a-conversation-message-is-from)).
+3. **A14,** then **A15**, which builds on A14's property shape and its defaults.
+4. **A17.**
+5. **A18.** bizapps-tasks then builds § 6.1 on the release that carries it.
 
-Each item lands with its unit tests and, where it touches the database or GraphQL, an integration check in the deterministic tier. A migration takes a `minor` changeset; anything else a `patch`. The design points in [§ 8](#8-design-points-to-settle-first) are settled in a comment before the first migration.
+Each item lands with its unit tests and, where it touches the database or GraphQL, an integration check in the deterministic tier. A migration takes a `minor` changeset; anything else a `patch`. The design points in [§ 9](#9-design-points-to-settle-first) are settled in a comment before the first migration.
 
 ## 2. A16. Bound, hidden action parameters for agents
 
@@ -121,7 +125,7 @@ export type ContextToken =
 - **Tokens are a closed set, not formulas.** Each is worked out from the context user and the clock alone, so it can't read data, and it comes out the same wherever it runs. They're the names A17 gives a query template's server-set variables, so a default and a template say the same thing the same way. A new token is added here, in core, for every app.
 - **An app's own context is never a token.** Which chapter or which space is a property value, set by the host (A15) or by server code.
 - **Offsets apply to the date tokens only.** Thirty days ago is `Context.Today` with -30 days; the start of last month is `Context.StartOfMonth` with -1 month. A month offset from a day the target month doesn't have lands on its last day. An offset on a user token is refused when the definition is saved.
-- **One resolver,** in `MJCore`, used by the server and the browser alike, so the two can differ only in the time zone they're given ([§ 8](#8-design-points-to-settle-first), point 6).
+- **One resolver,** in `MJCore`, used by the server and the browser alike, so the two can differ only in the time zone they're given ([§ 9](#9-design-points-to-settle-first), point 6).
 - **A token is worked out where its value is set.** The server works out a view property's default when a run gives no value, any value only the server may set (A14's `AllowOverride` false, A17's locked parameters), and A17's template variables. The dashboard viewer works out the defaults it applies itself (A15): the browser could send any value there anyway.
 - **Checked when saved:** a token's name, an offset's unit, and a fixed value's type against the property's.
 
@@ -167,16 +171,59 @@ export type ContextToken =
 
   A required input with none of these stops its part, which says which input is missing; it never runs with the input blank. To give one part a different value, map it to a different dashboard property, or give its mapping a `Default` and no `Property`.
 - **Tokens in these defaults** are worked out by the viewer, in the browser, with § 3's one resolver.
-- **Only what the browser may set is mapped.** An input only the server may set, a view property whose `AllowOverride` is false or a locked query parameter (A17), can't be mapped: the designer shows it as set by the server, and the host's runner sets it there ([§ 8](#8-design-points-to-settle-first), point 1).
+- **Only what the browser may set is mapped.** An input only the server may set, a view property whose `AllowOverride` is false or a locked query parameter (A17), can't be mapped: the designer shows it as set by the server, and the host's runner sets it there ([§ 9](#9-design-points-to-settle-first), point 1).
 - **A mapped query parameter** overrides the user's saved value, is never saved back into it (that set is shared by every dashboard showing the query), and isn't offered for editing.
 - **The designer** gets a Properties panel for the dashboard (add, edit and remove its properties, each with a default), and an Inputs list in each part's configuration: every input the part declares, each mapped to a dashboard property, fixed by a default, or left to its own.
 - **A broken mapping shows on its part.** Saving refuses a mapping to an input the part doesn't declare, from a property the dashboard doesn't have, or between types that don't match. If a part's inputs change later (a view's property renamed), the part shows the error rather than running without the value.
 - **An Interactive Component part type,** first-class: the component's registry name and version, and its props mapping.
-- **A host hook for data access** ([§ 8](#8-design-points-to-settle-first), point 1): the viewer accepts an optional runner for queries and hands it to its parts, so an app can route a part's queries through its own server operation. The Component part passes the same runner to the React host as `utilities.rq`.
+- **A host hook for data access** ([§ 9](#9-design-points-to-settle-first), point 1): the viewer accepts an optional runner for queries and hands it to its parts, so an app can route a part's queries through its own server operation. The Component part passes the same runner to the React host as `utilities.rq`.
 
 **Tests:** property values reach each part type through its mapping, under names that differ from the dashboard's; each level of the order wins when the ones above it are empty; a token default worked out in the browser; a mapping with a `Default` and no `Property`; a required input with no value stops its part and names the input; an input only the server may set can't be mapped; a broken mapping refused on save, and shown on its part when a view's property is renamed afterwards; an unmapped part is unchanged; a saved Query-part value is overridden by a mapped property and not offered for editing; the component part renders a registered component with mapped props; a dashboard with no properties renders exactly as today.
 
 **Accept:** one chapter dashboard, with its `Chapter` property set once, drives a view part (`ChapterID`), a query part (`chapter_id`) and a component part (`selectedChapter`), and each shows only that chapter. With the host setting nothing else, a `Since` property that defaults to the start of the month gives the query part this month's rows.
+
+### 4.1 Events and wires
+
+Amith, 2026-09-28: a part's event can set a dashboard property, so selecting a row in one part filters another.
+
+**Today:**
+- A part reports a selection through `BaseDashboardPart.DataChanged` (`Angular/Generic/dashboard-viewer/src/lib/parts/base-dashboard-part.ts:113`): the View part when a row is selected, with the record and its key (`view-part.component.ts:196`), and the Query part when an entity link is clicked (`query-part.component.ts:214`). The viewer listens to neither, so nothing on the dashboard reacts.
+- The query viewer raises a row selection (`SelectionChange`, `query-viewer/src/lib/query-viewer/query-viewer.component.ts:142`), and the Query part doesn't pass it on.
+- `PanelInteractionEvent` (`dashboard-viewer/src/lib/models/dashboard-types.ts:110`) declares `'record-select'`, but the viewer never raises it: it raises only its own add, configure and remove requests.
+- An interactive component declares its events in its spec (`ComponentSpec.events`, `InteractiveComponents/src/component-spec.ts:285`), each a `ComponentEvent` with named, typed parameters (`component-props-events.ts:46`). The React host raises them as `ComponentEvent` (`mj-react-component.component.ts:449`).
+
+**Add:**
+- **Each part type declares its events,** as it declares its inputs:
+  - a View part: `RecordSelected`, whose values are the selected record's fields;
+  - a Query part: `RowSelected`, whose values are the selected row's columns, from the query viewer's `SelectionChange`;
+  - a Component part: its component's declared events, whose values are each event's parameters;
+  - Web URL and Artifact parts: none.
+- **A wire sets a dashboard property from an event.** Wires live in the dashboard's configuration, beside its properties:
+
+  ```ts
+  export interface DashboardWire {
+      /** The part that raises the event. */
+      Panel: string;
+      /** One of the events that part declares. */
+      Event: string;
+      /** Which of the event's values: a record's field, a row's column or an event's parameter. */
+      Value: string;
+      /** The dashboard property it sets. */
+      Property: string;
+  }
+  ```
+
+- **One path for values.** A wire sets a dashboard property, never a part's input. The property then reaches the parts through their own mappings, as a host's value does, so the left part's selection reaches the right part under the right part's own input name.
+- **Where an event's value sits in A15's order:** after the host's value and before the dashboard property's default. The host's value always wins, so a selection can't change context the host set, such as a chapter space's chapter.
+- **Clearing the selection** removes the event's value, so the property goes back to the host's value or its default.
+- **No loops:** a part isn't refreshed by a value its own event set.
+- **A wire only narrows.** It sets a dashboard property, which can't reach an input only the server may set (A15), and a view property's value is one more predicate ANDed with the view's filter, under row-level security. So a selection changes what a part shows, never what a person may see.
+- **The host hears it too:** the viewer raises `PanelInteraction` with `'record-select'` for a View or Query part's selection.
+- **The designer** gets a Wires list: each wire's part, event, value and property. Saving refuses a wire from an event the part doesn't declare, to a property the dashboard doesn't have, or with a value whose type doesn't match the property's.
+
+**Tests:** a View part's selection sets its wired property, and the parts mapped from it refresh; a Query part's row and a component's event do the same; the host's value wins over an event's; clearing the selection returns the property to its default; the part that raised the event isn't refreshed by it; `PanelInteraction` raises `'record-select'`; a broken wire refused on save; a dashboard with no wires behaves exactly as today.
+
+**Accept:** a dashboard with a *Chapters* view on the left and a *Members* view on the right. The left part's `RecordSelected` is wired, by its `ID`, to a `Chapter` property, which the right part maps onto its view's `ChapterID`. Selecting a chapter shows its members on the right, and clearing the selection shows every member the viewer may see. When the host sets `Chapter`, selecting on the left doesn't change the right.
 
 ## 5. A17. Locked query parameters, server-set context variables, and an approval status
 
@@ -188,9 +235,9 @@ export type ContextToken =
 - `MJ: Queries.Status` ('Approved', 'Expired', 'Pending', 'Rejected', default 'Pending') exists, but a query that isn't Approved only logs a warning when it runs (`GenericDatabaseProvider.ts:3688`); composition requires Reusable and Approved. Queries have no approved-by or approved-at. User views and dashboards have no status. Components have Draft, Published and Deprecated, which is publication, not approval. No entity records query tests. The nearest precedent is `CodeApprovalStatus`, `CodeApprovedByUserID` and `CodeApprovedAt` on `MJ: Actions`.
 
 **Add:**
-- **Locked parameters.** A query parameter can be marked as the server's: a client value for it is refused over GraphQL, and server code sets it through `RunQueryParams`. Whether the mark lives on the query's parameter metadata or per call (`RunQueryParams.LockedParameters`) is [§ 8](#8-design-points-to-settle-first)'s point 2; the metadata mark protects every caller, and this plan recommends it.
+- **Locked parameters.** A query parameter can be marked as the server's: a client value for it is refused over GraphQL, and server code sets it through `RunQueryParams`. Whether the mark lives on the query's parameter metadata or per call (`RunQueryParams.LockedParameters`) is [§ 9](#9-design-points-to-settle-first)'s point 2; the metadata mark protects every caller, and this plan recommends it.
 - **Server-set context variables** in a query's template, such as `{{Context.UserID}}` and `{{Context.UserEmail}}`: a reserved `Context` object in the template's render context, filled from the context user on the server and never from a client. Its variables are [§ 3's tokens](#defaults-and-tokens), worked out by the same resolver, so a template and a default name the same values. A parameter named `Context` is refused. A query's SQL can then carry its own access predicate. A server operation that runs a query on a user's behalf passes that user as the context.
-- **An approval status** on queries, user views, dashboards and interactive components: approved or not, who approved it, when, and the tests it passed. Queries keep their `Status` and gain who and when. [§ 8](#8-design-points-to-settle-first)'s point 3 decides the shape for the rest.
+- **An approval status** on queries, user views, dashboards and interactive components: approved or not, who approved it, when, and the tests it passed. Queries keep their `Status` and gain who and when. [§ 9](#9-design-points-to-settle-first)'s point 3 decides the shape for the rest.
 
 **Tests:** a client value for a locked parameter is refused and logged; server code sets it; a context variable can't be set from a client; a query with no locked parameters and no context variables runs exactly as today; the approval status reads and writes, with its audit.
 
@@ -250,10 +297,33 @@ This part isn't built in this pull request. It says where calendar tracking goes
 - **Neither writes the other's rows:** bizapps-tasks writes no activities, and common writes no meetings.
 - **Common may move to A18's sync later,** instead of re-reading a window each run. That's its own choice; A18 keeps `GetEvents` as it is.
 
-## 7. Rules for the work
+## 7. A19. Who a conversation message is from
+
+**Today:**
+- `MJConversationDetailEntityExtended` (`MJCoreEntities/src/custom/MJConversationDetailEntityExtended.ts:51`) guards writes to messages on the server. The conversation's owner, or a person with an `Edit` or `Owner` grant on it, may create, change or delete any of its messages. It checks who may write, not what they write: only the rating fields (`UserRating`, `UserFeedback`) are kept to the owner.
+- So a person with an `Edit` grant can:
+  - save a message with someone else's `UserID`, or with none, which shows as the conversation's owner;
+  - save one with `Role` `AI`, which reads as the agent's reply;
+  - change or delete other people's messages.
+- MJ's chat creates each agent reply's row in the browser before the run starts (`Angular/Generic/conversations/src/lib/components/message/message-input.component.ts:2939`, with `Role` `AI` and In-Progress; Sage's delegation row the same way, `:2545`), and saves the final text from the browser when the run returns (`updateConversationDetail`, `:2814`). The server's `AgentRunner.RunAgentInConversation` (`AI/Agents/src/AgentRunner.ts:262`) writes the run's progress, final text and status into the same row (`:503`). All of these writes run with the person who asked as the user, so on the server a real reply and a forged one look the same.
+- The runner already creates the reply's row itself when it isn't given one (`:384`). A host that runs turns on its own server, through the chat area's `AgentTurnHandler` (MJ#4788), writes replies as the system user already.
+- The gate lets a server save with no user through. A save as the system user gets no such pass: the system user must own the conversation or hold a grant on it.
+
+**Add:**
+- **People post as themselves.** A `User` message a person creates carries their own `UserID`: the server fills it in when it's empty and refuses someone else's. Only its author changes it. Its author or the conversation's owner deletes it.
+- **Only the server writes the agent's replies.** A row with `Role` `AI` or `Error` is created, and its content changed, only by server code writing as the system user. A person's save of one is refused, except the owner's rating fields.
+- **The system user may write any message,** as a save with no user may today, so server code can write replies in anyone's conversation.
+- **The chat stops writing replies from the browser.** The runner creates the reply's row on the server, as the system user, and the browser shows that row ([§ 9](#9-design-points-to-settle-first), point 7). The browser no longer saves the final text. The other server code that writes `AI` rows writes them as the system user too: the realtime session's (`MJServer/src/resolvers/RealtimeClientSessionResolver.ts:2453` and `:2880`) and the task graph's (`MJServer/src/services/TaskGraphContinuationDeliverer.ts:77`).
+- **Delivery:** the rules for `User` messages are safe alone and can land first. The rule for replies lands with the chat's change, in the same release, or MJ's own chat can't write a reply at all.
+
+**Tests:** a grantee's message with another person's `UserID` refused, and one with none saved with the grantee's; a grantee's `AI` row refused; a grantee changing or deleting another person's message refused; the owner deleting any message allowed; the runner creating the reply's row as the system user, and the chat showing it; the owner rating an agent's reply still allowed; a person's own conversation, agent replies included, working exactly as today.
+
+**Accept:** in a conversation shared with `Edit`, the grantee's message saved with the owner's `UserID` is refused, and so is one with `Role` `AI`. The grantee's @-mention of an agent still gets a reply, written by the system user.
+
+## 8. Rules for the work
 
 MemberJunction's own `CLAUDE.md` governs, and these points matter most here:
-- **Everything is opt-in,** and every default keeps today's behavior.
+- **Everything is opt-in,** and every default keeps today's behavior, except A19's fix.
 - **A migration carries DDL and its CodeGen output only,** in `migrations/v6/`, named `V<YYYYMMDDHHMM>__v6.2.x__<Name>.sql` (the current band), with apply-time `EntityField` sequences. Metadata (JSONType wiring, seed rows, permissions) is JSON under `metadata/`, pushed before CodeGen runs.
 - **T-SQL only.** PostgreSQL is converted by the toolchain at release.
 - **Strong types:** no `any`, and no `.Get()` or `.Set()` in place of generated properties.
@@ -261,7 +331,7 @@ MemberJunction's own `CLAUDE.md` governs, and these points matter most here:
 - **Changesets:** `minor` for a migration, `patch` otherwise.
 - **When the work merges,** this plan moves to `plans/complete/`.
 
-## 8. Design points to settle first
+## 9. Design points to settle first
 
 1. **Data access from a dashboard's parts and from components.** A host that lets people run only its own server operation for queries needs a seam. The React host has one (`utilities`); the dashboard viewer and the query viewer don't. Say where the hook goes (a runner input, a `Provider` passed down, or both), and whether views need one too; row-level security already covers views.
 2. **Where a parameter is locked.** On the query's parameter metadata, so every caller is covered, or per call. The plan recommends metadata, with `RunQueryParams` carrying server-set values.
@@ -271,3 +341,4 @@ MemberJunction's own `CLAUDE.md` governs, and these points matter most here:
 6. **Tokens: the list, the time zone and the week.** Confirm [§ 3's list](#defaults-and-tokens), and that an app can't add its own (its context is a property value the host sets). Then two rules the resolver needs:
    - **The time zone** a date token is worked out in. MemberJunction keeps no time zone per user today; its only time zone column is a record process's schedule. The browser has the viewer's zone, and the server must come out the same, or a part's range moves by a day near midnight. The choices: the browser's zone sent with each request, a user setting, or UTC.
    - **The first day of a week,** for `Context.StartOfWeek`: Monday, Sunday, or a setting.
+7. **How the chat gets its reply's row** (A19). The runner creates the row on the server. Say whether its ID reaches the browser on the run's progress channel before the run starts, or through a separate server call that creates the row first, and how the chat keeps its duration timer, which starts from the row's `__mj_CreatedAt` today.
