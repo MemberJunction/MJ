@@ -37,10 +37,22 @@ function mockPromptResult(response: Record<string, unknown>): AIPromptRunResult 
     };
 }
 
-/** Params carrying the merged agent-type prompt params, which is where the gate is read from. */
+/** Params carrying a per-run override in `data.__agentTypePromptParams` — the highest-precedence source. */
 function paramsWith(enableTaskGraphs: boolean | undefined): ExecuteAgentParams {
     return {
         data: { __agentTypePromptParams: enableTaskGraphs === undefined ? {} : { enableTaskGraphs } },
+    } as unknown as ExecuteAgentParams;
+}
+
+/**
+ * Params shaped like a REAL run: no runtime override, and the opt-in living only in the agent's
+ * own `AgentTypePromptParams` JSON. This is what every production invocation looks like — the
+ * merged bag renders the prompt but is never written back to `params.data`.
+ */
+function paramsFromAgentConfig(agentTypePromptParams: string | null, runtime?: Record<string, unknown>): ExecuteAgentParams {
+    return {
+        agent: { Name: 'Workflow Planner', AgentTypePromptParams: agentTypePromptParams },
+        data: runtime === undefined ? {} : { __agentTypePromptParams: runtime },
     } as unknown as ExecuteAgentParams;
 }
 
@@ -104,6 +116,47 @@ describe('LoopAgentType — the Tasks primitive', () => {
             const result = await agent.DetermineNextStep(emit(graph()), paramsWith(false), {}, {});
             expect(result.message).toMatch(/Sub-Agent/);
             expect(result.message).toMatch(/Actions/);
+        });
+
+        it('admits a graph when the opt-in lives only in the agent config, as in every real run', async () => {
+            // The regression this file missed: every case above supplies the flag through the
+            // runtime bag, which production never populates. The Workflow Planner carries
+            // enableTaskGraphs in its AgentTypePromptParams and was still refused on every run.
+            const result = await agent.DetermineNextStep(
+                emit(graph()), paramsFromAgentConfig('{"enableTaskGraphs": true}'), {}, {},
+            );
+            expect(result.step).not.toBe('Retry');
+            expect(result.errorMessage).toBeUndefined();
+        });
+
+        it('lets a runtime override switch the agent config OFF', async () => {
+            const result = await agent.DetermineNextStep(
+                emit(graph()), paramsFromAgentConfig('{"enableTaskGraphs": true}', { enableTaskGraphs: false }), {}, {},
+            );
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toMatch(/not enabled/i);
+        });
+
+        it('lets a runtime override switch the agent config ON', async () => {
+            const result = await agent.DetermineNextStep(
+                emit(graph()), paramsFromAgentConfig('{"enableTaskGraphs": false}', { enableTaskGraphs: true }), {}, {},
+            );
+            expect(result.step).not.toBe('Retry');
+        });
+
+        it('a runtime bag that is silent on the flag defers to the agent config', async () => {
+            const result = await agent.DetermineNextStep(
+                emit(graph()), paramsFromAgentConfig('{"enableTaskGraphs": true}', { includeScratchpadDocs: true }), {}, {},
+            );
+            expect(result.step).not.toBe('Retry');
+        });
+
+        it('fails CLOSED on agent config that is absent, false, or unparseable', async () => {
+            for (const raw of [null, '{"enableTaskGraphs": false}', '{"enableTaskGraphs": "true"}', 'not json', '{}']) {
+                const result = await agent.DetermineNextStep(emit(graph()), paramsFromAgentConfig(raw), {}, {});
+                expect(result.step, `config ${String(raw)}`).toBe('Retry');
+                expect(result.errorMessage, `config ${String(raw)}`).toMatch(/not enabled/i);
+            }
         });
 
         it('admits a graph from an opted-in agent', async () => {

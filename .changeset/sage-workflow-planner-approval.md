@@ -14,3 +14,12 @@ The durable task-graph work masked this: under the old `payloadChangeRequest` fo
 - Sage's prompt tells it to route a reply to a planner plan back to the planner instead of treating it as a new request.
 
 Metadata only; `mj sync push` applies it.
+
+---
+
+fix(agents): the task-graph capability gate reads the agent's own config, not just a runtime override
+
+With the button and the search fixed, the approved plan still never ran. `LoopAgentType.taskGraphsEnabled` read `enableTaskGraphs` from `params.data.__agentTypePromptParams` alone. That bag holds a per-run override and nothing else; the merged params that render the prompt live in the prompt's template data and are never written back to `params.data`. So on every real run the gate saw an empty bag and answered no — while the prompt, rendered from the merge, was inviting the `Tasks` step. The planner emitted the graph it was told to, was told it "is not enabled to emit task graphs", concluded the feature was off, and tried to run the workflow by calling agents it has no sub-agent relationship with. Not one task graph had been submitted on the host all day. The existing unit tests all supplied the flag through the runtime bag, which is why they passed.
+
+The gate now applies the same precedence as `BaseAgent.buildAgentTypePromptParams`: a runtime override wins when it says anything, otherwise the agent's `AgentTypePromptParams` decides, and absent or unparseable config still fails closed. Tests cover the agent-config path, both override directions, a silent override bag, and the fail-closed cases.
+
