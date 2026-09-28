@@ -577,6 +577,20 @@ describe('Phase 4.1: MJ: Users Record Cloning Use Case', () => {
         expect(plan.Nodes.filter((n) => n.EntityName === 'MJ: User Settings')).toHaveLength(0);
     });
 
+    it('blocks a user clone until Email, FirstName and LastName are entered', async () => {
+        mockRunViewInstance.mockImplementation(async (params: { EntityName: string }) =>
+            params.EntityName === 'MJ: Users'
+                ? { Success: true, Results: [{ ID: 'alice-id', Name: 'alice@company.com', Email: 'alice@company.com', FirstName: 'Alice', LastName: 'Smith', Type: 'Owner', IsActive: true }] }
+                : { Success: true, Results: [] }
+        );
+        const plan = await new ClonePlanner({ Provider: mockMetadataProvider }).Plan(
+            { EntityName: 'MJ: Users', SourceRecordKey: { KeyValuePairs: [{ FieldName: 'ID', Value: 'alice-id' }] }, PromptedValues: { FirstName: 'Bob' } },
+            ownerUser
+        );
+        expect(plan.Blocked).toBe(true);
+        expect(plan.Warnings.filter((w) => w.Code === 'UNIQUE_PROMPT_REQUIRED').map((w) => w.Field).sort()).toEqual(['Email', 'LastName']);
+    });
+
     it('copies personal settings only with the with-settings preset, never device, draft or consent keys', async () => {
         mockRunViewInstance.mockImplementation(async (params: { EntityName: string }) => {
             if (params.EntityName === 'MJ: Users') {

@@ -93,10 +93,17 @@ import type { CloneTreeNodeViewModel, CloneEdgePolicyChange } from './record-clo
                         </span>
                     }
                     @if (Plan.Blocked) {
-                        <span class="count-item blocked">
-                            <i class="fa-solid fa-ban"></i>
-                            <strong>Blocked</strong>
-                        </span>
+                        @if (NeedsValuesOnly) {
+                            <span class="count-item skip" title="Enter the required values on the Values step">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                                <strong>Needs values</strong>
+                            </span>
+                        } @else {
+                            <span class="count-item blocked">
+                                <i class="fa-solid fa-ban"></i>
+                                <strong>Blocked</strong>
+                            </span>
+                        }
                     }
                 </div>
             }
@@ -527,6 +534,12 @@ export class ClonePlanTreeComponent {
     public get ReferenceCount(): number {
         if (!this.Plan) return 0;
         return this.Plan.Nodes.filter(n => n.Action === 'Reference').length;
+    }
+
+    /** Blocked only because prompted values haven't been entered yet: not a problem on the Scope step. */
+    public get NeedsValuesOnly(): boolean {
+        const errors = (this.Plan?.Warnings ?? []).filter((w) => w.Severity === 'Error');
+        return errors.length > 0 && errors.every((w) => w.Code === 'UNIQUE_PROMPT_REQUIRED');
     }
 
     public get SkipCount(): number {

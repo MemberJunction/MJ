@@ -698,6 +698,24 @@ export class ClonePlanner {
                 NewParentKey: isRoot ? request.Options?.NewParentKey : undefined,
             });
 
+            // Prompted fields are the ones the user must supply (Email on a user clone): without a
+            // value the copy would carry the source's, so the plan can't run until they're entered.
+            if (isRoot) {
+                const prompted = request.PromptedValues ?? request.Options?.PromptedValues ?? {};
+                for (const field of rootConfig?.Fields?.PromptFor ?? []) {
+                    const value = prompted[field];
+                    if (value === undefined || value === null || (typeof value === 'string' && value.trim() === '')) {
+                        warnings.push({
+                            Code: 'UNIQUE_PROMPT_REQUIRED',
+                            Severity: 'Error',
+                            NodeKey: nodeKey,
+                            Field: field,
+                            Message: `Enter a value for '${field}': the copy can't reuse the source's.`,
+                        });
+                        planBlocked = true;
+                    }
+                }
+            }
             for (const field of fieldMappingResult.NamingFailures) {
                 warnings.push({
                     Code: 'NAME_UNAVAILABLE',
