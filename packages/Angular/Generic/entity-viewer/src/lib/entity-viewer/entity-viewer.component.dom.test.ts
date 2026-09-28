@@ -80,4 +80,21 @@ describe('EntityViewerComponent (DOM)', () => {
     // both the entity header AND the no-records empty state render (the "select an entity" one does not)
     expect(query(f, '.empty-state-fill')).not.toBeNull();
   });
+
+  it('keeps the page for an in-place refresh that waits on a load, but not once another reload also waits', () => {
+    const f = render({ entity: ENTITY, IsLoading: true });
+    const c = f.componentInstance as unknown as {
+      Records: unknown; _pendingReload: boolean; _pendingReloadKeepsPage: boolean; RefreshInPlace(): void; LoadData(): Promise<void>;
+    };
+    c.Records = null;
+
+    c.RefreshInPlace();
+    expect([c._pendingReload, c._pendingReloadKeepsPage]).toEqual([true, true]);
+
+    void c.LoadData(); // a sort/filter/entity change while still loading: that one starts at page 1
+    expect([c._pendingReload, c._pendingReloadKeepsPage]).toEqual([true, false]);
+
+    c.RefreshInPlace();
+    expect(c._pendingReloadKeepsPage).toBe(false);
+  });
 });
