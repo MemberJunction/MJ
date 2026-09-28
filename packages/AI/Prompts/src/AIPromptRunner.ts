@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -9,11 +9,10 @@ import {
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
-import { CredentialEngine } from '@memberjunction/credentials';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -124,7 +123,7 @@ interface ModelSelectionResult {
    * {@link AIPromptRunner.selectModelWithAPIKeyTracked} during selection, keyed by
    * `driverClass:modelID:vendorId` (the same key {@link AIPromptRunner.executeModelWithFailover}
    * uses for its own cache). Lets failover REUSE selection's credential probes instead of
-   * recomputing `hasCredentialsAvailable` for the prefix it already walked.
+   * recomputing `HasCredentialsAvailable` for the prefix it already walked.
    *
    * Because selection short-circuits once the highest-priority credentialed candidate is found
    * (see the DECISION note in {@link AIPromptRunner.selectModelWithAPIKeyTracked}), this map
@@ -142,7 +141,7 @@ interface ModelSelectionResult {
  * Stop sequences and assistant prefill are handled separately because their shapes differ
  * between the two targets (comma-delimited/array vs. raw string).
  */
-export interface ResolvedScalarInferenceParams {
+interface ResolvedScalarInferenceParams {
   temperature?: number;
   topP?: number;
   topK?: number;
@@ -160,6 +159,11 @@ export class AIPromptRunner extends BaseModelRunner {
    */
   public override get RequiredModelType(): string {
     return 'LLM';
+  }
+
+  /** Keeps this runner's uncategorized errors logged under `AIPromptRunner`, as before the base class existed. */
+  protected override get DefaultLogCategory(): string {
+    return 'AIPromptRunner';
   }
 
   private _templateEngine: TemplateEngineServer;
@@ -522,7 +526,7 @@ export class AIPromptRunner extends BaseModelRunner {
     let promptModelConfiguration = existingSelection?.promptModelConfiguration;
     let allCandidates: ModelVendorCandidate[] = existingSelection?.allCandidates ?? [];
     // Credential probes already done during selection — reused by failover so it doesn't
-    // recompute hasCredentialsAvailable for the prefix it walks before the selected candidate.
+    // recompute HasCredentialsAvailable for the prefix it walks before the selected candidate.
     let credentialAvailability = existingSelection?.credentialAvailability;
 
     if (!selectedModel) {
@@ -1256,7 +1260,7 @@ export class AIPromptRunner extends BaseModelRunner {
 
   /**
    * Selects the appropriate AI model based on prompt configuration and parameters.
-   * Uses the unified buildModelVendorCandidates method to create an ordered list of candidates,
+   * Uses the unified BuildModelVendorCandidates method to create an ordered list of candidates,
    * then selects the first one with an available API key.
    */
   private async selectModel(
@@ -1292,7 +1296,7 @@ export class AIPromptRunner extends BaseModelRunner {
       }
 
       // Build unified list of model-vendor candidates
-      const candidates = this.buildModelVendorCandidates(
+      const candidates = this.BuildModelVendorCandidates(
         prompt,
         explicitModelId,
         configurationId,
@@ -1509,7 +1513,7 @@ export class AIPromptRunner extends BaseModelRunner {
     // DECISION (performance): candidates are ordered by priority, and we only need the
     // highest-priority candidate that has working credentials. So once we find that first
     // hit, we STOP credential-probing the remaining candidates and record them as
-    // "not-evaluated" rather than running a `hasCredentialsAvailable` check (which does
+    // "not-evaluated" rather than running a `HasCredentialsAvailable` check (which does
     // env-var lookups + binding scans) for every configured model on every prompt run.
     // The remaining candidates are still kept in `consideredModels` (and in the returned
     // `allCandidates` from selectModel, which is the FULL ordered list) so failover and the
@@ -1545,7 +1549,7 @@ export class AIPromptRunner extends BaseModelRunner {
         hasCredentials = credentialCache.get(cacheKey)!;
       } else {
         // Check for credentials using hierarchical resolution
-        hasCredentials = this.hasCredentialsAvailable(
+        hasCredentials = this.HasCredentialsAvailable(
           candidate.driverClass,
           promptId,
           candidate.model.ID,
@@ -1704,10 +1708,11 @@ export class AIPromptRunner extends BaseModelRunner {
    * to the configured failover strategy when errors occur.
    * 
    * Candidates come from model selection (`allCandidates`), already filtered to the prompt's
-   * model type by ID. The method calls several smaller, focused helper methods:
-   * - updatePromptRunWithFailoverSuccess: Records successful failover metadata
-   * - updatePromptRunWithFailoverFailure: Records failed failover metadata
-   * - createFailoverErrorResult: Creates standardized error response
+   * model type by ID. When failover applies, the loop itself is
+   * {@link BaseModelRunner.ExecuteWithFailover}: this method supplies the chat call on each candidate
+   * (`executeModel` with that candidate's model, vendor, driver, effort level and prompt-model
+   * configuration) and the final error result (`createFailoverErrorResult`). The base records
+   * failover success or failure on the prompt run.
    */
   protected async executeModelWithFailover(
     model: MJAIModelEntityExtended,
@@ -1739,7 +1744,7 @@ export class AIPromptRunner extends BaseModelRunner {
         promptModelConfiguration
       );
     }
-    return this.executeWithFailover(
+    return this.ExecuteWithFailover(
       prompt,
       params,
       allCandidates,
@@ -1768,7 +1773,7 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Creates an error result for failed failover attempts
    */
-  protected createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
+  private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
     const startTime = new Date();
     const endTime = new Date();
 
@@ -1850,7 +1855,7 @@ export class AIPromptRunner extends BaseModelRunner {
             // order. Picking the developer row merges an empty config layer and silently drops any
             // per-serving-path LLM.* knob (notably the SupportsNativeToolCalling kill switch).
             ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
-                && mv.Status === 'Active' && this.isInferenceProvider(mv))?.ID
+                && mv.Status === 'Active' && this.IsInferenceProvider(mv))?.ID
             : undefined
         ),
         promptConfiguration: prompt.PromptConfigurationObject,
@@ -2035,7 +2040,7 @@ export class AIPromptRunner extends BaseModelRunner {
         if (vendorId) {
           // Find the AIModelVendor record for this specific vendor - must be an inference provider
           const modelVendor = model.ModelVendors.find(
-            (mv) => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active' && this.isInferenceProvider(mv)
+            (mv) => UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active' && this.IsInferenceProvider(mv)
           );
 
           if (modelVendor) {
@@ -2051,7 +2056,7 @@ export class AIPromptRunner extends BaseModelRunner {
       }
 
       // Resolve credentials using hierarchical resolution (Credentials system with legacy fallback)
-      const apiKey = await this.resolveCredentialForExecution(
+      const apiKey = await this.ResolveCredentialForExecution(
         driverClass,
         prompt.ID,
         model.ID,
@@ -2786,7 +2791,7 @@ export class AIPromptRunner extends BaseModelRunner {
 
         if (attempt > 0) {
           LogStatus(`   🔄 Retrying execution due to validation failure, attempt ${attempt + 1}/${maxRetries + 1}`);
-          await this.applyRetryDelay(prompt, attempt);
+          await this.ApplyRetryDelay(prompt, attempt);
         }
 
         // Execute the AI model with failover support
@@ -3735,16 +3740,16 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Creates an AIPromptRun entity for execution tracking
    */
-  protected async createPromptRun(
+  private async createPromptRun(
     prompt: MJAIPromptEntityExtended,
     model: MJAIModelEntityExtended,
     params: AIPromptParams,
     systemPromptText: string,
     startTime: Date,
     vendorId?: string,
-    modelSelectionInfo?: any
+    modelSelectionInfo?: AIModelSelectionInfo
   ): Promise<MJAIPromptRunEntityExtended> {
-    return this.createRunRecord(
+    return this.CreateRunRecord(
       prompt,
       model,
       params,
@@ -3758,7 +3763,7 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Sets a prompt-run's chat-specific request fields: messages, prefill, sampling parameters,
    * response format, streaming, effort level, child prompt and the validation/retry columns. Called by
-   * {@link BaseModelRunner.createRunRecord} just before the INSERT is queued.
+   * {@link BaseModelRunner.CreateRunRecord} just before the INSERT is queued.
    */
   private applyChatRequestFields(
     promptRun: MJAIPromptRunEntityExtended,
@@ -3857,7 +3862,7 @@ export class AIPromptRunner extends BaseModelRunner {
   /**
    * Updates the AIPromptRun entity with execution results
    */
-  protected async updatePromptRun(
+  private async updatePromptRun(
     promptRun: MJAIPromptRunEntityExtended,
     prompt: MJAIPromptEntityExtended,
     modelResult: ChatResult,
@@ -3871,8 +3876,11 @@ export class AIPromptRunner extends BaseModelRunner {
       totalCost: number;
     },
   ): Promise<void> {
-    return this.finalizeRunRecord(
+    // A chat run succeeds only if the model call succeeded AND its output did not fail validation.
+    const success = modelResult.success && (parsedResult.validationResult?.Success !== false);
+    return this.FinalizeRunRecord(
       promptRun,
+      success,
       endTime,
       executionTimeMS,
       (run) => this.applyChatResultFields(run, prompt, modelResult, parsedResult, endTime, executionTimeMS, validationAttempts, cumulativeTokens)
@@ -3881,9 +3889,10 @@ export class AIPromptRunner extends BaseModelRunner {
 
   /**
    * Populates a prompt-run's chat-specific finalized fields (result, tokens, cost, timing, validation)
-   * from the model result. Runs INSIDE the post-INSERT save task — see {@link BaseModelRunner.finalizeRunRecord},
-   * which also sets the completion timing and rollups and logs (non-fatal) any error thrown here: the
-   * AIPromptRun is observability, not part of the prompt's success contract.
+   * from the model result. Runs INSIDE the post-INSERT save task — see {@link BaseModelRunner.FinalizeRunRecord},
+   * which sets the completion timing, `Success` and `Status` before this runs and the rollups after it,
+   * and logs (non-fatal) any error thrown here: the AIPromptRun is observability, not part of the
+   * prompt's success contract.
    */
   private applyChatResultFields(
     promptRun: MJAIPromptRunEntityExtended,
@@ -4074,12 +4083,7 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    // Set Success flag based on validation result
-    promptRun.Success = modelResult.success && (parsedResult.validationResult?.Success !== false);
-    
-    // Set final Status based on success
-    promptRun.Status = promptRun.Success ? 'Completed' : 'Failed';
-    
+    // Success and Status were set by FinalizeRunRecord from the outcome updatePromptRun passed it.
     // Set ErrorDetails if failed
     if (!promptRun.Success) {
       if (!modelResult.success && modelResult.errorMessage) {

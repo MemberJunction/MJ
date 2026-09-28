@@ -6,6 +6,7 @@ import {
   type FailoverAttempt,
 } from '../BaseModelRunner';
 import { BaseResult, type AIErrorInfo } from '@memberjunction/ai';
+import { AIEngine } from '@memberjunction/aiengine';
 import type {
   MJAIPromptEntityExtended,
   MJAIModelEntityExtended,
@@ -43,11 +44,12 @@ class FakePromptRun {
 class TestModelRunner extends BaseModelRunner {
   public availableDrivers = new Set<string>();
 
+  // Not an LLM: the loop has no chat code, so it serves a runner of any model type.
   public override get RequiredModelType(): string {
-    return 'LLM';
+    return AIEngine.Instance.EmbeddingModelTypeName;
   }
 
-  public override hasCredentialsAvailable(
+  public override HasCredentialsAvailable(
     driverClass: string,
     _promptId: string,
     _modelId: string,
@@ -67,7 +69,7 @@ class TestModelRunner extends BaseModelRunner {
     promptRun?: MJAIPromptRunEntityExtended,
     credentialAvailability?: Map<string, boolean>
   ): Promise<TResult> {
-    return this.executeWithFailover(
+    return this.ExecuteWithFailover(
       prompt,
       params,
       allCandidates,
@@ -80,7 +82,7 @@ class TestModelRunner extends BaseModelRunner {
   }
 }
 
-describe('BaseModelRunner.executeWithFailover', () => {
+describe('BaseModelRunner.ExecuteWithFailover', () => {
   const createCandidate = (
     id: string,
     name: string,
@@ -118,16 +120,13 @@ describe('BaseModelRunner.executeWithFailover', () => {
 
   const failoverConfig: FailoverConfiguration = {
     strategy: 'NextBestModel',
-    maxRetries: 0,
-    retryDelayMS: 0,
-    errorScope: 'AllErrors',
-    modelStrategy: 'SameModelDifferentVendor',
-    vendorStrategy: 'NextBestVendor',
-    backoffFactor: 1,
-    prioritizeVendorsByCost: false,
+    maxAttempts: 3,
+    delaySeconds: 0,
+    modelStrategy: 'PreferSameModel',
+    errorScope: 'All',
   };
 
-  const params: AIPromptParams = {};
+  const params: AIPromptParams = { prompt: createPrompt() };
 
   it('1. The first candidate fails with errorInfo.canFailover === true, and the second succeeds. The second candidate result is returned, and failover success is recorded on the prompt run', async () => {
     const runner = new TestModelRunner();
@@ -144,10 +143,7 @@ describe('BaseModelRunner.executeWithFailover', () => {
         const errorInfo: AIErrorInfo = {
           canFailover: true,
           errorType: 'NetworkError',
-          message: 'Connection reset by peer',
-          severity: 'Recoverable',
-          source: 'driver',
-          suggestedAction: 'Retry with another candidate',
+          severity: 'Retriable',
         };
         return new TestResult(false, undefined, errorInfo, 'Connection reset by peer');
       }
@@ -168,6 +164,7 @@ describe('BaseModelRunner.executeWithFailover', () => {
       promptRun
     );
 
+    expect(runner.RequiredModelType).toBe('Embeddings'); // the loop is not tied to chat models
     expect(executeOnCandidate).toHaveBeenCalledTimes(2);
     expect(createErrorResult).not.toHaveBeenCalled();
     expect(result.success).toBe(true);
@@ -197,10 +194,7 @@ describe('BaseModelRunner.executeWithFailover', () => {
       const errorInfo: AIErrorInfo = {
         canFailover: true,
         errorType: 'NetworkError',
-        message: `Failure on ${candidate.model.Name}`,
-        severity: 'Recoverable',
-        source: 'driver',
-        suggestedAction: 'Try next candidate',
+        severity: 'Retriable',
       };
       return new TestResult(false, undefined, errorInfo, `Failure on ${candidate.model.Name}`);
     });
@@ -281,11 +275,8 @@ describe('BaseModelRunner.executeWithFailover', () => {
 
     const nonFailoverError: AIErrorInfo = {
       canFailover: false,
-      errorType: 'InvalidInput',
-      message: 'Prompt schema violation',
+      errorType: 'InvalidRequest',
       severity: 'Fatal',
-      source: 'validation',
-      suggestedAction: 'Fix prompt schema',
     };
 
     const executeOnCandidate = vi.fn(async (candidate: ModelVendorCandidate): Promise<TestResult> => {

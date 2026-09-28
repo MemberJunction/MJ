@@ -19,7 +19,6 @@ import {
   LogStatusEx,
   IsVerboseLoggingEnabled,
   Metadata,
-  UserInfo,
   IMetadataProvider
 } from '@memberjunction/core';
 import {
@@ -29,8 +28,6 @@ import {
 import {
   MJAIPromptModelEntity,
   MJAIModelVendorEntity,
-  MJAIConfigurationEntity,
-  MJAIVendorEntity,
   MJAICredentialBindingEntity,
   MJCredentialEntity
 } from '@memberjunction/core-entities';
@@ -130,22 +127,28 @@ export interface FailoverAttempt {
  *
  * `AIPromptRunner`, the chat runner, is built on it. Subclasses declare the model type they run
  * through {@link BaseModelRunner.RequiredModelType}.
+ *
+ * **Its protected API is still settling.** This class arrives in a short series of changes meant to
+ * ship in one release (#4767 through #4801). Until the series is complete, protected members may
+ * still be renamed or narrowed back to `private`, so do not subclass it from outside this package yet.
  */
 export abstract class BaseModelRunner {
   /**
-   * The model type this runner requires (e.g. `'LLM'`, `'Embeddings'`).
+   * The model type this runner requires, as the **name** of an `MJ: AI Model Types` row: `'LLM'` for
+   * `AIPromptRunner`, `'Embeddings'` (`AIEngine.Instance.EmbeddingModelTypeName`) for an embeddings
+   * runner.
    *
-   * Semantics:
-   * - The getter returns a model type **name** (code-stable and readable). `BaseModelRunner`
-   *   resolves it to an ID via {@link requiredModelTypeID} (case-insensitive, trimmed) and
-   *   filters by ID on every candidate-selection path.
-   * - `AIPrompt.AIModelTypeID` may equal it. Model types are flat, so a prompt type that differs
-   *   would widen or contradict the floor, and is refused.
+   * The contract:
+   * - It is a name, not an ID, so a subclass can declare it without a metadata lookup. The base
+   *   resolves it to the type's ID through `AIEngine.Instance.ModelTypes` ({@link requiredModelTypeID}:
+   *   a case-insensitive, trimmed name match) and compares each model's `AIModelTypeID` with that ID
+   *   using `UUIDsEqual`, on every candidate-selection path. Names are never compared with each other,
+   *   and a name that matches no model type is an error.
+   * - It is a hard floor. `AIPrompt.AIModelTypeID` may equal it. Model types are flat, so a prompt type
+   *   that differs would widen or contradict the floor, and the runner refuses the prompt with an error
+   *   naming both the prompt's configured type and the runner's required type.
    * - `AIPrompt.AIModelTypeID = NULL` means "whatever the runner requires" (not "any model").
    *   This closes a footgun where prompts with an unset column drew models of every type.
-   * - If `AIPrompt.AIModelTypeID` is set and does not match the runner's required type, the runner
-   *   refuses to run the prompt with an error naming both the prompt's configured type and the
-   *   runner's required type.
    * - Bound models (`AIPromptModel`) of a different type are skipped during candidate building
    *   with a `LogStatus` warning, but do not fail the prompt unless no valid candidates remain.
    * - Model overrides of a different type return no candidate (an override cannot violate the
@@ -201,6 +204,14 @@ export abstract class BaseModelRunner {
   }
 
   /**
+   * The category {@link logError} records when the caller passes none. Override it so a runner's
+   * uncategorized errors are attributed to that runner rather than to the base.
+   */
+  protected get DefaultLogCategory(): string {
+    return 'BaseModelRunner';
+  }
+
+  /**
    * Helper method for enhanced error logging with metadata
    */
   protected logError(error: Error | string, options?: {
@@ -239,7 +250,7 @@ export abstract class BaseModelRunner {
     LogErrorEx({
       message: errorMessage,
       error: errorObj,
-      category: options?.category || 'AIPromptRunner',
+      category: options?.category || this.DefaultLogCategory,
       severity: options?.severity || 'error',
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined
     });
@@ -253,7 +264,7 @@ export abstract class BaseModelRunner {
    * @param modelVendor The model vendor to check
    * @returns true if the vendor is an inference provider
    */
-  protected isInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean {
+  protected IsInferenceProvider(modelVendor: MJAIModelVendorEntity): boolean {
     return AIEngine.Instance.IsInferenceProvider(modelVendor);
   }
 
@@ -289,7 +300,7 @@ export abstract class BaseModelRunner {
    * @param params - The prompt execution parameters containing contextUser and optional credentialId
    * @returns The API key/configuration string to pass to the LLM constructor
    */
-  protected async resolveCredentialForExecution(
+  protected async ResolveCredentialForExecution(
     driverClass: string,
     promptId: string | undefined,
     modelId: string | undefined,
@@ -522,7 +533,7 @@ export abstract class BaseModelRunner {
    * @param params - The prompt execution parameters
    * @returns true if credentials are available, false otherwise
    */
-  protected hasCredentialsAvailable(
+  protected HasCredentialsAvailable(
     driverClass: string,
     promptId: string | undefined,
     modelId: string | undefined,
@@ -633,7 +644,7 @@ export abstract class BaseModelRunner {
    * @param preferredVendorId - Preferred vendor ID
    * @returns Ordered array of model-vendor candidates (highest priority first)
    */
-  protected buildModelVendorCandidates(
+  protected BuildModelVendorCandidates(
     prompt: MJAIPromptEntityExtended,
     explicitModelId?: string,
     configurationId?: string,
@@ -990,7 +1001,7 @@ export abstract class BaseModelRunner {
     const modelVendor = model.ModelVendors.find(
       mv => UUIDsEqual(mv.VendorID, promptModel.VendorID) &&
             mv.Status === 'Active' &&
-            this.isInferenceProvider(mv)
+            this.IsInferenceProvider(mv)
     );
 
     if (!modelVendor) return null;
@@ -1020,7 +1031,7 @@ export abstract class BaseModelRunner {
     const vendors = model.ModelVendors
       .filter(mv =>
         mv.Status === 'Active' &&
-        this.isInferenceProvider(mv)
+        this.IsInferenceProvider(mv)
       )
       .sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
 
@@ -1259,7 +1270,7 @@ export abstract class BaseModelRunner {
             m.ModelVendors.some(mv =>
               mv.Status === 'Active' &&
               mv.Vendor === preferredVendorName &&
-              this.isInferenceProvider(mv)
+              this.IsInferenceProvider(mv)
             ))
     );
   }
@@ -1322,7 +1333,7 @@ export abstract class BaseModelRunner {
     // Uses the model's precomputed ModelVendors (grouped at engine load) rather than scanning
     // the global ModelVendors array.
     const modelVendors = model.ModelVendors
-      .filter(mv => mv.Status === 'Active' && this.isInferenceProvider(mv))
+      .filter(mv => mv.Status === 'Active' && this.IsInferenceProvider(mv))
       .sort((a, b) => b.Priority - a.Priority);
 
     // First, add preferred vendor if it exists
@@ -1393,14 +1404,21 @@ export abstract class BaseModelRunner {
   /**
    * Creates the `MJ: AI Prompt Runs` record for one model call, fills the fields every runner shares,
    * lets the subclass add its own request fields, then queues the INSERT (fire-and-forget).
+   *
+   * For prompt-based runners: the record is always tied to an `AIPrompt` and its `AIPromptParams`.
+   *
+   * @param applyRequestFields Sets the runner's own request columns. It runs once, after the shared
+   *   fields are set and before the INSERT is queued, so everything it sets is on the inserted row.
+   *   **It must be synchronous.** An `async` callback type-checks against this signature, but any
+   *   field it sets after its first `await` races the INSERT and can miss the row.
    */
-  protected async createRunRecord(
+  protected async CreateRunRecord(
     prompt: MJAIPromptEntityExtended,
     model: MJAIModelEntityExtended,
     params: AIPromptParams,
     startTime: Date,
     vendorId?: string,
-    modelSelectionInfo?: any,
+    modelSelectionInfo?: AIModelSelectionInfo,
     applyRequestFields?: (promptRun: MJAIPromptRunEntityExtended) => void
   ): Promise<MJAIPromptRunEntityExtended> {
     const provider: IMetadataProvider = params.provider ?? Metadata.Provider;
@@ -1481,7 +1499,7 @@ export abstract class BaseModelRunner {
       } else {
         // Fallback: grab the highest priority AI Model Vendor record for this model (inference providers only)
         const modelVendors = model.ModelVendors
-          .filter((mv) => mv.Status === 'Active' && this.isInferenceProvider(mv))
+          .filter((mv) => mv.Status === 'Active' && this.IsInferenceProvider(mv))
           .sort((a, b) => b.Priority - a.Priority);
         
         if (modelVendors.length > 0) {
@@ -1566,7 +1584,7 @@ export abstract class BaseModelRunner {
   /**
    * Updates prompt run with failover failure tracking data
    */
-  protected updatePromptRunWithFailoverFailure(
+  private updatePromptRunWithFailoverFailure(
     promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
@@ -1586,8 +1604,15 @@ export abstract class BaseModelRunner {
    * credentials, lets processFailoverError decide retry / next candidate / stop, and records failover
    * success or failure on the prompt run. The model call itself and the final error result are
    * supplied by the subclass, so the loop works for any result type that extends BaseResult.
+   *
+   * For prompt-based runners: it takes the `AIPrompt` and `AIPromptParams` the call is for, and
+   * candidates that carry prompt-model fields (effort level, the `AIPromptModel` configuration).
+   *
+   * @param executeOnCandidate Makes the call on one candidate. It must use the candidate's own model,
+   *   vendor, driver and prompt-model fields, not those of the first candidate.
+   * @param createErrorResult Builds the result returned when every candidate has failed.
    */
-  protected async executeWithFailover<TResult extends BaseResult>(
+  protected async ExecuteWithFailover<TResult extends BaseResult>(
     prompt: MJAIPromptEntityExtended,
     params: AIPromptParams,
     allCandidates: ModelVendorCandidate[],
@@ -1608,7 +1633,7 @@ export abstract class BaseModelRunner {
     // walks the priority list until it finds the first credentialed candidate, so this map holds
     // the prefix it rejected (known false) PLUS the selected candidate (known true) — which is
     // exactly the segment failover re-walks on the happy path. Reusing those results means the
-    // common case (and any caller looping failover) does ZERO redundant hasCredentialsAvailable
+    // common case (and any caller looping failover) does ZERO redundant HasCredentialsAvailable
     // calls. The not-evaluated tail is intentionally absent, so failover still lazily probes it
     // only if a real failure forces it to walk down there.
     const failoverCredentialCache = credentialAvailability
@@ -1618,7 +1643,7 @@ export abstract class BaseModelRunner {
       const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
       let has = failoverCredentialCache.get(key);
       if (has === undefined) {
-        has = this.hasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);
+        has = this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);
         failoverCredentialCache.set(key, has);
       }
       return has;
@@ -1888,7 +1913,7 @@ export abstract class BaseModelRunner {
     return delay;
   }
 
-  protected async applyRetryDelay(prompt: MJAIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
+  protected async ApplyRetryDelay(prompt: MJAIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
     const delay = this.calculateRetryDelay(prompt, attemptNumber, suggestedDelaySeconds);
     const delaySeconds = (delay / 1000).toFixed(1);
     LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
@@ -1992,7 +2017,7 @@ export abstract class BaseModelRunner {
 
       // Apply backoff delay before retry
       if (attemptNumber < maxAttempts) {
-        await this.applyRetryDelay(prompt, rateLimitRetryCount, errorAnalysis.suggestedRetryDelaySeconds);
+        await this.ApplyRetryDelay(prompt, rateLimitRetryCount, errorAnalysis.suggestedRetryDelaySeconds);
       }
 
       return true; // Signal to continue with same model/vendor
@@ -2007,7 +2032,7 @@ export abstract class BaseModelRunner {
    *
    * @returns Decision object indicating whether to retry same model, continue to next candidate, or stop
    */
-  protected async processFailoverError(
+  private async processFailoverError(
     error: Error,
     errorInfo: AIErrorInfo,
     candidate: ModelVendorCandidate,
@@ -2094,11 +2119,26 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Queues the finalize UPDATE for a prompt-run record. Inside the queued task: sets the completion
-   * timing, lets the subclass apply its result fields, then computes the rollups and TotalCost.
+   * Queues the finalize UPDATE for a prompt-run record. Inside the queued task it sets, in order:
+   * the completion timing (`CompletedAt`, `ExecutionTimeMS`); the outcome (`Success`, and `Status` =
+   * `'Completed'` or `'Failed'` from it); then the subclass's result fields; then the token rollups and
+   * `TotalCost`.
+   *
+   * The outcome is a parameter, not left to the callback, so every runner's row leaves `'Running'`.
+   * It is written before the callback runs, so the row reaches its final status even if the callback
+   * throws (the error is logged under `PromptRunUpdate` and the rollups are skipped).
+   *
+   * For prompt-based runners, like {@link CreateRunRecord}.
+   *
+   * @param success Whether the call succeeded, as the runner judges it (the chat runner also requires
+   *   its output to pass validation).
+   * @param applyResultFields Sets the runner's own result columns. It can read the timing and outcome
+   *   already set, and may refine them (for example `ErrorDetails`). **It must be synchronous**: it runs
+   *   inside the queued save task, and anything it sets after an `await` can miss the UPDATE.
    */
-  protected async finalizeRunRecord(
+  protected async FinalizeRunRecord(
     promptRun: MJAIPromptRunEntityExtended,
+    success: boolean,
     endTime: Date,
     executionTimeMS: number,
     applyResultFields: (promptRun: MJAIPromptRunEntityExtended) => void
@@ -2111,6 +2151,8 @@ export abstract class BaseModelRunner {
       try {
         promptRun.CompletedAt = endTime;
         promptRun.ExecutionTimeMS = executionTimeMS;
+        promptRun.Success = success;
+        promptRun.Status = success ? 'Completed' : 'Failed';
 
         applyResultFields(promptRun);
 

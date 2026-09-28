@@ -168,7 +168,7 @@ class ConcreteTestRunner extends BaseModelRunner {
     preferredVendorId?: string,
     verbose?: boolean
   ): ModelVendorCandidate[] {
-    return this.buildModelVendorCandidates(prompt, explicitModelId, configurationId, preferredVendorId, verbose);
+    return this.BuildModelVendorCandidates(prompt, explicitModelId, configurationId, preferredVendorId, verbose);
   }
 }
 
@@ -464,7 +464,7 @@ describe('BaseModelRunner.RequiredModelType enforcement', () => {
         return this.requiredModelTypeID();
       }
       public invokeBuildModelVendorCandidates(p: MJAIPromptEntityExtended): ModelVendorCandidate[] {
-        return this.buildModelVendorCandidates(p);
+        return this.BuildModelVendorCandidates(p);
       }
     }
 
