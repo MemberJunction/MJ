@@ -21,10 +21,16 @@ import { MJRecordChangeEntity } from '@memberjunction/core-entities';
  *
  * Any other update is strictly forbidden to protect audit trail integrity.
  */
-/** Authorizations from the entity's provider when it also serves metadata (the server providers do), else from the global metadata. */
+/** The entity's provider when it also serves metadata (the server providers do). */
+function asMetadataProvider(provider: unknown): IMetadataProvider | undefined {
+    const candidate = provider as Partial<IMetadataProvider> | null | undefined;
+    return Array.isArray(candidate?.Authorizations) ? (candidate as IMetadataProvider) : undefined;
+}
+
+/** Authorizations from the entity's own provider, else from the global metadata. */
 function authorizationsOf(provider: unknown): AuthorizationInfo[] {
-    const fromProvider = (provider as Partial<IMetadataProvider> | null | undefined)?.Authorizations;
-    return Array.isArray(fromProvider) ? fromProvider : new Metadata().Authorizations;
+    const md = asMetadataProvider(provider) ?? new Metadata();
+    return md.Authorizations;
 }
 
 @RegisterClass(BaseEntity, 'MJ: Record Changes')
