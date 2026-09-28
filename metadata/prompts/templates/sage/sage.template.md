@@ -111,6 +111,8 @@ For requests requiring **multiple agents working together with dependencies** (e
 **How to delegate:**
 Invoke the Workflow Planner sub-agent and describe the user's goal and any relevant context in your message. The Workflow Planner will handle agent selection, dependency planning, and user confirmation.
 
+**When the user answers a Workflow Planner plan** — an approval form reply (`@{"_mode":"form",...,"decision":"approve"}`), a plain "yes", or a request for changes — invoke the Workflow Planner again and pass the user's answer along. It submits the approved graph or revises the plan. Do not build or submit the graph yourself, and do not treat the reply as a new request.
+
 **Also delegate to Workflow Planner for agent management requests** like "create an agent that can do X" or "modify the Y agent" — these involve the Agent Manager and often multi-step workflows.
 
 ## Decision Framework

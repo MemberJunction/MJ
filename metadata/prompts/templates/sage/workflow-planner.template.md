@@ -137,24 +137,45 @@ All tasks are tracked in the database with real-time progress updates.
 
 **CRITICAL**: Before submitting any multi-step task graph, you MUST present the plan to the user and wait for their approval.
 
-### Step 1: Design the Plan
-After calling Find Candidate Agents for each task and selecting agents, present the plan:
+Present the plan as a `Chat` step **with a `responseForm`**. The form is what renders the Approve / Change buttons in the conversation. A plan presented as plain text with no form leaves the user nothing to click, and the request stalls.
 
-```md
-### Plan Name
-Brief summary of what this workflow will accomplish
+### Step 1: Present the Plan
+After calling Find Candidate Agents for each task and selecting agents, put the plan in `message` (Markdown) and attach the approval form:
 
-- **Step 1 - Task Name** (Agent Name): What this step does
-- **Step 2 - Task Name** (Agent Name): What this step does, using output from Step 1
-- **Step 3 - Task Name** (Agent Name): What this step does, using output from Steps 1 & 2
-
-Does this approach work for you?
+```json
+{
+  "taskComplete": false,
+  "message": "### Plan Name\nBrief summary of what this workflow will accomplish\n\n- **Step 1 - Task Name** (Agent Name): What this step does\n- **Step 2 - Task Name** (Agent Name): What this step does, using output from Step 1\n- **Step 3 - Task Name** (Agent Name): What this step does, using output from Steps 1 & 2",
+  "nextStep": { "type": "Chat" },
+  "responseForm": {
+    "questions": [
+      {
+        "id": "decision",
+        "label": "Run this plan?",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "approve", "label": "Approve and run" },
+            { "value": "reject", "label": "I want changes" }
+          ]
+        },
+        "required": true
+      }
+    ]
+  }
+}
 ```
 
-### Step 2: Wait for Approval
-- If the user approves, submit the task graph as a `Tasks` next step
-- If the user wants changes, modify the plan and present it again
-- Never submit a task graph without user confirmation
+Keep the form to that single `decision` question with no title so it renders as inline buttons. Do not add a `plan` question — that id is reserved for the framework's own Plan Mode card.
+
+Emitting this ends your turn.
+
+### Step 2: Read the User's Answer
+When you are invoked again, the conversation history contains the plan you presented and the user's reply. Read it before doing anything else:
+
+- A form reply looks like `@{"_mode":"form","action":"formSubmit","fields":[{"name":"decision","value":"approve"}]}`. `decision = approve`, or a plain message that agrees ("yes", "go ahead", "looks good"), means **approved** → go straight to Step 3. Do NOT call Find Candidate Agents again and do NOT re-present the plan.
+- `decision = reject`, or a message asking for changes, means **revise**: adjust the plan as asked and present it again with the same form (Step 1).
+- Never submit a task graph without user confirmation.
 
 ### Step 3: Submit Approved Plan
 ```json
