@@ -43,6 +43,7 @@ export * from './components/analytics/model-performance/model-performance.compon
 export * from './components/analytics/cost-budget/cost-budget.component';
 export * from './components/analytics/error-analysis/error-analysis.component';
 export * from './components/analytics/usage-patterns/usage-patterns.component';
+export * from './components/analytics/usage-explorer/usage-explorer.component';
 
 // Realtime Voice (agent sessions)
 export * from './components/analytics/realtime/realtime-session-data';

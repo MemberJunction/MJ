@@ -237,7 +237,7 @@ jobs:
     name: Seed ${{ github.event.inputs.seed_package }} over OIDC
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.seed_package != '' }}
     needs: [dispatch-guard]
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -324,10 +324,16 @@ jobs:
           set -euo pipefail
           encoded="${PACKAGE/\//%2f}"
           url="https://registry.npmjs.org/-/npm/v1/attestations/$encoded@$VERSION"
-          code=$(curl -s -o /tmp/att.json -w '%{http_code}' "$url")
-          echo "attestation endpoint returned HTTP $code"
+          # npm takes a few minutes to expose a fresh attestation ("Your package is being
+          # processed"), so a 404 straight after publish is normal. Poll before failing.
+          for attempt in $(seq 1 24); do
+            code=$(curl -s -o /tmp/att.json -w '%{http_code}' "$url")
+            echo "attempt $attempt: attestation endpoint returned HTTP $code"
+            [ "$code" = "200" ] && break
+            sleep 15
+          done
           if [ "$code" != "200" ]; then
-            echo "::error::Published, but no public attestation at $url. The gate will still block. Confirm 'npm trust list $PACKAGE' names publish.yml."
+            echo "::error::Published, but no public attestation at $url after 6 minutes. The gate will still block. Confirm 'npm trust list $PACKAGE' names publish.yml."
             exit 1
           fi
           node -e '

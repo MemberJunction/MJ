@@ -252,6 +252,11 @@ class FakeAgentRun {
     }
 }
 
+/** Whether a message is the loop agent's trailing runtime-state fragment. */
+function isVolatileState(message: ChatMessage<{ volatileState?: boolean }>): boolean {
+    return message.metadata?.volatileState === true;
+}
+
 /** Scripted stand-in for AIPromptRunner that also snapshots the messages each prompt was sent. */
 class RecordingPromptRunner {
     public readonly Calls: AIPromptParams[] = [];
@@ -259,7 +264,9 @@ class RecordingPromptRunner {
 
     public async ExecutePrompt(params: AIPromptParams): Promise<AIPromptRunResult> {
         this.Calls.push(params);
-        this.MessagesAtCall.push([...(params.conversationMessages ?? [])]);
+        // The trailing <mj-runtime-state> fragment is framework state appended to every loop turn, not
+        // conversation; these tests assert on the conversation the discovery decision shapes.
+        this.MessagesAtCall.push((params.conversationMessages ?? []).filter(m => !isVolatileState(m)));
         const done: LoopAgentResponse = { taskComplete: true, message: 'All done' };
         return { success: true, result: JSON.stringify(done), chatResult: {} as AIPromptRunResult['chatResult'] };
     }
