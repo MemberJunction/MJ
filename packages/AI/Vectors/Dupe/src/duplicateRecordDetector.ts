@@ -27,6 +27,7 @@ import {
     LogStatus,
     RecordMergeRequest,
     EntityInfo,
+    EntityFieldInfo,
     PotentialDuplicate,
     DuplicateDetectionOptions,
     DuplicateDetectionProgress,
@@ -46,7 +47,11 @@ import { EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-ve
 import { EntityDocumentTemplateParser } from "@memberjunction/entity-documents";
 import { TemplateEngineServer } from "@memberjunction/templates";
 import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
-import { DuplicateReasoningProvider } from "./reasoning/DuplicateReasoningProvider";
+import {
+    DuplicateReasoningProvider,
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
+} from "./reasoning/DuplicateReasoningProvider";
 import {
     DuplicateReasoningInput,
     DuplicateReasoningOutput,
@@ -54,6 +59,8 @@ import {
     ReasoningFieldDelta,
 } from "./reasoning/DuplicateReasoningTypes";
 import { MatchedSetDeltaBuilder } from "./reasoning/MatchedSetDeltaBuilder";
+import type { DecisionReasoningProvider, DuplicateCandidateProbability } from "./reasoning/DecisionReasoningProvider";
+import { DuplicateEntryCandidate, DuplicateEntryCheckResult, DuplicateEntryCheckStatus } from "./duplicateEntryCheckTypes";
 
 /** Default number of nearest neighbors to retrieve per record */
 const DEFAULT_TOP_K = 5;
@@ -72,6 +79,15 @@ const VECTOR_QUERY_BATCH_SIZE = 100;
 
 /** Default batch size for parallel database saves */
 const SAVE_BATCH_SIZE = 20;
+
+/**
+ * The entity-document ReasoningModes that turn on the entry-time check. Both carry a typed
+ * decision, which is fast enough to answer while a person types.
+ */
+const ENTRY_CHECK_REASONING_MODES: ReadonlySet<string> = new Set([
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
+]);
 
 /**
  * Metadata structure returned by vector DB for each matched record.
@@ -114,12 +130,32 @@ interface SetReasoning {
 }
 
 /**
+ * What the entry-time check carries into its decision step: the unsaved record, its vector
+ * candidates narrowed to those the context user can read, and their display names.
+ */
+interface EntryCheckCandidates {
+    EntityInfo: EntityInfo;
+    EntityDocument: MJEntityDocumentEntity;
+    /** The unsaved record built from the entered values. */
+    Record: BaseEntity;
+    /** The vector query result, holding only the readable candidates. */
+    Query: RecordQueryResult;
+    /** Display name by normalized compact record id, for every readable candidate. */
+    DisplayNames: Map<string, string>;
+    ContextUser?: UserInfo;
+}
+
+/** The entry-time decision's outcome: the flagged candidates, or why there are none. */
+type EntryCheckDecision = { Candidates: DuplicateEntryCandidate[] } | { Error: string };
+
+/**
  * Modernized duplicate record detection engine.
  *
  * Supports:
  * - List-based batch detection (getDuplicateRecords)
  * - View/filter/full-entity batch detection (vector-first approach)
  * - Single-record duplicate check (CheckSingleRecord)
+ * - Entry-time check of a new record's unsaved values, flag only (CheckRecordValues)
  * - Hybrid search via RRF when vector DB supports it
  * - Optional post-retrieval reranking via MJ's BaseReranker
  * - Configurable topK, thresholds, and progress reporting
@@ -316,17 +352,8 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const record = records.Results[0];
-        const templateParser = EntityDocumentTemplateParser.CreateInstance();
-        const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], ContextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName });
-
-        const topK = options.TopK ?? DEFAULT_TOP_K;
-        const queryResults = await this.QueryDuplicatesForRecords(
-            [record], embedResult.vectors, templateTexts, entityDocument, topK, options,
-            this.GetQueryConcurrency(entityDocument)
-        );
-
-        if (queryResults.length === 0) {
+        const single = await this.QueryCandidatesForRecord(record, entityDocument, options, ContextUser);
+        if (!single) {
             return new PotentialDuplicateResult();
         }
 
@@ -334,12 +361,288 @@ export class DuplicateRecordDetector extends VectorBase {
         // has it enabled and the set clears the gate — same gate as the batch path. There are no
         // match rows to stamp run ids onto here; the verdict rides on the returned result so a
         // real-time "is this a duplicate?" caller gets recommendation + resolved field map too.
-        const single = queryResults[0];
         const reasoning = await this.RunReasoningForSet(single, entityInfo, entityDocument, ContextUser);
         if (reasoning) {
             this.applyReasoningToResult(single.Duplicates, reasoning.Output, reasoning.FieldMap);
         }
         return single.Duplicates;
+    }
+
+    /**
+     * Check values a person is entering for a new record against the entity's existing records, and
+     * flag the plausible duplicates. It only flags: nothing is saved, merged or blocked.
+     *
+     * 1. **The switch.** The check runs only for an entity with an Active entity document whose
+     *    `ReasoningMode` is `'Decision'` or `'DecisionThenPrompt'` (see {@link FindEntryCheckDocument}).
+     *    Without one the result is `NotConfigured` and nothing else runs.
+     * 2. **Candidates.** The values become an unsaved entity object, rendered by the document's
+     *    template, embedded, and queried with the same TopK and threshold as {@link CheckSingleRecord}.
+     * 3. **Permission.** The vector index does not know who is asking, so the candidates are narrowed
+     *    to those the context user can read, with one RunView as that user.
+     * 4. **Decision.** One {@link DecisionReasoningProvider.DecideCandidates} call over the readable
+     *    candidates, in either mode: the prompt half of `'DecisionThenPrompt'` is too slow for entry,
+     *    and it can recommend a merge. A candidate is flagged when the provider bands it `Uncertain`,
+     *    by its own threshold. A failed decision flags nothing.
+     *
+     * Never throws: any failure is a `Failed` result with the reason.
+     *
+     * @param entityName the entity the new record belongs to
+     * @param values the entered values by field name; fields the entity does not have are ignored
+     * @param options overrides for TopK and the potential-match threshold
+     * @param contextUser the person entering the record; candidates are limited to what they can read
+     * @returns the flagged candidates, most probable first, or why there are none
+     */
+    public async CheckRecordValues(
+        entityName: string,
+        values: Record<string, unknown>,
+        options?: DuplicateDetectionOptions,
+        contextUser?: UserInfo
+    ): Promise<DuplicateEntryCheckResult> {
+        const startTime = Date.now();
+        this.CurrentUser = contextUser;
+        try {
+            return await this.runEntryCheck(entityName, values, options ?? {}, contextUser, startTime);
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`Duplicate entry check for ${entityName} failed: ${message}`);
+            return this.entryCheckResult('Failed', startTime, [], message);
+        }
+    }
+
+    /**
+     * Render one record with the entity document's template, embed it, and query the vector index
+     * for its candidates. Shared by {@link CheckSingleRecord} (a saved record) and
+     * {@link CheckRecordValues} (an unsaved one).
+     *
+     * @returns the record's query result, or null when the query produced none
+     */
+    protected async QueryCandidatesForRecord(
+        record: BaseEntity,
+        entityDocument: MJEntityDocumentEntity,
+        options: DuplicateDetectionOptions,
+        contextUser?: UserInfo
+    ): Promise<RecordQueryResult | null> {
+        const templateParser = EntityDocumentTemplateParser.CreateInstance();
+        const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], contextUser);
+        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName });
+
+        const topK = options.TopK ?? DEFAULT_TOP_K;
+        const queryResults = await this.QueryDuplicatesForRecords(
+            [record], embedResult.vectors, templateTexts, entityDocument, topK, options,
+            this.GetQueryConcurrency(entityDocument)
+        );
+        return queryResults[0] ?? null;
+    }
+
+    // ─────────────────────────────────────────────
+    // Entry-Time Check
+    // ─────────────────────────────────────────────
+
+    /**
+     * The entity document that turns the entry-time check on for an entity: an Active document
+     * whose `ReasoningMode` is `'Decision'` or `'DecisionThenPrompt'`. When several qualify, the
+     * oldest wins (earliest `__mj_CreatedAt`, then lowest ID), so adding a document never silently
+     * changes which one an entity uses.
+     *
+     * @returns the document, or null when the check is not configured for the entity
+     */
+    protected async FindEntryCheckDocument(entityName: string): Promise<MJEntityDocumentEntity | null> {
+        await KnowledgeHubMetadataEngine.Instance.Config(false, this.CurrentUser);
+        const documents = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentsForEntity(entityName)
+            .filter(d => d.Status === 'Active' && ENTRY_CHECK_REASONING_MODES.has(d.ReasoningMode));
+        return documents.sort(compareOldestFirst)[0] ?? null;
+    }
+
+    /**
+     * Build an unsaved entity object holding the entered values, so the entity document's template
+     * renders it as it renders a saved record. Values for fields the entity does not have are ignored.
+     */
+    protected async BuildUnsavedRecord(
+        entityInfo: EntityInfo,
+        values: Record<string, unknown>,
+        contextUser?: UserInfo
+    ): Promise<BaseEntity> {
+        const record = await this.Metadata.GetEntityObject<BaseEntity>(entityInfo.Name, contextUser);
+        record.NewRecord();
+        record.SetMany(values, true);
+        return record;
+    }
+
+    /**
+     * The display names of the candidates the context user can read, from one RunView over the
+     * candidate keys run as that user, so entity permissions and row-level security apply. A
+     * candidate missing from the map must not be shown. When the RunView fails the map is empty:
+     * a candidate is shown only when the user is known to be able to read it.
+     *
+     * @returns display name by normalized compact record id ({@link NormalizeUUID})
+     */
+    protected async LoadReadableCandidateNames(
+        candidates: PotentialDuplicate[],
+        entityInfo: EntityInfo
+    ): Promise<Map<string, string>> {
+        const names = new Map<string, string>();
+        if (candidates.length === 0) {
+            return names;
+        }
+        const nameFields = this.DisplayNameFields(entityInfo);
+        const result = await this.RunView.RunView<Record<string, unknown>>({
+            EntityName: entityInfo.Name,
+            ExtraFilter: candidates.map(c => `(${c.ToWhereClause()})`).join(' OR '),
+            Fields: [...new Set([...entityInfo.PrimaryKeys.map(pk => pk.Name), ...nameFields.map(f => f.Name)])],
+            ResultType: 'simple',
+            MaxRows: candidates.length,
+        }, this.CurrentUser);
+        if (!result.Success) {
+            LogError(`Duplicate entry check: could not confirm which ${entityInfo.Name} candidates are readable: ${result.ErrorMessage}`);
+            return names;
+        }
+        for (const row of result.Results) {
+            const recordID = CompositeKey.FromEntityRecord(entityInfo, row).ToCompactURLSegment();
+            names.set(NormalizeUUID(recordID), this.rowDisplayName(row, nameFields) || recordID);
+        }
+        return names;
+    }
+
+    /**
+     * The decision provider the entry-time check asks: whatever the class factory holds for the
+     * `'Decision'` mode, which is {@link DecisionReasoningProvider} unless an app registers a
+     * subclass. Null when that registration is not a decision provider.
+     */
+    protected ResolveEntryDecisionProvider(): DecisionReasoningProvider | null {
+        const provider = MJGlobal.Instance.ClassFactory.CreateInstance<DuplicateReasoningProvider>(
+            DuplicateReasoningProvider, DECISION_REASONING_PROVIDER_KEY
+        );
+        return isDecisionReasoningProvider(provider) ? provider : null;
+    }
+
+    /**
+     * The fields whose values make up a record's display name: every `IsNameField` field in
+     * Sequence order, or the entity's single `NameField` when none is flagged.
+     */
+    protected DisplayNameFields(entityInfo: EntityInfo): EntityFieldInfo[] {
+        const nameFields = entityInfo.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+
+        // Fall back to singular NameField if no IsNameField flags
+        if (nameFields.length === 0 && entityInfo.NameField) {
+            nameFields.push(entityInfo.NameField);
+        }
+        return nameFields;
+    }
+
+    /** The steps of {@link CheckRecordValues} after it has recorded the start time. May throw. */
+    private async runEntryCheck(
+        entityName: string,
+        values: Record<string, unknown>,
+        options: DuplicateDetectionOptions,
+        contextUser: UserInfo | undefined,
+        startTime: number
+    ): Promise<DuplicateEntryCheckResult> {
+        const entityDocument = await this.FindEntryCheckDocument(entityName);
+        if (!entityDocument) {
+            return this.entryCheckResult('NotConfigured', startTime);
+        }
+        const entityInfo = this.Metadata.EntityByID(entityDocument.EntityID);
+        if (!entityInfo) {
+            return this.entryCheckResult('Failed', startTime, [], `Entity not found for ID ${entityDocument.EntityID}`);
+        }
+        await this.InitializeProviders(entityDocument);
+        const record = await this.BuildUnsavedRecord(entityInfo, values, contextUser);
+        const query = await this.QueryCandidatesForRecord(record, entityDocument, options, contextUser);
+        if (!query) {
+            return this.entryCheckResult('Checked', startTime);
+        }
+        const displayNames = await this.keepReadableCandidates(query, entityInfo);
+        if (query.Duplicates.Duplicates.length === 0) {
+            return this.entryCheckResult('Checked', startTime);
+        }
+        const decision = await this.decideEntryCandidates({
+            EntityInfo: entityInfo, EntityDocument: entityDocument, Record: record,
+            Query: query, DisplayNames: displayNames, ContextUser: contextUser,
+        });
+        return 'Error' in decision
+            ? this.entryCheckResult('Failed', startTime, [], decision.Error)
+            : this.entryCheckResult('Checked', startTime, decision.Candidates);
+    }
+
+    /** Narrow a query result's candidates, in place, to those the context user can read. */
+    private async keepReadableCandidates(query: RecordQueryResult, entityInfo: EntityInfo): Promise<Map<string, string>> {
+        const names = await this.LoadReadableCandidateNames(query.Duplicates.Duplicates, entityInfo);
+        query.Duplicates.Duplicates = query.Duplicates.Duplicates.filter(
+            d => names.has(NormalizeUUID(d.ToCompactURLSegment()))
+        );
+        return names;
+    }
+
+    /**
+     * Ask the decision about the readable candidates, with the unsaved record's own values as the
+     * source, and flag the ones the provider bands `Uncertain`.
+     */
+    private async decideEntryCandidates(state: EntryCheckCandidates): Promise<EntryCheckDecision> {
+        const provider = this.ResolveEntryDecisionProvider();
+        if (!provider) {
+            return { Error: `No DecisionReasoningProvider is registered for the '${DECISION_REASONING_PROVIDER_KEY}' reasoning mode` };
+        }
+        const input = await this.BuildReasoningInput(
+            state.Query, state.EntityInfo, state.EntityDocument, state.ContextUser, state.Record
+        );
+        const decision = await provider.DecideCandidates(input, { Provider: this._provider, ContextUser: state.ContextUser });
+        if (!decision.Success) {
+            const message = `Decision failed: ${decision.ErrorMessage ?? 'unknown error'}`;
+            LogError(`Duplicate entry check for ${state.EntityInfo.Name}: ${message}. Nothing is flagged.`);
+            return { Error: message };
+        }
+        return { Candidates: this.flagEntryCandidates(provider, decision.Candidates, state) };
+    }
+
+    /**
+     * The candidates the provider bands `Uncertain` (they cannot be ruled out), most probable first.
+     * The decision answers in input order, so each answer lines up with the query's candidate at the
+     * same index.
+     */
+    private flagEntryCandidates(
+        provider: DecisionReasoningProvider,
+        answers: DuplicateCandidateProbability[],
+        state: EntryCheckCandidates
+    ): DuplicateEntryCandidate[] {
+        const flagged: DuplicateEntryCandidate[] = [];
+        answers.forEach((answer, index) => {
+            const duplicate = state.Query.Duplicates.Duplicates[index];
+            if (!duplicate || provider.BandCandidate(answer).Recommendation !== 'Uncertain') {
+                return;
+            }
+            const recordID = duplicate.ToCompactURLSegment();
+            flagged.push({
+                RecordID: recordID,
+                DisplayName: state.DisplayNames.get(NormalizeUUID(recordID)) ?? recordID,
+                VectorScore: duplicate.ProbabilityScore,
+                Probability: answer.Probability,
+            });
+        });
+        return flagged.sort(compareMostProbableFirst);
+    }
+
+    /** A row's name-field values joined with spaces; empty when it has none the user may read. */
+    private rowDisplayName(row: Record<string, unknown>, nameFields: EntityFieldInfo[]): string {
+        return nameFields
+            .map(f => row[f.Name])
+            .filter(v => v != null && String(v).trim() !== '')
+            .map(v => String(v))
+            .join(' ');
+    }
+
+    private entryCheckResult(
+        status: DuplicateEntryCheckStatus,
+        startTime: number,
+        candidates: DuplicateEntryCandidate[] = [],
+        errorMessage?: string
+    ): DuplicateEntryCheckResult {
+        const result: DuplicateEntryCheckResult = { Status: status, Candidates: candidates, ElapsedMs: Date.now() - startTime };
+        if (errorMessage) {
+            result.ErrorMessage = errorMessage;
+        }
+        return result;
     }
 
     // ─────────────────────────────────────────────
@@ -1041,14 +1344,7 @@ export class DuplicateRecordDetector extends VectorBase {
         const metadataMap = new Map<string, string>();
 
         // Combine all IsNameField fields in Sequence order for the display name
-        const nameFields = entityInfo.Fields
-            .filter(f => f.IsNameField)
-            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
-
-        // Fall back to singular NameField if no IsNameField flags
-        if (nameFields.length === 0 && entityInfo.NameField) {
-            nameFields.push(entityInfo.NameField);
-        }
+        const nameFields = this.DisplayNameFields(entityInfo);
 
         // Use DefaultInView fields for display, plus IsNameField fields
         const internalNames = new Set(['ID', '__mj_CreatedAt', '__mj_UpdatedAt']);
@@ -1533,19 +1829,23 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Assemble the reasoning input for a matched set: source description, candidate
      * descriptions, and the differing-field deltas loaded for the whole set.
+     *
+     * @param unsavedSource the source record when it is not saved yet (the entry-time check): its
+     *   in-memory values stand in for the database row the delta load cannot find
      */
     protected async BuildReasoningInput(
         qr: RecordQueryResult,
         entityInfo: EntityInfo,
         entityDocument: MJEntityDocumentEntity,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        unsavedSource?: BaseEntity
     ): Promise<DuplicateReasoningInput> {
         // Load the field deltas first — the same pass yields a record-id → name label map, which
         // gives BOTH the source and the candidates real names (loaded from the records) instead of
         // raw GUIDs. The vector-metadata name is a weaker fallback; the GUID is the last resort.
         const deltaBuilder = new MatchedSetDeltaBuilder(this.RunView);
         const allKeys = [qr.SourceKey, ...qr.Duplicates.Duplicates];
-        const { FieldDeltas: fieldDeltas, Labels: labels } = await deltaBuilder.Build(entityInfo, allKeys, contextUser);
+        const { FieldDeltas: fieldDeltas, Labels: labels } = await deltaBuilder.Build(entityInfo, allKeys, contextUser, unsavedSource);
 
         const candidates: ReasoningCandidate[] = qr.Duplicates.Duplicates.map(d => ({
             RecordID: d.Values(),
@@ -1770,6 +2070,35 @@ function chunkArray<T>(array: T[], chunkSize: number): T[][] {
         chunks.push(array.slice(i, i + chunkSize));
     }
     return chunks;
+}
+
+/**
+ * Whether a reasoning provider is a decision provider. Checked by shape, not `instanceof`, so this
+ * module need not load the decision provider and the AI engine behind it; the package index
+ * registers the provider, as it does every other reasoning mode's.
+ */
+function isDecisionReasoningProvider(provider: DuplicateReasoningProvider | null): provider is DecisionReasoningProvider {
+    return provider != null
+        && 'DecideCandidates' in provider && typeof provider.DecideCandidates === 'function'
+        && 'BandCandidate' in provider && typeof provider.BandCandidate === 'function';
+}
+
+/**
+ * Orders entity documents oldest first: by `__mj_CreatedAt`, then by ID, so the order is total
+ * and stable across calls.
+ */
+function compareOldestFirst(a: MJEntityDocumentEntity, b: MJEntityDocumentEntity): number {
+    const byAge = (a.__mj_CreatedAt?.getTime() ?? 0) - (b.__mj_CreatedAt?.getTime() ?? 0);
+    return byAge !== 0 ? byAge : NormalizeUUID(a.ID).localeCompare(NormalizeUUID(b.ID));
+}
+
+/**
+ * Orders flagged candidates most probable first. A candidate the decision gave no answer for sorts
+ * after every answered one; ties fall back to the vector score.
+ */
+function compareMostProbableFirst(a: DuplicateEntryCandidate, b: DuplicateEntryCandidate): number {
+    const byProbability = (b.Probability ?? -1) - (a.Probability ?? -1);
+    return byProbability !== 0 ? byProbability : b.VectorScore - a.VectorScore;
 }
 
 /**

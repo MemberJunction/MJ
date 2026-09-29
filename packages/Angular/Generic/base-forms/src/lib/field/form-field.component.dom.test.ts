@@ -7,6 +7,7 @@ import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
 import { FORM_SECTION_FIELD_HOST, type FormSectionFieldHost } from '../section-indicators/form-section-field-host';
+import { FormFieldEditCoordinator, type FormFieldEdit } from '../form-field-edit.coordinator';
 
 /**
  * DOM-level spec for <mj-form-field> — the single most-used component in MJ forms.
@@ -973,5 +974,41 @@ describe('MjFormFieldComponent — declaring itself to its section', () => {
   it('renders normally with no section in scope — the token is optional', () => {
     const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
     expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
+  });
+});
+
+/**
+ * A person's edit reaches the form through the `FormFieldEditCoordinator` that
+ * `mj-record-form-container` provides; it starts the entry-time duplicate check on a new record.
+ */
+describe('MjFormFieldComponent — reporting edits to the form', () => {
+  function renderWithEdits(inputs: Record<string, unknown>): { fixture: ComponentFixture<MjFormFieldComponent>; edits: FormFieldEdit[] } {
+    const coordinator = new FormFieldEditCoordinator();
+    const edits: FormFieldEdit[] = [];
+    coordinator.Edited$.subscribe((edit) => edits.push(edit));
+    const fixture = renderComponentFixture(MjFormFieldComponent, {
+      declarations: [MjFormFieldComponent],
+      imports: [CommonModule, StubMarkdownComponent, StubCodeEditorComponent, StubSafeRichHtmlPipe],
+      providers: [{ provide: FormFieldEditCoordinator, useValue: coordinator }],
+      inputs,
+    });
+    return { fixture, edits };
+  }
+
+  it('reports each edit a person makes, by field name', () => {
+    const { fixture, edits } = renderWithEdits({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true });
+
+    typeInto(fixture, 'input.mj-forms-field-input', 'Gizmo');
+
+    expect(edits).toEqual([{ FieldName: 'Name' }]);
+  });
+
+  it('reports nothing when only its inputs change', () => {
+    const { fixture, edits } = renderWithEdits({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox' });
+
+    fixture.componentRef.setInput('EditMode', true);
+    fixture.detectChanges();
+
+    expect(edits).toEqual([]);
   });
 });

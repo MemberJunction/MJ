@@ -1,4 +1,9 @@
 export { DuplicateRecordDetector } from './duplicateRecordDetector';
+export type {
+    DuplicateEntryCheckStatus,
+    DuplicateEntryCandidate,
+    DuplicateEntryCheckResult,
+} from './duplicateEntryCheckTypes';
 
 // Reasoning seam (pluggable LLM reasoning for duplicate detection)
 export * from './reasoning/DuplicateReasoningTypes';

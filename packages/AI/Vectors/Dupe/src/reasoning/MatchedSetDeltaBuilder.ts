@@ -17,9 +17,10 @@
  * @module @memberjunction/ai-vector-dupe
  */
 
-import { RunView, CompositeKey, EntityInfo, UserInfo } from '@memberjunction/core';
+import { RunView, CompositeKey, EntityInfo, EntityFieldInfo, UserInfo, BaseEntity } from '@memberjunction/core';
 import {
     RecordComparisonEngine,
+    RecordComparisonOptions,
     RecordComparisonResult,
     RecordFieldValue,
 } from '@memberjunction/record-comparison';
@@ -58,17 +59,21 @@ export class MatchedSetDeltaBuilder {
      * @param entityInfo the entity being deduped (already resolved by the detector)
      * @param keys the source key first, then each candidate key (order preserved)
      * @param contextUser the run's context user
+     * @param unsavedSource a record that is not in the database yet, whose primary key is among
+     *   `keys` (the entry-time check's source). Its in-memory values stand in for the row the load
+     *   cannot find, so the reasoner compares the candidates against what is being entered.
      * @returns the differing-field deltas plus a record-id → label map; empty on load failure
      */
     public async Build(
         entityInfo: EntityInfo,
         keys: CompositeKey[],
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        unsavedSource?: BaseEntity
     ): Promise<MatchedSetDelta> {
         if (keys.length === 0) {
             return { FieldDeltas: [], Labels: new Map() };
         }
-        const engine = new RecordComparisonEngine();
+        const engine = this.CreateComparisonEngine(unsavedSource);
         const result = await engine.CompareRecordsForEntity(entityInfo, keys, contextUser, {
             RunViewInstance: this.runView,
         });
@@ -76,6 +81,38 @@ export class MatchedSetDeltaBuilder {
             return { FieldDeltas: [], Labels: new Map() };
         }
         return { FieldDeltas: this.project(result), Labels: this.buildLabels(result) };
+    }
+
+    /**
+     * The comparison engine for one build: the shared engine, or, when the source is unsaved, one
+     * that supplies the source's row from memory.
+     */
+    protected CreateComparisonEngine(unsavedSource?: BaseEntity): RecordComparisonEngine {
+        return unsavedSource
+            ? new UnsavedSourceComparisonEngine(this.ToComparisonRow(unsavedSource))
+            : new RecordComparisonEngine();
+    }
+
+    /**
+     * An unsaved record's values as a comparison row: scalars as they are, other values (dates)
+     * stringified as `toStringValue` stringifies a loaded value, and empty as null.
+     */
+    protected ToComparisonRow(record: BaseEntity): Record<string, RecordFieldValue> {
+        const row: Record<string, RecordFieldValue> = {};
+        for (const [fieldName, value] of Object.entries(record.GetAll())) {
+            row[fieldName] = this.toComparisonValue(value);
+        }
+        return row;
+    }
+
+    private toComparisonValue(value: unknown): RecordFieldValue {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            return value;
+        }
+        return String(value);
     }
 
     /**
@@ -121,5 +158,27 @@ export class MatchedSetDeltaBuilder {
             return null;
         }
         return String(value);
+    }
+}
+
+/**
+ * A comparison engine for a set whose source record is not saved yet. It loads the saved records
+ * as the shared engine does, then adds the unsaved record's row, which the engine matches to the
+ * source key by its primary-key values like any loaded row.
+ */
+class UnsavedSourceComparisonEngine extends RecordComparisonEngine {
+    constructor(private readonly unsavedRow: Record<string, RecordFieldValue>) {
+        super();
+    }
+
+    protected override async loadRecords(
+        entity: EntityInfo,
+        keys: CompositeKey[],
+        fields: EntityFieldInfo[],
+        contextUser: UserInfo | undefined,
+        options?: RecordComparisonOptions
+    ): Promise<Record<string, RecordFieldValue>[] | null> {
+        const loaded = await super.loadRecords(entity, keys, fields, contextUser, options);
+        return loaded === null ? null : [this.unsavedRow, ...loaded];
     }
 }
