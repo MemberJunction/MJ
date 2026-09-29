@@ -338,6 +338,13 @@ export interface LoopAgentTypePromptParams {
     decisionsMaxItems?: number;
 
     /**
+     * Maximum number of decision requests answered from one agent turn. Requests beyond this
+     * limit are not run; each gets a failed result saying why.
+     * @default MAX_DECISION_REQUESTS_PER_TURN (8)
+     */
+    decisionsMaxRequests?: number;
+
+    /**
      * Name of the decision prompt used for evaluating decisions.
      * @default 'Default Decision'
      */
@@ -379,25 +386,49 @@ export interface LoopAgentTypePromptParams {
     // === Content Limiting ===
 
     /**
-     * Maximum number of sub-agents to include in prompt details.
-     * -1 = include all (default)
-     * 0 = include none (hide sub-agent capabilities)
-     * N = include first N sub-agents
-     * Useful for agents with many sub-agents where only a few are commonly used.
+     * Catalog narrowing for sub-agents (plan Task 3.7).
+     * -1 or 0 = include all (default: narrowing is off)
+     * N = when the agent has more than N sub-agents, show the N most useful for the run's opening
+     *     request, judged once per run by one decision call, plus any with MinExecutionsPerRun set.
+     * Narrowing only hides: every permitted sub-agent can still be called, and a failed decision
+     * shows them all.
      * @default -1
      */
     maxSubAgentsInPrompt?: number;
 
     /**
-     * Maximum number of actions to include in prompt details.
-     * -1 = include all (default)
-     * 0 = include none (hide action capabilities)
-     * N = include first N actions
-     * Useful for agents with many actions where only a few are commonly used.
+     * Catalog narrowing for actions and skills (plan Task 3.7).
+     * -1 or 0 = include all (default: narrowing is off)
+     * N = when the agent has more than N actions (or skills), show the N most useful for the run's
+     *     opening request, judged once per run by one decision call, plus any action with
+     *     MinExecutionsPerRun set and Find Candidate Actions / Find Candidate Agents.
+     * Narrowing only hides: every permitted action can still be called, and a failed decision shows
+     * them all.
      * @default -1
      */
     maxActionsInPrompt?: number;
+
+    /**
+     * Decision discovery (plan Task 3.1): suggest the agent to delegate to before the first prompt.
+     * When true, and the run's opening request does not @mention an agent, one decision call runs
+     * once per run, in parallel with the rest of pre-execution. It asks which of the agents the user
+     * may run (the Find Candidate Agents set, minus this agent, and only those the host's
+     * `ALL_AVAILABLE_AGENTS` allows when it sends one) should handle the request, and whether the
+     * request needs a specialist at all. When both answers are confident it adds a
+     * `<suggested_agent>` system message to the first prompt, so the agent can delegate in its first
+     * turn instead of calling Find Candidate Agents first. Otherwise, and on any error or timeout, the
+     * prompt is unchanged.
+     * @default false
+     */
+    decisionDiscovery?: boolean;
 }
+
+/**
+ * The most decision requests answered from one agent turn, unless `decisionsMaxRequests` overrides
+ * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so this
+ * bounds how many decision calls one turn can start.
+ */
+export const MAX_DECISION_REQUESTS_PER_TURN = 8;
 
 /**
  * Default values for LoopAgentTypePromptParams.
@@ -420,11 +451,13 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includePipelineDocs: true,
     includeDecisionsDocs: true,
     decisionsMaxItems: 100,
+    decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
     decisionPromptName: 'Default Decision',
     includeFinishIfDocs: true,
     finishIfThreshold: 0.9,
     // Deliberately false — a capability gate, not a token-savings flag (D3).
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,
-    maxActionsInPrompt: -1
+    maxActionsInPrompt: -1,
+    decisionDiscovery: false
 };

@@ -112,6 +112,11 @@
             "type": "integer",
             "default": -1,
             "description": "Maximum number of actions to include in the prompt's capabilities section. Use -1 to include all available actions, 0 to hide action capabilities entirely, or a positive number to limit to the first N actions. Useful for agents with many actions where only a few are commonly used."
+          },
+          "decisionDiscovery": {
+            "type": "boolean",
+            "default": false,
+            "description": "Before the first prompt, ask one typed decision which agent should handle the opening request, and suggest it to the agent in a <suggested_agent> block. For conversation managers such as Sage. Off by default."
           }
         }
       }
