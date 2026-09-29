@@ -94,6 +94,18 @@ describe('AnalyticsCostBudgetComponent (DOM)', () => {
     expect(queryAll(fixture, '.data-table tbody tr').length).toBe(2);
   });
 
+  it('thins day labels from the newest bar, so today always keeps its label', async () => {
+    installProvider({ RunQueryResults: [], runViewResults: [] });
+    const month = Array.from({ length: 30 }, (_, i) => day(`2026-01-${String(i + 1).padStart(2, '0')}`, 'm1', 'v1', 0.01, true));
+    const fixture = await render(queryRowsOf(month), viewRowsFn);
+    const labels = queryAll(fixture, '.bar-label');
+    expect(labels).toHaveLength(30);
+    expect(labels[labels.length - 1].classList.contains('bar-label--skipped')).toBe(false);
+    // Every third label from the right: 10 of 30 shown, the first one (29 bars back) thinned out.
+    expect(labels.filter((l) => !l.classList.contains('bar-label--skipped'))).toHaveLength(10);
+    expect(labels[0].classList.contains('bar-label--skipped')).toBe(true);
+  });
+
   it('renders the export CSV button', async () => {
     installProvider({ RunQueryResults: [], runViewResults: [] });
     const fixture = await render(queryRowsFn, viewRowsFn);

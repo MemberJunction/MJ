@@ -15,7 +15,7 @@ import { RunView } from '@memberjunction/core';
 import { CacheHitRate } from '../../../services/cache-metrics';
 import { AIInstrumentationService } from '../../../services/ai-instrumentation.service';
 import { AIUsageDailyRow, AIUsageHourlyRow } from '../../../services/ai-usage-analytics.types';
-import { ComputeTotalCost, ComputeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
+import { ComputeTotalCost, ComputeCoveragePercent, CostCurrencyResolution, CostInputRow, FilterRowsToCurrency, ResolveCostCurrency } from '../../../services/ai-usage-analytics.compute';
 import { CompareDateCells, DateCellIso } from '../../../../shared/date-cell';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -26,6 +26,7 @@ import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 
 interface PromptRunRecord {
     ID: string;
+    CostCurrency: string | null;
     RunAt: Date | string;
     CompletedAt: Date | string | null;
     Status: string;
@@ -66,7 +67,8 @@ interface PromptRunStats {
 
 interface ChartBucket {
     label: string;
-    value: number;
+    /** Null when the bucket's runs are all unpriced: its cost is unknown, not $0. */
+    value: number | null;
     heightPercent: number;
     startTime: Date;
     endTime: Date;
@@ -88,7 +90,7 @@ type SortField = 'RunAt' | 'Prompt' | 'Model' | 'Status' | 'ExecutionTimeMS' | '
 type SortDirection = 'asc' | 'desc';
 
 const FIELDS = [
-    'ID', 'RunAt', 'CompletedAt', 'Status', 'Success', 'Cost', 'TotalCost',
+    'ID', 'RunAt', 'CompletedAt', 'Status', 'Success', 'Cost', 'CostCurrency', 'TotalCost',
     'TokensUsed', 'TokensPrompt', 'TokensCompletion', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS',
     'ModelID', 'Model', 'AgentID', 'Agent', 'PromptID', 'Prompt', 'ErrorMessage'
 ];
@@ -171,10 +173,10 @@ const PAGE_SIZE = 25;
                             @for (bucket of ChartBuckets; track bucket.startTime.getTime(); let i = $index, count = $count) {
                                 <div
                                     class="chart-bar-wrapper"
-                                    [title]="bucket.label + ': ' + bucket.value">
+                                    [title]="bucket.label + ': ' + (bucket.value === null ? 'unpriced — cost unknown' : bucket.value)">
                                     <div class="chart-bar-value">{{ bucket.value ? FormatChartValue(bucket.value) : '' }}</div>
-                                    <div class="chart-bar" [style.height.%]="bucket.heightPercent"></div>
-                                    <div class="chart-bar-label" [class.chart-bar-label--skipped]="i % ChartLabelStep(count) !== 0">{{ bucket.label }}</div>
+                                    <div class="chart-bar" [class.chart-bar--unpriced]="bucket.value === null" [style.height.%]="bucket.heightPercent"></div>
+                                    <div class="chart-bar-label" [class.chart-bar-label--skipped]="(count - 1 - i) % ChartLabelStep(count) !== 0">{{ bucket.label }}</div>
                                 </div>
                             }
                         </div>
@@ -445,6 +447,13 @@ const PAGE_SIZE = 25;
             background: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
             border-radius: 4px 4px 0 0;
             transition: background 0.15s, height 0.3s;
+        }
+
+        /* An all-unpriced cost bucket: an outline the full height of the chart, so it reads as
+           "unknown" rather than as a free (zero) bucket. Matches Cost & Budget's unpriced day. */
+        .chart-bar.chart-bar--unpriced {
+            background: transparent;
+            border: 1px dashed var(--mj-status-warning);
         }
 
         .chart-bar-wrapper:hover .chart-bar {
@@ -1011,7 +1020,10 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         return this.FilteredRuns.length === this.AllRuns.length ? `latest ${sample} runs` : `${shown} of the latest ${sample} runs`;
     }
 
-    /** Show every Nth bar label so 30 daily / 25 hourly labels never truncate into each other. */
+    /**
+     * Show every Nth bar label so 30 daily / 25 hourly labels never truncate into each other. The
+     * template counts from the newest bar, so the current bucket always keeps its label.
+     */
     public ChartLabelStep(count: number): number {
         return Math.max(1, Math.ceil(count / 16));
     }
@@ -1121,13 +1133,16 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
             const totalRuns = usage.reduce((sum, r) => sum + (r.Runs ?? 0), 0);
             const priced = usage.reduce((sum, r) => sum + (r.PricedRuns ?? 0), 0);
             const unpriced = usage.reduce((sum, r) => sum + (r.UnpricedRuns ?? 0), 0);
-            const totalCost = totalRuns > 0 ? ComputeTotalCost(usage) : 0;
+            // One currency for the total, the average and the chart (see computeUsageChartBuckets).
+            const resolution = ResolveCostCurrency(usage);
+            const totalCost = totalRuns > 0 ? ComputeTotalCost(usage, resolution.Currency) : 0;
+            const pricedInCurrency = FilterRowsToCurrency(usage, resolution.Currency).reduce((sum, r) => sum + (r.PricedRuns ?? 0), 0);
             const tokens = usage.reduce((sum, r) => sum + (r.TokensPrompt ?? 0) + (r.TokensCompletion ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0), 0);
             const succeeded = usage.reduce((sum, r) => sum + (r.SucceededRuns ?? 0), 0);
             return {
                 TotalRuns: totalRuns,
                 TotalCost: totalCost,
-                AvgCost: totalCost !== null && priced > 0 ? totalCost / priced : null,
+                AvgCost: totalCost !== null && pricedInCurrency > 0 ? totalCost / pricedInCurrency : null,
                 AvgTokens: totalRuns > 0 ? tokens / totalRuns : 0,
                 SuccessRate: totalRuns > 0 ? (succeeded / totalRuns) * 100 : 0,
                 CacheHitRate: CacheHitRate({
@@ -1135,7 +1150,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
                     CacheReadTokens: usage.reduce((sum, r) => sum + (r.TokensCacheRead ?? 0), 0),
                     CacheWriteTokens: usage.reduce((sum, r) => sum + (r.TokensCacheWrite ?? 0), 0)
                 }),
-                CoverageSubtitle: priced + unpriced > 0 ? `covers ${Math.round(ComputeCoveragePercent({ PricedRuns: priced, UnpricedRuns: unpriced }))}% of runs` : undefined,
+                CoverageSubtitle: this.coverageSubtitle(priced, unpriced, resolution),
                 AvgLatencySeconds: avgLatencyMs / 1000,
                 P95LatencySeconds: p95 / 1000,
                 FromSample: false,
@@ -1147,15 +1162,18 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         if (total === 0) {
             return { TotalRuns: 0, AvgCost: null, AvgTokens: 0, AvgLatencySeconds: 0, SuccessRate: 0, P95LatencySeconds: 0, TotalCost: 0, CacheHitRate: 0, FromSample: true, LatencySampleSize: 0 };
         }
-        // Unpriced runs (Cost null) stay out of the cost sum and the average instead of counting as $0.
-        const pricedRuns = runs.filter(r => r.Cost !== null && r.Cost !== undefined);
-        const totalCost = pricedRuns.length > 0 ? pricedRuns.reduce((sum, r) => sum + (r.Cost as number), 0) : null;
+        // Unpriced runs (Cost null) stay out of the cost sum and the average instead of counting as $0,
+        // and the total is in one currency — the same basis as the chart (sampleBucketValue).
+        const resolution = ResolveCostCurrency(runs);
+        const totalCost = ComputeTotalCost(runs, resolution.Currency);
+        const pricedCount = runs.filter(r => r.Cost !== null && r.Cost !== undefined).length;
+        const pricedInCurrency = FilterRowsToCurrency(runs, resolution.Currency).filter(r => r.Cost !== null && r.Cost !== undefined).length;
         const totalTokens = runs.reduce((sum, r) => sum + this.TrueTotalTokens(r), 0);
         const successCount = runs.filter(r => r.Success === true).length;
         return {
             TotalRuns: total,
             TotalCost: totalCost,
-            AvgCost: totalCost !== null ? totalCost / pricedRuns.length : null,
+            AvgCost: totalCost !== null && pricedInCurrency > 0 ? totalCost / pricedInCurrency : null,
             AvgTokens: totalTokens / total,
             AvgLatencySeconds: avgLatencyMs / 1000,
             SuccessRate: (successCount / total) * 100,
@@ -1165,10 +1183,22 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
                 CacheReadTokens: this.sumNullable(runs, r => r.TokensCacheRead),
                 CacheWriteTokens: this.sumNullable(runs, r => r.TokensCacheWrite)
             }),
-            CoverageSubtitle: `covers ${Math.round((pricedRuns.length / total) * 100)}% of runs`,
+            CoverageSubtitle: this.coverageSubtitle(pricedCount, total - pricedCount, resolution),
             FromSample: true,
             LatencySampleSize: latencies.length
         };
+    }
+
+    /**
+     * "covers N% of runs", plus which currency the figures are in when runs were priced in more than
+     * one (the others are left out of the totals, not added at 1:1).
+     */
+    private coverageSubtitle(priced: number, unpriced: number, resolution: CostCurrencyResolution): string | undefined {
+        if (priced + unpriced === 0) {
+            return undefined;
+        }
+        const coverage = `covers ${Math.round(ComputeCoveragePercent({ PricedRuns: priced, UnpricedRuns: unpriced }))}% of runs`;
+        return resolution.IsMixed ? `${coverage} · ${resolution.Currency} only` : coverage;
     }
 
     /**
@@ -1202,43 +1232,73 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         const cutoff = this.getTimeRangeCutoff(this._timeRange)!;
         const first = Math.floor(cutoff.getTime() / bucketMs) * bucketMs;
         const now = Date.now();
-        const values = new Map<number, { total: number; cacheRead: number; input: number; priced: number; unpriced: number }>();
+        // The cost card and the chart share one basis: the same rows, the same currency.
+        const currency = ResolveCostCurrency(rows).Currency;
+
+        const byBucket = new Map<number, (AIUsageHourlyRow | AIUsageDailyRow)[]>();
         for (const r of rows) {
             const raw = 'HourBucket' in r ? r.HourBucket : r.DayBucket;
             const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(raw) || raw.length <= 10 ? raw : raw + 'Z';
             const key = Math.floor(new Date(iso).getTime() / bucketMs) * bucketMs;
-            const v = values.get(key) ?? { total: 0, cacheRead: 0, input: 0, priced: 0, unpriced: 0 };
-            switch (this.ActiveChartMetric) {
-                case 'cost': v.total += r.OwnCost ?? 0; break;
-                case 'tokens': v.total += (r.TokensPrompt ?? 0) + (r.TokensCompletion ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0); break;
-                default: v.total += r.Runs ?? 0;
+            const list = byBucket.get(key);
+            if (list) {
+                list.push(r);
+            } else {
+                byBucket.set(key, [r]);
             }
-            v.cacheRead += r.TokensCacheRead ?? 0;
-            v.input += (r.TokensPrompt ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
-            v.priced += r.PricedRuns ?? 0;
-            v.unpriced += r.UnpricedRuns ?? 0;
-            values.set(key, v);
         }
 
-        const buckets: { label: string; total: number; start: Date; end: Date }[] = [];
+        const buckets: { label: string; total: number | null; start: Date; end: Date }[] = [];
         for (let t = first; t <= now; t += bucketMs) {
-            const v = values.get(t);
-            let total = v?.total ?? 0;
-            if (v && this.ActiveChartMetric === 'cacheHit') {
-                total = v.input > 0 ? (v.cacheRead / v.input) * 100 : 0;
-            }
+            const bucketRows = byBucket.get(t) ?? [];
             const start = new Date(t);
             const label = this.usageGrain === 'hour'
                 ? start.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
                 : start.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
-            buckets.push({ label, total, start, end: new Date(t + bucketMs) });
+            buckets.push({ label, total: this.usageBucketValue(bucketRows, currency), start, end: new Date(t + bucketMs) });
         }
+        return this.toChartBuckets(buckets);
+    }
 
-        const max = Math.max(...buckets.map(b => b.total), 1);
+    /** One aggregate bucket's value for the active metric. Cost is null when every run was unpriced. */
+    private usageBucketValue(rows: (AIUsageHourlyRow | AIUsageDailyRow)[], currency: string): number | null {
+        switch (this.ActiveChartMetric) {
+            case 'cost':
+                return this.bucketCost(rows, currency);
+            case 'tokens':
+                return rows.reduce((sum, r) => sum + (r.TokensPrompt ?? 0) + (r.TokensCompletion ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0), 0);
+            case 'cacheHit': {
+                const cacheRead = rows.reduce((sum, r) => sum + (r.TokensCacheRead ?? 0), 0);
+                const input = rows.reduce((sum, r) => sum + (r.TokensPrompt ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0), 0);
+                return input > 0 ? (cacheRead / input) * 100 : 0;
+            }
+            default:
+                return rows.reduce((sum, r) => sum + (r.Runs ?? 0), 0);
+        }
+    }
+
+    /**
+     * A bucket's cost in the card's currency. Spend only in other currencies is 0 here — the card
+     * leaves it out too, so the bars still sum to the card — while a bucket whose runs were all
+     * unpriced is null (unknown), never 0.
+     */
+    private bucketCost(rows: CostInputRow[], currency: string): number | null {
+        if (rows.length > 0 && FilterRowsToCurrency(rows, currency).length === 0) {
+            return 0;
+        }
+        return ComputeTotalCost(rows, currency);
+    }
+
+    /**
+     * Scales raw bucket totals to bar heights. An unpriced (null) bucket is drawn full height as an
+     * outline, so it can never be mistaken for a short, cheap bar.
+     */
+    private toChartBuckets(buckets: { label: string; total: number | null; start: Date; end: Date }[]): ChartBucket[] {
+        const max = Math.max(...buckets.map(b => b.total ?? 0), 1);
         return buckets.map(b => ({
             label: b.label,
-            value: Math.round(b.total * 100) / 100,
-            heightPercent: Math.max((b.total / max) * 100, 1),
+            value: b.total === null ? null : Math.round(b.total * 100) / 100,
+            heightPercent: b.total === null ? 100 : Math.max((b.total / max) * 100, 1),
             startTime: b.start,
             endTime: b.end,
         }));
@@ -1256,53 +1316,42 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         const rangeMs = now.getTime() - cutoff.getTime();
         const bucketMs = rangeMs / bucketCount;
 
-        const buckets: { label: string; total: number; cacheRead: number; inputForHit: number; start: Date; end: Date }[] = [];
-        for (let i = 0; i < bucketCount; i++) {
-            const start = new Date(cutoff.getTime() + i * bucketMs);
-            const end = new Date(cutoff.getTime() + (i + 1) * bucketMs);
-            buckets.push({
-                label: this.formatBucketLabel(start),
-                total: 0,
-                cacheRead: 0,
-                inputForHit: 0,
-                start,
-                end,
-            });
-        }
-
+        const bucketRuns: PromptRunRecord[][] = Array.from({ length: bucketCount }, () => []);
         for (const run of runs) {
             const runTime = new Date(run.RunAt).getTime();
             const idx = Math.min(Math.floor((runTime - cutoff.getTime()) / bucketMs), bucketCount - 1);
             if (idx >= 0 && idx < bucketCount) {
-                buckets[idx].total += this.getChartMetricValue(run);
-                // Cache hit-rate is a ratio, not a sum — accumulate the components and divide below.
-                buckets[idx].cacheRead += run.TokensCacheRead ?? 0;
-                buckets[idx].inputForHit += (run.TokensPrompt ?? 0) + (run.TokensCacheRead ?? 0) + (run.TokensCacheWrite ?? 0);
+                bucketRuns[idx].push(run);
             }
         }
 
-        if (this.ActiveChartMetric === 'cacheHit') {
-            for (const b of buckets) {
-                b.total = b.inputForHit > 0 ? (b.cacheRead / b.inputForHit) * 100 : 0;
-            }
-        }
-
-        const max = Math.max(...buckets.map(b => b.total), 1);
-
-        return buckets.map(b => ({
-            label: b.label,
-            value: Math.round(b.total * 100) / 100,
-            heightPercent: Math.max((b.total / max) * 100, 1),
-            startTime: b.start,
-            endTime: b.end,
+        const currency = ResolveCostCurrency(runs).Currency;
+        return this.toChartBuckets(bucketRuns.map((inBucket, i) => {
+            const start = new Date(cutoff.getTime() + i * bucketMs);
+            return {
+                label: this.formatBucketLabel(start),
+                total: this.sampleBucketValue(inBucket, currency),
+                start,
+                end: new Date(cutoff.getTime() + (i + 1) * bucketMs),
+            };
         }));
     }
 
-    private getChartMetricValue(run: PromptRunRecord): number {
+    /** One sample bucket's value for the active metric, on the same basis as the aggregate path. */
+    private sampleBucketValue(runs: PromptRunRecord[], currency: string): number | null {
         switch (this.ActiveChartMetric) {
-            case 'cost': return run.Cost ?? 0;
-            case 'tokens': return this.TrueTotalTokens(run);
-            default: return 1; // volume = count
+            case 'cost':
+                return this.bucketCost(runs, currency);
+            case 'tokens':
+                return runs.reduce((sum, r) => sum + this.TrueTotalTokens(r), 0);
+            case 'cacheHit': {
+                // Cache hit-rate is a ratio, not a sum — total the components, then divide.
+                const cacheRead = runs.reduce((sum, r) => sum + (r.TokensCacheRead ?? 0), 0);
+                const input = runs.reduce((sum, r) => sum + (r.TokensPrompt ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0), 0);
+                return input > 0 ? (cacheRead / input) * 100 : 0;
+            }
+            default:
+                return runs.length; // volume = count
         }
     }
 

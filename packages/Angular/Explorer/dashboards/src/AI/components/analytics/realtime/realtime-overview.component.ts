@@ -114,7 +114,7 @@ const DONUT_COLORS = [
                                         <div class="bar"
                                              [class.bar--accent]="bucket.DelegatedHeavy"
                                              [style.height.%]="bucket.HeightPercent"></div>
-                                        <div class="blabel" [class.blabel--skipped]="i % LabelStep(count) !== 0">{{ bucket.Label }}</div>
+                                        <div class="blabel" [class.blabel--skipped]="(count - 1 - i) % LabelStep(count) !== 0">{{ bucket.Label }}</div>
                                     </div>
                                 }
                             </div>
@@ -691,7 +691,10 @@ export class AnalyticsRealtimeOverviewComponent extends BaseAngularComponent imp
         ];
     }
 
-    /** Show every Nth bar label so 24 hourly / 30 daily labels never run into each other. */
+    /**
+     * Show every Nth bar label so 24 hourly / 30 daily labels never run into each other. The
+     * template counts from the newest bar, so the current bucket always keeps its label.
+     */
     public LabelStep(count: number): number {
         return Math.max(1, Math.ceil(count / 12));
     }

@@ -124,6 +124,35 @@ describe('AnalyticsPromptRunsComponent (DOM)', () => {
     expect(card('Avg Latency').querySelector('.stat-subtitle')?.textContent?.trim()).toBe('latest 2 runs');
   });
 
+  it('charts cost on the Total Cost card\'s basis: one currency, and an unpriced bucket as unknown, not $0', async () => {
+    installProvider({ runViewResults: [] });
+    const hour = (back: number) => new Date((Math.floor(Date.now() / 3600000) - back) * 3600000).toISOString();
+    const row = (over: Record<string, unknown>) => ({
+      AgentID: null, PromptID: 'p1', ModelID: 'm1', Runs: 0, SucceededRuns: 0, FailedRuns: 0, PricedRuns: 0, UnpricedRuns: 0,
+      TokensPrompt: 0, TokensCompletion: 0, TokensCacheRead: 0, TokensCacheWrite: 0, OwnCost: null, CostCurrency: null, ...over,
+    });
+    const usage = [
+      row({ HourBucket: hour(3), CostCurrency: 'USD', Runs: 100, SucceededRuns: 100, PricedRuns: 100, OwnCost: 40 }),
+      row({ HourBucket: hour(2), CostCurrency: 'EUR', Runs: 20, SucceededRuns: 20, PricedRuns: 20, OwnCost: 500 }),
+      row({ HourBucket: hour(1), Runs: 5, SucceededRuns: 5, UnpricedRuns: 5 }),
+    ];
+    const fixture = await render(RUNS, usage);
+    fixture.componentInstance.OnChartMetricToggle('cost');
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges(false);
+
+    const card = queryAll(fixture, '.stat-card').find((c) => c.querySelector('.stat-label')?.textContent?.trim() === 'Total Cost') as HTMLElement;
+    expect(card.querySelector('.stat-value')?.textContent?.trim()).toBe('$40.00');
+    expect(card.querySelector('.stat-subtitle')?.textContent?.trim()).toBe('covers 96% of runs · USD only');
+
+    const values = fixture.componentInstance.ChartBuckets.map((b) => b.value);
+    // The EUR spend is outside the card's currency (0 here, as on the card); the bars sum to the card.
+    expect(values.filter((v): v is number => v !== null).reduce((a, b) => a + b, 0)).toBe(40);
+    // The all-unpriced hour is unknown, drawn as an outline, never a $0.00 bar.
+    expect(values.filter((v) => v === null)).toHaveLength(1);
+    expect(queryAll(fixture, '.chart-bar.chart-bar--unpriced')).toHaveLength(1);
+  });
+
   it('shows an unpriced run as a dash, never as $0.00', async () => {
     installProvider({ runViewResults: [] });
     const fixture = await render([{ ...RUNS[0], Cost: null }]);

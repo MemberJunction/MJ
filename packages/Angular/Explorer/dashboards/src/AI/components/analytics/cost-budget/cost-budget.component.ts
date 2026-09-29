@@ -164,7 +164,7 @@ function CostBudgetUTCDayKey(d: Date): string {
                                                 [class.bar--unpriced]="bar.IsUnpriced"
                                                 [style.height.%]="bar.HeightPercent"
                                             ></div>
-                                            <div class="bar-label" [class.bar-label--skipped]="i % LabelStep !== 0">{{ bar.Label }}</div>
+                                            <div class="bar-label" [class.bar-label--skipped]="(DailyBars.length - 1 - i) % LabelStep !== 0">{{ bar.Label }}</div>
                                         </div>
                                     }
                                 </div>
@@ -690,7 +690,10 @@ export class AnalyticsCostBudgetComponent extends BaseAngularComponent implement
     public CostKpis: CostKpi[] = [];
     public DailyBars: DailyBar[] = [];
 
-    /** Label every Nth day so the axis stays legible at 30/90-day ranges (about 12 labels max). */
+    /**
+     * Label every Nth day so the axis stays legible at 30/90-day ranges (about 12 labels max). The
+     * template counts from the newest bar, so today always keeps its label.
+     */
     public get LabelStep(): number {
         return Math.max(1, Math.ceil(this.DailyBars.length / 12));
     }
