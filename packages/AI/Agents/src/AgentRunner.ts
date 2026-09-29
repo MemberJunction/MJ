@@ -17,7 +17,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { PlanArtifactTarget, IsKnownArtifactBehavior, ArtifactTargetPlan } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJEnvironmentEntityExtended, ArtifactMetadataEngine, ConversationEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -449,7 +449,7 @@ export class AgentRunner {
             // the conversation with the artifact already available." This means ALL artifacts
             // in the conversation (both agent-produced Output and user-attached Input) should
             // be available to the agent via artifact tools.
-            const inputArtifacts = await this.gatherConversationArtifacts(conversationId, contextUser);
+            const inputArtifacts = await this.gatherConversationArtifacts(conversationId, contextUser, params.ConversationHistoryFrom);
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
@@ -2084,7 +2084,7 @@ export class AgentRunner {
         if (!conversationId) {
             return params;
         }
-        const inputArtifacts = await this.gatherConversationArtifacts(conversationId, params.contextUser);
+        const inputArtifacts = await this.gatherConversationArtifacts(conversationId, params.contextUser, params.ConversationHistoryFrom);
         return inputArtifacts.length > 0 ? { ...params, inputArtifacts } : params;
     }
 
@@ -2108,16 +2108,26 @@ export class AgentRunner {
      * Gathers all artifacts from a conversation (both artifact-system records and
      * uploaded file attachments) so the ArtifactToolManager can make them available
      * to the agent as input artifacts.
+     *
+     * @param historyFrom The run's history floor (`ExecuteAgentParams.ConversationHistoryFrom`).
+     *   When set, only artifacts attached to messages written at or after it are gathered.
      */
-    private async gatherConversationArtifacts(conversationId: string, contextUser: UserInfo): Promise<InputArtifact[]> {
+    private async gatherConversationArtifacts(
+        conversationId: string,
+        contextUser: UserInfo,
+        historyFrom?: Date
+    ): Promise<InputArtifact[]> {
         try {
             const rv = new RunView();
+            const conversationFilter = `ConversationID='${conversationId}'`;
 
-            // Get all conversation detail IDs for this conversation
+            // Get all conversation detail IDs for this conversation (from its floor, if the run has one)
             const details = await rv.RunView<{ ID: string }>(
                 {
                     EntityName: 'MJ: Conversation Details',
-                    ExtraFilter: `ConversationID='${conversationId}'`,
+                    ExtraFilter: historyFrom
+                        ? `${conversationFilter} AND ${ConversationEngine.HistoryFromFilter(historyFrom)}`
+                        : conversationFilter,
                     Fields: ['ID'],
                     ResultType: 'simple',
                 },

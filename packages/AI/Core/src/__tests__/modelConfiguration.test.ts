@@ -227,3 +227,27 @@ describe('LLM control-flow knobs', () => {
         expect(merged?.LLM?.NativeControlFlow).toBeNull();
     });
 });
+
+describe('Decision section — per-model typed-decision limits', () => {
+    it('lets a vendor layer narrow one limit while keeping the model layer\'s others', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { Decision: { MaxChoiceOptions: 255, MaxScoreLevels: 10, MaxStateTokens: 32000 } },
+            { Decision: { MaxStateTokens: 16000 } }
+        );
+        expect(merged?.Decision).toEqual({ MaxChoiceOptions: 255, MaxScoreLevels: 10, MaxStateTokens: 16000 });
+    });
+
+    it('does not disturb another modality section', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { SupportsNativeToolCalling: true } },
+            { Decision: { MaxQuestionsPerCall: 32 } }
+        );
+        expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
+        expect(merged?.Decision?.MaxQuestionsPerCall).toBe(32);
+    });
+
+    it('leaves the section absent when no layer declares limits', () => {
+        const merged = ResolveEffectiveModelConfiguration({ LLM: { NativeToolResults: true } });
+        expect(merged?.Decision).toBeUndefined();
+    });
+});
