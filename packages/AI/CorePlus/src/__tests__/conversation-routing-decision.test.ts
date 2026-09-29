@@ -119,16 +119,16 @@ describe('conversation routing decision', () => {
         it('are the figures the Phase 2 Decision Eval set', () => {
             expect(DECISION_ROUTING_TIMEOUT_MS).toBe(350);
             expect(DECISION_ROUTING_MIN_CONFIDENCE).toBe(0.7);
-            expect(ROUTING_CONTINUES_CALIBRATION).toEqual({ Jev: { A: 1.5035, B: -2.1629 }, 'LLM Decision': { A: 1.6508, B: -2.9110 } });
+            expect(ROUTING_CONTINUES_CALIBRATION).toEqual({ Jev: { A: 1.7757, B: -3.3506 }, 'LLM Decision': { A: 1.6508, B: -2.9110 } });
         });
     });
 
     describe('the thread likelihood is calibrated per model', () => {
         it('maps a raw probability through the answering model\'s Platt calibration', () => {
-            // Jev's raw 0.5 means about a 10% chance the thread continues
-            expect(CalibratedContinuesProbability(0.5, 'Jev')).toBeCloseTo(0.1031, 4);
+            // Jev's raw 0.5 means about a 3% chance the thread continues
+            expect(CalibratedContinuesProbability(0.5, 'Jev')).toBeCloseTo(0.0339, 4);
             expect(CalibratedContinuesProbability(0.5, 'LLM Decision')).toBeCloseTo(0.0516, 4);
-            expect(CalibratedContinuesProbability(0.5, '  Jev ')).toBeCloseTo(0.1031, 4);
+            expect(CalibratedContinuesProbability(0.5, '  Jev ')).toBeCloseTo(0.0339, 4);
         });
 
         it('has no calibrated probability for an unknown or unnamed model', () => {
@@ -137,17 +137,17 @@ describe('conversation routing decision', () => {
         });
 
         it('routes on a raw answer the uncalibrated check called unsure', () => {
-            // Raw 0.45 sits in the old 0.3–0.7 middle; calibrated for Jev it is about 0.08
+            // Raw 0.45 sits in the old 0.3–0.7 middle; calibrated for Jev it is about 0.02
             const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.45) }));
             expect(outcome.Verdict).toBe('Routed');
             expect(outcome.RoutedAgentId).toBe(WRITER.ID);
         });
 
         it('keeps continuity when the calibrated probability is still in the middle', () => {
-            // Raw 0.8 from Jev is a calibrated 0.48
-            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.8) }));
+            // Raw 0.87 from Jev is a calibrated 0.51
+            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) }));
             expect(outcome.Verdict).toBe('KeptContinuity');
-            expect(outcome.Reason).toContain('calibrated probability 0.480');
+            expect(outcome.Reason).toContain('calibrated probability 0.506');
         });
 
         it('keeps continuity when the answering model is unnamed or uncalibrated, however sure it sounds', () => {

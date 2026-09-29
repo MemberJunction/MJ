@@ -190,8 +190,8 @@ describe('decision routing', () => {
         });
 
         it('keeps continuity when the Likelihood is ambiguous', async () => {
-            // Ambiguous after calibration: Jev's raw 0.8 is a calibrated 0.48 (a raw 0.5 is 0.10, a clear "leaves")
-            const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.8) });
+            // Ambiguous after calibration: Jev's raw 0.87 is a calibrated 0.51 (a raw 0.5 is 0.03, a clear "leaves")
+            const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) });
             expect((await RunRoutingDecision(input(), runner(ambiguous))).Verdict).toBe('KeptContinuity');
         });
 
