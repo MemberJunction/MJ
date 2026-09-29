@@ -58,6 +58,13 @@ interface AgentInternals {
     processSubAgentStep: () => Promise<BaseAgentNextStep>;
     validateSuccessNextStep: (params: ExecuteAgentParams, nextStep: BaseAgentNextStep) => Promise<BaseAgentNextStep>;
     finalizeStepEntity: (step: MockStepEntity, success: boolean, error?: string, output?: Record<string, unknown>) => Promise<void>;
+    executeActionsStep: (
+        params: ExecuteAgentParams,
+        decision: BaseAgentNextStep,
+        parentStepId: string | undefined,
+        addConversationMessage: boolean,
+        stepCount: number
+    ) => Promise<BaseAgentNextStep>;
 }
 
 class TestAgent extends BaseAgent {
@@ -66,9 +73,6 @@ class TestAgent extends BaseAgent {
     }
     public TestApplyResponseTypeAutoAlignment(params: Record<string, unknown>, explicit?: Record<string, unknown>): void {
         this.applyResponseTypeAutoAlignment(params, explicit);
-    }
-    public TestExecuteActionsStep(params: ExecuteAgentParams, decision: BaseAgentNextStep, addConversationMessage = true): Promise<BaseAgentNextStep> {
-        return this.executeActionsStep(params, decision, undefined, addConversationMessage, 1);
     }
     public TestExecuteNextStep(params: ExecuteAgentParams, decision: BaseAgentNextStep): Promise<BaseAgentNextStep> {
         return this.executeNextStep(params, {} as never, decision, 1);
@@ -127,6 +131,11 @@ describe('finishIf', () => {
             return finalize(step, success, error, output);
         });
     });
+
+    /** executeActionsStep is private on BaseAgent, so it is reached through the internals seam. */
+    function executeActions(params: ExecuteAgentParams, decision: BaseAgentNextStep, addConversationMessage = true): Promise<BaseAgentNextStep> {
+        return internals.executeActionsStep(params, decision, undefined, addConversationMessage, 1);
+    }
 
     function actionSucceeds(params: ActionResult['Params'] = []): void {
         vi.spyOn(internals, 'ExecuteSingleAction').mockResolvedValueOnce({ Success: true, Message: 'Created', Params: params } as unknown as ActionResult);
@@ -199,7 +208,7 @@ describe('finishIf', () => {
             actionSucceeds([{ Name: 'RecordID', Type: 'Output', Value: 'T-42' }]);
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.95));
 
-            const result = await agent.TestExecuteActionsStep(makeParams(), actionsDecision());
+            const result = await executeActions(makeParams(), actionsDecision());
 
             expect(result).toMatchObject({ step: 'Success', terminate: true, message: FINISH_IF.message });
             const asked: AgentDecisionAskParams = ask.mock.calls[0][0];
@@ -214,7 +223,7 @@ describe('finishIf', () => {
             actionSucceeds();
             vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
 
-            const result = await agent.TestExecuteActionsStep(makeParams(), actionsDecision());
+            const result = await executeActions(makeParams(), actionsDecision());
 
             expect(result).toMatchObject({ step: 'Retry', terminate: false });
             expect(finishChecks[0]).toMatchObject({ passed: false });
@@ -224,7 +233,7 @@ describe('finishIf', () => {
             vi.spyOn(internals, 'ExecuteSingleAction').mockResolvedValueOnce({ Success: false, Message: 'Denied', Params: [] } as unknown as ActionResult);
             const ask = vi.spyOn(decisions, 'Ask');
 
-            const result = await agent.TestExecuteActionsStep(makeParams(), actionsDecision());
+            const result = await executeActions(makeParams(), actionsDecision());
 
             expect(result.step).toBe('Retry');
             expect(ask).not.toHaveBeenCalled();
@@ -239,7 +248,7 @@ describe('finishIf', () => {
             actionSucceeds();
             vi.spyOn(decisions, 'Ask').mockImplementationOnce(answer as () => Promise<AIDecisionRunResult>);
 
-            const result = await agent.TestExecuteActionsStep(makeParams(), actionsDecision());
+            const result = await executeActions(makeParams(), actionsDecision());
 
             expect(result).toMatchObject({ step: 'Retry', terminate: false });
             expect(finishChecks).toHaveLength(1);
@@ -259,7 +268,7 @@ describe('finishIf', () => {
                 return { step: 'Retry', terminate: false, errorMessage: 'Minimum execution requirements not met' };
             });
 
-            const result = await agent.TestExecuteActionsStep(makeParams(), actionsDecision());
+            const result = await executeActions(makeParams(), actionsDecision());
 
             expect(result.step).toBe('Retry');
             expect(finishChecks[0]).toMatchObject({ passed: false, reason: 'Minimum execution requirements not met' });
@@ -271,7 +280,7 @@ describe('finishIf', () => {
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask');
 
-            const result = await agent.TestExecuteActionsStep(makeParams(), actionsDecision(), false);
+            const result = await executeActions(makeParams(), actionsDecision(), false);
 
             expect(result.step).toBe('Retry');
             expect(ask).not.toHaveBeenCalled();
@@ -282,7 +291,7 @@ describe('finishIf', () => {
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask');
 
-            const result = await agent.TestExecuteActionsStep(makeParams(), actionsDecision());
+            const result = await executeActions(makeParams(), actionsDecision());
 
             expect(result.step).toBe('Retry');
             expect(ask).not.toHaveBeenCalled();
@@ -293,7 +302,7 @@ describe('finishIf', () => {
             actionSucceeds();
             const ask = vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
 
-            const result = await agent.TestExecuteActionsStep(makeParams(), actionsDecision());
+            const result = await executeActions(makeParams(), actionsDecision());
 
             expect(result.step).toBe('Success');
             expect(ask.mock.calls[0][0].PromptName).toBe('Custom Decision');

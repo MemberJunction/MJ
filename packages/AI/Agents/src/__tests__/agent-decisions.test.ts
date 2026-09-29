@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
-import { DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
+import type { IMetadataProvider } from '@memberjunction/core';
+import { DecisionQuestion, DecisionAnswer, DecisionResult } from '@memberjunction/ai';
+import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { AIDecisionRunner, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     AgentDecisionQuestion,
     AgentDecisionRequest,
     AgentDecisionResult,
+    AIPromptRunResult,
+    ExecuteAgentParams,
+    MJAIAgentRunEntityExtended,
+    MJAIPromptEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { AgentDecisionService } from '../AgentDecisionService';
 import { BaseAgent } from '../base-agent';
@@ -54,6 +60,25 @@ class MockStepEntity {
     }
 }
 
+/** The ExecuteAgentParams members the paths under test read — all a test has to supply. */
+type DecisionStepParams = Pick<ExecuteAgentParams, 'contextUser' | 'conversationMessages'>;
+
+/** The seam onto the full ExecuteAgentParams that the methods under test are declared to take. */
+function asAgentParams(params: DecisionStepParams): ExecuteAgentParams {
+    return params as ExecuteAgentParams;
+}
+
+/**
+ * The private BaseAgent run state a Decision step reads, each member narrowed from its real type.
+ * A subclass cannot reach private members, so the tests seed them through this seam.
+ */
+interface AgentInternals {
+    _activeProvider: Pick<IMetadataProvider, 'GetEntityObject'>;
+    _agentRun: Pick<MJAIAgentRunEntityExtended, 'ID' | 'AgentID' | 'Steps'>;
+    _agentHierarchy: string[];
+    _depth: number;
+}
+
 // Concrete BaseAgent subclass exposing protected methods for testing
 class TestAgent extends BaseAgent {
     public setAgentDecisionService(service: AgentDecisionService): void {
@@ -64,13 +89,13 @@ class TestAgent extends BaseAgent {
         requests: AgentDecisionRequest[],
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
-        params: any,
+        params: DecisionStepParams,
     ): Promise<AgentDecisionResult[]> {
-        return this.executeDecisionRequestsAsSteps(requests, finalPayload, agentTypePromptParams, params);
+        return this.executeDecisionRequestsAsSteps(requests, finalPayload, agentTypePromptParams, asAgentParams(params));
     }
 
-    public testInjectDecisionResultsMessage(params: any, results: AgentDecisionResult[]): void {
-        this.injectDecisionResultsMessage(params, results);
+    public testInjectDecisionResultsMessage(params: DecisionStepParams, results: AgentDecisionResult[]): void {
+        this.injectDecisionResultsMessage(asAgentParams(params), results);
     }
 
     public testApplyResponseTypeAutoAlignment(
@@ -79,6 +104,21 @@ class TestAgent extends BaseAgent {
     ): void {
         this.applyResponseTypeAutoAlignment(params, explicitResponseType);
     }
+}
+
+/** Seeds the private run state a Decision step needs, collecting each step entity it creates. */
+function seedDecisionRun(agent: TestAgent, createdSteps: MockStepEntity[]): void {
+    const internals = agent as unknown as AgentInternals;
+    internals._activeProvider = {
+        GetEntityObject: vi.fn().mockImplementation(async () => {
+            const e = new MockStepEntity(`step-${createdSteps.length + 1}`);
+            createdSteps.push(e);
+            return e;
+        }),
+    };
+    internals._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
+    internals._agentHierarchy = [];
+    internals._depth = 0;
 }
 
 describe('Agent Decisions', () => {
@@ -151,7 +191,7 @@ describe('Agent Decisions', () => {
                 scoreQ: {
                     kind: 'Score',
                     instructions: 'Rate complexity',
-                    levels: [1, 2, 3, 4, 5],
+                    levels: ['Trivial', 'Minor', 'Moderate', 'Major', 'Critical'],
                 },
             };
 
@@ -172,7 +212,7 @@ describe('Agent Decisions', () => {
             expect(mapped.scoreQ).toEqual({
                 Kind: 'Score',
                 Instructions: 'Rate complexity',
-                Levels: [1, 2, 3, 4, 5],
+                Levels: ['Trivial', 'Minor', 'Moderate', 'Major', 'Critical'],
             });
         });
     });
@@ -182,19 +222,18 @@ describe('Agent Decisions', () => {
             const answers: Record<string, DecisionAnswer> = {
                 likeA: {
                     Kind: 'Likelihood',
-                    Instructions: '...',
                     Probability: 0.85,
                 },
                 choiceA: {
                     Kind: 'Choice',
-                    Instructions: '...',
                     Value: 'bug',
+                    Probabilities: { bug: 0.92, feature: 0.08 },
                     Confidence: 0.92,
                 },
                 scoreA: {
                     Kind: 'Score',
-                    Instructions: '...',
                     Value: 4,
+                    Probabilities: { Major: 0.12, Critical: 0.88 },
                     Confidence: 0.88,
                 },
             };
@@ -230,8 +269,8 @@ describe('Agent Decisions', () => {
 
         it('resolves decision prompt case-insensitively and invokes AIDecisionRunner', async () => {
             const service = new AgentDecisionService();
-            const mockPrompt = { Name: 'Default Decision', ID: 'prompt-1' };
-            const promptsSpy = vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([mockPrompt as any]);
+            const mockPrompt = { Name: 'Default Decision', ID: 'prompt-1' } satisfies Pick<MJAIPromptEntityExtended, 'Name' | 'ID'>;
+            const promptsSpy = vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([mockPrompt as MJAIPromptEntityExtended]);
 
             const executeSpy = vi.spyOn(AIDecisionRunner.prototype, 'ExecuteDecision').mockResolvedValue({
                 success: true,
@@ -272,32 +311,26 @@ describe('Agent Decisions', () => {
         beforeEach(() => {
             agent = new TestAgent();
             createdSteps = [];
-            (agent as any)._activeProvider = {
-                GetEntityObject: vi.fn().mockImplementation(async () => {
-                    const e = new MockStepEntity(`step-${createdSteps.length + 1}`);
-                    createdSteps.push(e);
-                    return e;
-                }),
-            };
-            (agent as any)._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
-            (agent as any)._agentHierarchy = [];
-            (agent as any)._depth = 0;
+            seedDecisionRun(agent, createdSteps);
 
             mockService = new AgentDecisionService();
             agent.setAgentDecisionService(mockService);
         });
 
         it('creates and finalizes Decision step with telemetry and answers', async () => {
+            const decisionResult = new DecisionResult(true, new Date(), new Date());
+            decisionResult.ResolvedModel = 'fast-model-v1';
+            const promptRun = { ID: 'prun-1' } satisfies Pick<MJAIPromptRunEntity, 'ID'>;
             vi.spyOn(mockService, 'Ask').mockResolvedValue({
                 success: true,
                 Answers: {
-                    triage: { Kind: 'Choice', Instructions: '...', Value: 'high', Confidence: 0.95 },
+                    triage: { Kind: 'Choice', Value: 'high', Probabilities: { high: 0.95, low: 0.05 }, Confidence: 0.95 },
                 },
                 executionTimeMS: 85,
                 tokensUsed: 30,
                 DriverClass: 'OpenRouterDecision',
-                DecisionResult: { ResolvedModel: 'fast-model-v1' } as any,
-                promptRun: { ID: 'prun-1' } as any,
+                DecisionResult: decisionResult,
+                promptRun: promptRun as MJAIPromptRunEntity,
             } as AIDecisionRunResult);
 
             const requests: AgentDecisionRequest[] = [
@@ -350,9 +383,9 @@ describe('Agent Decisions', () => {
         });
 
         it('injects decision results into conversationMessages with expiration metadata', () => {
-            const params = {
+            const params: DecisionStepParams = {
                 contextUser: { ID: 'user-1' } as UserInfo,
-                conversationMessages: [] as any[],
+                conversationMessages: [],
             };
 
             const results: AgentDecisionResult[] = [
@@ -390,16 +423,7 @@ describe('Agent Decisions', () => {
         beforeEach(() => {
             agent = new TestAgent();
             createdSteps = [];
-            (agent as any)._activeProvider = {
-                GetEntityObject: vi.fn().mockImplementation(async () => {
-                    const e = new MockStepEntity(`step-${createdSteps.length + 1}`);
-                    createdSteps.push(e);
-                    return e;
-                }),
-            };
-            (agent as any)._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
-            (agent as any)._agentHierarchy = [];
-            (agent as any)._depth = 0;
+            seedDecisionRun(agent, createdSteps);
 
             mockService = new AgentDecisionService();
             agent.setAgentDecisionService(mockService);
@@ -550,16 +574,7 @@ describe('Agent Decisions', () => {
         beforeEach(() => {
             agent = new TestAgent();
             createdSteps = [];
-            (agent as any)._activeProvider = {
-                GetEntityObject: vi.fn().mockImplementation(async () => {
-                    const e = new MockStepEntity(`step-${createdSteps.length + 1}`);
-                    createdSteps.push(e);
-                    return e;
-                }),
-            };
-            (agent as any)._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
-            (agent as any)._agentHierarchy = [];
-            (agent as any)._depth = 0;
+            seedDecisionRun(agent, createdSteps);
 
             mockService = new AgentDecisionService();
             agent.setAgentDecisionService(mockService);
@@ -567,11 +582,11 @@ describe('Agent Decisions', () => {
 
         it('iterates over items and returns answers in order', async () => {
             const askSpy = vi.spyOn(mockService, 'Ask').mockImplementation(async (args) => {
-                const item = JSON.parse(args.State as string);
+                const item: { priority: number } = JSON.parse(args.State as string);
                 return {
                     success: true,
                     Answers: {
-                        score: { Kind: 'Score', Instructions: '', Value: item.priority, Confidence: 0.9 },
+                        score: { Kind: 'Score', Value: item.priority, Probabilities: {}, Confidence: 0.9 },
                     },
                     executionTimeMS: 10,
                     tokensUsed: 5,
@@ -589,7 +604,7 @@ describe('Agent Decisions', () => {
                     {
                         id: 'batch-req',
                         forEachItemIn: 'payload.tickets',
-                        questions: { score: { kind: 'Score', instructions: 'Priority score', levels: [1, 2, 3, 4, 5] } },
+                        questions: { score: { kind: 'Score', instructions: 'Priority score', levels: ['P1', 'P2', 'P3', 'P4', 'P5'] } },
                     },
                 ],
                 { tickets },
@@ -752,16 +767,7 @@ describe('Agent Decisions', () => {
         beforeEach(() => {
             agent = new TestAgent();
             createdSteps = [];
-            (agent as any)._activeProvider = {
-                GetEntityObject: vi.fn().mockImplementation(async () => {
-                    const e = new MockStepEntity(`step-${createdSteps.length + 1}`);
-                    createdSteps.push(e);
-                    return e;
-                }),
-            };
-            (agent as any)._agentRun = { ID: 'run-1', AgentID: 'agent-1', Steps: [] };
-            (agent as any)._agentHierarchy = [];
-            (agent as any)._depth = 0;
+            seedDecisionRun(agent, createdSteps);
 
             mockService = new AgentDecisionService();
             agent.setAgentDecisionService(mockService);
@@ -801,112 +807,104 @@ describe('Agent Decisions', () => {
             loopAgentType = new LoopAgentType();
         });
 
-        it('preempts Chat when decisions are present to force a turn to read results', async () => {
-            const promptResult = {
-                success: true,
-                result: JSON.stringify({
-                    message: 'Hello user',
-                    nextStep: { type: 'Chat' },
-                    decisions: [{ id: 'd1', state: 's', questions: {} }],
-                }),
-            } as any;
+        /** A successful prompt run whose result is the loop response, serialized as the model returns it. */
+        const promptResultFor = (response: Record<string, unknown>): AIPromptRunResult => {
+            const run = { success: true, result: JSON.stringify(response) } satisfies Pick<AIPromptRunResult, 'success' | 'result'>;
+            return run as AIPromptRunResult;
+        };
 
-            const nextStep = await loopAgentType.DetermineNextStep(promptResult);
+        /** The preemption paths read none of params, payload or agent-type state; they are supplied because the signature requires them. */
+        const determineNextStep = (promptResult: AIPromptRunResult) =>
+            loopAgentType.DetermineNextStep(promptResult, asAgentParams({ contextUser: {} as UserInfo, conversationMessages: [] }), {}, {});
+
+        it('preempts Chat when decisions are present to force a turn to read results', async () => {
+            const promptResult = promptResultFor({
+                message: 'Hello user',
+                nextStep: { type: 'Chat' },
+                decisions: [{ id: 'd1', state: 's', questions: {} }],
+            });
+
+            const nextStep = await determineNextStep(promptResult);
             expect(nextStep.step).toBe('Retry');
             expect(nextStep.terminate).toBe(false);
             expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
         });
 
         it('carries decisions into Chat step after preemption cap is reached', async () => {
-            const promptResult = {
-                success: true,
-                result: JSON.stringify({
-                    message: 'Hello user',
-                    nextStep: { type: 'Chat' },
-                    decisions: [{ id: 'd1', state: 's', questions: {} }],
-                }),
-            } as any;
+            const promptResult = promptResultFor({
+                message: 'Hello user',
+                nextStep: { type: 'Chat' },
+                decisions: [{ id: 'd1', state: 's', questions: {} }],
+            });
 
             // Trigger 3 preemptions
-            await loopAgentType.DetermineNextStep(promptResult);
-            await loopAgentType.DetermineNextStep(promptResult);
-            await loopAgentType.DetermineNextStep(promptResult);
+            await determineNextStep(promptResult);
+            await determineNextStep(promptResult);
+            await determineNextStep(promptResult);
 
             // 4th time honors Chat
-            const nextStep = await loopAgentType.DetermineNextStep(promptResult);
+            const nextStep = await determineNextStep(promptResult);
             expect(nextStep.step).toBe('Chat');
             expect(nextStep.terminate).toBe(true);
             expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
         });
 
         it('carries decisions into Pipeline early-return step', async () => {
-            const promptResult = {
-                success: true,
-                result: JSON.stringify({
-                    nextStep: {
-                        type: 'Pipeline',
-                        pipeline: { steps: [{ name: 's1' }] },
-                    },
-                    decisions: [{ id: 'd1', state: 's', questions: {} }],
-                }),
-            } as any;
+            const promptResult = promptResultFor({
+                nextStep: {
+                    type: 'Pipeline',
+                    pipeline: { steps: [{ name: 's1' }] },
+                },
+                decisions: [{ id: 'd1', state: 's', questions: {} }],
+            });
 
-            const nextStep = await loopAgentType.DetermineNextStep(promptResult);
+            const nextStep = await determineNextStep(promptResult);
             expect(nextStep.step).toBe('Retry');
             expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
         });
 
         it('preempts taskComplete when decisions are present to force a turn to read results', async () => {
-            const promptResult = {
-                success: true,
-                result: JSON.stringify({
-                    taskComplete: true,
-                    message: 'Task is complete',
-                    decisions: [{ id: 'd1', state: 's', questions: {} }],
-                }),
-            } as any;
+            const promptResult = promptResultFor({
+                taskComplete: true,
+                message: 'Task is complete',
+                decisions: [{ id: 'd1', state: 's', questions: {} }],
+            });
 
-            const nextStep = await loopAgentType.DetermineNextStep(promptResult);
+            const nextStep = await determineNextStep(promptResult);
             expect(nextStep.step).toBe('Retry');
             expect(nextStep.terminate).toBe(false);
             expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
         });
 
         it('carries decisions into normal taskComplete step when no preemption after cap', async () => {
-            const promptResult = {
-                success: true,
-                result: JSON.stringify({
-                    taskComplete: true,
-                    message: 'All done',
-                    decisions: [{ id: 'd1', state: 's', questions: {} }],
-                }),
-            } as any;
+            const promptResult = promptResultFor({
+                taskComplete: true,
+                message: 'All done',
+                decisions: [{ id: 'd1', state: 's', questions: {} }],
+            });
 
             // Trigger 3 preemptions
-            await loopAgentType.DetermineNextStep(promptResult);
-            await loopAgentType.DetermineNextStep(promptResult);
-            await loopAgentType.DetermineNextStep(promptResult);
+            await determineNextStep(promptResult);
+            await determineNextStep(promptResult);
+            await determineNextStep(promptResult);
 
             // 4th time honors terminal step
-            const finalStep = await loopAgentType.DetermineNextStep(promptResult);
+            const finalStep = await determineNextStep(promptResult);
             expect(finalStep.step).toBe('Success');
             expect(finalStep.terminate).toBe(true);
             expect(finalStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
         });
 
         it('carries decisions into normal actions/nextStep return branch', async () => {
-            const promptResult = {
-                success: true,
-                result: JSON.stringify({
-                    nextStep: {
-                        type: 'Actions',
-                        actions: [{ actionName: 'Test' }],
-                    },
-                    decisions: [{ id: 'd1', state: 's', questions: {} }],
-                }),
-            } as any;
+            const promptResult = promptResultFor({
+                nextStep: {
+                    type: 'Actions',
+                    actions: [{ actionName: 'Test' }],
+                },
+                decisions: [{ id: 'd1', state: 's', questions: {} }],
+            });
 
-            const nextStep = await loopAgentType.DetermineNextStep(promptResult);
+            const nextStep = await determineNextStep(promptResult);
             expect(nextStep.step).toBe('Actions');
             expect(nextStep.decisions).toEqual([{ id: 'd1', state: 's', questions: {} }]);
         });
