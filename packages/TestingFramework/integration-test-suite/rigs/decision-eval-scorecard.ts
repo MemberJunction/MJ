@@ -13,20 +13,38 @@
  *
  * USAGE (from the repo root; reads the database named in .env):
  *   npx tsx packages/TestingFramework/integration-test-suite/rigs/decision-eval-scorecard.ts \
- *     --suite <name> --out <dir> [--since <iso>] [--until <iso>]
+ *     --suite <name> --out <dir> [--since <iso>] [--until <iso>] [--decision agent-discovery [--catalog <agents.json>]]
+ *
+ * `--decision agent-discovery` scores an agent-discovery suite (plan Task 3.1) with its own metrics
+ * (`decision-eval/discovery-metrics.ts`): top-1 accuracy, Choice-confidence and `anyApplies`
+ * calibration, the injection operating table, and the `semantic-search` baseline. `--catalog` names
+ * the corpus's `agents.json`; the scorecard then reports how the discoverable agents have drifted
+ * since the corpus was generated.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { RunView, type UserInfo } from '@memberjunction/core';
 import { EscapeSQLString } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
+import { DecisionDiscoveryRunnableAgents } from '@memberjunction/ai-agents';
 import {
     AssertOutputOutsideRepo,
     BuildDecisionEvalScorecard,
+    BuildDiscoveryEvalScorecard,
+    CompareDiscoveryCatalog,
+    CONVERSATION_MANAGER_NAME,
+    DECISION_EVAL_DECISIONS,
+    DiscoveryCatalogSnapshotSchema,
     FindRepoRoot,
     RenderDecisionEvalScorecard,
-    type DecisionEvalRunRow
+    RenderDiscoveryEvalScorecard,
+    type DecisionEvalDecision,
+    type DecisionEvalRunRow,
+    type DiscoveryCatalogDrift
 } from '@memberjunction/testing-engine';
+import { DiscoverableAgentsForCorpus } from '../src/discovery-corpus/generator';
 import { BootstrapAI } from './lib/ai-bootstrap';
 
 const RIG_DIR = dirname(fileURLToPath(import.meta.url));
@@ -35,7 +53,8 @@ const REPO_ROOT = FindRepoRoot(RIG_DIR) ?? resolve(RIG_DIR, '../../../..');
 /** IDs per `IN (...)` list, so no one query grows without bound. */
 const ID_CHUNK = 300;
 
-const USAGE = 'usage: decision-eval-scorecard.ts --suite <name> --out <dir> [--since <iso>] [--until <iso>]';
+const USAGE = 'usage: decision-eval-scorecard.ts --suite <name> --out <dir> [--since <iso>] [--until <iso>] '
+    + '[--decision conversation-routing|agent-discovery] [--catalog <agents.json>]';
 
 /** The command line, read. */
 interface ScorecardArgs {
@@ -43,6 +62,9 @@ interface ScorecardArgs {
     OutDir: string;
     Since: string | null;
     Until: string | null;
+    Decision: DecisionEvalDecision;
+    /** The corpus's `agents.json`, for an agent-discovery suite's drift report. */
+    CatalogPath: string | null;
 }
 
 /** A test run's columns the scorecard reads. */
@@ -88,7 +110,15 @@ function parseArgs(argv: readonly string[]): ScorecardArgs {
     if (!suite || !out) {
         throw new Error(USAGE);
     }
-    return { Suite: suite, OutDir: out, Since: readTimestamp(argv, 'since'), Until: readTimestamp(argv, 'until') };
+    const decisionFlag = readFlag(argv, 'decision') ?? 'conversation-routing';
+    const decision = DECISION_EVAL_DECISIONS.find(d => d === decisionFlag);
+    if (!decision) {
+        throw new Error(`--decision must be one of ${DECISION_EVAL_DECISIONS.join(', ')}, got '${decisionFlag}'`);
+    }
+    return {
+        Suite: suite, OutDir: out, Since: readTimestamp(argv, 'since'), Until: readTimestamp(argv, 'until'),
+        Decision: decision, CatalogPath: readFlag(argv, 'catalog') ?? null
+    };
 }
 
 function chunks<T>(items: readonly T[], size: number): T[][] {
@@ -179,6 +209,37 @@ function toRunRows(runs: readonly TestRunRow[], costs: ReadonlyMap<string, numbe
     }));
 }
 
+/** Writes the routing scorecard; returns its cell and unreadable counts. */
+function writeRoutingScorecard(outDir: string, args: ScorecardArgs, rows: DecisionEvalRunRow[]): { Cells: number; Unreadable: number } {
+    const scorecard = BuildDecisionEvalScorecard(rows, { Suite: args.Suite, Since: args.Since, Until: args.Until });
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'scorecard.json'), `${JSON.stringify(scorecard, null, 2)}\n`);
+    writeFileSync(join(outDir, 'scorecard.md'), `${RenderDecisionEvalScorecard(scorecard)}\n`);
+    return { Cells: scorecard.Cells.length, Unreadable: scorecard.UnreadableRuns };
+}
+
+/** Writes the agent-discovery scorecard, with the catalog drift when `--catalog` names a snapshot. */
+async function writeDiscoveryScorecard(outDir: string, args: ScorecardArgs, rows: DecisionEvalRunRow[], user: UserInfo): Promise<{ Cells: number; Unreadable: number }> {
+    const drift = args.CatalogPath ? await catalogDrift(args.CatalogPath, user) : null;
+    const scorecard = BuildDiscoveryEvalScorecard(rows, { Suite: args.Suite, Since: args.Since, Until: args.Until, CatalogDrift: drift });
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, 'scorecard.json'), `${JSON.stringify(scorecard, null, 2)}\n`);
+    writeFileSync(join(outDir, 'scorecard.md'), `${RenderDiscoveryEvalScorecard(scorecard)}\n`);
+    return { Cells: scorecard.Cells.length, Unreadable: scorecard.UnreadableRuns };
+}
+
+/** How the discoverable agents, for this user and as production sees them, differ from the corpus's snapshot. */
+async function catalogDrift(catalogPath: string, user: UserInfo): Promise<DiscoveryCatalogDrift> {
+    const snapshot = DiscoveryCatalogSnapshotSchema.parse(JSON.parse(readFileSync(catalogPath, 'utf8')));
+    const agents = AIEngine.Instance.Agents;
+    const manager = agents.find(a => a.Name?.trim().toLowerCase() === CONVERSATION_MANAGER_NAME.toLowerCase());
+    if (!manager) {
+        throw new Error(`The conversation manager '${CONVERSATION_MANAGER_NAME}' is not in AIEngine metadata`);
+    }
+    const current = DiscoverableAgentsForCorpus(await DecisionDiscoveryRunnableAgents(agents, user), manager.ID);
+    return CompareDiscoveryCatalog(snapshot.agents, current);
+}
+
 async function main(): Promise<void> {
     const args = parseArgs(process.argv.slice(2));
     const outDir = AssertOutputOutsideRepo(args.OutDir, [REPO_ROOT]);
@@ -192,11 +253,11 @@ async function main(): Promise<void> {
         }
         const runs = await loadTestRuns(rv, testIds, args, ctx.user);
         const costs = await loadPromptRunCosts(rv, runs, ctx.user);
-        const scorecard = BuildDecisionEvalScorecard(toRunRows(runs, costs), { Suite: args.Suite, Since: args.Since, Until: args.Until });
-        mkdirSync(outDir, { recursive: true });
-        writeFileSync(join(outDir, 'scorecard.json'), `${JSON.stringify(scorecard, null, 2)}\n`);
-        writeFileSync(join(outDir, 'scorecard.md'), `${RenderDecisionEvalScorecard(scorecard)}\n`);
-        console.log(`${runs.length} run(s) across ${scorecard.Cells.length} cell(s); ${scorecard.UnreadableRuns} unreadable`);
+        const rows = toRunRows(runs, costs);
+        const written = args.Decision === 'agent-discovery'
+            ? await writeDiscoveryScorecard(outDir, args, rows, ctx.user)
+            : writeRoutingScorecard(outDir, args, rows);
+        console.log(`${runs.length} run(s) across ${written.Cells} cell(s); ${written.Unreadable} unreadable`);
         console.log(`wrote ${join(outDir, 'scorecard.md')} and scorecard.json`);
     } finally {
         await ctx.pool.close();

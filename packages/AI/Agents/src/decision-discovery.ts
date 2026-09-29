@@ -19,7 +19,10 @@
 import type { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ConversationUtility, type MentionContent, type SpecialContent } from '@memberjunction/ai-core-plus';
-import type { IRunViewProvider } from '@memberjunction/core';
+import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+import type { AIEngine } from '@memberjunction/aiengine';
+import type { EntitySearchResult, IRunViewProvider, UserInfo } from '@memberjunction/core';
+import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import { IsPlainObject, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -420,4 +423,133 @@ export function SuggestedAgentMessage(agent: DecisionDiscoveryOption, confidence
  */
 export function CanSearchEntities<T extends object>(provider: T | undefined): provider is T & Pick<IRunViewProvider, 'SearchEntity'> {
     return !!provider && 'SearchEntity' in provider && typeof provider.SearchEntity === 'function';
+}
+
+/** The fields of an agent that discovery reads. Every `MJAIAgentEntity` has them. */
+export type DecisionDiscoveryAgent = Pick<MJAIAgentEntity, 'ID' | 'Name' | 'Description' | 'Status' | 'InvocationMode' | 'ParentID'>;
+
+/**
+ * The semantic search that ranks agents for one request, best first: see
+ * {@link DecisionDiscoveryAgentSearch}. It returns at most `topK` results.
+ */
+export type DecisionDiscoverySearch = (topK: number) => Promise<EntitySearchResult[]>;
+
+/** What {@link BuildDecisionDiscoveryOptionSet} builds the Choice's options from. */
+export interface DecisionDiscoveryOptionSetParams {
+    /** The agents the user may run: {@link DecisionDiscoveryRunnableAgents} over the engine's catalog. */
+    Agents: ReadonlyArray<DecisionDiscoveryAgent>;
+    /** The agent running discovery, such as Sage. It is never an option. */
+    RunningAgentID: string;
+    /** The host's allow-list ({@link HostAllowedAgentIDs}), when the run carries one. */
+    HostAllowedIDs?: ReadonlyArray<string>;
+    /** The decision model's option cap ({@link DecisionPromptOptionCap}), when one is declared. */
+    DeclaredCap?: number;
+    /** Narrows a catalog over the limit. Undefined when the provider cannot run the search. */
+    Search?: DecisionDiscoverySearch;
+}
+
+/**
+ * The agents a user may run, as Find Candidate Agents filters them: through
+ * {@link AIAgentPermissionHelper.FilterRunnableAgents} (Active, with run permission), in catalog order.
+ *
+ * @param agents - The catalog: `AIEngine.Instance.Agents`.
+ * @param contextUser - The user whose run permission decides.
+ */
+export async function DecisionDiscoveryRunnableAgents<T extends DecisionDiscoveryAgent>(agents: T[], contextUser: UserInfo): Promise<T[]> {
+    return AIAgentPermissionHelper.FilterRunnableAgents(agents, contextUser);
+}
+
+/**
+ * The agents this run may suggest: of the agents the user may run, the ones that can be discovered
+ * directly (the set Find Candidate Agents offers, through the same {@link AIAgentPermissionHelper}
+ * filter), minus the running agent itself. In catalog order.
+ *
+ * @param agents - The agents the user may run ({@link DecisionDiscoveryRunnableAgents}).
+ * @param runningAgentID - The agent running discovery.
+ */
+export function DecisionDiscoveryCatalog<T extends Pick<DecisionDiscoveryAgent, 'ID' | 'InvocationMode' | 'ParentID'>>(
+    agents: ReadonlyArray<T>,
+    runningAgentID: string
+): T[] {
+    return agents.filter(a => AIAgentPermissionHelper.IsDirectlyDiscoverable(a) && !UUIDsEqual(a.ID, runningAgentID));
+}
+
+/**
+ * The decision model's option cap: the smallest `Decision.MaxChoiceOptions` in the effective model
+ * configuration of the models the decision prompt is bound to, the setting `AIDecisionRunner`
+ * checks before its call. `undefined` when none declares one, or the prompt is not found.
+ *
+ * @param engine - The loaded engine: `AIEngine.Instance`.
+ * @param promptName - The decision prompt's name, matched whole in any case.
+ */
+export function DecisionPromptOptionCap(
+    engine: Pick<AIEngine, 'Prompts' | 'PromptModels' | 'ModelVendors' | 'GetEffectiveModelConfiguration'>,
+    promptName: string
+): number | undefined {
+    const target = promptName.trim().toLowerCase();
+    const prompt = engine.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target);
+    if (!prompt) {
+        return undefined;
+    }
+    const caps = engine.PromptModels
+        .filter(pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview'))
+        .map(pm => {
+            const modelVendor = pm.VendorID
+                ? engine.ModelVendors.find(mv => UUIDsEqual(mv.ModelID, pm.ModelID) && UUIDsEqual(mv.VendorID, pm.VendorID))
+                : undefined;
+            return engine.GetEffectiveModelConfiguration(pm.ModelID, modelVendor?.ID)?.Decision?.MaxChoiceOptions;
+        });
+    return SmallestOptionCap(caps);
+}
+
+/**
+ * The search Find Candidate Agents runs, for one request: hybrid over
+ * {@link DECISION_DISCOVERY_SEARCH_ENTITY}. Its similarity floor is not applied: the caller judges fit.
+ *
+ * @param provider - A provider that can search ({@link CanSearchEntities}).
+ * @param request - The request to rank agents for.
+ * @param contextUser - The user the search runs as.
+ */
+export function DecisionDiscoveryAgentSearch(
+    provider: Pick<IRunViewProvider, 'SearchEntity'>,
+    request: string,
+    contextUser: UserInfo
+): DecisionDiscoverySearch {
+    return topK => provider.SearchEntity({
+        entityName: DECISION_DISCOVERY_SEARCH_ENTITY,
+        searchText: request,
+        options: { mode: 'hybrid', topK, minScore: 0, contextUser },
+    });
+}
+
+/**
+ * The Choice's options, rebuilt on every call and never cached: the agents in the permitted
+ * catalog ({@link DecisionDiscoveryCatalog}) that the host allows and that have a description.
+ * There are never more than {@link DecisionOptionLimit}: when there are, the semantic search narrows
+ * them first; if it cannot, `Error` says why.
+ *
+ * @param params - The permitted agents, the running agent, the host's allow-list, the option cap and the search.
+ */
+export async function BuildDecisionDiscoveryOptionSet(params: DecisionDiscoveryOptionSetParams): Promise<DecisionDiscoveryOptionSet> {
+    const catalog = KeepHostAllowedAgents(DecisionDiscoveryCatalog(params.Agents, params.RunningAgentID), params.HostAllowedIDs);
+    const options = DecisionDiscoveryOptions(catalog);
+    const limit = DecisionOptionLimit(params.DeclaredCap);
+    const set: DecisionDiscoveryOptionSet = {
+        Options: options,
+        CatalogSize: catalog.length,
+        HostAllowListSize: params.HostAllowedIDs?.length,
+        WithoutDescription: AgentsWithoutDescription(catalog),
+        OptionLimit: limit,
+        DeclaredOptionCap: params.DeclaredCap,
+    };
+    if (options.length <= limit) {
+        return set;
+    }
+    if (!params.Search) {
+        return { ...set, Options: [], NarrowedFrom: options.length,
+            Error: `${options.length} agents exceed the limit of ${limit} options, and the provider cannot run the semantic search that narrows them` };
+    }
+    // Over-fetching threefold for the permission filter, as Find Candidate Agents does.
+    const results = await params.Search(limit * 3);
+    return { ...set, Options: RankOptionsBySearch(options, results.map(r => r.recordId), limit), NarrowedFrom: options.length };
 }

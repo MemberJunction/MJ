@@ -21,27 +21,49 @@
  * whose cells pin no model: copy it outside the repository and fill in the model IDs locally.
  * `--dry-run` prints the counts and a cost estimate and writes nothing. It never pushes: it prints
  * the `mj sync push` command instead.
+ *
+ * `--decision agent-discovery` builds the agent-discovery suite instead (plan Task 3.1) from a corpus
+ * written by `generate-discovery-corpus.ts` (`corpus.jsonl`, `labels.jsonl`, and `agents.json` for the
+ * estimate). Its matrix cells take `baseline: "semantic-search"` or a model pinning, with no
+ * `stateLayout`; without `--matrix` it runs the decision as the prompt selects its model beside the
+ * `semantic-search` baseline. A baseline cell's records run once: its search makes no model call.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
     AssertOutputOutsideRepo,
     BuildDecisionEvalSuiteRecord,
     BuildDecisionEvalTestRecord,
+    BuildDiscoveryEvalTestRecord,
+    DECISION_EVAL_DECISIONS,
     DEFAULT_DECISION_EVAL_REPS,
     DEFAULT_DECISION_EVAL_SUITE_NAME,
+    DEFAULT_DISCOVERY_EVAL_MATRIX,
+    DEFAULT_DISCOVERY_EVAL_SUITE_NAME,
     DEFAULT_LABEL_SOURCE,
+    DiscoveryCatalogSnapshotSchema,
+    DiscoveryCellRepeats,
     EstimateDecisionEvalRun,
+    EstimateDiscoveryEvalRun,
     FindRepoRoot,
     IsDecidableOffline,
     JoinDecisionCorpus,
+    JoinDiscoveryCorpus,
     ParseDecisionCorpus,
     ParseDecisionEvalMatrix,
     ParseDecisionLabels,
+    ParseDiscoveryCorpus,
+    ParseDiscoveryEvalMatrix,
+    ParseDiscoveryLabels,
+    SelectDiscoveryLabelSource,
     SelectLabelSource,
+    type DecisionEvalDecision,
     type DecisionEvalMatrix,
+    type DiscoveryCatalogAgent,
+    type DiscoveryEvalMatrix,
     type LabelledDecisionPoint,
+    type LabelledDiscoveryRequest,
     type SyncRecord
 } from '@memberjunction/testing-engine';
 
@@ -51,14 +73,16 @@ const REPO_ROOT = FindRepoRoot(RIG_DIR) ?? resolve(RIG_DIR, '../../../..');
 const TEMPLATE_MATRIX = join(REPO_ROOT, 'metadata-optional/decision-eval/matrix/example.json');
 const CORPUS_ENV = 'MJ_DECISION_EVAL_CORPUS_DIR';
 
-const USAGE = 'usage: generate-decision-eval-suite.ts --corpus <dir> --out <dir> [--matrix <file>] [--reps N] '
-    + '[--label-source construction] [--suite <name>] [--limit N] [--dry-run]';
+const USAGE = 'usage: generate-decision-eval-suite.ts --corpus <dir> --out <dir> [--decision conversation-routing|agent-discovery] '
+    + '[--matrix <file>] [--reps N] [--label-source construction] [--suite <name>] [--limit N] [--dry-run]';
 
 /** The command line, read. */
 interface GeneratorArgs {
+    Decision: DecisionEvalDecision;
     CorpusDir: string;
     OutDir: string;
-    MatrixPath: string;
+    /** The matrix file, or null for the decision's default (routing's is the committed template). */
+    MatrixPath: string | null;
     Reps: number | null;
     LabelSource: string;
     Suite: string | null;
@@ -96,16 +120,28 @@ function readPositiveInt(argv: readonly string[], name: string): number | null {
     return value;
 }
 
+/** `--decision`, or conversation routing when it is absent. */
+function readDecision(argv: readonly string[]): DecisionEvalDecision {
+    const raw = readFlag(argv, 'decision') ?? 'conversation-routing';
+    const decision = DECISION_EVAL_DECISIONS.find(d => d === raw);
+    if (!decision) {
+        throw new Error(`--decision must be one of ${DECISION_EVAL_DECISIONS.join(', ')}, got '${raw}'`);
+    }
+    return decision;
+}
+
 function parseArgs(argv: readonly string[]): GeneratorArgs {
     const corpus = readFlag(argv, 'corpus') ?? process.env[CORPUS_ENV];
     const out = readFlag(argv, 'out');
     if (!corpus || !out) {
         throw new Error(`${USAGE}\n(--corpus may also come from ${CORPUS_ENV})`);
     }
+    const matrix = readFlag(argv, 'matrix');
     return {
+        Decision: readDecision(argv),
         CorpusDir: resolve(corpus),
         OutDir: out,
-        MatrixPath: resolve(readFlag(argv, 'matrix') ?? TEMPLATE_MATRIX),
+        MatrixPath: matrix ? resolve(matrix) : null,
         Reps: readPositiveInt(argv, 'reps'),
         LabelSource: readFlag(argv, 'label-source') ?? DEFAULT_LABEL_SOURCE,
         Suite: readFlag(argv, 'suite') ?? null,
@@ -120,7 +156,8 @@ function generate(args: GeneratorArgs): GeneratedSuite {
     const labels = ParseDecisionLabels(readFileSync(join(args.CorpusDir, 'labels.jsonl'), 'utf8'), 'labels.jsonl');
     const joined = JoinDecisionCorpus(points, SelectLabelSource(labels, args.LabelSource, 'labels.jsonl'));
     const cases = args.Limit === null ? joined.Cases : joined.Cases.slice(0, args.Limit);
-    const matrix = ParseDecisionEvalMatrix(readFileSync(args.MatrixPath, 'utf8'), args.MatrixPath);
+    const matrixPath = args.MatrixPath ?? TEMPLATE_MATRIX;
+    const matrix = ParseDecisionEvalMatrix(readFileSync(matrixPath, 'utf8'), matrixPath);
     const reps = args.Reps ?? matrix.reps ?? DEFAULT_DECISION_EVAL_REPS;
     const records = cases.flatMap(c => matrix.cells.map(cell => BuildDecisionEvalTestRecord(c, cell, reps, args.LabelSource)));
     return {
@@ -142,32 +179,12 @@ function writeJson(path: string, value: object): void {
 
 /** Writes the records, the suite, the sync configs and the provenance into the output directory. */
 function writeSuite(outDir: string, args: GeneratorArgs, suite: GeneratedSuite): void {
-    const testsDir = join(outDir, 'tests');
-    const suitesDir = join(outDir, 'test-suites');
-    // Regenerate from scratch: a stale record for a dropped point would keep running forever.
-    rmSync(testsDir, { recursive: true, force: true });
-    rmSync(suitesDir, { recursive: true, force: true });
-    mkdirSync(testsDir, { recursive: true });
-    mkdirSync(suitesDir, { recursive: true });
-    for (const record of suite.Records) {
-        writeJson(join(testsDir, `.${record.primaryKey.ID}.json`), record);
-    }
-    writeJson(join(testsDir, '.mj-sync.json'), { entity: 'MJ: Tests', filePattern: '**/.*.json' });
-    writeJson(join(suitesDir, '.mj-sync.json'), { entity: 'MJ: Test Suites', filePattern: '**/.*.json' });
     const description = `Generated from ${suite.Cases.length} labelled decision point(s) × ${suite.Matrix.cells.length} cell(s). `
         + 'Regenerate with rigs/generate-decision-eval-suite.ts; do not hand-edit.';
-    writeJson(join(suitesDir, '.decision-eval-suite.json'), [BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description)]);
-    // `emitSyncNotes: false`: every push would otherwise write sync blocks back into generated files.
-    writeJson(join(outDir, '.mj-sync.json'), {
-        version: '1.0.0',
-        push: { autoCreateMissingRecords: true },
-        directoryOrder: ['tests', 'test-suites'],
-        emitSyncNotes: false
-    });
-    writeJson(join(outDir, 'generated-from.json'), {
+    writeSyncFiles(outDir, suite.Records, BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description), {
         corpus: args.CorpusDir,
         labelSource: args.LabelSource,
-        matrix: args.MatrixPath,
+        matrix: args.MatrixPath ?? TEMPLATE_MATRIX,
         suiteName: suite.SuiteName,
         reps: suite.Reps,
         cells: suite.Matrix.cells.map(c => c.label),
@@ -175,6 +192,31 @@ function writeSuite(outDir: string, args: GeneratorArgs, suite: GeneratedSuite):
         records: suite.Records.length,
         generatedAt: new Date().toISOString()
     });
+}
+
+/** Writes the test records, the suite record, the sync configs and the provenance. */
+function writeSyncFiles(outDir: string, records: readonly SyncRecord[], suiteRecord: SyncRecord, provenance: object): void {
+    const testsDir = join(outDir, 'tests');
+    const suitesDir = join(outDir, 'test-suites');
+    // Regenerate from scratch: a stale record for a dropped point would keep running forever.
+    rmSync(testsDir, { recursive: true, force: true });
+    rmSync(suitesDir, { recursive: true, force: true });
+    mkdirSync(testsDir, { recursive: true });
+    mkdirSync(suitesDir, { recursive: true });
+    for (const record of records) {
+        writeJson(join(testsDir, `.${record.primaryKey.ID}.json`), record);
+    }
+    writeJson(join(testsDir, '.mj-sync.json'), { entity: 'MJ: Tests', filePattern: '**/.*.json' });
+    writeJson(join(suitesDir, '.mj-sync.json'), { entity: 'MJ: Test Suites', filePattern: '**/.*.json' });
+    writeJson(join(suitesDir, '.decision-eval-suite.json'), [suiteRecord]);
+    // `emitSyncNotes: false`: every push would otherwise write sync blocks back into generated files.
+    writeJson(join(outDir, '.mj-sync.json'), {
+        version: '1.0.0',
+        push: { autoCreateMissingRecords: true },
+        directoryOrder: ['tests', 'test-suites'],
+        emitSyncNotes: false
+    });
+    writeJson(join(outDir, 'generated-from.json'), provenance);
 }
 
 /** Warnings worth reading before spending a run. */
@@ -209,7 +251,7 @@ function report(args: GeneratorArgs, outDir: string, suite: GeneratedSuite): voi
     const byLabel = (label: string) => suite.Cases.filter(c => c.Label === label).length;
     const estimate = EstimateDecisionEvalRun(suite.Cases, suite.Matrix.cells, suite.Reps);
     console.log(args.DryRun ? '── decision-eval suite — DRY RUN (nothing written) ──' : '── decision-eval suite generated ──');
-    console.log(`   matrix       : ${args.MatrixPath}`);
+    console.log(`   matrix       : ${args.MatrixPath ?? TEMPLATE_MATRIX}`);
     console.log(`   label source : ${args.LabelSource}`);
     console.log(`   corpus       : ${suite.PointCount} point(s); ${suite.Cases.length} labelled and used`
         + ` (continue ${byLabel('continue')}, switch ${byLabel('switch')}, ambiguous ${byLabel('ambiguous')})`);
@@ -236,12 +278,114 @@ function main(): void {
     const args = parseArgs(process.argv.slice(2));
     // Refuse before reading a single corpus line: nothing derived from it may land in a repository.
     const outDir = AssertOutputOutsideRepo(args.OutDir, [REPO_ROOT]);
+    if (args.Decision === 'agent-discovery') {
+        mainDiscovery(args, outDir);
+        return;
+    }
     const suite = generate(args);
     if (!args.DryRun) {
         mkdirSync(outDir, { recursive: true });
         writeSuite(outDir, args, suite);
     }
     report(args, outDir, suite);
+}
+
+// ── agent discovery (--decision agent-discovery) ───────────────────────────────────────────────
+
+/** What was generated for the agent-discovery suite. */
+interface GeneratedDiscoverySuite {
+    SuiteName: string;
+    Reps: number;
+    Matrix: DiscoveryEvalMatrix;
+    Cases: LabelledDiscoveryRequest[];
+    RequestCount: number;
+    UnlabelledCount: number;
+    OrphanLabelCount: number;
+    /** The corpus's catalog snapshot, when it has `agents.json`. */
+    Catalog: DiscoveryCatalogAgent[] | null;
+    Records: SyncRecord[];
+    Names: string[];
+}
+
+/** Reads and validates the discovery corpus, its labels, its catalog snapshot and the matrix, and builds every record. */
+function generateDiscovery(args: GeneratorArgs): GeneratedDiscoverySuite {
+    const requests = ParseDiscoveryCorpus(readFileSync(join(args.CorpusDir, 'corpus.jsonl'), 'utf8'), 'corpus.jsonl');
+    const labels = ParseDiscoveryLabels(readFileSync(join(args.CorpusDir, 'labels.jsonl'), 'utf8'), 'labels.jsonl');
+    const joined = JoinDiscoveryCorpus(requests, SelectDiscoveryLabelSource(labels, args.LabelSource, 'labels.jsonl'));
+    const cases = args.Limit === null ? joined.Cases : joined.Cases.slice(0, args.Limit);
+    const matrix = args.MatrixPath ? ParseDiscoveryEvalMatrix(readFileSync(args.MatrixPath, 'utf8'), args.MatrixPath) : DEFAULT_DISCOVERY_EVAL_MATRIX;
+    const reps = args.Reps ?? matrix.reps ?? DEFAULT_DECISION_EVAL_REPS;
+    const records = cases.flatMap(c => matrix.cells.map(cell => BuildDiscoveryEvalTestRecord(c, cell, reps, args.LabelSource)));
+    const catalogPath = join(args.CorpusDir, 'agents.json');
+    return {
+        SuiteName: args.Suite ?? matrix.suiteName ?? DEFAULT_DISCOVERY_EVAL_SUITE_NAME,
+        Reps: reps,
+        Matrix: matrix,
+        Cases: cases,
+        RequestCount: requests.length,
+        UnlabelledCount: joined.UnlabelledRequestIds.length,
+        OrphanLabelCount: joined.OrphanLabelCount,
+        Catalog: existsSync(catalogPath) ? DiscoveryCatalogSnapshotSchema.parse(JSON.parse(readFileSync(catalogPath, 'utf8'))).agents : null,
+        Records: records,
+        Names: records.map(r => String(r.fields.Name))
+    };
+}
+
+/** Writes the discovery suite. */
+function writeDiscoverySuite(outDir: string, args: GeneratorArgs, suite: GeneratedDiscoverySuite): void {
+    const description = `Generated from ${suite.Cases.length} labelled agent-discovery request(s) × ${suite.Matrix.cells.length} cell(s). `
+        + 'Regenerate with rigs/generate-decision-eval-suite.ts --decision agent-discovery; do not hand-edit.';
+    writeSyncFiles(outDir, suite.Records, BuildDecisionEvalSuiteRecord(suite.SuiteName, suite.Names, description), {
+        decision: 'agent-discovery',
+        corpus: args.CorpusDir,
+        labelSource: args.LabelSource,
+        matrix: args.MatrixPath ?? '(default: decision + semantic-search)',
+        suiteName: suite.SuiteName,
+        reps: suite.Reps,
+        cells: suite.Matrix.cells.map(c => c.label),
+        requests: suite.Cases.length,
+        records: suite.Records.length,
+        generatedAt: new Date().toISOString()
+    });
+}
+
+/** Prints the discovery suite's counts, the estimate, any warnings, and what to do next. */
+function reportDiscovery(args: GeneratorArgs, outDir: string, suite: GeneratedDiscoverySuite): void {
+    const agentCases = suite.Cases.filter(c => c.Label.label === 'agent').length;
+    const estimate = EstimateDiscoveryEvalRun(suite.Cases, suite.Matrix.cells, suite.Reps, suite.Catalog ?? []);
+    const calls = suite.Matrix.cells.reduce((sum, cell) => sum + suite.Cases.length * DiscoveryCellRepeats(cell, suite.Reps), 0);
+    console.log(args.DryRun ? '── agent-discovery suite — DRY RUN (nothing written) ──' : '── agent-discovery suite generated ──');
+    console.log(`   matrix       : ${args.MatrixPath ?? '(default: decision + semantic-search)'}`);
+    console.log(`   label source : ${args.LabelSource}`);
+    console.log(`   corpus       : ${suite.RequestCount} request(s); ${suite.Cases.length} labelled and used (agent ${agentCases}, none ${suite.Cases.length - agentCases})`);
+    console.log(`   catalog      : ${suite.Catalog ? `${suite.Catalog.length} agent(s) in agents.json` : 'no agents.json: the estimate leaves out the options'}`);
+    console.log(`   cells        : ${suite.Matrix.cells.map(c => c.baseline ? `${c.label} (baseline)` : c.label).join(', ')}`);
+    console.log(`   records      : ${suite.Records.length} test(s)${args.DryRun ? ' (would be written)' : ` → ${join(outDir, 'tests')}`}`);
+    console.log(`   suite        : ${suite.SuiteName}`);
+    console.log(`   reps/record  : ${suite.Reps} (baseline cells: 1)`);
+    console.log(`   runs         : ${calls.toLocaleString()}`);
+    const money = estimate.USD === null ? 'unpriced (a decision cell carries no price)' : `~$${estimate.USD.toFixed(2)}`;
+    console.log(`   EST. SPEND   : ${money}  ·  ~${estimate.PromptTokens.toLocaleString()} prompt + ~${estimate.CompletionTokens.toLocaleString()} completion tokens`);
+    const unpinned = suite.Matrix.cells.filter(c => !c.baseline && !c.modelId && !c.vendorId).map(c => c.label);
+    if (unpinned.length > 0) {
+        console.log(`   ⚠ ${unpinned.join(', ')} pin(s) no model: they run whatever the decision prompt selects, with its failover.`);
+    }
+    if (suite.UnlabelledCount > 0 || suite.OrphanLabelCount > 0) {
+        console.log(`   ⚠ ${suite.UnlabelledCount} request(s) unlabelled by this source; ${suite.OrphanLabelCount} label(s) name no request.`);
+    }
+    console.log(args.DryRun
+        ? `\n   dry run: re-run without --dry-run to write ${suite.Records.length} record(s) to ${outDir}`
+        : `\n   next (push the 'Decision Eval' test type from metadata/test-types first):\n     npx mj sync push --dir=${outDir}`);
+}
+
+/** The agent-discovery path. */
+function mainDiscovery(args: GeneratorArgs, outDir: string): void {
+    const suite = generateDiscovery(args);
+    if (!args.DryRun) {
+        mkdirSync(outDir, { recursive: true });
+        writeDiscoverySuite(outDir, args, suite);
+    }
+    reportDiscovery(args, outDir, suite);
 }
 
 try {

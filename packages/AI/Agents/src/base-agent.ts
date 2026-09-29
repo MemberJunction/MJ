@@ -138,25 +138,22 @@ import {
     SelectCatalogNarrowing,
 } from './catalog-narrowing';
 import {
-    AgentsWithoutDescription,
+    BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
     CanSearchEntities,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
     DECISION_DISCOVERY_MIN_CONFIDENCE,
-    DECISION_DISCOVERY_SEARCH_ENTITY,
     DECISION_DISCOVERY_TIMEOUT_MS,
+    DecisionDiscoveryAgentSearch,
     DecisionDiscoveryFromResult,
-    DecisionDiscoveryOptions,
     DecisionDiscoveryOptionSet,
     DecisionDiscoveryOutcome,
-    DecisionOptionLimit,
+    DecisionDiscoveryRunnableAgents,
+    DecisionPromptOptionCap,
     FailedDecisionDiscovery,
     HostAllowedAgentIDs,
     IsDecisionDiscoveryOn,
-    KeepHostAllowedAgents,
     MentionsAgent,
-    RankOptionsBySearch,
-    SmallestOptionCap,
 } from './decision-discovery';
 import {
     PipelineExecutor,
@@ -3657,10 +3654,9 @@ export class BaseAgent {
     }
 
     /**
-     * The Choice's options, rebuilt on every call and never cached: the agents in the permitted
-     * catalog that the host allows and that have a description. There are never more than
-     * {@link DecisionOptionLimit}: when there are, the semantic search narrows them first; if it
-     * cannot, `Error` says why.
+     * The Choice's options, rebuilt on every call and never cached ({@link BuildDecisionDiscoveryOptionSet}):
+     * from AIEngine's current catalog, the agents the user may run, the decision prompt's option cap,
+     * and the semantic search over the opening request when the provider can run it.
      */
     private async decisionDiscoveryOptionSet(
         agent: MJAIAgentEntityExtended,
@@ -3668,67 +3664,14 @@ export class BaseAgent {
         promptName: string,
         hostAllowedIDs: string[] | undefined
     ): Promise<DecisionDiscoveryOptionSet> {
-        const catalog = KeepHostAllowedAgents(await this.decisionDiscoveryCatalog(agent, contextUser), hostAllowedIDs);
-        const options = DecisionDiscoveryOptions(catalog);
-        const declaredCap = this.decisionOptionCap(promptName);
-        const limit = DecisionOptionLimit(declaredCap);
-        const set: DecisionDiscoveryOptionSet = {
-            Options: options,
-            CatalogSize: catalog.length,
-            HostAllowListSize: hostAllowedIDs?.length,
-            WithoutDescription: AgentsWithoutDescription(catalog),
-            OptionLimit: limit,
-            DeclaredOptionCap: declaredCap,
-        };
-        if (options.length <= limit) {
-            return set;
-        }
         const provider = this.ProviderToUse;
-        if (!CanSearchEntities(provider)) {
-            return { ...set, Options: [], NarrowedFrom: options.length,
-                Error: `${options.length} agents exceed the limit of ${limit} options, and the provider cannot run the semantic search that narrows them` };
-        }
-        // The search Find Candidate Agents runs: hybrid over MJ: AI Agents, over-fetching threefold for
-        // the permission filter. Its similarity floor is not applied: the decision judges fit.
-        const results = await provider.SearchEntity({
-            entityName: DECISION_DISCOVERY_SEARCH_ENTITY,
-            searchText: this._openingRequest,
-            options: { mode: 'hybrid', topK: limit * 3, minScore: 0, contextUser },
+        return BuildDecisionDiscoveryOptionSet({
+            Agents: await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, contextUser),
+            RunningAgentID: agent.ID,
+            HostAllowedIDs: hostAllowedIDs,
+            DeclaredCap: DecisionPromptOptionCap(AIEngine.Instance, promptName),
+            Search: CanSearchEntities(provider) ? DecisionDiscoveryAgentSearch(provider, this._openingRequest, contextUser) : undefined,
         });
-        return { ...set, Options: RankOptionsBySearch(options, results.map(r => r.recordId), limit), NarrowedFrom: options.length };
-    }
-
-    /**
-     * The agents this run may suggest, from AIEngine's current catalog: the ones the user may run and
-     * that can be discovered directly (the set Find Candidate Agents offers, through the same
-     * {@link AIAgentPermissionHelper} filter), minus the running agent itself.
-     */
-    private async decisionDiscoveryCatalog(agent: MJAIAgentEntityExtended, contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
-        const runnable = await AIAgentPermissionHelper.FilterRunnableAgents(AIEngine.Instance.Agents, contextUser);
-        return runnable.filter(a => AIAgentPermissionHelper.IsDirectlyDiscoverable(a) && !UUIDsEqual(a.ID, agent.ID));
-    }
-
-    /**
-     * The decision model's option cap: the smallest `Decision.MaxChoiceOptions` in the effective model
-     * configuration of the models the decision prompt is bound to, the setting `AIDecisionRunner`
-     * checks before its call. `undefined` when none declares one, or the prompt is not found.
-     */
-    private decisionOptionCap(promptName: string): number | undefined {
-        const engine = AIEngine.Instance;
-        const target = promptName.trim().toLowerCase();
-        const prompt = engine.Prompts.find(p => (p.Name ?? '').trim().toLowerCase() === target);
-        if (!prompt) {
-            return undefined;
-        }
-        const caps = engine.PromptModels
-            .filter(pm => UUIDsEqual(pm.PromptID, prompt.ID) && (pm.Status === 'Active' || pm.Status === 'Preview'))
-            .map(pm => {
-                const modelVendor = pm.VendorID
-                    ? engine.ModelVendors.find(mv => UUIDsEqual(mv.ModelID, pm.ModelID) && UUIDsEqual(mv.VendorID, pm.VendorID))
-                    : undefined;
-                return engine.GetEffectiveModelConfiguration(pm.ModelID, modelVendor?.ID)?.Decision?.MaxChoiceOptions;
-            });
-        return SmallestOptionCap(caps);
     }
 
     /** Opens the `Agent discovery` Decision step. Without a run there is no step. */
