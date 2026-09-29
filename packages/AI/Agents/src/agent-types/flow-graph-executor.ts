@@ -22,10 +22,13 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     CompileFlowToTaskGraph,
+    FormatValidationErrors,
     type FlowCompileResult,
     type FlowCompilerOptions,
     type FlowCompilerPath,
     type FlowCompilerStep,
+    type TaskGraphSpec,
+    type TaskGraphValidationError,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
@@ -117,4 +120,17 @@ export function CompileFlowAgentToTaskGraph(
 export function FormatFlowCompileErrors(result: FlowCompileResult): string {
     if (result.Errors.length === 0) return '';
     return result.Errors.map((e) => `[${e.Code}] ${e.Message}`).join('\n');
+}
+
+/**
+ * Renders the task-graph validator's refusals of a compiled workflow for its author.
+ *
+ * A compiled graph's tempIds are step IDs, so the validator's messages name steps by ID where the
+ * author knows them by name: an incomplete Choice fork, for one, is reported by its exclusive group,
+ * which is its origin step's ID. Every step ID in a message becomes that step's name.
+ */
+export function FormatFlowValidationErrors(errors: readonly TaskGraphValidationError[], spec: TaskGraphSpec): string {
+    const named = (message: string): string =>
+        spec.tasks.reduce((text, task) => (task.tempId && task.name ? text.split(task.tempId).join(task.name) : text), message);
+    return FormatValidationErrors(errors.map((e) => ({ ...e, Message: named(e.Message) })));
 }

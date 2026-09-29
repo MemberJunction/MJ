@@ -20,6 +20,8 @@
  * @module @memberjunction/ai-core-plus
  */
 import type { AgentSpec, AgentStep, AgentStepPath } from '../agent-spec';
+import { RewriteDecisionReferences } from './decision-conditions';
+import { FLOW_DECISION_KEY_PATTERN, type FlowDecisionStepConfiguration } from './flow-decision-step';
 import { ConfigOf, NormalizeDependency, type TaskGraphSpec, type TaskGraphSpecNode } from './task-graph-spec';
 
 /** What the caller must supply that a runtime graph does not carry. */
@@ -51,7 +53,12 @@ export type SaveAsWorkflowLoss =
     | { Kind: 'HumanTask'; TempId: string; Detail: string }
     | { Kind: 'UnknownAgent'; TempId: string; Detail: string }
     | { Kind: 'Continuation'; Detail: string }
-    | { Kind: 'InputPayload'; TempId: string; Detail: string };
+    | { Kind: 'InputPayload'; TempId: string; Detail: string }
+    /**
+     * A Decision node names a prompt that could not be resolved to an ID, so the saved step runs on
+     * `Default Decision` instead of the prompt the graph chose.
+     */
+    | { Kind: 'UnknownPrompt'; TempId: string; Detail: string };
 
 export type SaveAsWorkflowResult = {
     Success: boolean;
@@ -94,11 +101,14 @@ export function ConvertTaskGraphToAgentSpec(
         graph.tasks.filter((t) => (t.dependsOn ?? []).length > 0).map((t) => t.tempId),
     );
 
+    // A graph's conditions name a Decision node by tempId; a flow's name a Decision step by key.
+    const decisionKeys = assignDecisionKeys(graph.tasks);
+
     for (const node of graph.tasks) {
-        // Human, External and Decision have no design-time equivalent — reported, never emitted as
-        // an empty step, which would look like a workflow that runs unattended. Every OTHER kind
-        // maps to a step type: reading only `agentName` used to mislabel action, prompt and loop
-        // nodes as "human task" losses and drop them.
+        // Human and External have no design-time equivalent — reported, never emitted as an empty
+        // step, which would look like a workflow that runs unattended. Every OTHER kind maps to a
+        // step type: reading only `agentName` used to mislabel action, prompt and loop nodes as
+        // "human task" losses and drop them.
         const omitted = noDesignTimeEquivalent(node);
         if (omitted) {
             losses.push({ Kind: 'HumanTask', TempId: node.tempId, Detail: omitted });
@@ -130,6 +140,9 @@ export function ConvertTaskGraphToAgentSpec(
             });
         }
 
+        const unresolvedPrompt = unresolvedDecisionPrompt(node, options);
+        if (unresolvedPrompt) losses.push(unresolvedPrompt);
+
         const stepID = options.NextID();
         stepIdByTempId.set(node.tempId, stepID);
         steps.push({
@@ -137,7 +150,7 @@ export function ConvertTaskGraphToAgentSpec(
             Name: node.name,
             Description: node.description,
             StartingStep: !hasDependency.has(node.tempId),
-            ...stepShapeFor(node, subAgentID, options),
+            ...stepShapeFor(node, subAgentID, options, decisionKeys.get(node.tempId) ?? node.tempId),
             // Policy and geometry are presentation/execution settings the graph carries; dropping
             // them here would make Save-as-Workflow quietly lossy.
             TimeoutSeconds: node.policy?.timeoutSeconds,
@@ -184,7 +197,7 @@ export function ConvertTaskGraphToAgentSpec(
                 // The direction flip: dependsOn points backwards, a flow path points forwards.
                 OriginStepID: originStepID,
                 DestinationStepID: destinationStepID,
-                Condition: dep.condition,
+                Condition: withDecisionKeys(dep.condition, decisionKeys),
                 // The graph's own ranking, carried through. Hardcoding 0 here used to flatten every
                 // branch to equal priority, so a saved workflow could take a different branch than
                 // the graph it came from. `exclusiveGroup`/`sequence` are deliberately NOT carried:
@@ -226,24 +239,75 @@ export function FormatSaveAsWorkflowLosses(losses: SaveAsWorkflowLoss[]): string
     return losses.map((l) => `[${l.Kind}] ${l.Detail}`).join('\n');
 }
 
-/**
- * Why a node cannot become a Flow step, or `null` when it can.
- *
- * A Decision node is here because a Flow has no Decision step yet: dropping it silently would save a
- * workflow whose path conditions read answers nothing produces any more.
- */
+/** Why a node cannot become a Flow step, or `null` when it can. */
 function noDesignTimeEquivalent(node: TaskGraphSpecNode): string | null {
     switch (node.kind) {
         case 'Human':
             return `"${node.name}" is a person's step and has no design-time equivalent yet; it is omitted from the workflow.`;
         case 'External':
             return `"${node.name}" is completed by an external system and has no design-time equivalent; it is omitted from the workflow.`;
-        case 'Decision':
-            return `"${node.name}" is a Decision step, which a Flow cannot express yet; it is omitted from the workflow, `
-                + 'and any path condition that reads its answers must be rewritten.';
         default:
             return null;
     }
+}
+
+/**
+ * The key each Decision node's step is saved under, by tempId.
+ *
+ * A flow's path conditions name a Decision step by key (`decisions.<key>.<question>`), and a key has
+ * to be an identifier. A tempId that already is one is kept, so the graph's conditions read the same
+ * in the workflow. Any other is replaced by one derived from it, unique among the graph's Decision
+ * steps, and {@link withDecisionKeys} rewrites every condition that names it.
+ */
+function assignDecisionKeys(tasks: readonly TaskGraphSpecNode[]): Map<string, string> {
+    const tempIds = tasks.filter((t) => t.kind === 'Decision').map((t) => t.tempId);
+    const taken = new Set(tempIds.filter((id) => FLOW_DECISION_KEY_PATTERN.test(id)));
+    const keys = new Map<string, string>();
+    for (const tempId of tempIds) {
+        if (FLOW_DECISION_KEY_PATTERN.test(tempId)) {
+            keys.set(tempId, tempId);
+            continue;
+        }
+        const key = unusedKey(keyFrom(tempId), taken);
+        taken.add(key);
+        keys.set(tempId, key);
+    }
+    return keys;
+}
+
+/** A valid key built from a tempId that is not one: every other character becomes `_`. */
+function keyFrom(tempId: string): string {
+    const cleaned = tempId.replace(/[^A-Za-z0-9_]/g, '_');
+    return /^[A-Za-z_]/.test(cleaned) ? cleaned : `step_${cleaned}`;
+}
+
+/** `base`, or `base_2`, `base_3`… — the first one no other Decision step has. */
+function unusedKey(base: string, taken: ReadonlySet<string>): string {
+    let key = base;
+    for (let n = 2; taken.has(key); n++) key = `${base}_${n}`;
+    return key;
+}
+
+/** A condition with each Decision node's tempId replaced by its step's key. */
+function withDecisionKeys(condition: string | undefined, keyByTempId: ReadonlyMap<string, string>): string | undefined {
+    if (!condition) return condition;
+    return RewriteDecisionReferences(condition, (tempId) => keyByTempId.get(tempId)).Expression;
+}
+
+/**
+ * A loss when a Decision node names a prompt that cannot be resolved, or `null`.
+ *
+ * Saving it with no `PromptID` would run the step on `Default Decision`, which is a different model
+ * binding from the one the graph chose, so it is said rather than done quietly.
+ */
+function unresolvedDecisionPrompt(node: TaskGraphSpecNode, options: SaveAsWorkflowOptions): SaveAsWorkflowLoss | null {
+    const promptName = ConfigOf(node, 'Decision')?.promptName;
+    if (!promptName || options.ResolvePromptID?.(promptName)) return null;
+    return {
+        Kind: 'UnknownPrompt',
+        TempId: node.tempId,
+        Detail: `Decision prompt "${promptName}" could not be resolved; "${node.name}" is saved to use the Default Decision prompt.`,
+    };
 }
 
 /**
@@ -251,11 +315,14 @@ function noDesignTimeEquivalent(node: TaskGraphSpecNode): string | null {
  *
  * One place where `kind` becomes `StepType`, so a new kind is a compile error here rather than a
  * step that silently converts to the wrong type.
+ *
+ * @param decisionKey the key a Decision node's step is saved under; unused for other kinds
  */
 function stepShapeFor(
     node: TaskGraphSpecNode,
     subAgentID: string | null,
     options: SaveAsWorkflowOptions,
+    decisionKey: string,
 ): Partial<AgentStep> & Pick<AgentStep, 'StepType'> {
     switch (node.kind) {
         case 'Agent':
@@ -291,9 +358,23 @@ function stepShapeFor(
                 LoopBodyType: ConfigOf(node, 'While')?.action ? 'Action' : 'Sub-Agent',
                 Configuration: JSON.stringify(ConfigOf(node, 'While') ?? {}),
             };
+        case 'Decision': {
+            const cfg = ConfigOf(node, 'Decision');
+            const configuration: FlowDecisionStepConfiguration = {
+                key: decisionKey,
+                ...(cfg?.state !== undefined ? { state: cfg.state } : {}),
+                questions: cfg?.questions ?? {},
+            };
+            return {
+                StepType: 'Decision',
+                // No prompt means Default Decision, which is also what a NULL PromptID means.
+                PromptID: cfg?.promptName ? options.ResolvePromptID?.(cfg.promptName) ?? undefined : undefined,
+                Configuration: JSON.stringify(configuration),
+            };
+        }
         default:
-            // Human/External/Decision are filtered out before this point; the fallback keeps the
-            // function total rather than letting a future kind fall through as undefined.
+            // Human/External are filtered out before this point; the fallback keeps the function
+            // total rather than letting a future kind fall through as undefined.
             return { StepType: 'Sub-Agent', SubAgentID: subAgentID ?? undefined };
     }
 }

@@ -12,6 +12,10 @@
  * `.name` or `['name']` — and anything else that touches `decisions` is reported as malformed rather
  * than guessed at, so the validator refuses it and the gate holds on it.
  *
+ * The same grammar rewrites the step names in a condition ({@link RewriteDecisionReferences}): a flow
+ * names a Decision step by its key and a compiled graph by its step ID, so a condition crossing
+ * between the two must still name the step it named.
+ *
  * @module @memberjunction/ai-core-plus
  */
 
@@ -33,6 +37,14 @@ export type DecisionReferenceScan = {
      * `decisions[key]`. Nothing can say which answer they read, so none of them can be checked.
      */
     Malformed: string[];
+};
+
+/** A condition with the step names in its `decisions` references rewritten. */
+export type DecisionReferenceRewrite = {
+    /** The condition, with every reference `rename` could map rewritten and everything else as written. */
+    Expression: string;
+    /** Step names `rename` could not map, each once, in the order they appear. Their references are left as written. */
+    Unknown: string[];
 };
 
 /**
@@ -64,6 +76,20 @@ const LEADING_LITERAL = /^(?:'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/;
 
 /** Loose or strict equality, with the whitespace around it. */
 const EQUALITY = /^\s*===?\s*/;
+
+/** A name that can follow a dot. Anything else is written in brackets. */
+const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/** The step segment of one reference, where it sits, and how it was written. */
+type StepSegment = {
+    Name: string;
+    Start: number;
+    End: number;
+    /** The segment as written, including any whitespace before it. */
+    Text: string;
+    /** The quote a bracket segment used, or `null` for `.name`. */
+    Quote: '\'' | '"' | null;
+};
 
 /**
  * Every `decisions` reference in a condition, and every use of the root that is not one.
@@ -111,6 +137,73 @@ export function DecisionChoiceTestOf(expression: string): DecisionChoiceTest | n
         test.Values.push(equality.Value);
     }
     return test;
+}
+
+/**
+ * Rewrites the step name in every `decisions.<step>.<question>` reference a condition makes.
+ *
+ * The grammar is {@link DecisionReferencesIn}'s: text inside string literals is left alone, a
+ * property named `decisions` (`payload.decisions`) is not the root, and `.step`, `?.step` and
+ * `['step']` are all read. Only references that name a step AND a question are rewritten; a malformed
+ * use stays as written, for the validator or the hold to report.
+ *
+ * A rewritten name keeps its reference's form where it can: `.triage` stays a dot when the new name
+ * can follow a dot, and becomes `['<name>']` when it cannot (a step ID); `?.` is kept either way.
+ *
+ * @param condition the condition to rewrite
+ * @param rename    maps a step name to its new name, or `undefined` when it has none
+ * @returns the rewritten condition, and every step name `rename` could not map
+ */
+export function RewriteDecisionReferences(
+    condition: string,
+    rename: (key: string) => string | undefined,
+): DecisionReferenceRewrite {
+    const rewrite: DecisionReferenceRewrite = { Expression: condition, Unknown: [] };
+    if (!condition) return rewrite;
+
+    const strings = stringSpans(condition);
+    const parts: string[] = [];
+    let copied = 0;
+    for (const match of condition.matchAll(ROOT_PATTERN)) {
+        const start = match.index ?? 0;
+        if (strings.some(([from, to]) => start >= from && start < to)) continue;
+
+        const segment = stepSegmentAt(condition, start + ROOT.length);
+        if (!segment) continue;
+        const renamed = rename(segment.Name);
+        if (renamed === undefined) {
+            if (!rewrite.Unknown.includes(segment.Name)) rewrite.Unknown.push(segment.Name);
+            continue;
+        }
+        parts.push(condition.slice(copied, segment.Start), formatStepSegment(segment, renamed));
+        copied = segment.End;
+    }
+    parts.push(condition.slice(copied));
+    rewrite.Expression = parts.join('');
+    return rewrite;
+}
+
+/** The step segment of a reference that also names a question, or `null` for a malformed use. */
+function stepSegmentAt(expression: string, from: number): StepSegment | null {
+    const [step, question] = readSegments(expression, from, 2).Segments;
+    if (!step || !question) return null;
+
+    SEGMENT.lastIndex = from;
+    const match = SEGMENT.exec(expression);
+    if (!match) return null;
+    const quote = match[1] !== undefined ? null : match[2] !== undefined ? '\'' : '"';
+    return { Name: step, Start: from, End: SEGMENT.lastIndex, Text: match[0], Quote: quote };
+}
+
+/** A step segment written with a new name, in its original form where the name allows. */
+function formatStepSegment(segment: StepSegment, name: string): string {
+    const lead = /^\s*/.exec(segment.Text)?.[0] ?? '';
+    const optional = /^\s*\?\./.test(segment.Text);
+    if (segment.Quote === null && IDENTIFIER.test(name)) return `${lead}${optional ? '?.' : '.'}${name}`;
+
+    const quote = segment.Quote ?? '\'';
+    const escaped = name.replace(/\\/g, '\\\\').split(quote).join(`\\${quote}`);
+    return `${lead}${optional ? '?.' : ''}[${quote}${escaped}${quote}]`;
 }
 
 /** The `[start, end)` ranges of every string literal. */

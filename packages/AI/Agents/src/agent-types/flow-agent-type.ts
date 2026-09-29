@@ -12,9 +12,22 @@
  */
 
 import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
-import { SelectOutgoingEdges, type IConditionEvaluator } from '@memberjunction/ai-core-plus';
+import {
+    CollectDecisionStepKeys,
+    DecisionHoldReason,
+    NO_DECISIONS,
+    ReadFlowDecisionStepConfiguration,
+    ResolveDecisionStepAnswers,
+    SelectOutgoingEdges,
+    ValidateTaskGraphSpec,
+    type AgentDecisionAnswerSummary,
+    type DecisionStepAnswers,
+    type FlowDecisionStepConfiguration,
+    type GraphDecisions,
+    type IConditionEvaluator,
+} from '@memberjunction/ai-core-plus';
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
-import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors } from './flow-graph-executor';
+import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
 import { BaseAgentType, type AgentTypeExecutionRouting } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus, LogStatusEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -33,6 +46,30 @@ interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
     /** The ID of the prompt to execute for flow prompt steps */
     flowPromptStepId?: string;
 }
+
+/** The paths a step may take next, or why it may not choose among them yet. */
+type FlowPathSelection = {
+    /** The followable paths, highest priority first. */
+    Paths: MJAIAgentStepPathEntity[];
+    /**
+     * Set when a path ranked at or above every followable one reads a decision that is not usable:
+     * the answer it needed and why it is missing. The walker then stops rather than pick around it.
+     */
+    HoldReason: string | null;
+};
+
+/** A Decision step's `stepResult`, in the shape a Prompt step's has. */
+type FlowDecisionStepResult = {
+    Success: boolean;
+    step: 'Success' | 'Failed';
+    result: Record<string, AgentDecisionAnswerSummary> | { error: string };
+};
+
+/** How a Decision step ended, as the shared answer rules read it. */
+type FlowDecisionOutcome =
+    | { Status: 'Complete'; Answers: Record<string, AgentDecisionAnswerSummary> }
+    | { Status: 'Failed'; ErrorMessage: string }
+    | { Status: 'Skipped' };
 
 /**
  * Where a Flow agent's steps execute.
@@ -90,9 +127,34 @@ export class FlowExecutionState {
         confidence?: number;
     };
 
+    /**
+     * What this run's Decision steps have answered, keyed by each step's `key` and then by question.
+     *
+     * `Answers` holds the answers a path condition may act on, and is what the `decisions` root
+     * reads. `Unresolved` says why each of the rest is not usable (the call failed, the answer fell
+     * below its question's `minConfidence`, or the step was skipped), and a condition that reads one
+     * of them holds. Never written into the payload.
+     */
+    Decisions: GraphDecisions = NO_DECISIONS;
+
     constructor(agentId: string) {
         this.agentId = agentId;
     }
+}
+
+/** A run's decisions with one Decision step's answers replacing whatever that step gave before. */
+function withDecisionStep(
+    decisions: GraphDecisions,
+    config: FlowDecisionStepConfiguration,
+    resolved: DecisionStepAnswers
+): GraphDecisions {
+    const answers = { ...decisions.Answers };
+    const unresolved = { ...decisions.Unresolved };
+    delete answers[config.key];
+    delete unresolved[config.key];
+    if (Object.keys(resolved.Answers).length > 0) answers[config.key] = resolved.Answers;
+    if (Object.keys(resolved.Unresolved).length > 0) unresolved[config.key] = resolved.Unresolved;
+    return { Answers: answers, Unresolved: unresolved };
 }
 
 /**
@@ -345,8 +407,12 @@ export class FlowAgentType extends BaseAgentType {
 
             // Find valid paths from current step
             // Pass params to enable data/context access in path conditions (Phase 1)
-            const paths = await this.getValidPaths(flowState.currentStepId, payload, flowState, params);
-            
+            const selection = await this.getValidPaths(flowState.currentStepId, payload, flowState, params);
+            if (selection.HoldReason) {
+                return this.stopOnHeldPath(flowState.currentStepId, selection.HoldReason, payload);
+            }
+            const paths = selection.Paths;
+
             if (paths.length === 0) {
                 // No valid paths - flow is complete
                 return this.createSuccessStep({
@@ -465,6 +531,7 @@ export class FlowAgentType extends BaseAgentType {
      * - flowContext: Flow execution metadata (current step, completed steps, path)
      * - data: Transient template data from ExecuteAgentParams (NEW in Phase 1)
      * - context: Runtime context from ExecuteAgentParams (NEW in Phase 1)
+     * - decisions: The usable answers of the run's Decision steps, by key (`decisions.<key>.<question>`)
      *
      * This allows path conditions to access runtime parameters like:
      * - `data.userApproval === true`
@@ -492,13 +559,18 @@ export class FlowAgentType extends BaseAgentType {
         payload: unknown,
         flowState: FlowExecutionState,
         params: ExecuteAgentParams<unknown, P>
-    ): Promise<MJAIAgentStepPathEntity[]> {
+    ): Promise<FlowPathSelection> {
         const repo = new AIEngineGraphRepository(flowState.agentId);
+        // The Decision hold runs BEFORE any condition is evaluated, on every step's paths: a later
+        // step's condition can read an earlier Decision step's answer. A condition reading an answer
+        // that is not usable is never evaluated, because `undefined === 'billing'` is a confident,
+        // wrong `false`.
         const selection = SelectOutgoingEdges(
             stepId,
             repo,
             this._conditionEvaluator,
-            this.buildConditionContext(payload, flowState, params)
+            this.buildConditionContext(payload, flowState, params),
+            (condition) => DecisionHoldReason(condition, flowState.Decisions)
         );
 
         for (const rejection of selection.Rejected) {
@@ -506,7 +578,9 @@ export class FlowAgentType extends BaseAgentType {
             // is not shaped the way its author thinks", and each previously vanished: a broken
             // expression was logged as if it were a false one, and a dangling edge failed the run
             // with a message that named the missing ID but not the edge that pointed at it.
-            if (rejection.Reason === 'ConditionFalse') continue;
+            // ConditionHeld is quiet too: one that outranks the choice stops the run with its reason,
+            // and one ranked below the choice could not have won.
+            if (rejection.Reason === 'ConditionFalse' || rejection.Reason === 'ConditionHeld') continue;
             LogError(
                 `Flow path ${rejection.EdgeId} from step ${stepId} not followed (${rejection.Reason})` +
                 `${rejection.Detail ? `: ${rejection.Detail}` : ''}`
@@ -514,9 +588,38 @@ export class FlowAgentType extends BaseAgentType {
         }
 
         const byId = new Map(AIEngine.Instance.GetPathsFromStep(stepId).map(p => [p.ID, p]));
-        return selection.Edges
-            .map(e => byId.get(e.id))
-            .filter((p): p is MJAIAgentStepPathEntity => !!p);
+        return {
+            Paths: selection.Edges
+                .map(e => byId.get(e.id))
+                .filter((p): p is MJAIAgentStepPathEntity => !!p),
+            HoldReason: selection.Held?.Detail ?? null
+        };
+    }
+
+    /**
+     * Stops the run because a step cannot choose its next step without guessing.
+     *
+     * A path ranked at or above every followable one reads a decision that is not usable, so it
+     * might have been the one to take. The dispatcher holds such a fork; a walker cannot wait, so it
+     * fails the run with the reason instead, and never takes a lower-ranked path in its place.
+     */
+    private stopOnHeldPath<P>(stepId: string, holdReason: string, payload: P): BaseAgentNextStep<P> {
+        const stepName = AIEngine.Instance.GetAgentStepByID(stepId)?.Name ?? stepId;
+        return this.stopFlow(
+            `Step "${stepName}" cannot choose its next step: a path from it that ranks at or above the ` +
+            `others reads a decision that is not usable, because ${holdReason}. The flow stops rather than guess.`,
+            payload
+        );
+    }
+
+    /** A failed step that ends the run: no recovery path is taken after it. */
+    private stopFlow<P>(errorMessage: string, payload: P): BaseAgentNextStep<P> {
+        return this.createNextStep<P>('Failed', {
+            errorMessage,
+            terminate: true,
+            newPayload: payload,
+            previousPayload: payload
+        });
     }
 
     /**
@@ -544,7 +647,9 @@ export class FlowAgentType extends BaseAgentType {
                 stepCount: flowState.completedStepIds.size
             },
             data: params.data || {},
-            context: params.context || {}
+            context: params.context || {},
+            // Only the usable answers. A condition reading any other one holds before it is evaluated.
+            decisions: flowState.Decisions.Answers
         };
     }
 
@@ -732,8 +837,17 @@ export class FlowAgentType extends BaseAgentType {
             // Store a skip marker as the step result
             flowState.stepResults.set(node.ID, { skipped: true, stepName: node.Name });
 
+            // A skipped Decision step answered nothing, so every condition that reads it holds.
+            if (node.StepType === 'Decision') {
+                this.recordDecisionOutcome(flowState, node, { Status: 'Skipped' });
+            }
+
             // Find the next step by evaluating paths from this skipped step
-            const paths = await this.getValidPaths(node.ID, payload, flowState, params);
+            const selection = await this.getValidPaths(node.ID, payload, flowState, params);
+            if (selection.HoldReason) {
+                return this.stopOnHeldPath(node.ID, selection.HoldReason, payload);
+            }
+            const paths = selection.Paths;
 
             if (paths.length === 0) {
                 // No more paths - flow is complete
@@ -869,6 +983,9 @@ export class FlowAgentType extends BaseAgentType {
             case 'While':
                 return await this.convertWhileStepToOperation(node, payload, flowState, params);
 
+            case 'Decision':
+                return this.createDecisionStep(node, payload);
+
             default:
                 return this.createNextStep('Failed', {
                     errorMessage: `Unknown step type: ${node.StepType}`,
@@ -897,6 +1014,102 @@ export class FlowAgentType extends BaseAgentType {
     private async getAgentName(agentId: string): Promise<string | null> {
         const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
         return agent?.Name || null;
+    }
+
+    /**
+     * Turns a Decision step into the `'Decision'` next step BaseAgent runs.
+     *
+     * The same hand-off a Prompt step makes with its marker: the walker does not call a model
+     * itself. BaseAgent runs the request through its own decision execution, so the call gets the
+     * prompt default, state resolution and error handling every agent decision gets, and is logged
+     * as a `Decision` run step. The answers come back to {@link completeDecisionStep}.
+     *
+     * A configuration that cannot be read, or a prompt that no longer exists, ends the run: the
+     * dispatched path refuses the same flow before it starts.
+     */
+    private createDecisionStep<P>(node: MJAIAgentStepEntity, payload: P): BaseAgentNextStep<P> {
+        const read = ReadFlowDecisionStepConfiguration(node.Configuration);
+        if ('Error' in read) {
+            return this.stopFlow(`Decision step "${node.Name}" cannot run: ${read.Error}.`, payload);
+        }
+        const promptName = this.decisionPromptName(node);
+        if (promptName === null) {
+            return this.stopFlow(
+                `Decision step "${node.Name}" refers to a prompt that no longer exists (${node.PromptID}). ` +
+                `Point it at an existing one, or clear it to use the Default Decision prompt.`,
+                payload
+            );
+        }
+
+        const { key, state, questions } = read.Config;
+        return this.createNextStep<P>('Decision' as BaseAgentNextStep['step'], {
+            decisions: [{ id: key, state: state ?? 'payload', questions }],
+            ...(promptName ? { decisionPromptName: promptName } : {}),
+            newPayload: payload,
+            previousPayload: payload
+        });
+    }
+
+    /**
+     * A Decision step's prompt by name: `undefined` when it has none (BaseAgent then uses
+     * `Default Decision`), `null` when the prompt it names is gone.
+     */
+    private decisionPromptName(node: MJAIAgentStepEntity): string | undefined | null {
+        if (!node.PromptID) return undefined;
+        return AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, node.PromptID))?.Name ?? null;
+    }
+
+    /**
+     * Records what the current Decision step answered, and turns BaseAgent's `'Retry'` into the
+     * step's outcome.
+     *
+     * A call that succeeded makes the step `'Success'`; one that failed makes it `'Failed'`, so a
+     * failed decision takes the same recovery handling as any failed step, and every condition that
+     * reads its answers holds.
+     */
+    private completeDecisionStep<P>(
+        step: BaseAgentNextStep<P>,
+        flowState: FlowExecutionState
+    ): { Next: BaseAgentNextStep<P>; StepResult: FlowDecisionStepResult } {
+        const node = flowState.currentStepId ? AIEngine.Instance.GetAgentStepByID(flowState.currentStepId) : null;
+        const result = step.decisionResults?.[0];
+        const answers = result?.success && result.answers && !Array.isArray(result.answers) ? result.answers : null;
+        const outcome: FlowDecisionOutcome = answers
+            ? { Status: 'Complete', Answers: answers }
+            : { Status: 'Failed', ErrorMessage: result?.error || 'the decision returned no answers' };
+        if (node) this.recordDecisionOutcome(flowState, node, outcome);
+
+        if (outcome.Status === 'Complete') {
+            return {
+                Next: { ...step, step: 'Success' },
+                StepResult: { Success: true, step: 'Success', result: outcome.Answers }
+            };
+        }
+        const errorMessage = `Decision step "${node?.Name ?? flowState.currentStepId}" failed: ${outcome.ErrorMessage}`;
+        return {
+            Next: { ...step, step: 'Failed', errorMessage },
+            StepResult: { Success: false, step: 'Failed', result: { error: outcome.ErrorMessage } }
+        };
+    }
+
+    /**
+     * Puts a Decision step's answers into the flow state under its key, replacing any it gave on an
+     * earlier visit. The shared answer rules decide which are usable and say why the rest are not.
+     */
+    private recordDecisionOutcome(flowState: FlowExecutionState, node: MJAIAgentStepEntity, outcome: FlowDecisionOutcome): void {
+        const read = ReadFlowDecisionStepConfiguration(node.Configuration);
+        // A step whose settings cannot be read has no key, so nothing can name it: a condition that
+        // tries still holds, on "no Decision step has answered".
+        if ('Error' in read) return;
+
+        const run = {
+            Name: node.Name,
+            Status: outcome.Status,
+            ErrorMessage: outcome.Status === 'Failed' ? outcome.ErrorMessage : null
+        };
+        const given = outcome.Status === 'Complete' ? outcome.Answers : {};
+        const resolved = ResolveDecisionStepAnswers(run, read.Config.questions, given);
+        flowState.Decisions = withDecisionStep(flowState.Decisions, read.Config, resolved);
     }
     
     /**
@@ -1345,6 +1558,16 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
+        // The same check Submit makes, made here so a refusal names the author's steps. A compiled
+        // graph's tempIds are step IDs, and the validator's messages would otherwise name those —
+        // an incomplete Choice fork, for one, is reported by its group, which is its origin's ID.
+        const validation = ValidateTaskGraphSpec(compiled.Spec);
+        if (!validation.Valid) {
+            return this.createNextStep('Failed', {
+                errorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowValidationErrors(validation.Errors, compiled.Spec)}`
+            });
+        }
+
         this.logCompiledGraph(params.agent.Name, compiled.Spec.tasks.length, compiled.Excluded);
 
         // 'Tasks' is not in the BaseAgentNextStep step union — it is non-terminal in the same sense
@@ -1397,6 +1620,18 @@ export class FlowAgentType extends BaseAgentType {
     private async determineInitialStepInRun<P = any, ATS = any>(params: ExecuteAgentParams<P>, payload: P, agentTypeState: ATS): Promise<BaseAgentNextStep<P> | null> {
         const flowState = agentTypeState as FlowExecutionState;
         const payloadToUse = payload || {} as P;
+
+        // The compiler's own key check, over every active step: the walker can start anywhere
+        // (startAtStep), so it cannot limit itself to what the entry reaches. A shared key would
+        // leave a condition's `decisions.<key>` naming two steps, and the dispatched path refuses
+        // the same flow before it starts.
+        const duplicateKeys = CollectDecisionStepKeys(AIEngine.Instance.GetAgentSteps(flowState.agentId, 'Active') ?? []).Errors;
+        if (duplicateKeys.length > 0) {
+            return this.stopFlow(
+                `Workflow '${params.agent.Name}' cannot run:\n${FormatFlowCompileErrors({ Success: false, Errors: duplicateKeys, Excluded: [] })}`,
+                payloadToUse
+            );
+        }
 
         // Check for startAtStep in agentTypeParams (FlowAgentExecuteParams)
         const flowParams = params.agentTypeParams as FlowAgentExecuteParams | undefined;
@@ -1508,9 +1743,15 @@ export class FlowAgentType extends BaseAgentType {
             });
         }
 
+        // A Decision step's answers come back on the 'Retry' BaseAgent returns after running it. They
+        // are recorded first, so this step's paths, and every later step's, can read them. From here
+        // on the step is its outcome: Success, or Failed when the call failed.
+        const decision = step.decisionResults ? this.completeDecisionStep(step, flowState) : null;
+        const finished = decision?.Next ?? step;
+
         // Store the step result so path conditions can access it via stepResult
         // The step parameter contains the result from the just-completed step (Sub-Agent, Action, or Prompt)
-        flowState.stepResults.set(flowState.currentStepId, step);
+        flowState.stepResults.set(flowState.currentStepId, decision ? decision.StepResult : step);
 
         // Add to execution path if not already present
         if (!flowState.executionPath.includes(flowState.currentStepId)) {
@@ -1522,18 +1763,22 @@ export class FlowAgentType extends BaseAgentType {
 
         // Find valid paths from current step using updated payload
         // Pass params to enable data/context access in path conditions (Phase 1)
-        const paths = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState, params);
+        const selection = await this.getValidPaths(flowState.currentStepId, currentPayload, flowState, params);
+        if (selection.HoldReason) {
+            return this.stopOnHeldPath(flowState.currentStepId, selection.HoldReason, currentPayload);
+        }
+        const paths = selection.Paths;
 
         if (paths.length === 0) {
             // No valid paths found
             // If the previous step failed, propagate the failure with its error message
-            if (step.step === 'Failed') {
+            if (finished.step === 'Failed') {
                 LogStatusEx({
-                    message: `⚠️ Flow Agent: Step failed with no recovery path. Error: ${step.errorMessage || 'No error message'}`,
+                    message: `⚠️ Flow Agent: Step failed with no recovery path. Error: ${finished.errorMessage || 'No error message'}`,
                     verboseOnly: false
                 });
                 return this.createNextStep('Failed', {
-                    errorMessage: step.errorMessage || 'Flow step failed with no recovery path',
+                    errorMessage: finished.errorMessage || 'Flow step failed with no recovery path',
                     newPayload: currentPayload,
                     previousPayload: currentPayload,
                     terminate: true
@@ -1568,7 +1813,7 @@ export class FlowAgentType extends BaseAgentType {
         }
 
         // Log when we're navigating to a recovery path after a failure
-        if (step.step === 'Failed') {
+        if (finished.step === 'Failed') {
             LogStatusEx({
                 message: `🔄 Flow Agent: Failure detected, navigating to recovery path: '${nextStep.Name}'`,
                 verboseOnly: false
@@ -1581,7 +1826,7 @@ export class FlowAgentType extends BaseAgentType {
             for (let i = 1; i < paths.length; i++) {
                 const alternateStep = await this.getStepById(paths[i].DestinationStepID);
                 if (alternateStep && alternateStep.Status === 'Active') {
-                    if (step.step === 'Failed') {
+                    if (finished.step === 'Failed') {
                         LogStatusEx({
                             message: `🔄 Flow Agent: Using alternate recovery path: '${alternateStep.Name}'`,
                             verboseOnly: false
@@ -1842,6 +2087,7 @@ export class FlowAgentType extends BaseAgentType {
      */
     public GetPromptConfigurationGuidance(): string {
         return `   - Flow agents use step-level prompts (StepType="Prompt" with PromptID)\n` +
+               `   - Decision steps (StepType="Decision") use PromptID for their decision prompt; empty means "Default Decision"\n` +
                `   - Prompts should be configured in agent steps, not AI Agent Prompts relationship\n` +
                `   - Verify that prompts exist in AI Prompts table and are active`;
     }

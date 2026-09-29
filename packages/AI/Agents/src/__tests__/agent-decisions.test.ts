@@ -522,6 +522,30 @@ describe('Agent Decisions', () => {
             expect(createdSteps[0].Success).toBe(false);
         });
 
+        it('reads the whole payload for a bare "payload" state', async () => {
+            const askSpy = vi.spyOn(mockService, 'Ask').mockResolvedValue({
+                success: true,
+                Answers: {},
+            } as AIDecisionRunResult);
+
+            const payload = { ticket: { id: 101, title: 'Bug report' } };
+            await agent.testExecuteDecisionRequestsAsSteps(
+                [
+                    {
+                        id: 'whole-payload',
+                        state: 'payload',
+                        questions: { q: { kind: 'Likelihood', instructions: 'Is urgent?' } },
+                    },
+                ],
+                payload,
+                undefined,
+                { contextUser: {} as UserInfo, conversationMessages: [] },
+            );
+
+            expect(askSpy).toHaveBeenCalledOnce();
+            expect(askSpy.mock.calls[0][0].State).toBe(JSON.stringify(payload, undefined, 1));
+        });
+
         it('fails cleanly when neither state nor forEachItemIn is provided', async () => {
             const askSpy = vi.spyOn(mockService, 'Ask');
 

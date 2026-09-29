@@ -10,12 +10,13 @@
  */
 import {
     GetValueFromPath,
+    ResolveDecisionStepAnswers,
+    type GraphDecisions,
     type TaskGraphDecisionAnswer,
-    type TaskGraphDecisionQuestion,
     type TaskGraphNodeConfigMap,
 } from '@memberjunction/ai-core-plus';
 import type { MJTaskEntity_ITaskStepConfiguration } from '@memberjunction/core-entities';
-import { ParseConditionOutput, type GraphDecisions } from './condition-gate';
+import { ParseConditionOutput } from './condition-gate';
 
 /**
  * What a Decision step keeps in `Task.Configuration.decision`: its spec configuration, plus the name
@@ -122,18 +123,6 @@ export function BuildDecisionStepOutput(
 }
 
 /**
- * How confident an answer is, on the scale `minConfidence` is written in.
- *
- * A Choice or Score states its confidence. A Likelihood's probability IS its confidence, but in one
- * direction only, so it is measured by its distance from an even call: 0.05 is as sure as 0.95.
- */
-export function DecisionAnswerConfidence(answer: TaskGraphDecisionAnswer): number | undefined {
-    if (typeof answer.confidence === 'number') return answer.confidence;
-    if (typeof answer.probability === 'number') return Math.max(answer.probability, 1 - answer.probability);
-    return undefined;
-}
-
-/**
  * Every Decision step's answers in a graph, split into those a condition may act on and, for the
  * rest, why not.
  *
@@ -151,16 +140,9 @@ export function ResolveGraphDecisions(rows: readonly DecisionTaskRow[]): GraphDe
         if (!config) continue;
 
         const given = row.Status === 'Complete' ? answersIn(row.OutputPayload, config.nodeId) : {};
-        for (const [key, question] of Object.entries(config.questions)) {
-            const reason = row.Status === 'Complete'
-                ? unusableAnswerReason(row.Name, key, given[key], question)
-                : notAnsweredReason(row);
-            if (reason) {
-                (unresolved[config.nodeId] ??= {})[key] = reason;
-            } else {
-                (answers[config.nodeId] ??= {})[key] = given[key] as TaskGraphDecisionAnswer;
-            }
-        }
+        const resolved = ResolveDecisionStepAnswers(row, config.questions, given);
+        if (Object.keys(resolved.Answers).length > 0) Object.assign(answers[config.nodeId] ??= {}, resolved.Answers);
+        if (Object.keys(resolved.Unresolved).length > 0) Object.assign(unresolved[config.nodeId] ??= {}, resolved.Unresolved);
     }
     return { Answers: answers, Unresolved: unresolved };
 }
@@ -171,39 +153,6 @@ function answersIn(outputPayload: string | null, nodeId: string): Record<string,
     const decisions = isRecord(output) ? output[DECISIONS_PAYLOAD_KEY] : undefined;
     const mine = isRecord(decisions) && Object.prototype.hasOwnProperty.call(decisions, nodeId) ? decisions[nodeId] : undefined;
     return isRecord(mine) ? mine : {};
-}
-
-/** Why a completed step's answer to one question may not be acted on, or `null` when it may. */
-function unusableAnswerReason(
-    stepName: string,
-    key: string,
-    answer: unknown,
-    question: TaskGraphDecisionQuestion,
-): string | null {
-    if (!isDecisionAnswer(answer)) return `the decision "${stepName}" completed without an answer to "${key}"`;
-    const min = question.minConfidence;
-    if (typeof min !== 'number') return null;
-    const confidence = DecisionAnswerConfidence(answer);
-    if (confidence === undefined) {
-        return `the decision "${stepName}" answered "${key}" with no confidence to hold to its minConfidence of ${min}`;
-    }
-    return confidence < min
-        ? `the decision "${stepName}" answered "${key}" with confidence ${Number(confidence.toFixed(3))}, below its minConfidence of ${min}`
-        : null;
-}
-
-/** Why a step that is not Complete has no usable answers. */
-function notAnsweredReason(row: DecisionTaskRow): string {
-    if (row.Status === 'Failed') {
-        return `the decision "${row.Name}" failed${row.ErrorMessage ? `: ${row.ErrorMessage}` : ''}`;
-    }
-    return `the decision "${row.Name}" has not answered (it is ${row.Status})`;
-}
-
-/** An answer in the shape a condition reads: a Likelihood's probability, or a Choice's or Score's value. */
-function isDecisionAnswer(value: unknown): value is TaskGraphDecisionAnswer {
-    if (!isRecord(value)) return false;
-    return typeof value.probability === 'number' || typeof value.value === 'string' || typeof value.value === 'number';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

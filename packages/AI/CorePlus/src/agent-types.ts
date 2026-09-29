@@ -16,7 +16,7 @@ import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
-import { AgentDecisionRequest, AgentFinishIf } from './agent-decisions';
+import { AgentDecisionRequest, AgentDecisionResult, AgentFinishIf } from './agent-decisions';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
@@ -592,6 +592,9 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      *   they are NOT part of the generated `MJAIAgentRun.FinalStep` union below. Use an explicit
      *   `'Skill' as typeof nextStep.step` / `'Plan' as typeof nextStep.step` assertion at
      *   assignment/switch sites, mirroring the existing 'ClientTools' pattern.
+     * - 'Decision': non-terminal in the same way. Runs {@link decisions} as `Decision` run steps with
+     *   no LLM turn, and returns a 'Retry' carrying {@link decisionResults}. A Flow agent's Decision
+     *   step emits it.
      *
      * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
@@ -692,8 +695,25 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * Decision requests from the agent's response.
      * Processed inline (zero turn cost) alongside payload and scratchpad changes.
      * Results are injected into the next turn's conversation.
+     *
+     * On a `'Decision'` step these are the step's own requests instead, and their results come back
+     * on {@link decisionResults} rather than into the conversation.
      */
     decisions?: AgentDecisionRequest[];
+    /**
+     * The decision prompt a `'Decision'` step's {@link decisions} run on, by name. Omitted means
+     * `Default Decision`.
+     */
+    decisionPromptName?: string;
+    /**
+     * The results of a `'Decision'` step's {@link decisions}, on the `'Retry'` BaseAgent returns once
+     * it has run them.
+     *
+     * These go back to the agent type, which routes on them, rather than to a model. So each Choice's
+     * and Score's answer keeps its whole distribution in `probabilities` (the shape of
+     * `TaskGraphDecisionAnswer`), which a path condition may read.
+     */
+    decisionResults?: AgentDecisionResult[];
     /**
      * Artifact tool calls from the agent's response.
      * Each entry identifies an artifact and the tool to execute against it.

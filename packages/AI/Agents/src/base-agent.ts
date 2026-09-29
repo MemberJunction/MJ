@@ -20,7 +20,7 @@ import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptE
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
@@ -113,7 +113,8 @@ import {
     AgentDecisionRequest,
     AgentDecisionResult,
     AgentDecisionAnswerSummary,
-    AgentFinishIf
+    AgentFinishIf,
+    SummarizeDecisionAnswers
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective, RuntimeAPIKeyResolver } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -419,6 +420,13 @@ function formatSubAgentForFinishIf<P>(result: SubAgentStepResult<P>): string {
     }
     return capFinishIfState(lines.join('\n\n'));
 }
+
+/**
+ * Turns one decision call's typed answers into what its reader gets. A loop turn's model reads
+ * `AgentDecisionService.SummarizeAnswers`; an agent type that routes on the answers reads
+ * `SummarizeDecisionAnswers`, which keeps each distribution.
+ */
+type DecisionAnswerSummarizer = (answers: Record<string, DecisionAnswer>) => Record<string, AgentDecisionAnswerSummary>;
 
 /** The outcome of one decision request: its answers, or why it has none. */
 type DecisionOutcome =
@@ -7077,9 +7085,35 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Runs a `'Decision'` next step: an agent type's decision requests, answered with no LLM turn.
+     *
+     * Each request goes through the same path a loop turn's decisions take
+     * ({@link executeSingleDecisionRequestAsStep}), so it gets the same prompt default, state
+     * resolution and error handling, and is logged as a `Decision` run step. Where a loop turn's
+     * results go into the conversation, these come back to the agent type on the returned `'Retry'`
+     * (`decisionResults`), because it routes on them. So each answer keeps its whole distribution
+     * (`SummarizeDecisionAnswers`), which a path condition may read. A failed request is a result
+     * with `success: false`, never a failed run: what a failure means is the agent type's call.
+     *
+     * @since 6.2.0
+     */
+    protected async executeDecisionStep<P>(
+        params: ExecuteAgentParams,
+        decision: BaseAgentNextStep<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        const payload = decision.newPayload ?? decision.previousPayload;
+        const promptParams = decision.decisionPromptName ? { decisionPromptName: decision.decisionPromptName } : undefined;
+        const results = await this.runWithConcurrencyLimit(decision.decisions ?? [], BaseAgent.DECISION_CONCURRENCY,
+            request => this.executeSingleDecisionRequestAsStep(request, payload, promptParams, params, SummarizeDecisionAnswers));
+        return { step: 'Retry', terminate: false, decisionResults: results, previousPayload: payload, newPayload: payload };
+    }
+
+    /**
      * Answers one decision request, either once against its `state` or once per item of its
      * `forEachItemIn` array, and records it as a Decision step.
      *
+     * @param summarize how the typed answers are summarised for whoever reads them next; defaults
+     *                  to the loop turn's model-facing summary
      * @since 2.132.0
      */
     protected async executeSingleDecisionRequestAsStep(
@@ -7087,6 +7121,7 @@ The context is now within limits. Please retry your request with the recovered c
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
+        summarize: DecisionAnswerSummarizer = AgentDecisionService.SummarizeAnswers,
     ): Promise<AgentDecisionResult> {
         const step = await this.createStepEntity({
             stepType: 'Decision',
@@ -7112,8 +7147,8 @@ The context is now within limits. Please retry your request with the recovered c
             CancellationToken: params.cancellationToken,
         });
         const outcome = request.forEachItemIn
-            ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, ask)
-            : await this.askOnce(request, finalPayload, ask);
+            ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, ask, summarize)
+            : await this.askOnce(request, finalPayload, ask, summarize);
         return this.finishDecisionStep(step, request, outcome);
     }
 
@@ -7121,7 +7156,8 @@ The context is now within limits. Please retry your request with the recovered c
     private async askOnce(
         request: AgentDecisionRequest,
         finalPayload: unknown,
-        ask: (state: string) => Promise<AIDecisionRunResult>
+        ask: (state: string) => Promise<AIDecisionRunResult>,
+        summarize: DecisionAnswerSummarizer
     ): Promise<DecisionOutcome> {
         const state = this.resolveDecisionState(request.state, finalPayload);
         if ('Error' in state) {
@@ -7131,7 +7167,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!result.success) {
             return { Error: result.errorMessage || 'Decision evaluation failed' };
         }
-        return { Answers: AgentDecisionService.SummarizeAnswers(result.Answers), Results: [result] };
+        return { Answers: summarize(result.Answers), Results: [result] };
     }
 
     /** Asks the same questions of each item of a payload array, up to `decisionsMaxItems`. */
@@ -7140,7 +7176,8 @@ The context is now within limits. Please retry your request with the recovered c
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
-        ask: (state: string) => Promise<AIDecisionRunResult>
+        ask: (state: string) => Promise<AIDecisionRunResult>,
+        summarize: DecisionAnswerSummarizer
     ): Promise<DecisionOutcome> {
         const target = this.resolvePayloadPath(request.forEachItemIn ?? '', finalPayload);
         if (!Array.isArray(target)) {
@@ -7157,15 +7194,18 @@ The context is now within limits. Please retry your request with the recovered c
         if (failedIndex >= 0) {
             return { Error: `Item ${failedIndex}: ${results[failedIndex].errorMessage || 'decision evaluation failed'}` };
         }
-        return { Answers: results.map(r => AgentDecisionService.SummarizeAnswers(r.Answers)), Results: results, SkippedCount: skippedCount };
+        return { Answers: results.map(r => summarize(r.Answers)), Results: results, SkippedCount: skippedCount };
     }
 
-    /** A literal state, or a value read from the payload by a `payload.` path. */
+    /**
+     * A literal state, or a value read from the payload: the whole payload for `payload`, one value
+     * for a `payload.` path.
+     */
     private resolveDecisionState(state: string | undefined, finalPayload: unknown): { State: string } | { Error: string } {
         if (typeof state !== 'string') {
             return { Error: 'Either state or forEachItemIn is required' };
         }
-        if (!state.startsWith('payload.')) {
+        if (state.trim() !== 'payload' && !state.startsWith('payload.')) {
             return { State: state };
         }
         const value = this.resolvePayloadPath(state, finalPayload);
@@ -9844,6 +9884,11 @@ The context is now within limits. Please retry your request with the recovered c
             // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
                 return await this.executeClientToolsStep(params, config, previousDecision, stepCount);
+            // Type assertion required because 'Decision' is not part of the BaseAgentNextStep step
+            // union — FlowAgentType emits it for a Decision step, which is one decision call and no
+            // LLM turn. executeDecisionStep returns a 'Retry' carrying the answers.
+            case 'Decision' as typeof previousDecision.step:
+                return await this.executeDecisionStep(params, previousDecision);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':

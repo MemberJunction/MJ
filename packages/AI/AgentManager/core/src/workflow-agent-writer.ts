@@ -49,7 +49,8 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
         context: { ContextUser: UserInfo; Provider: IMetadataProvider },
     ): Promise<string> {
         const flowTypeID = await this.resolveFlowAgentTypeID(context);
-        const agentIDsByName = await this.buildAgentNameIndex(context);
+        const { Agents, Actions, Prompts } = await this.buildNameIndexes(context);
+        const byName = (index: Map<string, string>, name: string): string | null => index.get(name.trim().toLowerCase()) ?? null;
 
         let counter = 0;
         const result = ConvertTaskGraphToAgentSpec(spec.graph, {
@@ -57,7 +58,11 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
             // insert — these only have to correlate steps to paths inside this payload.
             AgentID: `workflow-${Date.now()}-${counter}`,
             NextID: () => `wf-node-${++counter}`,
-            ResolveAgentID: (name) => agentIDsByName.get(name.trim().toLowerCase()) ?? null,
+            ResolveAgentID: (name) => byName(Agents, name),
+            // Without these, a saved Action step carries no action and a Decision step loses its
+            // named prompt: the spec addresses both by name, and a step stores the ID.
+            ResolveActionID: (name) => byName(Actions, name),
+            ResolvePromptID: (name) => byName(Prompts, name),
             FlowAgentTypeID: flowTypeID,
             Name: spec.name,
         });
@@ -99,15 +104,24 @@ export class WorkflowAgentWriter extends WorkflowAgentWriterBase {
         return id;
     }
 
-    /** Name → ID for every agent, lowercased so a spec's human-entered name still resolves. */
-    private async buildAgentNameIndex(
+    /**
+     * Name → ID for every agent, action and prompt, in one batch, lowercased so a spec's
+     * human-entered name still resolves.
+     */
+    private async buildNameIndexes(
         context: { ContextUser: UserInfo; Provider: IMetadataProvider },
-    ): Promise<Map<string, string>> {
-        const result = await RunView.FromMetadataProvider(context.Provider).RunView<{ ID: string; Name: string }>(
-            { EntityName: 'MJ: AI Agents', Fields: ['ID', 'Name'], ResultType: 'simple' },
+    ): Promise<{ Agents: Map<string, string>; Actions: Map<string, string>; Prompts: Map<string, string> }> {
+        const [agents, actions, prompts] = await RunView.FromMetadataProvider(context.Provider).RunViews<{ ID: string; Name: string }>(
+            ['MJ: AI Agents', 'MJ: Actions', 'MJ: AI Prompts'].map((EntityName) => ({
+                EntityName,
+                Fields: ['ID', 'Name'],
+                ResultType: 'simple' as const,
+            })),
             context.ContextUser,
         );
-        return new Map((result.Results ?? []).map((a) => [a.Name.trim().toLowerCase(), a.ID]));
+        const index = (rows: Array<{ ID: string; Name: string }> | undefined): Map<string, string> =>
+            new Map((rows ?? []).map((r) => [r.Name.trim().toLowerCase(), r.ID]));
+        return { Agents: index(agents?.Results), Actions: index(actions?.Results), Prompts: index(prompts?.Results) };
     }
 }
 

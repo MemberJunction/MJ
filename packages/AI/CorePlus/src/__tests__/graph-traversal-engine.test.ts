@@ -316,3 +316,78 @@ describe('TraversalState', () => {
         expect(state.FailedNodeIds.has('ok')).toBe(false);
     });
 });
+
+describe('SelectOutgoingEdges with a hold check', () => {
+    /** Holds every condition that starts with `held`, standing in for one that reads an unusable decision. */
+    const holdCheck = (condition: string): string | null => (condition.startsWith('held') ? `cannot tell ${condition}` : null);
+
+    /** An evaluator that records what it was asked, so a test can show a held condition never is. */
+    const recording = (): IConditionEvaluator & { Asked: string[] } => {
+        const asked: string[] = [];
+        return {
+            Asked: asked,
+            Evaluate: (expression, context) => {
+                asked.push(expression);
+                return { Success: true, Value: Boolean(context[expression]) };
+            },
+        };
+    };
+
+    it('never evaluates a held condition, and rejects its edge with the reason', () => {
+        const repo = repoOf([node('a'), node('b')], [edge('e1', 'a', 'b', { condition: 'heldA' })]);
+        const ev = recording();
+        const sel = SelectOutgoingEdges('a', repo, ev, { heldA: false }, holdCheck);
+        expect(ev.Asked).toEqual([]);
+        expect(sel.Rejected[0]).toMatchObject({ EdgeId: 'e1', Reason: 'ConditionHeld', Detail: 'cannot tell heldA' });
+    });
+
+    it('reports a held edge that outranks every followable one — it might have been the one to take', () => {
+        const repo = repoOf(
+            [node('a'), node('b'), node('c')],
+            [edge('hi', 'a', 'b', { condition: 'heldHi', priority: 9 }), edge('lo', 'a', 'c', { condition: 'go', priority: 1 })],
+        );
+        const sel = SelectOutgoingEdges('a', repo, evaluator, { go: true }, holdCheck);
+        expect(sel.Edges.map((e) => e.id)).toEqual(['lo']);
+        expect(sel.Held).toMatchObject({ EdgeId: 'hi', Detail: 'cannot tell heldHi' });
+    });
+
+    it('ignores a held edge ranked below the first followable one — it could not have won', () => {
+        const repo = repoOf(
+            [node('a'), node('b'), node('c')],
+            [edge('hi', 'a', 'b', { condition: 'go', priority: 9 }), edge('lo', 'a', 'c', { condition: 'heldLo', priority: 1 })],
+        );
+        const sel = SelectOutgoingEdges('a', repo, evaluator, { go: true }, holdCheck);
+        expect(sel.Edges.map((e) => e.id)).toEqual(['hi']);
+        expect(sel.Held).toBeUndefined();
+    });
+
+    it('ranks a priority tie by edge id, the same order the choice is made in', () => {
+        const nodes = [node('a'), node('b'), node('c')];
+        const heldFirst = repoOf(nodes, [edge('e1', 'a', 'b', { condition: 'heldX' }), edge('e2', 'a', 'c')]);
+        const heldSecond = repoOf(nodes, [edge('e1', 'a', 'b'), edge('e2', 'a', 'c', { condition: 'heldX' })]);
+        expect(SelectOutgoingEdges('a', heldFirst, evaluator, {}, holdCheck).Held?.EdgeId).toBe('e1');
+        expect(SelectOutgoingEdges('a', heldSecond, evaluator, {}, holdCheck).Held).toBeUndefined();
+    });
+
+    it('reports a held edge when nothing is followable', () => {
+        const repo = repoOf([node('a'), node('b')], [edge('e1', 'a', 'b', { condition: 'heldA' })]);
+        expect(SelectOutgoingEdges('a', repo, evaluator, {}, holdCheck).Held?.EdgeId).toBe('e1');
+    });
+
+    it('does not report a held edge into a step that could never be entered', () => {
+        const repo = repoOf(
+            [node('a'), node('off', { status: 'Disabled' }), node('c')],
+            [edge('hi', 'a', 'off', { condition: 'heldHi', priority: 9 }), edge('lo', 'a', 'c', { priority: 1 })],
+        );
+        const sel = SelectOutgoingEdges('a', repo, evaluator, {}, holdCheck);
+        expect(sel.Held).toBeUndefined();
+        expect(sel.Rejected[0]).toMatchObject({ EdgeId: 'hi', Reason: 'DestinationInactive' });
+        expect(sel.Edges.map((e) => e.id)).toEqual(['lo']);
+    });
+
+    it('selects exactly as before when no condition is held', () => {
+        const repo = repoOf([node('a'), node('b'), node('c')], [edge('e1', 'a', 'b', { condition: 'go' }), edge('e2', 'a', 'c')]);
+        expect(SelectOutgoingEdges('a', repo, evaluator, { go: true }, holdCheck))
+            .toEqual(SelectOutgoingEdges('a', repo, evaluator, { go: true }));
+    });
+});

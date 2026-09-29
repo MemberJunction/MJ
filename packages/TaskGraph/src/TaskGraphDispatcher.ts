@@ -47,6 +47,7 @@ import {
 
     FinalizeAgentRunStep,
     InitAgentRunStep,
+    type GraphDecisions,
 } from '@memberjunction/ai-core-plus';
 import { DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { IShutdownable, ShutdownRegistry, UUIDsEqual } from '@memberjunction/global';
@@ -60,7 +61,6 @@ import {
     IsBrokenGuard,
     ParseConditionOutput,
     type ConditionInvocation,
-    type GraphDecisions,
 } from './condition-gate';
 import {
     BuildDecisionStepOutput,

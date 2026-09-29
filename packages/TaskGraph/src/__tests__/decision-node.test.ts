@@ -16,37 +16,34 @@ import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction
 import type { MJTaskDependencyEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import {
     CONDITION_ROOTS,
-    DECISION_ANSWER_FIELDS,
+    DecisionAnswerConfidence,
+    DecisionHoldReason,
+    NO_DECISIONS,
     ResolveExclusiveGroups,
     TaskNode,
     type EdgeConditionOutcome,
     type EvaluatedEdge,
+    type GraphDecisions,
     type TaskGraphDecisionAnswer,
     type TaskGraphNodeConfigMap,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
-import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
 import { DispatcherConditionEvaluator } from '../DispatcherConditionEvaluator';
 import {
     BuildConditionContext,
     DecideGate,
-    DecisionHoldReason,
     EvaluateCondition,
-    NO_DECISIONS,
     type ConditionInvocation,
     type ConditionVerdict,
-    type GraphDecisions,
 } from '../condition-gate';
 import {
     BuildDecisionStepOutput,
-    DecisionAnswerConfidence,
     ReadDecisionStepConfiguration,
     ResolveDecisionState,
     ResolveGraphDecisions,
     type DecisionTaskRow,
 } from '../decision-node';
-import { SummarizeDecisionAnswers } from '../AIDecisionTaskRunner';
 import { BuildStepConfiguration, DecisionPromptNameOf, FindUnrunnableKinds } from '../TaskGraphService';
 import type { TaskDecisionRunner, TaskDecisionRunParams, TaskDecisionRunResult, TaskPromptRunner } from '../types';
 
@@ -506,29 +503,6 @@ describe('a failed decision holds; it never reads as false', () => {
 });
 
 // ── pieces ──────────────────────────────────────────────────────────────────────────────────────
-
-describe('SummarizeDecisionAnswers', () => {
-    const typed: AIDecisionRunResult['Answers'] = {
-        urgent: { Kind: 'Likelihood', Probability: 0.81 },
-        intent: { Kind: 'Choice', Value: 'refund', Confidence: 0.77, Probabilities: { billing: 0.2, refund: 0.77, other: 0.03 } },
-        severity: { Kind: 'Score', Value: 1.4, Confidence: 0.6, Probabilities: { minor: 0.1, major: 0.4, critical: 0.5 } },
-    };
-
-    it('keeps the full distribution in the shape conditions read', () => {
-        expect(SummarizeDecisionAnswers(typed)).toEqual({
-            urgent: { probability: 0.81 },
-            intent: { value: 'refund', confidence: 0.77, probabilities: { billing: 0.2, refund: 0.77, other: 0.03 } },
-            severity: { value: 1.4, confidence: 0.6, probabilities: { minor: 0.1, major: 0.4, critical: 0.5 } },
-        });
-    });
-
-    it('produces exactly the fields the validator lets a condition read, for every kind', () => {
-        const summary = SummarizeDecisionAnswers(typed);
-        expect(Object.keys(summary.urgent).sort()).toEqual([...DECISION_ANSWER_FIELDS.Likelihood].sort());
-        expect(Object.keys(summary.intent).sort()).toEqual([...DECISION_ANSWER_FIELDS.Choice].sort());
-        expect(Object.keys(summary.severity).sort()).toEqual([...DECISION_ANSWER_FIELDS.Score].sort());
-    });
-});
 
 describe('ResolveDecisionState', () => {
     it('defaults to the whole payload', () => {
