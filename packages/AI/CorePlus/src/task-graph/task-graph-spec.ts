@@ -26,6 +26,7 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import type { AgentDecisionAnswerSummary, AgentDecisionQuestion } from '../agent-decisions';
 import type { ForEachOperation } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
 
@@ -138,7 +139,49 @@ export function NormalizeDependency(dep: string | TaskGraphDependency): TaskGrap
  * Adding a kind is one entry in {@link TaskGraphNodeConfigMap} plus one runner — the compiler then
  * forces every exhaustive `switch` over kinds to be updated, which is the point of the union.
  */
-export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External';
+export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+
+/**
+ * One question a `Decision` node asks: the LLM-facing shape agents already use for decisions, plus
+ * the confidence below which its answer is not acted on.
+ */
+export type TaskGraphDecisionQuestion = AgentDecisionQuestion & {
+    /**
+     * Below this confidence (0..1) the answer is not used: every edge whose condition reads it is
+     * unevaluable, so an ordinary edge HOLDS and an exclusive group holds rather than guessing.
+     *
+     * A Choice or Score is measured by its `confidence`. A Likelihood has no separate confidence —
+     * its probability is its confidence — so it is measured by how far that probability is from an
+     * even call: `max(probability, 1 - probability)`. A confident "no" is as usable as a confident
+     * "yes"; a probability near 0.5 is the one that holds.
+     *
+     * Omitted means every answer is used as given.
+     */
+    minConfidence?: number;
+};
+
+/**
+ * What `decisions.<node>.<question>` resolves to in an edge condition.
+ *
+ * A Likelihood carries `probability` (of yes). A Choice carries the chosen option in `value`; a Score
+ * its position from 0 (the lowest level) in `value`. Both carry `confidence` and the full
+ * distribution in `probabilities`, keyed by option value or level.
+ */
+export type TaskGraphDecisionAnswer = AgentDecisionAnswerSummary & {
+    /** A Choice's or Score's whole distribution, so a condition can read more than the winner. */
+    probabilities?: Record<string, number>;
+};
+
+/**
+ * The fields each question kind's answer carries — the only ones a condition may read after
+ * `decisions.<node>.<question>`. Reading any other field would be `undefined`, which a comparison
+ * turns into a silent `false`; the validator refuses it at submit instead.
+ */
+export const DECISION_ANSWER_FIELDS: Readonly<Record<AgentDecisionQuestion['kind'], readonly string[]>> = {
+    Likelihood: ['probability'],
+    Choice: ['value', 'confidence', 'probabilities'],
+    Score: ['value', 'confidence', 'probabilities'],
+};
 
 /**
  * Per-kind configuration.
@@ -167,6 +210,53 @@ export type TaskGraphNodeConfigMap = {
      * whole reason the union exists.
      */
     External: { domain: string; ref?: string };
+    /**
+     * A typed judgment, resolved as a STEP so that no condition ever has to make one.
+     *
+     * The node makes exactly one `AIDecisionRunner` call, which answers every question in
+     * `questions` about one state, and writes the answers into its output under
+     * `decisions.<tempId>`. Edges then route on them through the `decisions` condition root —
+     * `decisions.triage.intent.value === 'billing'`, `decisions.triage.urgent.probability >= 0.8` —
+     * as a synchronous expression over facts that already exist. Nothing in condition evaluation
+     * calls a model.
+     *
+     * Every question one fork needs belongs in one node: questions about one state travel together
+     * in one call and cost about what one question does. A judgment that needs another step's
+     * output goes in a node that depends on that step.
+     *
+     * A fork whose edges all test one Choice question's `value` is checked at submit for
+     * exhaustiveness: it must have a path for every option. An answer below its question's
+     * `minConfidence`, or one from a call that failed, makes the edges that read it unevaluable, so
+     * they hold rather than read as `false`.
+     *
+     * **What a `'Decision'` run step means.** When an agent run submitted the graph, the call is also
+     * logged on that run as an `AIAgentRunStep` with `StepType 'Decision'`, and the value means
+     * exactly this: one typed decision call, a fixed set of Likelihood, Choice or Score questions
+     * answered about one state. Its `TargetID` is the decision prompt, `TargetLogID` the call's
+     * `MJ: AI Prompt Runs` row, `InputData` the state and questions, and `OutputData` the answers.
+     * Some older writers use the value loosely for deterministic bookkeeping (Agent Manager's
+     * "Sync Agent Spec", the memory manager's phases, the reranker); new code writes it only for a
+     * decision call.
+     */
+    Decision: {
+        /**
+         * The `MJ: AI Prompts` row whose model bindings run the decision. Default `Default Decision`,
+         * the prompt agent decisions use.
+         */
+        promptName?: string;
+        /**
+         * What the questions are about. `payload` is the node's whole input: its own `inputPayload`
+         * merged with everything upstream produced. `payload.<path>` is one named value from it,
+         * typically an upstream step's output (`payload.ticket`). Default `payload`.
+         */
+        state?: string;
+        /**
+         * The questions, all answered in one call. The key is how conditions name the answer
+         * (`decisions.<tempId>.<key>`); the model never sees it, so put everything it needs in
+         * `instructions` and the option descriptions.
+         */
+        questions: Record<string, TaskGraphDecisionQuestion>;
+    };
 };
 
 /** Per-node execution policy. All optional; absent means the engine's default. */
@@ -298,6 +388,8 @@ export const TaskNode = {
         ({ ...base, kind: 'While', configuration }),
     External: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['External']): TaskGraphSpecNode<'External'> =>
         ({ ...base, kind: 'External', configuration }),
+    Decision: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Decision']): TaskGraphSpecNode<'Decision'> =>
+        ({ ...base, kind: 'Decision', configuration }),
 } as const;
 
 /** Everything a node needs that is not its kind or configuration. */
@@ -331,6 +423,11 @@ export type TaskGraphValidationError = {
         | 'InvalidConfiguration'
         /** Members of one `exclusiveGroup` do not all leave the same origin. */
         | 'InvalidExclusiveGroup'
+        /**
+         * Every edge of an `exclusiveGroup` tests one Choice question's `value`, and some option has
+         * no edge. When the model picks that option every edge loses and the branch ends silently.
+         */
+        | 'IncompleteFork'
         /**
          * An edge condition cannot be parsed.
          *

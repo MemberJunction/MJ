@@ -95,18 +95,13 @@ export function ConvertTaskGraphToAgentSpec(
     );
 
     for (const node of graph.tasks) {
-        // Human and External have no design-time equivalent — reported, never emitted as an empty
-        // step, which would look like a workflow that runs unattended. Every OTHER kind maps to a
-        // step type: reading only `agentName` used to mislabel action, prompt and loop nodes as
-        // "human task" losses and drop them.
-        if (node.kind === 'Human' || node.kind === 'External') {
-            losses.push({
-                Kind: 'HumanTask',
-                TempId: node.tempId,
-                Detail: node.kind === 'Human'
-                    ? `"${node.name}" is a person's step and has no design-time equivalent yet; it is omitted from the workflow.`
-                    : `"${node.name}" is completed by an external system and has no design-time equivalent; it is omitted from the workflow.`,
-            });
+        // Human, External and Decision have no design-time equivalent — reported, never emitted as
+        // an empty step, which would look like a workflow that runs unattended. Every OTHER kind
+        // maps to a step type: reading only `agentName` used to mislabel action, prompt and loop
+        // nodes as "human task" losses and drop them.
+        const omitted = noDesignTimeEquivalent(node);
+        if (omitted) {
+            losses.push({ Kind: 'HumanTask', TempId: node.tempId, Detail: omitted });
             continue;
         }
 
@@ -232,6 +227,26 @@ export function FormatSaveAsWorkflowLosses(losses: SaveAsWorkflowLoss[]): string
 }
 
 /**
+ * Why a node cannot become a Flow step, or `null` when it can.
+ *
+ * A Decision node is here because a Flow has no Decision step yet: dropping it silently would save a
+ * workflow whose path conditions read answers nothing produces any more.
+ */
+function noDesignTimeEquivalent(node: TaskGraphSpecNode): string | null {
+    switch (node.kind) {
+        case 'Human':
+            return `"${node.name}" is a person's step and has no design-time equivalent yet; it is omitted from the workflow.`;
+        case 'External':
+            return `"${node.name}" is completed by an external system and has no design-time equivalent; it is omitted from the workflow.`;
+        case 'Decision':
+            return `"${node.name}" is a Decision step, which a Flow cannot express yet; it is omitted from the workflow, `
+                + 'and any path condition that reads its answers must be rewritten.';
+        default:
+            return null;
+    }
+}
+
+/**
  * The step fields that depend on a node's kind.
  *
  * One place where `kind` becomes `StepType`, so a new kind is a compile error here rather than a
@@ -277,8 +292,8 @@ function stepShapeFor(
                 Configuration: JSON.stringify(ConfigOf(node, 'While') ?? {}),
             };
         default:
-            // Human/External are filtered out before this point; the fallback keeps the function
-            // total rather than letting a future kind fall through as undefined.
+            // Human/External/Decision are filtered out before this point; the fallback keeps the
+            // function total rather than letting a future kind fall through as undefined.
             return { StepType: 'Sub-Agent', SubAgentID: subAgentID ?? undefined };
     }
 }

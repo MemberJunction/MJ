@@ -1,0 +1,568 @@
+/**
+ * A Decision node on the dispatcher, and what its answers mean to the edges that read them
+ * (plan 4.2, 4.3 and 4.5).
+ *
+ * Three things are pinned here, and each is a way a judgment could silently become a wrong branch:
+ *
+ *  - the node makes ONE call for all its questions, and its answers reach both its output and the
+ *    `decisions` condition root — a condition never calls a model;
+ *  - an answer below its question's `minConfidence` makes the edges that read it unevaluable, so an
+ *    ordinary edge holds and an exclusive group holds rather than guessing;
+ *  - a failed decision holds too. It never reads as `false`, which is what a missing answer would
+ *    otherwise do: `undefined === 'billing'` is a confident, wrong no.
+ */
+import { describe, it, expect, vi } from 'vitest';
+import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import type { MJTaskDependencyEntity, MJTaskEntity } from '@memberjunction/core-entities';
+import {
+    CONDITION_ROOTS,
+    DECISION_ANSWER_FIELDS,
+    ResolveExclusiveGroups,
+    TaskNode,
+    type EdgeConditionOutcome,
+    type EvaluatedEdge,
+    type TaskGraphDecisionAnswer,
+    type TaskGraphNodeConfigMap,
+    type TaskGraphSpec,
+} from '@memberjunction/ai-core-plus';
+import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import { TaskGraphDispatcher } from '../TaskGraphDispatcher';
+import { DispatcherConditionEvaluator } from '../DispatcherConditionEvaluator';
+import {
+    BuildConditionContext,
+    DecideGate,
+    DecisionHoldReason,
+    EvaluateCondition,
+    NO_DECISIONS,
+    type ConditionInvocation,
+    type ConditionVerdict,
+    type GraphDecisions,
+} from '../condition-gate';
+import {
+    BuildDecisionStepOutput,
+    DecisionAnswerConfidence,
+    ReadDecisionStepConfiguration,
+    ResolveDecisionState,
+    ResolveGraphDecisions,
+    type DecisionTaskRow,
+} from '../decision-node';
+import { SummarizeDecisionAnswers } from '../AIDecisionTaskRunner';
+import { BuildStepConfiguration, DecisionPromptNameOf, FindUnrunnableKinds } from '../TaskGraphService';
+import type { TaskDecisionRunner, TaskDecisionRunParams, TaskDecisionRunResult, TaskPromptRunner } from '../types';
+
+// ── fixtures ────────────────────────────────────────────────────────────────────────────────────
+
+const TRIAGE: TaskGraphNodeConfigMap['Decision'] = {
+    state: 'payload.ticket',
+    questions: {
+        intent: {
+            kind: 'Choice',
+            instructions: 'Which team should handle this ticket?',
+            options: [
+                { value: 'billing', description: 'A question about an invoice or a charge.' },
+                { value: 'refund', description: 'A request for money back.' },
+                { value: 'other', description: 'Anything else.' },
+            ],
+            minConfidence: 0.7,
+        },
+        urgent: { kind: 'Likelihood', instructions: 'The customer cannot work until this is fixed.', minConfidence: 0.8 },
+    },
+};
+
+const DECISION_PROMPT_ID = '8a1c2d33-0000-4000-8000-000000000001';
+const PROMPT_RUN_ID = '8a1c2d33-0000-4000-8000-000000000002';
+const SUBMITTING_RUN_ID = '8a1c2d33-0000-4000-8000-000000000003';
+
+/** The stored Configuration of the `triage` step, as `BuildStepConfiguration` writes it. */
+const TRIAGE_CONFIGURATION = JSON.stringify(BuildStepConfiguration(TaskNode.Decision(
+    { tempId: 'triage', name: 'Triage the ticket', description: '', dependsOn: [] }, TRIAGE,
+)));
+
+const BILLING_CONFIDENT: Record<string, TaskGraphDecisionAnswer> = {
+    intent: { value: 'billing', confidence: 0.92, probabilities: { billing: 0.92, refund: 0.05, other: 0.03 } },
+    urgent: { probability: 0.1 },
+};
+
+/** A Decision task row, the shape the dispatcher reads. */
+function decisionTask(over: Partial<Pick<MJTaskEntity, 'Configuration' | 'PromptID' | 'ParentID'>> = {}): MJTaskEntity {
+    return {
+        ID: 'task-triage',
+        Name: 'Triage the ticket',
+        StepType: 'Decision',
+        PromptID: DECISION_PROMPT_ID,
+        ActionID: null,
+        AgentID: null,
+        ParentID: 'graph-1',
+        Configuration: TRIAGE_CONFIGURATION,
+        ConfigurationObject: null,
+        ...over,
+    } satisfies Partial<MJTaskEntity> as unknown as MJTaskEntity;
+}
+
+/** The row a Decision step leaves behind once it has run. */
+function decisionRow(status: string, output: unknown, errorMessage: string | null = null): DecisionTaskRow {
+    return {
+        Name: 'Triage the ticket',
+        Status: status,
+        StepType: 'Decision',
+        Configuration: TRIAGE_CONFIGURATION,
+        OutputPayload: output === undefined ? null : JSON.stringify(output),
+        ErrorMessage: errorMessage,
+    };
+}
+
+/** The graph's decisions after `triage` completed with these answers. */
+const decided = (answers: Record<string, TaskGraphDecisionAnswer>): GraphDecisions =>
+    ResolveGraphDecisions([decisionRow('Complete', BuildDecisionStepOutput({}, 'triage', answers))]);
+
+/** A decision runner that records every call and answers with `result`. */
+function decisionRunner(result: TaskDecisionRunResult): TaskDecisionRunner & { Calls: TaskDecisionRunParams[] } {
+    const calls: TaskDecisionRunParams[] = [];
+    return {
+        Calls: calls,
+        RunDecisionForTask: async (params: TaskDecisionRunParams) => { calls.push(params); return result; },
+    };
+}
+
+/** An `AIAgentRunStep` as the fake provider hands it out: plain fields and a recording Save. */
+class FakeRunStep {
+    public AgentRunID = '';
+    public StepNumber = 0;
+    public StepType = '';
+    public StepName = '';
+    public TargetID: string | null = null;
+    public TargetLogID: string | null = null;
+    public ParentID: string | null = null;
+    public Status = '';
+    public StartedAt = new Date(0);
+    public CompletedAt: Date | null = null;
+    public Success: boolean | null = null;
+    public ErrorMessage: string | null = null;
+    public InputData: string | null = null;
+    public OutputData: string | null = null;
+    constructor(private readonly saved: FakeRunStep[]) {}
+    public NewRecord(): void { /* a fresh step needs nothing reset */ }
+    public async Save(): Promise<boolean> { this.saved.push(this); return true; }
+}
+
+/** A provider that knows the graph's parent, the run that submitted it, and that run's steps. */
+function fakeProvider(submittingRunID: string | null, highestStepNumber = 0) {
+    const saved: FakeRunStep[] = [];
+    const runViews: RunViewParams[] = [];
+    const provider = {
+        GetEntityObject: async (entityName: string) => {
+            if (entityName === 'MJ: Tasks') {
+                return { InputPayload: null, AgentRunID: submittingRunID, Load: async () => true };
+            }
+            return new FakeRunStep(saved);
+        },
+        RunView: async (params: RunViewParams) => {
+            runViews.push(params);
+            return { Success: true, Results: highestStepNumber ? [{ StepNumber: highestStepNumber }] : [] };
+        },
+    };
+    return { Provider: provider as unknown as IMetadataProvider, Saved: saved, RunViews: runViews };
+}
+
+/** The private surface of the dispatcher these tests drive. */
+type DispatcherInternals = {
+    runTaskBody(
+        task: MJTaskEntity,
+        provider: IMetadataProvider,
+        inputPayload: unknown,
+        dependencyOutputs: Map<string, unknown>,
+    ): Promise<{ Success: boolean; Output?: unknown; ErrorMessage?: string; PromptRunID?: string }>;
+    canActOn(entity: MJTaskEntity): boolean;
+    evaluateEdgeCondition(
+        dep: MJTaskDependencyEntity,
+        entityById: Map<string, MJTaskEntity>,
+        failureSemantics: 'block' | 'edges',
+        invocation: ConditionInvocation,
+        decisions: GraphDecisions,
+    ): { outcome: 'keep' | 'drop' | 'hold'; reason?: string };
+    evaluateExclusiveCondition(
+        dep: MJTaskDependencyEntity,
+        entityById: Map<string, MJTaskEntity>,
+        invocation: ConditionInvocation,
+        decisions: GraphDecisions,
+    ): EdgeConditionOutcome;
+};
+
+/**
+ * A dispatcher with only what these paths read. The real constructor stands up a claim store, timers
+ * and a provider factory none of this touches; the methods under test come from the prototype.
+ */
+function dispatcherWith(runner: TaskDecisionRunner, promptRunner?: TaskPromptRunner): DispatcherInternals {
+    const instance = Object.create(TaskGraphDispatcher.prototype) as {
+        decisionRunner: TaskDecisionRunner;
+        promptRunner?: TaskPromptRunner;
+        contextUser: UserInfo;
+        conditionEvaluator: DispatcherConditionEvaluator;
+        reportedUnevaluableConditions: Set<string>;
+        inFlight: Set<string>;
+    };
+    instance.decisionRunner = runner;
+    instance.promptRunner = promptRunner;
+    instance.contextUser = {} as UserInfo;
+    instance.conditionEvaluator = new DispatcherConditionEvaluator();
+    instance.reportedUnevaluableConditions = new Set<string>();
+    instance.inFlight = new Set<string>();
+    return instance as unknown as DispatcherInternals;
+}
+
+/** The origin a condition is evaluated against — the Decision step itself, with its status and output. */
+function origin(status: MJTaskEntity['Status'], output: unknown): MJTaskEntity {
+    return {
+        ID: 'task-triage', Name: 'Triage the ticket', Status: status, ErrorMessage: null,
+        OutputPayload: output === undefined ? null : JSON.stringify(output),
+    } satisfies Partial<MJTaskEntity> as unknown as MJTaskEntity;
+}
+
+/** An edge out of `task-triage`. */
+function edge(id: string, condition: string, exclusiveGroup: string | null = null): MJTaskDependencyEntity {
+    return {
+        ID: id, TaskID: `target-${id}`, DependsOnTaskID: 'task-triage', Condition: condition,
+        ExclusiveGroup: exclusiveGroup, Priority: 0, Sequence: 0,
+    } satisfies Partial<MJTaskDependencyEntity> as unknown as MJTaskDependencyEntity;
+}
+
+const INTENT_FORK = [
+    edge('e-billing', "decisions.triage.intent.value === 'billing'", 'route'),
+    edge('e-refund', "decisions.triage.intent.value === 'refund'", 'route'),
+    edge('e-other', "decisions.triage.intent.value === 'other'", 'route'),
+];
+
+/** Resolves the intent fork the way `loadGraphState` does, through the dispatcher's own evaluation. */
+function resolveIntentFork(originStatus: 'Complete' | 'Failed', decisions: GraphDecisions, failureSemantics: 'block' | 'edges' = 'block') {
+    const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+    const entityById = new Map([['task-triage', origin(originStatus, {})]]);
+    const evaluated: EvaluatedEdge[] = INTENT_FORK.map((d) => ({
+        id: d.ID, taskId: d.TaskID, dependsOnTaskId: d.DependsOnTaskID, exclusiveGroup: 'route',
+        originStatus, priority: 0, sequence: 0,
+        conditionOutcome: dispatcher.evaluateExclusiveCondition(d, entityById, {}, decisions),
+    }));
+    return ResolveExclusiveGroups(evaluated, failureSemantics === 'edges' ? new Set(['Complete', 'Failed']) : new Set(['Complete']));
+}
+
+// ── the node ────────────────────────────────────────────────────────────────────────────────────
+
+describe('a Decision node on the dispatcher', () => {
+    const input = { ticket: { subject: 'I was charged twice', body: 'Two charges on my card this month.' } };
+
+    it('makes ONE call for all of its questions, about the state its path names', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT, PromptRunID: PROMPT_RUN_ID });
+        const { Provider } = fakeProvider(null);
+
+        await dispatcherWith(runner).runTaskBody(decisionTask(), Provider, input, new Map());
+
+        expect(runner.Calls).toHaveLength(1);
+        expect(Object.keys(runner.Calls[0].Questions)).toEqual(['intent', 'urgent']);
+        expect(runner.Calls[0].State).toEqual(input.ticket);
+        expect(runner.Calls[0].PromptID).toBe(DECISION_PROMPT_ID);
+    });
+
+    it('writes the answers into its output under decisions.<step>, keeping the payload and earlier decisions', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT, PromptRunID: PROMPT_RUN_ID });
+        const upstream = new Map<string, unknown>([['task-0', { decisions: { earlier: { ok: { probability: 0.9 } } } }]]);
+
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), fakeProvider(null).Provider, input, upstream);
+
+        expect(outcome.Success).toBe(true);
+        expect(outcome.PromptRunID).toBe(PROMPT_RUN_ID);
+        expect(outcome.Output).toEqual({
+            ticket: input.ticket,
+            decisions: { earlier: { ok: { probability: 0.9 } }, triage: BILLING_CONFIDENT },
+        });
+    });
+
+    it('puts the same answers in the condition context, where an edge reads them without a model call', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), fakeProvider(null).Provider, input, new Map());
+
+        const decisions = ResolveGraphDecisions([decisionRow('Complete', outcome.Output)]);
+        const context = BuildConditionContext(origin('Complete', outcome.Output), outcome.Output, {}, decisions.Answers);
+        const verdict = new DispatcherConditionEvaluator().Evaluate("decisions.triage.intent.value === 'billing'", context);
+
+        expect(context.decisions).toEqual({ triage: BILLING_CONFIDENT });
+        expect(verdict).toEqual({ Success: true, Value: true });
+        expect(runner.Calls).toHaveLength(1);
+    });
+
+    it('logs the call on the submitting run as a Decision step', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT, PromptRunID: PROMPT_RUN_ID });
+        const { Provider, Saved, RunViews } = fakeProvider(SUBMITTING_RUN_ID, 7);
+
+        await dispatcherWith(runner).runTaskBody(decisionTask(), Provider, input, new Map());
+
+        expect(Saved).toHaveLength(1);
+        const step = Saved[0];
+        expect(step).toMatchObject({
+            AgentRunID: SUBMITTING_RUN_ID,
+            StepNumber: 8,
+            StepType: 'Decision',
+            StepName: 'Decision: Triage the ticket',
+            TargetID: DECISION_PROMPT_ID,
+            TargetLogID: PROMPT_RUN_ID,
+            Status: 'Completed',
+            Success: true,
+        });
+        expect(JSON.parse(step.InputData ?? '{}')).toMatchObject({ decision: 'triage', state: input.ticket });
+        expect(JSON.parse(step.OutputData ?? '{}').answers).toEqual(BILLING_CONFIDENT);
+        expect(RunViews[0]).toMatchObject({ EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${SUBMITTING_RUN_ID}'` });
+    });
+
+    it('logs no step for a graph no run submitted, and still decides', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+        const { Provider, Saved } = fakeProvider(null);
+
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), Provider, input, new Map());
+
+        expect(Saved).toHaveLength(0);
+        expect(outcome.Success).toBe(true);
+    });
+
+    it('fails on a failed call, writes NO answers, and logs the step as failed', async () => {
+        const runner = decisionRunner({ Success: false, ErrorMessage: 'the model timed out', PromptRunID: PROMPT_RUN_ID });
+        const { Provider, Saved } = fakeProvider(SUBMITTING_RUN_ID);
+
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), Provider, input, new Map());
+
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toBe('the model timed out');
+        expect(outcome.Output).toEqual(input);
+        // Still carried: a failed call can have cost tokens, and the rollup reaches it through this.
+        expect(outcome.PromptRunID).toBe(PROMPT_RUN_ID);
+        expect(Saved[0]).toMatchObject({ StepType: 'Decision', Status: 'Failed', Success: false, ErrorMessage: 'the model timed out' });
+    });
+
+    it('does not call the model when its state is not in the payload, and says which path was missing', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+
+        const outcome = await dispatcherWith(runner).runTaskBody(decisionTask(), fakeProvider(null).Provider, { other: 1 }, new Map());
+
+        expect(outcome.Success).toBe(false);
+        expect(outcome.ErrorMessage).toMatch(/"payload.ticket" is not in the payload/);
+        expect(runner.Calls).toHaveLength(0);
+    });
+
+    it('is routed by StepType, so the prompt runner never sees it despite its PromptID', async () => {
+        const runner = decisionRunner({ Success: true, Answers: BILLING_CONFIDENT });
+        const promptRunner = { RunPromptForTask: vi.fn() };
+
+        await dispatcherWith(runner, promptRunner).runTaskBody(decisionTask(), fakeProvider(null).Provider, input, new Map());
+
+        expect(promptRunner.RunPromptForTask).not.toHaveBeenCalled();
+        expect(runner.Calls).toHaveLength(1);
+    });
+
+    it('is claimable on a host with no prompt runner', () => {
+        expect(dispatcherWith(decisionRunner({ Success: true })).canActOn(decisionTask())).toBe(true);
+    });
+});
+
+// ── the root ────────────────────────────────────────────────────────────────────────────────────
+
+describe('the decisions root in the condition envelope', () => {
+    it('is provided at run time and declared for the door — the pinned pair covers it', () => {
+        expect(Object.keys(BuildConditionContext(origin('Complete', null), null))).toContain('decisions');
+        expect(CONDITION_ROOTS.has('decisions')).toBe(true);
+    });
+
+    it('is empty, not missing, in a graph with no decisions', () => {
+        expect(BuildConditionContext(origin('Complete', null), null).decisions).toEqual({});
+    });
+
+    it('evaluates a condition that reads no decision exactly as before', () => {
+        const evaluate = vi.fn((): ConditionVerdict => ({ Success: true, Value: true }));
+        expect(EvaluateCondition('payload.ok === true', {}, NO_DECISIONS, evaluate)).toEqual({ Success: true, Value: true });
+        expect(evaluate).toHaveBeenCalledTimes(1);
+    });
+});
+
+// ── the hold ────────────────────────────────────────────────────────────────────────────────────
+
+describe('ResolveGraphDecisions — which answers a condition may act on', () => {
+    it('uses an answer at or above its minConfidence', () => {
+        const decisions = decided({ intent: { value: 'refund', confidence: 0.7 }, urgent: { probability: 0.95 } });
+        expect(decisions.Answers.triage).toEqual({ intent: { value: 'refund', confidence: 0.7 }, urgent: { probability: 0.95 } });
+        expect(decisions.Unresolved).toEqual({});
+    });
+
+    it('does not use a Choice below its minConfidence, and says why', () => {
+        const decisions = decided({ intent: { value: 'billing', confidence: 0.55 }, urgent: { probability: 0.05 } });
+        expect(decisions.Answers.triage).toEqual({ urgent: { probability: 0.05 } });
+        expect(decisions.Unresolved.triage.intent).toMatch(/confidence 0.55, below its minConfidence of 0.7/);
+    });
+
+    it('measures a Likelihood by its distance from an even call — a confident no is usable', () => {
+        expect(DecisionAnswerConfidence({ probability: 0.05 })).toBeCloseTo(0.95);
+        expect(decided({ ...BILLING_CONFIDENT, urgent: { probability: 0.05 } }).Answers.triage.urgent).toEqual({ probability: 0.05 });
+        expect(decided({ ...BILLING_CONFIDENT, urgent: { probability: 0.6 } }).Unresolved.triage.urgent).toMatch(/below its minConfidence of 0.8/);
+    });
+
+    it('uses nothing from a failed decision, and carries the failure as the reason', () => {
+        const decisions = ResolveGraphDecisions([decisionRow('Failed', {}, 'the model timed out')]);
+        expect(decisions.Answers).toEqual({});
+        expect(decisions.Unresolved.triage).toEqual({
+            intent: 'the decision "Triage the ticket" failed: the model timed out',
+            urgent: 'the decision "Triage the ticket" failed: the model timed out',
+        });
+    });
+
+    it.each(['Pending', 'In Progress', 'Skipped', 'Blocked'])('uses nothing from a %s decision', (status) => {
+        expect(ResolveGraphDecisions([decisionRow(status, undefined)]).Unresolved.triage.intent).toMatch(/has not answered/);
+    });
+
+    it('does not trust a completed step that wrote no answer', () => {
+        expect(ResolveGraphDecisions([decisionRow('Complete', { unrelated: true })]).Unresolved.triage.intent)
+            .toMatch(/completed without an answer/);
+    });
+});
+
+describe('a condition reading an unsettled decision holds', () => {
+    const BELOW = decided({ intent: { value: 'billing', confidence: 0.55 }, urgent: { probability: 0.6 } });
+    const ABOVE = decided(BILLING_CONFIDENT);
+
+    it('is refused evaluation — the evaluator is never asked, so absence cannot read as false', () => {
+        const evaluate = vi.fn((): ConditionVerdict => ({ Success: true, Value: false }));
+        const verdict = EvaluateCondition("decisions.triage.intent.value === 'billing'", {}, BELOW, evaluate);
+        expect(verdict.Unevaluable).toBe(true);
+        expect(verdict.ErrorMessage).toMatch(/below its minConfidence/);
+        expect(evaluate).not.toHaveBeenCalled();
+    });
+
+    it('turns into a hold at the gate, not a drop', () => {
+        expect(DecideGate('Complete', 'block', () => ({ Success: false, Unevaluable: true, ErrorMessage: 'held' }))).toBe('hold');
+    });
+
+    it('holds a malformed or unknown reference too — the backstop for a condition that bypassed the door', () => {
+        expect(DecisionHoldReason('decisions.triage', ABOVE)).toMatch(/without naming a step and a question/);
+        expect(DecisionHoldReason('decisions.nobody.intent.value === "x"', ABOVE)).toMatch(/no Decision step "nobody"/);
+    });
+
+    it('holds an ordinary edge below minConfidence and routes it above', () => {
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+        const entityById = new Map([['task-triage', origin('Complete', {})]]);
+        const urgentEdge = edge('e-urgent', 'decisions.triage.urgent.probability >= 0.5');
+
+        expect(dispatcher.evaluateEdgeCondition(urgentEdge, entityById, 'block', {}, BELOW)).toMatchObject({
+            outcome: 'hold', reason: expect.stringMatching(/below its minConfidence of 0.8/),
+        });
+        expect(dispatcher.evaluateEdgeCondition(urgentEdge, entityById, 'block', {}, ABOVE).outcome).toBe('drop');
+        expect(dispatcher.evaluateEdgeCondition(edge('e-calm', 'decisions.triage.urgent.probability < 0.5'), entityById, 'block', {}, ABOVE).outcome)
+            .toBe('keep');
+    });
+
+    it('HOLDS the whole fork below minConfidence — no branch is guessed and none is skipped', () => {
+        const resolution = resolveIntentFork('Complete', BELOW);
+        expect(resolution.holdTaskIDs.sort()).toEqual(['target-e-billing', 'target-e-other', 'target-e-refund']);
+        expect(resolution.keptEdgeIDs).toEqual([]);
+        expect(resolution.loserEdgeIDs).toEqual([]);
+    });
+
+    it('ROUTES the fork above minConfidence — the chosen branch runs and the others are skipped', () => {
+        const resolution = resolveIntentFork('Complete', ABOVE);
+        expect(resolution.holdTaskIDs).toEqual([]);
+        expect(resolution.keptEdgeIDs).toEqual(['e-billing']);
+        expect(resolution.loserEdgeIDs.sort()).toEqual(['e-other', 'e-refund']);
+    });
+});
+
+describe('a failed decision holds; it never reads as false', () => {
+    const FAILED = ResolveGraphDecisions([decisionRow('Failed', {}, 'the model timed out')]);
+
+    it('holds an edge that reads it where failures decide (edges semantics)', () => {
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+        const entityById = new Map([['task-triage', origin('Failed', {})]]);
+        const decision = dispatcher.evaluateEdgeCondition(
+            edge('e-not-billing', "decisions.triage.intent.value !== 'billing'"), entityById, 'edges', {}, FAILED,
+        );
+        // A NEGATED test is the dangerous one: with no answer, `undefined !== 'billing'` is TRUE, so a
+        // read-through would open this edge on a decision that never happened.
+        expect(decision.outcome).toBe('hold');
+        expect(decision.reason).toMatch(/failed: the model timed out/);
+    });
+
+    it('leaves it to the block cascade under block semantics — kept, never dropped', () => {
+        const dispatcher = dispatcherWith(decisionRunner({ Success: true }));
+        const entityById = new Map([['task-triage', origin('Failed', {})]]);
+        const decision = dispatcher.evaluateEdgeCondition(
+            edge('e-billing', "decisions.triage.intent.value === 'billing'"), entityById, 'block', {}, FAILED,
+        );
+        expect(decision.outcome).toBe('keep');
+    });
+
+    it('holds the whole fork on it where failures decide', () => {
+        const resolution = resolveIntentFork('Failed', FAILED, 'edges');
+        expect(resolution.holdTaskIDs).toHaveLength(3);
+        expect(resolution.loserEdgeIDs).toEqual([]);
+    });
+
+    it('holds an edge from ANOTHER step that reads it, whatever that step\'s status', () => {
+        const evaluate = vi.fn((): ConditionVerdict => ({ Success: true, Value: true }));
+        expect(EvaluateCondition("decisions.triage.intent.value === 'other'", {}, FAILED, evaluate).Unevaluable).toBe(true);
+        expect(evaluate).not.toHaveBeenCalled();
+    });
+});
+
+// ── pieces ──────────────────────────────────────────────────────────────────────────────────────
+
+describe('SummarizeDecisionAnswers', () => {
+    const typed: AIDecisionRunResult['Answers'] = {
+        urgent: { Kind: 'Likelihood', Probability: 0.81 },
+        intent: { Kind: 'Choice', Value: 'refund', Confidence: 0.77, Probabilities: { billing: 0.2, refund: 0.77, other: 0.03 } },
+        severity: { Kind: 'Score', Value: 1.4, Confidence: 0.6, Probabilities: { minor: 0.1, major: 0.4, critical: 0.5 } },
+    };
+
+    it('keeps the full distribution in the shape conditions read', () => {
+        expect(SummarizeDecisionAnswers(typed)).toEqual({
+            urgent: { probability: 0.81 },
+            intent: { value: 'refund', confidence: 0.77, probabilities: { billing: 0.2, refund: 0.77, other: 0.03 } },
+            severity: { value: 1.4, confidence: 0.6, probabilities: { minor: 0.1, major: 0.4, critical: 0.5 } },
+        });
+    });
+
+    it('produces exactly the fields the validator lets a condition read, for every kind', () => {
+        const summary = SummarizeDecisionAnswers(typed);
+        expect(Object.keys(summary.urgent).sort()).toEqual([...DECISION_ANSWER_FIELDS.Likelihood].sort());
+        expect(Object.keys(summary.intent).sort()).toEqual([...DECISION_ANSWER_FIELDS.Choice].sort());
+        expect(Object.keys(summary.severity).sort()).toEqual([...DECISION_ANSWER_FIELDS.Score].sort());
+    });
+});
+
+describe('ResolveDecisionState', () => {
+    it('defaults to the whole payload', () => {
+        expect(ResolveDecisionState(undefined, { a: 1 })).toEqual({ State: { a: 1 } });
+    });
+
+    it('passes text through and sends a list as JSON', () => {
+        expect(ResolveDecisionState('payload.text', { text: 'hello' })).toEqual({ State: 'hello' });
+        expect(ResolveDecisionState('payload.items', { items: [1, 2] })).toEqual({ State: '[1,2]' });
+    });
+
+    it('refuses an empty state rather than ask about nothing', () => {
+        expect(ResolveDecisionState(undefined, {})).toEqual({ ErrorMessage: 'its state "payload" is empty' });
+        expect(ResolveDecisionState('payload.text', { text: ' ' })).toEqual({ ErrorMessage: 'its state "payload.text" is empty' });
+    });
+});
+
+describe('persisting a Decision step', () => {
+    const node = TaskNode.Decision({ tempId: 'triage', name: 'Triage the ticket', description: '', dependsOn: [] }, TRIAGE);
+
+    it('is a kind the dispatcher can run', () => {
+        const graph: TaskGraphSpec = { workflowName: 'Support triage', tasks: [node] };
+        expect(FindUnrunnableKinds(graph)).toBeNull();
+    });
+
+    it('stores its questions and state with the tempId conditions name it by', () => {
+        const config = BuildStepConfiguration(node);
+        expect(config?.decision).toEqual({ ...TRIAGE, nodeId: 'triage' });
+        expect(ReadDecisionStepConfiguration(JSON.stringify(config))).toEqual({ ...TRIAGE, nodeId: 'triage' });
+    });
+
+    it('runs on Default Decision unless it names a prompt', () => {
+        expect(DecisionPromptNameOf(node)).toBe('Default Decision');
+        expect(DecisionPromptNameOf({ ...node, configuration: { ...TRIAGE, promptName: 'Triage Decision' } })).toBe('Triage Decision');
+        expect(DecisionPromptNameOf(TaskNode.Agent({ tempId: 'a', name: 'A', description: '', dependsOn: [] }, { agentName: 'X' }))).toBeNull();
+    });
+});

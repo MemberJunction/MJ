@@ -29,7 +29,6 @@ import {
     MJTaskDependencyEntity,
     MJTaskTypeEntity,
     MJAIAgentRequestEntity,
-    type MJTaskEntity_ITaskStepConfiguration,
 } from '@memberjunction/core-entities';
 import {
     FormatValidationErrors,
@@ -45,6 +44,8 @@ import {
     ConfigOf,
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
+import { AgentDecisionService } from '@memberjunction/ai-agents';
+import type { TaskStepConfiguration } from './decision-node';
 import { TaskClaimStore, type TaskGraphDebugFieldWrite } from './TaskClaimStore';
 import { ParseTaskGraphDebugState, type EdgeOverrideVerdict, type StepTarget, type TaskGraphDebugState } from './debug-state';
 import { KickTaskGraphDispatchers } from './task-graph-kick';
@@ -301,9 +302,12 @@ export const TASK_TYPE_NAME = 'AI Workflow';
  * `Prompt` joins them now that `TaskPromptRunner` exists — it carries `Task.PromptID`. `External`
  * remains absent: it is completed by a system that has no way to report back, so persisting one
  * would produce a task that waits forever.
+ *
+ * `Decision` carries its decision prompt in `Task.PromptID` and its questions in
+ * `Task.Configuration`, and runs on the dispatcher's decision runner.
  */
 const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
-    'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt',
+    'Agent', 'Action', 'Human', 'ForEach', 'While', 'Prompt', 'Decision',
 ];
 
 /**
@@ -334,8 +338,8 @@ const DISPATCHABLE_KINDS: ReadonlyArray<TaskGraphSpecNode['kind']> = [
  * workflow whose conditions all evaluate against nothing. Undefined is falsy, so that failure looks
  * exactly like a branch legitimately not being taken.
  */
-export function BuildStepConfiguration(node: TaskGraphSpecNode): MJTaskEntity_ITaskStepConfiguration | null {
-    const config: MJTaskEntity_ITaskStepConfiguration = {};
+export function BuildStepConfiguration(node: TaskGraphSpecNode): TaskStepConfiguration | null {
+    const config: TaskStepConfiguration = {};
 
     const agent = ConfigOf(node, 'Agent');
     if (agent?.message || agent?.templateParameters) {
@@ -361,6 +365,11 @@ export function BuildStepConfiguration(node: TaskGraphSpecNode): MJTaskEntity_IT
 
     const external = ConfigOf(node, 'External');
     if (external) config.external = external;
+
+    // The questions and state, plus the node's tempId: conditions name a decision by the tempId it
+    // was submitted under (`decisions.<tempId>.<question>`), and the row keeps no other copy of it.
+    const decision = ConfigOf(node, 'Decision');
+    if (decision) config.decision = { ...decision, nodeId: node.tempId };
 
     // Mappings live on the Action arm of the spec, but they are not action-specific: a loop step
     // carries them too, which is how its per-iteration inputs and results are wired.
@@ -414,10 +423,20 @@ function agentNamesIn(node: TaskGraphSpecNode): string[] {
     return names.filter((n): n is string => !!n);
 }
 
-/** Every prompt name a node references, including the prompt a loop repeats. */
+/** Every prompt name a node references, including the prompt a loop repeats and a Decision's prompt. */
 function promptNamesIn(node: TaskGraphSpecNode): string[] {
-    const names = [ConfigOf(node, 'Prompt')?.promptName, LoopOperationOf(node)?.prompt?.name];
+    const names = [ConfigOf(node, 'Prompt')?.promptName, LoopOperationOf(node)?.prompt?.name, DecisionPromptNameOf(node)];
     return names.filter((n): n is string => !!n);
+}
+
+/**
+ * The decision prompt a Decision node runs on — its own `promptName`, or `Default Decision`, the
+ * prompt agent decisions use. `null` for any other kind.
+ */
+export function DecisionPromptNameOf(node: TaskGraphSpecNode): string | null {
+    const decision = ConfigOf(node, 'Decision');
+    if (!decision) return null;
+    return decision.promptName?.trim() || AgentDecisionService.DEFAULT_PROMPT_NAME;
 }
 
 /** Every action name a node references, including the action a loop repeats. */
@@ -1505,6 +1524,12 @@ export class TaskGraphService {
                     break;
                 case 'Prompt':
                     task.PromptID = promptIDsByName.get(ConfigOf(node, 'Prompt')!.promptName)!;
+                    break;
+                case 'Decision':
+                    // The decision prompt, as a real foreign key like a Prompt step's. The row stays a
+                    // machine task for claiming and reclamation; `StepType` is what routes it to the
+                    // decision runner rather than the prompt runner.
+                    task.PromptID = promptIDsByName.get(DecisionPromptNameOf(node)!)!;
                     break;
                 case 'ForEach':
                 case 'While': {
