@@ -314,7 +314,57 @@ class LambdaDocumentHandler implements WorkHandler {
 export const handler = CreateSqsLambdaHandler(() => new LambdaDocumentHandler());
 ```
 
-Bundle with esbuild (`platform: node`, `format: esm`, `external: ['@aws-sdk/*']`); the Lambda runtime provides the SDK.
+#### Packaging and deploying the function
+
+The function's build lives in **your consumer project**, not in this repository. The line between the two:
+
+| Lives in this repository | Lives in your consumer / infrastructure repository |
+|---|---|
+| `@memberjunction/work-queue-aws/lambda` (`CreateSqsLambdaHandler`), `@memberjunction/work-queue-core` types, the `examples/thin-consumer` reference | The handler class and its `index.ts` entrypoint |
+| The Terraform module (function, `live` alias, SQS event source mapping, role, log group, alarms) | Bundling that entrypoint, zipping it, uploading the zip to S3 (or pushing an image to ECR) |
+| `mj queue export-topology` / `import-bindings` / `validate-bindings` | The `terraform apply` that points the function at that artifact |
+
+There is no `mj` command that builds or uploads a function. The module only *references* an artifact you have
+already uploaded, so a deploy is three steps: build, upload, apply.
+
+**1. Build and upload** (in the consumer project, which depends on `@memberjunction/work-queue-aws` and
+`@memberjunction/work-queue-core`):
+
+```bash
+npx esbuild src/index.ts --bundle --platform=node --format=esm --target=node22 \
+  --outfile=dist/index.mjs --external:@aws-sdk/*
+(cd dist && zip -q ../documents-archive.zip index.mjs)
+HASH=$(shasum -a 256 documents-archive.zip | cut -c1-12)
+aws s3 cp documents-archive.zip "s3://acme-artifacts/work-queue/documents-archive/${HASH}.zip"
+```
+
+`--bundle` folds the MJ packages and your code into one file, so the zip carries no `node_modules`.
+`--external:@aws-sdk/*` leaves the SDK out because the Lambda Node.js runtimes (`nodejs22.x` is the module's
+default) already ship AWS SDK v3. The content hash in the key is what makes Terraform see a new build — reusing
+one key would leave the function on the old code. A container image is the alternative: the same esbuild step in a
+Dockerfile on the AWS Lambda Node base image, pushed to ECR and passed as `image_uri` instead of `s3_bucket` + `s3_key`.
+
+**2. Point Terraform at the artifact.** In the `lambda_consumers` entry for the subscription (4.2), set `s3_key` to
+the key you just uploaded. The key of the map must equal a subscription whose `ConsumerKind` is `External`; the
+module refuses an entry for an `MJWorker` subscription, and its `external_subscriptions_without_lambda` output lists
+any `External` subscription with no entry (deployed some other way, or forgotten). `handler` defaults to
+`index.handler`, so the file must be `index.mjs` exporting `handler` — or set `handler` to match your entrypoint.
+
+**3. Apply.** `terraform apply` creates or updates the function, moves the `live` alias that the SQS event source
+invokes, and sets `MJ_WQ_SUBSCRIPTION` on it from the manifest. Then run the bindings import (4.3) if the topology
+changed. A later code change is the same loop: new hash, new `s3_key`, apply. The function's policy
+(`MaxAttempts`, backoff, filter) is frozen in `MJ_WQ_SUBSCRIPTION` at apply time, so a policy change in MJ also
+needs a re-export and apply.
+
+**`ExternalRef` on the subscription** is informational: MJ never reads it, and nothing above sets it. Its purpose is
+to let an operator looking at the subscription in Explorer see which function serves it. After the apply, copy the
+ARN from the module's `lambda_function_arns` output (keyed by subscription name) into the subscription's
+`ExternalRef` — on the Explorer record, or in the subscription's metadata JSON if the topology is seeded with
+`mj sync push`. `BindingConfig` is different: `import-bindings` writes it, it holds the queue URLs and ARNs the
+transport needs at runtime, and it must not be hand-edited.
+
+The consumer stays thin by design: `pnpm run check:lambda-bundle` in the `aws` package fails if the `./lambda`
+entry ever reaches the SNS client or an MJ runtime package, which is what keeps the bundle small.
 
 ---
 

@@ -43,7 +43,9 @@ export const handler = CreateSqsLambdaHandler(() => new ArchiveEmailEvent());
 - FIFO event sources use **`batch_size = 1`** (the module enforces it); scale with the event source's
   `maximum_concurrency`, never reserved concurrency.
 - Bundle with esbuild (`platform: node`, `format: esm`, `external: ['@aws-sdk/*']`); the Lambda Node.js runtime
-  provides the SDK. `examples/thin-consumer/index.ts` is a complete consumer.
+  provides the SDK. `examples/thin-consumer/index.ts` is a complete consumer. The build, upload and apply loop —
+  which lives in your consumer project, not here — is spelled out in the package-family README, section 4.4
+  "Packaging and deploying the function".
 - Return `Outcome.Retry(reason, delaySeconds)` or throw `TransientWorkError` to retry; return `Outcome.DeadLetter(reason)`
   or throw `FatalWorkError` to dead-letter now. Any other thrown error retries with backoff.
 
