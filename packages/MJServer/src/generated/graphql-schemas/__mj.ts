@@ -15685,6 +15685,10 @@ export class MJAIPromptRun_ {
     @MaxLength(25)
     ToolCallingMode?: string;
         
+    @Field({nullable: true, description: `The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.`}) 
+    @MaxLength(36)
+    UserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Prompt?: string;
@@ -15732,6 +15736,10 @@ export class MJAIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(50)
     UsageType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -16029,6 +16037,9 @@ export class CreateMJAIPromptRunInput {
     @Field({ nullable: true })
     ToolCallingMode: string | null;
 
+    @Field({ nullable: true })
+    UserID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16308,6 +16319,9 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     ToolCallingMode?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19215,6 +19229,9 @@ export class MJAIVendor_ {
     @MaxLength(36)
     CredentialTypeID?: string;
         
+    @Field({nullable: true, description: `Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     CredentialType?: string;
@@ -19241,6 +19258,9 @@ export class CreateMJAIVendorInput {
     @Field({ nullable: true })
     CredentialTypeID: string | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -19262,6 +19282,9 @@ export class UpdateMJAIVendorInput {
 
     @Field({ nullable: true })
     CredentialTypeID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -66952,6 +66975,10 @@ export class MJProject_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.`}) 
+    @MaxLength(36)
+    OwnerUserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Environment?: string;
@@ -66959,6 +66986,10 @@ export class MJProject_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    OwnerUser?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -67010,6 +67041,9 @@ export class CreateMJProjectInput {
     @Field(() => Boolean, { nullable: true })
     IsArchived?: boolean;
 
+    @Field({ nullable: true })
+    OwnerUserID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -67043,6 +67077,9 @@ export class UpdateMJProjectInput {
 
     @Field(() => Boolean, { nullable: true })
     IsArchived?: boolean;
+
+    @Field({ nullable: true })
+    OwnerUserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
