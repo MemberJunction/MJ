@@ -25852,5 +25852,109 @@
       "lastModified": "2026-09-22T18:52:51.505Z",
       "checksum": "8d92008bca6d9c38c7aec4009a1a897af586a516ac02e26e1562179ff49543ea"
     }
+  },
+  {
+    "fields": {
+      "Name": "Eleven v4",
+      "PowerRank": 10,
+      "Description": "ElevenLabs' flagship v4 text-to-speech model, announced September 2026. Successor to Eleven v3, with broader language coverage and richer audio-tag control over delivery and emotion. Called through the ElevenLabs API as model_id eleven_v4.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "IsActive": true,
+      "SpeedRank": 5,
+      "CostRank": 5,
+      "ModelSelectionInsights": "Flagship-quality ElevenLabs speech for narration, dialogue and multilingual voice work where expressiveness matters more than time-to-first-audio. Choose Eleven v4 Turbo when latency matters.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9A35C5EE-8534-480B-BE47-E11FA79769E5"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "ElevenLabsAudioGenerator",
+            "APIName": "eleven_v4",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "EB26D13D-14DE-4D01-A996-6BE1386872E7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "76D7649A-8C1D-4E54-9680-1141CF7EB26B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eleven v4 Turbo",
+      "PowerRank": 9,
+      "Description": "Low-latency variant of ElevenLabs' v4 text-to-speech model, announced September 2026 and built for real-time, conversational use. Called through the ElevenLabs API as model_id eleven_v4_turbo.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 4,
+      "ModelSelectionInsights": "Lower-latency ElevenLabs speech for live and conversational use, such as voice agents and interactive playback. Choose Eleven v4 when maximum expressiveness matters more than latency.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "6A756492-352A-4EBF-B4C4-3F9DD88A1A2E"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "ElevenLabsAudioGenerator",
+            "APIName": "eleven_v4_turbo",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "80E6A272-EC29-4C4A-B360-4237B411D9C9"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AE74888E-161C-47E7-BA2E-F0D1F907D8F6"
+    }
   }
 ]
