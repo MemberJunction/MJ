@@ -17,6 +17,7 @@ import { logError, LogMessage, logStatus, LogWarning, StartSpinner, UpdateSpinne
 import { SQLUtilityBase } from "./sql";
 import { ApplyIncludeSchemaScope } from "./schema-scope";
 import { BuildHealSchemaRoutineParams, GetAuthoredExcludeSchemas, SnapshotAuthoredExcludeSchemas } from "./heal-schema-params";
+import { JSON_VALIDATOR_CATEGORY_NAME, JSONCheckStore, JSONCheckTranslator, JSONValidatorResult, ResolveJSONCheckValidators } from "./json-check-validators";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, IsPlausibleEntityName } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
@@ -754,6 +755,14 @@ export class ManageMetadataBase {
       }
    }
    private static _generatedValidators: ValidatorResult[] = [];
+   private static _generatedJSONValidators: JSONValidatorResult[] = [];
+   /**
+    * Globally scoped translations of the SQL `@CHECK` rules of opted-in JSONTypes, loaded from
+    * `__mj.GeneratedCode` (and extended by generation). Consumed when entity subclasses are emitted.
+    */
+   public static get GeneratedJSONValidators(): JSONValidatorResult[] {
+      return this._generatedJSONValidators;
+   }
    /**
     * Globally scoped list of validators that have been generated during the metadata management process.
     */
@@ -5741,12 +5750,80 @@ export class ManageMetadataBase {
 
          // await the completion of all generation promises here
          await Promise.all(generationPromises);
+
+         // SQL @CHECK rules on opted-in JSONTypes: same load-always / generate-when-allowed contract
+         await this.manageJSONCheckValidators(pool, allEntityFields, currentUser, !skipDBUpdate);
          return true;
       }
       catch (e) {
          logError(e as string);
          return false;
       }
+   }
+
+   /**
+    * Loads (always) and generates (only when `generateNewCode` and the `ParseCheckConstraints`
+    * feature allow) the TypeScript translations of SQL `@CHECK` rules written on opted-in JSONTypes,
+    * then publishes them on {@link GeneratedJSONValidators} for the entity emitter.
+    *
+    * Failures are logged and never fail the run: a missing translation only means that one rule is
+    * not emitted, which the emitter reports.
+    */
+   protected async manageJSONCheckValidators(pool: CodeGenConnection, allEntityFields: any[], currentUser: UserInfo, generateNewCode: boolean): Promise<void> {
+      try {
+         const store = this.buildJSONCheckStore(pool);
+         const resolved = await ResolveJSONCheckValidators({
+            Fields: allEntityFields,
+            GenerateNew: generateNewCode,
+            Store: store,
+            Translator: this.createJSONCheckTranslator(),
+            CurrentUser: currentUser,
+            ReportError: (message) => logError(message),
+            ReportWarning: (message) => LogWarning(message),
+         });
+         const resolvedKeys = new Set(resolved.map((r) => r.Key));
+         ManageMetadataBase._generatedJSONValidators = [
+            ...ManageMetadataBase._generatedJSONValidators.filter((r) => !resolvedKeys.has(r.Key)),
+            ...resolved,
+         ];
+      }
+      catch (e) {
+         logError(`Error resolving JSON @CHECK validators: ${e instanceof Error ? e.message : String(e)}`);
+      }
+   }
+
+   /** The model-backed translator for SQL `@CHECK` rules; a seam so tests can supply a stub. */
+   protected createJSONCheckTranslator(): JSONCheckTranslator {
+      return new AdvancedGeneration();
+   }
+
+   /** `__mj.GeneratedCode` access for the JSON-validators category. */
+   private buildJSONCheckStore(pool: CodeGenConnection): JSONCheckStore {
+      const lit = (v: string) => this.dialect.QuoteStringLiteral(v);
+      const codes = this.qs(MjCoreSchema(), 'GeneratedCode');
+      const categories = this.qs(MjCoreSchema(), 'vwGeneratedCodeCategories');
+      const categoryLookup = `(SELECT ${this.qi('ID')} FROM ${categories} WHERE ${this.qi('Name')}=${lit(JSON_VALIDATOR_CATEGORY_NAME)})`;
+      return {
+         LoadCached: async () => {
+            const sql = `SELECT ${this.qi('ID')}, ${this.qi('Source')}, ${this.qi('Name')}, ${this.qi('Code')}, ${this.qi('Description')} FROM ${codes} WHERE ${this.qi('CategoryID')} = ${categoryLookup} AND ${this.qi('Status')}=${lit('Approved')}`;
+            const result = await this.runQuery(pool, sql);
+            return result.recordset.map((r) => ({
+               ID: String(r.ID), Source: String(r.Source), Name: String(r.Name), Code: String(r.Code), Description: r.Description == null ? null : String(r.Description),
+            }));
+         },
+         Persist: async (entry) => {
+            const categoryRows = (await this.runQuery(pool, `SELECT ${this.qi('ID')} FROM ${categories} WHERE ${this.qi('Name')}=${lit(JSON_VALIDATOR_CATEGORY_NAME)}`)).recordset;
+            if (categoryRows.length === 0) {
+               LogWarning(`GeneratedCode category '${JSON_VALIDATOR_CATEGORY_NAME}' does not exist in this database (run 'mj sync push' for metadata/generated-code-categories); the validator generated for '${entry.Key}' is used for this run only and will be regenerated next time`);
+               return;
+            }
+            entry.GeneratedCodeID = uuidv4();
+            const checkQuery = `SELECT 1 FROM ${codes} WHERE ${this.qi('CategoryID')} = ${categoryLookup} AND ${this.qi('Source')} = ${lit(entry.Key)}`;
+            const insertSQL = `INSERT INTO ${codes} (${['ID', 'CategoryID', 'GeneratedByModelID', 'GeneratedAt', 'Language', 'Status', 'Source', 'Code', 'Description', 'Name'].map((c) => this.qi(c)).join(', ')})
+VALUES (${lit(entry.GeneratedCodeID)}, ${categoryLookup}, ${lit(entry.AIModelID)}, ${this.utcNow()}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(entry.Key)}, ${lit(entry.FunctionText)}, ${lit(entry.FunctionDescription)}, ${lit(entry.FunctionName)})`;
+            await this.logSQLAndExecute(pool, `${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};`, `Generated JSON @CHECK validator ${entry.Key}`);
+         },
+      };
    }
 
    /**

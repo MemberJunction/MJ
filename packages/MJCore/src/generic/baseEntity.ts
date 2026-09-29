@@ -16,6 +16,7 @@ import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode,
 import { EmbeddedRecord, type EmbeddedRecordOptions } from './embeddedRecord';
 import { EntitySavePlan, ExecuteEntitySavePlan } from './entitySavePlan';
 import { EntityTransactionScope } from './entityTransactionScope';
+import { JSONFieldBinding, JSONFieldRuleSet, JSONFieldSeverity, ValidateJSONFieldValue } from './jsonFieldBinding';
 import { BaseRemotableOperation } from './baseRemotableOperation';
 import {
     SAVE_ENTITY_GRAPH_OPERATION_KEY,
@@ -2491,6 +2492,7 @@ export abstract class BaseEntity<T = unknown> {
         // Reset this entity to pristine state: clears _compositeKey, _recordLoaded,
         // _everSaved, and recreates all EntityField instances with _NeverSet = true
         this.init();
+        this.discardJSONFieldObjects();
 
         // Recursively hydrate parent entities first (deepest ancestor resets first).
         // After init(), parent fields have fresh _NeverSet=true, so SetMany can set PKs.
@@ -4405,6 +4407,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
+        this.discardJSONFieldObjects();
         this._everSaved = false; // Reset save state for new record
 
         // Clear child entity state — new records don't have children yet
@@ -4600,6 +4603,10 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean>
      */
     public async Save(options?: EntitySaveOptions): Promise<boolean> {
+        // JSONType safety net: pick up in-place edits made through un-proxied references BEFORE any
+        // dirty evaluation, plan building or SQL construction below reads the raw field values.
+        this.FlushJSONFieldObjects();
+
         // IS-A parent chain saves bypass the debounce to prevent deadlock:
         // Root.Save() → delegates to Leaf.Save() → Leaf saves parent chain →
         // calls Root.Save(IsParentEntitySave=true). Without this bypass, the second
@@ -4678,6 +4685,7 @@ export abstract class BaseEntity<T = unknown> {
         newResult.StartedAt = new Date();
 
         try {
+            this.FlushJSONFieldObjects(); // idempotent; covers graph-node saves that bypass Save()
             const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
 
             const _options: EntitySaveOptions = options ? options : new EntitySaveOptions();
@@ -5311,6 +5319,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns
      */
     public Revert(): boolean {
+        this.discardJSONFieldObjects(); // unconditional: an un-flushed edit through a stale reference must go too
         if (this.Dirty) {
             for (let field of this.Fields) {
                 field.Value = field.OldValue;
@@ -5353,6 +5362,7 @@ export abstract class BaseEntity<T = unknown> {
             }
 
             const data = await this.readRowForLoad(CompositeKey, EntityRelationshipsToLoad);
+            this.discardJSONFieldObjects(); // a reload replaces the record's data
             if (!data) {
                 // A subtype-hint probe asks whether this row exists, so "no" is an answer, not an error
                 if (!this._subtypeHintProbe) {
@@ -5521,6 +5531,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns Promise<boolean> - Returns true if the load was successful
      */
     public async LoadFromData(data: any, _replaceOldValues: boolean = false): Promise<boolean> {
+        this.discardJSONFieldObjects(); // the record's data is being replaced: parsed JSON objects are stale
         // IS-A: hydrate parent chain from data before populating self.
         // Hydrate resets each parent via init() (giving fresh _NeverSet=true on PK fields)
         // then populates from data, ensuring correct PK and saved state on parents.
@@ -5636,6 +5647,113 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Per-field live bindings for JSONType fields, created lazily by {@link GetJSONFieldObject}.
+     * Undefined until a generated `<Field>Object` accessor is first used, so entities without
+     * JSONType fields pay nothing.
+     */
+    private _jsonFieldBindings: Map<string, JSONFieldBinding> | undefined;
+
+    private getJSONFieldBinding(fieldName: string): JSONFieldBinding {
+        this._jsonFieldBindings ??= new Map<string, JSONFieldBinding>();
+        let binding = this._jsonFieldBindings.get(fieldName);
+        if (!binding) {
+            binding = new JSONFieldBinding(
+                fieldName,
+                () => this.Get(fieldName),
+                (raw) => this.Set(fieldName, raw),
+            );
+            this._jsonFieldBindings.set(fieldName, binding);
+        }
+        return binding;
+    }
+
+    /**
+     * Backs the generated typed `<Field>Object` accessor of a JSONType field. Returns a live view of
+     * the parsed JSON: assigning to it, or mutating it in place at any depth (`obj.a.b = 1`,
+     * `arr.push(x)`, `delete obj.k`), updates the raw field through {@link Set}, so the field becomes
+     * dirty and `Save()` persists the edit. Reading after the raw value changed by any other route
+     * (`Load`, `LoadFromData`, `Set`, revert) re-parses; references obtained earlier are then
+     * detached. Use `ToPlainJSON()` to clone/`structuredClone`/`postMessage` a value from here.
+     *
+     * @param fieldName - the JSON text field (its `EntityField.Name`)
+     * @returns the live object/array, a bare primitive for a primitive JSON root, or `null`
+     * @throws Error when the field holds text that is not valid JSON
+     */
+    protected GetJSONFieldObject<TObject>(fieldName: string): TObject | null {
+        return this.getJSONFieldBinding(fieldName).GetValue() as TObject | null;
+    }
+
+    /**
+     * Backs the generated setter of a `<Field>Object` accessor. `null`/`undefined` clears the field.
+     * A plain object/array is adopted, so later edits through the caller's own reference are still
+     * picked up before validation and save (see {@link FlushJSONFieldObjects}).
+     */
+    protected SetJSONFieldObject<TObject>(fieldName: string, value: TObject | null | undefined): void {
+        this.getJSONFieldBinding(fieldName).SetValue(value);
+    }
+
+    /**
+     * Safety net for JSONType accessors: re-serializes every materialized JSON object and writes any
+     * difference to its raw field. Catches an object that was assigned into the tree and then
+     * mutated through the caller's original (un-proxied) reference. Called automatically before
+     * `Validate()` and at the start of `Save()`; cheap because only fields whose object was actually
+     * read are visited.
+     */
+    protected FlushJSONFieldObjects(): void {
+        if (!this._jsonFieldBindings) {
+            return;
+        }
+        for (const binding of this._jsonFieldBindings.values()) {
+            binding.Flush();
+        }
+    }
+
+    /**
+     * Drops every materialized JSON object so the next accessor read re-parses from the raw field and
+     * all earlier references detach. Called wherever the record's data is replaced wholesale
+     * (`Revert`, `NewRecord`, `Hydrate`, `From`, a load) — NOT on the save round trip, so a reference
+     * held across `Save()` stays live.
+     */
+    private discardJSONFieldObjects(): void {
+        if (!this._jsonFieldBindings) {
+            return;
+        }
+        for (const binding of this._jsonFieldBindings.values()) {
+            binding.Invalidate();
+        }
+    }
+
+    /**
+     * Validates one JSONType field against its structural schema and `@CHECK` rules, appending any
+     * problems to `result`. Called from generated `Validate()` overrides for JSONTypes opted in with
+     * `@mjValidate`; the field is checked only when it is dirty or the record is new, so opting a type
+     * in never blocks unrelated edits to existing rows.
+     *
+     * Error `Source`s are dotted/indexed paths (`Configuration.Items[2].EndHour`). `severity` is
+     * `'Warning'` for `@mjValidate warn`: such errors are reported but do not fail the save.
+     *
+     * @param fieldName - the JSON text field
+     * @param schema - structural Zod schema for the whole field value (arrays included)
+     * @param rules - `@CHECK` rules and the type graph to find their scope, or null
+     * @param severity - severity the results are reported at
+     * @param result - the result object to add errors to
+     */
+    protected ValidateJSONField(
+        fieldName: string,
+        schema: z.ZodTypeAny,
+        rules: JSONFieldRuleSet | null,
+        severity: JSONFieldSeverity,
+        result: ValidationResult,
+    ): void {
+        // Flush FIRST: a field changed only through an un-proxied reference is not dirty until flushed.
+        this.FlushJSONFieldObjects();
+        if (this.IsSaved && !this.FieldIsDirty(fieldName)) {
+            return;
+        }
+        ValidateJSONFieldValue(fieldName, this.Get(fieldName), schema, rules, severity, this, result);
+    }
+
+    /**
      * This method is used automatically within Save() and is used to determine if the state of the object is valid relative to the validation rules that are defined in metadata. In addition, sub-classes can
      * override or wrap this base class method to add other logic for validation.
      * 
@@ -5651,6 +5769,9 @@ export abstract class BaseEntity<T = unknown> {
         }
         this._isValidating = true;
         try {
+            // Safety net for JSONType object accessors: an object mutated through the caller's own
+            // (un-proxied) reference must reach the raw field before that field is validated.
+            this.FlushJSONFieldObjects();
             const result = new ValidationResult();
             result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
 
@@ -6328,6 +6449,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     public From<K extends z.AnyZodObject>(data: unknown, schema?: z.infer<K>): boolean {
         this.init();
+        this.discardJSONFieldObjects();
         if(schema){
             const parseResult = schema.safeParse(data);
             if(parseResult.success){

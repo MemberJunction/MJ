@@ -1,6 +1,6 @@
 # JSONType: live object↔string sync, structural Zod, and opt-in validation (`@mjValidate` / `@CHECK`)
 
-Status: **in progress** — this PR. Owner: Amith Nagarajan.
+Status: **implemented in this PR, awaiting review** (integration bundles IT95/IT96 authored but not yet executed against a database). Owner: Amith Nagarajan.
 
 ## Why
 
@@ -155,3 +155,43 @@ the existing `ValidateJSONTypeDefinition` would then silently demote the field t
 - Running the real LLM for SQL `@CHECK` (no model access here) — covered by stubbed tests.
 - `ValidateAsync` referential rules.
 - Opting any existing JSONType in.
+
+## Implementation notes (deviations and decisions)
+
+- **Binding design.** `JSONFieldBinding` keeps a per-generation `WeakMap` proxy cache and a canonical
+  snapshot for no-op suppression. When the raw text changes but parses to the same canonical value (a
+  formatting-only change) the tree is kept. Proxies from a discarded generation are *detached*: a write
+  through one throws rather than silently vanishing. `Revert`, `NewRecord`, `Hydrate`, `From`, `LoadFromData`
+  and loads always discard bindings (even when the raw text is identical) so a stale adopted tree cannot
+  survive.
+- **`ToPlainJSON`** is exported from core (not on the entity). `LoadScript` and `cloneSubAgentPayload` were
+  fixed; `cloneSubAgentPayload` tries `structuredClone`, then `ToPlainJSON`, then logs and returns the original.
+- **Opt-in tags are read from the AST** (`json-type-model.ts`); the historical regex prefix rewrite is kept
+  only for untagged definitions so their output stays byte-identical (golden test).
+- **Same-line JSDoc after `{`** is not attached to a member by TypeScript. It cannot be fixed, so CodeGen
+  warns about orphaned tag comments; authors must put tags on their own lines.
+- **Unsupported constructs** degrade to `z.custom<T>()` (plus warning) for that sub-tree. Required
+  `unknown`/`any` members force the schema const to `z.ZodTypeAny` (a `z.ZodType<T>` annotation cannot hold them).
+- **Rule engine.** `ValidateJSONFieldValue` runs structural `safeParse` first, then `@CHECK` rules only when the
+  structure is valid, via a type-graph walk emitted as `JSONFieldRuleSet`. `Test(value,row)` returns true when valid.
+  Warn severity produces Warning-typed errors that do not fail the save.
+- **SQL `@CHECK` cache** key is `JSONType|Path|NormalizedText` in `GeneratedCode.Source`, category
+  `CodeGen: JSON Validators` (seeded under `metadata/generated-code-categories/`). Old rows are not deleted when
+  a rule's text changes. LLM bodies are compile-checked (syntax, `return`, no `${`, type-check against the interface).
+- **Entity Zod stays `z.any()` (decision, replaces an earlier draft).** The column's value everywhere (Get,
+  GetAll, LoadFromData, GraphQL, raw rows) is JSON TEXT, so the `<Entity>Schema` column entry for an opted-in
+  field is exactly what an untagged field emits. The structural schema consts are emitted at module scope,
+  EXPORTED, and used only by the generated `Validate()` (and by consumers who want `z.infer`/`safeParse`).
+  Opted-in declarations are rewritten with `export` so the exported consts never name a private type.
+- **Re-assigning the live object** (`SetValue`): a proxy of the current generation's root is a no-op plus `sync()`
+  (nothing detaches); a proxy of a nested node becomes the root as an independent copy; a proxy of another record
+  or a detached generation is copied.
+- **`ValidateJSONField`** flushes before its dirty check.
+- **SQL `@CHECK` self-check.** The prompt now requires `TestCases`; CodeGen executes them in a `vm` context
+  (250 ms limit) and rejects a translation with none, with a failing case, or (when the value type has
+  optional/nullable members) without an absent/null case. This is self-consistency, not proof of equivalence with
+  the SQL; reviewers should still read translated rules.
+- **Inherited property rules** re-key per derived declaration.
+- **Integration bundles** `jsontype-live-sync` (IT95, seq 49) and `jsontype-live-sync-client` (IT96, seq 71) use a
+  test-only `MJ: Tests` subclass with a `LiveConfig` accessor over `Configuration`. Not executed.
+- **MJCore has no `README.md`** (its file is `readme.md`); that file and the CodeGenLib README were updated.

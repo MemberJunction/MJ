@@ -6,6 +6,10 @@ import ts from 'typescript';
 import { MakeDir, SortBySequenceAndCreatedAt } from '../Misc/util';
 import { logError, logStatus, LogWarning } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
+import type { JSONValidatorResult } from '../Database/json-check-validators';
+import { FindUnattachedTagComments, JSONTypeModel, ParseJSONTypeDefinition, RewriteJSONTypeDefinition } from './json-type-model';
+import { GenerateJSONTypeZod, JSONSchemaConstName } from './json-type-zod';
+import { BuildJSONRuleSet, JSONCheckTranslation } from './json-type-rules';
 import { configInfo, DbPlatform, MjCoreSchema, ResolveEntityImportPackage, type ConfigInfo } from '../Config/config';
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection, ResolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
@@ -382,6 +386,81 @@ ${loadModule}
     return { baseClass: 'BaseEntity', importStatement: '' };
   }
 
+  /**
+   * Collects and de-duplicates the JSONTypeDefinitions of this entity into the block of interface
+   * declarations emitted above the entity class (a Set, because several fields may share one
+   * definition). Each definition is validated through the TypeScript compiler API first; an invalid
+   * one is logged and its field is demoted to a plain string getter/setter (`JSONType` is nulled).
+   *
+   * Type names are prefixed with the entity class name so entities can reuse a JSONType name. An
+   * opted-in definition (`@mjValidate`) is prefixed through the AST so words inside its JSDoc tag
+   * bodies are never rewritten; every other definition keeps the historical whole-text rewrite, so
+   * untagged output is unchanged byte for byte.
+   */
+  protected static CollectJSONTypeBlock(entity: EntityInfo, sortedFields: EntityFieldInfo[], sClassName: string): string {
+      const jsonTypeDefinitions = new Set<string>();
+      for (const field of sortedFields) {
+          if (field.JSONTypeDefinition && field.JSONTypeDefinition.trim().length > 0) {
+              const definition = field.JSONTypeDefinition.trim();
+              if (field.JSONType && field.JSONType.trim().length > 0) {
+                  const validation = EntitySubClassGeneratorBase.ValidateJSONTypeDefinition(
+                      definition, field.JSONType.trim(), entity.Name, field.Name
+                  );
+                  if (!validation.valid) {
+                      for (const err of validation.errors) {
+                          logError(err);
+                      }
+                      logError(`[JSONType] Skipping JSONTypeDefinition for ${entity.Name}.${field.Name} due to validation errors. The field will use a plain string getter/setter instead.`);
+                      (field as unknown as Record<string, unknown>).JSONType = null;
+                      continue;
+                  }
+              }
+              jsonTypeDefinitions.add(EntitySubClassGeneratorBase.PrefixJSONTypeDefinition(definition, field.JSONType, sClassName));
+          }
+      }
+      return jsonTypeDefinitions.size > 0
+          ? '\n' + Array.from(jsonTypeDefinitions).join('\n\n') + '\n'
+          : '';
+  }
+
+  /** Prefixes a definition's type names with the entity class name (see {@link CollectJSONTypeBlock}). */
+  protected static PrefixJSONTypeDefinition(definition: string, jsonType: string | null, sClassName: string): string {
+      const model = jsonType && jsonType.trim().length > 0 ? ParseJSONTypeDefinition(definition, jsonType.trim()) : null;
+      if (model?.OptedIn) {
+          return RewriteJSONTypeDefinition(definition, sClassName);
+      }
+      // Historical rewrite: every top-level declared name, `\b`-matched over the whole text.
+      let rewrittenDef = definition;
+      const sourceFile = ts.createSourceFile('temp.ts', definition, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+      ts.forEachChild(sourceFile, (node) => {
+          if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
+               ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
+              const originalName = node.name.text;
+              const prefixedName = `${sClassName}_${originalName}`;
+              rewrittenDef = rewrittenDef.replace(new RegExp('\\b' + originalName + '\\b', 'g'), prefixedName);
+          }
+      });
+      return rewrittenDef;
+  }
+
+  /**
+   * The parsed model of a field's JSONTypeDefinition when — and only when — the field is bound to an
+   * opted-in (`@mjValidate`) type whose definition is valid TypeScript. Silent: validity problems are
+   * reported once, by {@link CollectJSONTypeBlock}.
+   */
+  protected static GetOptedInJSONModel(field: EntityFieldInfo, entityName: string): JSONTypeModel | null {
+      const name = field.JSONType?.trim();
+      const definition = field.JSONTypeDefinition?.trim();
+      if (!name || !definition) {
+          return null;
+      }
+      if (!EntitySubClassGeneratorBase.ValidateJSONTypeDefinition(definition, name, entityName, field.Name).valid) {
+          return null;
+      }
+      const model = ParseJSONTypeDefinition(definition, name);
+      return model?.OptedIn ? model : null;
+  }
+
   public async GenerateEntitySubClass(pool: CodeGenConnection, entity: EntityInfo, includeFileHeader: boolean = false, skipDBUpdate: boolean = false): Promise<string> {
     if (entity.PrimaryKeys.length === 0) {
       console.warn(`SKIPPING TYPESCRIPT GENERATION: Entity ${entity.Name} has no primary keys in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
@@ -391,6 +470,9 @@ ${loadModule}
     const sClassName: string = `${entity.ClassName}Entity`;
     // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
     const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
+    // Validated BEFORE the accessors are emitted: a field whose JSONTypeDefinition does not parse is
+    // demoted to a plain string here, so it never gets a typed accessor naming a type that is not emitted.
+    const jsonTypeBlock: string = EntitySubClassGeneratorBase.CollectJSONTypeBlock(entity, sortedFields, sClassName);
     const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
@@ -470,34 +552,29 @@ ${loadModule}
     }`;
         }
 
-        // JSONType: emit additional typed "Object" accessor with caching
+        // JSONType: emit additional typed "Object" accessor. Both halves delegate to the framework
+        // (BaseEntity.GetJSONFieldObject / SetJSONFieldObject) so the object <-> string logic lives once,
+        // in core, and edits made in place (obj.a.b = 1, arr.push(x)) are written back to the field.
         if (hasJSONType && jsonTypeAccessorInfo) {
           const objName = `${safeName}Object`;
-          const cachedField = `_${objName}_cached`;
-          const lastRawField = `_${objName}_lastRaw`;
           const ft = jsonTypeAccessorInfo.fullTypeString;
+          const elementType = jsonTypeAccessorInfo.isArray ? `Array<${jsonTypeAccessorInfo.prefixedTypeName}>` : jsonTypeAccessorInfo.prefixedTypeName;
 
           sRet += `
 
-    private ${cachedField}: ${ft} | undefined = undefined;
-    private ${lastRawField}: string | null = null;
     /**
-    * Typed accessor for ${e.Name} — returns parsed JSON as ${jsonTypeAccessorInfo.isArray ? `Array<${jsonTypeAccessorInfo.prefixedTypeName}>` : jsonTypeAccessorInfo.prefixedTypeName}.
-    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    * Typed accessor for ${e.Name} — a live view of the parsed JSON as ${elementType}.
+    * Edits made through it, at any depth (\`obj.a.b = 1\`, \`arr.push(x)\`, \`delete obj.k\`), update the
+    * underlying ${e.Name} field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
     */
     get ${objName}(): ${ft} {
-        const raw = this.${safeName};
-        if (raw !== this.${lastRawField}) {
-            this.${cachedField} = raw ? JSON.parse(raw) : null;
-            this.${lastRawField} = raw;
-        }
-        return this.${cachedField}!;
+        return this.GetJSONFieldObject<${elementType}>('${e.Name}')${e.AllowsNull ? '' : '!'};
     }
     set ${objName}(value: ${ft}) {
-        const raw = value ? JSON.stringify(value) : null;
-        this.${safeName} = raw;
-        this.${cachedField} = value;
-        this.${lastRawField} = raw;
+        this.SetJSONFieldObject<${elementType}>('${e.Name}', value);
     }`;
         }
 
@@ -613,47 +690,6 @@ ${loadModule}
         `\n * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
     const disabledFlag: string = status === 'disabled' ? 
         `\n * @disabled This entity is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
-      // Collect and deduplicate JSONTypeDefinitions for this entity.
-      // These are raw TypeScript interface/type definitions (from EntityField.JSONTypeDefinition)
-      // that get emitted above the entity class so the typed getters/setters can reference them.
-      // A Set is used because multiple fields may share the same definition (e.g., a shared config type).
-      // Each definition is validated via the TypeScript compiler API before inclusion.
-      const jsonTypeDefinitions = new Set<string>();
-      for (const field of sortedFields) {
-          if (field.JSONTypeDefinition && field.JSONTypeDefinition.trim().length > 0) {
-              const definition = field.JSONTypeDefinition.trim();
-              if (field.JSONType && field.JSONType.trim().length > 0) {
-                  const validation = EntitySubClassGeneratorBase.ValidateJSONTypeDefinition(
-                      definition, field.JSONType.trim(), entity.Name, field.Name
-                  );
-                  if (!validation.valid) {
-                      for (const err of validation.errors) {
-                          logError(err);
-                      }
-                      logError(`[JSONType] Skipping JSONTypeDefinition for ${entity.Name}.${field.Name} due to validation errors. The field will use a plain string getter/setter instead.`);
-                      (field as unknown as Record<string, unknown>).JSONType = null;
-                      continue;
-                  }
-              }
-              // Prefix all type names defined in this definition block with the entity class name
-              // to avoid naming conflicts across entities. Uses AST to find all defined type names.
-              let rewrittenDef = definition;
-              const sourceFile = ts.createSourceFile('temp.ts', definition, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-              ts.forEachChild(sourceFile, (node) => {
-                  if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
-                       ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
-                      const originalName = node.name.text;
-                      const prefixedName = `${sClassName}_${originalName}`;
-                      rewrittenDef = rewrittenDef.replace(new RegExp('\\b' + originalName + '\\b', 'g'), prefixedName);
-                  }
-              });
-              jsonTypeDefinitions.add(rewrittenDef);
-          }
-      }
-      const jsonTypeBlock = jsonTypeDefinitions.size > 0
-          ? '\n' + Array.from(jsonTypeDefinitions).join('\n\n') + '\n'
-          : '';
-
       const relatedRecordCollections = EntitySubClassGeneratorBase.GenerateRelatedRecordCollections(entity);
       const embeddedRecords = EntitySubClassGeneratorBase.GenerateEmbeddedRecords(entity);
       const hierarchyMethods = EntitySubClassGeneratorBase.GenerateHierarchyMethods(entity, sClassName);
@@ -1403,6 +1439,48 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
       return null;
     }
   }
+  /**
+   * The `Validate()` contributions of an entity's opted-in JSONType fields: one
+   * `this.ValidateJSONField(...)` call per field (structural Zod schema, then the field's `@CHECK`
+   * rules) and one doc line per field. Empty when no field is opted in — the common case, in which
+   * generated output is exactly what it was before JSONType validation existed.
+   *
+   * Fields that are read-only, or that are IS-A parent fields mirrored onto a child, are skipped: the
+   * former cannot be written, and the latter are validated by the parent's own generated `Validate()`.
+   *
+   * SQL `@CHECK` rules are emitted from translations already resolved by CodeGen's metadata phase
+   * (`ManageMetadataBase.GeneratedJSONValidators`); one with no translation is skipped with a warning.
+   */
+  protected buildJSONValidation(entity: EntityInfo): { Calls: string[]; DocLines: string[] } {
+    const calls: string[] = [];
+    const docLines: string[] = [];
+    const prefix = `${entity.ClassName}Entity`;
+    const translations = this.collectJSONTranslations();
+    for (const field of SortBySequenceAndCreatedAt(entity.Fields)) {
+      const isISAParentField = field.IsVirtual && field.AllowUpdateAPI && entity.IsChildType;
+      const model = field.ReadOnly || isISAParentField ? null : EntitySubClassGeneratorBase.GetOptedInJSONModel(field, entity.Name);
+      if (!model) {
+        continue;
+      }
+      const isArray = field.JSONTypeIsArray === true;
+      const ruleSet = BuildJSONRuleSet(model, prefix, prefix, isArray, translations);
+      ruleSet.Errors.forEach((message) => logError(`[JSONType] ${entity.Name}.${field.Name}: ${message}`));
+      ruleSet.Missing.forEach((rule) => LogWarning(`[JSONType] ${entity.Name}.${field.Name}: SQL @CHECK on ${rule.Path} ('${rule.NormalizedText}') has no generated validator and is not emitted`));
+      const root = JSONSchemaConstName(prefix, model.RootName);
+      const schema = isArray ? `z.array(${root})` : root;
+      const rules = ruleSet.Source ? ruleSet.Source.split('\n').map((l, i) => (i === 0 ? l : `        ${l}`)).join('\n') : 'null';
+      calls.push(`        this.ValidateJSONField(${JSON.stringify(field.Name)}, ${schema}, ${rules}, '${model.Severity}', result);`);
+      docLines.push(`    * * ${field.Name}: JSON structure${ruleSet.Source ? ' and @CHECK rules' : ''} (@mjValidate${model.Severity === 'Warning' ? ' warn' : ''})`);
+    }
+    return { Calls: calls, DocLines: docLines };
+  }
+
+  /** Key → translation for every resolved SQL `@CHECK` of the run. Tolerates a manage-metadata that predates them. */
+  private collectJSONTranslations(): Map<string, JSONCheckTranslation> {
+    const resolved: JSONValidatorResult[] = ManageMetadataBase.GeneratedJSONValidators ?? [];
+    return new Map(resolved.map((r) => [r.Key, { Description: r.FunctionDescription, Body: r.FunctionText }]));
+  }
+
   public GenerateValidateFunction(entity: EntityInfo): null | { code: string, validators: ValidatorResult[] } {
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
     const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
@@ -1435,7 +1513,9 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
       return true;
     });
 
-    if (validators.length === 0) {
+    const jsonValidation = this.buildJSONValidation(entity);
+
+    if (validators.length === 0 && jsonValidation.Calls.length === 0) {
       return null;
     }
     else {
@@ -1458,23 +1538,47 @@ ${formattedText}`
 
       const ret = `    /**
     * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${EntitySubClassGeneratorBase.SanitizeDescription(f.functionDescription)}`).join('\n')}
+${[...validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${EntitySubClassGeneratorBase.SanitizeDescription(f.functionDescription)}`), ...jsonValidation.DocLines].join('\n')}
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-${validators.map((f) => `        this.${f.functionName}(result);`).join('\n')}
-        result.Success = result.Success && (result.Errors.length === 0);
+${[...validators.map((f) => `        this.${f.functionName}(result);`), ...jsonValidation.Calls].join('\n')}
+        result.Success = result.Success && ${jsonValidation.Calls.length > 0 ? '!result.Errors.some((e) => e.Type === ValidationErrorType.Failure)' : '(result.Errors.length === 0)'};
 
         return result;
     }
-
-${validationFunctions}`
+${validationFunctions.length > 0 ? '\n' + validationFunctions : ''}`
       return {code: ret, validators: validators};
   }
 }
+
+  /**
+   * Collects the exported structural Zod consts of a field bound to an opted-in JSONType (nothing for
+   * a field that is not opted in). The consts are used ONLY by the generated `Validate()` and by
+   * consumers that want to `z.infer` / `safeParse` the object shape; the field's own column entry in
+   * `<Entity>Schema` stays `z.any()` because the column's value everywhere (Get, GetAll, LoadFromData,
+   * GraphQL, raw rows) is JSON TEXT, and the typed object view is the `<Field>Object` accessor. `consts`
+   * is a Set so a definition shared by two fields is emitted once. Constructs Zod cannot express are
+   * reported here as warnings and become unchecked sub-trees; they never fail the run.
+   */
+  protected collectStructuralJSONSchema(entity: EntityInfo, field: EntityFieldInfo, consts: Set<string>): void {
+    const model = EntitySubClassGeneratorBase.GetOptedInJSONModel(field, entity.Name);
+    if (!model) {
+      return;
+    }
+    const prefix = `${entity.ClassName}Entity`;
+    const converted = GenerateJSONTypeZod(model, prefix);
+    for (const warning of converted.Warnings) {
+      LogWarning(`[JSONType] ${entity.Name}.${field.Name}: ${warning}`);
+    }
+    for (const orphan of FindUnattachedTagComments(model)) {
+      LogWarning(`[JSONType] ${entity.Name}.${field.Name}: a comment carrying tags is attached to nothing and its tags are ignored — start the comment on its own line, not on the line of the opening '{' (${orphan})`);
+    }
+    consts.add(converted.Source);
+  }
 
   public GenerateSchemaAndType(entity: EntityInfo): string {
     let content: string = '';
@@ -1484,6 +1588,7 @@ ${validationFunctions}`
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedFields = SortBySequenceAndCreatedAt(entity.Fields);
       
+      const jsonSchemaConsts = new Set<string>();
       const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
@@ -1495,12 +1600,14 @@ ${validationFunctions}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
-        // JSONType fields use z.any() in the Zod schema since the actual validation is
-        // handled by the TypeScript interface (full Zod schema generation is a future phase).
+        // JSONType fields ALWAYS use z.any() in the entity Zod schema (the column value is JSON text).
+        // A type that opted in with @mjValidate additionally gets exported structural schema consts,
+        // converted from the type's AST, that Validate() uses to check the parsed shape.
         const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullable()' : '');
         if (hasJSONType) {
           typeString = `any()${e.AllowsNull ? '.nullable()' : ''}`;
+          this.collectStructuralJSONSchema(entity, e, jsonSchemaConsts);
         } else if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
@@ -1527,7 +1634,8 @@ ${validationFunctions}`
       }).join('\n');
 
       const schemaName: string = `${entity.ClassName}Schema`;
-      content = `
+      const jsonSchemaBlock = jsonSchemaConsts.size > 0 ? `\n${Array.from(jsonSchemaConsts).join('\n\n')}\n` : '';
+      content = `${jsonSchemaBlock}
 /**
  * zod schema definition for the entity ${entity.Name}
  */

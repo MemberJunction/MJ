@@ -15,6 +15,7 @@
     "api-applications",
     "api-application-scopes",
     "audit-log-types",
+    "generated-code-categories",
     "credential-categories",
     "credential-types",
     "authentication-providers",
