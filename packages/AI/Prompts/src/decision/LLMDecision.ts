@@ -35,6 +35,13 @@ import { AIPromptRunner } from '../AIPromptRunner';
 const MAX_REPLY_IN_ERROR = 500;
 
 /**
+ * How far outside [0, 1] a Likelihood may fall and still be clamped into it: the tolerance
+ * `BaseDecision` allows a distribution's sum. A value further out is not a probability (85 is the
+ * percent-scale reading of 0.85), so the question fails instead of becoming a certainty.
+ */
+const LIKELIHOOD_CLAMP_TOLERANCE = 0.01;
+
+/**
  * Driver that answers typed decision questions with a chat LLM through an MJ prompt. It is the
  * fallback `BaseDecision` driver: everything downstream can be written against `BaseDecision`
  * before a native decision model is configured. Unlike a native driver it must parse, because a
@@ -305,7 +312,8 @@ export class LLMDecision extends BaseDecision {
     }
 
     /**
-     * Maps a Likelihood question answer: clamps finite number to [0, 1].
+     * Maps a Likelihood question answer: a finite number within `LIKELIHOOD_CLAMP_TOLERANCE` of
+     * [0, 1] is clamped into it; anything else fails.
      */
     private mapLikelihood(
         key: string,
@@ -316,6 +324,12 @@ export class LLMDecision extends BaseDecision {
             return {
                 success: false,
                 error: `Question '${key}': Likelihood value must be a finite number, got ${this.describeValue(rawVal)}`,
+            };
+        }
+        if (value < -LIKELIHOOD_CLAMP_TOLERANCE || value > 1 + LIKELIHOOD_CLAMP_TOLERANCE) {
+            return {
+                success: false,
+                error: `Question '${key}': Likelihood value must be a probability in [0, 1], got ${this.describeValue(rawVal)}`,
             };
         }
 

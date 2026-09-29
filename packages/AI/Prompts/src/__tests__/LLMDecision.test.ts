@@ -258,9 +258,13 @@ describe('LLMDecision', () => {
             expect(answer.Probability).toBe(0.83);
         });
 
-        it('clamps 1.4 to 1', async () => {
+        it.each([
+            [1.005, 1],
+            [1.01, 1],
+            [-0.005, 0],
+        ])('clamps a small overshoot (%j) to %j', async (reply, expected) => {
             const decision = new LLMDecision('', PROMPT_ID, mockUser);
-            executePromptSpy.mockResolvedValueOnce(makeSuccessRunResult({ q1: 1.4 }));
+            executePromptSpy.mockResolvedValueOnce(makeSuccessRunResult({ q1: reply }));
 
             const result = await decision.Decide({
                 Model: 'LLM',
@@ -271,12 +275,18 @@ describe('LLMDecision', () => {
             expect(result.success).toBe(true);
             const answer = result.Answers.q1 as LikelihoodAnswer;
             expect(answer.Kind).toBe('Likelihood');
-            expect(answer.Probability).toBe(1);
+            expect(answer.Probability).toBe(expected);
         });
 
-        it('clamps negative numbers to 0', async () => {
+        it.each([
+            [85, '85'],
+            ['85', '"85"'],
+            [1.4, '1.4'],
+            [1.02, '1.02'],
+            [-0.2, '-0.2'],
+        ])('fails on a value clearly outside [0, 1] (%j) instead of clamping it', async (reply, shown) => {
             const decision = new LLMDecision('', PROMPT_ID, mockUser);
-            executePromptSpy.mockResolvedValueOnce(makeSuccessRunResult({ q1: -0.2 }));
+            executePromptSpy.mockResolvedValueOnce(makeSuccessRunResult({ q1: reply }));
 
             const result = await decision.Decide({
                 Model: 'LLM',
@@ -284,10 +294,11 @@ describe('LLMDecision', () => {
                 Questions: likelihoodQuestions,
             });
 
-            expect(result.success).toBe(true);
-            const answer = result.Answers.q1 as LikelihoodAnswer;
-            expect(answer.Kind).toBe('Likelihood');
-            expect(answer.Probability).toBe(0);
+            expect(result.success).toBe(false);
+            expect(result.Answers).toEqual({});
+            expect(result.errorMessage).toBe(
+                `Question 'q1': Likelihood value must be a probability in [0, 1], got ${shown}`
+            );
         });
 
         it('accepts a probability the model wrote as a numeric string ("0.1")', async () => {
