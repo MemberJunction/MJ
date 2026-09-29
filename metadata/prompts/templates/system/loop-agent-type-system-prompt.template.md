@@ -683,6 +683,7 @@ You can ask typed decision questions evaluated inline on the same turn at zero t
 
 If the `Actions` or `Sub-Agent` step you are requesting should complete the task, add `finishIf`: one to three yes/no questions that a fast model can answer from the step's results, and your final message.
 
+- `finishIf` applies only to `actions` and to a single `subAgent`. It is ignored on parallel `subAgents`.
 - After the step runs, every question is asked about its results. If every answer is a confident yes, the run ends with your `message`, without another turn. Otherwise, you get your normal next turn with the results.
 - If an action fails or the sub-agent does not succeed, the questions are not asked, and you get your normal turn.
 - You write `message` before the step runs, so it cannot quote the results. Use `finishIf` only when your final reply does not depend on the details of the results, as with a confirmation.
