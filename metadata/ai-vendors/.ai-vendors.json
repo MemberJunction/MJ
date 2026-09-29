@@ -459,8 +459,38 @@
   },
   {
     "fields": {
+      "Name": "Xiaomi",
+      "Description": "Chinese consumer-electronics manufacturer whose AI division develops the open-weight MiMo model family. The MiMo V2.6 generation (Pro, Flash and a Pro-UltraSpeed serving variant, all released 2026-09-22) is MIT-licensed and natively omnimodal, with a 1M-token context. Xiaomi serves an OpenAI-compatible first-party API authenticated with an API key; MJ currently reaches MiMo models through OpenRouter rather than Xiaomi direct, because no Xiaomi driver class exists yet. This vendor row therefore records Model Developer attribution only.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "8D69D59B-6F29-4FE6-BD31-EBB908768871"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DeepInfra",
+      "Description": "US-based serverless inference provider hosting open-weight models (GLM, Qwen, DeepSeek, Kimi, Llama and others) behind an OpenAI-compatible API at https://api.deepinfra.com/v1/openai, authenticated with an API key. Models are addressed by their Hugging Face-style id (e.g. zai-org/GLM-5.3-Flash). Consistently among the lowest-priced hosts on Artificial Analysis provider leaderboards, often running launch promotions below the model developer's list rate. MJ reaches it through the DeepInfraLLM driver.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "C54A8588-D653-4263-AAD7-71FB9DA096B0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiliconFlow",
+      "Description": "Serverless inference provider specializing in open-weight Chinese and international models (GLM, Qwen, DeepSeek, Kimi, MiniMax), serving an OpenAI-compatible API at https://api.siliconflow.com/v1 (international; a separate mainland-China platform runs at api.siliconflow.cn) authenticated with an API key. Models are addressed by their Hugging Face-style id (e.g. zai-org/GLM-5.3-Flash). MJ reaches it through the SiliconFlowLLM driver.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "E688DFD9-AE6B-4D93-AA4D-8AB642DDB541"
+    }
+  },
+  {
+    "fields": {
       "Name": "MemberJunction",
-      "Description": "MemberJunction \u2014 developer of Betty, the MJ-native organization-scoped assistant. Unlike a single hosted service, Betty is deployed per organization, so each instance configures its own API root (BETTY_API_BASE_URL) and the API key is presented directly as a bearer token rather than exchanged for a session credential.",
+      "Description": "MemberJunction — developer of Betty, the MJ-native organization-scoped assistant. Unlike a single hosted service, Betty is deployed per organization, so each instance configures its own API root (BETTY_API_BASE_URL) and the API key is presented directly as a bearer token rather than exchanged for a session credential.",
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
     },
     "primaryKey": {
