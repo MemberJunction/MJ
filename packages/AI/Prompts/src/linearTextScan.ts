@@ -7,7 +7,7 @@
 
 /** True for the characters a regex `.` refuses to match, other than `\n` (callers split on it). */
 function isNonNewlineTerminator(ch: string): boolean {
-    return ch === '\r' || ch === ' ' || ch === ' ';
+    return ch === '\r' || ch === '\u2028' || ch === '\u2029';
 }
 
 /**
