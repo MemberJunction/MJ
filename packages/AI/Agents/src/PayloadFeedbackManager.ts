@@ -215,6 +215,16 @@ export class PayloadFeedbackManager {
      * @param contextUser - The user the decision runs as
      * @returns One response per question, in the same order
      */
+    private _lastDecisionResult: AIDecisionRunResult | undefined;
+
+    /**
+     * The result of the most recent decision call {@link QueryAgent} made, so the caller can link
+     * its prompt run to a run step and count its cost. Undefined until a call is made.
+     */
+    public get LastDecisionResult(): AIDecisionRunResult | undefined {
+        return this._lastDecisionResult;
+    }
+
     public async QueryAgent(
         questions: PayloadFeedbackQuestion[],
         context: PayloadFeedbackContext,
@@ -229,6 +239,7 @@ export class PayloadFeedbackManager {
 
         const asked = questions.slice(0, this.maxQuestionsPerCall());
         const result = await this.askDecisions(asked, context ?? {}, contextUser);
+        this._lastDecisionResult = result;
         if (!result.success) {
             const reason = result.errorMessage || 'no error message';
             LogError(`PayloadFeedbackManager: the payload change decisions failed, so every change is accepted: ${reason}`);

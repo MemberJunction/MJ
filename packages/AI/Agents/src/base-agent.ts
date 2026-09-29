@@ -8192,6 +8192,10 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             });
             const responses = await manager.QueryAgent(questions, this.payloadFeedbackContext(nextStep, promptResult, params), params.contextUser);
+            // Like every decision call, it counts toward the run's cost and tokens through its step
+            if (manager.LastDecisionResult) {
+                this.attachDecisionPromptRun(step, manager.LastDecisionResult);
+            }
             await this.finalizePayloadCheckStep(step, questions, responses, manager.IntendedThreshold);
             const message = manager.BuildUnintendedChangesMessage(questions, responses);
             if (message) {

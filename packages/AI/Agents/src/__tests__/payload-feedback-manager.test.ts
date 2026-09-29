@@ -101,6 +101,17 @@ describe('PayloadFeedbackManager.QueryAgent', () => {
             expect(asked.PromptName).toBeUndefined();
         });
 
+        it('keeps the decision call\'s result, so the caller can link its prompt run to a step', async () => {
+            const { manager, ask } = makeManager();
+            const result = likelihoods(0.9);
+            ask.mockResolvedValueOnce(result);
+
+            expect(manager.LastDecisionResult).toBeUndefined();
+            await manager.QueryAgent(manager.GenerateQuestions([truncation()]), {}, USER);
+
+            expect(manager.LastDecisionResult).toBe(result);
+        });
+
         it('uses the configured decision prompt', async () => {
             const { manager, ask } = makeManager({ decisionPromptName: 'Custom Decision' });
             ask.mockResolvedValueOnce(likelihoods(0.9));
