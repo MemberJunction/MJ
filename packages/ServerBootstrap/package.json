@@ -48,6 +48,7 @@
     "@memberjunction/ai-assemblyai": "6.2.0-edge.0",
     "@memberjunction/ai-azure": "6.2.0-edge.0",
     "@memberjunction/ai-bedrock": "6.2.0-edge.0",
+    "@memberjunction/ai-betty": "6.2.0-edge.0",
     "@memberjunction/ai-betty-bot": "6.2.0-edge.0",
     "@memberjunction/ai-blackforestlabs": "6.2.0-edge.0",
     "@memberjunction/ai-bridge-livekit": "6.2.0-edge.0",

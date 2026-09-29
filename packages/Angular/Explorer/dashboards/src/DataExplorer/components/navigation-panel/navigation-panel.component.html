@@ -72,7 +72,7 @@
         [Expanded]="entitiesSectionExpanded" (ExpandedChange)="onSectionToggle('entities')">
         <ng-template mjAccordionTitle>
           <i class="fa-solid fa-database section-icon"></i>
-          <span class="section-title">Entities</span>
+          <span class="section-title">Record Types</span>
           <span class="mj-accordion-badge mj-accordion-badge--right">{{ entities.length }}</span>
         </ng-template>
 
@@ -83,7 +83,7 @@
             <input
               type="text"
               class="search-input"
-              placeholder="Search entities..."
+              placeholder="Search record types..."
               [(ngModel)]="entitySearchTerm"
               (ngModelChange)="onEntitySearchChanged()"
             />
