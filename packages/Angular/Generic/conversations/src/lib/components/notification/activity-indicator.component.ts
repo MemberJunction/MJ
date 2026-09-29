@@ -96,5 +96,14 @@ import { ActivityIndicatorConfig } from '../../models/notification.model';
   `]
 })
 export class ActivityIndicatorComponent {
-  @Input() config?: ActivityIndicatorConfig;
+  @Input() Config?: ActivityIndicatorConfig;
+
+  /** @deprecated Use {@link Config}. */
+  @Input() set config(value: ActivityIndicatorConfig | undefined) {
+    this.Config = value;
+  }
+  /** @deprecated Use {@link Config}. */
+  get config(): ActivityIndicatorConfig | undefined {
+    return this.Config;
+  }
 }

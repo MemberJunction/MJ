@@ -60,7 +60,7 @@ demand otherwise. Startup registration is an optimization, not a correctness req
 
 ### Mode resolution precedence (highest wins)
 
-1. **`MJ_STARTUP_MODE` env var** — per-invocation override, e.g. `MJ_STARTUP_MODE=full npx mj sync push`. Invalid values warn and fall through (never crash).
+1. **`MJ_STARTUP_MODE` env var** — per-invocation override, e.g. `MJ_STARTUP_MODE=full pnpm mj sync push`. Invalid values warn and fall through (never crash).
 2. **Programmatic option** passed by the entry point (e.g. `setupSQLServerClient(cfg, { mode: 'task' })`).
 3. **`mj.config.cjs` → `startup.mode`** — note this file is shared by every process in a repo, which is why the env var and programmatic levels outrank it.
 4. **Entry-point default** — `full` for MJAPI, `task` for CLI-style processes.

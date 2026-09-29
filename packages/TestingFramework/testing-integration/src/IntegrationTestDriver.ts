@@ -32,27 +32,28 @@ import {
 } from '@memberjunction/testing-engine';
 import { Metadata, ProviderType } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import type sql from 'mssql';
 import {
     getActiveIntegrationStorage,
     getActiveIntegrationBootstrap,
     getActiveIntegrationClientBootstrap,
-    bootstrapIntegrationServer,
+    BootstrapIntegrationServer,
     serverProcessAlreadyClaimed
 } from './bootstrap';
-import { bootstrapIntegrationClient } from './bootstrap-client';
+import { BootstrapIntegrationClient } from './bootstrap-client';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext, RlsFixture } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
 import { IntegrationTestConfig, IntegrationCheckSelectionConfig } from './types';
 import { IntegrationTier, TIER_ENV_GATE, IsTierEnabled } from './tiers';
-import { TestOutcome, writeOutcomesFile } from './test-runner';
-import { discoverRlsFixture } from './rls-fixture';
+import { TestOutcome, WriteOutcomesFile } from './test-runner';
+import { DiscoverRlsFixture } from './rls-fixture';
 
 const TARGET_TYPE = 'Integration Check Bundle';
 /** Bundles that run against the GraphQL client transport (everything else: SQL server). */
-const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client', 'remote-op-wire-progress']);
+const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client', 'remote-op-wire-progress', 'fls-enforcement-client']);
 /** Bundles that need the discovered two-user RLS fixture threaded into the context. */
 const RLS_BUNDLES = new Set(['rls-isolation', 'rls-isolation-client']);
 /** Key under SuiteFixtureContext.Data where the discovered RLS fixture is stashed. */
@@ -77,7 +78,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         try {
             const users = UserCache.Instance.Users;
             if (users && users.length > 0) {
-                context.Data[RLS_FIXTURE_KEY] = discoverRlsFixture(this.Provider, users);
+                context.Data[RLS_FIXTURE_KEY] = DiscoverRlsFixture(this.Provider, users);
             }
         } catch (e) {
             this.log(`SetupSuite RLS discovery skipped: ${(e as Error).message}`);
@@ -103,7 +104,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         if (cached) {
             return cached;
         }
-        const fx = discoverRlsFixture(this.Provider, UserCache.Instance.Users);
+        const fx = DiscoverRlsFixture(this.Provider, UserCache.Instance.Users);
         if (context.fixtures) {
             context.fixtures.Data[RLS_FIXTURE_KEY] = fx;
         }
@@ -196,7 +197,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
         const emitPath = process.env.EMIT_OUTCOMES;
         if (emitPath) {
             try {
-                await writeOutcomesFile(emitPath, outcomes);
+                await WriteOutcomesFile(emitPath, outcomes);
             } catch (e) {
                 this.logToTestRun(context, 'warn', `EMIT_OUTCOMES write failed: ${(e as Error).message}`);
             }
@@ -419,7 +420,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
      */
     private async buildCheckContext(context: DriverExecutionContext, transport: 'server' | 'client'): Promise<IntegrationCheckContext> {
         if (transport === 'client') {
-            const client = getActiveIntegrationClientBootstrap() ?? await bootstrapIntegrationClient();
+            const client = getActiveIntegrationClientBootstrap() ?? await BootstrapIntegrationClient();
             return {
                 User: context.contextUser,
                 Provider: this.Provider,
@@ -441,11 +442,21 @@ export class IntegrationTestDriver extends BaseTestDriver {
         // process (D1), so the global is unambiguous and matches what the tsx dispatcher passes.
         let provider: IMetadataProvider = activeBootstrap?.Provider ?? Metadata.Provider;
         if (!storage) {
-            const ic = await bootstrapIntegrationServer();
+            const ic = await BootstrapIntegrationServer();
             storage = ic.Storage;
             pool = ic.Pool;
             schema = ic.Db.Schema;
             provider = ic.Provider;
+        }
+        // The testing-CLI path installs the instrumented cache first-caller and then sets up its
+        // OWN provider (installInstrumentedCacheFirst → initializeMJProvider), so no
+        // IntegrationBootstrapContext is ever published and `pool` is undefined here — which
+        // silently skipped every ctx.Pool-dependent check (metadata-consistency, layered base
+        // views, fls-enforcement fixture SQL) under `mj test`. The provider already owns the
+        // connection: recover its mssql pool from the config it was set up with.
+        if (!pool && provider instanceof SQLServerDataProvider && provider.ConfigData instanceof SQLServerProviderConfigData) {
+            pool = provider.ConfigData.ConnectionPool;
+            schema = schema ?? provider.ConfigData.MJCoreSchemaName;
         }
         // #3251: a server-transport bundle MUST resolve a DATABASE provider. If the process-global
         // provider was rebound to a client (GraphQL/Network) provider — because a client-transport

@@ -56,64 +56,64 @@ const AGENT_RUN_FIELDS = [
 ];
 
 export interface DashboardKPIs {
-  totalExecutions: number;
-  activeExecutions: number;
-  totalCost: number;
-  costCurrency: string;
-  avgExecutionTime: number;
-  successRate: number;
-  totalTokens: number;
-  costPerToken: number;
-  topModel: string;
-  topAgent: string;
-  errorRate: number;
-  dailyCostBurn: number;
-  cacheHitRate: number;
+  totalExecutions: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  activeExecutions: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalCost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  costCurrency: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  avgExecutionTime: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  successRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  totalTokens: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  costPerToken: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  topModel: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  topAgent: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errorRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  dailyCostBurn: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cacheHitRate: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface TrendData {
-  timestamp: Date;
-  executions: number;
-  cost: number;
-  tokens: number;
-  avgTime: number;
-  errors: number;
+  timestamp: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  executions: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokens: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  avgTime: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errors: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface LiveExecution {
-  id: string;
-  type: 'prompt' | 'agent';
-  name: string;
-  status: 'running' | 'completed' | 'failed';
-  startTime: Date;
-  duration?: number;
-  cost?: number;
-  tokens?: number;
-  progress?: number;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type: 'prompt' | 'agent';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: 'running' | 'completed' | 'failed';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  duration?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cost?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokens?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  progress?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ExecutionDetails {
-  id: string;
-  type: 'prompt' | 'agent';
-  name: string;
-  status: string;
-  startTime: Date;
-  endTime?: Date;
-  cost: number;
-  tokens: number;
-  success: boolean;
-  errorMessage?: string;
-  parentId?: string;
-  children: ExecutionDetails[];
-  model?: string;
-  vendor?: string;
+  id: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  type: 'prompt' | 'agent';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  status: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  startTime: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  endTime?: Date;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  cost: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokens: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  success: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  errorMessage?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  parentId?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  children: ExecutionDetails[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  model?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  vendor?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 export interface ChartData {
-  executionTrends: TrendData[];
-  costByModel: { model: string; cost: number; tokens: number }[];
-  performanceMatrix: { agent: string; model: string; avgTime: number; successRate: number }[];
-  tokenEfficiency: { inputTokens: number; outputTokens: number; cost: number; model: string }[];
+  executionTrends: TrendData[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  costByModel: { model: string; cost: number; tokens: number }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  performanceMatrix: { agent: string; model: string; avgTime: number; successRate: number }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  tokenEfficiency: { inputTokens: number; outputTokens: number; cost: number; model: string }[];  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 }
 
 /** Internal shape for the single data load that all derived streams share */
@@ -148,7 +148,12 @@ export class AIInstrumentationService {
   private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
 
   // Expose loading state as observable
-  readonly isLoading$ = this._isLoading$.asObservable();
+  readonly IsLoading$ = this._isLoading$.asObservable();
+
+  /** @deprecated Use {@link IsLoading$}. */
+  get isLoading$() {
+    return this.IsLoading$;
+  }
 
   constructor() {}
 
@@ -164,32 +169,62 @@ export class AIInstrumentationService {
   );
 
   // Derived streams — pure in-memory transforms, no extra DB queries
-  readonly kpis$ = this.rawData$.pipe(
+  readonly Kpis$ = this.rawData$.pipe(
     map(data => this.computeKPIs(data.promptRuns, data.agentRuns)),
     shareReplay(1)
   );
 
-  readonly trends$ = this.rawData$.pipe(
+  /** @deprecated Use {@link Kpis$}. */
+  get kpis$() {
+    return this.Kpis$;
+  }
+
+  readonly Trends$ = this.rawData$.pipe(
     map(data => this.computeTrends(data.promptRuns, data.agentRuns)),
     shareReplay(1)
   );
 
-  readonly liveExecutions$ = this.rawData$.pipe(
+  /** @deprecated Use {@link Trends$}. */
+  get trends$() {
+    return this.Trends$;
+  }
+
+  readonly LiveExecutions$ = this.rawData$.pipe(
     map(data => this.computeLiveExecutions(data.livePromptRuns, data.liveAgentRuns)),
     shareReplay(1)
   );
 
-  readonly chartData$ = combineLatest([this.rawData$, this.trends$]).pipe(
+  /** @deprecated Use {@link LiveExecutions$}. */
+  get liveExecutions$() {
+    return this.LiveExecutions$;
+  }
+
+  readonly ChartData$ = combineLatest([this.rawData$, this.Trends$]).pipe(
     map(([data, executionTrends]) => this.computeChartData(data.promptRuns, executionTrends)),
     shareReplay(1)
   );
 
-  setDateRange(start: Date, end: Date): void {
+  /** @deprecated Use {@link ChartData$}. */
+  get chartData$() {
+    return this.ChartData$;
+  }
+
+  SetDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
   }
 
-  refresh(): void {
+  /** @deprecated Use {@link SetDateRange}. */
+  setDateRange(start: Date, end: Date): void {
+    return this.SetDateRange(start, end);
+  }
+
+  Refresh(): void {
     this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+  }
+
+  /** @deprecated Use {@link Refresh}. */
+  refresh(): void {
+    return this.Refresh();
   }
 
   /**
@@ -561,7 +596,7 @@ export class AIInstrumentationService {
 
   // ─── Execution Details (on-demand, not part of initial load) ──────
 
-  async getExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
+  async GetExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
     try {
       if (type === 'prompt') {
         return await this.getPromptExecutionDetails(executionId);
@@ -572,6 +607,11 @@ export class AIInstrumentationService {
       console.error('Error loading execution details:', error);
       return null;
     }
+  }
+
+  /** @deprecated Use {@link GetExecutionDetails}. */
+  async getExecutionDetails(executionId: string, type: 'prompt' | 'agent'): Promise<ExecutionDetails | null> {
+    return this.GetExecutionDetails(executionId, type);
   }
 
   private async getPromptExecutionDetails(promptRunId: string): Promise<ExecutionDetails> {

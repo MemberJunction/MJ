@@ -36,9 +36,9 @@ import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationC
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { AgentInvoker } from './_it-live-agent-harness';
 import {
-    resolveClient, newMarker, loadAgentByName, runAgentClient, runIdOf, settle,
-    readRun, readSteps, readPromptRunsForAgent, parseStepPayloadChange, parseJsonObject,
-    deepDeleteRunTrees, runWithCompliance,
+    ResolveClient, NewMarker, LoadAgentByName, RunAgentClient, RunIdOf, Settle,
+    ReadRun, ReadSteps, ReadPromptRunsForAgent, ParseStepPayloadChange, ParseJsonObject,
+    DeepDeleteRunTrees, RunWithCompliance,
     AgentStepRow
 } from './_it-live-agent-harness';
 
@@ -86,10 +86,10 @@ function subAgentSteps(steps: AgentStepRow[]): AgentStepRow[] {
 
 /** Concatenate the raw Messages+Result of every prompt run a given child agent produced under a root. */
 async function childPromptText(ctx: IntegrationCheckContext, rootRunId: string, childAgentId: string): Promise<string> {
-    const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+    const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
     const childRunIds = subAgentSteps(steps).map((s) => s.TargetLogID).filter((id): id is string => !!id);
     if (childRunIds.length === 0) return '';
-    const runs = await readPromptRunsForAgent(ctx.Provider, ctx.User, childRunIds, childAgentId);
+    const runs = await ReadPromptRunsForAgent(ctx.Provider, ctx.User, childRunIds, childAgentId);
     return runs.map((r) => `${r.Messages ?? ''}\n${r.Result ?? ''}`).join('\n');
 }
 
@@ -103,16 +103,16 @@ async function childPromptText(ctx: IntegrationCheckContext, rootRunId: string, 
  * both of which its own instruction string supplies verbatim.
  */
 async function childResultText(ctx: IntegrationCheckContext, rootRunId: string, childAgentId: string): Promise<string> {
-    const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+    const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
     const childRunIds = subAgentSteps(steps).map((s) => s.TargetLogID).filter((id): id is string => !!id);
     if (childRunIds.length === 0) return '';
-    const runs = await readPromptRunsForAgent(ctx.Provider, ctx.User, childRunIds, childAgentId);
+    const runs = await ReadPromptRunsForAgent(ctx.Provider, ctx.User, childRunIds, childAgentId);
     return runs.map((r) => r.Result ?? '').join('\n');
 }
 
 /** True when the child agent produced at least one prompt run under this root (delegation happened). */
 async function childDelegated(ctx: IntegrationCheckContext, rootRunId: string, childAgentId: string): Promise<boolean> {
-    const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+    const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
     return subAgentSteps(steps).some((s) => !!s.TargetLogID);
 }
 
@@ -124,9 +124,9 @@ async function runParent(
     if (!fx.Client || !fx.Parent) return undefined;
     const parts = [`Invoke ${childName}.`];
     if (childInstruction) parts.push(`Instruction for the sub-agent: ${childInstruction}`);
-    const result = await runAgentClient(fx.Client, fx.Parent, parts.join(' '), payload);
-    await settle();
-    return track(fx, runIdOf(result));
+    const result = await RunAgentClient(fx.Client, fx.Parent, parts.join(' '), payload);
+    await Settle();
+    return track(fx, RunIdOf(result));
 }
 
 /** Snapshot a field, run body, restore in finally — for the un-seeded-config guard checks. */
@@ -134,7 +134,7 @@ async function withAgentFieldOverride<K extends 'PayloadDownstreamPaths' | 'Payl
     ctx: IntegrationCheckContext, agentName: string, field: K, value: MJAIAgentEntity[K],
     body: () => Promise<void>
 ): Promise<void> {
-    const agent = await loadAgentByName(ctx.Provider, ctx.User, agentName);
+    const agent = await LoadAgentByName(ctx.Provider, ctx.User, agentName);
     Assert(!!agent, `override target '${agentName}' loads`);
     const original = agent![field];
     agent![field] = value;
@@ -143,7 +143,7 @@ async function withAgentFieldOverride<K extends 'PayloadDownstreamPaths' | 'Payl
     try {
         await body();
     } finally {
-        const fresh = await loadAgentByName(ctx.Provider, ctx.User, agentName);
+        const fresh = await LoadAgentByName(ctx.Provider, ctx.User, agentName);
         if (fresh) {
             fresh[field] = original;
             if (!(await fresh.Save())) {
@@ -163,10 +163,10 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG1'); if (!fx) return;
-            const marker = newMarker('IT-PG1');
+            const marker = NewMarker('IT-PG1');
             const custVal = `${CUSTOMER_SENTINEL}-${marker}`;
             const secretVal = `${SECRET_SENTINEL}-${marker}`;
-            const rootRunId = await runWithCompliance(
+            const rootRunId = await RunWithCompliance(
                 () => runParent(ctx, fx, { customer: { name: custVal }, secret: { key: secretVal }, other: { z: 1 }, __marker: marker }, 'IT: Payload Child'),
                 // Phase P: the child must have RECEIVED the granted (customer) data — proves the payload
                 // channel is live, so the absence of `secret` below is meaningful (anti-vacuity control).
@@ -184,23 +184,23 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG2'); if (!fx) return;
-            const marker = newMarker('IT-PG2');
-            const rootRunId = await runWithCompliance(
+            const marker = NewMarker('IT-PG2');
+            const rootRunId = await RunWithCompliance(
                 () => runParent(ctx, fx, { __marker: marker }, 'IT: Payload Child'),
                 // Phase P: the child's raw response must contain the attempted ungranted path.
                 async (id) => /secret\.?leak|IT-LEAK-ATTEMPT/i.test(await childPromptText(ctx, id, fx.ChildID)),
                 'PG2 upstream-block'
             );
-            const run = await readRun(ctx.Provider, ctx.User, rootRunId);
-            const finalPayload = parseJsonObject(run?.FinalPayload);
-            const analysis = parseJsonObject(JSON.stringify(finalPayload.analysis ?? {}));
+            const run = await ReadRun(ctx.Provider, ctx.User, rootRunId);
+            const finalPayload = ParseJsonObject(run?.FinalPayload);
+            const analysis = ParseJsonObject(JSON.stringify(finalPayload.analysis ?? {}));
             AssertEqual(analysis.result, 'IT-ANALYSIS-OK', 'PG2: the GRANTED analysis.result was merged upstream');
             Assert(!('secret' in finalPayload), 'PG2: the ungranted `secret` was merged into the parent payload (block broken)');
 
-            const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+            const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
             const violations = subAgentSteps(steps)
-                .map(parseStepPayloadChange)
-                .map((p) => p?.payloadValidation?.upstreamMergeViolations)
+                .map(ParseStepPayloadChange)
+                .map((p) => p?.PayloadValidation?.upstreamMergeViolations)
                 .find((v) => !!v);
             Assert(!!violations, 'PG2: the blocked op was not recorded in upstreamMergeViolations (unauditable)');
             Assert(
@@ -215,9 +215,9 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG3'); if (!fx) return;
-            const marker = newMarker('IT-PG3');
+            const marker = NewMarker('IT-PG3');
             const present = `PRESENT-${marker}`;
-            const rootRunId = await runWithCompliance(
+            const rootRunId = await RunWithCompliance(
                 () => runParent(ctx, fx, { analysis: { x: present }, __marker: marker }, 'IT: Payload Child',
                     'emit a payload change request that DELETES the element at path analysis.x — ' +
                     'set removeElements.analysis.x to the string "__DELETE__". Change nothing else.'),
@@ -234,8 +234,8 @@ export const PayloadGuardsChecks: NamedCheck[] = [
                 },
                 'PG3 delete-block'
             );
-            const run = await readRun(ctx.Provider, ctx.User, rootRunId);
-            const analysis = parseJsonObject(JSON.stringify(parseJsonObject(run?.FinalPayload).analysis ?? {}));
+            const run = await ReadRun(ctx.Provider, ctx.User, rootRunId);
+            const analysis = ParseJsonObject(JSON.stringify(ParseJsonObject(run?.FinalPayload).analysis ?? {}));
             AssertEqual(analysis.x, present, 'PG3: the ungranted DELETE slipped through — analysis.x was removed');
 
             // 🚨 WHAT THE PRODUCT ACTUALLY GUARANTEES HERE — and what it does NOT.
@@ -258,10 +258,10 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             // the upstream merge to diff parent-vs-child for removals and evaluate delete grants — a
             // behaviour change in the merge engine, not a release-prep edit. If someone implements it,
             // THIS assertion flips and the one below becomes the real per-op audit assertion.
-            const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
-            const blobs = subAgentSteps(steps).map(parseStepPayloadChange);
-            const attempted = blobs.flatMap((p) => p?.payloadValidation?.upstreamMergeViolations?.attemptedOperations ?? []);
-            const warnings = blobs.flatMap((p) => p?.warnings ?? []);
+            const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
+            const blobs = subAgentSteps(steps).map(ParseStepPayloadChange);
+            const attempted = blobs.flatMap((p) => p?.PayloadValidation?.upstreamMergeViolations?.attemptedOperations ?? []);
+            const warnings = blobs.flatMap((p) => p?.Warnings ?? []);
             // The child's own emitted text goes in the message: fixtures are purged at teardown, so a
             // red here cannot be re-queried from the database afterwards.
             const emitted = await childResultText(ctx, rootRunId, fx.ChildID);
@@ -285,19 +285,19 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG4'); if (!fx) return;
-            const marker = newMarker('IT-PG4');
+            const marker = NewMarker('IT-PG4');
             await withAgentFieldOverride(ctx, 'IT: Payload Child', 'PayloadUpstreamPaths', '[]', async () => {
-                const rootRunId = await runWithCompliance(
+                const rootRunId = await RunWithCompliance(
                     () => runParent(ctx, fx, { __marker: marker }, 'IT: Payload Child'),
                     async (id) => /analysis\.?result|IT-ANALYSIS-OK/i.test(await childPromptText(ctx, id, fx.ChildID)),
                     'PG4 empty-grant'
                 );
-                const run = await readRun(ctx.Provider, ctx.User, rootRunId);
-                const finalPayload = parseJsonObject(run?.FinalPayload);
+                const run = await ReadRun(ctx.Provider, ctx.User, rootRunId);
+                const finalPayload = ParseJsonObject(run?.FinalPayload);
                 Assert(!('analysis' in finalPayload) && !('secret' in finalPayload),
                     `PG4: empty upstream grant still merged child changes: ${JSON.stringify(finalPayload)}`);
                 // Best-effort: the framework's "no upstream paths" warning should surface in a step's OutputData.
-                const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+                const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
                 const warned = steps.some((s) => (s.OutputData ?? '').includes('No upstream paths specified'));
                 if (warned) console.log('      → PG4: "No upstream paths specified" warning surfaced in step OutputData');
                 else console.log('      → PG4: no-merge proven; warning string not surfaced in step OutputData (outcome is the load-bearing proof)');
@@ -310,16 +310,16 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG5'); if (!fx) return;
-            const marker = newMarker('IT-PG5');
+            const marker = NewMarker('IT-PG5');
             const seed = `IT-SEED-${marker}`;
             const custVal = `${CUSTOMER_SENTINEL}-${marker}`;
-            const rootRunId = await runWithCompliance(
+            const rootRunId = await RunWithCompliance(
                 () => runParent(ctx, fx, { analysis: { seed }, customer: { name: custVal }, __marker: marker }, 'IT: Payload Scoped Child'),
                 async (id) => /IT-SCOPED-OK|"result"/i.test(await childPromptText(ctx, id, fx.ScopedChildID)),
                 'PG5 scope'
             );
-            const run = await readRun(ctx.Provider, ctx.User, rootRunId);
-            const analysis = parseJsonObject(JSON.stringify(parseJsonObject(run?.FinalPayload).analysis ?? {}));
+            const run = await ReadRun(ctx.Provider, ctx.User, rootRunId);
+            const analysis = ParseJsonObject(JSON.stringify(ParseJsonObject(run?.FinalPayload).analysis ?? {}));
             AssertEqual(analysis.result, 'IT-SCOPED-OK', 'PG5: the scoped write did not reverse-slice back under /analysis');
             AssertEqual(analysis.seed, seed, 'PG5: reverse-scope clobbered a sibling of the scoped subtree');
 
@@ -334,9 +334,9 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG6'); if (!fx) return;
-            const marker = newMarker('IT-PG6');
+            const marker = NewMarker('IT-PG6');
             // Starting payload OMITS `analysis`, so the scoped child's PayloadScope='/analysis' cannot resolve.
-            const rootRunId = await runWithCompliance(
+            const rootRunId = await RunWithCompliance(
                 () => runParent(ctx, fx, { customer: { name: `${CUSTOMER_SENTINEL}-${marker}` }, __marker: marker }, 'IT: Payload Scoped Child'),
                 // Compliant when the framework surfaced the critical scope error somewhere in the tree.
                 async (id) => criticalScopeErrorPresent(await gatherErrorText(ctx, id)),
@@ -355,33 +355,48 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG7'); if (!fx) return;
             // Part A — pin the fail-OPEN default: a default agent (IT: Payload Child) has NULL self-write paths.
-            const child = await loadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Child');
+            const child = await LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Child');
             Assert(!!child, 'PG7: IT: Payload Child loads');
             AssertEqual(child!.PayloadSelfWritePaths, null, 'PG7: the default self-write contract flipped CLOSED (would break every agent)');
 
             // Part B — the restricted agent enforces its allow-list.
             Assert(!!fx.SelfWrite && !!fx.Client, 'PG7: IT: Self-Write Restricted + client available');
-            const marker = newMarker('IT-PG7');
-            const selfRunId = await runWithCompliance(
+            const marker = NewMarker('IT-PG7');
+            const selfRunId = await RunWithCompliance(
                 async () => {
-                    const r = await runAgentClient(fx.Client!, fx.SelfWrite!, `Perform your scripted self-write. Marker ${marker}.`);
-                    await settle();
-                    return track(fx, runIdOf(r));
+                    const r = await RunAgentClient(fx.Client!, fx.SelfWrite!, `Perform your scripted self-write. Marker ${marker}.`);
+                    await Settle();
+                    return track(fx, RunIdOf(r));
                 },
-                // Phase P: the agent's raw response attempted the restricted path.
-                async (id) => /config\.?b|IT-CONFIG-ATTEMPT/i.test(await selfAgentText(ctx, id, fx.SelfWrite!.ID)),
+                // Phase P: the agent's raw response attempted BOTH scripted writes.
+                //
+                // Both markers are required, not just the restricted one. The agent's prompt demands
+                // `notes.a` and `config.b` in a SINGLE payloadChangeRequest, and the assertions below
+                // read the ALLOWED half (`notes.a` landed) while this gate historically watched only
+                // the RESTRICTED half. A model that emitted `config.b` and dropped `notes.a` therefore
+                // satisfied compliance and then failed `notes.a did not land` — a bare value assertion
+                // that reads as a product defect. It is not one: driving this agent directly, a fully
+                // compliant response yields FinalPayload {"notes":{"a":"IT-NOTES-OK"}} with `config`
+                // correctly absent, so partial application works exactly as designed.
+                //
+                // Gating on both markers makes that case report `model-noncompliance:` like every
+                // other check in this bundle, instead of accusing the engine.
+                async (id) => {
+                    const text = await selfAgentText(ctx, id, fx.SelfWrite!.ID);
+                    return /config\.?b|IT-CONFIG-ATTEMPT/i.test(text) && /IT-NOTES-OK/i.test(text);
+                },
                 'PG7 self-write'
             );
-            const run = await readRun(ctx.Provider, ctx.User, selfRunId);
-            const finalPayload = parseJsonObject(run?.FinalPayload);
-            const notes = parseJsonObject(JSON.stringify(finalPayload.notes ?? {}));
+            const run = await ReadRun(ctx.Provider, ctx.User, selfRunId);
+            const finalPayload = ParseJsonObject(run?.FinalPayload);
+            const notes = ParseJsonObject(JSON.stringify(finalPayload.notes ?? {}));
             AssertEqual(notes.a, 'IT-NOTES-OK', 'PG7: the ALLOWED notes.a self-write did not land');
             Assert(!('config' in finalPayload), 'PG7: the RESTRICTED config.b self-write leaked into the payload');
 
-            const steps = await readSteps(ctx.Provider, ctx.User, selfRunId);
+            const steps = await ReadSteps(ctx.Provider, ctx.User, selfRunId);
             const denied = steps
-                .map(parseStepPayloadChange)
-                .flatMap((p) => p?.payloadValidation?.selfWriteViolations?.deniedOperations ?? []);
+                .map(ParseStepPayloadChange)
+                .flatMap((p) => p?.PayloadValidation?.selfWriteViolations?.deniedOperations ?? []);
             Assert(denied.some((o) => (o.path ?? '').includes('config')),
                 `PG7: the blocked self-write was not recorded in selfWriteViolations: ${JSON.stringify(denied)}`);
         }
@@ -392,7 +407,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG8'); if (!fx) return;
-            const marker = newMarker('IT-PG8');
+            const marker = NewMarker('IT-PG8');
             {
                 // HOW THIS FORCES A FAILED DELEGATION — and why it no longer flips Status.
                 // The original fixture set 'IT: Payload Child'.Status='Disabled'. That CANNOT work in
@@ -404,9 +419,9 @@ export const PayloadGuardsChecks: NamedCheck[] = [
                 // all: 'IT: Payload Scoped Child' has PayloadScope='/analysis', so delegating with a payload
                 // that OMITS `analysis` is a hard Critical scope failure. PG6 asserts that it fails; PG8
                 // asserts the complementary half — that the failure merged nothing upstream.
-                const rootRunId = await runWithCompliance(
+                const rootRunId = await RunWithCompliance(
                     () => runParent(ctx, fx, { customer: { name: `${CUSTOMER_SENTINEL}-${marker}` }, __marker: marker }, 'IT: Payload Scoped Child'),
-                    async (id) => (await readSteps(ctx.Provider, ctx.User, id)).some((s) => s.StepType === 'Sub-Agent'),
+                    async (id) => (await ReadSteps(ctx.Provider, ctx.User, id)).some((s) => s.StepType === 'Sub-Agent'),
                     'PG8 failed-subagent'
                 );
                 // WHAT THE PRODUCT ACTUALLY GUARANTEES (base-agent.ts ~9429): `mergedPayload` is
@@ -424,7 +439,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
                 //      delegating, this reds while the guard is working perfectly.
                 // Comparing End against Start removes the parent's own authorship from the question
                 // entirely: whatever the parent wrote is in BOTH sides and cancels out.
-                const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+                const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
                 const sub = subAgentSteps(steps);
                 const stepEvidence = sub
                     .map((s, i) => `  [${i}] Status=${s.Status} err=${(s.ErrorMessage ?? '').slice(0, 120)}\n      AtStart=${(s.PayloadAtStart ?? '(null)').slice(0, 300)}\n      AtEnd  =${(s.PayloadAtEnd ?? '(null)').slice(0, 300)}`)
@@ -453,8 +468,8 @@ export const PayloadGuardsChecks: NamedCheck[] = [
                     if (!s.PayloadAtEnd) continue;
                     // Compare parsed objects, not raw strings: serialization key order is not part of the
                     // contract, and a re-serialized-but-identical payload is not a merge.
-                    const before = JSON.stringify(parseJsonObject(s.PayloadAtStart));
-                    const after = JSON.stringify(parseJsonObject(s.PayloadAtEnd));
+                    const before = JSON.stringify(ParseJsonObject(s.PayloadAtStart));
+                    const after = JSON.stringify(ParseJsonObject(s.PayloadAtEnd));
                     Assert(before === after,
                         `PG8: a FAILED sub-agent's upstream state WAS merged into the parent — the Sub-Agent ` +
                         `step's payload changed across the failed delegation. Sub-Agent steps:\n${stepEvidence}`);
@@ -468,11 +483,11 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG9'); if (!fx) return;
-            const marker = newMarker('IT-PG9');
+            const marker = NewMarker('IT-PG9');
             const secretVal = `${SECRET_SENTINEL}-${marker}`;
             // Set the downstream paths column to non-JSON text; the getter/parse must fall open to ["*"].
             await withAgentFieldOverride(ctx, 'IT: Payload Child', 'PayloadDownstreamPaths', 'not-valid-json {[', async () => {
-                const rootRunId = await runWithCompliance(
+                const rootRunId = await RunWithCompliance(
                     () => runParent(ctx, fx, { customer: { name: `${CUSTOMER_SENTINEL}-${marker}` }, secret: { key: secretVal }, __marker: marker }, 'IT: Payload Child'),
                     (id) => childDelegated(ctx, id, fx.ChildID),
                     'PG9 malformed-downstream'
@@ -489,13 +504,13 @@ export const PayloadGuardsChecks: NamedCheck[] = [
                 //   - the PARENT's Sub-Agent-step PayloadAtStart (~9415, `previousDecision.newPayload`):
                 //     that is the parent's UNFILTERED payload, recorded before scoping, so it contains the
                 //     sentinel no matter what the downstream paths were. Asserting on it passes vacuously.
-                const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+                const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
                 const childRunIds = subAgentSteps(steps).map((s) => s.TargetLogID).filter((id): id is string => !!id);
                 Assert(childRunIds.length > 0,
                     `model-noncompliance: PG9 — the parent never produced a linked child run, so no downstream ` +
                     `payload was ever computed and the fail-open rule was not exercised.`);
                 const childSteps = (await Promise.all(
-                    childRunIds.map((id) => readSteps(ctx.Provider, ctx.User, id))
+                    childRunIds.map((id) => ReadSteps(ctx.Provider, ctx.User, id))
                 )).flat();
                 const receivedByChild = childSteps.map((s) => s.PayloadAtStart ?? '').join('\n');
 
@@ -525,15 +540,15 @@ export const PayloadGuardsChecks: NamedCheck[] = [
 /** Gather run + step + sub-agent error text across a root run tree (for the PG6 critical-scope assertion). */
 async function gatherErrorText(ctx: IntegrationCheckContext, rootRunId: string): Promise<string> {
     const parts: string[] = [];
-    const run = await readRun(ctx.Provider, ctx.User, rootRunId);
+    const run = await ReadRun(ctx.Provider, ctx.User, rootRunId);
     if (run?.ErrorMessage) parts.push(run.ErrorMessage);
-    const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+    const steps = await ReadSteps(ctx.Provider, ctx.User, rootRunId);
     for (const s of steps) {
         if (s.ErrorMessage) parts.push(s.ErrorMessage);
         if (s.OutputData) parts.push(s.OutputData);
         if (s.FinalPayloadValidationMessages) parts.push(s.FinalPayloadValidationMessages);
         if (s.TargetLogID) {
-            const sub = await readRun(ctx.Provider, ctx.User, s.TargetLogID);
+            const sub = await ReadRun(ctx.Provider, ctx.User, s.TargetLogID);
             if (sub?.ErrorMessage) parts.push(sub.ErrorMessage);
         }
     }
@@ -546,7 +561,7 @@ function criticalScopeErrorPresent(text: string): boolean {
 
 /** Concatenate raw prompt text for a TOP-LEVEL agent's own run (self-write / plan agents). */
 async function selfAgentText(ctx: IntegrationCheckContext, rootRunId: string, agentId: string): Promise<string> {
-    const runs = await readPromptRunsForAgent(ctx.Provider, ctx.User, [rootRunId], agentId);
+    const runs = await ReadPromptRunsForAgent(ctx.Provider, ctx.User, [rootRunId], agentId);
     return runs.map((r) => `${r.Messages ?? ''}\n${r.Result ?? ''}`).join('\n');
 }
 
@@ -557,12 +572,12 @@ for (const check of PayloadGuardsChecks) {
 IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-payload-guards', {
     Setup: async (ctx: IntegrationCheckContext) => {
         fixture = { ChildID: '', ScopedChildID: '', CreatedRootRunIds: [] };
-        const client = resolveClient(ctx.Provider, ctx.User);
+        const client = ResolveClient(ctx.Provider, ctx.User);
         const [parent, child, scoped, selfWrite] = await Promise.all([
-            loadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Parent'),
-            loadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Child'),
-            loadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Scoped Child'),
-            loadAgentByName(ctx.Provider, ctx.User, 'IT: Self-Write Restricted')
+            LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Parent'),
+            LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Child'),
+            LoadAgentByName(ctx.Provider, ctx.User, 'IT: Payload Scoped Child'),
+            LoadAgentByName(ctx.Provider, ctx.User, 'IT: Self-Write Restricted')
         ]);
         if (!parent || !child || !scoped || !selfWrite) {
             fixture.Skip = 'IT payload roster not seeded — run: npx mj sync push --dir=metadata-optional/integration-test';
@@ -577,7 +592,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-payload-guards', {
     Teardown: async (ctx: IntegrationCheckContext) => {
         const fx = fixture;
         if (!fx) return;
-        await deepDeleteRunTrees(ctx.Provider, ctx.User, fx.CreatedRootRunIds);
+        await DeepDeleteRunTrees(ctx.Provider, ctx.User, fx.CreatedRootRunIds);
         fixture = undefined;
     }
 });

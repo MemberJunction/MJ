@@ -12,11 +12,28 @@
  */
 
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
+import type { NativeToolBinding } from '../native-tools/control-tools';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { ActionResult } from '@memberjunction/actions-base';
+
+/**
+ * How an agent type decided to execute a run, recorded on the run as a completed `Decision` step.
+ *
+ * Some agent types can run the same agent in more than one way (a Flow agent runs either in this
+ * process or on the task-graph dispatcher). Which way was taken changes what the run record means,
+ * so it belongs on the record, not only in a log line that is gone by the time someone investigates.
+ */
+export interface AgentTypeExecutionRouting {
+    /** The step name shown in the run timeline, naming the chosen mode. */
+    StepName: string;
+    /** Why this mode was chosen, in words an operator can act on. */
+    Reason: string;
+    /** Stored as the step's output data. */
+    Detail: Record<string, string>;
+}
 
 /**
  * Abstract base class for agent type implementations.
@@ -58,6 +75,24 @@ export abstract class BaseAgentType {
      * @protected
      */
     protected _jsonValidator: JSONValidator = new JSONValidator();
+
+    /**
+     * Whether this agent type can read a native tool call back as a step (plan §8.1).
+     *
+     * `BaseAgent` declares an agent's Actions as native tools ONLY when this is true. Declaring them
+     * to a type that cannot consume the call is not harmless: the model answers with a tool call and
+     * no text, the type's `DetermineNextStep` parses the empty text, and the turn becomes a Retry
+     * — a run that would have worked on the envelope path fails because tools were offered. That is
+     * exactly the failure a catalog-wide `DefaultToNativeToolCalling` would have produced on every
+     * Flow agent with Actions.
+     *
+     * Defaults to false. A type opts in by overriding this AND by honouring the `nativeToolBindings`
+     * argument of {@link DetermineNextStep}; the two go together, and `LoopAgentType` is the only
+     * type that does both today.
+     */
+    public get SupportsNativeToolCalls(): boolean {
+        return false;
+    }
 
     /**
      * Common placeholder for current payload injection
@@ -107,7 +142,16 @@ export abstract class BaseAgentType {
         promptResult: AIPromptRunResult | null, 
         params: ExecuteAgentParams<any, P>,
         payload: P,
-        agentTypeState: ATS
+        agentTypeState: ATS,
+        /**
+         * Reverse map from the sanitized tool name a model calls back to the Action it names,
+         * supplied by `BaseAgent` only when the turn ran with native tools declared (plan §8.1).
+         *
+         * A tool call arrives as `run_ad_hoc_query`, not "Run Ad-hoc Query", so without this an
+         * agent type cannot dispatch one. Optional and trailing: agent types that never declare
+         * tools are unaffected.
+         */
+        nativeToolBindings?: ReadonlyMap<string, NativeToolBinding>
     ): Promise<BaseAgentNextStep<P>>;
 
     /**
@@ -568,6 +612,20 @@ export abstract class BaseAgentType {
     ): Promise<BaseAgentNextStep<P> | null> {
         // Default implementation: return null to use base-agent's default behavior
         // (fall back to prompt execution if prompts are configured)
+        return null;
+    }
+
+    /**
+     * Describes how this run is being executed, once {@link DetermineInitialStep} has decided.
+     *
+     * BaseAgent calls this right after `DetermineInitialStep` and, when it returns a value, writes
+     * it to the run as a completed `Decision` step. Default: null, meaning the agent type has only
+     * one way to run and there is nothing to record.
+     *
+     * @param agentTypeState - The state returned by {@link InitializeAgentTypeState}
+     * @since 6.1.3
+     */
+    public DescribeExecutionRouting<ATS>(agentTypeState: ATS): AgentTypeExecutionRouting | null {
         return null;
     }
 

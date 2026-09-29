@@ -1,0 +1,90 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "codesmith-terminal-done-01 [claude-sonnet-5 · Anthropic · envelope]",
+    "Description": "Code ran and produced the result. The agent must finish and write code/results/iterations to the payload rather than iterating for its own sake. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+    "InputDefinition": {
+      "payload": {
+        "iterations": 1,
+        "code": "output = _.meanBy(input.rows, 'v');",
+        "results": {
+          "mean": 21.4
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Compute the mean of rows.v."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Execute Code succeeded. output = { mean: 21.4 }"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "codesmith-terminal-done-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete",
+            "forbiddenActions": [
+              "Execute Code"
+            ]
+          },
+          {
+            "kind": "payloadChange",
+            "forbiddenActions": [
+              "Execute Code"
+            ]
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Codesmith Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete",
+                "forbiddenActions": [
+                  "Execute Code"
+                ]
+              },
+              {
+                "kind": "payloadChange",
+                "forbiddenActions": [
+                  "Execute Code"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5E8C742F-071A-4E79-A008-1AE923091AEA"
+  }
+}

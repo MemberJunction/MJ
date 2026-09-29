@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, RuntimeAPIKeyResolver } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView, UserInfo } from "@memberjunction/core";
@@ -9,7 +9,7 @@ import {
     ImageGenerationResult,
     ImageEditParams,
     GeneratedImage,
-    GetAIAPIKey
+    GetAIAPIKey,
 } from "@memberjunction/ai";
 import { MJAIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
@@ -71,6 +71,25 @@ import { AIEngineBase } from "@memberjunction/ai-engine-base";
  * });
  * ```
  */
+/**
+ * Resolve the key an image generator should use.
+ *
+ * Inside an agent run, `resolve` is the run's {@link RuntimeAPIKeyResolver}: the RUN'S key for the
+ * driver class first, then the platform's — the same order the run's prompts use, so a run on a
+ * customer's OpenAI key now generates its images on that key too. Outside a run (or when the agent
+ * refuses this action the run's key) it is undefined / answers undefined, and `GetAIAPIKey` gives
+ * the platform key as it always did. Then the vendor-name fallback that was always here — but
+ * actually USED this time: the previous code found a key by vendor name and then handed the empty
+ * driver-class result to the generator, so that branch never produced an image.
+ */
+export function ResolveImageGenerationAPIKey(driverClass: string, vendorName: string | undefined, resolve?: RuntimeAPIKeyResolver): string {
+    const byDriver = resolve?.(driverClass) || GetAIAPIKey(driverClass);
+    if (byDriver) return byDriver;
+    const byVendor = vendorName ? resolve?.(vendorName) || GetAIAPIKey(vendorName) : '';
+    if (byVendor) return byVendor;
+    throw new Error(`No API key found for ${driverClass} or vendor ${vendorName || 'unknown'}`);
+}
+
 @RegisterClass(BaseAction, "Generate Image")
 export class GenerateImageAction extends BaseAction {
 
@@ -119,7 +138,8 @@ export class GenerateImageAction extends BaseAction {
             // Get image generator model and create instance
             const { generator, model, apiName } = await this.prepareImageGenerator(
                 params.ContextUser,
-                modelName
+                modelName,
+                params.RuntimeAPIKeyResolver
             );
 
             let result: ImageGenerationResult;
@@ -227,7 +247,8 @@ export class GenerateImageAction extends BaseAction {
      */
     private async prepareImageGenerator(
         contextUser: UserInfo | undefined,
-        modelName?: string
+        modelName?: string,
+        resolve?: RuntimeAPIKeyResolver
     ): Promise<{ generator: BaseImageGenerator; model: MJAIModelEntityExtended; apiName: string }> {
         // Ensure AIEngine is loaded
         await AIEngineBase.Instance.Config(false, contextUser);
@@ -269,19 +290,10 @@ export class GenerateImageAction extends BaseAction {
             throw new Error(`No active inference provider found for model '${model.Name}'`);
         }
 
-        // Get API key using the vendor's driver class
         const driverClass = inferenceProvider.DriverClass;
         const apiName = inferenceProvider.APIName || model.APIName || model.Name;
-        const apiKey = GetAIAPIKey(driverClass);
-
-        if (!apiKey) {
-            // Try getting by vendor name as fallback
-            const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, inferenceProvider.VendorID));
-            const vendorApiKey = vendor ? GetAIAPIKey(vendor.Name) : null;
-            if (!vendorApiKey) {
-                throw new Error(`No API key found for ${driverClass} or vendor ${vendor?.Name || 'unknown'}`);
-            }
-        }
+        const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, inferenceProvider.VendorID));
+        const apiKey = ResolveImageGenerationAPIKey(driverClass, vendor?.Name, resolve);
 
         const generator = MJGlobal.Instance.ClassFactory.CreateInstance<BaseImageGenerator>(
             BaseImageGenerator,

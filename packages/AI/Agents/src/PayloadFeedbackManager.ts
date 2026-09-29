@@ -78,7 +78,7 @@ export class PayloadFeedbackManager {
     /**
      * Generate feedback questions from warnings
      */
-    public generateQuestions(warnings: PayloadWarning[]): PayloadFeedbackQuestion[] {
+    public GenerateQuestions(warnings: PayloadWarning[]): PayloadFeedbackQuestion[] {
         const questions: PayloadFeedbackQuestion[] = [];
         const feedbackWarnings = warnings.filter(w => w.requiresFeedback);
         
@@ -89,6 +89,11 @@ export class PayloadFeedbackManager {
         }
         
         return questions;
+    }
+
+    /** @deprecated Use {@link GenerateQuestions}. */
+    public generateQuestions(warnings: PayloadWarning[]): PayloadFeedbackQuestion[] {
+        return this.GenerateQuestions(warnings);
     }
     
     /**
@@ -141,7 +146,7 @@ export class PayloadFeedbackManager {
      * @param contextUser - User context for the prompt execution
      * @returns Array of responses indicating whether each change was intended
      */
-    public async queryAgent(
+    public async QueryAgent(
         questions: PayloadFeedbackQuestion[],
         conversationContext: Record<string, unknown>,
         contextUser?: UserInfo
@@ -205,6 +210,15 @@ export class PayloadFeedbackManager {
         }
     }
 
+    /** @deprecated Use {@link QueryAgent}. */
+    public async queryAgent(
+        questions: PayloadFeedbackQuestion[],
+        conversationContext: Record<string, unknown>,
+        contextUser?: UserInfo
+    ): Promise<PayloadFeedbackResponse[]> {
+        return this.QueryAgent(questions, conversationContext, contextUser);
+    }
+
     /**
      * Map LLM responses back to PayloadFeedbackResponse format
      */
@@ -255,7 +269,7 @@ export class PayloadFeedbackManager {
     /**
      * Process feedback responses and determine final result
      */
-    public processFeedback(
+    public ProcessFeedback(
         questions: PayloadFeedbackQuestion[],
         responses: PayloadFeedbackResponse[]
     ): PayloadFeedbackResult {
@@ -281,11 +295,19 @@ export class PayloadFeedbackManager {
             requiresRevision: rejectedChanges.length > 0
         };
     }
+
+    /** @deprecated Use {@link ProcessFeedback}. */
+    public processFeedback(
+        questions: PayloadFeedbackQuestion[],
+        responses: PayloadFeedbackResponse[]
+    ): PayloadFeedbackResult {
+        return this.ProcessFeedback(questions, responses);
+    }
     
     /**
      * Log feedback results
      */
-    public logFeedbackResults(result: PayloadFeedbackResult): void {
+    public LogFeedbackResults(result: PayloadFeedbackResult): void {
         if (result.responses.length === 0) {
             return;
         }
@@ -304,5 +326,10 @@ export class PayloadFeedbackManager {
         if (result.requiresRevision) {
             LogStatus(`\n   ⚠️  Agent needs to revise the payload`);
         }
+    }
+
+    /** @deprecated Use {@link LogFeedbackResults}. */
+    public logFeedbackResults(result: PayloadFeedbackResult): void {
+        return this.LogFeedbackResults(result);
     }
 }

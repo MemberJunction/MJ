@@ -7,7 +7,7 @@
  * execution → parse/validate → retry → result assembly → fire-and-forget persistence, plus
  * cancellation and the parallel-execution aggregation path.
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const h = vi.hoisted(() => {
   const norm = (s: unknown): string => (s == null ? '' : String(s).trim().toLowerCase());
@@ -79,6 +79,7 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 });
 
 import { AIPromptRunner } from '../AIPromptRunner';
+import { GetToolCallingDecision, GetToolCallingMode } from '../nativeToolCallingGate';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
 import { ChildPromptParam } from '@memberjunction/ai-core-plus';
@@ -319,4 +320,86 @@ describe('ExecutePrompt — agent attribution on the prompt run', () => {
         const stamped = (result.promptRun as unknown as { AgentID: string | null }).AgentID;
         expect(stamped == null).toBe(true);
     });
+});
+
+describe('ExecutePrompt — the gate decision reaches the ChatResult', () => {
+  // The runner tagged the REQUEST with the whole decision but
+  // copied only the mode onto the RESULT, which reset `toolResults` to false on the fresh object. The agent
+  // loop reads `toolResults` off the result, so native tool-result turns were never sent. This drives the
+  // real executeModel path end to end; the harness TestLLM ignores tools (SupportsTools false), which is
+  // fine — the seam under test is the runner's bookkeeping, not the driver.
+  type EngineWithCatalog = { GetEffectiveModelConfiguration?: (modelID: string, vendorRowID?: string) => unknown };
+  const engine = h.engine as unknown as EngineWithCatalog;
+
+  afterEach(() => { delete engine.GetEffectiveModelConfiguration; });
+
+  it('copies mode AND toolResults from the request onto the result when the catalog asks for native results', async () => {
+    engine.GetEffectiveModelConfiguration = () => ({ LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeToolResults: true } });
+    testLLM.Script({ kind: 'succeed', content: 'done' });
+    const tools = [{ name: 'get_weather', description: 'Call this for the weather.', inputSchema: { type: 'object', properties: {} } }];
+    const result = await runner.ExecutePrompt(makeParams(makePrompt(), { tools }) as never);
+    expect(result.success).toBe(true);
+    expect(GetToolCallingMode(result.chatResult)).toBe('Native');
+    expect(GetToolCallingDecision(result.chatResult)).toMatchObject({ useNativeTools: true, mode: 'Native', controlFlow: 'envelope', toolResults: true });
+  });
+
+  it('carries toolResults: false when the catalog does not ask for native results', async () => {
+    engine.GetEffectiveModelConfiguration = () => ({ LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } });
+    testLLM.Script({ kind: 'succeed', content: 'done' });
+    const tools = [{ name: 'get_weather', inputSchema: { type: 'object', properties: {} } }];
+    const result = await runner.ExecutePrompt(makeParams(makePrompt(), { tools }) as never);
+    expect(GetToolCallingDecision(result.chatResult)).toMatchObject({ mode: 'Native', toolResults: false });
+  });
+
+  it('still records Envelope on the result when the gate is closed', async () => {
+    engine.GetEffectiveModelConfiguration = () => ({ LLM: { SupportsNativeToolCalling: true } });
+    testLLM.Script({ kind: 'succeed', content: 'done' });
+    const tools = [{ name: 'get_weather', inputSchema: { type: 'object', properties: {} } }];
+    const result = await runner.ExecutePrompt(makeParams(makePrompt(), { tools }) as never);
+    expect(GetToolCallingDecision(result.chatResult)).toMatchObject({ mode: 'Envelope', useNativeTools: false, toolResults: false });
+  });
+});
+
+describe('ExecutePrompt — implicit control flow treats plain text as the terminal form (results §16.5)', () => {
+  type EngineWithCatalog = { GetEffectiveModelConfiguration?: (modelID: string, vendorRowID?: string) => unknown };
+  const engine = h.engine as unknown as EngineWithCatalog;
+  const IMPLICIT = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true, NativeControlFlow: 'implicit' } };
+  const HYBRID = { LLM: { SupportsNativeToolCalling: true, DefaultToNativeToolCalling: true } };
+  const tools = [
+    { name: 'get_weather', inputSchema: { type: 'object', properties: {} } },
+    { name: 'ask_user', inputSchema: { type: 'object', properties: { message: { type: 'string' } } } },
+  ];
+  const objectPrompt = () => makePrompt({ OutputType: 'object', OutputExample: JSON.stringify({ taskComplete: true, message: 'x' }), ValidationBehavior: 'Warn', MaxRetries: 2 });
+  const prose = 'I have retrieved all 214 models from `[__mj].vwAIModels`, sorted by PowerRank. Done.';
+
+  afterEach(() => { delete engine.GetEffectiveModelConfiguration; });
+
+  it('accepts prose on an object-typed prompt under implicit control flow: success, no validation error, no repair', async () => {
+    engine.GetEffectiveModelConfiguration = () => IMPLICIT;
+    testLLM.Script({ kind: 'succeed', content: prose });
+    const result = await runner.ExecutePrompt(makeParams(objectPrompt(), { tools, controlFlowToolNames: ['ask_user'] }) as never);
+    expect(GetToolCallingMode(result.chatResult)).toBe('NativeImplicit');
+    expect(result.success).toBe(true);
+    expect(result.result).toBe(prose);
+    expect(result.validationResult?.Success).toBe(true);
+    expect(result.errorMessage).toBeUndefined();
+    expect(lastPromptRun?.Success).toBe(true);
+    expect(lastPromptRun?.Status).toBe('Completed');
+  });
+
+  it('still parses and validates a JSON envelope under implicit control flow', async () => {
+    engine.GetEffectiveModelConfiguration = () => IMPLICIT;
+    testLLM.Script({ kind: 'succeed', content: JSON.stringify({ taskComplete: true, message: 'all done' }) });
+    const result = await runner.ExecutePrompt<{ taskComplete: boolean; message: string }>(makeParams(objectPrompt(), { tools, controlFlowToolNames: ['ask_user'] }) as never);
+    expect(result.success).toBe(true);
+    expect(result.result).toEqual({ taskComplete: true, message: 'all done' });
+  });
+
+  it('leaves the hybrid and envelope paths unchanged: prose on an object prompt is still a validation failure', async () => {
+    engine.GetEffectiveModelConfiguration = () => HYBRID;
+    testLLM.Script({ kind: 'succeed', content: prose });
+    const result = await runner.ExecutePrompt(makeParams(objectPrompt(), { tools: [tools[0]] }) as never);
+    expect(GetToolCallingMode(result.chatResult)).toBe('Native');
+    expect(result.validationResult?.Success).toBe(false);
+  });
 });

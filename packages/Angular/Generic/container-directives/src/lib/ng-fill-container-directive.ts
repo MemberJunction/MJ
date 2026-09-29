@@ -27,16 +27,52 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
 })
 export class FillContainer implements OnInit, OnDestroy {
   /** Whether to fill the parent's width. Default is true. */
-  @Input() fillWidth: boolean = true;
+  @Input() FillWidth: boolean = true;
+
+  /** @deprecated Use {@link FillWidth}. */
+  @Input() set fillWidth(value: boolean) {
+    this.FillWidth = value;
+  }
+  /** @deprecated Use {@link FillWidth}. */
+  get fillWidth(): boolean {
+    return this.FillWidth;
+  }
   
   /** Whether to fill the parent's height. Default is true. */
-  @Input() fillHeight: boolean = true;
+  @Input() FillHeight: boolean = true;
+
+  /** @deprecated Use {@link FillHeight}. */
+  @Input() set fillHeight(value: boolean) {
+    this.FillHeight = value;
+  }
+  /** @deprecated Use {@link FillHeight}. */
+  get fillHeight(): boolean {
+    return this.FillHeight;
+  }
   
   /** Right margin in pixels. Default is 0. */
-  @Input() rightMargin: number = 0;
+  @Input() RightMargin: number = 0;
+
+  /** @deprecated Use {@link RightMargin}. */
+  @Input() set rightMargin(value: number) {
+    this.RightMargin = value;
+  }
+  /** @deprecated Use {@link RightMargin}. */
+  get rightMargin(): number {
+    return this.RightMargin;
+  }
   
   /** Bottom margin in pixels. Default is 0. */
-  @Input() bottomMargin: number = 0;
+  @Input() BottomMargin: number = 0;
+
+  /** @deprecated Use {@link BottomMargin}. */
+  @Input() set bottomMargin(value: number) {
+    this.BottomMargin = value;
+  }
+  /** @deprecated Use {@link BottomMargin}. */
+  get bottomMargin(): number {
+    return this.BottomMargin;
+  }
 
   /** Flag to globally disable resize functionality for all instances */
   public static DisableResize: boolean = false;
@@ -183,17 +219,17 @@ export class FillContainer implements OnInit, OnDestroy {
             let paddingTop = parseInt(parentStyle.getPropertyValue('padding-top'));
             let paddingLeft = parseInt(parentStyle.getPropertyValue('padding-left'));
   
-            if (this.fillWidth) {
+            if (this.FillWidth) {
               const widthVariance = (elementRect.left - parentRect.left) + paddingLeft + (paddingLeft > 0 ? 1 : 0); // add 1 to account for rounding errors
-              const newWidth = Math.floor(parentRect.width - this.rightMargin - widthVariance);
+              const newWidth = Math.floor(parentRect.width - this.RightMargin - widthVariance);
               if (Math.floor(elementRect.width) !== newWidth) {
                 element.style.width = newWidth + 'px';
               }
             }
   
-            if (this.fillHeight) {
+            if (this.FillHeight) {
               const heightVariance = (elementRect.top - parentRect.top) + paddingTop + (paddingTop > 0 ? 1 : 0); // add 1 to account for rounding errors   
-              const newHeight = Math.floor(parentRect.height - this.bottomMargin - heightVariance);          
+              const newHeight = Math.floor(parentRect.height - this.BottomMargin - heightVariance);          
               if (Math.floor(elementRect.height) !== newHeight) {
                 element.style.height = newHeight + 'px';  
               }

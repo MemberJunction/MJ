@@ -273,8 +273,7 @@ Read `payload.callerContext.tableSpecs` (always an array) for the specifications
 >         { "entityName": "...", "schemaName": "...", "tableName": "...", "description": "..." }
 >       ]
 >     }
->   },
->   "nextStep": { "type": "Success" }
+>   }
 > }
 > ```
 > If nothing matches, set `"found": false` and `"matchingEntities": []`. 'Not found' is a valid and complete answer.

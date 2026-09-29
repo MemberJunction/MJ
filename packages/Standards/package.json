@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/standards",
   "type": "module",
-  "version": "6.1.0-edge.5",
+  "version": "6.2.0-edge.0",
   "description": "MemberJunction engineering standards as runnable, versioned checks — plus the scaffolding that gets a repo enforcing them. Opt-in per check; a new standard never changes an existing repo's result.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -29,6 +29,14 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "typescript": "^5.9.3",

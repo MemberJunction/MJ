@@ -1,5 +1,1035 @@
 # Change Log - @memberjunction/cli
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- 73fa918: Enhance agent-first tooling across MemberJunction with machine-readable diagnostics, hardened secret redaction, and native CLI execution trace auditing:
+  - **Machine-Readable Diagnostics (`mj doctor --format json`)**: Added canonical format flag and `--scope [install|runtime|ai|metadata|agent]` filtering to `mj doctor`. When JSON format is requested, suppress all terminal formatting and output structured diagnostics adhering to the `Diagnostics.toJSON()` schema, exiting non-zero on failure.
+  - **Diagnostic Codes & Subsystem Probes**: Added stable machine-readable check codes, scopes, contextual evidence, and actionable remediation descriptors. Added checks for `MJ_BASE_ENCRYPTION_KEY` and AI provider credentials (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`).
+  - **Hardened Secret Redaction**: Extended credential pattern matching in `ReportGenerator` across sensitive environment variable names (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`, etc.) and high-entropy token shapes (`sk-...`, `Bearer ...`, `ghp_...`, JWTs) across file snapshots, markdown reports, and container service logs.
+  - **Native CLI Trace Auditing**: Updated `citizen-builder/scripts/query-run-history.sh` to delegate to native `mj ai audit agent-run`, supporting `--format json`, step-by-step inspections, error audits, and agent name filtering.
+  - **Citizen Agent Builder Documentation & Skills**: Detailed the complete 11-step agent engineering loop in `citizen-builder/AGENTS.md` and `README.md`, updated skill templates (`test-agent`, `package-agent`) to use native JSON auditing, and bundled updated template assets into `@memberjunction/cli`.
+
+- d122a41: DOM-grounded selection and replay scripts for Computer Use tests.
+
+  A Computer Use test currently pays full vision-model price on every run, re-deriving
+  the same sequence of clicks against a build that changed nothing it touches. This makes
+  the first passing run _compile_ a replay script that later runs _execute_ through the
+  same browser adapter — no screenshots, no model calls — with the model returning only
+  when replay stops working, which is exactly when a fresh derivation is worth paying for.
+
+  **DOM selection.** Element grounding hands the model an indexed list of the page's
+  interactive elements (role, accessible name, selector) so it acts by index instead of by
+  coordinate; a recorded target is then the element the model actually chose rather than
+  where its bounding box happened to be. `resolveActionLocator` narrows an ambiguous
+  selector to a single locator before acting — preferring visible matches, then the
+  smallest by area, which for a `:has-text()` ancestor chain is the element the model
+  meant. A multi-match is a guaranteed strict-mode throw today (and worse than a lost
+  click: the page does not change, so the loop detector ends the run as `LoopDetected`), so
+  disambiguating cannot regress any action that currently works.
+
+  **Replay.** Each step carries a multi-signal locator (selector primary; role + name as
+  the heal fallback), a fail-fast precondition, and a postcondition that confirms the step
+  advanced the page the way the recording did. Scripts are keyed by build hash, app
+  version, and goal hash: an exact build match replays with no healing expected, any
+  mismatch replays with healing, and a changed goal falls back to the model. Variable
+  _values_ are never stored — recording tokenizes them to `%name%` and replay substitutes
+  fresh values — so a script holds no credentials and stays valid when the values change.
+  A replayed run is scored by deterministic goal postconditions distilled from the passing
+  run, not by a model verdict, which is what keeps the tier free.
+
+  **Storage.** Scripts live in the test row, at `Configuration.ReplayScript` on
+  `MJ: Tests`. That column already exists, so there is **no migration** — this registers
+  JSONType metadata on it (`ITestConfiguration`, alongside the ~20 JSONType columns already
+  registered this way) and CodeGen emits a typed `ConfigurationObject` accessor. Reads are
+  free because the TestingEngine already caches the entity. `ITestConfiguration` declares
+  only framework-level properties over an index signature, so each driver's own
+  configuration passes through untouched and a future framework option is an interface edit
+  rather than a migration. The script shape necessarily exists twice — once as
+  `ComputerUseTrace`, once as the JSONType, because CodeGen emits the definition into
+  `core-entities`, which sits below the engine package. `__tests__/script-store.test-d.ts`
+  holds the two field-for-field with vitest `expectTypeOf`, checked by tsc through
+  `typecheck` in `vitest.config.ts` — the same idiom as the related-record-collection type
+  tests in `core-entities`. The assertions were confirmed to fail on injected drift rather
+  than assumed to work, since that precedent's own typecheck program was once empty and
+  every assertion passing for free.
+
+  **Fallback and review.** A diverged replay falls back to the model within the same
+  attempt. The re-derived script does not take effect on its own: it lands in
+  `PendingReplayScript` and replay keeps using the promoted `ReplayScript` until someone
+  runs `mj test scripts`, sees what changed, and promotes it — so a UI change can never
+  rewrite the suite unnoticed. The listing separates routine selector churn from a moved
+  target, verb, or URL. A test's first script skips the gate, having no baseline to be
+  diffed against. Until a pending script is promoted, the affected tests fall back on
+  every run: they stay green and pay full model price, which is the cost of not letting
+  the suite rewrite itself. The fallback restarts clean rather than inheriting
+  the failed replay's memo, and a replay is never re-recorded (that would launder healed
+  selectors into storage without re-deriving them). A test can refuse the pathway with
+  `Configuration.AllowLLMFallback: false`, which makes a divergence the result instead —
+  the right setting wherever a silent re-derivation would paper over the regression the
+  test exists to catch. Defaults to `true`.
+
+  Also adds `tier` and `ReplayTelemetry` (healed/diverged counts) to the testing-framework
+  result types, so drift is visible per attempt and survives a green fallback. Design doc:
+  `plans/regression-testing/dom-selection-and-replay-design.md`.
+
+  **MetadataSync — JSON sub-property externalization.** `pull.externalizeFields` accepted
+  entity fields only, so it could move a whole column into a side file but not a single
+  property inside a JSON column. An entry may now be a dotted path (`Configuration.ReplayScript`),
+  which externalizes that leaf and leaves an `@file:` reference in its place; push already
+  resolves nested references, so there is no push-side change. A property the record does not
+  carry is skipped entirely, and a whole-field config wins over its dotted paths. Pull's
+  existing-file discovery moved to `lib/existing-record-files.ts`.
+
+  **MJExplorer — a readiness beacon for automation.** The shell publishes `data-mj-ready="true"`
+  on `<html>` when the active route's resource has finished loading, so a browser-driven suite
+  can poll a fact instead of comparing screenshot hashes. The attribute is inert — nothing in
+  the product reads it and no styling keys off it — and it is published from the `loading`
+  accessor so all ~22 assignment sites stay correct.
+
+  **Prompt model change.** The Computer Use controller and judge prompts in core `metadata/prompts`
+  move from `Gemini 3.1 Flash-Lite` to `Gemini 3.6 Flash` and gain `Temperature`/`Seed` for
+  determinism. This applies to every instance that syncs `metadata/`, not only the regression suite.
+
+### Patch Changes
+
+- 130a280: `mj agent init` scaffolds a workspace with a `.env` again. The bundled template under
+  `src/init-templates/citizen-builder/` creates `.env` from its `.env.example`, but that file was
+  caught by the repo's `.env.*` ignore rule (only the root `citizen-builder/.env.example` was
+  whitelisted) — so it existed only where it was authored, and every clean checkout, CI included,
+  scaffolded a workspace with no `.env`. The file is now tracked and whitelisted; the two
+  `agent-init` tests that pinned this pass on a clean checkout.
+- 8f23b23: Fix `mj app install` rejecting every first-party BizApp schema (#3302). The installer blocked any schema name starting with `__`, but MJ's own app convention is `__mj_<AppName>` — so installing `bizapps-common`, `-forms`, `-tasks`, `-caliber` or `-ats` required the hidden `--dangerously-ignore-dbl-underscore-schema-rule` flag. `__mj_<AppName>` is now the documented app namespace and installs with no flag; `__mj_UDT` joins the reserved set (MJ core owns it as the user-defined-table sandbox); reserved-name matching is now case-insensitive; and the schema name is validated before an app can adopt an already-existing schema, which previously bypassed the guard entirely.
+
+  Opening `__mj_` made every first-party schema name reachable on the default install path, which put weight on the reserved set that it could not previously carry. The set now covers every schema the **database platform** owns, on both dialects: PostgreSQL's `public` and the whole `pg_` prefix (which also covers the per-session `pg_temp_N` / `pg_toast_temp_N` schemas an enumerated list cannot), and SQL Server's nine fixed database-role schemas (`db_owner`, `db_accessadmin`, `db_securityadmin`, `db_ddladmin`, `db_backupoperator`, `db_datareader`, `db_datawriter`, `db_denydatareader`, `db_denydatawriter`). Each of these exists in a stock database, which is exactly what made them dangerous: an app declaring one was never _creating_ a schema, it was **adopting** one on the default path with no flag — and `mj app remove` would then drop it. Verified against SQL Server 2022: all nine accept tables and all nine `DROP SCHEMA` cleanly. The reserved-name error now names the real owner ("reserved by the database platform" vs "by MemberJunction") rather than claiming MJ owns `dbo`.
+
+  `mj app upgrade` now validates the schema name too. Validation previously lived only on the install path, so a v2 manifest could rename its schema to `public` or `db_owner` and the upgrade would run that version's migrations straight into it.
+
+  Installing an app that adopts a schema another installed app already owns now emits a warning. Sharing remains supported and the install still succeeds, but the operator is told that `mj app remove` will from then on skip the schema and metadata cleanup for **both** apps, to avoid destroying the co-tenant's data.
+
+  **Behaviour change for existing installs.** An app installed under a name that is reserved only as of this release — `public` on PostgreSQL, or a casing like `PUBLIC` / `Dbo` / `__mj_udt` that case-insensitive matching now catches — can no longer have its schema dropped, with or without any flag. `mj app remove` refuses, and the app lands in status `Error` while staying installed; reinstalling fails on the same name. This is deliberate (these are schemas MJ must never drop), and `mj app remove <app> --keep-data` is the way out: it unregisters the app and leaves the schema in place. An app installed under a different `__`-prefixed name outside the `__mj_<AppName>` namespace is not stuck the same way: re-running `mj app remove <app> --dangerously-ignore-dbl-underscore-schema-rule` — the same override its install needed — drops the schema.
+
+  Deferred, tracked separately: an optional `coreSchemaName` on `ValidateSchemaNameOptions` so a non-default `MJCoreSchema` is reserved too (#4559), factoring the duplicated rollback drop-result block into a shared helper so the install-rollback path gains the same classified remedy text as remove (#4560), and a shared mock for the three orchestrator suites' identical `vi.mock` spread (#4561).
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [73fa918]
+- Updated dependencies [ee5c033]
+- Updated dependencies [ce55864]
+- Updated dependencies [662d47e]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [3062639]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [8f23b23]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [b87e4ac]
+- Updated dependencies [ce55864]
+- Updated dependencies [f48dffc]
+- Updated dependencies [2771f01]
+- Updated dependencies [630bb88]
+- Updated dependencies [7658d68]
+- Updated dependencies [44faf83]
+- Updated dependencies [58faa68]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [e6c8f53]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [2cd8411]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [e9dbf77]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [3d633ed]
+- Updated dependencies [2c590b0]
+  - @memberjunction/aiengine@6.2.0-edge.0
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/installer@6.2.0-edge.0
+  - @memberjunction/codegen-lib@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/generic-database-provider@6.2.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.2.0-edge.0
+  - @memberjunction/db-auto-doc@6.2.0-edge.0
+  - @memberjunction/testing-cli@6.2.0-edge.0
+  - @memberjunction/metadata-sync@6.2.0-edge.0
+  - @memberjunction/open-app-engine@6.2.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.2.0-edge.0
+  - @memberjunction/sql-converter@6.2.0-edge.0
+  - @memberjunction/ai-cli@6.2.0-edge.0
+  - @memberjunction/query-gen@6.2.0-edge.0
+  - @memberjunction/cli-core@6.2.0-edge.0
+  - @memberjunction/config@6.2.0-edge.0
+  - @memberjunction/dynamic-packages@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+  - @memberjunction/sqlglot-ts@6.2.0-edge.0
+  - @memberjunction/standards@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- 076fa5d: Add a provider-neutral native tool-calling surface to `BaseLLM`, implement it in the Anthropic, OpenAI and Gemini drivers, give the prompt stack its own configuration bag, and gate the whole thing behind metadata in the prompt runner . MJ's LLM providers have described agent actions as prose in the system prompt and parsed a JSON envelope back; newer agentically-trained models increasingly fight that, and the prose action catalog is most of a 56–104KB Loop system prompt. This lands the plumbing, end to end and switched off. **Nothing in the tool-calling path changes behavior on merge.** The catalog now records which models and vendor servings _can_ do native tool calling — that is the audit this branch produced — but every one of them carries `LLM.DefaultToNativeToolCalling: false`, no prompt sets `LLM.UseNativeToolCalling`, and no MJ caller passes tools, so the gate resolves false on every existing path and each run takes exactly the code it takes today. Capability is a statement of fact and is safe to ship; policy is the switch, and it is off. The first behavior change is a deliberate one: flipping the policy on a specific model, and a caller that supplies tools.
+
+  **Model selection does change on merge, and is not gated.** Query Builder and the Research Agent family (7 agents, 8 prompts) move from `Gemini 3.5 Flash` to `Gemini 3.8 Flash` — 16 `ModelID` changes across 8 prompt seed files. The Flash-Lite rows that outranked them are set `Status: "Inactive"` rather than deleted, because `mj sync push` never deletes; removing the rows from JSON would have left those agents on Flash-Lite in every existing database. Once this metadata is pushed, those eight prompts are served by a different model than they are today.
+
+  `ChatParams` gains `tools` (declarations as JSON Schema — the one format all three vendors accept), `toolChoice` (`'auto' | 'none' | 'required' | { name }`) and `parallelToolCalls`. Responses normalize to `ChatCompletionMessage.toolCalls` with **parsed** arguments plus a `'tool_calls'` finish reason; a turn can carry text _and_ calls, because all three providers structurally allow it, and nothing may assume text exists on a tool-call turn. Multi-turn tool use round-trips through a new `tool` message role and `tool_result` content block, which reuse the existing content-block serialization so tool turns persist correctly in message logs. `BaseLLM.SupportsTools` declares whether a driver has the mapping (default `false`); a driver without it ignores declarations rather than failing.
+
+  **Schema — a JSON bag at the prompt layers.** `AIPrompt.PromptConfiguration` and `AIPromptModel.PromptConfiguration` (`nvarchar(max) NULL`) mirror the model catalog's `ModelConfiguration` cascade, resolving prompt-model over prompt over catalog. This resolves the plan's open question in favour of a bag over bit columns: `AIPrompt` already carries fifty-odd columns, and a bag lets the shape keep adapting without a migration per knob — a knob graduates to a real column when it needs a foreign key or becomes a first-class platform concept. It is named `PromptConfiguration` rather than `Configuration` because `AIPromptModel.ConfigurationID` already makes CodeGen emit a `Configuration` display column in the base view, which a same-named base column would collide with.
+
+  **One source of truth for the modality sections.** `metadata/entities/JSONType-interfaces/IAIConfiguration.ts` now defines `LLMConfigurationSettings`, `RealtimeConfigurationSettings`, `VisionConfigurationSettings` and `AudioConfigurationSettings` once, plus one outer type per column (`IAIModelConfiguration`, `IAIPromptConfiguration`, `IAIPromptModelConfiguration`); all five `EntityField` rows point at that single file. It has to be one file because `JSONTypeDefinition` is stored verbatim and emitted inline per entity — a definition cannot import a sibling. The package-side mirror in `@memberjunction/ai` matches, keeping `AIModelConfiguration` and the existing resolver exports intact (the old section names remain as deprecated aliases). Two typed flags join the `LLM` section: `SupportsNativeToolCalling` (capability — a hard gate) and `DefaultToNativeToolCalling` (policy), joined at the prompt layers by `UseNativeToolCalling` (preference). All are tri-state — absent means _inherit_, distinct from an explicit `false` that overrides a lower layer.
+
+  **Guard.** An assistant turn must carry `toolCalls` for the `tool_result` answering it to be valid; forgetting to copy them is the easy mistake, and Anthropic rejects it with an error naming only an opaque id. `validateToolConversation` now catches orphaned results at the MJ boundary with a message that says what to fix, run from `BaseLLM.ChatCompletion` for tool-capable drivers.
+
+  **Shared conformance suite.** `RunLLMToolCallingConformanceSuite` in `@memberjunction/unit-testing` asserts the provider-independent half of the contract — capability declaration, parsed arguments, the `'tool_calls'` finish reason, text-and-calls coexistence, a text-free call counting as success, the streaming downgrade, and the orphan guard — and is adopted by all three tool-capable drivers. It is a separate entry point from the streaming/cancellation suite so a driver can conform on tools without first scripting a mock for every streaming path. Provider-specific request mapping stays in each driver's own tests.
+
+  Per-provider notes. Anthropic coalesces consecutive tool turns into the single user turn its API requires, so parallel-call results are not orphaned by the role-alternation filler, and drops the empty text block a tool-only turn would otherwise send. OpenAI expands one tool turn into its per-result `tool` messages and surfaces a call whose arguments are malformed JSON rather than dropping it — the agent loop must be able to see a bad call, not silently nothing. Gemini's "no output received from model" guard now accepts a tool call as output; without that, every clean text-free tool call would have been reported as a failed generation. Drivers extending `OpenAILLM` inherit the mapping (OpenRouter, xAI, Zhipu, MiniMax, LlamaCpp); `ai-inception` overrides `SupportsTools` back to false, since Mercury Edit is a next-edit-prediction model on a custom endpoint that takes no `tools` parameter.
+
+  Native tool calling is non-streaming: when a caller requests streaming with tools declared, `BaseLLM` takes the non-streaming path and records `streamingSuppressedForTools` on the result, mirroring the existing streaming-unsupported fallback.
+
+  `ai-cerebras` and `ai-lmstudio` pass MJ roles straight to SDKs that accept only system/user/assistant; both now narrow through the new `toClassicChatMessageRole` helper, which maps `tool` to `user` — the role a tool result reads as to a provider with no tool support.
+
+  **Gating (layer 3).** `AIPromptRunner` is the only layer that reads metadata to decide whether tools go out. The decision itself is a pure function, `ResolveNativeToolCalling`, so the design's truth table is asserted directly rather than through the runner. It resolves inside `executeModel` — per model call, not once per run — because failover can move a run to a (model, vendor) whose capability differs, and the failover loop already threads each candidate's own `AIPromptModel` row so a candidate with no such row contributes no override. Callers supply tools through new `AIPromptParams.tools` / `toolChoice` / `parallelToolCalls`; the runner never invents them. The gate is wrapped so that any failure to resolve configuration degrades to the envelope path — an opt-in enhancement must never fail a run that would otherwise succeed.
+
+  **Instrumentation and fallback (layer 4).** New `AIPromptRun.ToolCallingMode` column (`'Native' | 'Envelope' | 'NativeFallback'`, CHECK-constrained) records which path each run took, so the envelope-vs-native comparison is queryable from run history. It is a column rather than a bag key precisely because its purpose is to be filtered and grouped across many runs. When a native call fails in a _tools-specific_ way — the provider rejecting the declarations, an unusable tool call, a tool-related discarded turn — the runner retries once with tools stripped and records `NativeFallback`. That classification is deliberately narrow and biased toward missing a tool failure rather than catching an unrelated one: a rate limit or context-length error must reach the existing retry/failover logic unchanged. The retry shares the original call's timeout budget rather than silently doubling the caller's timeout.
+
+  **Provider probe.** `integration-test-suite/rigs/native-tool-matrix.ts` sweeps each tool-capable driver directly against live providers across {no tools | auto | none | required | named} × {responseFormat Any | JSON} × an optional thinking axis, recording call well-formedness, parallel count, text/call coexistence, envelope compliance, forcing adherence, finish reason and prompt tokens. It answers the plan's §5.6 and §9.3 open questions with data rather than inference, and it is deliberately not a test: it reports rates, asserts nothing, is dry-run by default, and `mj test` never dispatches it. The evaluators live apart from the runner in `src/native-tool-matrix/` as framework-free pure functions with 37 unit tests, so the measuring instrument is verified on every PR without spending a token. The first sweep against Google found: forcing semantics are 100% honored; **forced tool choice combined with JSON mode is a hard 400 on every current Gemini model**, not just 2.x as the audit had it, which constrains the per-step forcing policy; and Gemini 3.7 Flash under JSON mode answers a tool question natively while ignoring the requested envelope entirely — the malformed-response mechanism reproduced in three calls at the driver layer. It also confirms two PR 2 decisions were load-bearing: text NEVER accompanied a tool call on Google (so the "no text on a tool-call turn" rule is the only case there), and the extended Gemini empty-output guard would otherwise have failed every successful tool call in the sweep.
+
+  **Prompt-exemplar audit (plan open question §9.4).** Every JSON exemplar in `metadata/prompts/` — the shapes agent prompts show models and the `OutputExample` values injected into them — was checked against `LoopAgentResponse`, the validator, and the dispatcher. 20 defects across 8 files, **13 of which made a forced retry the guaranteed outcome of following the prompt**: `message` nested inside `nextStep` on a Chat step (it is top-level; the runtime retries without it) across seven research-agent exemplars, `"type": "Action"` with `action: {name, input}` across six Codesmith exemplars — one labelled "✅ CORRECT Response" — a lowercase `"chat"` the validator accepts case-insensitively and the dispatcher then cannot switch on, and `nextStep: {type: "Success"}` beside `taskComplete: true`. Separately, `database-schema-designer.example.json` had four trailing commas and did not parse: since `AIPromptRunner` parses `OutputExample` as a validation schema and that prompt is `ValidationBehavior: 'Strict'`, **every run of `Database Schema Designer - Main Prompt` failed validation regardless of what the model produced**. Also fixed: raw newlines inside a JSON string, a `//` comment inside an exemplar, bare `...` array placeholders, and invented keys that were silently dropped (`subAgent.payload`, `suggestedResponses`, and Codesmith's `finalCode`/`result`/`iterations`, now written through `payloadChangeRequest` under the names its own `FinalPayloadValidation` requires).
+
+  To stop the class from returning, `LOOP_NEXT_STEP_TYPES` is now exported from `loop-agent-response-type.ts` with two-way compile-time checks against the interface union (a plain `readonly T[]` annotation accepts a subset, so it catches an invented value but not a forgotten one — both directions are asserted), `LoopAgentType.isValidLoopResponse` derives its accept-list from it instead of restating it, and `ai-agents` gains `loop-exemplar-conformance.test.ts`, which brace-matches every shipped exemplar out of `metadata/prompts/` — blockquotes stripped, so quoted and nested-fence exemplars are covered — and fails per offending exemplar. Full findings: prompt-exemplar audit.
+
+  **Two repairs found while building the above.** `integration-test-suite/rigs/lib/harness.ts` re-exported `createRunQueryFixtures` / `teardownRunQueryFixtures`, which had moved into this package's own `runquery-cache` checks. A named re-export of a binding the source module does not provide is an ESM _link-time_ error, so it did not fail where it was written — it took down **all six rigs** that import the shim, before a line of their own code ran, and `tsc` never saw it because `rigs/` sits outside the package's tsconfig `include`. No rig ever used either symbol; removing the two lines revives every rig (verified by linking all sixteen). `src/__tests__/rig-harness-shim.test.ts` guards it by checking each forwarded name against the package's real exports — note that merely importing the shim under vitest does **not** reproduce the failure, because Vite transforms rather than links, so the name check is the part that bites.
+
+  The matrix rig also now proves a credential before spending a sweep on it. A revoked key previously produced one identical 401 per cell — 186 across the two Claude rows — burying the real findings and reporting models as 100%-failed that were never actually asked anything; it now costs one eight-token preflight call per model, plus a mid-sweep abort after three consecutive auth failures, and the run ends by naming every unmeasured model so a partial scorecard cannot pass for a complete one. The classifier (`src/native-tool-matrix/credentials.ts`) is deliberately conservative — a rate limit, quota, unknown model or 5xx is not an auth failure, since a false positive discards a model that would have produced data — and is unit-tested against all three providers' verbatim rejection messages and against near-misses like a token count containing "1401".
+
+  **The Action→tool mapping, measured before the framework implements it — and corrected.** The matrix grew a second scenario family that builds tools from **real `ActionParam` rows** (snapshotted into a fixture so the probe stays database-free) using a faithful restatement of the Action→`ChatTool` table, then asked providers what they make of it. Two results. First, the `Scalar` → `{type: ["string","number","boolean"]}` union type — which appears to contradict §8.2's own "stay inside the cross-provider common subset" rule, since OpenAPI has no union type — measured clean: identical error counts to a conservative `{type:"string"}` arm across 192 calls, and 6/6 tool selection among three real MJ Actions. It stands as written. Second, and less comfortably, `ValueType: 'Other'` → `{type:"object"}` does **not** hold. `Run Ad-hoc Query.Query` is `Other` but carries a SQL string, and typing it as an object makes models emit `Query: {}` — a well-formed, dispatchable, useless call that no well-formedness oracle would catch. Usable arguments: **60% as specified, 100% mapped to `{type:"string"}`** on identical prompts. The mapping has been corrected (`Other`/`MediaOutput` → string; `Simple Object`/`BaseEntity Sub-Class` stay object), its "exact parity with the prose catalog" claim retracted, and the `ValueSchema`-on-`ActionParam` question reopened — the baseline turns out to recover that case only by _guessing_ a type, which is precisely what `ValueSchema` would make unnecessary. The mapping ships here as a tested rig-side module, not as the framework's generator; `observedArguments` was added to the observation record because a failed matcher says fidelity was lost while only the payload says how.
+
+  **The baseline eval harness.** The harness that has to exist _before_ the feature can be measured now exists.
+
+  `trace-validate-sub-agents` (**T1**) is implemented and registered. It was referenced by shipped metadata that never had an implementation: both stock research-agent tests weight it at 0.25 and 0.3, the engine logged `Oracle not found`, and that fraction of each test's score silently vanished while the tests reported green on the rest. It walks the run tree through the **Sub-Agent step's `TargetLogID`** rather than `AIAgentRun.ParentRunID` — the generated ORM is explicit that ParentRunID "records parentage but is not a link the tree traverses" — recursing so a required agent two levels down still counts, and gives partial credit across the `requiredAgents` / `forbiddenAgents` / `minIterations` checks a test configures.
+
+  `PromptEvalDriver` + the `Prompt Eval` test type (**T2**) evaluate ONE model decision from frozen mid-loop state. No action executes: the runner returns the reply and deterministic oracles read it. It is separate from `AgentEvalDriver` because a loop confounds the measurement — a run that recovered on iteration three answers a different question than "does this model, in this state, choose action B". Three easily-missed execution details are handled explicitly: an explicit `contextUser` (#3251), `AIEngine.Config()` before the first run, and `WaitForPendingPromptRunSaves()` before any oracle reads a prompt run back.
+
+  `agent-decision-match` and `response-well-formed` (**T3**) are the decision oracles. The first reads a decision off **whichever channel the model used** — envelope `nextStep.actions[]` or native `ChatToolCall[]` — and scores it against an encoding-independent expectation, which is what makes a baseline cell and a native cell comparable on an identical corpus case. Its details carry the components apart (decision kind / action accuracy / param fidelity / per-matcher outcomes) so §6.1's metrics aggregate out of stored `ResultDetails` without re-running a single model call. The second measures the malformed class on its own, because "malformed rate fell" and "decision accuracy rose" are different claims.
+
+  The corpus (**T4**) ships as golden files under `metadata-optional/prompt-eval-corpus/` with a validating loader, eight starter cases spanning the plan's categories against real shipped agents, and a generator that expands corpus × matrix into `MJ: Tests` records with stable per-cell IDs (so regeneration updates rather than orphans, and `mj test history` survives) plus an estimated-token manifest per run. Verified end to end: 8 cases generate, push, and validate through the real `mj test` pipeline against the registered driver.
+
+  Everything scoring-related lives in `Engine/src/eval/` as **framework-free pure functions** per test plan §2.1 — no import from the testing engine anywhere in that directory — so the same logic runs behind the `IOracle` wrappers today and would run unchanged under the documented bespoke-runner fallback. 45 unit tests pin the instrument, including the rule that a corpus expectation may never name `nextStep` or `toolCalls`.
+
+  **Corpus and harness verification.** The corpus is 57 golden cases spanning every category the test plan's §4.3 table names, written against the real shipped agents and their actual action names: first-step selection, mid-loop params, error recovery, disambiguation across Sage's 26-action catalog, parallel fan-out, sub-agent dispatch through Marketing's five specialists, terminal synthesis, clarify, payload change, forced control flow at the iteration ceiling, and six adversarial cases that specifically detect the malformed shapes MJ's own exemplars taught before the audit.
+
+  A pinned matrix (`matrix/envelope-baseline.json`) fixes the (model, vendor) pairs by catalog ID rather than by name, so a rerun months later addresses the same rows; expanding corpus × matrix yields **399 test records, all validating through `mj test`**.
+
+  `prompt-eval-harness` (IT87) verifies the instrument in the deterministic tier, for zero tokens: every case names capabilities that actually exist (PE1 — which caught two unsatisfiable cases the moment it was written), the generated records have not drifted from the golden files AND cover the pinned matrix in full (PE2 — which caught real drift on its first real run, and whose matrix half exists because a suite generated against the wrong matrix passes every other check while measuring the wrong models under the right name), every expectation is decidable (PE3), a scripted correct reply scores correct through the **real `AIPromptRunner`** with `TestLLM` registered over the driver classes (PE4), five distinct malformed shapes are provably caught (PE5), and a wrong-but-well-formed reply separates decision accuracy from malformed rate (PE6). PE5 is the load-bearing negative: a harness that cannot fail on demand makes every rate it reports a fiction.
+
+  One evaluator gap closed along the way: an undispatchable `nextStep.type` — `'Success'`, or a lower-cased `'chat'` — previously scored as well-formed even though the runtime rejects it into a forced Retry. `evaluateWellFormed` now checks the raw step type against `LOOP_NEXT_STEP_TYPES`, derived from the agent framework rather than restated.
+
+  The deterministic tier is 65/71 with the new bundle in it, 558 oracle results, zero failures.
+
+  **The cost manifest is measured, not guessed.** It originally priced a run at a flat 12,000 tokens of composed prompt per call. Measuring the real templates showed that to be **38% low** — the Loop agent-type system prompt _alone_ is ~12,700 tokens (50KB, consistent with the issue's 56–104KB claim) before any agent's own prompt or its action catalog. Per-agent sizes now range 12.7k (an agent with no actions) to 33k (Report Writer), and the generator reads them from a committed `matrix/prompt-size-baseline.json` regenerated by `rigs/measure-prompt-sizes.cjs`. A full baseline run at N=20 is **~158M prompt tokens, not ~96M** — and that still reads low, since it is chars/4 over raw metadata rather than the rendered catalog. A cost manifest wrong by 64% is worse than none, because it gets believed.
+
+  **The matrix is pinned to the deployed configuration, at N=3, for ~$11.** Two problems with the first pinning, both caught by asking what it would cost. First, it pinned one model per generation per developer — right for the provider probe, wrong for a baseline whose stated job is _"the quantified current-state of the framework"_: only 2 of 15 corpus agents had even one of those models in their real configuration, so it would have measured models nobody deploys. The cells are now the (model, vendor) pairs the agents actually run on, ranked by adoption, led by **GPT-OSS-120B on Cerebras — which all 15 corpus agents list**.
+
+  Second, N=20 was over-specified. The plan justifies it from an experiment that ran 40 repetitions of _one_ prompt, where repetition was the only source of variation; here the corpus is the variation, and 57 cases × N=3 gives 171 observations per cell — well past what a two-proportion test on the aggregate needs. Escalating to N=20 belongs on the (case, cell) pairs that come back non-unanimous, which is the only place more repetition resolves anything.
+
+  GPT 5.5 / 5.5 Instant are excluded on cost: at \$5/\$30 per 1M they were \$121 of a \$196 run, two thirds of the bill for one sixth of the cells. Aggregator pairs (Vertex, Bedrock, OpenRouter, Azure) are deferred to a run where vendor divergence is the thing being measured.
+
+  The manifest now prices in **dollars per cell**, reading `AIModelCost` at pin time so the estimate works offline — a token count nobody can convert is a cost control nobody uses. The full baseline: **285 cells, ~$11.36**, down from $196.
+
+  **A finding that outlives the baseline:** `CerebrasLLM` and `GroqLLM` extend `BaseLLM` directly rather than `OpenAILLM`, so `SupportsTools` is `false` on both. GPT-OSS-120B — the single most-deployed model across the corpus agents — **cannot do native tool calling in MJ today at all**; the gate would resolve `Envelope` whatever metadata is set. Irrelevant to an envelope-only baseline, but it means the primary deployed configuration is not reachable without driver work on those two providers.
+
+  **Native tool calling on Cerebras and Groq — the deployed workhorse.** `CerebrasLLM` and `GroqLLM` extend `BaseLLM` directly rather than `OpenAILLM`, so unlike OpenRouter/xAI/Zhipu/MiniMax/LlamaCpp they inherited nothing and reported `SupportsTools: false`. That mattered more than the provider count suggests: **GPT-OSS-120B on Cerebras is the single most-deployed model across MJ's shipped agents** (all 15 in the eval corpus list it; Groq is second at 11), so the one configuration the feature most needed to reach was the one it could not — the capability gate resolved to the envelope no matter what metadata said.
+
+  Rather than write the mapping a third and fourth time, it now lives once in `@memberjunction/ai` as `openAICompatibleTools.ts`, and **OpenAI delegates to it too**. That format is the de-facto standard — Groq, Cerebras, Fireworks, xAI, Together, LM Studio, DeepSeek, Moonshot, Z.AI, MiniMax and OpenRouter all speak it — and the mapping has three details that are easy to get quietly wrong: arguments cross the wire as a JSON **string**; one MJ tool turn expands into **N** provider `tool` messages; and a call with malformed arguments must be **surfaced**, because an agent loop that sees nothing cannot tell "said nothing" from "said something broken". Four copies of that would drift. The wire types carry an open index signature deliberately — several provider SDKs declare their own with one, and a closed type is not assignable to an open one.
+
+  Two provider-specific facts are encoded rather than assumed. **Groq does not support parallel tool calls on the gpt-oss family** — precisely what MJ deploys most — so `parallel_tool_calls` is forwarded only when a caller sets it explicitly, never inferred. **Cerebras can emit a call to a tool that was never declared**; the shared extractor surfaces it rather than dropping it, so the agent loop can reject it by name instead of receiving silence.
+
+  One latent bug fixed on the way: Groq's converter appended a dummy `"OK"` user message whenever the last turn was not from a user. After tool results that would have separated them from the assistant call they answer — the same hazard as the Anthropic alternation filler — so the filler now skips a turn ending in tool results. Its multimodal branch also cast the role through with `as`, which would have sent a raw `tool` role the API rejects; it narrows through `toClassicChatMessageRole` now.
+
+  Both drivers adopt `RunLLMToolCallingConformanceSuite`, and their `@memberjunction/ai` test mocks import the real mapping by path rather than re-mocking it — a mocked copy would be exactly the second implementation the shared module exists to prevent.
+
+  **Reachable, not enabled.** This makes the deployed configuration _reachable_; whether anything uses it is the policy flag's business, and that ships off (see the capability audit below).
+
+  **`reasoning_effort` gained the two levels it was missing.** `OpenAILLM.getReasoningLevel` accepted `low`/`medium`/`high` or a number and threw on anything else, so OpenAI's `xhigh` and `none` were unreachable through MJ — verified against the live API, whose own rejection message enumerates `none, low, medium, high, xhigh`. Both are now accepted **by name only**: MJ's numeric 1-100 scale is a cross-provider convention whose three bands are replicated in the Groq and Cerebras drivers, so re-banding it to make room would silently reclassify every documented `effortLevel: 85` and mean something different per provider. `AIPromptParams.effortLevel` widens to `number | string` to carry a named level (`.toString()` on the runner's path already handled both); `AIPromptRun.EffortLevel` is a numeric column with a 1-100 CHECK, so a named level is deliberately not persisted there. The GPT-OSS path writes `Reasoning: <level>` into the system prompt rather than sending an API field, and harmony defines only three levels, so it clamps `xhigh`→`high` and `none`→`low`.
+
+  **The hybrid agent loop, opt-in and inert.** Actions are now declarable as native tools and a tool call _is_ an Actions step. `buildActionToolSet` (§8.2) maps `ActionParam` metadata onto JSON Schema using the two mappings measurement settled — `Scalar` keeps the union type, and every opaque `ValueType` becomes `string` rather than `object`, which took usable arguments from 60% to 100% on `Run Ad-hoc Query.Query`. Only `Input`/`Both` params are declared, and a post-sanitization tool-name collision is a hard error at build time, because two Actions sharing one tool name would dispatch whichever registered last — a routing bug that presents as a model error. `LoopAgentType` checks native tool calls **before** the envelope (§8.1): Measurement showed that a model given tools answers through them and stops emitting the envelope entirely on some providers, so the two cannot be asked for in one turn. A call naming an undeclared tool is a Retry naming it, never a silent drop — Cerebras does this at roughly one forced call in six. The loop template drops its action catalog and the `'Actions'` step type under `_NATIVE_TOOL_CALLING` (§8.4), which is where the 56–104KB prompt reduction comes from; the flag is set from the gate's **real** decision before rendering, not from the caller's intent, so a prompt can never suppress its catalog while the model receives no tools. `AIAgentRunStep` gains `ToolCallingMode` and `NativeToolCallCount` (§8.5) so a comparison groups by its independent variable instead of reconstructing it through a lossy join.
+
+  **The capability audit, and the policy that ships off.** `metadata/ai-models/.ai-models.json` now carries `ModelConfiguration.LLM` on **139 model rows** — `SupportsNativeToolCalling: true`, plus `NativeControlFlow: 'implicit'` and `NativeToolResults: true` describing which protocol that model can hold — and **83 vendor-level rows** that override it to `false` for a serving path verified not to accept tools. Those three are statements of fact about a model, and the gate treats capability as a hard gate that no policy can override, so recording them turns nothing on. Every one of the 139 also carries `DefaultToNativeToolCalling: false`: written explicitly rather than omitted, because "we know this model can, and we are choosing not to yet" is the thing a reader needs to see, and flipping it later is then a one-word edit per row rather than a new key. No prompt carries a `UseNativeToolCalling` preference. That is the measurement's own recommendation applied as written: revert the preference, keep the capability flags.
+
+  `BaseAgentType.SupportsNativeToolCalls` (false; `true` on `LoopAgentType`, inherited by Harness) gates whether `BaseAgent` declares an agent's Actions as tools at all — without it a catalog default would have offered tools to the four Flow agents with Actions, whose type cannot read a call back and would have turned every such reply into a Retry.
+
+  A full-corpus comparison then ran both arms — four times at N=3, 1,026 observations each, no observations lost — and returned **NO-GO on all three providers on every run**. The decomposition (results §9) is the useful part. Native tool calling delivers exactly the gain it should: given that an action is the right answer, GPT 5.6-luna acts 76% of the time through the envelope and 96% with tools declared, and every native turn that picks the right tool fills it correctly. That gain is then spent, almost to the turn, on two losses. Tool _selection_ got worse — the same confusion pairs as the envelope, confused more — and richer declarations fixed it only in compact form (outputs and result codes as names, +6 to +11pp on two models) while full-detail prose reversed the gain and cost the smallest model ~700 tokens a call. And models call a tool on 5–20% of turns whose right answer is chat, completion or delegation; that number did not move across four runs and two interventions, is concentrated in five specific corpus cases, and is the blocker. **The prompt-size premise did not hold** on any run: tokens fell on one model and rose on the other two. The single largest source of "wrong tool" in every arm is the action catalog itself — `Search Query Catalog`'s description prescribes search-before-SQL and the corpus expects direct SQL — which is a product question, not a model one. The recommendation on the record is to revert the prompt-level `UseNativeToolCalling` before merge and keep the capability flags, which change nothing on their own.
+
+  **Tool declarations now carry what the prose catalog carries.** `buildToolFromAction` folds output params and result codes into the description, restoring the rule the file already stated (never less informative than the prose). The description ceiling is 1,024 characters as a _measured operating point_ — no provider enforces a limit anywhere near it (all three accepted 8,000 on a live probe), but the compact form measured better than full detail and the code comment says so. `resolveToolChoiceForTurn` forces `'none'` on the last permitted iteration, where a tool call would be executed and discarded; that is correct and unit-tested, and could not affect the single-decision corpus.
+
+  **Six defects the measurement surfaced, all fixed here.** A tool-call-only turn carries no text, and the runner scored that as `No output received from model` — a warning on every native turn, and under `ValidationBehavior: 'Strict'` a retry that could never succeed; tool calls now count as output. The Layer-4 fallback only inspected a _returned_ failed result, but OpenAI's SDK _raises_ its 400, so a tools rejection bypassed the strip-and-retry entirely and hard-failed the run; both shapes now take the same one-shot retry. OpenAI additionally rejects tools alongside `reasoning_effort` on `/v1/chat/completions`, so **native tool calling and reasoning are mutually exclusive on OpenAI until the driver speaks the Responses API** — the earlier probe missed this by testing a non-reasoning model. `CerebrasLLM` drops `response_format` when a request declares tools, which Cerebras rejects outright. On the harness side, `PromptEvalConfig` gained the `toolCallingMode` axis it was always documented to have (an `envelope` cell withholds the declarations the composer attached, which is the gate's `toolsProvided` term and the only difference between the arms); the decision normalizer maps sanitized tool names back to Action names through the framework's own binding table, without which a corpus expectation written as `Execute Code` scores a correct `execute_code` call as the wrong action; and pinned matrix cells now decline vendor failover, after a first attempt lost 42% of its observations to rows that had quietly failed over to a different vendor and were recorded under the pinned one's label.
+
+  `FailoverConfiguration` is now exported from `@memberjunction/ai-prompts` — it is the return type of `getFailoverConfiguration`, a `protected` method documented as an override point, which a subclass outside the package could not name.
+
+  **Implicit control flow (opt-in, and off).** Under `LLM.NativeControlFlow: 'implicit'` the loop stops splitting its turn between two channels: sub-agents are declared as `delegate_to_<name>` tools, `payload_change_request` and `ask_user` join them, a tool call continues the loop, and **plain text with no call ends the turn as task completion**. The Loop agent-type template renders that protocol instead of the `'Actions'`/`'Sub-Agent'`/`'Chat'` step types, which is the rest of the prompt reduction the hybrid could not reach — the hybrid still had to describe the envelope because completion lived there. `ToolCallingMode` gains `'NativeImplicit'` so the two native protocols are distinguishable in run history rather than both reading as `Native`.
+
+  **Tool results as tool turns.** When the catalog says `LLM.NativeToolResults`, a step's action results go back as native `tool` turns answering the assistant's call turn, instead of the markdown "Action results:" user message. `AIAgentRunStep.NativeToolResultsSent` records which encoding a step used, so the scorecard can tell them apart without reconstructing them from `AIPromptRun.Messages`. The two encodings are one function apart: `EncodeToolTurnsAsText` in `@memberjunction/ai` converts native tool turns back to the markdown form, and both the envelope fallback retry and the eval harness's history builder now call it rather than carrying their own copy — the fallback previously stripped the _declarations_ while leaving native `tool` turns in the history, which is a shape no envelope-path provider accepts.
+
+  **Declaration control, per agent and per action.** `AIAgent.DeclareActionsAsNativeTools` and `AIAgentAction.DeclareAsNativeTool` (both `BIT NOT NULL DEFAULT 1`) decide whether an agent's Actions are _supplied_ as tools, independent of whether the gate would use them. Measurement found this was the missing switch: the Research Agent's prompt says it never does work itself, yet declaring its one action made GPT 5.6-luna use it on 7 of 9 turns against 0 of 9 on the envelope. Declaration turns a dormant capability into an active one and no prompt text can undo it, because the prompt already says never. `metadata/agents/.research-agent.json` sets the agent-level flag to `false` for exactly that reason. `AIAgentRunStep.NativeDualChannel` counts the other half of the same finding: turns that carried a tool call _and_ a complete Loop envelope, where the loop takes the call and discards the envelope silently.
+
+  **Provider repairs found by running it.** Gemini rejects a request whose `contents` do not begin with a user turn, and a Skip-style caller that puts everything in the system instruction sends none — every such run died on a 400 naming `function call turn comes immediately after a user turn`. `geminiMessageSpacing` now prepends a minimal user turn when the first turn is the model's. Anthropic gained a `thinking-config` module so a thinking request and tool declarations no longer contradict each other in the mapping.
+
+  **One step-save defect.** `AIAgentRunStep.StepName` is 255 characters and the loop writes a failure message into it; a 327-character provider error therefore failed the step save, and the run reported "2 step record save(s) failed" while hiding the actual error. `BaseAgent.fitStepName` truncates to the column's declared `MaxLength` read off the entity, so the row saves and the message is still readable.
+
+  **Two toolchain repairs, unrelated to the feature but on its path.** `mj dev workspace` generated a root manifest with a `pnpm` block that pnpm 10.33 ignores — settings have to live in `pnpm-workspace.yaml` — and could not express a consumer-scoped override, so a member repo's own copy of a package lost to another member's `workspace:*`. The generator now emits its settings into the workspace file, pins patched packages to their patch version, and resolves duplicate providers with `parent>child` selectors pointing at the owning member. It also relaxes `strict-peer-dependencies` from `true` to `false` in the process: a mixed workspace resolving published `@mj-biz-apps/*` against linked MJ source now reports its peer gaps and completes, where it previously failed the install on peers no member can fix. Separately, `mj app install` resolved hook modules from the repo root only, which fails whenever the app's packages live in an installed tree or a dev-workspace parent; `ResolveHookModule` now walks the installed app packages, the server/client workspaces and the repo root, and names every base it tried when it fails.
+
+  **Schema ships as one migration.** The seven migrations this work accumulated are consolidated into `V202609122036__v6.1.x__Native_Tool_Calling.sql` — hand-written DDL for all four groups above, then the CodeGen fold, generated from a from-scratch database so the tail reflects `next`'s schema rather than overwriting the procs `next`'s own migrations regenerate. The PostgreSQL counterpart is deferred to the release build, per `migrations/CLAUDE.md`.
+
+### Patch Changes
+
+- cffd286: Fix five gaps in the agent-first CLI work, found in review.
+
+  **`-f` works again on `mj test *`.** Widening `--format` to the canonical vocabulary had
+  swapped in a flag with no short form, so `mj test run -f json` — and the same on `list`,
+  `history`, `compare`, `validate`, `suite`, and `regression compare` — started failing with
+  "Nonexistent flag". Widening the accepted _values_ must not narrow the accepted
+  _spellings_; `-f` is restored on all seven. The `mj ai` family deliberately keeps no `-f`:
+  `--format` is new there, and `mj ai audit agent-run` already spends `-f` on `--file`.
+
+  **`mj ai agents run --chat` no longer hangs when spawned.** It went straight into an stdin
+  REPL without passing through the interactivity guard. It now refuses up front — before
+  loading the AI services — and points at `--prompt`, which does work headlessly.
+
+  **`mj install` fails before it writes anything.** The guard lived in the prompt handler, so
+  a non-interactive install got as far as scaffolding files and only then hit the version
+  picker it could not answer. A preflight check now refuses at the start, leaving the target
+  directory untouched. Relatedly, the CLI no longer registers its interactive prompt bridge
+  under `--yes`: it was racing the engine's own auto-resolver safety net and could turn a
+  working headless install into an exit(1).
+
+  **Machine output stays machine-readable.** `mj ai actions run --dry-run` printed coloured
+  prose regardless of `--format`, and an empty `mj ai agents list` / `actions list` returned
+  the sentence "No agents found." even under `--format=json`, which no JSON parser accepts.
+  The dry run now renders through the resolved formatter, and an empty list is `[]` in json
+  mode while keeping the readable sentence for humans.
+
+  **`mj sync file-reset` validates before it connects.** It opened a database connection and
+  loaded the sync engine before checking whether `--sections` or `--all` was supplied, so a
+  run missing them paid for a full connection just to be told which flag to pass. All input
+  resolution now happens first.
+
+- 574008d: Make the `mj` CLI agent-first, following the model the ElevenLabs CLI adopted.
+
+  **Prompting now follows the terminal.** A command prompts when stdin and stdout are both
+  TTYs — so nothing changes for a human — and does not when either is piped, when a CI
+  environment variable is set, or when `TERM=dumb`. In those cases a command that needs a
+  value it wasn't given fails immediately naming the flag that supplies it, instead of
+  blocking on stdin forever. Previously `mj sync init` had four prompts and no escape flags
+  at all, and `mj install --legacy` had two dozen; both hung an agent indefinitely. Override
+  the detection with the global `--interactive` / `--no-interactive`, or pin it for a session
+  with `MJ_CLI_INTERACTIVE`.
+
+  **Output follows the pipe.** With no explicit `--format`, a non-TTY stdout resolves to
+  `json` and all decorative chrome (banner, spinners, color) is suppressed — no flag
+  required. `MJ_CLI_FORMAT` pins the format for a shell session.
+
+  **One `--format` spelling CLI-wide.** `mj test *` (`console|json|markdown`) and `mj ai *`
+  (`compact|json|table`) now also accept the canonical `--format text|json|md`. Every
+  existing value keeps working, and an explicit legacy value still wins over inference.
+
+  **`mj usage` covers the whole CLI.** The tier-1 domain map went from 3 domains to 23, and
+  every domain now has a `mj <domain> usage` page. Entries for commands that aren't
+  `BaseCLIPlugin` plugins are derived from oclif's own manifest at runtime, so they cannot
+  drift; only the per-domain runtime budget is hand-maintained.
+
+  **Richer result envelope.** `MJCLIResult` now carries a `version` field (stamped on every
+  serialized result) and `MJCLIResultError` gains machine-readable `code` and actionable
+  `suggestion` fields. JSON output is compact when piped and pretty on a terminal.
+
+  Behavioral change: a command that used to prompt when spawned or piped now fails with an
+  actionable error instead of hanging. Interactive use at a terminal is unchanged.
+  `mj sync init` gains `--setup-entity`, `--entity`, `--dir`, and `--overwrite` to make it
+  fully scriptable.
+
+- d1d74c2: Open App CodeGen writes `CodeGen_Run_*.sql` (EntityField INSERTs) to the app's `migrations/codegen` when cwd has `mj-app.json`. Running from the MJ repo with `includeSchemas` set to an app schema fails instead of dumping metadata SQL into `MJ/migrations/v*`. If SQLOutput is enabled but no log file is open, metadata SQL is not applied. `--sql-output-dir` overrides the folder.
+- 698aeaf: A statement the converter could not parse now fails the run.
+
+  Two rules write a marker comment into their own output at the point where they knowingly could not produce SQL — `DeclareDmlBlockRule` emits `-- Could not parse: …` and `BatchConverter` emits `-- ERROR converting batch …` — and then return normally. On the legacy `migrate convert` path the batch was therefore counted as `Converted`, so a file that PostgreSQL rejects was reported as `Files: 1 (1 OK, 0 errors)` and the command exited 0. The unusable `.pg.sql` was then committed like any other.
+
+  The markers now live in one place (`CONVERSION_GAP_MARKERS`), the assembled output is scanned for exactly those strings, and matches are counted as `Gaps`. Adding a marker to that list is all a new rule needs to have its gaps reported — an emitter and the scan cannot drift apart, which is the failure mode that made this invisible in the first place.
+
+  `Gaps` is deliberately distinct from `Errors`: an error is a throw the converter CAUGHT and already counted as a failure, while a gap is output it knowingly could not produce, where the rule returned normally and nothing downstream ever learned the file was unusable. An errored batch leaves a marker too, so it is counted in both channels — the scan reports what is actually in the file.
+
+  `decideLegacyConvertExit` fails the run on gaps unless `--allow-gaps` is passed, which finally gives that flag meaning on the legacy path. It never suppresses a caught error, and when both are present the message names both.
+
+- 64bc5dc: New `mj dev workspace` command set: generates the four parent files of the multi-repo Open App dev workspace (`pnpm-workspace.yaml`, `.npmrc`, `package.json`, `turbo.json`) reproducing the manual setup it replaces, with sibling-repo member detection (+ include/exclude), an opt-out `pnpm install` step, a `status` subcommand, and never-overwrite-silently protection (`--force` writes `.bak` backups). App registration into a running host is deliberately out of scope for this MVP.
+
+  Generation also writes a `.mj-dev-workspace.json` sentinel manifest at the parent — the `generatedBy` marker, the files written, and the member repo names, with no timestamp so regenerating an unchanged workspace is byte-identical. `mj dev workspace clean` uses it as proof of ownership: it removes exactly the workspace residue (the four files, the sentinel, `pnpm-lock.yaml`, `node_modules`) and refuses to touch a parent whose sentinel is missing or not ours unless given `--force`, so a hand-made workspace can't be torn down by accident. `--dry-run` lists what would go without deleting, `.bak` backups are always kept, absent paths are reported as already gone rather than failing, and `status` now reports whether a sentinel is present.
+
+  All three commands bind `--dir` to the `MJ_DEV_WORKSPACE_DIR` environment variable, so a shell that exports it once can drive generate/status/clean without repeating the path; an explicit `--dir` still wins, and `status` reports which of flag, environment, or default supplied the directory it used.
+
+  `mj dev usage` joins the progressive-disclosure surface: `dev` now appears in `mj usage`, and the tier-2 command documents each dev command's flags, examples, and runtime expectations — including the rules an agent would otherwise have to guess (the parent must be a plain directory rather than a git repo root, how members are detected, what the sentinel gates, and that a shell declares its own auth-SDK peers). Because the dev commands are plain oclif commands that must stay bootstrap-free rather than `BaseCLIPlugin` plugins, `@memberjunction/cli-core` gains `CLIPluginRegistry.RegisterUsage()` so a command shipping inside the CLI can declare usage without being plugin-backed; plugin-declared usage still wins on a key collision.
+
+  The generated `.npmrc` carries no `public-hoist-pattern[]` block. The 78-entry hoist set the manual setup carried was written for the npm-hoisted era; an attribution audit of all 78 entries against the monorepo found none that still needs hoisting — every package an MJ library imports is declared by that library, and every third-party peer relationship in the set is satisfied by a real declaration, because pnpm's strict layout forced those fixes during the pnpm conversion. The only residue is the auth SDK family, which MJ correctly exposes as `peerDependencies` of `@memberjunction/ng-auth-services` because the choice of provider belongs to the shell; the command now prints that as guidance instead of hoisting the whole family.
+
+- 4acaeed: `mj dev workspace` now reads each member's committed `mj-app.json` and registers every
+  `packages.client[]` and `packages.shared[]` entry in the generated parent `package.json` as
+  `dependencies` at `workspace:*` — the same set, at every role, that the host emits into
+  `dynamicPackages.client` and that `mj codegen manifest` turns into imports in an app shell's
+  generated class-registrations manifest. Unmet shell-provided peers of those packages are reported
+  per shell with the version the parent already pins (found under per-major override keys too), and
+  `mj dev workspace doctor` gains a check that a member's declared client packages are linked at the
+  parent — scoped to actual workspace members, and skipped until `pnpm install` has run there. Fixes
+  a page-load resolve failure that presented with a completely green build (#4364).
+- 41b0d28: Load Open App server packages in every MJ process, not only MJAPI (#4199).
+
+  `mj sync push` (and `mj app …`, `mj test`, the MCP/A2A servers, the integration-test bootstrap)
+  never imported an installed app's server package, so `Metadata.GetEntityObject` handed back a
+  generic `BaseEntity` for the app's entities and every custom `Save()`, validation rule and
+  lifecycle hook was silently skipped — while MJ core's own server subclasses, loaded through the
+  lite manifest, did run. New `@memberjunction/dynamic-packages` extracts the loader (and the
+  host-anchored import) out of `server-bootstrap` into a package with no MJ runtime dependencies,
+  and each host is now one `LoadDynamicPackages({ processId })` call. ServerBootstrap consumes it
+  with two deliberate behaviour changes: it no longer attempts to import the Angular forms package
+  into Node, and when an `mj-app.json` sits beside its `mj.config.cjs` (an Open App repo running its
+  own dev host) it now loads that app's server packages and resolver paths too.
+
+  `dynamicPackages.server[]` stays the single list `mj app install` writes; when both it and an
+  `mj-app.json` name a package, the config entry decides `Enabled` and scoping while the manifest's
+  on-disk location remains the resolution fallback. Entries gain optional
+  `Processes` / `ExcludeProcesses` (process IDs or prefixes: `cli`, `cli:sync`, `cli:sync:push`,
+  `mjapi`, `mcp`, …) and the section gains an optional `policy` map, so a package can be scoped to
+  just `mj sync` or switched off for `mj migrate`. `MJ_DYNAMIC_PACKAGES=none` and the global CLI
+  flag `--no-app-packages` (declared in `--help`) disable loading for one run — for app packages AND the
+  host's own generated packages; MJ core's classes still load from the manifest. The `mj` prerun hook
+  publishes its process id through `MJ_DYNAMIC_PACKAGES_PROCESS` so the nested `ai-cli` /
+  `testing-cli` bootstraps apply the same scoping and policy. A package already loaded in the process
+  is handed back from cache without re-running its startup export. New guide:
+  `guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`. `mj sync push` now warns, once per entity,
+  when it is about to write with a `BaseEntity` because no subclass is registered.
+
+- fd0a019: Follow-ups to the dynamic-package loader (#4199) from testing it end to end:
+  - The `mj` CLI's config schema no longer requires `AppName` on hand-authored `dynamicPackages.server[]` entries and accepts every `policy` value the loader accepts, so the README's own examples no longer make `mj migrate` / `mj clean` / `mj app check-updates` abort with a misleading "Database credentials are missing" error.
+  - A workspace member found on disk via `mj-app.json` but not yet built is reported as not-found (with the missing entry file named) instead of as a load failure that warned on every command.
+  - The standalone `mj-ai` / `mj-testing` provider bootstraps log through a new `StderrDynamicPackagesLogger`, so `--format=json` / `--output=json` stdout is no longer prefixed with loader progress lines.
+  - README: scoping examples use `cli:codegen` instead of `cli:migrate` (migrate is a light command that never loads app packages), and mode `none` is documented as skipping the host's generated packages too.
+
+- dec0349: New `mj dev workspace doctor`: a read-only health check for a generated cross-repo workspace that prints PASS/WARN/FAIL/SKIP per check and exits non-zero on any failure — including a one-copy census of the parent package store that fails when more than one version of `@angular/core`, `@angular/common`, `@angular/compiler`, `rxjs`, `zone.js`, `@memberjunction/core` or `@memberjunction/global` is installed.
+- e5063c5: `mj dev workspace`: generate member globs from each member's own `pnpm-workspace.yaml` instead of a hardcoded `packages/*`. Fixes the silent split-registry failure where MJ's 42 nested globs (248 packages) fell out of the generated workspace and resolved from npm (#3795). Positive globs must be packages-rooted; negation guards are always kept and re-prefixed; a member whose workspace file yields no packages-rooted globs now triggers a loud warning instead of a silent `packages/*` fallback.
+- beae186: Follow-up to the Open App client bootstrap fix: number the generated namespace-import aliases off their position in `OPEN_APP_CLIENT_MODULES` rather than off the entry index, so the declared aliases and the array contents share one counter by construction. They agreed before, but nothing pinned that — and any skew between the two emits an array element naming a variable that was never declared, which surfaces as a TS2304 in the host app's build rather than a CLI test failure. Adds regression tests for mixed enabled/disabled entry sets and the all-disabled case, and records in the emitter's docs that the `globalThis` anchor is a deliberate variant of (not the same mechanism as) the `CLASS_REGISTRATIONS` array-spread anchor, and that a package declaring `"sideEffects": false` while self-registering classes is the underlying false declaration this block defends against.
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+
+  **Superseded in part by #4292**: the "insert at the live BaseView ordinal after parking existing sequences" step was reverted. CodeGen inserts carry an apply-time `MAX(Sequence)` expression and there is no park; the post-migrate heal steps described above are unchanged.
+
+- 23c2521: Close silent-failure gaps in Open App config writes, class registration, and update checks — and
+  fix the first real collision the new class-registration diagnostic found.
+
+  `dynamicPackages` idempotency matched the whole config file rather than the target array, so a
+  `shared` package — which must be written to both `server` and `client` — had its client insert
+  skipped by the server entry written moments earlier. The package never reached
+  `dynamicPackages.client`, so its `@RegisterClass` components were tree-shaken out of the browser
+  bundle with no error raised anywhere. The check is now scoped to the target array's body.
+
+  Upgrades were add-only, so `mj.config.cjs` converged on the union of every version ever installed
+  and a package dropped in v2 kept being bootstrapped. `PruneDynamicPackagesNotInManifest` now runs
+  on the upgrade path, after the adds; surviving entries are left byte-identical so an operator's
+  `Enabled: false` is not silently reset, keep-sets are per-array, and an entry shape that cannot be
+  parsed is a no-op rather than a guess. A renamed `startupExport` is retargeted in place — keying
+  only on package name left the old export name in the config forever, and ServerBootstrap then reads
+  `mod[StartupExport]`, gets `undefined`, skips it because it is not a function, and still logs
+  `(ran <old name>)`. The add-then-prune order is chosen for the failure case: these are two writes
+  to the same files with no rollback between them, and adding first leaves that window holding
+  (old ∪ new), so a server that restarts mid-upgrade still finds every entry it needs. Pruning first
+  would leave a subset of both versions and the app's registrations would vanish.
+
+  `@RegisterClass` passes `priority = 0`, which routes to the auto-increment branch, so a later
+  registration always wins — correct for an inheritance chain, silently wrong for two unrelated
+  classes colliding on a key. Only `priority > 0` ever warned, so in practice nothing warned.
+  `ClassFactory.Register` now warns naming every prior unrelated registration for that
+  `(base class, key)` pair, using a new `AreClassesRelated` that compares by name as well as identity
+  so a module loaded through two paths does not read as a collision. Registration behavior is
+  unchanged; the warning is diagnostic only. Measured over a realistic MJAPI load — 1,318 real
+  registrations across 697 `(base, key)` groups — it fires on exactly one pair, with no false
+  positives.
+
+  That one pair was a real bug, fixed here. `MJConversationDetailEntityServer` and
+  `MJConversationDetailEntityExtended` both registered for `BaseEntity` under
+  `'MJ: Conversation Details'` as siblings, each extending the generated entity directly. The server
+  package loads last, so it won outright and the Extended class's `Save`/`Delete` permission gate —
+  the check that only a conversation's owner may set `UserRating`/`UserFeedback`, and that a
+  non-owner without a resource grant cannot write at all — never ran. The gate is explicitly written
+  to run server-side (`ProviderType === 'Database'`), which is exactly where it was being shadowed
+  out. `MJConversationDetailEntityServer` now extends `MJConversationDetailEntityExtended`, so the
+  edit-flag logic and the permission gate compose instead of one replacing the other. The resolved
+  class is unchanged; only its base is.
+
+  `mj app check-updates` dropped the per-repo `TokenMap` that `install` and `upgrade` both use, so
+  private repos reported "up to date" forever; dropped each app's `Subpath`, so a multi-app repo
+  reported a **sibling app's** version as this app's latest; and let one throwing app kill the sweep
+  or vanish from a report that still concluded "All apps are up to date". The loop moved into a
+  testable `CheckAppsForUpdates` helper with the version lookup injected, and failures are collected
+  per app and reported.
+
+  A lookup that returns no version at all is now reported as `Unresolved` — a third outcome, distinct
+  from both an update and a failure — and the green "All apps are up to date" line is printed only
+  when every app actually produced an answer. Every app in the list is installed, so it resolved from
+  a real ref once; finding no version now means the resolver and the repository disagree. This matters
+  because `ListGitHubTags` reads a single page of the GitHub tags API: against
+  `MemberJunction/Integrations` (374 tags), the scoped `<subpath>@<semver>` tag line for every
+  installed connector sits past page 1, so all nine apps resolve to nothing. Without this, scoping the
+  lookup by `Subpath` would have traded a wrong-but-obvious answer for a confident false green.
+  Pagination itself is fixed separately in #3353, which should land with or before this.
+
+- ac0275b: Seed the BIT/BOOLEAN registry from the live catalog when baking PostgreSQL migrations. The registry was collected only from the migration set's own baseline, which declares the app's tables and never MJ core's — so an Open App migration seeding `__mj.EntityField` had no type information for `AllowsNull` / `IsVirtual` / `IsPrimaryKey`, emitted bare `0`/`1`, and failed with `column "AllowsNull" is of type boolean but expression is of type integer`, halting the whole bake chain. `--bake-codegen` already requires a live connection, so `information_schema` is now read for the core and app schemas and merged in via the new `MJPostgresTranspiler.addExtraBitColumns()`. Also corrects the registry's type: entries are `[table, column]` pairs (`BitColumnRef`), not the `string[]` the signature claimed — a `"Table.Column"` string would have serialized fine and matched nothing.
+- 517d18b: Resolve `${mjSchema}` when converting migrations. `${flyway:defaultSchema}` (the app's own schema) was substituted but `${mjSchema}` (MJ core) was not, so the macro survived into the emitted `.pg.sql` and into the SQL `--bake-codegen` executes against the working database — failing with `relation "${mjSchema}.Entity" does not exist` and halting the entire bake chain at the first migration that referenced core. Adds a `coreSchema` option to `convertMigration` and `IncrementalBaker`, plus a `--core-schema` CLI flag (default `__mj`). The two are deliberately separate values: an Open App names itself with `${flyway:defaultSchema}` and core with `${mjSchema}`, and for every app those differ.
+- 8d0d45a: build: declare dependencies that npm's hoisting was silently supplying, as part of the monorepo's cutover to pnpm.
+
+  Under npm, a package could import a module it never declared and still resolve it, because npm flattens everything into the workspace-root `node_modules`. pnpm's strict, isolated linking gives a package only what it declares — so each of these was a latent bug that happened to work. They are fixed here independently of the package manager; nothing about the published API changes.
+
+  Added declarations: `@types/mssql` (codegen-lib, sqlserver-dataprovider, testing-cli, testing-integration, react-test-harness), `@types/pg` (codegen-lib), `@types/express` (messaging-adapters, server-extensions-core), `@types/fs-extra` (codegen-lib), `@types/babel__traverse` (react-linter), `ora` (ai-cli), `glob` (react-test-harness), `tslib` (ng-bootstrap, which compiles with `importHelpers`), `@auth0/auth0-spa-js` (ng-auth-services), `@memberjunction/core-entities` + `@memberjunction/global` + `@memberjunction/aiengine` (cli), and `@memberjunction/ng-react` (ng-explorer-core, reached from a generated file).
+
+  Two changes are more than a declaration:
+  - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
+  - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
+
+  (A third change in this set applied to `@memberjunction/scheduled-actions-server` — dropping `@types/axios`, a deprecated stub carrying no type definitions. That package has since been removed from the workspace, so its entry is no longer part of this changeset.)
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [6dbe524]
+- Updated dependencies [834f8d7]
+- Updated dependencies [cffd286]
+- Updated dependencies [574008d]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [f5e91a7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies
+- Updated dependencies [d735407]
+- Updated dependencies [4586215]
+- Updated dependencies [d430fa5]
+- Updated dependencies [319a7ed]
+- Updated dependencies [2f305df]
+- Updated dependencies [197fdf8]
+- Updated dependencies [099b4d9]
+- Updated dependencies [cd520e2]
+- Updated dependencies [5ef97ff]
+- Updated dependencies [62e0707]
+- Updated dependencies [6673f51]
+- Updated dependencies [c49a34a]
+- Updated dependencies [d1d74c2]
+- Updated dependencies [0312b22]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [698aeaf]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [407f2f7]
+- Updated dependencies [1940a4d]
+- Updated dependencies [489aecd]
+- Updated dependencies [64bc5dc]
+- Updated dependencies [07cb22e]
+- Updated dependencies [8643a3d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [41b0d28]
+- Updated dependencies [fd0a019]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [9fe3019]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [047a80f]
+- Updated dependencies [9699d0e]
+- Updated dependencies [887ba9c]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [ddf8621]
+- Updated dependencies
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [6bb2e1f]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [8ec1515]
+- Updated dependencies [eb962a1]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [394d276]
+- Updated dependencies [50860ad]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [d6e854b]
+- Updated dependencies [956f0e0]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [b42c125]
+- Updated dependencies [f4fedab]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [328a98d]
+- Updated dependencies [a4bb2f7]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [7857d8e]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [49f3592]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [23c2521]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [aa4fbe9]
+- Updated dependencies [ac0275b]
+- Updated dependencies [517d18b]
+- Updated dependencies [9864d86]
+- Updated dependencies [1d3ab82]
+- Updated dependencies [a788e27]
+- Updated dependencies [44fca09]
+- Updated dependencies [2741d46]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [048c5ce]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [2e2879e]
+- Updated dependencies [6b971ab]
+- Updated dependencies [80fcb61]
+- Updated dependencies [b46330e]
+- Updated dependencies [8b78695]
+- Updated dependencies [cdd25c0]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [512bb53]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [1100077]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [bae672c]
+- Updated dependencies [cda0187]
+- Updated dependencies [2741d46]
+- Updated dependencies [f2f1491]
+- Updated dependencies [a1a8989]
+- Updated dependencies [e76b195]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [ac96bb6]
+- Updated dependencies [190db45]
+- Updated dependencies [d8adda1]
+- Updated dependencies [88f8898]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/sql-converter@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/aiengine@6.1.0
+  - @memberjunction/ai-cli@6.1.0
+  - @memberjunction/cli-core@6.1.0
+  - @memberjunction/codegen-lib@6.1.0
+  - @memberjunction/server-bootstrap-lite@6.1.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0
+  - @memberjunction/generic-database-provider@6.1.0
+  - @memberjunction/standards@6.1.0
+  - @memberjunction/metadata-sync@6.1.0
+  - @memberjunction/installer@6.1.0
+  - @memberjunction/testing-cli@6.1.0
+  - @memberjunction/open-app-engine@6.1.0
+  - @memberjunction/dynamic-packages@6.1.0
+  - @memberjunction/sqlglot-ts@6.1.0
+  - @memberjunction/db-auto-doc@6.1.0
+  - @memberjunction/query-gen@6.1.0
+  - @memberjunction/config@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- 076fa5d: Add a provider-neutral native tool-calling surface to `BaseLLM`, implement it in the Anthropic, OpenAI and Gemini drivers, give the prompt stack its own configuration bag, and gate the whole thing behind metadata in the prompt runner . MJ's LLM providers have described agent actions as prose in the system prompt and parsed a JSON envelope back; newer agentically-trained models increasingly fight that, and the prose action catalog is most of a 56–104KB Loop system prompt. This lands the plumbing, end to end and switched off. **Nothing in the tool-calling path changes behavior on merge.** The catalog now records which models and vendor servings _can_ do native tool calling — that is the audit this branch produced — but every one of them carries `LLM.DefaultToNativeToolCalling: false`, no prompt sets `LLM.UseNativeToolCalling`, and no MJ caller passes tools, so the gate resolves false on every existing path and each run takes exactly the code it takes today. Capability is a statement of fact and is safe to ship; policy is the switch, and it is off. The first behavior change is a deliberate one: flipping the policy on a specific model, and a caller that supplies tools.
+
+  **Model selection does change on merge, and is not gated.** Query Builder and the Research Agent family (7 agents, 8 prompts) move from `Gemini 3.5 Flash` to `Gemini 3.8 Flash` — 16 `ModelID` changes across 8 prompt seed files. The Flash-Lite rows that outranked them are set `Status: "Inactive"` rather than deleted, because `mj sync push` never deletes; removing the rows from JSON would have left those agents on Flash-Lite in every existing database. Once this metadata is pushed, those eight prompts are served by a different model than they are today.
+
+  `ChatParams` gains `tools` (declarations as JSON Schema — the one format all three vendors accept), `toolChoice` (`'auto' | 'none' | 'required' | { name }`) and `parallelToolCalls`. Responses normalize to `ChatCompletionMessage.toolCalls` with **parsed** arguments plus a `'tool_calls'` finish reason; a turn can carry text _and_ calls, because all three providers structurally allow it, and nothing may assume text exists on a tool-call turn. Multi-turn tool use round-trips through a new `tool` message role and `tool_result` content block, which reuse the existing content-block serialization so tool turns persist correctly in message logs. `BaseLLM.SupportsTools` declares whether a driver has the mapping (default `false`); a driver without it ignores declarations rather than failing.
+
+  **Schema — a JSON bag at the prompt layers.** `AIPrompt.PromptConfiguration` and `AIPromptModel.PromptConfiguration` (`nvarchar(max) NULL`) mirror the model catalog's `ModelConfiguration` cascade, resolving prompt-model over prompt over catalog. This resolves the plan's open question in favour of a bag over bit columns: `AIPrompt` already carries fifty-odd columns, and a bag lets the shape keep adapting without a migration per knob — a knob graduates to a real column when it needs a foreign key or becomes a first-class platform concept. It is named `PromptConfiguration` rather than `Configuration` because `AIPromptModel.ConfigurationID` already makes CodeGen emit a `Configuration` display column in the base view, which a same-named base column would collide with.
+
+  **One source of truth for the modality sections.** `metadata/entities/JSONType-interfaces/IAIConfiguration.ts` now defines `LLMConfigurationSettings`, `RealtimeConfigurationSettings`, `VisionConfigurationSettings` and `AudioConfigurationSettings` once, plus one outer type per column (`IAIModelConfiguration`, `IAIPromptConfiguration`, `IAIPromptModelConfiguration`); all five `EntityField` rows point at that single file. It has to be one file because `JSONTypeDefinition` is stored verbatim and emitted inline per entity — a definition cannot import a sibling. The package-side mirror in `@memberjunction/ai` matches, keeping `AIModelConfiguration` and the existing resolver exports intact (the old section names remain as deprecated aliases). Two typed flags join the `LLM` section: `SupportsNativeToolCalling` (capability — a hard gate) and `DefaultToNativeToolCalling` (policy), joined at the prompt layers by `UseNativeToolCalling` (preference). All are tri-state — absent means _inherit_, distinct from an explicit `false` that overrides a lower layer.
+
+  **Guard.** An assistant turn must carry `toolCalls` for the `tool_result` answering it to be valid; forgetting to copy them is the easy mistake, and Anthropic rejects it with an error naming only an opaque id. `validateToolConversation` now catches orphaned results at the MJ boundary with a message that says what to fix, run from `BaseLLM.ChatCompletion` for tool-capable drivers.
+
+  **Shared conformance suite.** `RunLLMToolCallingConformanceSuite` in `@memberjunction/unit-testing` asserts the provider-independent half of the contract — capability declaration, parsed arguments, the `'tool_calls'` finish reason, text-and-calls coexistence, a text-free call counting as success, the streaming downgrade, and the orphan guard — and is adopted by all three tool-capable drivers. It is a separate entry point from the streaming/cancellation suite so a driver can conform on tools without first scripting a mock for every streaming path. Provider-specific request mapping stays in each driver's own tests.
+
+  Per-provider notes. Anthropic coalesces consecutive tool turns into the single user turn its API requires, so parallel-call results are not orphaned by the role-alternation filler, and drops the empty text block a tool-only turn would otherwise send. OpenAI expands one tool turn into its per-result `tool` messages and surfaces a call whose arguments are malformed JSON rather than dropping it — the agent loop must be able to see a bad call, not silently nothing. Gemini's "no output received from model" guard now accepts a tool call as output; without that, every clean text-free tool call would have been reported as a failed generation. Drivers extending `OpenAILLM` inherit the mapping (OpenRouter, xAI, Zhipu, MiniMax, LlamaCpp); `ai-inception` overrides `SupportsTools` back to false, since Mercury Edit is a next-edit-prediction model on a custom endpoint that takes no `tools` parameter.
+
+  Native tool calling is non-streaming: when a caller requests streaming with tools declared, `BaseLLM` takes the non-streaming path and records `streamingSuppressedForTools` on the result, mirroring the existing streaming-unsupported fallback.
+
+  `ai-cerebras` and `ai-lmstudio` pass MJ roles straight to SDKs that accept only system/user/assistant; both now narrow through the new `toClassicChatMessageRole` helper, which maps `tool` to `user` — the role a tool result reads as to a provider with no tool support.
+
+  **Gating (layer 3).** `AIPromptRunner` is the only layer that reads metadata to decide whether tools go out. The decision itself is a pure function, `ResolveNativeToolCalling`, so the design's truth table is asserted directly rather than through the runner. It resolves inside `executeModel` — per model call, not once per run — because failover can move a run to a (model, vendor) whose capability differs, and the failover loop already threads each candidate's own `AIPromptModel` row so a candidate with no such row contributes no override. Callers supply tools through new `AIPromptParams.tools` / `toolChoice` / `parallelToolCalls`; the runner never invents them. The gate is wrapped so that any failure to resolve configuration degrades to the envelope path — an opt-in enhancement must never fail a run that would otherwise succeed.
+
+  **Instrumentation and fallback (layer 4).** New `AIPromptRun.ToolCallingMode` column (`'Native' | 'Envelope' | 'NativeFallback'`, CHECK-constrained) records which path each run took, so the envelope-vs-native comparison is queryable from run history. It is a column rather than a bag key precisely because its purpose is to be filtered and grouped across many runs. When a native call fails in a _tools-specific_ way — the provider rejecting the declarations, an unusable tool call, a tool-related discarded turn — the runner retries once with tools stripped and records `NativeFallback`. That classification is deliberately narrow and biased toward missing a tool failure rather than catching an unrelated one: a rate limit or context-length error must reach the existing retry/failover logic unchanged. The retry shares the original call's timeout budget rather than silently doubling the caller's timeout.
+
+  **Provider probe.** `integration-test-suite/rigs/native-tool-matrix.ts` sweeps each tool-capable driver directly against live providers across {no tools | auto | none | required | named} × {responseFormat Any | JSON} × an optional thinking axis, recording call well-formedness, parallel count, text/call coexistence, envelope compliance, forcing adherence, finish reason and prompt tokens. It answers the plan's §5.6 and §9.3 open questions with data rather than inference, and it is deliberately not a test: it reports rates, asserts nothing, is dry-run by default, and `mj test` never dispatches it. The evaluators live apart from the runner in `src/native-tool-matrix/` as framework-free pure functions with 37 unit tests, so the measuring instrument is verified on every PR without spending a token. The first sweep against Google found: forcing semantics are 100% honored; **forced tool choice combined with JSON mode is a hard 400 on every current Gemini model**, not just 2.x as the audit had it, which constrains the per-step forcing policy; and Gemini 3.7 Flash under JSON mode answers a tool question natively while ignoring the requested envelope entirely — the malformed-response mechanism reproduced in three calls at the driver layer. It also confirms two PR 2 decisions were load-bearing: text NEVER accompanied a tool call on Google (so the "no text on a tool-call turn" rule is the only case there), and the extended Gemini empty-output guard would otherwise have failed every successful tool call in the sweep.
+
+  **Prompt-exemplar audit (plan open question §9.4).** Every JSON exemplar in `metadata/prompts/` — the shapes agent prompts show models and the `OutputExample` values injected into them — was checked against `LoopAgentResponse`, the validator, and the dispatcher. 20 defects across 8 files, **13 of which made a forced retry the guaranteed outcome of following the prompt**: `message` nested inside `nextStep` on a Chat step (it is top-level; the runtime retries without it) across seven research-agent exemplars, `"type": "Action"` with `action: {name, input}` across six Codesmith exemplars — one labelled "✅ CORRECT Response" — a lowercase `"chat"` the validator accepts case-insensitively and the dispatcher then cannot switch on, and `nextStep: {type: "Success"}` beside `taskComplete: true`. Separately, `database-schema-designer.example.json` had four trailing commas and did not parse: since `AIPromptRunner` parses `OutputExample` as a validation schema and that prompt is `ValidationBehavior: 'Strict'`, **every run of `Database Schema Designer - Main Prompt` failed validation regardless of what the model produced**. Also fixed: raw newlines inside a JSON string, a `//` comment inside an exemplar, bare `...` array placeholders, and invented keys that were silently dropped (`subAgent.payload`, `suggestedResponses`, and Codesmith's `finalCode`/`result`/`iterations`, now written through `payloadChangeRequest` under the names its own `FinalPayloadValidation` requires).
+
+  To stop the class from returning, `LOOP_NEXT_STEP_TYPES` is now exported from `loop-agent-response-type.ts` with two-way compile-time checks against the interface union (a plain `readonly T[]` annotation accepts a subset, so it catches an invented value but not a forgotten one — both directions are asserted), `LoopAgentType.isValidLoopResponse` derives its accept-list from it instead of restating it, and `ai-agents` gains `loop-exemplar-conformance.test.ts`, which brace-matches every shipped exemplar out of `metadata/prompts/` — blockquotes stripped, so quoted and nested-fence exemplars are covered — and fails per offending exemplar. Full findings: prompt-exemplar audit.
+
+  **Two repairs found while building the above.** `integration-test-suite/rigs/lib/harness.ts` re-exported `createRunQueryFixtures` / `teardownRunQueryFixtures`, which had moved into this package's own `runquery-cache` checks. A named re-export of a binding the source module does not provide is an ESM _link-time_ error, so it did not fail where it was written — it took down **all six rigs** that import the shim, before a line of their own code ran, and `tsc` never saw it because `rigs/` sits outside the package's tsconfig `include`. No rig ever used either symbol; removing the two lines revives every rig (verified by linking all sixteen). `src/__tests__/rig-harness-shim.test.ts` guards it by checking each forwarded name against the package's real exports — note that merely importing the shim under vitest does **not** reproduce the failure, because Vite transforms rather than links, so the name check is the part that bites.
+
+  The matrix rig also now proves a credential before spending a sweep on it. A revoked key previously produced one identical 401 per cell — 186 across the two Claude rows — burying the real findings and reporting models as 100%-failed that were never actually asked anything; it now costs one eight-token preflight call per model, plus a mid-sweep abort after three consecutive auth failures, and the run ends by naming every unmeasured model so a partial scorecard cannot pass for a complete one. The classifier (`src/native-tool-matrix/credentials.ts`) is deliberately conservative — a rate limit, quota, unknown model or 5xx is not an auth failure, since a false positive discards a model that would have produced data — and is unit-tested against all three providers' verbatim rejection messages and against near-misses like a token count containing "1401".
+
+  **The Action→tool mapping, measured before the framework implements it — and corrected.** The matrix grew a second scenario family that builds tools from **real `ActionParam` rows** (snapshotted into a fixture so the probe stays database-free) using a faithful restatement of the Action→`ChatTool` table, then asked providers what they make of it. Two results. First, the `Scalar` → `{type: ["string","number","boolean"]}` union type — which appears to contradict §8.2's own "stay inside the cross-provider common subset" rule, since OpenAPI has no union type — measured clean: identical error counts to a conservative `{type:"string"}` arm across 192 calls, and 6/6 tool selection among three real MJ Actions. It stands as written. Second, and less comfortably, `ValueType: 'Other'` → `{type:"object"}` does **not** hold. `Run Ad-hoc Query.Query` is `Other` but carries a SQL string, and typing it as an object makes models emit `Query: {}` — a well-formed, dispatchable, useless call that no well-formedness oracle would catch. Usable arguments: **60% as specified, 100% mapped to `{type:"string"}`** on identical prompts. The mapping has been corrected (`Other`/`MediaOutput` → string; `Simple Object`/`BaseEntity Sub-Class` stay object), its "exact parity with the prose catalog" claim retracted, and the `ValueSchema`-on-`ActionParam` question reopened — the baseline turns out to recover that case only by _guessing_ a type, which is precisely what `ValueSchema` would make unnecessary. The mapping ships here as a tested rig-side module, not as the framework's generator; `observedArguments` was added to the observation record because a failed matcher says fidelity was lost while only the payload says how.
+
+  **The baseline eval harness.** The harness that has to exist _before_ the feature can be measured now exists.
+
+  `trace-validate-sub-agents` (**T1**) is implemented and registered. It was referenced by shipped metadata that never had an implementation: both stock research-agent tests weight it at 0.25 and 0.3, the engine logged `Oracle not found`, and that fraction of each test's score silently vanished while the tests reported green on the rest. It walks the run tree through the **Sub-Agent step's `TargetLogID`** rather than `AIAgentRun.ParentRunID` — the generated ORM is explicit that ParentRunID "records parentage but is not a link the tree traverses" — recursing so a required agent two levels down still counts, and gives partial credit across the `requiredAgents` / `forbiddenAgents` / `minIterations` checks a test configures.
+
+  `PromptEvalDriver` + the `Prompt Eval` test type (**T2**) evaluate ONE model decision from frozen mid-loop state. No action executes: the runner returns the reply and deterministic oracles read it. It is separate from `AgentEvalDriver` because a loop confounds the measurement — a run that recovered on iteration three answers a different question than "does this model, in this state, choose action B". Three easily-missed execution details are handled explicitly: an explicit `contextUser` (#3251), `AIEngine.Config()` before the first run, and `WaitForPendingPromptRunSaves()` before any oracle reads a prompt run back.
+
+  `agent-decision-match` and `response-well-formed` (**T3**) are the decision oracles. The first reads a decision off **whichever channel the model used** — envelope `nextStep.actions[]` or native `ChatToolCall[]` — and scores it against an encoding-independent expectation, which is what makes a baseline cell and a native cell comparable on an identical corpus case. Its details carry the components apart (decision kind / action accuracy / param fidelity / per-matcher outcomes) so §6.1's metrics aggregate out of stored `ResultDetails` without re-running a single model call. The second measures the malformed class on its own, because "malformed rate fell" and "decision accuracy rose" are different claims.
+
+  The corpus (**T4**) ships as golden files under `metadata-optional/prompt-eval-corpus/` with a validating loader, eight starter cases spanning the plan's categories against real shipped agents, and a generator that expands corpus × matrix into `MJ: Tests` records with stable per-cell IDs (so regeneration updates rather than orphans, and `mj test history` survives) plus an estimated-token manifest per run. Verified end to end: 8 cases generate, push, and validate through the real `mj test` pipeline against the registered driver.
+
+  Everything scoring-related lives in `Engine/src/eval/` as **framework-free pure functions** per test plan §2.1 — no import from the testing engine anywhere in that directory — so the same logic runs behind the `IOracle` wrappers today and would run unchanged under the documented bespoke-runner fallback. 45 unit tests pin the instrument, including the rule that a corpus expectation may never name `nextStep` or `toolCalls`.
+
+  **Corpus and harness verification.** The corpus is 57 golden cases spanning every category the test plan's §4.3 table names, written against the real shipped agents and their actual action names: first-step selection, mid-loop params, error recovery, disambiguation across Sage's 26-action catalog, parallel fan-out, sub-agent dispatch through Marketing's five specialists, terminal synthesis, clarify, payload change, forced control flow at the iteration ceiling, and six adversarial cases that specifically detect the malformed shapes MJ's own exemplars taught before the audit.
+
+  A pinned matrix (`matrix/envelope-baseline.json`) fixes the (model, vendor) pairs by catalog ID rather than by name, so a rerun months later addresses the same rows; expanding corpus × matrix yields **399 test records, all validating through `mj test`**.
+
+  `prompt-eval-harness` (IT87) verifies the instrument in the deterministic tier, for zero tokens: every case names capabilities that actually exist (PE1 — which caught two unsatisfiable cases the moment it was written), the generated records have not drifted from the golden files AND cover the pinned matrix in full (PE2 — which caught real drift on its first real run, and whose matrix half exists because a suite generated against the wrong matrix passes every other check while measuring the wrong models under the right name), every expectation is decidable (PE3), a scripted correct reply scores correct through the **real `AIPromptRunner`** with `TestLLM` registered over the driver classes (PE4), five distinct malformed shapes are provably caught (PE5), and a wrong-but-well-formed reply separates decision accuracy from malformed rate (PE6). PE5 is the load-bearing negative: a harness that cannot fail on demand makes every rate it reports a fiction.
+
+  One evaluator gap closed along the way: an undispatchable `nextStep.type` — `'Success'`, or a lower-cased `'chat'` — previously scored as well-formed even though the runtime rejects it into a forced Retry. `evaluateWellFormed` now checks the raw step type against `LOOP_NEXT_STEP_TYPES`, derived from the agent framework rather than restated.
+
+  The deterministic tier is 65/71 with the new bundle in it, 558 oracle results, zero failures.
+
+  **The cost manifest is measured, not guessed.** It originally priced a run at a flat 12,000 tokens of composed prompt per call. Measuring the real templates showed that to be **38% low** — the Loop agent-type system prompt _alone_ is ~12,700 tokens (50KB, consistent with the issue's 56–104KB claim) before any agent's own prompt or its action catalog. Per-agent sizes now range 12.7k (an agent with no actions) to 33k (Report Writer), and the generator reads them from a committed `matrix/prompt-size-baseline.json` regenerated by `rigs/measure-prompt-sizes.cjs`. A full baseline run at N=20 is **~158M prompt tokens, not ~96M** — and that still reads low, since it is chars/4 over raw metadata rather than the rendered catalog. A cost manifest wrong by 64% is worse than none, because it gets believed.
+
+  **The matrix is pinned to the deployed configuration, at N=3, for ~$11.** Two problems with the first pinning, both caught by asking what it would cost. First, it pinned one model per generation per developer — right for the provider probe, wrong for a baseline whose stated job is _"the quantified current-state of the framework"_: only 2 of 15 corpus agents had even one of those models in their real configuration, so it would have measured models nobody deploys. The cells are now the (model, vendor) pairs the agents actually run on, ranked by adoption, led by **GPT-OSS-120B on Cerebras — which all 15 corpus agents list**.
+
+  Second, N=20 was over-specified. The plan justifies it from an experiment that ran 40 repetitions of _one_ prompt, where repetition was the only source of variation; here the corpus is the variation, and 57 cases × N=3 gives 171 observations per cell — well past what a two-proportion test on the aggregate needs. Escalating to N=20 belongs on the (case, cell) pairs that come back non-unanimous, which is the only place more repetition resolves anything.
+
+  GPT 5.5 / 5.5 Instant are excluded on cost: at \$5/\$30 per 1M they were \$121 of a \$196 run, two thirds of the bill for one sixth of the cells. Aggregator pairs (Vertex, Bedrock, OpenRouter, Azure) are deferred to a run where vendor divergence is the thing being measured.
+
+  The manifest now prices in **dollars per cell**, reading `AIModelCost` at pin time so the estimate works offline — a token count nobody can convert is a cost control nobody uses. The full baseline: **285 cells, ~$11.36**, down from $196.
+
+  **A finding that outlives the baseline:** `CerebrasLLM` and `GroqLLM` extend `BaseLLM` directly rather than `OpenAILLM`, so `SupportsTools` is `false` on both. GPT-OSS-120B — the single most-deployed model across the corpus agents — **cannot do native tool calling in MJ today at all**; the gate would resolve `Envelope` whatever metadata is set. Irrelevant to an envelope-only baseline, but it means the primary deployed configuration is not reachable without driver work on those two providers.
+
+  **Native tool calling on Cerebras and Groq — the deployed workhorse.** `CerebrasLLM` and `GroqLLM` extend `BaseLLM` directly rather than `OpenAILLM`, so unlike OpenRouter/xAI/Zhipu/MiniMax/LlamaCpp they inherited nothing and reported `SupportsTools: false`. That mattered more than the provider count suggests: **GPT-OSS-120B on Cerebras is the single most-deployed model across MJ's shipped agents** (all 15 in the eval corpus list it; Groq is second at 11), so the one configuration the feature most needed to reach was the one it could not — the capability gate resolved to the envelope no matter what metadata said.
+
+  Rather than write the mapping a third and fourth time, it now lives once in `@memberjunction/ai` as `openAICompatibleTools.ts`, and **OpenAI delegates to it too**. That format is the de-facto standard — Groq, Cerebras, Fireworks, xAI, Together, LM Studio, DeepSeek, Moonshot, Z.AI, MiniMax and OpenRouter all speak it — and the mapping has three details that are easy to get quietly wrong: arguments cross the wire as a JSON **string**; one MJ tool turn expands into **N** provider `tool` messages; and a call with malformed arguments must be **surfaced**, because an agent loop that sees nothing cannot tell "said nothing" from "said something broken". Four copies of that would drift. The wire types carry an open index signature deliberately — several provider SDKs declare their own with one, and a closed type is not assignable to an open one.
+
+  Two provider-specific facts are encoded rather than assumed. **Groq does not support parallel tool calls on the gpt-oss family** — precisely what MJ deploys most — so `parallel_tool_calls` is forwarded only when a caller sets it explicitly, never inferred. **Cerebras can emit a call to a tool that was never declared**; the shared extractor surfaces it rather than dropping it, so the agent loop can reject it by name instead of receiving silence.
+
+  One latent bug fixed on the way: Groq's converter appended a dummy `"OK"` user message whenever the last turn was not from a user. After tool results that would have separated them from the assistant call they answer — the same hazard as the Anthropic alternation filler — so the filler now skips a turn ending in tool results. Its multimodal branch also cast the role through with `as`, which would have sent a raw `tool` role the API rejects; it narrows through `toClassicChatMessageRole` now.
+
+  Both drivers adopt `RunLLMToolCallingConformanceSuite`, and their `@memberjunction/ai` test mocks import the real mapping by path rather than re-mocking it — a mocked copy would be exactly the second implementation the shared module exists to prevent.
+
+  **Reachable, not enabled.** This makes the deployed configuration _reachable_; whether anything uses it is the policy flag's business, and that ships off (see the capability audit below).
+
+  **`reasoning_effort` gained the two levels it was missing.** `OpenAILLM.getReasoningLevel` accepted `low`/`medium`/`high` or a number and threw on anything else, so OpenAI's `xhigh` and `none` were unreachable through MJ — verified against the live API, whose own rejection message enumerates `none, low, medium, high, xhigh`. Both are now accepted **by name only**: MJ's numeric 1-100 scale is a cross-provider convention whose three bands are replicated in the Groq and Cerebras drivers, so re-banding it to make room would silently reclassify every documented `effortLevel: 85` and mean something different per provider. `AIPromptParams.effortLevel` widens to `number | string` to carry a named level (`.toString()` on the runner's path already handled both); `AIPromptRun.EffortLevel` is a numeric column with a 1-100 CHECK, so a named level is deliberately not persisted there. The GPT-OSS path writes `Reasoning: <level>` into the system prompt rather than sending an API field, and harmony defines only three levels, so it clamps `xhigh`→`high` and `none`→`low`.
+
+  **The hybrid agent loop, opt-in and inert.** Actions are now declarable as native tools and a tool call _is_ an Actions step. `buildActionToolSet` (§8.2) maps `ActionParam` metadata onto JSON Schema using the two mappings measurement settled — `Scalar` keeps the union type, and every opaque `ValueType` becomes `string` rather than `object`, which took usable arguments from 60% to 100% on `Run Ad-hoc Query.Query`. Only `Input`/`Both` params are declared, and a post-sanitization tool-name collision is a hard error at build time, because two Actions sharing one tool name would dispatch whichever registered last — a routing bug that presents as a model error. `LoopAgentType` checks native tool calls **before** the envelope (§8.1): Measurement showed that a model given tools answers through them and stops emitting the envelope entirely on some providers, so the two cannot be asked for in one turn. A call naming an undeclared tool is a Retry naming it, never a silent drop — Cerebras does this at roughly one forced call in six. The loop template drops its action catalog and the `'Actions'` step type under `_NATIVE_TOOL_CALLING` (§8.4), which is where the 56–104KB prompt reduction comes from; the flag is set from the gate's **real** decision before rendering, not from the caller's intent, so a prompt can never suppress its catalog while the model receives no tools. `AIAgentRunStep` gains `ToolCallingMode` and `NativeToolCallCount` (§8.5) so a comparison groups by its independent variable instead of reconstructing it through a lossy join.
+
+  **The capability audit, and the policy that ships off.** `metadata/ai-models/.ai-models.json` now carries `ModelConfiguration.LLM` on **139 model rows** — `SupportsNativeToolCalling: true`, plus `NativeControlFlow: 'implicit'` and `NativeToolResults: true` describing which protocol that model can hold — and **83 vendor-level rows** that override it to `false` for a serving path verified not to accept tools. Those three are statements of fact about a model, and the gate treats capability as a hard gate that no policy can override, so recording them turns nothing on. Every one of the 139 also carries `DefaultToNativeToolCalling: false`: written explicitly rather than omitted, because "we know this model can, and we are choosing not to yet" is the thing a reader needs to see, and flipping it later is then a one-word edit per row rather than a new key. No prompt carries a `UseNativeToolCalling` preference. That is the measurement's own recommendation applied as written: revert the preference, keep the capability flags.
+
+  `BaseAgentType.SupportsNativeToolCalls` (false; `true` on `LoopAgentType`, inherited by Harness) gates whether `BaseAgent` declares an agent's Actions as tools at all — without it a catalog default would have offered tools to the four Flow agents with Actions, whose type cannot read a call back and would have turned every such reply into a Retry.
+
+  A full-corpus comparison then ran both arms — four times at N=3, 1,026 observations each, no observations lost — and returned **NO-GO on all three providers on every run**. The decomposition (results §9) is the useful part. Native tool calling delivers exactly the gain it should: given that an action is the right answer, GPT 5.6-luna acts 76% of the time through the envelope and 96% with tools declared, and every native turn that picks the right tool fills it correctly. That gain is then spent, almost to the turn, on two losses. Tool _selection_ got worse — the same confusion pairs as the envelope, confused more — and richer declarations fixed it only in compact form (outputs and result codes as names, +6 to +11pp on two models) while full-detail prose reversed the gain and cost the smallest model ~700 tokens a call. And models call a tool on 5–20% of turns whose right answer is chat, completion or delegation; that number did not move across four runs and two interventions, is concentrated in five specific corpus cases, and is the blocker. **The prompt-size premise did not hold** on any run: tokens fell on one model and rose on the other two. The single largest source of "wrong tool" in every arm is the action catalog itself — `Search Query Catalog`'s description prescribes search-before-SQL and the corpus expects direct SQL — which is a product question, not a model one. The recommendation on the record is to revert the prompt-level `UseNativeToolCalling` before merge and keep the capability flags, which change nothing on their own.
+
+  **Tool declarations now carry what the prose catalog carries.** `buildToolFromAction` folds output params and result codes into the description, restoring the rule the file already stated (never less informative than the prose). The description ceiling is 1,024 characters as a _measured operating point_ — no provider enforces a limit anywhere near it (all three accepted 8,000 on a live probe), but the compact form measured better than full detail and the code comment says so. `resolveToolChoiceForTurn` forces `'none'` on the last permitted iteration, where a tool call would be executed and discarded; that is correct and unit-tested, and could not affect the single-decision corpus.
+
+  **Six defects the measurement surfaced, all fixed here.** A tool-call-only turn carries no text, and the runner scored that as `No output received from model` — a warning on every native turn, and under `ValidationBehavior: 'Strict'` a retry that could never succeed; tool calls now count as output. The Layer-4 fallback only inspected a _returned_ failed result, but OpenAI's SDK _raises_ its 400, so a tools rejection bypassed the strip-and-retry entirely and hard-failed the run; both shapes now take the same one-shot retry. OpenAI additionally rejects tools alongside `reasoning_effort` on `/v1/chat/completions`, so **native tool calling and reasoning are mutually exclusive on OpenAI until the driver speaks the Responses API** — the earlier probe missed this by testing a non-reasoning model. `CerebrasLLM` drops `response_format` when a request declares tools, which Cerebras rejects outright. On the harness side, `PromptEvalConfig` gained the `toolCallingMode` axis it was always documented to have (an `envelope` cell withholds the declarations the composer attached, which is the gate's `toolsProvided` term and the only difference between the arms); the decision normalizer maps sanitized tool names back to Action names through the framework's own binding table, without which a corpus expectation written as `Execute Code` scores a correct `execute_code` call as the wrong action; and pinned matrix cells now decline vendor failover, after a first attempt lost 42% of its observations to rows that had quietly failed over to a different vendor and were recorded under the pinned one's label.
+
+  `FailoverConfiguration` is now exported from `@memberjunction/ai-prompts` — it is the return type of `getFailoverConfiguration`, a `protected` method documented as an override point, which a subclass outside the package could not name.
+
+  **Implicit control flow (opt-in, and off).** Under `LLM.NativeControlFlow: 'implicit'` the loop stops splitting its turn between two channels: sub-agents are declared as `delegate_to_<name>` tools, `payload_change_request` and `ask_user` join them, a tool call continues the loop, and **plain text with no call ends the turn as task completion**. The Loop agent-type template renders that protocol instead of the `'Actions'`/`'Sub-Agent'`/`'Chat'` step types, which is the rest of the prompt reduction the hybrid could not reach — the hybrid still had to describe the envelope because completion lived there. `ToolCallingMode` gains `'NativeImplicit'` so the two native protocols are distinguishable in run history rather than both reading as `Native`.
+
+  **Tool results as tool turns.** When the catalog says `LLM.NativeToolResults`, a step's action results go back as native `tool` turns answering the assistant's call turn, instead of the markdown "Action results:" user message. `AIAgentRunStep.NativeToolResultsSent` records which encoding a step used, so the scorecard can tell them apart without reconstructing them from `AIPromptRun.Messages`. The two encodings are one function apart: `EncodeToolTurnsAsText` in `@memberjunction/ai` converts native tool turns back to the markdown form, and both the envelope fallback retry and the eval harness's history builder now call it rather than carrying their own copy — the fallback previously stripped the _declarations_ while leaving native `tool` turns in the history, which is a shape no envelope-path provider accepts.
+
+  **Declaration control, per agent and per action.** `AIAgent.DeclareActionsAsNativeTools` and `AIAgentAction.DeclareAsNativeTool` (both `BIT NOT NULL DEFAULT 1`) decide whether an agent's Actions are _supplied_ as tools, independent of whether the gate would use them. Measurement found this was the missing switch: the Research Agent's prompt says it never does work itself, yet declaring its one action made GPT 5.6-luna use it on 7 of 9 turns against 0 of 9 on the envelope. Declaration turns a dormant capability into an active one and no prompt text can undo it, because the prompt already says never. `metadata/agents/.research-agent.json` sets the agent-level flag to `false` for exactly that reason. `AIAgentRunStep.NativeDualChannel` counts the other half of the same finding: turns that carried a tool call _and_ a complete Loop envelope, where the loop takes the call and discards the envelope silently.
+
+  **Provider repairs found by running it.** Gemini rejects a request whose `contents` do not begin with a user turn, and a Skip-style caller that puts everything in the system instruction sends none — every such run died on a 400 naming `function call turn comes immediately after a user turn`. `geminiMessageSpacing` now prepends a minimal user turn when the first turn is the model's. Anthropic gained a `thinking-config` module so a thinking request and tool declarations no longer contradict each other in the mapping.
+
+  **One step-save defect.** `AIAgentRunStep.StepName` is 255 characters and the loop writes a failure message into it; a 327-character provider error therefore failed the step save, and the run reported "2 step record save(s) failed" while hiding the actual error. `BaseAgent.fitStepName` truncates to the column's declared `MaxLength` read off the entity, so the row saves and the message is still readable.
+
+  **Two toolchain repairs, unrelated to the feature but on its path.** `mj dev workspace` generated a root manifest with a `pnpm` block that pnpm 10.33 ignores — settings have to live in `pnpm-workspace.yaml` — and could not express a consumer-scoped override, so a member repo's own copy of a package lost to another member's `workspace:*`. The generator now emits its settings into the workspace file, pins patched packages to their patch version, and resolves duplicate providers with `parent>child` selectors pointing at the owning member. It also relaxes `strict-peer-dependencies` from `true` to `false` in the process: a mixed workspace resolving published `@mj-biz-apps/*` against linked MJ source now reports its peer gaps and completes, where it previously failed the install on peers no member can fix. Separately, `mj app install` resolved hook modules from the repo root only, which fails whenever the app's packages live in an installed tree or a dev-workspace parent; `ResolveHookModule` now walks the installed app packages, the server/client workspaces and the repo root, and names every base it tried when it fails.
+
+  **Schema ships as one migration.** The seven migrations this work accumulated are consolidated into `V202609122036__v6.1.x__Native_Tool_Calling.sql` — hand-written DDL for all four groups above, then the CodeGen fold, generated from a from-scratch database so the tail reflects `next`'s schema rather than overwriting the procs `next`'s own migrations regenerate. The PostgreSQL counterpart is deferred to the release build, per `migrations/CLAUDE.md`.
+
+### Patch Changes
+
+- 4acaeed: `mj dev workspace` now reads each member's committed `mj-app.json` and registers every
+  `packages.client[]` and `packages.shared[]` entry in the generated parent `package.json` as
+  `dependencies` at `workspace:*` — the same set, at every role, that the host emits into
+  `dynamicPackages.client` and that `mj codegen manifest` turns into imports in an app shell's
+  generated class-registrations manifest. Unmet shell-provided peers of those packages are reported
+  per shell with the version the parent already pins (found under per-major override keys too), and
+  `mj dev workspace doctor` gains a check that a member's declared client packages are linked at the
+  parent — scoped to actual workspace members, and skipped until `pnpm install` has run there. Fixes
+  a page-load resolve failure that presented with a completely green build (#4364).
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [099b4d9]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9864d86]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [88f8898]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/aiengine@6.1.0-edge.7
+  - @memberjunction/codegen-lib@6.1.0-edge.7
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/generic-database-provider@6.1.0-edge.7
+  - @memberjunction/open-app-engine@6.1.0-edge.7
+  - @memberjunction/sql-converter@6.1.0-edge.7
+  - @memberjunction/sqlglot-ts@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ai-cli@6.1.0-edge.7
+  - @memberjunction/metadata-sync@6.1.0-edge.7
+  - @memberjunction/query-gen@6.1.0-edge.7
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.7
+  - @memberjunction/testing-cli@6.1.0-edge.7
+  - @memberjunction/db-auto-doc@6.1.0-edge.7
+  - @memberjunction/cli-core@6.1.0-edge.7
+  - @memberjunction/config@6.1.0-edge.7
+  - @memberjunction/dynamic-packages@6.1.0-edge.7
+  - @memberjunction/installer@6.1.0-edge.7
+  - @memberjunction/standards@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- d1d74c2: Open App CodeGen writes `CodeGen_Run_*.sql` (EntityField INSERTs) to the app's `migrations/codegen` when cwd has `mj-app.json`. Running from the MJ repo with `includeSchemas` set to an app schema fails instead of dumping metadata SQL into `MJ/migrations/v*`. If SQLOutput is enabled but no log file is open, metadata SQL is not applied. `--sql-output-dir` overrides the folder.
+- 41b0d28: Load Open App server packages in every MJ process, not only MJAPI (#4199).
+
+  `mj sync push` (and `mj app …`, `mj test`, the MCP/A2A servers, the integration-test bootstrap)
+  never imported an installed app's server package, so `Metadata.GetEntityObject` handed back a
+  generic `BaseEntity` for the app's entities and every custom `Save()`, validation rule and
+  lifecycle hook was silently skipped — while MJ core's own server subclasses, loaded through the
+  lite manifest, did run. New `@memberjunction/dynamic-packages` extracts the loader (and the
+  host-anchored import) out of `server-bootstrap` into a package with no MJ runtime dependencies,
+  and each host is now one `LoadDynamicPackages({ processId })` call. ServerBootstrap consumes it
+  with two deliberate behaviour changes: it no longer attempts to import the Angular forms package
+  into Node, and when an `mj-app.json` sits beside its `mj.config.cjs` (an Open App repo running its
+  own dev host) it now loads that app's server packages and resolver paths too.
+
+  `dynamicPackages.server[]` stays the single list `mj app install` writes; when both it and an
+  `mj-app.json` name a package, the config entry decides `Enabled` and scoping while the manifest's
+  on-disk location remains the resolution fallback. Entries gain optional
+  `Processes` / `ExcludeProcesses` (process IDs or prefixes: `cli`, `cli:sync`, `cli:sync:push`,
+  `mjapi`, `mcp`, …) and the section gains an optional `policy` map, so a package can be scoped to
+  just `mj sync` or switched off for `mj migrate`. `MJ_DYNAMIC_PACKAGES=none` and the global CLI
+  flag `--no-app-packages` (declared in `--help`) disable loading for one run — for app packages AND the
+  host's own generated packages; MJ core's classes still load from the manifest. The `mj` prerun hook
+  publishes its process id through `MJ_DYNAMIC_PACKAGES_PROCESS` so the nested `ai-cli` /
+  `testing-cli` bootstraps apply the same scoping and policy. A package already loaded in the process
+  is handed back from cache without re-running its startup export. New guide:
+  `guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`. `mj sync push` now warns, once per entity,
+  when it is about to write with a `BaseEntity` because no subclass is registered.
+
+- fd0a019: Follow-ups to the dynamic-package loader (#4199) from testing it end to end:
+  - The `mj` CLI's config schema no longer requires `AppName` on hand-authored `dynamicPackages.server[]` entries and accepts every `policy` value the loader accepts, so the README's own examples no longer make `mj migrate` / `mj clean` / `mj app check-updates` abort with a misleading "Database credentials are missing" error.
+  - A workspace member found on disk via `mj-app.json` but not yet built is reported as not-found (with the missing entry file named) instead of as a load failure that warned on every command.
+  - The standalone `mj-ai` / `mj-testing` provider bootstraps log through a new `StderrDynamicPackagesLogger`, so `--format=json` / `--output=json` stdout is no longer prefixed with loader progress lines.
+  - README: scoping examples use `cli:codegen` instead of `cli:migrate` (migrate is a light command that never loads app packages), and mode `none` is documented as skipping the host's generated packages too.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [319a7ed]
+- Updated dependencies [2f305df]
+- Updated dependencies [197fdf8]
+- Updated dependencies [62e0707]
+- Updated dependencies [6673f51]
+- Updated dependencies [d1d74c2]
+- Updated dependencies [0312b22]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [41b0d28]
+- Updated dependencies [fd0a019]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [ddf8621]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [d6e854b]
+- Updated dependencies [956f0e0]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [328a98d]
+- Updated dependencies [a4bb2f7]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [80fcb61]
+- Updated dependencies [cdd25c0]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [ac96bb6]
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/codegen-lib@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/metadata-sync@6.1.0-edge.6
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/dynamic-packages@6.1.0-edge.6
+  - @memberjunction/ai-cli@6.1.0-edge.6
+  - @memberjunction/testing-cli@6.1.0-edge.6
+  - @memberjunction/installer@6.1.0-edge.6
+  - @memberjunction/open-app-engine@6.1.0-edge.6
+  - @memberjunction/db-auto-doc@6.1.0-edge.6
+  - @memberjunction/query-gen@6.1.0-edge.6
+  - @memberjunction/cli-core@6.1.0-edge.6
+  - @memberjunction/sql-converter@6.1.0-edge.6
+  - @memberjunction/config@6.1.0-edge.6
+  - @memberjunction/sqlglot-ts@6.1.0-edge.6
+  - @memberjunction/standards@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

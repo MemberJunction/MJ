@@ -42,8 +42,13 @@ export class RelatedEntityGridPanelComponent {
     @Input() FormComponent!: BaseFormComponent;
     @Input() FormContext?: FormContext;
 
-    public onDataLoad(event: AfterDataLoadEventArgs): void {
+    public OnDataLoad(event: AfterDataLoadEventArgs): void {
         this.FormComponent.SetSectionRowCount(this.Contribution.BakedSectionKey, event.totalRowCount);
+    }
+
+    /** @deprecated Use {@link OnDataLoad}. */
+    public onDataLoad(event: AfterDataLoadEventArgs): void {
+        return this.OnDataLoad(event);
     }
 
     public get GridIcon(): string {

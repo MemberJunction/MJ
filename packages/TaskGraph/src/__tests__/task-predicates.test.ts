@@ -13,7 +13,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    BARE_COLUMNS,
+    BARECOLUMNS,
     EXECUTOR_COLUMNS,
     HumanTaskSQL,
     IsHumanTask,
@@ -96,7 +96,7 @@ describe('IsHumanTask — including the rows that predate StepType', () => {
 
 describe('the SQL twins say the same thing as the TypeScript ones', () => {
     it('names every executor column, so a new runner cannot be half-added', () => {
-        const sql = MachineTaskSQL(BARE_COLUMNS);
+        const sql = MachineTaskSQL(BARECOLUMNS);
         for (const column of EXECUTOR_COLUMNS) {
             expect(sql).toContain(`${column} IS NOT NULL`);
         }
@@ -107,12 +107,12 @@ describe('the SQL twins say the same thing as the TypeScript ones', () => {
         // A task carries exactly one. ANDing would exclude every real row — a failure loud enough to
         // catch immediately, which is precisely why it is worth pinning: the dangerous version of
         // this bug is the quiet one.
-        expect(MachineTaskSQL(BARE_COLUMNS)).not.toContain(' AND ');
-        expect(MachineTaskSQL(BARE_COLUMNS).split(' OR ')).toHaveLength(EXECUTOR_COLUMNS.length);
+        expect(MachineTaskSQL(BARECOLUMNS)).not.toContain(' AND ');
+        expect(MachineTaskSQL(BARECOLUMNS).split(' OR ')).toHaveLength(EXECUTOR_COLUMNS.length);
     });
 
     it('carries both arms of the human predicate', () => {
-        const sql = HumanTaskSQL(BARE_COLUMNS);
+        const sql = HumanTaskSQL(BARECOLUMNS);
         expect(sql).toContain(`StepType = 'Human'`);
         expect(sql).toContain('StepType IS NULL AND UserID IS NOT NULL');
     });

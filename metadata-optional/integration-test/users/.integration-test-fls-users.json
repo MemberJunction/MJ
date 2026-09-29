@@ -1,0 +1,133 @@
+[
+  {
+    "fields": {
+      "Name": "Integration Test FLS Reader",
+      "FirstName": "Integration Test",
+      "LastName": "FLS Reader",
+      "Email": "it-fls-reader@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Reader"
+          },
+          "primaryKey": {
+            "ID": "2793DD9F-79AB-4FD6-A5B9-CC945EDFD036"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T15:26:48.700Z",
+            "checksum": "b276fe7742dfc66ae20699b6fecf6698f52f0db8d32b7e7e128f5484bb94af51"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "19E5B632-1788-4493-B585-151FA1ED1328"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.658Z",
+      "checksum": "ae9512ba34f5a6860bb801aecdf3c83026a19fbaf16a7fb558623f58aca15b0b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test FLS Writer",
+      "FirstName": "Integration Test",
+      "LastName": "FLS Writer",
+      "Email": "it-fls-writer@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Writer"
+          },
+          "primaryKey": {
+            "ID": "83CA7ABE-C307-4DB3-9608-30C67E8CE30F"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T15:26:48.724Z",
+            "checksum": "8e7505f6850d91ec98c6bf5a5f8e0b27da293e8a34603a281374f394de75b480"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8F659DC1-45AE-4063-B040-D252D0549F2B"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.668Z",
+      "checksum": "efc9eb8a83370f6c61ed288e44d4ff6fcd9bc61d22d7a3d2f2f5c65ad2f17865"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Integration Test FLS Multi",
+      "FirstName": "Integration Test",
+      "LastName": "FLS Multi",
+      "Email": "it-fls-multi@integration.test",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Writer"
+          },
+          "primaryKey": {
+            "ID": "B44670C2-2E79-427A-A2E8-60AEEF55307E"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T15:26:48.736Z",
+            "checksum": "8e7505f6850d91ec98c6bf5a5f8e0b27da293e8a34603a281374f394de75b480"
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Denier"
+          },
+          "primaryKey": {
+            "ID": "D011FEAD-5D00-4483-888A-03FA2CA683F4"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T15:26:48.744Z",
+            "checksum": "11a8cbabe8908053ff8d65fc5de3417477ea6a2b366fee716e19d558f5b8f53d"
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Neutral"
+          },
+          "primaryKey": {
+            "ID": "4A9811EE-6715-4029-962D-3AC2B1CA43E5"
+          },
+          "sync": {
+            "lastModified": "2026-09-04T15:26:48.752Z",
+            "checksum": "290f1472af8fb935cd080d65561035729ae31a829f75f3d00cc8dea2ee85c1a1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "52FC7F82-8B08-40C4-8373-360D56D703C5"
+    },
+    "sync": {
+      "lastModified": "2026-09-04T15:26:48.678Z",
+      "checksum": "0e21cdef69fd7eb77c3f748e157dd0ee77d488f78bb511becc26cbf20cbd0497"
+    }
+  }
+]

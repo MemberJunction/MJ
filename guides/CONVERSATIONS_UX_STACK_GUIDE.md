@@ -25,7 +25,7 @@ without forking.
 │            OR React/Vue/Node consumer driving ConversationsRuntime directly
 ├─ Layer 3   @memberjunction/ng-conversations                            (Angular widget)
 │            chat-area / message-list / message-item / overlay /
-│            realtime overlay / 7 slots + ChatSlotDirective /
+│            realtime overlay / 8 slots + ChatSlotDirective /
 │            ConversationsRuntimeBootstrap (registers adapters into runtime)
 ├─ Layer 2   @memberjunction/conversations-runtime  ★ pure TS, zero UX deps
 │            ConversationsRuntime singleton (BaseEngine + @RegisterForStartup)
@@ -174,11 +174,43 @@ and leaves `/` skill commands and `#` entity mentions working. All three sit und
 `allowMentions` master (false there disables everything regardless). See the package
 README's feature-toggle table.
 
+### Host rules: which agent answers, and when
+
+A chat with several people in it needs agents that answer only when asked, and only the agents the
+host allows. The chat area takes those rules as inputs; each defaults to today's behavior. Routing
+picks one agent per turn, in this order, skipping any agent `AllowedAgentIDs` leaves out:
+
+```
+1. A tagged agent            (the message @-mentions it)
+2. Continuity                (the last agent that answered, other than the conversation manager)
+3. The conversation's pin    (MJConversationEntity.DefaultAgentID)
+4. The host's default        ([DefaultAgentId] on the chat area)
+5. The conversation manager  (Sage unless configured otherwise; it may delegate)
+```
+
+- **`AgentReplyMode="MentionOnly"`** stops at step 1: a message that tags no agent starts no turn,
+  writes no placeholder and fires no turn events.
+- **`AllowedAgentIDs`** also narrows the `@` list, the manager's delegation (a single delegation and
+  each agent step of a workflow it plans) and the pin and voice pickers.
+- **`BeforeAgentTurn`** fires once per turn, before any reply row exists, with the resolved
+  `AgentId`, `AgentName`, `Route` and `UserMessageId`. Cancel it and nothing more is written; set
+  `RedirectAgentId` to send the turn to another allowed agent.
+- **`AgentTurnHandler`** runs the turn on the host's server instead of MJ's path, so the host's
+  rules hold on the server and not only in the browser.
+- **`AgentHistoryFrom`** is the first moment of the conversation a turn may read. MJAPI's
+  `RunAIAgentFromConversationDetail` takes it as the nullable `agentHistoryFrom` argument, and the
+  run holds it in its history tools, artifacts, compaction and carried-forward tool results. The
+  client names the argument only when it's set, so an older MJAPI keeps working.
+- **`MentionPeople`** is the people the `@` list offers, and **`AutoNameConversation`** turns MJ's
+  naming of a new conversation off.
+
+The package README's "Chats with several people" section has the full table and an example.
+
 ---
 
 ## 6. The slot system (extension surface)
 
-The chat-area exposes 7 named template slots. Project a template via the
+The chat-area exposes 8 named template slots. Project a template via the
 `mjChatSlot` directive to replace or augment the default rendering. Every
 slot is **opt-in** — existing embeds see no UI change.
 
@@ -190,6 +222,7 @@ slot is **opt-in** — existing embeds see no UI change.
 | `emptyState` | Replaces the welcome block on a fresh conversation | Consumer projects `mjChatSlot="emptyState"` |
 | `messageRenderer` | Per-message renderer (full bubble replacement) | Consumer projects `mjChatSlot="messageRenderer"` |
 | `messageExtra` | Additive content inside each default bubble, after the text | Consumer projects `mjChatSlot="messageExtra"` |
+| `composerExtra` | **Additive** host UI directly above the composer, wherever the chat area shows one (the new-conversation composer and the empty state's included). Context: `IMJChatComposerExtraContext` | Consumer projects `mjChatSlot="composerExtra"` |
 | `demonstrationSurface` | Layout-mode switch — stage takes main pane, messages → side rail | `[showDemonstrationSurface]="true"` AND slot |
 
 ### Three ways to consume each slot
@@ -251,7 +284,7 @@ happen, plus session-lifecycle informational events.
 
 | Pair | When it fires | Cancel enforced? |
 |---|---|---|
-| `(beforeAgentTurn)` / `(afterAgentTurn)` | Around `processMessage()` | ✓ Yes |
+| `(beforeAgentTurn)` / `(afterAgentTurn)` | Once per agent turn, on every route: before any reply row exists, and after a successful turn. `beforeAgentTurn` can also redirect the turn (`RedirectAgentId`) | ✓ Yes |
 | `(beforeResponseFormSubmitted)` / `(afterResponseFormSubmitted)` | Around interactive form submission | ✓ Yes |
 | `(beforeToolInvoked)` / `(afterToolInvoked)` | Around client-tool dispatch | ✓ Yes |
 | `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` | Realtime session lifecycle | Informational — cancel not applicable |

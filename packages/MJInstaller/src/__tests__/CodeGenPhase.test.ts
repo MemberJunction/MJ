@@ -187,6 +187,13 @@ describe('CodeGenPhase', () => {
       await expect(phase.Run(ctx)).rejects.toThrow(InstallerError);
     });
 
+    it('should fail when codegen exits 0 but never wrote entity_subclasses.ts (#4477)', async () => {
+      mockFs.FileExists.mockImplementation(async (p: string) => !p.includes('entity_subclasses.ts'));
+
+      const ctx = makeContext();
+      await expect(phase.Run(ctx)).rejects.toThrow(/entity_subclasses\.ts/);
+    });
+
     it('should warn but succeed when secondary (GeneratedEntities) is missing', async () => {
       mockFs.DirectoryExists.mockImplementation(async (p: string) => {
         if (p.includes('GeneratedEntities') && !p.includes('mj_generatedentities')) return false;
@@ -538,7 +545,8 @@ describe('CodeGenPhase package-manager awareness (pnpm)', () => {
   });
 
   it('falls back to pnpm dlx for the CLI when no local binary exists', async () => {
-    mockFs.FileExists.mockResolvedValue(false);
+    // Only the CLI binary is absent; the codegen barrel still exists so the artifact check passes.
+    mockFs.FileExists.mockImplementation(async (p: string) => p.includes('entity_subclasses.ts'));
     const ctx = makeContext({ PackageManager: 'pnpm', VersionTag: 'v6.1.0' });
     await phase.Run(ctx);
 

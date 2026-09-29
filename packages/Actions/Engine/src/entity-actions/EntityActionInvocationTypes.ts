@@ -1,6 +1,6 @@
 import { MJGlobal, MJLruCache, RegisterClass, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { MJActionFilterEntity, MJActionParamEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
-import { BaseEntity, LogError, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, DatabaseProviderBase, LogError, Metadata, RunView } from "@memberjunction/core";
 import {
     ActionInvocationProvenance,
     ActionParam,
@@ -195,11 +195,15 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
     /**
      * The deferral that hands this run to the durable substrate, or `undefined` to execute normally.
      *
-     * Returns undefined for every case that must stay inline: a binding that did not opt in, a
-     * lifecycle event that participates in the save, or a host with no submitter registered. The
-     * last is a fallback rather than a refusal — `RunMode='Durable'` asks for the work to be harder
-     * to lose, so declining to run it where the durable path is unavailable would make the opt-in
-     * less reliable than leaving it off.
+     * Returns undefined for every case that must stay inline: a binding that did not opt in, or a
+     * lifecycle event that participates in the save (Validate / Before*).
+     *
+     * After* + Durable with no queue submitter (local / no-queue process — e.g. CLI
+     * `mj sync push`): do **not** nest in the caller's EntityTransactionScope. Hand the run to the
+     * provider's post-commit queue (`RunAfterCommit`): it runs once the ambient transaction commits
+     * and is dropped if that transaction rolls back. Dropping the work on a *successful* save would
+     * make Durable worse than leaving it off; nesting it is what blew up cheese (LogActivity inside
+     * Person.Save on a shared provider).
      */
     protected BuildDurableDeferral(
         params: EntityActionInvocationParams,
@@ -215,7 +219,15 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
         }
         const submitter = DurableEntityActionRegistry.Instance.Submitter;
         if (!submitter) {
-            return undefined;
+            return async (runParams: RunActionParams): Promise<ActionResultSimple | null> => {
+                this.scheduleDurableLocalRun(params, action, runParams);
+                return {
+                    Success: true,
+                    ResultCode: 'DEFERRED_LOCAL',
+                    Message: 'Durable action deferred until the ambient transaction commits, and dropped if it rolls back ' +
+                        '(no queue submitter in this process).',
+                };
+            };
         }
 
         return async (runParams: RunActionParams): Promise<ActionResultSimple | null> => {
@@ -252,6 +264,41 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
             );
             return null;
         };
+    }
+
+    /**
+     * Local / no-queue Durable fallback (CLI `mj sync push` is one host): run the action without
+     * DeferExecution once the save is durable. When the entity's provider has a post-commit queue
+     * (`DatabaseProviderBase.RunAfterCommit`), the run follows the transaction the save ran in —
+     * identified by `params.PostCommitToken`, captured when the save dispatched the action — waiting
+     * for its outermost commit and discarded if it (or the savepoint the save ran in) rolls back, so
+     * it never fires against rows that no longer exist. That holds even when this registers after the
+     * transaction settled. A provider without one runs it on the next tick, fire-and-forget. Errors are
+     * logged; the originating Save already succeeded. Protected so subclasses can replace the policy.
+     */
+    protected scheduleDurableLocalRun(
+        params: EntityActionInvocationParams,
+        action: MJActionEntityExtended,
+        runParams: RunActionParams,
+    ): void {
+        const { DeferExecution: _d, ...rest } = runParams;
+        const run = async (): Promise<void> => {
+            try {
+                await ActionEngineServer.Instance.RunAction(rest);
+            } catch (e: unknown) {
+                LogError(
+                    `Durable entity action ${params.EntityAction.ID} (${action.Name}) failed after deferral: ` +
+                    `${e instanceof Error ? e.message : String(e)}`,
+                );
+            }
+        };
+        const provider = params.EntityObject?.ProviderToUse;
+        if (hasPostCommitQueue(provider)) {
+            provider.RunAfterCommit(run, `Durable entity action ${action.Name}`, params.PostCommitToken);
+        } else {
+            // Next tick, as before: let the save that triggered this finish unwinding first.
+            setImmediate(() => void run());
+        }
     }
 
     /**
@@ -459,7 +506,7 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
             return [];
         }
 
-        const pk = entity.FirstPrimaryKey;
+        const pk = entity.FirstPrimaryKey; // first-pk-ok: guarded above — List invocation throws for composite keys (PrimaryKeys.length !== 1), so this column is the whole key
         const numericKey = this.isNumericFieldType(pk.Type);
         const inList = recordIDs
             .map(id => numericKey ? id.replace(/[^0-9.\-]/g, '') : `'${id.replace(/'/g, "''")}'`)
@@ -502,4 +549,12 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
  */
 @RegisterClass(EntityActionInvocationBase, 'Validate')
 export class EntityActionInvocationValidate extends EntityActionInvocationSingleRecord {
+}
+
+/**
+ * True when `provider` exposes {@link DatabaseProviderBase.RunAfterCommit}. Checked structurally
+ * rather than with `instanceof`, so any provider that implements the post-commit contract qualifies.
+ */
+function hasPostCommitQueue(provider: object | undefined | null): provider is Pick<DatabaseProviderBase, 'RunAfterCommit'> {
+    return !!provider && 'RunAfterCommit' in provider && typeof provider.RunAfterCommit === 'function';
 }

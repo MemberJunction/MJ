@@ -308,7 +308,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
     set TimeRange(value: string) {
         const prev = this._timeRange;
         this._timeRange = value;
-        if (prev !== value && this.initialized) this.LoadData();
+        if (prev !== value && this.initialized) this.loadData();
     }
     get TimeRange(): string { return this._timeRange; }
 
@@ -350,7 +350,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         // we read .Vendors / .Models from it.
         await AIEngineBase.Instance.EnsureLoaded();
         this.initialized = true;
-        this.LoadData();
+        this.loadData();
     }
 
     ngOnDestroy(): void {
@@ -371,7 +371,7 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
 
     // ── Data Loading ──
 
-    private async LoadData(): Promise<void> {
+    private async loadData(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 

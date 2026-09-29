@@ -8,8 +8,8 @@
  */
 
 import type { ConsentRequest } from './types.js';
-import { groupScopesHierarchically, type HierarchicalScopeGroups, type ScopePrefixGroup } from './ScopeService.js';
-import { getOAuthStyles } from './styles.js';
+import { GroupScopesHierarchically, type HierarchicalScopeGroups, type ScopePrefixGroup } from './ScopeService.js';
+import { GetOAuthStyles } from './styles.js';
 
 /**
  * Inline SVG logo for MemberJunction.
@@ -26,9 +26,9 @@ const MJ_LOGO_SVG = `<svg class="logo-svg" viewBox="0 0 230 128" xmlns="http://w
  * @param consentRequest - The consent request containing user and scope info
  * @returns HTML string for the consent page
  */
-export function renderConsentPage(consentRequest: ConsentRequest): string {
+export function RenderConsentPage(consentRequest: ConsentRequest): string {
   const { user, availableScopes, clientId, requestId } = consentRequest;
-  const hierarchicalGroups = groupScopesHierarchically(availableScopes);
+  const hierarchicalGroups = GroupScopesHierarchically(availableScopes);
 
   const scopeCheckboxes = renderScopeCheckboxes(hierarchicalGroups, consentRequest.requestedScope);
 
@@ -38,7 +38,7 @@ export function renderConsentPage(consentRequest: ConsentRequest): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Authorize Access - MemberJunction MCP Server</title>
-  <style>${getOAuthStyles()}</style>
+  <style>${GetOAuthStyles()}</style>
 </head>
 <body>
   <div class="container">
@@ -85,6 +85,11 @@ export function renderConsentPage(consentRequest: ConsentRequest): string {
   </div>
 </body>
 </html>`;
+}
+
+/** @deprecated Use {@link RenderConsentPage}. */
+export function renderConsentPage(consentRequest: ConsentRequest): string {
+  return RenderConsentPage(consentRequest);
 }
 
 /**
@@ -623,14 +628,14 @@ function renderScopeCheckboxes(
  * @param message - Success message to display
  * @returns HTML string for success page
  */
-export function renderConsentSuccessPage(message: string): string {
+export function RenderConsentSuccessPage(message: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Authorization Complete - MemberJunction MCP Server</title>
-  <style>${getOAuthStyles()}</style>
+  <style>${GetOAuthStyles()}</style>
 </head>
 <body>
   <div class="container">
@@ -649,19 +654,24 @@ export function renderConsentSuccessPage(message: string): string {
 </html>`;
 }
 
+/** @deprecated Use {@link RenderConsentSuccessPage}. */
+export function renderConsentSuccessPage(message: string): string {
+  return RenderConsentSuccessPage(message);
+}
+
 /**
  * Renders a page when user denies consent.
  *
  * @returns HTML string for denied page
  */
-export function renderConsentDeniedPage(): string {
+export function RenderConsentDeniedPage(): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Access Denied - MemberJunction MCP Server</title>
-  <style>${getOAuthStyles()}</style>
+  <style>${GetOAuthStyles()}</style>
 </head>
 <body>
   <div class="container">
@@ -679,6 +689,11 @@ export function renderConsentDeniedPage(): string {
   </div>
 </body>
 </html>`;
+}
+
+/** @deprecated Use {@link RenderConsentDeniedPage}. */
+export function renderConsentDeniedPage(): string {
+  return RenderConsentDeniedPage();
 }
 
 /**

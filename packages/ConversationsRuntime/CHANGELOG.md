@@ -1,5 +1,298 @@
 # @memberjunction/conversations-runtime
 
+## 6.2.0-edge.0
+
+### Minor Changes
+
+- c157749: Extract the mention-autocomplete engine out of Angular into `@memberjunction/conversations-runtime`, so a non-Angular host can offer the same `@` / `#` / `/` pickers.
+
+  **Why.** `MentionAutocompleteService` was 503 lines of permission-filtered caching and ranking — the agent / user / entity / query / skill sets behind every composer trigger, the `/` picker's target-agent narrowing, and the per-trigger match scoring. It imported nothing from `@angular/*` and carried no decorator; it was Angular-coupled purely by which package it sat in. `MentionParser`, the other half of the same feature, already lived in the runtime.
+
+  That location was the problem. The React Native app needs the same three pickers, and a native host cannot depend on an Angular library — so reaching them would have meant writing the agent/skill run-permission filtering, the accepted-skills intersection and the ranking a second time. A second copy of a _permission_ rule is the copy that drifts, and it drifts silently in the direction of showing someone a skill they may not run.
+
+  **What moved:** `MentionAutocomplete` (the engine), `IntersectAcceptedSkills` (the `/` narrowing rule), and the `MentionSuggestion` / `MentionSuggestionPreset` data shapes. Reachable as `ConversationsRuntime.Instance.MentionSuggestions` or directly as `MentionAutocomplete.Instance`.
+
+  **On the suggestion types.** `@memberjunction/ng-composer` keeps its own structurally identical `MentionSuggestion` — that one is a _rendering_ contract (what a dropdown row and a chip display), this one is a _data_ contract (what a suggestion engine produces). They are kept assignable so the Angular shim passes runtime suggestions straight through with no mapping. Deliberately NOT consolidated: `ng-composer`'s type is consumed by Explorer's omnibar across a dozen files, and MJ forbids cross-package re-exports, so unifying them would have meant a wide, unrelated churn in a branch that had no business causing it.
+
+  **No behaviour change.** `MentionAutocompleteService` remains importable from `@memberjunction/ng-conversations` with the same name and the same `.Instance` accessor — it is now an alias for the runtime engine, so there is still exactly one instance and one cache warm-up shared with the ClassFactory-instantiated trigger providers. Verified by the package's own suites: 1,319 tests green in `ng-conversations`, 122 in the runtime (the five skill-narrowing tests moved with the code they cover).
+
+  `skill-picker-narrowing.ts` is gone from `ng-conversations`; import `IntersectAcceptedSkills` from `@memberjunction/conversations-runtime` instead. No in-repo consumer outside its own test.
+
+### Patch Changes
+
+- d61b425: Voice and text now share a conversation properly, in both directions and on both surfaces.
+
+  **Context flows into a voice session.** `ConversationMessages` was a hardcoded `[]` with an MVP
+  note, so a call started mid-thread opened knowing nothing about what had been typed — the symptom
+  being the agent asking the user to repeat something they had just written. The consumer had been
+  written all along; only the plumbing was missing. The conversation's turns are now hydrated at
+  session mint under the same caps the session-resume path uses (newest 30 turns, 8,000 characters,
+  oldest dropped first). Because voice turns are themselves conversation rows, a resumed session
+  would otherwise receive its previous leg twice, so the prior-transcript loader returns its leg ids
+  and those legs are excluded; earlier calls that are not being resumed stay in.
+
+  **Voice sessions collapse in the mobile thread.** The realtime-session timeline grouping and the
+  card's presentation logic move from `ng-conversations` to `@memberjunction/conversations-runtime`
+  (`BuildConversationTimeline`, `SessionCardTitle`, `SessionCardStatusChip`,
+  `SessionCardIsSameDayRange`, `CollectRealtimeSessionIDs`, `MapRealtimeSessionMeta`,
+  `FindRealtimeSessionMeta`, `IsVisibleRealtimeTurn`). The module was always pure TypeScript — and
+  its own header already said rendering session-stamped rows as chat bubbles was wrong — but living
+  behind an Angular import meant the React Native thread did exactly that. Both surfaces now run the
+  same pass. `ng-conversations` re-exports from `lib/utils/realtime-session-timeline`, so its call
+  sites are unchanged, and the Angular card delegates to the promoted functions instead of keeping
+  its own copies.
+
+  Mobile renders the collapsed card natively, expandable in place to the turns it counted, with a new
+  `realtimeSessionCard` slot so a host can replace it.
+
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [37891d3]
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [d122a41]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [a8be410]
+- Updated dependencies [5df9486]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [44faf83]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8d1a373]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [af57e8d]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core-entities@6.2.0-edge.0
+  - @memberjunction/ai-core-plus@6.2.0-edge.0
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/graphql-dataprovider@6.2.0-edge.0
+  - @memberjunction/ai-engine-base@6.2.0-edge.0
+  - @memberjunction/ai-agent-client@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Patch Changes
+
+- d7feeae: Stop Explorer from showing "Unknown error" with a stuck Running timer when a Skip/sub-agent transport path fails. Pass the real error through invokeSubAgent, keep In-Progress when the agent may still be running, and persist Failed/Error on the run and conversation detail if executeAIAgent throws.
+- Updated dependencies [634aa8c]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [22ec804]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [199eb2b]
+- Updated dependencies [1940a4d]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [2e2879e]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [9a29da4]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [0db6105]
+- Updated dependencies [d7feeae]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [394d276]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [6cd337d]
+- Updated dependencies [394d276]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ai-core-plus@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ai-engine-base@6.1.0
+  - @memberjunction/graphql-dataprovider@6.1.0
+  - @memberjunction/ai-agent-client@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ai-agent-client@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/ai-agent-client@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

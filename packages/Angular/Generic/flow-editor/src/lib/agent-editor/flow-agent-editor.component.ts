@@ -184,7 +184,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       },
       {
         EntityName: 'MJ: AI Agent Step Paths',
-        ExtraFilter: `OriginStepID IN (SELECT ID FROM [__mj].[AIAgentStep] WHERE AgentID='${this.AgentID}')`,
+        ExtraFilter: `OriginStepID IN (SELECT ID FROM [__mj].[vwAIAgentSteps] WHERE AgentID='${this.AgentID}')`,
         OrderBy: 'Priority DESC',
         ResultType: 'entity_object'
       }
@@ -690,8 +690,13 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   }
 
   /** Whether editing is currently allowed — combines parent EditMode + fullscreen self-contained edit */
-  get isEditingActive(): boolean {
+  get IsEditingActive(): boolean {
     return this.EditMode || this.fullscreenEditMode;
+  }
+
+  /** @deprecated Use {@link IsEditingActive}. */
+  get isEditingActive(): boolean {
+    return this.IsEditingActive;
   }
 
   protected toggleFullscreenEditMode(): void {

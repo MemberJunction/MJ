@@ -1,0 +1,68 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-clarify-ambiguous-01 [claude-sonnet-5 · Anthropic · native-implicit-results]",
+    "Description": "The request is too broad to search well. Clarifying is right; searching anyway is the over-eager failure this case exists to catch.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research AI."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-clarify-ambiguous-01",
+      "expect": {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        },
+        "forbiddenActions": [
+          "Web Search",
+          "Web Page Content"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            },
+            "forbiddenActions": [
+              "Web Search",
+              "Web Page Content"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "4174C3A0-ABCF-4F67-A3AC-CFF806ADCFF9"
+  }
+}

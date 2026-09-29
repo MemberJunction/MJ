@@ -105,6 +105,46 @@ export interface RecordSourceContext {
    */
   sourceRecordEntity?: string;
   sourceRecordId?: string;
+  /**
+   * The PARENT record's own origin, carried forward so a return can restore
+   * it instead of recapturing.
+   *
+   * Without this the crumb ping-pongs. Under the preview-tab model an
+   * in-record link CONSUMES the parent's tab, so by the time the user clicks
+   * the crumb back, the parent's tab no longer holds the parent — the
+   * reactivate-the-tab fast path in ReturnToRecordSource misses and it
+   * re-opens the parent, capturing wherever the user is standing (the CHILD)
+   * as the new origin. The two records then point at each other and the
+   * entry point ("Data Explorer › Data") is lost for good.
+   *
+   * Nesting makes this unwind at any depth: Data › A › B › C returns to B
+   * carrying A, then to A carrying Data. Truncated at
+   * {@link MAX_RECORD_ORIGIN_DEPTH} — it rides in the tab configuration and
+   * is persisted with the workspace.
+   */
+  sourceParentOrigin?: RecordSourceContext;
+}
+
+/**
+ * How many ancestors a record origin chain keeps. Deep enough for real
+ * drill-downs, shallow enough that the persisted workspace config stays small.
+ */
+export const MAX_RECORD_ORIGIN_DEPTH = 5;
+
+/** Drop ancestors beyond MAX_RECORD_ORIGIN_DEPTH so the chain cannot grow without bound. */
+export function TruncateRecordOriginChain(
+  origin: RecordSourceContext | null | undefined,
+  depth: number = MAX_RECORD_ORIGIN_DEPTH
+): RecordSourceContext | undefined {
+  if (!origin) {
+    return undefined;
+  }
+  if (depth <= 1) {
+    const { sourceParentOrigin: _dropped, ...rest } = origin;
+    return rest;
+  }
+  const parent = TruncateRecordOriginChain(origin.sourceParentOrigin, depth - 1);
+  return parent ? { ...origin, sourceParentOrigin: parent } : { ...origin, sourceParentOrigin: undefined };
 }
 
 /** True when the origin has somewhere to GO back to (crumb is clickable) */
@@ -137,6 +177,15 @@ export function GetRecordSourceContext(configuration: Record<string, unknown> | 
     sourceRecordEntity: readString('sourceRecordEntity'),
     sourceRecordId: readString('sourceRecordId')
   };
+  // The ancestor chain round-trips as a nested object on the same
+  // configuration bag, so recurse through the same reader.
+  const rawParent = configuration?.['sourceParentOrigin'];
+  if (rawParent && typeof rawParent === 'object' && !Array.isArray(rawParent)) {
+    const parent = GetRecordSourceContext(rawParent as Record<string, unknown>);
+    if (parent) {
+      context.sourceParentOrigin = parent;
+    }
+  }
   const rawParams = configuration?.['sourceQueryParams'];
   if (rawParams && typeof rawParams === 'object' && !Array.isArray(rawParams)) {
     const params: Record<string, string> = {};

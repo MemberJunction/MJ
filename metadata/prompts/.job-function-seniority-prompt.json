@@ -1,0 +1,62 @@
+[
+  {
+    "fields": {
+      "Name": "Job Function and Seniority Derivation",
+      "Description": "Analyzes a person's current job title and extracts normalized job functions (plural child rows) and seniority level (FK field).",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/bizapps/job-function-seniority.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 3,
+      "RetryDelayMS": 3000,
+      "RetryStrategy": "Exponential",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "29E25958-922D-4148-A9DB-01770ED9F3B0"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T16:25:00.347Z",
+            "checksum": "71ee991d8e0ab07b2e4ea296274c871739fbb9068ae94df729251a82c42f9641"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "EBCD12BB-B5D0-45A5-84E0-C6EAEA8ADF0A"
+          },
+          "sync": {
+            "lastModified": "2026-09-22T16:25:00.360Z",
+            "checksum": "095fd3e315f3b21003c644d5708f6734db90f565786423ebadb395b7fa53105f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7C46041F-0412-4C2E-9B9E-3ED61D32210C"
+    },
+    "sync": {
+      "lastModified": "2026-09-22T16:25:00.331Z",
+      "checksum": "8a94af86fb5dbe237d3f41622bfd24d6af137273f4ae0bb90a149f6245f59a88"
+    }
+  }
+]

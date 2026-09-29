@@ -126,6 +126,45 @@ class RefusingEntity extends BaseEntity {
     }
 }
 
+describe('MessageIncludesErrors — a producer whose Message already renders Errors', () => {
+    const prose = 'Cannot add TagScope row for tag "Global" because it is marked IsGlobal=1.';
+    const refused = () => {
+        const result = new BaseEntityResult();
+        result.Success = false;
+        result.Errors = [new ValidationErrorInfo('TagID', prose, 'abc'), new ValidationErrorInfo('', 'Reviewed by policy.', null, ValidationErrorType.Warning)];
+        return result;
+    };
+
+    it('is false by default, so every existing producer keeps the (deliberately un-deduped) behaviour', () => {
+        const result = refused();
+        result.Message = prose + '\nReviewed by policy.';
+        expect(result.MessageIncludesErrors).toBe(false);
+        expect(result.CompleteMessage.split(prose).length - 1).toBe(2);
+    });
+
+    it('when set, CompleteMessage is Message alone — the errors are already in it', () => {
+        // The client-side provider: Message = the SERVER's CompleteMessage, Errors = the same entries rehydrated.
+        const result = refused();
+        result.Message = prose + '\nReviewed by policy.';
+        result.MessageIncludesErrors = true;
+        expect(result.CompleteMessage).toBe(prose + '\nReviewed by policy.');
+    });
+
+    it('is ignored when Message is empty — a flag with nothing behind it must not lose the errors', () => {
+        const result = refused();
+        result.MessageIncludesErrors = true;
+        expect(result.CompleteMessage.split('\n')).toEqual([prose, 'Reviewed by policy.']);
+    });
+
+    it('still appends the single Error property — the flag speaks only for the Errors array', () => {
+        const result = refused();
+        result.Message = prose + '\nReviewed by policy.';
+        result.MessageIncludesErrors = true;
+        result.Error = new Error('connection reset');
+        expect(result.CompleteMessage.split('\n')).toEqual([prose, 'Reviewed by policy.', 'connection reset']);
+    });
+});
+
 describe('a save refused for real, not a result built by hand', () => {
     beforeAll(() => {
         const entities = ALL_ENTITY_DATA.map(d => new EntityInfo(d));

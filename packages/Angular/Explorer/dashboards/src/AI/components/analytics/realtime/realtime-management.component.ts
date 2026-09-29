@@ -170,16 +170,12 @@ export class RealtimeManagementComponent extends BaseAngularComponent implements
 
     /** Opens the AIAgentSession record behind a bridge via the shared record-open path. */
     public OpenSession(sessionId: string): void {
-        const key = new CompositeKey();
-        key.LoadFromSingleKeyValuePair('ID', sessionId);
-        SharedService.Instance.OpenEntityRecord('MJ: AI Agent Sessions', key);
+        SharedService.Instance.OpenEntityRecord('MJ: AI Agent Sessions', CompositeKey.FromID(sessionId));
     }
 
     /** Opens a bridge provider record. */
     public OpenProvider(providerId: string): void {
-        const key = new CompositeKey();
-        key.LoadFromSingleKeyValuePair('ID', providerId);
-        SharedService.Instance.OpenEntityRecord('MJ: AI Bridge Providers', key);
+        SharedService.Instance.OpenEntityRecord('MJ: AI Bridge Providers', CompositeKey.FromID(providerId));
     }
 
     // ── Capability summary accessors (template helpers) ──
@@ -225,13 +221,18 @@ export class RealtimeManagementComponent extends BaseAngularComponent implements
     }
 
     /** Max slice count (for horizontal bar scaling); min 1. */
-    public maxSlice(slices: MetricSlice[]): number {
+    public MaxSlice(slices: MetricSlice[]): number {
         return Math.max(1, ...slices.map(s => s.Count));
+    }
+
+    /** @deprecated Use {@link MaxSlice}. */
+    public maxSlice(slices: MetricSlice[]): number {
+        return this.MaxSlice(slices);
     }
 
     /** Bar width percentage for a metric slice. */
     public SliceBarWidth(slices: MetricSlice[], count: number): number {
-        return Math.round((count / this.maxSlice(slices)) * 100);
+        return Math.round((count / this.MaxSlice(slices)) * 100);
     }
 
     // ── Summary getters ──

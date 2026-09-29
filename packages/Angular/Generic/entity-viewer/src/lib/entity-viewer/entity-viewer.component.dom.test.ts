@@ -23,7 +23,7 @@ const CHILDREN = [SwitcherStub, RecycleChipStub, StubEmptyStateComponent, StubLo
 const ENTITY = { Name: 'Accounts' } as unknown as EntityInfo;
 type OnInitProto = { ngOnInit: () => void };
 
-interface State { entity?: EntityInfo | null; IsLoading?: boolean; ShowRecycleBin?: boolean; records?: Record<string, unknown>[]; filteredCount?: number; totalCount?: number }
+interface State { entity?: EntityInfo | null; IsLoading?: boolean; ShowRecycleBin?: boolean; records?: Record<string, unknown>[]; filteredCount?: number; totalCount?: number; config?: Record<string, unknown> }
 function render(state: State = {}) {
   vi.spyOn(EntityViewerComponent.prototype as unknown as OnInitProto, 'ngOnInit').mockImplementation(() => undefined);
   return renderComponentFixture(EntityViewerComponent, {
@@ -31,12 +31,15 @@ function render(state: State = {}) {
     declarations: [EntityViewerComponent],
     inputs: { Records: state.records ?? [] },
     setup: (c) => {
-      const priv = c as unknown as { _entity: EntityInfo | null; IsLoading: boolean; ShowRecycleBin: boolean; FilteredRecordCount: number; TotalRecordCount: number };
+      const priv = c as unknown as { _entity: EntityInfo | null; IsLoading: boolean; ShowRecycleBin: boolean; FilteredRecordCount: number; TotalRecordCount: number; Config: Record<string, unknown> };
       priv._entity = state.entity ?? null;
       priv.IsLoading = state.IsLoading ?? false;
       priv.ShowRecycleBin = state.ShowRecycleBin ?? false;
       priv.FilteredRecordCount = state.filteredCount ?? 0;
       priv.TotalRecordCount = state.totalCount ?? 0;
+      if (state.config) {
+        priv.Config = state.config;
+      }
     },
   });
 }
@@ -51,6 +54,12 @@ describe('EntityViewerComponent (DOM)', () => {
 
   it('renders the header when an entity is set', () => {
     expect(query(render({ entity: ENTITY }), '.viewer-header')).not.toBeNull();
+  });
+
+  it('hides the header when chrome is embedded', () => {
+    const f = render({ entity: ENTITY, config: { chrome: 'embedded' } });
+    expect(query(f, '.viewer-header')).toBeNull();
+    expect(query(f, '.filter-input')).toBeNull();
   });
 
   it('renders the view-type switcher in the header for an entity', () => {

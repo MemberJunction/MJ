@@ -135,8 +135,8 @@ describe('bundle↔metadata sibling parity (drift-check)', () => {
         // dispatch to "Unknown integration check bundle". Assert on the raw text so the check
         // stays independent of config evaluation (env vars, dotenv side effects).
         const raw = fs.readFileSync(MJ_CONFIG, 'utf-8');
-        expect(raw).toContain('@memberjunction/integration-test-suite');
         expect(raw).toMatch(/checkModules/);
+        expect(raw).toContain('packages/TestingFramework/integration-test-suite/dist/index.js');
     });
 });
 

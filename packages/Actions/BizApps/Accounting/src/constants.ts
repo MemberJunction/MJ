@@ -30,6 +30,11 @@ export const ACCOUNTING_VERBS = {
 export type AccountingVerb = (typeof ACCOUNTING_VERBS)[keyof typeof ACCOUNTING_VERBS];
 
 /** Plugin ClassFactory key: `CreateJournalEntry:QuickBooks Online`. */
-export function erpPluginKey(verb: string, integrationName: string): string {
+export function ErpPluginKey(verb: string, integrationName: string): string {
     return `${verb}:${integrationName}`;
+}
+
+/** @deprecated Use {@link ErpPluginKey}. */
+export function erpPluginKey(verb: string, integrationName: string): string {
+    return ErpPluginKey(verb, integrationName);
 }

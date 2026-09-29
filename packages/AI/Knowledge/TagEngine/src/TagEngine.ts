@@ -58,6 +58,11 @@ export interface ResolveTagOptions {
      * deterministically rule-compliant. Existing matches are still found globally.
      */
     parentIDForNew?: string | null;
+    /**
+     * When true, suppresses all side-effecting operations (enqueuing suggestions,
+     * auto-creating tags) to allow safe resolution previews without DB mutations.
+     */
+    dryRun?: boolean;
 }
 
 /**
@@ -596,13 +601,23 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * @param provider    Optional metadata provider override.
      * @returns The proposed taxonomy tree + provenance metadata (nothing is saved).
      */
-    public async generateSeedTaxonomy(
+    public async GenerateSeedTaxonomy(
         sourceID: string,
         sampleSize: number,
         contextUser?: UserInfo,
         provider?: IMetadataProvider
     ): Promise<SeedTaxonomyResult> {
         return generateSeedTaxonomyImpl(sourceID, sampleSize, contextUser, provider);
+    }
+
+    /** @deprecated Use {@link GenerateSeedTaxonomy}. */
+    public async generateSeedTaxonomy(
+        sourceID: string,
+        sampleSize: number,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<SeedTaxonomyResult> {
+        return this.GenerateSeedTaxonomy(sourceID, sampleSize, contextUser, provider);
     }
 
     // ========================================================================
@@ -721,16 +736,18 @@ export class TagEngine extends BaseSingleton<TagEngine> {
 
             // Score >= suggestThreshold but < threshold → enqueue suggestion, return null.
             if (score >= suggestThreshold) {
-                await this.enqueueSuggestionSafe(contextUser, {
-                    proposedName: tagText,
-                    proposedParentID: rootID,
-                    bestMatchTagID: tag.ID,
-                    bestMatchScore: score,
-                    reason: 'BelowThreshold',
-                    sourceContentItemID: options?.sourceContentItemID ?? null,
-                    sourceContentSourceID: options?.sourceContentSourceID ?? null,
-                    sourceText: options?.sourceText ?? null,
-                });
+                if (!options?.dryRun) {
+                    await this.enqueueSuggestionSafe(contextUser, {
+                        proposedName: tagText,
+                        proposedParentID: rootID,
+                        bestMatchTagID: tag.ID,
+                        bestMatchScore: score,
+                        reason: 'BelowThreshold',
+                        sourceContentItemID: options?.sourceContentItemID ?? null,
+                        sourceContentSourceID: options?.sourceContentSourceID ?? null,
+                        sourceText: options?.sourceText ?? null,
+                    });
+                }
                 return null;
             }
             // Below the suggestion band — fall through to handleNoMatch.
@@ -1003,6 +1020,10 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         contextUser: UserInfo,
         options?: ResolveTagOptions
     ): Promise<MJTagEntity | null> {
+        if (options?.dryRun) {
+            return null;
+        }
+
         const traceability = {
             sourceContentItemID: options?.sourceContentItemID ?? null,
             sourceContentSourceID: options?.sourceContentSourceID ?? null,

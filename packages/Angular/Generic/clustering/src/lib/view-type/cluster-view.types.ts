@@ -37,7 +37,7 @@ export const DEFAULT_CLUSTER_VIEW_CONFIG: ClusterViewConfig = {
  * filling any missing keys from {@link DEFAULT_CLUSTER_VIEW_CONFIG}. Tolerant of partial or
  * empty input (e.g. a brand-new view with no saved config).
  */
-export function toClusterViewConfig(raw: Record<string, unknown> | null | undefined): ClusterViewConfig {
+export function ToClusterViewConfig(raw: Record<string, unknown> | null | undefined): ClusterViewConfig {
   const r = raw ?? {};
   const algorithm = r['algorithm'] === 'dbscan' ? 'dbscan' : 'kmeans';
   const dimensions = r['dimensions'] === 3 ? 3 : 2;
@@ -50,4 +50,9 @@ export function toClusterViewConfig(raw: Record<string, unknown> | null | undefi
     maxRecords: typeof r['maxRecords'] === 'number' ? (r['maxRecords'] as number) : DEFAULT_CLUSTER_VIEW_CONFIG.maxRecords,
     nameClusters: typeof r['nameClusters'] === 'boolean' ? (r['nameClusters'] as boolean) : DEFAULT_CLUSTER_VIEW_CONFIG.nameClusters,
   };
+}
+
+/** @deprecated Use {@link ToClusterViewConfig}. */
+export function toClusterViewConfig(raw: Record<string, unknown> | null | undefined): ClusterViewConfig {
+  return ToClusterViewConfig(raw);
 }

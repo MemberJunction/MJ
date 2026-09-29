@@ -17,7 +17,7 @@ export type AgentFailureSource = {
  * Prefer the persisted run's ErrorMessage, then a transport-level errorMessage.
  * Never returns empty string.
  */
-export function agentFailureMessage(
+export function AgentFailureMessage(
     result: AgentFailureSource,
     fallback = 'The agent failed without an error message.'
 ): string {
@@ -32,6 +32,14 @@ export function agentFailureMessage(
     return fallback;
 }
 
+/** @deprecated Use {@link AgentFailureMessage}. */
+export function agentFailureMessage(
+    result: AgentFailureSource,
+    fallback = 'The agent failed without an error message.'
+): string {
+    return AgentFailureMessage(result, fallback);
+}
+
 /**
  * True when the failure text means the HTTP/WebSocket path died but the
  * server-side AIAgentRun may still be Running. Painting Status=Error in that
@@ -43,7 +51,7 @@ export function agentFailureMessage(
  * still be running / please refresh" copy; only that copy (or an explicit
  * `requestAcknowledged: true`) is treated as in-flight.
  */
-export function isDisconnectWhileAgentMayStillBeRunning(
+export function IsDisconnectWhileAgentMayStillBeRunning(
     message: string,
     result?: AgentFailureSource
 ): boolean {
@@ -58,6 +66,14 @@ export function isDisconnectWhileAgentMayStillBeRunning(
     );
 }
 
+/** @deprecated Use {@link IsDisconnectWhileAgentMayStillBeRunning}. */
+export function isDisconnectWhileAgentMayStillBeRunning(
+    message: string,
+    result?: AgentFailureSource
+): boolean {
+    return IsDisconnectWhileAgentMayStillBeRunning(message, result);
+}
+
 export type AgentFailureDisposition =
     | { status: 'In-Progress'; message: string }
     | { status: 'Error'; message: string };
@@ -66,12 +82,12 @@ export type AgentFailureDisposition =
  * Decide whether a failed `ExecuteAgentResult` should keep the conversation
  * detail In-Progress (server may still complete) or paint Error.
  */
-export function agentFailureDisposition(
+export function agentFailureDisposition(  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope
     result: AgentFailureSource,
     fallback?: string
 ): AgentFailureDisposition {
-    const message = agentFailureMessage(result, fallback);
-    if (isDisconnectWhileAgentMayStillBeRunning(message, result)) {
+    const message = AgentFailureMessage(result, fallback);
+    if (IsDisconnectWhileAgentMayStillBeRunning(message, result)) {
         return { status: 'In-Progress', message };
     }
     return { status: 'Error', message };
@@ -81,13 +97,21 @@ export function agentFailureDisposition(
  * Copy of a failed agent result. Always `success: false` with a non-empty
  * `errorMessage`. Does not mutate the caller's object.
  */
-export function coerceFailedExecuteAgentResult<T extends { success?: boolean; errorMessage?: string | null; agentRun?: { ErrorMessage?: string | null } | null }>(
+export function CoerceFailedExecuteAgentResult<T extends { success?: boolean; errorMessage?: string | null; agentRun?: { ErrorMessage?: string | null } | null }>(
     result: T | null | undefined,
     fallback: string
 ): T & { success: false; errorMessage: string } {
     return {
         ...(result ?? {}),
         success: false,
-        errorMessage: agentFailureMessage(result, fallback),
+        errorMessage: AgentFailureMessage(result, fallback),
     } as T & { success: false; errorMessage: string };
+}
+
+/** @deprecated Use {@link CoerceFailedExecuteAgentResult}. */
+export function coerceFailedExecuteAgentResult<T extends { success?: boolean; errorMessage?: string | null; agentRun?: { ErrorMessage?: string | null } | null }>(
+    result: T | null | undefined,
+    fallback: string
+): T & { success: false; errorMessage: string } {
+    return CoerceFailedExecuteAgentResult(result, fallback);
 }

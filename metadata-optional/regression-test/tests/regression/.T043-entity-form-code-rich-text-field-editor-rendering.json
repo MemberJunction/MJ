@@ -1,0 +1,57 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T043 - Entity Form Code/Rich-Text Field Editor Rendering",
+    "Description": "Exercises the RichTextMode='code'/'markdown'/'html' rendering path (mj-code-editor, mj-markdown, CodeEditorLanguage) for long-text fields — a distinct field-type editor branch from textbox/textarea/number/date/checkbox/select and from FK search.",
+    "InputDefinition": "{\n  \"goal\": \"Open an entity whose records contain a large code, SQL, JSON, or markdown field via the LEFT sidebar 'Search entities...' box — good candidates are 'Templates' (template text), 'MJ: Queries' (SQL), or 'Email Templates'. Click a row and 'Open Full Record'. Locate the long code/markdown field: in read mode it should render in a formatted way (syntax-highlighted code block or rendered markdown, NOT a single plain input line). Then click Edit and confirm that field becomes a multi-line code editor (syntax-highlighted textarea) rather than a one-line text box. Success is the long/code field using the rich code-editor rendering in at least one mode. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.\",\n  \"startUrl\": \"http://localhost:4200\",\n  \"allowedDomains\": [\n    \"localhost\",\n    \"*.auth0.com\"\n  ],\n  \"auth\": {\n    \"bindings\": [\n      {\n        \"domains\": [\n          \"localhost\",\n          \"*.auth0.com\"\n        ],\n        \"method\": {\n          \"Type\": \"Basic\",\n          \"Username\": \"{{authUsername}}\",\n          \"Password\": \"{{authPassword}}\",\n          \"Strategy\": \"FormLogin\"\n        }\n      }\n    ]\n  }\n}",
+    "ExpectedOutcomes": "{\n  \"goalCompleted\": true,\n  \"minConfidence\": 0.7,\n  \"maxSteps\": 35,\n  \"judgeValidationCriteria\": [\n    \"A long code/SQL/JSON/markdown field renders with rich formatting (syntax-highlighted code editor or rendered markdown), not a plain single-line input\",\n    \"In edit mode the field presents as a multi-line code/rich editor\",\n    \"No error messages, blank screens, or crash pages\"\n  ]\n}",
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,form",
+    "Priority": 0,
+    "EstimatedDurationSeconds": null,
+    "EstimatedCostUSD": null,
+    "RepeatCount": null,
+    "MaxExecutionTimeMS": null,
+    "Variables": null,
+    "Type": "Computer Use",
+    "SkipEmbeddings": false
+  },
+  "primaryKey": {
+    "ID": "94B49AA3-DB65-4724-B48C-E26A6B5E5E3C"
+  },
+  "sync": {
+    "lastModified": "2026-09-11T21:36:53.286Z",
+    "checksum": "044b96d4e4d387de1eea82f647e061bfab9e6c29bd4939f60ad889b8f4915590"
+  }
+}

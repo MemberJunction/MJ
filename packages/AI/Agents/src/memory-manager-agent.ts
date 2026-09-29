@@ -516,7 +516,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Create an agent run step record for observability.
      * Returns null if agentRunID is not set (defensive check).
      */
-    private async CreateRunStep(
+    private async createRunStep(
         stepType: 'Prompt' | 'Decision' | 'Validation',
         stepName: string,
         inputData?: Record<string, unknown>,
@@ -560,7 +560,7 @@ export class MemoryManagerAgent extends BaseAgent {
     /**
      * Finalize an agent run step with success/failure status and output data.
      */
-    private async FinalizeRunStep(
+    private async finalizeRunStep(
         step: MJAIAgentRunStepEntity | null,
         success: boolean,
         outputData?: Record<string, unknown>,
@@ -600,7 +600,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Get the last run timestamp for this agent to determine what to process.
      * For first run, returns null to process all history (limited by MaxRows).
      */
-    private async GetLastRunTime(agentId: string, contextUser: UserInfo): Promise<Date | null> {
+    private async getLastRunTime(agentId: string, contextUser: UserInfo): Promise<Date | null> {
         // Read-only: we only need StartedAt, so use a 'simple' projection with a narrow Fields
         // list. Loading this as 'entity_object' would build a full MJAIAgentRunEntityExtended,
         // whose InnerLoad fires a secondary "MJ: AI Agent Run Steps" RunView (LoadRelatedData) —
@@ -654,7 +654,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Load agents that have note or example injection enabled.
      * Only extract notes/examples for agents that actually use these features.
      */
-    private async LoadAgentsUsingMemory(contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
+    private async loadAgentsUsingMemory(contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
         const allAgents = AIEngine.Instance.Agents;
         const filteredAgents = allAgents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
 
@@ -685,7 +685,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Uses a single optimized RunQuery that replaces 4 separate database queries.
      * Returns conversations with their details, ratings, and agent run IDs for scope inheritance.
      */
-    private async LoadConversationsWithNewActivity(
+    private async loadConversationsWithNewActivity(
         since: Date | null,
         agentsUsingMemory: MJAIAgentEntityExtended[],
         contextUser: UserInfo
@@ -776,7 +776,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * secondary "MJ: AI Agent Run Steps" RunView via InnerLoad/LoadRelatedData — exactly the
      * redundant round-trips the telemetry flagged. The simple projection skips all of them.
      */
-    private async LoadHighValueAgentRuns(since: Date | null, contextUser: UserInfo): Promise<Array<{ ID: string }>> {
+    private async loadHighValueAgentRuns(since: Date | null, contextUser: UserInfo): Promise<Array<{ ID: string }>> {
         const rv = new RunView();
 
         // Use subquery to find agent runs with high-usage artifacts
@@ -834,7 +834,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * matching the high-value loader's lightweight projection. The confidence gate (≥80) downstream
      * discards transient/low-signal failures that carry no generalizable lesson.
      */
-    private async LoadInstructiveFailedAgentRuns(since: Date | null, contextUser: UserInfo): Promise<InstructiveFailedRun[]> {
+    private async loadInstructiveFailedAgentRuns(since: Date | null, contextUser: UserInfo): Promise<InstructiveFailedRun[]> {
         const rv = new RunView();
         const sinceFilter = since ? ` AND __mj_CreatedAt >= '${since.toISOString()}'` : '';
         const filter = `((Status IN ('Failed', 'Cancelled') AND ErrorMessage IS NOT NULL) OR (Success = 0 AND Status NOT IN ('Running', 'Paused')))${sinceFilter}`;
@@ -856,7 +856,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * This is the primary method that handles rated, unrated, positive, and negative feedback.
      * Uses LLM-based deduplication and applies sparsity controls.
      */
-    private async ExtractNotesFromConversations(
+    private async extractNotesFromConversations(
         conversations: ConversationWithRatings[],
         contextUser: UserInfo
     ): Promise<ExtractedNote[]> {
@@ -907,7 +907,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * to the corrective note types (Issue/Context only, never Constraint/Preference/Example) and
      * tagged 'Ephemeral' so a one-off transient failure decays unless reinforced by recurrence.
      */
-    private async ExtractNotesFromFailedRuns(
+    private async extractNotesFromFailedRuns(
         failedRuns: InstructiveFailedRun[],
         contextUser: UserInfo
     ): Promise<ExtractedNote[]> {
@@ -1048,7 +1048,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const conversationThreads = promptData.conversationThreads;
         this.logExtractionPromptContext(prompt, conversationThreads);
 
-        const step = await this.CreateRunStep('Prompt', 'Extract Notes from Conversations', {
+        const step = await this.createRunStep('Prompt', 'Extract Notes from Conversations', {
             conversationCount: conversationThreads.length,
             messageCount: conversationThreads.reduce((sum, t) => sum + t.messages.length, 0),
             existingNoteCount
@@ -1063,7 +1063,7 @@ export class MemoryManagerAgent extends BaseAgent {
         params.additionalParameters = DETERMINISTIC_PROMPT_PARAMS;
 
         const result = await runner.ExecutePrompt<{ notes: ExtractedNote[] }>(params);
-        await this.FinalizeRunStep(step, result.success, {
+        await this.finalizeRunStep(step, result.success, {
             success: result.success,
             rawNoteCount: result.result && typeof result.result !== 'string' ? (result.result.notes?.length || 0) : 0
         }, result.promptRun?.ID, result.errorMessage || undefined);
@@ -1202,7 +1202,7 @@ export class MemoryManagerAgent extends BaseAgent {
         existingNotes: MJAIAgentNoteEntity[],
         contextUser: UserInfo
     ): Promise<ExtractedNote[]> {
-        const step = await this.CreateRunStep('Decision', 'Deduplicate Note Candidates', {
+        const step = await this.createRunStep('Decision', 'Deduplicate Note Candidates', {
             candidateCount: candidates.length,
             existingNoteCount: existingNotes.length
         });
@@ -1225,7 +1225,7 @@ export class MemoryManagerAgent extends BaseAgent {
             }
         }
 
-        await this.FinalizeRunStep(step, true, {
+        await this.finalizeRunStep(step, true, {
             approvedCount: approved.length,
             rejectedCount: stats.rejectedCount,
             llmCallCount: stats.llmCallCount
@@ -1356,7 +1356,7 @@ export class MemoryManagerAgent extends BaseAgent {
      * Extract examples from conversation details with high ratings.
      * Uses LLM-based deduplication to avoid adding redundant examples.
      */
-    private async ExtractExamples(
+    private async extractExamples(
         conversationDetails: ConversationDetailProjection[],
         contextUser: UserInfo
     ): Promise<ExtractedExample[]> {
@@ -1384,7 +1384,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Step 5: Execute AI extraction
-        const step5 = await this.CreateRunStep('Prompt', 'Extract Examples from Conversations', {
+        const step5 = await this.createRunStep('Prompt', 'Extract Examples from Conversations', {
             qaPairCount: qaPairs.length
         }, extractPrompt.ID);
 
@@ -1399,7 +1399,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const extractResult = await runner.ExecutePrompt<{ examples: ExtractedExample[] }>(extractParams);
 
         if (!extractResult.success || !extractResult.result) {
-            await this.FinalizeRunStep(step5, false, {
+            await this.finalizeRunStep(step5, false, {
                 success: false
             }, extractResult.promptRun?.ID, extractResult.errorMessage || undefined);
             LogError('Failed to extract examples:', extractResult.errorMessage);
@@ -1424,7 +1424,7 @@ export class MemoryManagerAgent extends BaseAgent {
             .filter(e => e.successScore >= 70 && e.confidence >= 70);
 
         // Finalize Step 5 after extraction parsing
-        await this.FinalizeRunStep(step5, true, {
+        await this.finalizeRunStep(step5, true, {
             rawExampleCount: parsedResult.examples?.length || 0,
             candidateCount: candidateExamples.length
         }, extractResult.promptRun?.ID);
@@ -1434,7 +1434,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Step 6: Deduplicate example candidates (summary step)
-        const step6 = await this.CreateRunStep('Decision', 'Deduplicate Example Candidates', {
+        const step6 = await this.createRunStep('Decision', 'Deduplicate Example Candidates', {
             candidateCount: candidateExamples.length
         });
 
@@ -1496,7 +1496,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Finalize Step 6 after deduplication loop
-        await this.FinalizeRunStep(step6, true, {
+        await this.finalizeRunStep(step6, true, {
             approvedCount: approvedExamples.length,
             rejectedCount: exampleDedupeRejectedCount,
             llmCallCount: exampleDedupeLlmCallCount
@@ -1509,9 +1509,9 @@ export class MemoryManagerAgent extends BaseAgent {
      * Create note records from extracted data.
      * Inherits scope from source agent run and applies scopeLevel to determine scope specificity.
      */
-    private async CreateNoteRecords(extractedNotes: ExtractedNote[], contextUser: UserInfo): Promise<number> {
+    private async createNoteRecords(extractedNotes: ExtractedNote[], contextUser: UserInfo): Promise<number> {
         // Step 7: Create Note Records
-        const step7 = await this.CreateRunStep('Decision', 'Create Note Records', {
+        const step7 = await this.createRunStep('Decision', 'Create Note Records', {
             noteCount: extractedNotes.length
         });
 
@@ -1527,7 +1527,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const aiNoteTypeId = AIEngine.Instance.AgenteNoteTypeIDByName('AI');
         if (!aiNoteTypeId) {
             LogError('Memory Manager: Could not find "AI" note type - cannot create notes');
-            await this.FinalizeRunStep(step7, false, {
+            await this.finalizeRunStep(step7, false, {
                 created: 0,
                 merged: 0,
                 failed: extractedNotes.length
@@ -1648,7 +1648,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Finalize Step 7
-        await this.FinalizeRunStep(step7, failed === 0 || created > 0 || merged > 0, {
+        await this.finalizeRunStep(step7, failed === 0 || created > 0 || merged > 0, {
             created,
             merged,
             failed
@@ -2561,7 +2561,7 @@ export class MemoryManagerAgent extends BaseAgent {
         contextUser: UserInfo
     ): Promise<{ consolidated: number; archived: number; newNoteId: string | null; verification: ConsolidationVerificationResult | null }> {
         const maxGeneration = Math.max(...cluster.map(n => n.ConsolidationCount || 0));
-        const clusterStep = await this.CreateRunStep('Prompt', 'Process Consolidation Cluster', {
+        const clusterStep = await this.createRunStep('Prompt', 'Process Consolidation Cluster', {
             clusterSize: cluster.length,
             noteIds: cluster.map(n => n.ID),
             maxGeneration
@@ -2620,7 +2620,7 @@ export class MemoryManagerAgent extends BaseAgent {
         } finally {
             // Treat skip (shouldConsolidate: false) as a successful completion rather than a
             // failure — the phase intentionally chose not to consolidate this cluster.
-            await this.FinalizeRunStep(clusterStep, outcome.consolidated === 1 || stepOutput.shouldConsolidate === false, stepOutput);
+            await this.finalizeRunStep(clusterStep, outcome.consolidated === 1 || stepOutput.shouldConsolidate === false, stepOutput);
         }
     }
 
@@ -2949,7 +2949,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const queryMapping: Array<'users' | 'companies' | 'conversations'> = [];
         const push = (entityName: string, ids: Set<string>, kind: 'users' | 'companies' | 'conversations') => {
             if (ids.size === 0) return;
-            lookupQueries.push({ EntityName: entityName, ExtraFilter: `ID IN (${Array.from(ids).map(id => `'${id}'`).join(',')})`, Fields: ['ID'] });
+            lookupQueries.push({ EntityName: entityName, ExtraFilter: `ID IN (${Array.from(ids).map(id => `'${id}'`).join(',')})`, Fields: ['ID'] }); // pk-filter-ok: callers pass MJ core entities only (Users, Companies, Conversations)
             queryMapping.push(kind);
         };
         push('MJ: Users', referencedUserIds, 'users');
@@ -3355,7 +3355,7 @@ export class MemoryManagerAgent extends BaseAgent {
         contextUser: UserInfo
     ): Promise<{ hardened: number; deduped: number; failed: number }> {
         const counters = { hardened: 0, deduped: 0, failed: 0 };
-        const step = await this.CreateRunStep('Decision', 'Harden Provisional Notes', {
+        const step = await this.createRunStep('Decision', 'Harden Provisional Notes', {
             maxNotesPerRun: HARDENING_CONFIG.maxNotesPerRun
         });
         try {
@@ -3374,7 +3374,7 @@ export class MemoryManagerAgent extends BaseAgent {
                 .slice(0, HARDENING_CONFIG.maxNotesPerRun);
 
             if (provisionalNotes.length === 0) {
-                await this.FinalizeRunStep(step, true, { ...counters, provisionalCount: 0 });
+                await this.finalizeRunStep(step, true, { ...counters, provisionalCount: 0 });
                 return counters;
             }
 
@@ -3391,10 +3391,10 @@ export class MemoryManagerAgent extends BaseAgent {
             if (this._verbose) {
                 LogStatus(`Memory Manager: Hardening pass — ${counters.hardened} hardened, ${counters.deduped} deduped, ${counters.failed} failed of ${provisionalNotes.length} provisional notes`);
             }
-            await this.FinalizeRunStep(step, counters.failed === 0, { ...counters, provisionalCount: provisionalNotes.length });
+            await this.finalizeRunStep(step, counters.failed === 0, { ...counters, provisionalCount: provisionalNotes.length });
         } catch (error) {
             LogError('Memory Manager: Hardening pass failed, continuing with run:', error);
-            await this.FinalizeRunStep(step, false, counters, undefined, error instanceof Error ? error.message : String(error));
+            await this.finalizeRunStep(step, false, counters, undefined, error instanceof Error ? error.message : String(error));
         }
         return counters;
     }
@@ -3494,7 +3494,7 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     private async runImportancePhase(r: MaintenancePhaseResults, contextUser: UserInfo): Promise<void> {
-        const importanceStep = await this.CreateRunStep('Decision', 'Compute Importance Scores', {
+        const importanceStep = await this.createRunStep('Decision', 'Compute Importance Scores', {
             activeNoteCount: AIEngine.Instance.AgentNotes.filter(n => n.Status === 'Active').length
         });
         try {
@@ -3502,14 +3502,14 @@ export class MemoryManagerAgent extends BaseAgent {
             r.importanceScored = scoringResult.notesScored;
             r.tierPromotions = scoringResult.tierPromotions;
             if (this._verbose) LogStatus(`Memory Manager: Scored ${r.importanceScored} notes, ${r.tierPromotions} tier promotions`);
-            await this.FinalizeRunStep(importanceStep, true, {
+            await this.finalizeRunStep(importanceStep, true, {
                 notesScored: r.importanceScored,
                 tierPromotions: r.tierPromotions,
                 scoreDistribution: scoringResult.scoreDistribution
             });
         } catch (error) {
             LogError('Memory Manager: Importance scoring failed, continuing with other phases:', error);
-            await this.FinalizeRunStep(importanceStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
+            await this.finalizeRunStep(importanceStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
     }
 
@@ -3519,7 +3519,7 @@ export class MemoryManagerAgent extends BaseAgent {
         triggerType: ConsolidationTriggerType
     ): Promise<Set<string>> {
         const consolidatedNoteIds = new Set<string>();
-        const consolidationStep = await this.CreateRunStep('Decision', 'Consolidate Related Notes', {
+        const consolidationStep = await this.createRunStep('Decision', 'Consolidate Related Notes', {
             frequency: CONSOLIDATION_CONFIG.frequency,
             triggerType,
             activeNoteCount: AIEngine.Instance.AgentNotes.filter(n => n.Status === 'Active' && n.IsAutoGenerated).length
@@ -3533,14 +3533,14 @@ export class MemoryManagerAgent extends BaseAgent {
             if (r.consolidatedCount > 0 && this._verbose) {
                 LogStatus(`Memory Manager: Consolidated ${r.consolidatedCount} clusters, archived ${r.consolidationArchived} source notes`);
             }
-            await this.FinalizeRunStep(consolidationStep, true, {
+            await this.finalizeRunStep(consolidationStep, true, {
                 consolidatedClusterCount: r.consolidatedCount,
                 sourceNotesArchived: r.consolidationArchived,
                 newConsolidatedNoteIds: Array.from(consolidatedNoteIds)
             });
         } catch (error) {
             LogError('Memory Manager: Consolidation failed, continuing with other phases:', error);
-            await this.FinalizeRunStep(consolidationStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
+            await this.finalizeRunStep(consolidationStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
 
         // Emit the phase-level verification run step (spec Task 8c). Runs whether or not
@@ -3552,14 +3552,14 @@ export class MemoryManagerAgent extends BaseAgent {
 
     /** Aggregate per-cluster verification results into a single phase-level run step. */
     private async emitVerificationRunStep(verifications: ConsolidationVerificationResult[]): Promise<void> {
-        const verificationStep = await this.CreateRunStep('Validation', 'Verify Consolidation Output', {
+        const verificationStep = await this.createRunStep('Validation', 'Verify Consolidation Output', {
             clustersVerified: verifications.length
         });
         const verificationsFlagged = verifications.filter(v => !v.passed).length;
         const verificationsPassed = verifications.filter(v => v.passed).length;
         const entitiesChecked = verifications.reduce((sum, v) => sum + v.entitiesChecked, 0);
         const entitiesMissing = verifications.flatMap(v => v.entitiesMissing);
-        await this.FinalizeRunStep(verificationStep, true, {
+        await this.finalizeRunStep(verificationStep, true, {
             clustersVerified: verifications.length,
             entitiesChecked,
             entitiesMissing,
@@ -3569,7 +3569,7 @@ export class MemoryManagerAgent extends BaseAgent {
     }
 
     private async runContradictionPhase(r: MaintenancePhaseResults, contextUser: UserInfo, consolidatedNoteIds: Set<string>): Promise<void> {
-        const contradictionStep = await this.CreateRunStep('Decision', 'Detect Note Contradictions', {
+        const contradictionStep = await this.createRunStep('Decision', 'Detect Note Contradictions', {
             consolidatedNoteIdsCount: consolidatedNoteIds.size
         });
         try {
@@ -3580,7 +3580,7 @@ export class MemoryManagerAgent extends BaseAgent {
             if (r.contradictionsFound > 0 && this._verbose) {
                 LogStatus(`Memory Manager: Found ${r.contradictionsFound} contradictions — resolved ${r.contradictionsResolved}, flagged ${r.contradictionsFlagged}`);
             }
-            await this.FinalizeRunStep(contradictionStep, true, {
+            await this.finalizeRunStep(contradictionStep, true, {
                 pairsAnalyzed: contradictionResult.pairsAnalyzed,
                 contradictionsFound: r.contradictionsFound,
                 contradictionsResolved: r.contradictionsResolved,
@@ -3589,7 +3589,7 @@ export class MemoryManagerAgent extends BaseAgent {
             });
         } catch (error) {
             LogError('Memory Manager: Contradiction detection failed, continuing with other phases:', error);
-            await this.FinalizeRunStep(contradictionStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
+            await this.finalizeRunStep(contradictionStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
     }
 
@@ -3598,8 +3598,8 @@ export class MemoryManagerAgent extends BaseAgent {
      * doesn't block the other.
      */
     private async runPruneAndDecayPhases(r: MaintenancePhaseResults, contextUser: UserInfo): Promise<void> {
-        const pruneStep = await this.CreateRunStep('Decision', 'Prune Stale References', {});
-        const decayStep = await this.CreateRunStep('Decision', 'Decay-Based Archival', {});
+        const pruneStep = await this.createRunStep('Decision', 'Prune Stale References', {});
+        const decayStep = await this.createRunStep('Decision', 'Decay-Based Archival', {});
         await Promise.allSettled([
             this.runPrunePhase(r, contextUser, pruneStep),
             this.runDecayPhase(r, contextUser, decayStep),
@@ -3613,7 +3613,7 @@ export class MemoryManagerAgent extends BaseAgent {
             if (r.staleNotesArchived > 0 && this._verbose) {
                 LogStatus(`Memory Manager: Pruned ${r.staleNotesArchived} orphaned notes`);
             }
-            await this.FinalizeRunStep(pruneStep, true, {
+            await this.finalizeRunStep(pruneStep, true, {
                 notesArchived: r.staleNotesArchived,
                 orphanedAgents: pruneResult.orphanedAgents,
                 orphanedUsers: pruneResult.orphanedUsers,
@@ -3622,7 +3622,7 @@ export class MemoryManagerAgent extends BaseAgent {
             });
         } catch (error) {
             LogError('Memory Manager: Stale reference pruning failed:', error);
-            await this.FinalizeRunStep(pruneStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
+            await this.finalizeRunStep(pruneStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
     }
 
@@ -3635,7 +3635,7 @@ export class MemoryManagerAgent extends BaseAgent {
             if (totalDecayArchived > 0 && this._verbose) {
                 LogStatus(`Memory Manager: Decay archival — ${decayResult.notesArchived} notes, ${decayResult.examplesArchived} examples, ${decayResult.notesExpired} expired notes, ${decayResult.examplesExpired} expired examples`);
             }
-            await this.FinalizeRunStep(decayStep, true, {
+            await this.finalizeRunStep(decayStep, true, {
                 notesArchived: decayResult.notesArchived,
                 examplesArchived: decayResult.examplesArchived,
                 notesExpired: decayResult.notesExpired,
@@ -3646,7 +3646,7 @@ export class MemoryManagerAgent extends BaseAgent {
             });
         } catch (error) {
             LogError('Memory Manager: Decay-based archival failed:', error);
-            await this.FinalizeRunStep(decayStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
+            await this.finalizeRunStep(decayStep, false, undefined, undefined, error instanceof Error ? error.message : String(error));
         }
     }
 
@@ -3665,9 +3665,9 @@ export class MemoryManagerAgent extends BaseAgent {
      * Create example records from extracted data.
      * Inherits scope from source agent run and applies scopeLevel to determine scope specificity.
      */
-    private async CreateExampleRecords(extractedExamples: ExtractedExample[], contextUser: UserInfo): Promise<number> {
+    private async createExampleRecords(extractedExamples: ExtractedExample[], contextUser: UserInfo): Promise<number> {
         // Step 8: Create Example Records
-        const step8 = await this.CreateRunStep('Decision', 'Create Example Records', {
+        const step8 = await this.createRunStep('Decision', 'Create Example Records', {
             exampleCount: extractedExamples.length
         });
 
@@ -3746,7 +3746,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         // Finalize Step 8
-        await this.FinalizeRunStep(step8, failed === 0 || created > 0, {
+        await this.finalizeRunStep(step8, failed === 0 || created > 0, {
             created,
             skipped,
             failed
@@ -3778,8 +3778,8 @@ export class MemoryManagerAgent extends BaseAgent {
             // Phase 1: the last-run-time and the memory-enabled agent set are independent — load in
             // parallel (avoids two back-to-back sequential RunViews flagged by the parallelization telemetry).
             const [lastRunTime, agentsUsingMemory] = await Promise.all([
-                this.GetLastRunTime(params.agent.ID, params.contextUser!),
-                this.LoadAgentsUsingMemory(params.contextUser!)
+                this.getLastRunTime(params.agent.ID, params.contextUser!),
+                this.loadAgentsUsingMemory(params.contextUser!)
             ]);
 
             if (this._verbose) {
@@ -3800,34 +3800,34 @@ export class MemoryManagerAgent extends BaseAgent {
             // Phase 2: conversations-with-new-activity and high-value agent runs both depend only on
             // (lastRunTime, agentsUsingMemory) — never on each other — so load them in parallel, each
             // recorded in its own run step.
-            const step1 = await this.CreateRunStep('Decision', 'Load Conversations With New Activity', {
+            const step1 = await this.createRunStep('Decision', 'Load Conversations With New Activity', {
                 since: lastRunTime?.toISOString() || null,
                 agentCount: agentsUsingMemory.length,
                 agentIds: agentsUsingMemory.map(a => a.ID)
             });
-            const step2 = await this.CreateRunStep('Decision', 'Load High-Value Agent Runs', {
+            const step2 = await this.createRunStep('Decision', 'Load High-Value Agent Runs', {
                 since: lastRunTime?.toISOString() || null
             });
-            const step3 = await this.CreateRunStep('Decision', 'Load Instructive Failed Agent Runs', {
+            const step3 = await this.createRunStep('Decision', 'Load Instructive Failed Agent Runs', {
                 since: lastRunTime?.toISOString() || null
             });
             const [conversations, agentRuns, failedRuns] = await Promise.all([
-                this.LoadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!),
-                this.LoadHighValueAgentRuns(lastRunTime, params.contextUser!),
-                this.LoadInstructiveFailedAgentRuns(lastRunTime, params.contextUser!)
+                this.loadConversationsWithNewActivity(lastRunTime, agentsUsingMemory, params.contextUser!),
+                this.loadHighValueAgentRuns(lastRunTime, params.contextUser!),
+                this.loadInstructiveFailedAgentRuns(lastRunTime, params.contextUser!)
             ]);
             const totalMessages = conversations.reduce((sum, c) => sum + c.messages.length, 0);
-            await this.FinalizeRunStep(step1, true, {
+            await this.finalizeRunStep(step1, true, {
                 conversationCount: conversations.length,
                 totalMessages,
                 positiveCount: conversations.filter(c => c.hasPositiveRating).length,
                 negativeCount: conversations.filter(c => c.hasNegativeRating).length,
                 unratedCount: conversations.filter(c => c.isUnrated).length
             });
-            await this.FinalizeRunStep(step2, true, {
+            await this.finalizeRunStep(step2, true, {
                 runCount: agentRuns.length
             });
-            await this.FinalizeRunStep(step3, true, {
+            await this.finalizeRunStep(step3, true, {
                 runCount: failedRuns.length
             });
             if (this._verbose) {
@@ -3850,13 +3850,13 @@ export class MemoryManagerAgent extends BaseAgent {
             let examplesCreated = 0;
 
             if (hasNewData) {
-                const extractedNotes = await this.ExtractNotesFromConversations(conversations, params.contextUser!);
+                const extractedNotes = await this.extractNotesFromConversations(conversations, params.contextUser!);
                 if (this._verbose) {
                     LogStatus(`Memory Manager: Extracted ${extractedNotes.length} potential notes`);
                 }
 
                 // Mine corrective notes from failed runs (Issue/Context only, Ephemeral tier).
-                const correctiveNotes = await this.ExtractNotesFromFailedRuns(failedRuns, params.contextUser!);
+                const correctiveNotes = await this.extractNotesFromFailedRuns(failedRuns, params.contextUser!);
                 if (this._verbose) {
                     LogStatus(`Memory Manager: Extracted ${correctiveNotes.length} corrective notes from failed runs`);
                 }
@@ -3873,7 +3873,7 @@ export class MemoryManagerAgent extends BaseAgent {
                         __mj_CreatedAt: msg.createdAt
                     }))
                 );
-                const extractedExamples = await this.ExtractExamples(conversationDetails, params.contextUser!);
+                const extractedExamples = await this.extractExamples(conversationDetails, params.contextUser!);
                 if (this._verbose) {
                     LogStatus(`Memory Manager: Extracted ${extractedExamples.length} potential examples`);
                 }
@@ -3913,8 +3913,8 @@ export class MemoryManagerAgent extends BaseAgent {
                     }
                 }
 
-                notesCreated = await this.CreateNoteRecords([...extractedNotes, ...correctiveNotes], params.contextUser!);
-                examplesCreated = await this.CreateExampleRecords(extractedExamples, params.contextUser!);
+                notesCreated = await this.createNoteRecords([...extractedNotes, ...correctiveNotes], params.contextUser!);
+                examplesCreated = await this.createExampleRecords(extractedExamples, params.contextUser!);
 
                 if (this._verbose) LogStatus(`Memory Manager: Created ${notesCreated} notes and ${examplesCreated} examples`);
             }

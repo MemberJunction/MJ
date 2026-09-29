@@ -1,5 +1,200 @@
 # @memberjunction/auth-providers
 
+## 6.2.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [7be1684]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [9b5b489]
+- Updated dependencies [683f652]
+- Updated dependencies [f48dffc]
+- Updated dependencies [630bb88]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [a17a228]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [104125c]
+- Updated dependencies [5513c2a]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [2c590b0]
+  - @memberjunction/core@6.2.0-edge.0
+  - @memberjunction/global@6.2.0-edge.0
+
+## 6.1.0
+
+### Minor Changes
+
+- 048c5ce: feat(auth): metadata-driven pluggable authentication providers
+
+  Authentication providers are now discovered the MJ way — a `@RegisterClass(BaseAuthProvider, 'x')`
+  subclass plus a row in the new `MJ: Authentication Providers` entity, resolved at runtime through
+  `ClassFactory` by `DriverClass`. Adding a provider requires no core edits.
+  - **New entity** `__mj.AuthenticationProvider`, with the OIDC connection fields as columns, an
+    optional `CredentialID` for the rare provider needing server-side secrets, and login-picker
+    presentation fields. Driver configuration is split by trust boundary: `AdditionalConfiguration`
+    is server-only, `ClientConfiguration` is published to the browser.
+  - **`AuthProviderEngine`** loads the catalog at startup and registers it with `AuthProviderFactory`.
+  - **Layered resolution** — `mj.config.cjs` `authProviders[]` remains fully supported as the baseline
+    and fallback, so existing deployments are unaffected and need no changes.
+  - **`GET /auth/providers`** publishes the non-secret catalog to the pre-auth browser (rate-limited,
+    mounted ahead of the auth middleware, allow-list projection).
+  - **`<mj-login-picker>`** — a reusable, app-agnostic multi-IdP picker built on `mjButton`, rendered
+    only when 2+ client-visible providers exist. Single-provider deployments look exactly as before.
+  - `AuthProviderFactory` no longer carries a hard-wired list of built-in provider imports; the
+    package entry point and the class-registration manifests already covered registration.
+  - **Environment-variable configuration is now pluggable too.** The hard-coded block in MJServer's
+    config that enumerated Entra / Auth0 / Cognito inline is replaced by an optional
+    `configFromEnvironment` static on each provider class (`IEnvironmentConfigurableProvider`),
+    collected through the ClassFactory registry by `AuthProviderFactory.discoverFromEnvironment()`.
+    A third-party provider can now offer the same "set two variables and you're done" experience
+    with no change to MJ core. The three existing mappings are preserved byte-for-byte; **Okta**
+    (`OKTA_DOMAIN` + `OKTA_CLIENT_ID`) and **WorkOS** (`WORKOS_CLIENT_ID`) gain env-var support they
+    did not previously have.
+
+### Patch Changes
+
+- c679e8d: Fix the MCP OAuth proxy against Amazon Cognito: use the hosted-UI domain for the upstream endpoints.
+
+  The proxy derived its upstream `/authorize` and `/token` URLs with an Azure AD branch and an Auth0-shaped fallback, so a Cognito provider got `https://cognito-idp.<region>.amazonaws.com/<poolId>/authorize` — the user-pool API host, which answers HTTP 400. Cognito serves OAuth only on the hosted-UI domain (`https://<domain>.auth.<region>.amazoncognito.com/oauth2/authorize` and `/oauth2/token`); the issuer stays on `cognito-idp` and is still what validates tokens. The same fallback also appended `offline_access`, which Cognito rejects as `invalid_scope`.
+
+  Endpoint derivation now lives in `resolveUpstreamOAuthEndpoints()` (`@memberjunction/ai-mcp-server/auth/UpstreamEndpoints`) with an explicit Cognito branch. Azure AD and generic-OIDC (Auth0/Okta) URLs are unchanged and pinned by tests. The hosted-UI domain comes from the provider's existing optional `domain` field, which `CognitoProvider.ConfigFromEnvironment` now populates from `COGNITO_DOMAIN` — the same variable and host-only form MJExplorer already reads. `BaseAuthProvider` exposes `domain` alongside `clientId` for the proxy to read. A Cognito upstream configured without a domain now throws a message naming what to set, instead of silently building a URL that 400s.
+
+  The provider is also classified from the issuer's **hostname** rather than by substring-matching the whole issuer URL, which is how the Azure AD check worked before. An issuer is caller-supplied configuration, and the flavor decides which host a user's browser is sent to for login, so `https://evil.example/?microsoftonline.com` must not classify as Azure AD. Matching is exact-or-subdomain, so `notmicrosoftonline.com` does not match either. Legitimate issuers — including provider subdomains such as `login.partner.microsoftonline.com` — classify exactly as before.
+
+  Token validation is untouched: `domain` is optional and unused outside the OAuth proxy, so an existing Cognito deployment that never sets `COGNITO_DOMAIN` behaves exactly as before.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [c996a56]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- c679e8d: Fix the MCP OAuth proxy against Amazon Cognito: use the hosted-UI domain for the upstream endpoints.
+
+  The proxy derived its upstream `/authorize` and `/token` URLs with an Azure AD branch and an Auth0-shaped fallback, so a Cognito provider got `https://cognito-idp.<region>.amazonaws.com/<poolId>/authorize` — the user-pool API host, which answers HTTP 400. Cognito serves OAuth only on the hosted-UI domain (`https://<domain>.auth.<region>.amazoncognito.com/oauth2/authorize` and `/oauth2/token`); the issuer stays on `cognito-idp` and is still what validates tokens. The same fallback also appended `offline_access`, which Cognito rejects as `invalid_scope`.
+
+  Endpoint derivation now lives in `resolveUpstreamOAuthEndpoints()` (`@memberjunction/ai-mcp-server/auth/UpstreamEndpoints`) with an explicit Cognito branch. Azure AD and generic-OIDC (Auth0/Okta) URLs are unchanged and pinned by tests. The hosted-UI domain comes from the provider's existing optional `domain` field, which `CognitoProvider.ConfigFromEnvironment` now populates from `COGNITO_DOMAIN` — the same variable and host-only form MJExplorer already reads. `BaseAuthProvider` exposes `domain` alongside `clientId` for the proxy to read. A Cognito upstream configured without a domain now throws a message naming what to set, instead of silently building a URL that 400s.
+
+  The provider is also classified from the issuer's **hostname** rather than by substring-matching the whole issuer URL, which is how the Azure AD check worked before. An issuer is caller-supplied configuration, and the flavor decides which host a user's browser is sent to for login, so `https://evil.example/?microsoftonline.com` must not classify as Azure AD. Matching is exact-or-subdomain, so `notmicrosoftonline.com` does not match either. Legitimate issuers — including provider subdomains such as `login.partner.microsoftonline.com` — classify exactly as before.
+
+  Token validation is untouched: `domain` is optional and unused outside the OAuth proxy, so an existing Cognito deployment that never sets `COGNITO_DOMAIN` behaves exactly as before.
+
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

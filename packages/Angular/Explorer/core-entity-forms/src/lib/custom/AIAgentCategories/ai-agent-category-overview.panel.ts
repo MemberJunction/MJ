@@ -137,10 +137,10 @@ export class AIAgentCategoryOverviewPanel extends BaseFormPanel<MJAIAgentCategor
     public Agents: AgentRow[] = [];
 
     public ngOnInit(): void {
-        this.LoadCategoryAgents();
+        this.loadCategoryAgents();
     }
 
-    private async LoadCategoryAgents(): Promise<void> {
+    private async loadCategoryAgents(): Promise<void> {
         if (!this.Record?.ID) return;
         try {
             const rv = new RunView();

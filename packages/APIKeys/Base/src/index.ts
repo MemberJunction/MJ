@@ -15,4 +15,4 @@
  * @module @memberjunction/api-keys-base
  */
 
-export { APIKeysEngineBase, APIScopeUIConfig, parseAPIScopeUIConfig } from './APIKeysEngineBase';
+export { APIKeysEngineBase, APIScopeUIConfig, ParseAPIScopeUIConfig, parseAPIScopeUIConfig } from './APIKeysEngineBase';

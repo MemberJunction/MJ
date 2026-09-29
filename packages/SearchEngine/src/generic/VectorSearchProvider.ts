@@ -36,7 +36,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
     private available = false;
 
     /** LRU cache for query embeddings. Key = `${modelDriverClass}::${query}`, Value = embedding vector */
-    private static EmbeddingCache = new Map<string, EmbeddingCacheEntry>();
+    private static embeddingCache = new Map<string, EmbeddingCacheEntry>();
     private static readonly CACHE_MAX_SIZE = 200;
     private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -143,26 +143,26 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
     /** Retrieve a cached embedding if present and not expired, promoting it for LRU */
     private getCachedEmbedding(key: string): number[] | null {
-        const entry = VectorSearchProvider.EmbeddingCache.get(key);
+        const entry = VectorSearchProvider.embeddingCache.get(key);
         if (entry && (Date.now() - entry.timestamp) < VectorSearchProvider.CACHE_TTL_MS) {
             // Promote to most-recently-used by re-inserting
-            VectorSearchProvider.EmbeddingCache.delete(key);
-            VectorSearchProvider.EmbeddingCache.set(key, entry);
+            VectorSearchProvider.embeddingCache.delete(key);
+            VectorSearchProvider.embeddingCache.set(key, entry);
             return entry.vector;
         }
         // Expired or not found — clean up stale entry if present
-        if (entry) VectorSearchProvider.EmbeddingCache.delete(key);
+        if (entry) VectorSearchProvider.embeddingCache.delete(key);
         return null;
     }
 
     /** Store an embedding in the cache, evicting the oldest entry if at capacity */
     private setCachedEmbedding(key: string, vector: number[]): void {
         // Evict least-recently-used (first key in insertion order) if at capacity
-        if (VectorSearchProvider.EmbeddingCache.size >= VectorSearchProvider.CACHE_MAX_SIZE) {
-            const oldestKey = VectorSearchProvider.EmbeddingCache.keys().next().value;
-            if (oldestKey !== undefined) VectorSearchProvider.EmbeddingCache.delete(oldestKey);
+        if (VectorSearchProvider.embeddingCache.size >= VectorSearchProvider.CACHE_MAX_SIZE) {
+            const oldestKey = VectorSearchProvider.embeddingCache.keys().next().value;
+            if (oldestKey !== undefined) VectorSearchProvider.embeddingCache.delete(oldestKey);
         }
-        VectorSearchProvider.EmbeddingCache.set(key, { vector, timestamp: Date.now() });
+        VectorSearchProvider.embeddingCache.set(key, { vector, timestamp: Date.now() });
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -323,7 +323,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         vectorDBInstance.TryWireColocatedHost(this.Provider);
         if (vectorDBInstance.SupportsColocatedQuery) {
             const colocated = await vectorDBInstance.ColocatedQuery({
-                indexName: vectorIndex.Name,
+                indexName: vectorIndex.ExternalID?.trim() || vectorIndex.Name, // provider-side index name; Name is the MJ label
                 vector: queryVector,
                 keyword: queryText,
                 topK,
@@ -344,7 +344,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         // use it to honor server-side row-level security when loading vectors
         // via RunView.
         const response: BaseResponse = await vectorDBInstance.QueryIndex({
-            id: vectorIndex.Name,
+            id: vectorIndex.ExternalID?.trim() || vectorIndex.Name,
             vector: queryVector,
             topK,
             includeMetadata: true,
@@ -508,7 +508,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * Entities a content source is allowed to declare its vectors to be: the content-item entities
      * themselves, or anything that IS-A one of them.
      */
-    private static readonly AttributionRoots: readonly string[] = ['MJ: Content Items', 'MJ: Content Item Chunks'];
+    private static readonly attributionRoots: readonly string[] = ['MJ: Content Items', 'MJ: Content Item Chunks'];
 
     /**
      * Validate a declared attribution before it is trusted, and return the entity's CANONICAL name.
@@ -542,7 +542,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
             LogError(
                 `VectorSearchProvider: content source ${contentSourceID} declares vector entity ` +
                 `"${entity.Name}", which is not a content-item entity — ignoring it. A source may only ` +
-                `declare ${VectorSearchProvider.AttributionRoots.join(' / ')} or a subtype of one.`
+                `declare ${VectorSearchProvider.attributionRoots.join(' / ')} or a subtype of one.`
             );
             return null;
         }
@@ -560,7 +560,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
      * refused. Fail-closed, but wrong, and invisible until someone runs multi-provider.
      */
     private isContentItemEntity(entity: EntityInfo): boolean {
-        const roots = VectorSearchProvider.AttributionRoots;
+        const roots = VectorSearchProvider.attributionRoots;
         const provider = this.Provider;
         const visited = new Set<string>();
         let current: EntityInfo | undefined = entity;
@@ -657,9 +657,13 @@ export class VectorSearchProvider extends BaseSearchProvider {
 
             const rawScore = match.score ?? 0;
 
+            const entityInfo = this.Provider.EntityByName(entityName);
+            const entityDisplayName = entityInfo?.DisplayName || entityName;
+
             return {
                 ID: recordID,
                 EntityName: entityName,
+                EntityDisplayName: entityDisplayName,
                 RecordID: recordID,
                 SourceType: 'vector',
                 ResultType: 'entity-record' as SearchResultType,
@@ -679,7 +683,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
     }
 
     /** How many vector ids to name in the unattributed-match warning. */
-    private static readonly UnattributedSampleSize = 3;
+    private static readonly unattributedSampleSize = 3;
 
     /**
      * Report matches that no attribution step could name, because they are about to disappear.
@@ -697,7 +701,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         if (vectorIDs.length === 0) {
             return;
         }
-        const sample = vectorIDs.slice(0, VectorSearchProvider.UnattributedSampleSize).join(', ');
+        const sample = vectorIDs.slice(0, VectorSearchProvider.unattributedSampleSize).join(', ');
         LogError(
             `VectorSearchProvider: ${vectorIDs.length} match(es) from index "${indexName}" carry no ` +
             `resolvable entity and will be dropped by the permission filter rather than returned. Give ` +
@@ -820,10 +824,13 @@ export class VectorSearchProvider extends BaseSearchProvider {
     }
 
     /**
-     * Extract a plain record ID from a CompositeKey URL segment string.
-     * Vector metadata stores RecordID in format "FieldName|Value" or "F1|V1||F2|V2".
-     * For deduplication with entity search results, we need just the value(s).
-     * Uses CompositeKey.SimpleLoadFromURLSegment for proper multi-field parsing.
+     * Normalize the RecordID stored in vector metadata to the compact CompositeKey segment the
+     * other lanes emit, so fusion dedups the same record across lanes and the UI can open it.
+     * Vector metadata stores the always-prefixed form ("FieldName|Value" or "F1|V1||F2|V2"):
+     *  - single-column key → just the value (matches the entity/fulltext lanes, whatever the column is called)
+     *  - composite key     → the segment unchanged, field names intact, so
+     *    `CompositeKey.FromURLSegment(entity, RecordID)` can rebuild it. (Joining the bare values
+     *    with `||`, as this used to, produced a string nothing could parse.)
      */
     private extractRecordIDFromCompositeKey(raw: string): string {
         if (!raw.includes('|')) {
@@ -838,11 +845,11 @@ export class VectorSearchProvider extends BaseSearchProvider {
         }
 
         if (ck.KeyValuePairs.length === 1) {
-            return ck.KeyValuePairs[0].Value; // Single-key: just the UUID
+            return ck.KeyValuePairs[0].Value; // Single-key: just the value
         }
 
-        // Multi-key: join values with || for consistent dedup key
-        return ck.KeyValuePairs.map(kv => kv.Value).join('||');
+        // Multi-key: the prefixed segment IS the compact form for a composite key
+        return raw;
     }
 
 }

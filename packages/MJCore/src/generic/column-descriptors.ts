@@ -21,22 +21,22 @@ export type SQLBaseType =
  */
 export class ColumnDescriptor {
     /** Field name in the row data — the key used to access the value: row[field] */
-    field: string;
+    field: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Human-readable display name for headers, labels, and tooltips */
-    displayName?: string;
+    displayName?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** SQL base type — source of truth for formatting in MJ */
-    sqlBaseType?: SQLBaseType;
+    sqlBaseType?: SQLBaseType;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Full SQL type with precision/scale: 'decimal(18,2)', 'nvarchar(255)' */
-    sqlFullType?: string;
+    sqlFullType?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Column width in pixels (hint for renderers) */
-    width?: number;
+    width?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Human-readable description of what this column represents */
-    description?: string;
+    description?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     constructor(field: string) {
         this.field = field;
@@ -98,16 +98,61 @@ export class MJColumnDescriptor extends ColumnDescriptor {
  * Most consumers don't need this — it's specific to the grid renderer.
  */
 export class GridColumnDescriptor extends MJColumnDescriptor {
-    visible: boolean = true;
-    sortable: boolean = true;
-    resizable: boolean = true;
-    reorderable: boolean = true;
-    order: number = 0;
-    align?: 'left' | 'center' | 'right';
-    pinned?: 'left' | 'right' | null;
-    minWidth?: number;
-    maxWidth?: number;
-    flex?: number;
+    Visible: boolean = true;
+
+    /** @deprecated Use {@link Visible}. */
+    get visible(): boolean {
+        return this.Visible;
+    }
+    /** @deprecated Use {@link Visible}. */
+    set visible(value: boolean) {
+        this.Visible = value;
+    }
+    Sortable: boolean = true;
+
+    /** @deprecated Use {@link Sortable}. */
+    get sortable(): boolean {
+        return this.Sortable;
+    }
+    /** @deprecated Use {@link Sortable}. */
+    set sortable(value: boolean) {
+        this.Sortable = value;
+    }
+    Resizable: boolean = true;
+
+    /** @deprecated Use {@link Resizable}. */
+    get resizable(): boolean {
+        return this.Resizable;
+    }
+    /** @deprecated Use {@link Resizable}. */
+    set resizable(value: boolean) {
+        this.Resizable = value;
+    }
+    Reorderable: boolean = true;
+
+    /** @deprecated Use {@link Reorderable}. */
+    get reorderable(): boolean {
+        return this.Reorderable;
+    }
+    /** @deprecated Use {@link Reorderable}. */
+    set reorderable(value: boolean) {
+        this.Reorderable = value;
+    }
+    Order: number = 0;
+
+    /** @deprecated Use {@link Order}. */
+    get order(): number {
+        return this.Order;
+    }
+    /** @deprecated Use {@link Order}. */
+    set order(value: number) {
+        this.Order = value;
+    }
+    align?: 'left' | 'center' | 'right';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    pinned?: 'left' | 'right' | null;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    minWidth?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    maxWidth?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    flex?: number;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Create from an MJColumnDescriptor with sensible display defaults */
     static FromMJColumn(col: MJColumnDescriptor, order: number): GridColumnDescriptor {

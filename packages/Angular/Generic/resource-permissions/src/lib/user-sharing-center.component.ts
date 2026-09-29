@@ -195,10 +195,15 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
 
         try {
             const md = this.ProviderToUse;
+            // `SharingEntityResolver` is an @Input, so a custom domain can map to any entity — resolve the
+            // key against that entity's real primary key column(s) rather than assuming `ID`.
+            const entityInfo = md.EntityByName(entityName);
+            if (!entityInfo) {
+                this.setError(`Entity '${entityName}' for domain '${row.DomainName}' was not found in metadata.`);
+                return;
+            }
             const entity = await md.GetEntityObject<BaseEntity>(entityName, md.CurrentUser);
-            const key = new CompositeKey();
-            key.KeyValuePairs.push({ FieldName: 'ID', Value: row.SourceRecordID });
-            const loaded = await entity.InnerLoad(key);
+            const loaded = await entity.InnerLoad(CompositeKey.FromURLSegment(entityInfo, row.SourceRecordID));
             if (!loaded) {
                 this.setError('Could not load the permission record.');
                 return;

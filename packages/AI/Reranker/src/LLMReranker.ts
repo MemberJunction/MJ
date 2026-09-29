@@ -230,7 +230,12 @@ export class LLMReranker extends BaseReranker {
  * Factory function to create an LLMReranker.
  * Convenience function for simple usage.
  */
-export function createLLMReranker(promptID: string, contextUser: UserInfo): LLMReranker {
+export function CreateLLMReranker(promptID: string, contextUser: UserInfo): LLMReranker {
     return new LLMReranker('', '', promptID, contextUser);
+}
+
+/** @deprecated Use {@link CreateLLMReranker}. */
+export function createLLMReranker(promptID: string, contextUser: UserInfo): LLMReranker {
+    return CreateLLMReranker(promptID, contextUser);
 }
 

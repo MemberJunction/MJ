@@ -20,7 +20,21 @@
       "PayloadSelfWritePaths": "[\"name\", \"description\", \"category\", \"iconClass\", \"color\", \"instructions\", \"bundledActions\", \"bundledSubAgents\", \"existingSkillCheck\", \"skillId\", \"status\", \"message\"]",
       "FinalPayloadValidation": "{\"skillId\": \"any\", \"status\": \"string:!empty\", \"message\": \"string:!empty\"}",
       "FinalPayloadValidationMode": "Warn",
-      "MaxIterationsPerRun": 15
+      "MaxIterationsPerRun": 15,
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Find Candidate Actions",
+              "Find Candidate Agents",
+              "Get Record",
+              "Get Records"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -131,8 +145,8 @@
       "ID": "BB5654A1-2F1F-49B3-8278-1C414E72A6D5"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:39.047Z",
-      "checksum": "818747f2de848ba20625f9a2bbdb623b993b0a33c2f05c67254ab8e88455370f"
+      "lastModified": "2026-09-12T15:03:57.566Z",
+      "checksum": "05d9bbe21706219c5eaef86fa9fa7a1d5f38b613182c97b21522cbe8369aa659"
     }
   }
 ]

@@ -49,12 +49,17 @@ export type ScheduleAction = 'upsert' | 'disable';
  * `Active`, has `ScheduleEnabled`, and carries a non-empty `CronExpression`; otherwise the owned
  * job (if any) is disabled.
  */
-export function decideScheduleAction(p: { status: string; scheduleEnabled: boolean; cronExpression: string | null }): ScheduleAction {
+export function DecideScheduleAction(p: { status: string; scheduleEnabled: boolean; cronExpression: string | null }): ScheduleAction {
     return p.status === 'Active' && p.scheduleEnabled && !!p.cronExpression ? 'upsert' : 'disable';
 }
 
+/** @deprecated Use {@link DecideScheduleAction}. */
+export function decideScheduleAction(p: { status: string; scheduleEnabled: boolean; cronExpression: string | null }): ScheduleAction {
+    return DecideScheduleAction(p);
+}
+
 /** PURE mapping (exported for tests): the Scheduled Job field values for an active recurrence. */
-export function buildScheduledJobFields(p: {
+export function BuildScheduledJobFields(p: {
     jobTypeID: string;
     recordProcessName: string;
     cronExpression: string;
@@ -69,6 +74,17 @@ export function buildScheduledJobFields(p: {
         Configuration: JSON.stringify({ RecordProcessID: p.recordProcessID }),
         Status: 'Active',
     };
+}
+
+/** @deprecated Use {@link BuildScheduledJobFields}. */
+export function buildScheduledJobFields(p: {
+    jobTypeID: string;
+    recordProcessName: string;
+    cronExpression: string;
+    timezone: string | null;
+    recordProcessID: string;
+}): { JobTypeID: string; Name: string; CronExpression: string; Timezone: string; Configuration: string; Status: 'Active' } {
+    return BuildScheduledJobFields(p);
 }
 
 @RegisterClass(BaseEntity, 'MJ: Record Processes')
@@ -136,7 +152,7 @@ export class MJRecordProcessEntityServer extends MJRecordProcessEntity {
         const typeID = await this.resolveJobTypeID(user);
         const existing = await this.findOwnedJob(typeID, user);
 
-        const action = decideScheduleAction({ status: this.Status, scheduleEnabled: this.ScheduleEnabled, cronExpression: this.CronExpression });
+        const action = DecideScheduleAction({ status: this.Status, scheduleEnabled: this.ScheduleEnabled, cronExpression: this.CronExpression });
         if (action === 'disable') {
             await this.disableJobIfPresent(existing);
             return;
@@ -184,7 +200,7 @@ export class MJRecordProcessEntityServer extends MJRecordProcessEntity {
                 job.OwnerUserID = this.ContextCurrentUser.ID;
             }
         }
-        const fields = buildScheduledJobFields({
+        const fields = BuildScheduledJobFields({
             jobTypeID: typeID,
             recordProcessName: this.Name,
             cronExpression: this.CronExpression as string,
