@@ -32,7 +32,7 @@ type ResolvedConfig = ReturnType<typeof GetValidatedConfig>;
  * configured platform, by adapting MJCLI's config to the `MJConfig` shape that
  * MetadataSync's shared `initializeProvider` consumes.
  */
-export async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
+export async function EnsureProviderInitialized(): Promise<DatabaseProviderBase> {
   return initializeProvider(toMJConfig(GetValidatedConfig()));
 }
 
@@ -120,7 +120,7 @@ function getSystemUserInfo(): UserInfo {
  * Initializes the MJ runtime and returns the system user.
  */
 export async function BuildContextUser(): Promise<UserInfo> {
-  await ensureProviderInitialized();
+  await EnsureProviderInitialized();
   return getSystemUserInfo();
 }
 
@@ -138,7 +138,7 @@ export async function BuildOrchestratorContext(
   interactive: boolean = true,
 ): Promise<OrchestratorContextShape> {
   const config = GetValidatedConfig();
-  const provider = await ensureProviderInitialized();
+  const provider = await EnsureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
   // Only wire interactive prompt callbacks when this run is actually allowed to prompt.

@@ -37,10 +37,10 @@ export async function ResolveAwsCredentials(credentialID: string | null, region:
     }
     const engine = CredentialEngine.Instance;
     await engine.Config(false, contextUser);
-    const credential = engine.getCredentialById(credentialID);
+    const credential = engine.GetCredentialById(credentialID);
     if (!credential) {
         throw new WorkQueueConfigurationError(`Credential ${credentialID} was not found`);
     }
-    const resolved = await engine.getCredential<Record<string, string>>(credential.Name, { credentialId: credentialID, contextUser, subsystem: 'WorkQueue' });
+    const resolved = await engine.GetCredential<Record<string, string>>(credential.Name, { credentialId: credentialID, contextUser, subsystem: 'WorkQueue' });
     return ToAwsCredentials(resolved.values, region);
 }

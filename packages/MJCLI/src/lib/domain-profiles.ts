@@ -60,8 +60,8 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
     Runtime: { class: 'variable', note: 'a listing is instant; an agent run is bounded only by the agent itself' },
   },
   queue: {
-    summary: 'Operate the durable work queue — stats, backlog, dead letters, replay and discard, container-job workers, cloud bindings.',
-    runtime: { class: 'moderate', typicalSeconds: 15, note: 'dominated by MJ bootstrap; each operation is a few queries or cloud API calls' },
+    Summary: 'Operate the durable work queue — stats, backlog, dead letters, replay and discard, container-job workers, cloud bindings.',
+    Runtime: { class: 'moderate', typicalSeconds: 15, note: 'dominated by MJ bootstrap; each operation is a few queries or cloud API calls' },
   },
   app: {
     Summary: 'Install, upgrade, enable, and remove Open Apps.',
