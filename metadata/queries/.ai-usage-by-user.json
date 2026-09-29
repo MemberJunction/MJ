@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageByUser",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is our AI usage, spend, and token volume per user for chargeback attribution?",
+      "Description": "Aggregates AI usage facts by UserID to support user-level chargeback, attribution, and consumption monitoring.",
+      "SQL": "@file:SQL/ai-usage-by-user.sql",
+      "TechnicalDescription": "Aggregates vwAIUsageFacts by UserID and CostCurrency over model calls only (parallel parents excluded), with optional start/end on the base RunAt column. Computes runs, priced/unpriced run counts, own cost over priced runs, prompt and completion tokens, and the most recent run timestamp.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7C9243A8-0B86-4CFA-A3DF-9A0E50FBC605"
+    }
+  }
+]

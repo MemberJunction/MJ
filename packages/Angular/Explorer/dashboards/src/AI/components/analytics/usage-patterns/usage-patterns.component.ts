@@ -7,7 +7,7 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
+    Component, ChangeDetectionStrategy, Input, Output, EventEmitter,
     OnInit, OnDestroy, ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
@@ -66,6 +66,7 @@ const FIELDS: string[] = [
 
 @Component({
     standalone: false,
+    changeDetection: ChangeDetectionStrategy.OnPush,
     selector: 'app-analytics-usage-patterns',
     template: `
 
@@ -82,7 +83,7 @@ const FIELDS: string[] = [
             <div class="panel">
                 <div class="panel__header">
                     <h4 class="panel__title">Time-of-Day Heatmap</h4>
-                    <span class="panel__subtitle">Execution count by day and hour</span>
+                    <span class="panel__subtitle">Execution count by day and hour &bull; sampled from {{ TotalRuns | number }} recent runs</span>
                 </div>
                 <div class="heatmap-wrapper">
                     <div class="heatmap-grid">
@@ -99,10 +100,10 @@ const FIELDS: string[] = [
                             @for (h of Hours; track h) {
                                 <div
                                     class="heatmap-cell"
-                                    [style.background]="getCellBackground(d, h)"
-                                    [title]="getCellTooltip(d, h)">
-                                    @if (getCellCount(d, h) > 0) {
-                                        <span class="heatmap-cell__count">{{ getCellCount(d, h) }}</span>
+                                    [style.background]="GetCellBackground(d, h)"
+                                    [title]="GetCellTooltip(d, h)">
+                                    @if (GetCellCount(d, h) > 0) {
+                                        <span class="heatmap-cell__count">{{ GetCellCount(d, h) }}</span>
                                     }
                                 </div>
                             }
@@ -618,6 +619,8 @@ export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implem
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `RunAt >= '${sinceStr}'`,
             Fields: FIELDS,
+            OrderBy: 'RunAt DESC',
+            MaxRows: 1000,
             ResultType: 'simple'
         });
 

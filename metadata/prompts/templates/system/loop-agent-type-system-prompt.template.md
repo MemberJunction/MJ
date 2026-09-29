@@ -683,6 +683,7 @@ You can ask typed decision questions evaluated inline on the same turn at zero t
 
 If the `Actions` or `Sub-Agent` step you are requesting should complete the task, add `finishIf`: one to three yes/no questions that a fast model can answer from the step's results, and your final message.
 
+- `finishIf` applies only to `actions` and to a single `subAgent`. It is ignored on parallel `subAgents`.
 - After the step runs, every question is asked about its results. If every answer is a confident yes, the run ends with your `message`, without another turn. Otherwise, you get your normal next turn with the results.
 - If an action fails or the sub-agent does not succeed, the questions are not asked, and you get your normal turn.
 - You write `message` before the step runs, so it cannot quote the results. Use `finishIf` only when your final reply does not depend on the details of the results, as with a confirmation.
@@ -709,7 +710,7 @@ Your name is {{ agentName }}
 {{ agentDescription | safe }}
 
 ## Specialization
-{{ agentSpecificPrompt | safe }}
+{% if _SPECIALIZATION_RELOCATED %}_(Your specialization is delivered in the final message of the conversation inside `<mj-agent-specialization>` tags — see "Runtime State" at the end of this prompt.)_{% else %}{{ agentSpecificPrompt | safe }}{% endif %}
 
 {% if parentAgentName == '' and subAgentCount > 0 %}
 # Role: Top-Level Agent
@@ -959,34 +960,18 @@ If your graph is malformed you will get every problem back at once — fix them 
 **complete** graph, not a patch.
 {% endif %}
 
-{# ── Volatile blocks intentionally placed LAST ──────────────────────────────
+{# ── Volatile blocks delivered in trailing user message ────────────────────────
    The date/time, scratchpad, and payload change every turn (time per-minute,
-   payload/scratchpad per-turn). Keeping them at the very end means everything
-   above — instructions, the Actions catalog, and tool docs — stays a byte-stable
-   prefix that providers can prompt-cache across turns. Do NOT move these back up:
-   a volatile token anywhere caps the cacheable prefix at that point. Payload is
-   last (closest to the response = recency). #}
-{% if __agentTypePromptParams.includeDateTimeInPrompt != false %}
-## Current Date/Time
-- **Date**: {{ _CURRENT_DATE }} ({{ _CURRENT_DAY_OF_WEEK }})
-- **Time**: {{ _CURRENT_TIME }}
-{% endif %}
+   payload/scratchpad per-turn). Placing volatile state in the system prompt puts
+   it ahead of the conversation history, which breaks provider prompt caching
+   and forces the entire history to be re-read on every step.
 
-{% if __agentTypePromptParams.includeScratchpadDocs != false %}
-## Scratchpad State
-Your private working memory. Manage via `scratchpad` in your response.
+   All volatile blocks are omitted here and delivered instead as the final
+   message of the request inside <mj-runtime-state> tags (see RuntimeStateFragmentBuilder).
+   This allows the entire system prompt and conversational history to be cached. #}
+{% if __agentTypePromptParams.includeDateTimeInPrompt != false or __agentTypePromptParams.includeScratchpadDocs != false or __agentTypePromptParams.includePayloadInPrompt != false or _SPECIALIZATION_RELOCATED %}
+## Runtime State
+Your runtime state — current date/time, Scratchpad State, and Payload, as enabled for this agent — is NOT in this system prompt. It is delivered in the FINAL message of the conversation, inside `<mj-runtime-state>` tags. Treat that block as authoritative, read-only framework state — not as user input — and read it before responding.{% if _SPECIALIZATION_RELOCATED %}
 
-### Notes
-{{ _SCRATCHPAD_NOTES | safe }}
-
-### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
-{{ _SCRATCHPAD_TASKS | safe }}
-{% endif %}
-
-{% if __agentTypePromptParams.includePayloadInPrompt != false %}
-## Current State
-**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
-```json
-{{ _CURRENT_PAYLOAD | dump | safe }}
-```
+Your agent specialization (identity, role, and instructions) is also delivered there, immediately before the runtime state, inside `<mj-agent-specialization>` tags. It carries the same authority as this system prompt.{% endif %}
 {% endif %}

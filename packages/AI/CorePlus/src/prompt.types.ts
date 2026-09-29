@@ -397,6 +397,21 @@ export class AIPromptParams extends AIModelRunParams {
   templateMessageRole?: TemplateMessageRole;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Child prompt templates already rendered by the caller, so `AIPromptRunner.ExecutePrompt` embeds
+   * them instead of rendering `childPrompts` a second time.
+   *
+   * - **Key**: the parent template's placeholder name — the `parentPlaceholder` of the matching
+   *   `ChildPromptParam` in `childPrompts`, e.g. `'agentSpecificPrompt'`.
+   * - **Value**: that child prompt's fully rendered text, exactly as `RenderChildPromptTemplates`
+   *   returns it in `renderedTemplates`.
+   *
+   * Set by the loop agent when it relocates a volatile specialization into the trailing runtime-state
+   * message: it must render the child once to build that message, and this hands the same text to the
+   * parent render. Absent (the normal case), the runner renders `childPrompts` itself.
+   */
+  PreRenderedChildTemplates?: Record<string, string>;
+
+  /**
    * Optional callback for receiving execution progress updates
    * Provides real-time information about the execution progress
    */
@@ -461,6 +476,16 @@ export class AIPromptParams extends AIModelRunParams {
    * @internal
    */
   parentPromptRunId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+  /**
+   * Optional run type override for prompt execution tracking (e.g., 'ResultSelector', 'ParallelChild', 'Single').
+   */
+  RunType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single';
+
+  /**
+   * Optional execution order within a parallel execution group or sequence.
+   */
+  ExecutionOrder?: number;
 
   /**
    * Additional model-specific parameters that will be passed through to the underlying model.
@@ -747,6 +772,12 @@ export class AIPromptParams extends AIModelRunParams {
   agentId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Attribution only; never used for behaviour. The user on whose behalf this prompt
+   * was executed (`AIPromptRun.UserID`). If omitted, falls back to contextUser?.ID.
+   */
+  UserID?: string;
+
+  /**
    * Optional file artifacts that may be attached as native content blocks
    * when the resolved LLM driver supports the file's MIME type natively.
    *
@@ -758,9 +789,29 @@ export class AIPromptParams extends AIModelRunParams {
   nativeFileInputs?: NativeFileInput[];  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 }
 
+/**
+ * Inputs for resolving which user an `AIPromptRun` is attributed to.
+ *
+ * Only the USER is attributed on the prompt run. Which agent run a prompt run belongs to is owned by
+ * the agent layer — `AIAgentRunStep.TargetLogID` — and resolved at query time (see `vwAIUsageFacts`),
+ * so the prompt-execution layer carries no reference up into the agent layer.
+ */
+export interface ResolvePromptRunUserIDInput {
+  /** Explicit user override, if provided. */
+  UserID?: string | null;
+  /** The enclosing agent run, when there is one; its `UserID` is the next fallback. */
+  AgentRun?: { UserID?: string | null } | null;
+  /** The context user the operation runs as; the last fallback. */
+  ContextUser?: { ID?: string | null } | null;
+}
 
-
-
+/**
+ * Resolves `AIPromptRun.UserID`: explicit `UserID` > `AgentRun.UserID` > `ContextUser.ID` > null.
+ * An empty string counts as absent at every level.
+ */
+export function ResolvePromptRunUserID(input?: ResolvePromptRunUserIDInput | null): string | null {
+  return input?.UserID || input?.AgentRun?.UserID || input?.ContextUser?.ID || null;
+}
 
 /**
  * Callback function type for execution progress updates
