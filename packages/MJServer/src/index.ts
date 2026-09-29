@@ -167,6 +167,7 @@ export * from './generic/refusalExtensions.js';
 export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
+export * from './resolvers/RunDecisionResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';

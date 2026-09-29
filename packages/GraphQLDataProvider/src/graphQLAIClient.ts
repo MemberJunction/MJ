@@ -2,6 +2,7 @@ import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import type { DecisionAnswer, DecisionQuestion } from "@memberjunction/ai";
 import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
 import { FireAndForgetHelper, StallDecision } from "./fireAndForgetHelper";
 
@@ -266,6 +267,170 @@ export class GraphQLAIClient {
         return {
             success: false,
             error: error.message || 'Unknown error occurred'
+        };
+    }
+
+    /**
+     * Run a typed decision (Likelihood, Choice, Score) on the server in one round trip.
+     *
+     * This calls the `RunDecision` mutation, the fast path for browser features with a tight latency
+     * budget such as routing a message or checking for a duplicate: it carries none of the
+     * `Run Decision` action's execution overhead. The questions and the state are serialized for the
+     * wire and the answers parsed back.
+     *
+     * The method never throws. A failure on the server or in transport is `Success: false` with an
+     * `ErrorMessage` and empty `Answers`.
+     *
+     * @param params The questions, the state, and optionally the prompt and a timeout
+     * @returns A Promise that resolves to the answers by question key, or the reason there are none
+     *
+     * @example
+     * ```typescript
+     * const result = await aiClient.RunDecision({
+     *   State: { message: "Show me last quarter's renewals" },
+     *   Questions: {
+     *     route: {
+     *       Kind: 'Choice',
+     *       Instructions: 'Which agent should answer this message?',
+     *       Options: [
+     *         { Value: 'sage', Description: 'General questions about the product' },
+     *         { Value: 'analyst', Description: 'Questions about data and reports' }
+     *       ]
+     *     }
+     *   },
+     *   TimeoutMS: 250
+     * });
+     *
+     * const route = result.Answers.route;
+     * if (result.Success && route?.Kind === 'Choice') {
+     *   console.log(`Route to ${route.Value} (confidence ${route.Confidence})`);
+     * }
+     * ```
+     */
+    public async RunDecision(params: RunDecisionParams): Promise<RunDecisionResult> {
+        try {
+            const mutation = gql`
+                mutation RunDecision(
+                    $state: String!,
+                    $questions: String!,
+                    $promptId: String,
+                    $promptName: String,
+                    $timeoutMS: Int
+                ) {
+                    RunDecision(
+                        state: $state,
+                        questions: $questions,
+                        promptId: $promptId,
+                        promptName: $promptName,
+                        timeoutMS: $timeoutMS
+                    ) {
+                        success
+                        errorMessage
+                        answersJSON
+                        promptRunId
+                        modelName
+                        executionTimeMs
+                    }
+                }
+            `;
+
+            const variables = this.prepareDecisionVariables(params);
+            const result: RunDecisionResponse | null | undefined = await this._dataProvider.ExecuteGQL(mutation, variables);
+            return this.processDecisionResult(result);
+        } catch (e) {
+            return this.handleDecisionError(e);
+        }
+    }
+
+    /**
+     * Prepares the variables for the decision mutation: the questions as JSON, and the state as-is
+     * when it is text or as JSON when it is an object.
+     */
+    private prepareDecisionVariables(params: RunDecisionParams): RunDecisionVariables {
+        const variables: RunDecisionVariables = {
+            state: typeof params.State === 'string' ? params.State : JSON.stringify(params.State),
+            questions: JSON.stringify(params.Questions)
+        };
+        if (params.PromptID !== undefined) variables.promptId = params.PromptID;
+        if (params.PromptName !== undefined) variables.promptName = params.PromptName;
+        if (params.TimeoutMS !== undefined) variables.timeoutMS = params.TimeoutMS;
+        return variables;
+    }
+
+    /**
+     * Maps the decision mutation's result. The answers are returned only on success, so a caller
+     * never acts on partial ones; answers that cannot be read turn the result into a failure.
+     */
+    private processDecisionResult(result: RunDecisionResponse | null | undefined): RunDecisionResult {
+        const decision = result?.RunDecision;
+        if (!decision) {
+            throw new Error('Invalid response from server');
+        }
+        const details = {
+            PromptRunID: decision.promptRunId ?? undefined,
+            ModelName: decision.modelName ?? undefined,
+            ExecutionTimeMs: decision.executionTimeMs ?? undefined
+        };
+        if (!decision.success) {
+            return { ...details, Success: false, ErrorMessage: decision.errorMessage || 'Decision execution failed', Answers: {} };
+        }
+        const answers = this.parseDecisionAnswers(decision.answersJSON);
+        if (typeof answers === 'string') {
+            return { ...details, Success: false, ErrorMessage: answers, Answers: {} };
+        }
+        return { ...details, Success: true, Answers: answers };
+    }
+
+    /** Parses the answers the server sent, or returns why they cannot be used. */
+    private parseDecisionAnswers(answersJSON: string | null | undefined): Record<string, DecisionAnswer> | string {
+        if (!answersJSON) {
+            return 'The server returned no answers';
+        }
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(answersJSON);
+        } catch (e) {
+            return `The server returned answers that are not valid JSON: ${e instanceof Error ? e.message : String(e)}`;
+        }
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            return 'The server returned answers that are not an object';
+        }
+        const answers: Record<string, DecisionAnswer> = {};
+        for (const [key, answer] of Object.entries(parsed)) {
+            if (!this.isDecisionAnswer(answer)) {
+                return `The server returned an answer for '${key}' that is not a Likelihood, Choice or Score answer`;
+            }
+            answers[key] = answer;
+        }
+        return answers;
+    }
+
+    /** Whether a parsed value has the shape of a Likelihood, Choice or Score answer. */
+    private isDecisionAnswer(value: unknown): value is DecisionAnswer {
+        if (typeof value !== 'object' || value === null) {
+            return false;
+        }
+        const answer = value as Record<string, unknown>;
+        switch (answer.Kind) {
+            case 'Likelihood':
+                return typeof answer.Probability === 'number';
+            case 'Choice':
+                return typeof answer.Value === 'string' && typeof answer.Confidence === 'number';
+            case 'Score':
+                return typeof answer.Value === 'number' && typeof answer.Confidence === 'number';
+            default:
+                return false;
+        }
+    }
+
+    /** Maps a transport or parsing error to a failed decision result. */
+    private handleDecisionError(e: unknown): RunDecisionResult {
+        const message = e instanceof Error ? e.message : String(e);
+        LogError(`Error running decision: ${message}`);
+        return {
+            Success: false,
+            ErrorMessage: message || 'Unknown error occurred',
+            Answers: {}
         };
     }
 
@@ -1792,6 +1957,98 @@ export interface RunAIPromptResult {
      * Chat completion result data
      */
     chatResult?: any;
+}
+
+/**
+ * Parameters for {@link GraphQLAIClient.RunDecision}
+ */
+export interface RunDecisionParams {
+    /**
+     * The questions, keyed by a short label for code, answered together in one call.
+     * Write the instructions and option descriptions for the model: it never reads the keys.
+     */
+    Questions: Record<string, DecisionQuestion>;
+
+    /**
+     * The state the questions are about: text, or an object (sent as JSON).
+     * Keep it to what the questions need.
+     */
+    State: string | Record<string, unknown>;
+
+    /**
+     * The ID of the Decision-typed prompt to run. Takes precedence over `PromptName`.
+     */
+    PromptID?: string;
+
+    /**
+     * The name of the Decision-typed prompt to run, matched case-insensitively.
+     * The server uses `Default Decision` when neither this nor `PromptID` is set.
+     */
+    PromptName?: string;
+
+    /**
+     * Bounds each model call on the server, in milliseconds. Unset means unbounded.
+     */
+    TimeoutMS?: number;
+}
+
+/**
+ * Result from {@link GraphQLAIClient.RunDecision}
+ */
+export interface RunDecisionResult {
+    /**
+     * Whether the decision ran and its answers were read
+     */
+    Success: boolean;
+
+    /**
+     * Why the decision failed, when `Success` is false
+     */
+    ErrorMessage?: string;
+
+    /**
+     * The answers by question key. Empty on failure, so a caller never acts on partial answers.
+     */
+    Answers: Record<string, DecisionAnswer>;
+
+    /**
+     * ID of the `MJ: AI Prompt Runs` record the server wrote, when the run got that far
+     */
+    PromptRunID?: string;
+
+    /**
+     * The model that answered, or the one selected when the call failed
+     */
+    ModelName?: string;
+
+    /**
+     * Server-side execution time in milliseconds
+     */
+    ExecutionTimeMs?: number;
+}
+
+/** The `RunDecision` mutation's variables. */
+type RunDecisionVariables = {
+    state: string;
+    questions: string;
+    promptId?: string;
+    promptName?: string;
+    timeoutMS?: number;
+};
+
+/** The `RunDecision` mutation's result fields as the server sends them: nullable fields arrive as null. */
+interface RunDecisionWireResult {
+    success: boolean;
+    errorMessage?: string | null;
+    answersJSON?: string | null;
+    promptRunId?: string | null;
+    modelName?: string | null;
+    executionTimeMs?: number | null;
+}
+
+/** The `RunDecision` mutation's response. */
+interface RunDecisionResponse {
+    RunDecision?: RunDecisionWireResult | null;
 }
 
 /**
