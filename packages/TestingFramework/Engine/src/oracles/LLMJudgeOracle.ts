@@ -4,6 +4,7 @@
  */
 
 import { IOracle } from './IOracle';
+import { BuildJudgeTrace, ReadJudgeCriteria } from './judge-trace';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -91,8 +92,7 @@ Respond in JSON format:
             await AIEngine.Instance.Config(false, input.contextUser);
 
             // Get criteria from expected outcomes or config
-            const criteria = ((input.expectedOutput as any)?.judgeValidationCriteria as string[]) ||
-                           (config.criteria as string[]);
+            const criteria = ReadJudgeCriteria(input, config) as string[];
 
             if (!criteria || criteria.length === 0) {
                 return {
@@ -118,16 +118,12 @@ Respond in JSON format:
             }
 
             // Prepare data for prompt template
-            const inputDefinition = input.test.InputDefinition ?
-                (typeof input.test.InputDefinition === 'string' ?
-                    JSON.parse(input.test.InputDefinition) :
-                    input.test.InputDefinition) :
-                {};
+            const trace = BuildJudgeTrace(input);
 
             const promptData = {
-                input: JSON.stringify(inputDefinition, null, 2),
-                expected: JSON.stringify(input.expectedOutput, null, 2),
-                actual: JSON.stringify(input.actualOutput, null, 2),
+                input: trace.Input,
+                expected: trace.Expected,
+                actual: trace.Actual,
                 criteria: criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')
             };
 
