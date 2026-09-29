@@ -1,4 +1,5 @@
 import { Component, Input } from '@angular/core';
+import { By } from '@angular/platform-browser';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
@@ -22,6 +23,7 @@ class StubChart {
   @Input() data: unknown;
   @Input() title = '';
   @Input() config: unknown;
+  @Input() BucketSizeMs: number | null = null;
 }
 
 const EMPTY_CHART: ChartData = { executionTrends: [], costByModel: [], performanceMatrix: [], tokenEfficiency: [] };
@@ -53,6 +55,19 @@ describe('AnalyticsExecutiveSummaryComponent (DOM)', () => {
   it('embeds the execution-trends chart', () => {
     const { fixture } = render();
     expect(query(fixture, 'app-time-series-chart')).not.toBeNull();
+  });
+
+  it('tells the trend chart its bucket width, so a daily series is known to be daily even with one point', () => {
+    const { fixture } = render();
+    const chart = () => fixture.debugElement.query(By.directive(StubChart)).componentInstance as StubChart;
+
+    fixture.componentRef.setInput('TimeRange', '30d');
+    fixture.detectChanges(false);
+    expect(chart().BucketSizeMs).toBe(24 * 60 * 60 * 1000);
+
+    fixture.componentRef.setInput('TimeRange', '24h');
+    fixture.detectChanges(false);
+    expect(chart().BucketSizeMs).toBe(60 * 60 * 1000);
   });
 
   it('shows both panel empty states when chartData is empty', () => {
