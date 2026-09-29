@@ -114,9 +114,14 @@ export class OpenRouterDecision extends BaseDecision {
         }
     }
 
+    /**
+     * Marks the result failed because the response could not be mapped. Another model may still
+     * answer, so the failure allows failover (and is not 'Fatal', which would stop the failover loop).
+     */
     private fail(result: DecisionResult, message: string): DecisionResult {
         result.success = false;
         result.errorMessage = message;
+        result.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: true };
         result.Answers = {};
         return result;
     }

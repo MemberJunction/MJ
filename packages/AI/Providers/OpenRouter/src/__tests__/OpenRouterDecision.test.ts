@@ -364,6 +364,8 @@ describe('OpenRouterDecision', () => {
 
       expect(result.success).toBe(false);
       expect(result.errorMessage).toMatch(/Question 'route': the response has no answer object for it/);
+      // An unmappable response allows failover to another decision model.
+      expect(result.errorInfo).toMatchObject({ errorType: 'ModelError', severity: 'Retriable', canFailover: true });
     });
 
     it('fails when Choice choice value is not one of the options', async () => {
