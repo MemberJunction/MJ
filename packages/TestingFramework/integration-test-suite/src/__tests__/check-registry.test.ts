@@ -25,6 +25,7 @@ import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
+import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -130,6 +131,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
+        ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -211,13 +213,13 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     // not fail the build. When you add/remove a check DELIBERATELY, update the count here;
     // the failure message prints a paste-ready copy of the actual registry state.
     const EXPECTED_BUNDLE_COUNTS: Record<string, number> = {
-        'actions-pipeline': 5,
+        'actions-pipeline': 6,
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
-        'agent-loop-standin': 6,
+        'agent-loop-standin': 11,
         'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 3,
@@ -246,6 +248,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'concurrent': 2,
         'content-vectorization': 8,
         'conversation-compaction': 18,
+        'trailing-runtime-state': 6,
         'dataset-cache': 3,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -328,7 +331,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(94);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(95);
     });
 });
 

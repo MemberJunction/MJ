@@ -574,9 +574,15 @@ importers:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      '@types/nunjucks':
+        specifier: ^3.2.6
+        version: 3.2.6
       '@types/safe-regex':
         specifier: ^1.1.6
         version: 1.1.6
+      nunjucks:
+        specifier: 3.2.4
+        version: 3.2.4(chokidar@3.6.0)
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -15074,6 +15080,9 @@ importers:
       '@memberjunction/ai-agents':
         specifier: 6.2.0-edge.0
         version: link:../../AI/Agents
+      '@memberjunction/ai-anthropic':
+        specifier: 6.2.0-edge.0
+        version: link:../../AI/Providers/Anthropic
       '@memberjunction/ai-bridge-base':
         specifier: 6.2.0-edge.0
         version: link:../../AI/RealtimeBridge/Base
