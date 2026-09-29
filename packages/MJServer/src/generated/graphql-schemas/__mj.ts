@@ -15685,6 +15685,10 @@ export class MJAIPromptRun_ {
     @MaxLength(25)
     ToolCallingMode?: string;
         
+    @Field({nullable: true, description: `The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.`}) 
+    @MaxLength(36)
+    UserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Prompt?: string;
@@ -15732,6 +15736,10 @@ export class MJAIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(50)
     UsageType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -16029,6 +16037,9 @@ export class CreateMJAIPromptRunInput {
     @Field({ nullable: true })
     ToolCallingMode: string | null;
 
+    @Field({ nullable: true })
+    UserID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16308,6 +16319,9 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     ToolCallingMode?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
