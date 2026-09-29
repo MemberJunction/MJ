@@ -7844,6 +7844,8 @@ The context is now within limits. Please retry your request with the recovered c
         if (!step) {
             return;
         }
+        // Like every decision call, it counts toward the run's cost and tokens through its step
+        this.attachDecisionPromptRun(step, result);
         const usage = {
             executionTimeMS: result.executionTimeMS,
             tokensUsed: result.tokensUsed,
