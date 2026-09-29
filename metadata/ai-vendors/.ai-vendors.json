@@ -472,5 +472,15 @@
     "primaryKey": {
       "ID": "E688DFD9-AE6B-4D93-AA4D-8AB642DDB541"
     }
+  },
+  {
+    "fields": {
+      "Name": "MemberJunction",
+      "Description": "MemberJunction — developer of Betty, the MJ-native organization-scoped assistant. Unlike a single hosted service, Betty is deployed per organization, so each instance configures its own API root (BETTY_API_BASE_URL) and the API key is presented directly as a bearer token rather than exchanged for a session credential.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "F684A68C-D3CB-4AFF-92AE-D189D22A69D9"
+    }
   }
 ]
