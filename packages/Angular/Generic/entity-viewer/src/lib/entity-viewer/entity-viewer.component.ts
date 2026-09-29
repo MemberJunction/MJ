@@ -3,9 +3,10 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, RunView, LogError } from '@memberjunction/core';
+import { ExportColumn } from '@memberjunction/export-engine';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
-import { buildCompositeKey, buildPkString } from '../utils/record.util';
+import { BuildCompositeKey, BuildPkString } from '../utils/record.util';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
@@ -755,7 +756,15 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
 
   /** Title shown in the "no records" empty state — varies with the active filter. */
   get NoRecordsTitle(): string {
-    return this.DebouncedFilterText ? 'No matching records' : 'No records found';
+    if (this.DebouncedFilterText) {
+      return 'No matching records';
+    }
+    // Prefer the entity's business-friendly plural ("No Contacts to display") over the generic
+    // "No records found" so the empty state speaks the user's own domain language. Same wording
+    // as the grid and cards plug-ins so the copy does not shift between view types.
+    // Falls back to "records" when no entity is in scope.
+    const plural = this.EffectiveEntity?.DisplayNamePlural;
+    return plural ? `No ${plural} to display` : 'No records found';
   }
 
   /** True when the "no records" empty state is the result of an active filter. */
@@ -851,7 +860,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     return records.filter(record => {
       const matchResult = this.recordMatchesFilter(record, filterText, visibleFields);
       if (matchResult.matches && matchResult.matchedField && !matchResult.matchedInVisibleField) {
-        const recordKey = buildPkString(record, this.Entity!);
+        const recordKey = BuildPkString(record, this.Entity!);
         this.HiddenFieldMatches.set(recordKey, matchResult.matchedField);
       }
       return matchResult.matches;
@@ -949,7 +958,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   public HasHiddenFieldMatch(record: Record<string, unknown>): boolean {
     if (!this.DebouncedFilterText || !this.Entity) return false;
-    return this.HiddenFieldMatches.has(buildPkString(record, this.Entity));
+    return this.HiddenFieldMatches.has(BuildPkString(record, this.Entity));
   }
 
   /**
@@ -957,7 +966,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
    */
   public GetHiddenMatchFieldName(record: Record<string, unknown>): string {
     if (!this.Entity) return '';
-    const fieldName = this.HiddenFieldMatches.get(buildPkString(record, this.Entity));
+    const fieldName = this.HiddenFieldMatches.get(BuildPkString(record, this.Entity));
     if (!fieldName || !this.Entity) return '';
     const field = this.Entity.Fields.find(f => f.Name === fieldName);
     return field ? field.DisplayNameOrName : fieldName;
@@ -1540,7 +1549,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     if (!entity || !record) {
       return false;
     }
-    const compositeKey = buildCompositeKey(record, entity);
+    const compositeKey = BuildCompositeKey(record, entity);
     // Drive the highlight through the same input the user-click path uses.
     this.SelectedRecordID = compositeKey.ToConcatenatedString();
     this.RecordSelected.emit({ record, entity, compositeKey });
@@ -1559,6 +1568,18 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       return false;
     }
     return renderer.exportRecords(format);
+  }
+
+  /**
+   * The active renderer's on-screen columns ({@link IViewRenderer.GetExportColumns}), or an empty
+   * array when no renderer is mounted or the active view type has no column layout.
+   */
+  public GetExportColumns(): ExportColumn[] {
+    const renderer = this.dynamicRendererRef?.instance;
+    if (!renderer || typeof renderer.GetExportColumns !== 'function') {
+      return [];
+    }
+    return renderer.GetExportColumns();
   }
 
   /**
@@ -2159,7 +2180,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     const entity = this.EffectiveEntity;
     if (entity && record) {
       const row = record as Record<string, unknown>;
-      this.RecordSelected.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
+      this.RecordSelected.emit({ record: row, entity, compositeKey: BuildCompositeKey(row, entity) });
     }
   }
 
@@ -2167,7 +2188,7 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     const entity = this.EffectiveEntity;
     if (entity && record) {
       const row = record as Record<string, unknown>;
-      this.RecordOpened.emit({ record: row, entity, compositeKey: buildCompositeKey(row, entity) });
+      this.RecordOpened.emit({ record: row, entity, compositeKey: BuildCompositeKey(row, entity) });
     }
   }
 

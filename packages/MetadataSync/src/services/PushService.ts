@@ -15,15 +15,15 @@ import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
-import { GraphProviderPool, GraphSettleOutcome, probeIndependentInstances } from '../lib/graph-provider-pool';
+import { GraphProviderPool, GraphSettleOutcome, ProbeIndependentInstances } from '../lib/graph-provider-pool';
 import {
   PushWriteMode,
-  resolveDirectoryMode,
-  graphBatchSizeFor,
-  isolatedModeWarning,
-  unusedBatchSizeWarning,
+  ResolveDirectoryMode,
+  GraphBatchSizeFor,
+  IsolatedModeWarning,
+  UnusedBatchSizeWarning,
 } from '../lib/push-write-mode';
-import { CommittedWrite, PushAbortedError, describeCommitFailure, describeRollbackOutcome } from '../lib/push-outcome';
+import { CommittedWrite, PushAbortedError, DescribeCommitFailure, DescribeRollbackOutcome } from '../lib/push-outcome';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
@@ -69,12 +69,12 @@ export interface PushOptions {
  * --format=json | jq '.errors[]'` — instead of parsing the human log.
  */
 export interface PushRecordError {
-  entityName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Source file path of the offending record, when known. */
-  path?: string;
+  path?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /** Display form of the primary key, e.g. "ID=85B8…". */
-  primaryKey?: string;
-  message: string;
+  primaryKey?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  message: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface PushCallbacks {
@@ -101,12 +101,12 @@ export interface PushCallbacks {
  * "Changes" recap so actual mutations stand out from a sea of unchanged records.
  */
 export interface RecordChangeDetail {
-  entityName: string;
+  entityName: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Display form of the primary key, e.g. "ID: 85B8…14C7". */
-  primaryKey: string;
-  operation: 'created' | 'updated' | 'deleted';
+  primaryKey: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  Operation: 'created' | 'updated' | 'deleted';
   /** Field-level diffs (updates only); empty for creates/deletes. */
-  fields: Array<{ field: string; oldValue: string; newValue: string }>;
+  fields: Array<{ field: string; oldValue: string; newValue: string }>;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 export interface PushResult {
@@ -124,13 +124,13 @@ export interface PushResult {
 }
 
 export interface EntityPushResult {
-  created: number;
-  updated: number;
-  unchanged: number;
-  deleted: number;
-  skipped: number;
-  deferred: number;
-  errors: number;
+  created: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  updated: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  unchanged: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  deleted: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  skipped: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  deferred: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  errors: number;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
 }
 
 /**
@@ -278,8 +278,13 @@ export class PushService {
   }
 
   /** Set or replace the state manager after construction. */
-  setStateManager(stateManager: SyncStateManager): void {
+  SetStateManager(stateManager: SyncStateManager): void {
     this.stateManager = stateManager;
+  }
+
+  /** @deprecated Use {@link SetStateManager}. */
+  setStateManager(stateManager: SyncStateManager): void {
+    return this.SetStateManager(stateManager);
   }
 
   /**
@@ -354,7 +359,7 @@ export class PushService {
     };
   }
 
-  async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
+  async Push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
     this.warnings = [];
     this.changeDetails = [];
     // Warnings the engine raises while resolving lookups belong in this push's result envelope,
@@ -546,6 +551,11 @@ export class PushService {
       throw error;
     }
   }
+
+  /** @deprecated Use {@link Push}. */
+  async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
+    return this.Push(options, callbacks);
+  }
   
   /** Open the SQL logging session when the config asks for one and this is not a dry run. */
   private async startSqlLogging(
@@ -674,7 +684,7 @@ export class PushService {
     const isolated: string[] = [];
     for (const entityDir of entityDirs) {
       const entityConfig = await loadEntityConfig(entityDir);
-      const resolved = resolveDirectoryMode({
+      const resolved = ResolveDirectoryMode({
         isolatedFlag: options.isolatedTransactions,
         entityIsolated: entityConfig?.push?.isolatedTransactions,
         rootIsolated: this.syncConfig?.push?.isolatedTransactions,
@@ -691,7 +701,7 @@ export class PushService {
     if (isolated.length > 0) {
       await this.confirmIsolatedTransactions(isolated, options, callbacks);
     } else if (options.parallelBatchSize !== undefined && options.parallelBatchSize !== 1) {
-      this.addWarning(unusedBatchSizeWarning(options.parallelBatchSize), callbacks);
+      this.addWarning(UnusedBatchSizeWarning(options.parallelBatchSize), callbacks);
     }
   }
 
@@ -701,7 +711,7 @@ export class PushService {
    * deadlock the graph pool exists to prevent.
    */
   private async confirmIsolatedTransactions(isolated: string[], options: PushOptions, callbacks?: PushCallbacks): Promise<void> {
-    const reason = await probeIndependentInstances(this.hostProvider());
+    const reason = await ProbeIndependentInstances(this.hostProvider());
     if (reason) {
       this.addWarning(
         `Independent provider instances are not available (${reason}), so every directory runs in the shared ` +
@@ -714,14 +724,14 @@ export class PushService {
       return;
     }
     if (!options.dryRun) {
-      this.addWarning(isolatedModeWarning(isolated, graphBatchSizeFor('isolated', options.parallelBatchSize)), callbacks);
+      this.addWarning(IsolatedModeWarning(isolated, GraphBatchSizeFor('isolated', options.parallelBatchSize)), callbacks);
     }
   }
 
   /** Adopt one directory's mode for the work about to run in it. */
   private useDirectoryMode(entityDir: string, options: PushOptions): void {
     this.writeMode = this.directoryModes.get(entityDir) ?? 'shared';
-    this.graphBatchSize = graphBatchSizeFor(this.writeMode, options.parallelBatchSize);
+    this.graphBatchSize = GraphBatchSizeFor(this.writeMode, options.parallelBatchSize);
   }
 
   private addWarning(message: string, callbacks?: PushCallbacks): void {
@@ -794,7 +804,7 @@ export class PushService {
     try {
       await transactionManager.commitTransaction();
     } catch (error) {
-      throw new Error(describeCommitFailure(error, this.hostProvider()?.PlatformKey), { cause: error });
+      throw new Error(DescribeCommitFailure(error, this.hostProvider()?.PlatformKey), { cause: error });
     }
   }
 
@@ -806,7 +816,7 @@ export class PushService {
       callbacks?.onWarn?.('\n⚠️  Rolling back database transaction due to error...');
       rolledBack = await transactionManager.rollbackTransaction();
       await this.writeFilesWithCommittedRecords(run);
-      for (const line of describeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
+      for (const line of DescribeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
         callbacks?.onWarn?.(line);
       }
     }
@@ -1759,7 +1769,7 @@ export class PushService {
         this.changeDetails.push({
           entityName,
           primaryKey: primaryKeyDisplay.join(', '),
-          operation: 'updated',
+          Operation: 'updated',
           fields: fieldDiffs,
         });
 
@@ -1979,7 +1989,7 @@ export class PushService {
         this.changeDetails.push({
           entityName,
           primaryKey: primaryKeyDisplay.join(', '),
-          operation: 'created',
+          Operation: 'created',
           fields: [],
         });
       }
@@ -2160,7 +2170,7 @@ export class PushService {
     this.changeDetails.push({
       entityName,
       primaryKey: primaryKeyDisplay.join(', '),
-      operation: 'deleted',
+      Operation: 'deleted',
       fields: [],
     });
 

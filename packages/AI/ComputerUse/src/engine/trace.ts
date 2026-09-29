@@ -46,7 +46,7 @@ const ENCODED_UUID_TOKEN_RE = /%7Buuid%7D/gi;
  * (trimmed) unchanged when it can't be parsed as a URL — a best-effort that
  * never throws.
  */
-export function normalizeTraceUrl(url: string, volatileParams: string[] = []): string {
+export function NormalizeTraceUrl(url: string, volatileParams: string[] = []): string {
     const raw = (url ?? '').trim();
     if (!raw) {
         return '';
@@ -85,6 +85,11 @@ export function normalizeTraceUrl(url: string, volatileParams: string[] = []): s
     return `${parsed.origin}${path}${query}`;
 }
 
+/** @deprecated Use {@link NormalizeTraceUrl}. */
+export function normalizeTraceUrl(url: string, volatileParams: string[] = []): string {
+ return NormalizeTraceUrl(url, volatileParams);
+}
+
 
 /**
  * Re-escape the characters that would change how a query string PARSES, and only
@@ -121,12 +126,12 @@ function encodeQueryPart(part: string): string {
  * A path-FRAGMENT pattern (e.g. `/app/data`) keeps containment semantics, which is
  * what makes it a fragment. An empty pattern matches anything.
  */
-export function traceUrlMatches(pattern: string, actualUrl: string, volatileParams: string[] = []): boolean {
-    const p = normalizeTraceUrl(pattern, volatileParams);
+export function TraceUrlMatches(pattern: string, actualUrl: string, volatileParams: string[] = []): boolean {
+    const p = NormalizeTraceUrl(pattern, volatileParams);
     if (!p) {
         return true;
     }
-    const a = normalizeTraceUrl(actualUrl, volatileParams);
+    const a = NormalizeTraceUrl(actualUrl, volatileParams);
 
     let patternUrl: URL;
     let actualParsed: URL;
@@ -149,6 +154,11 @@ export function traceUrlMatches(pattern: string, actualUrl: string, volatilePara
         }
     }
     return true;
+}
+
+/** @deprecated Use {@link TraceUrlMatches}. */
+export function traceUrlMatches(pattern: string, actualUrl: string, volatileParams: string[] = []): boolean {
+ return TraceUrlMatches(pattern, actualUrl, volatileParams);
 }
 
 /** Same path, or a descendant of it — `/app/data` contains `/app/data/records`
@@ -251,7 +261,7 @@ function boxOverlap(a: BoundingBox, b: BoundingBox): number {
  * wrong thing later. A wrapper containing the target loses to the target itself
  * because overlap is scored against the union, which a large wrapper inflates.
  */
-export function resolveElementByBox(
+export function ResolveElementByBox(
     box: BoundingBox | undefined,
     elements: InteractiveElement[]
 ): InteractiveElement | undefined {
@@ -271,6 +281,14 @@ export function resolveElementByBox(
         }
     }
     return bestScore >= BOX_MATCH_MIN_OVERLAP ? best : undefined;
+}
+
+/** @deprecated Use {@link ResolveElementByBox}. */
+export function resolveElementByBox(
+    box: BoundingBox | undefined,
+    elements: InteractiveElement[]
+): InteractiveElement | undefined {
+ return ResolveElementByBox(box, elements);
 }
 
 /**
@@ -296,7 +314,7 @@ function isUngroundedType(action: BrowserAction): boolean {
  * refusal so the caller can log why a pass was not recorded. Layer 2 should
  * additionally require all oracles green before calling {@link recordTrace}.
  */
-export function isRecordableRun(result: ComputerUseResult): { recordable: boolean; reason?: string } {
+export function IsRecordableRun(result: ComputerUseResult): { recordable: boolean; reason?: string } {
     if (result.Status !== 'Completed') {
         return { recordable: false, reason: `status is ${result.Status}, not Completed` };
     }
@@ -321,7 +339,7 @@ export function isRecordableRun(result: ComputerUseResult): { recordable: boolea
             // with neither a selector to act on nor a role/name to heal from. Such a
             // step diverges on every future run, so the whole trace is worthless —
             // refuse it here rather than storing a script that dies mid-trajectory.
-            if (isUngroundedClick(action) && !resolveElementByBox(action.BoundingBox, step.InteractiveElements)) {
+            if (isUngroundedClick(action) && !ResolveElementByBox(action.BoundingBox, step.InteractiveElements)) {
                 return {
                     recordable: false,
                     reason: `step ${step.StepNumber} used a coordinate click that matches no extracted element (nothing to replay or heal from)`,
@@ -338,14 +356,19 @@ export function isRecordableRun(result: ComputerUseResult): { recordable: boolea
     return { recordable: true };
 }
 
+/** @deprecated Use {@link IsRecordableRun}. */
+export function isRecordableRun(result: ComputerUseResult): { recordable: boolean; reason?: string } {
+ return IsRecordableRun(result);
+}
+
 /** Distill a passing {@link ComputerUseResult} into a {@link ComputerUseTrace}. */
-export function recordTrace(options: RecordTraceOptions): ComputerUseTrace {
+export function RecordTrace(options: RecordTraceOptions): ComputerUseTrace {
     const volatile = options.volatileParams ?? [];
     const trace = new ComputerUseTrace();
     trace.TestId = options.testId;
     trace.AppBuildHash = options.appBuildHash ?? '';
     trace.AppVersion = options.appVersion ?? '';
-    trace.GoalHash = hashGoal(options.goal);
+    trace.GoalHash = HashGoal(options.goal);
     trace.RecordedAt = options.recordedAt;
     trace.Variables = options.variables ?? [];
     trace.GoalPostconditions = options.goalPostconditions ?? [];
@@ -369,19 +392,29 @@ export function recordTrace(options: RecordTraceOptions): ComputerUseTrace {
     return trace;
 }
 
+/** @deprecated Use {@link RecordTrace}. */
+export function recordTrace(options: RecordTraceOptions): ComputerUseTrace {
+ return RecordTrace(options);
+}
+
 /**
  * A stable, non-cryptographic hash of the goal text (djb2 → hex). The goal is
  * frozen fixture data: a reword changes the hash and demotes the test to the
  * LLM tier. Trivial whitespace differences are collapsed first so
  * reformatting alone doesn't invalidate. Exported sokeying reuses it.
  */
-export function hashGoal(goal: string): string {
+export function HashGoal(goal: string): string {
     const normalized = (goal ?? '').trim().replace(/\s+/g, ' ');
     let h = 5381;
     for (let i = 0; i < normalized.length; i++) {
         h = ((h << 5) + h + normalized.charCodeAt(i)) >>> 0;
     }
     return h.toString(16).padStart(8, '0');
+}
+
+/** @deprecated Use {@link HashGoal}. */
+export function hashGoal(goal: string): string {
+ return HashGoal(goal);
 }
 
 // ─── Internals ─────────────────────────────────────────────
@@ -402,8 +435,8 @@ function distillStep(
     volatile: string[],
     variableValues?: Record<string, string>
 ): TraceStep[] {
-    const urlBefore = normalizeTraceUrl(step.UrlBefore || step.Url, volatile);
-    const urlAfter = normalizeTraceUrl(step.UrlAfter || step.UrlBefore || step.Url, volatile);
+    const urlBefore = NormalizeTraceUrl(step.UrlBefore || step.Url, volatile);
+    const urlAfter = NormalizeTraceUrl(step.UrlAfter || step.UrlBefore || step.Url, volatile);
     // Tokenized like Text/Url: the controller narrates what it is doing, so a
     // login step's reasoning quotes the very credentials it was handed
     // ("log in using (user / hunter2)"). Untokenized, every recorded login wrote
@@ -470,7 +503,7 @@ function mapAction(
             // would have recorded, and so the same replayability and healability.
             // `isRecordableRun` has already refused the run if this cannot resolve.
             ta.Target =
-                targetFromElement(resolveElementByBox(action.BoundingBox, [...elementsByIndex.values()]))
+                targetFromElement(ResolveElementByBox(action.BoundingBox, [...elementsByIndex.values()]))
                 ?? targetFromSelectorOrBox(action.Selector, action.BoundingBox);
             break;
         case 'ClickElement':
@@ -491,7 +524,7 @@ function mapAction(
             ta.Key = action.Key;
             break;
         case 'Navigate':
-            ta.Url = tokenize(normalizeTraceUrl(action.Url, volatile), variableValues);
+            ta.Url = tokenize(NormalizeTraceUrl(action.Url, volatile), variableValues);
             break;
         // GoBack / GoForward / Refresh carry no fields.
     }
@@ -635,8 +668,13 @@ export interface TierDecision {
 }
 
 /** Whether the live goal text still matches the trace's frozen goal hash. */
+export function GoalMatchesTrace(trace: ComputerUseTrace, currentGoal: string): boolean {
+    return trace.GoalHash === HashGoal(currentGoal);
+}
+
+/** @deprecated Use {@link GoalMatchesTrace}. */
 export function goalMatchesTrace(trace: ComputerUseTrace, currentGoal: string): boolean {
-    return trace.GoalHash === hashGoal(currentGoal);
+ return GoalMatchesTrace(trace, currentGoal);
 }
 
 /**
@@ -647,14 +685,14 @@ export function goalMatchesTrace(trace: ComputerUseTrace, currentGoal: string): 
  *   4. Exact build-hash match       → replay
  *   5. Otherwise                    → replay-with-heal (default; build differs/unknown)
  */
-export function decideReplayTier(input: TierDecisionInput): TierDecision {
+export function DecideReplayTier(input: TierDecisionInput): TierDecision {
     const { trace, currentGoal, currentBuildHash, healRate } = input;
     const threshold = input.healRateThreshold ?? DEFAULT_HEAL_RATE_DEMOTE_THRESHOLD;
 
     if (!trace) {
         return { tier: 'llm', reason: 'no recorded trace for this test' };
     }
-    if (!goalMatchesTrace(trace, currentGoal)) {
+    if (!GoalMatchesTrace(trace, currentGoal)) {
         return { tier: 'llm', reason: 'goal text changed since record — re-derive and re-record' };
     }
     if (healRate !== undefined && healRate >= threshold) {
@@ -676,6 +714,11 @@ export function decideReplayTier(input: TierDecisionInput): TierDecision {
             ? 'build identity differs from record — replay with heal expected'
             : 'build identity unavailable — replay with heal expected (default)',
     };
+}
+
+/** @deprecated Use {@link DecideReplayTier}. */
+export function decideReplayTier(input: TierDecisionInput): TierDecision {
+ return DecideReplayTier(input);
 }
 
 // ─── Drift Diff ────────────────────────────────────────
@@ -713,7 +756,7 @@ export interface TraceDiff {
  * Compare a stored trace against a freshly-derived one (both for the same test).
  * Steps are compared positionally; length differences surface as added/removed.
  */
-export function diffTraces(recorded: ComputerUseTrace, fresh: ComputerUseTrace): TraceDiff {
+export function DiffTraces(recorded: ComputerUseTrace, fresh: ComputerUseTrace): TraceDiff {
     const recSteps = recorded.Steps;
     const freshSteps = fresh.Steps;
     const common = Math.min(recSteps.length, freshSteps.length);
@@ -740,6 +783,11 @@ export function diffTraces(recorded: ComputerUseTrace, fresh: ComputerUseTrace):
         meaningfulDrift,
         summary: buildSummary(identical, meaningfulDrift, changedSteps, addedSteps, removedSteps),
     };
+}
+
+/** @deprecated Use {@link DiffTraces}. */
+export function diffTraces(recorded: ComputerUseTrace, fresh: ComputerUseTrace): TraceDiff {
+ return DiffTraces(recorded, fresh);
 }
 
 // ─── Internals ─────────────────────────────────────────────

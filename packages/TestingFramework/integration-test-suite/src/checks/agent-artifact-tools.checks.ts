@@ -39,11 +39,11 @@ import type {
 import { ArtifactToolManager } from '@memberjunction/ai-agents';
 import { Assert, AssertEqual, IntegrationCheckRegistry, NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { AgentInvoker } from './_it-live-agent-harness';
-import { userTurn } from './agent-live-shared';
+import { UserTurn } from './agent-live-shared';
 import type { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import {
-    resolveClient, newMarker, loadAgentByName, settle,
-    readRun, readSteps, readPromptRunsForAgent, deepDeleteRunTrees, deleteMatching, runWithCompliance,
+    ResolveClient, NewMarker, LoadAgentByName, Settle,
+    ReadRun, ReadSteps, ReadPromptRunsForAgent, DeepDeleteRunTrees, DeleteMatching, RunWithCompliance,
     IT_FIXTURE_TAG, AgentStepRow
 } from './_it-live-agent-harness';
 
@@ -167,7 +167,7 @@ async function attachArtifact(
     ctx: IntegrationCheckContext, fx: ArtifactToolsFixture,
     typeName: string, mimeType: string, content: string, isBinary: boolean, userMessage: string
 ): Promise<string> {
-    const marker = newMarker('IT-AT');
+    const marker = NewMarker('IT-AT');
     const name = `IT Artifact ${marker} ${IT_FIXTURE_TAG}`;
 
     const conversation = await ctx.Provider.GetEntityObject<MJConversationEntity>('MJ: Conversations', ctx.User);
@@ -230,9 +230,9 @@ async function runReader(fx: ArtifactToolsFixture, conversationDetailId: string,
     // reach the run via the MJ: Conversation Detail Artifacts junction + conversationDetailId,
     // exactly as the wire RunAIAgentFromConversationDetail path did, but synchronously.
     const result = await fx.Client.RunAIAgent(
-        { agent: fx.Reader, conversationDetailId, conversationMessages: userTurn(userMessage) } as unknown as ExecuteAgentParams
+        { agent: fx.Reader, conversationDetailId, conversationMessages: UserTurn(userMessage) } as unknown as ExecuteAgentParams
     );
-    await settle(2500); // let the fire-and-forget Tool/prompt step saves flush
+    await Settle(2500); // let the fire-and-forget Tool/prompt step saves flush
     const runId = (result as unknown as { agentRun?: { ID?: string } }).agentRun?.ID;
     if (runId) fx.CreatedRootRunIds.push(runId);
     return runId;
@@ -258,7 +258,7 @@ function firstToolResult(steps: AgentStepRow[]): ToolStepResult | undefined {
 
 /** Read steps then extract the tool result (undefined if the model never called the tool). */
 async function readToolResult(ctx: IntegrationCheckContext, runId: string): Promise<ToolStepResult | undefined> {
-    return firstToolResult(await readSteps(ctx.Provider, ctx.User, runId));
+    return firstToolResult(await ReadSteps(ctx.Provider, ctx.User, runId));
 }
 
 /** Run a single-artifact interrogation with two-phase compliance keyed on the instructed tool name. */
@@ -267,7 +267,7 @@ async function interrogate(
     typeName: string, mimeType: string, content: string, isBinary: boolean,
     tool: string, input: Record<string, unknown>, label: string
 ): Promise<ToolStepResult> {
-    const runId = await runWithCompliance(
+    const runId = await RunWithCompliance(
         async () => {
             const instruction = toolInstruction(tool, input);
             const detailId = await attachArtifact(ctx, fx, typeName, mimeType, content, isBinary, instruction);
@@ -279,9 +279,9 @@ async function interrogate(
         // What the run ACTUALLY produced: the steps it took and what the model wrote. Distinguishes
         // "the model declined" from "the tool was never advertised" and from "the response was empty".
         async (id) => {
-            const steps = await readSteps(ctx.Provider, ctx.User, id);
+            const steps = await ReadSteps(ctx.Provider, ctx.User, id);
             const shape = steps.map((s) => s.StepType).join(' → ') || '(no steps)';
-            const runs = await readPromptRunsForAgent(ctx.Provider, ctx.User, [id], fx.ReaderID);
+            const runs = await ReadPromptRunsForAgent(ctx.Provider, ctx.User, [id], fx.ReaderID);
             const said = runs.map((r) => (r.Result ?? '').slice(0, 700)).join('\n    ---\n') || '(no prompt runs)';
             return `    steps:    ${shape}\n    model said: ${said}`;
         }
@@ -303,16 +303,16 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('AT1'); if (!fx) return;
             // "do not call any tool" → the reader completes immediately; we only prove the manifest reached the prompt.
-            const runId = await runWithCompliance(
+            const runId = await RunWithCompliance(
                 async () => {
                     const instruction = 'Do not call any tool.';
                     const detailId = await attachArtifact(ctx, fx, 'JSON', 'application/json', ASSET_JSON, false, instruction);
                     return runReader(fx, detailId, instruction);
                 },
-                async (id) => (await readPromptRunsForAgent(ctx.Provider, ctx.User, [id], fx.ReaderID)).length > 0,
+                async (id) => (await ReadPromptRunsForAgent(ctx.Provider, ctx.User, [id], fx.ReaderID)).length > 0,
                 'AT1 manifest'
             );
-            const prompts = await readPromptRunsForAgent(ctx.Provider, ctx.User, [runId], fx.ReaderID);
+            const prompts = await ReadPromptRunsForAgent(ctx.Provider, ctx.User, [runId], fx.ReaderID);
             const firstMessages = prompts.map((p) => p.Messages ?? '').join('\n');
             Assert(firstMessages.includes('Available Artifacts'), 'AT1: the artifact manifest was not injected into the prompt');
             Assert(/\bA\b/.test(firstMessages) && firstMessages.includes('IT Artifact'), 'AT1: the manifest did not list the artifact by alpha ID + name');
@@ -409,7 +409,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('AT8'); if (!fx) return;
-            const runId = await runWithCompliance(
+            const runId = await RunWithCompliance(
                 async () => {
                     const instruction = toolInstruction('json_path', { path: '$.truncated' });
                     const detailId = await attachArtifact(ctx, fx, 'JSON', 'application/json', '{ "truncated": ', false, instruction);
@@ -421,7 +421,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             const tr = await readToolResult(ctx, runId);
             Assert(!!tr && tr.result.success === false, 'AT8: a malformed artifact did not surface a structured failure result');
             Assert(!!tr!.result.errorMessage, 'AT8: the structured error carried no message');
-            const run = await readRun(ctx.Provider, ctx.User, runId);
+            const run = await ReadRun(ctx.Provider, ctx.User, runId);
             Assert(run?.Status === 'Completed' || run?.Status === 'AwaitingFeedback',
                 `AT8: one bad artifact crashed the whole run (Status=${run?.Status})`);
         }
@@ -437,10 +437,10 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             const over = ArtifactToolManager.ShouldExternalizeContent(50_001);
             Assert(!under.shouldExternalize && over.shouldExternalize, 'AT9: the 50k externalization boundary shifted');
 
-            const marker = newMarker('IT-AT9');
+            const marker = NewMarker('IT-AT9');
             const deepSentinel = `IT-AT9-DEEP-${marker}`;
             const big = 'x'.repeat(60_000) + `\n${deepSentinel}\n` + 'y'.repeat(5_000);
-            const runId = await runWithCompliance(
+            const runId = await RunWithCompliance(
                 async () => {
                     const instruction = toolInstruction('grep', { pattern: deepSentinel });
                     const detailId = await attachArtifact(ctx, fx, 'Generic Text', 'text/plain', big, false, instruction);
@@ -462,7 +462,7 @@ export const ArtifactToolsChecks: NamedCheck[] = [
             // success and reports a context blow-up that never happened. What actually distinguishes
             // inlining from tools-only delivery is whether the 65k filler body travelled with the
             // prompt, so that is what we test.
-            const prompts = await readPromptRunsForAgent(ctx.Provider, ctx.User, [runId], fx.ReaderID);
+            const prompts = await ReadPromptRunsForAgent(ctx.Provider, ctx.User, [runId], fx.ReaderID);
             const allMessages = prompts.map((p) => p.Messages ?? '').join('\n');
             const bodyProbe = 'x'.repeat(10_000); // a slab only the inlined 60k body could contain
             Assert(!allMessages.includes(bodyProbe), 'AT9: large artifact CONTENT was inlined into the prompt (context blow-up)');
@@ -480,8 +480,8 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-artifact-tools', {
             ReaderID: '', TypeIds: {}, CreatedRootRunIds: [],
             ConversationIds: [], ArtifactIds: [], ArtifactVersionIds: [], JunctionIds: []
         };
-        const client = resolveClient(ctx.Provider, ctx.User);
-        const reader = await loadAgentByName(ctx.Provider, ctx.User, 'IT: Artifact Reader');
+        const client = ResolveClient(ctx.Provider, ctx.User);
+        const reader = await LoadAgentByName(ctx.Provider, ctx.User, 'IT: Artifact Reader');
         if (!reader) {
             fixture.Skip = 'IT: Artifact Reader not seeded — run: npx mj sync push --dir=metadata-optional/integration-test';
             return;
@@ -512,14 +512,14 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('agent-artifact-tools', {
         const fx = fixture;
         if (!fx) return;
         // 1. Run trees (steps → prompt runs → runs) the reader spawned.
-        await deepDeleteRunTrees(ctx.Provider, ctx.User, fx.CreatedRootRunIds);
+        await DeepDeleteRunTrees(ctx.Provider, ctx.User, fx.CreatedRootRunIds);
         // 2. Junctions → versions → artifacts (FK order).
-        for (const id of fx.JunctionIds) await deleteMatching(ctx.Provider, ctx.User, 'MJ: Conversation Detail Artifacts', `ID='${id}'`);
-        for (const id of fx.ArtifactVersionIds) await deleteMatching(ctx.Provider, ctx.User, 'MJ: Artifact Versions', `ID='${id}'`);
-        for (const id of fx.ArtifactIds) await deleteMatching(ctx.Provider, ctx.User, 'MJ: Artifacts', `ID='${id}'`);
+        for (const id of fx.JunctionIds) await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Conversation Detail Artifacts', `ID='${id}'`);
+        for (const id of fx.ArtifactVersionIds) await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifact Versions', `ID='${id}'`);
+        for (const id of fx.ArtifactIds) await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Artifacts', `ID='${id}'`);
         // 3. All conversation details (user + any agent responses) → conversations.
-        for (const id of fx.ConversationIds) await deleteMatching(ctx.Provider, ctx.User, 'MJ: Conversation Details', `ConversationID='${id}'`);
-        for (const id of fx.ConversationIds) await deleteMatching(ctx.Provider, ctx.User, 'MJ: Conversations', `ID='${id}'`);
+        for (const id of fx.ConversationIds) await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Conversation Details', `ConversationID='${id}'`);
+        for (const id of fx.ConversationIds) await DeleteMatching(ctx.Provider, ctx.User, 'MJ: Conversations', `ID='${id}'`);
         fixture = undefined;
     }
 });

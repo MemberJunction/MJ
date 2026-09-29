@@ -326,7 +326,7 @@ async function createDomainRow(
  * or its `@RegisterClass` key drifted from `ProviderClassName` — the engine logs and skips it,
  * so the domain silently vanishes from the Sharing Center with no error anywhere.
  */
-export async function CheckPe1_DomainFanOut(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe1DomainFanOut(ctx: IntegrationCheckContext): Promise<void> {
     const engine = await configuredEngine(ctx);
     const domains = realDomains(engine);
     Assert(domains.length > 0, 'no ACTIVE MJ: Permission Domains rows loaded — the catalog is empty or unreadable');
@@ -348,13 +348,18 @@ export async function CheckPe1_DomainFanOut(ctx: IntegrationCheckContext): Promi
     console.log(`      → ${domains.length} active domain(s), all ClassFactory-resolved with matching DomainName`);
 }
 
+/** @deprecated Use {@link CheckPe1DomainFanOut}. */
+export async function CheckPe1_DomainFanOut(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe1DomainFanOut(ctx);
+}
+
 /**
  * PE2 — normalized-vocabulary conformance. Every provider must describe itself using the shared
  * `PermissionAction` / `GranteeType` vocabulary, because that is precisely what lets a sharing UI
  * render a domain it has never heard of. A typo'd action in a new provider fails here rather than
  * producing an un-renderable row in production.
  */
-export async function CheckPe2_VocabularyConformance(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe2VocabularyConformance(ctx: IntegrationCheckContext): Promise<void> {
     const engine = await configuredEngine(ctx);
     const domains = realDomains(engine);
     Assert(domains.length > 0, 'no active permission domains to validate');
@@ -392,13 +397,18 @@ export async function CheckPe2_VocabularyConformance(ctx: IntegrationCheckContex
     console.log(`      → ${domains.length} provider(s) conform to the PermissionAction / GranteeType vocabulary`);
 }
 
+/** @deprecated Use {@link CheckPe2VocabularyConformance}. */
+export async function CheckPe2_VocabularyConformance(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe2VocabularyConformance(ctx);
+}
+
 /**
  * PE3 — catalog↔class agreement. The `MJ: Permission Domains` row DECLARES the domain's
  * capabilities (`SupportedActions`, `SupportedGranteeTypes`, `SupportsDeny`) and the provider
  * class RESTATES them as readonly members. Admin UIs read the row; runtime code reads the class.
  * When they disagree, the UI offers a grant the provider will never honor. Drift detector.
  */
-export async function CheckPe3_CatalogMatchesClass(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe3CatalogMatchesClass(ctx: IntegrationCheckContext): Promise<void> {
     const engine = await configuredEngine(ctx);
     const domains = realDomains(engine);
     Assert(domains.length > 0, 'no active permission domains to validate');
@@ -439,6 +449,11 @@ export async function CheckPe3_CatalogMatchesClass(ctx: IntegrationCheckContext)
     console.log(`      → ${domains.length} domain(s): catalog action/grantee declarations match provider class metadata`);
 }
 
+/** @deprecated Use {@link CheckPe3CatalogMatchesClass}. */
+export async function CheckPe3_CatalogMatchesClass(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe3CatalogMatchesClass(ctx);
+}
+
 /**
  * PE3b — the SupportsDeny leg of catalog↔class agreement, asserted ASYMMETRICALLY because the two
  * directions have opposite safety properties:
@@ -456,7 +471,7 @@ export async function CheckPe3_CatalogMatchesClass(ctx: IntegrationCheckContext)
  * Net effect: Deny rows ARE enforced at runtime but no admin surface offers to create them.
  * Fixing that is a product decision (update the metadata row + `mj sync push`), not a test change.
  */
-export async function CheckPe3b_SupportsDenyAgreement(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe3bSupportsDenyAgreement(ctx: IntegrationCheckContext): Promise<void> {
     const engine = await configuredEngine(ctx);
     const domains = realDomains(engine);
     Assert(domains.length > 0, 'no active permission domains to validate');
@@ -486,13 +501,18 @@ export async function CheckPe3b_SupportsDenyAgreement(ctx: IntegrationCheckConte
     console.log(`      → no domain over-advertises Deny; ${underAdvertised.length} under-advertise(s) (warned)`);
 }
 
+/** @deprecated Use {@link CheckPe3bSupportsDenyAgreement}. */
+export async function CheckPe3b_SupportsDenyAgreement(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe3bSupportsDenyAgreement(ctx);
+}
+
 /**
  * PE4 — DENY: an unknown domain fails CLOSED. Asking the aggregator about a domain that has no
  * catalog row (or whose provider failed to load) must return `Allowed: false` with a Reason that
  * names the domain, and `GetResourcePermissions` must return `[]`. The alternative — silently
  * treating "no provider" as "no restriction" — would be a security hole.
  */
-export async function CheckPe4_UnknownDomainFailsClosed(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe4UnknownDomainFailsClosed(ctx: IntegrationCheckContext): Promise<void> {
     const engine = await configuredEngine(ctx);
     const bogus = 'Integration Test Nonexistent Domain 0F0F';
     Assert(engine.GetProvider(bogus) === undefined, `'${bogus}' unexpectedly resolved a provider`);
@@ -511,13 +531,18 @@ export async function CheckPe4_UnknownDomainFailsClosed(ctx: IntegrationCheckCon
     console.log(`      → unknown domain denied all ${VALID_ACTIONS.length} actions with a naming Reason; rows=[]`);
 }
 
+/** @deprecated Use {@link CheckPe4UnknownDomainFailsClosed}. */
+export async function CheckPe4_UnknownDomainFailsClosed(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe4UnknownDomainFailsClosed(ctx);
+}
+
 /**
  * PE5 — DENY through a REAL provider. The AI Agent provider must (a) refuse a domain-wide check
  * (`resourceId = null`) rather than answering for "all agents", and (b) deny every action on a
  * resource id that has no grant rows at all. This is the closed-by-default half of the two-path
  * contract, asserted directly on the provider rather than through the aggregator.
  */
-export async function CheckPe5_AgentProviderDenies(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe5AgentProviderDenies(ctx: IntegrationCheckContext): Promise<void> {
     const engine = await configuredEngine(ctx);
     const provider = engine.GetProvider('AI Agent Permissions');
     if (!provider) {
@@ -538,6 +563,11 @@ export async function CheckPe5_AgentProviderDenies(ctx: IntegrationCheckContext)
     console.log('      → unified agent provider: null-resource refused, stranger id denied on all 4 actions');
 }
 
+/** @deprecated Use {@link CheckPe5AgentProviderDenies}. */
+export async function CheckPe5_AgentProviderDenies(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe5AgentProviderDenies(ctx);
+}
+
 /**
  * PE6 ★ — the TWO-ACCESS-PATH contract for AI Agents, the headline asymmetry of this domain.
  *
@@ -553,7 +583,7 @@ export async function CheckPe5_AgentProviderDenies(ctx: IntegrationCheckContext)
  * "fixes" one path into agreement with the other. The difference — not either result alone —
  * is the assertion, so a high-privilege context user cannot make this check vacuous.
  */
-export async function CheckPe6_AgentDualPathDefault(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe6AgentDualPathDefault(ctx: IntegrationCheckContext): Promise<void> {
     const ai = await configuredAIEngine(ctx);
     Assert(ai.Agents.length > 0, 'no AI Agents in metadata — cannot exercise the agent permission paths');
 
@@ -594,13 +624,18 @@ export async function CheckPe6_AgentDualPathDefault(ctx: IntegrationCheckContext
     console.log(`      → agent '${agent.Name}' as '${identity.Label}': helper=open(View+Run) provider=closed([]) — asymmetry intact`);
 }
 
+/** @deprecated Use {@link CheckPe6AgentDualPathDefault}. */
+export async function CheckPe6_AgentDualPathDefault(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe6AgentDualPathDefault(ctx);
+}
+
 /**
  * PE7 ★ — the identical two-access-path contract for AI Skills. Skills mirror Agents exactly
  * (`AISkillPermissionHelper` open-by-default vs `AISkillPermissionProvider` closed-by-default over
  * `MJ: AI Skill Permissions`), and pinning both means a change to the shared pattern cannot land
  * silently on one resource type.
  */
-export async function CheckPe7_SkillDualPathDefault(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe7SkillDualPathDefault(ctx: IntegrationCheckContext): Promise<void> {
     const ai = await configuredAIEngine(ctx);
     if (ai.Skills.length === 0) {
         skipNote('PE7', 'no AI Skills in metadata — the skill permission paths are unexercised');
@@ -641,6 +676,11 @@ export async function CheckPe7_SkillDualPathDefault(ctx: IntegrationCheckContext
     console.log(`      → skill '${skill.Name}' as '${identity.Label}': helper=open(View+Run) provider=closed([]) — asymmetry intact`);
 }
 
+/** @deprecated Use {@link CheckPe7SkillDualPathDefault}. */
+export async function CheckPe7_SkillDualPathDefault(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe7SkillDualPathDefault(ctx);
+}
+
 /**
  * PE8 ★ — the open default SWITCHES OFF once any grant row exists, plus the hierarchy collapse.
  *
@@ -652,7 +692,7 @@ export async function CheckPe7_SkillDualPathDefault(ctx: IntegrationCheckContext
  * over already-loaded arrays, with UNSAVED synthetic rows. Zero mutation, fully deterministic,
  * and independent of which identity the harness happens to run as.
  */
-export async function CheckPe8_SkillGrantsCloseTheDefault(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe8SkillGrantsCloseTheDefault(ctx: IntegrationCheckContext): Promise<void> {
     const ai = await configuredAIEngine(ctx);
     const identity = await nonOwnerIdentity(ctx);
     const skill = ai.Skills.find(s => !UUIDsEqual(s.CreatedByUserID, identity.User.ID));
@@ -696,6 +736,11 @@ export async function CheckPe8_SkillGrantsCloseTheDefault(ctx: IntegrationCheckC
     console.log('      → grants close the open default for non-matching users; Delete⇒Edit⇒Run⇒View collapses downward only');
 }
 
+/** @deprecated Use {@link CheckPe8SkillGrantsCloseTheDefault}. */
+export async function CheckPe8_SkillGrantsCloseTheDefault(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe8SkillGrantsCloseTheDefault(ctx);
+}
+
 /**
  * PE9 ★ — the ENTITY PERMISSIONS / RLS concern, proven with TWO REAL IDENTITIES.
  *
@@ -705,7 +750,7 @@ export async function CheckPe8_SkillGrantsCloseTheDefault(ctx: IntegrationCheckC
  * context user CAN read. Asserting the DIFFERENCE — not the context user's allow — is what makes
  * this non-vacuous under a high-privilege harness identity.
  */
-export async function CheckPe9_EntityPermissionsDenyRolelessUser(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe9EntityPermissionsDenyRolelessUser(ctx: IntegrationCheckContext): Promise<void> {
     const noGrant = await loadSeededNoGrantUser(ctx);
     if (!noGrant) {
         skipNote('PE9', `seeded user '${SEEDED_NOGRANT_EMAIL}' not found — seed with: ${SEED_FIXTURES_COMMAND}`);
@@ -732,6 +777,11 @@ export async function CheckPe9_EntityPermissionsDenyRolelessUser(ctx: Integratio
     console.log(`      → '${SEEDED_RLS_ENTITY}': context user CanRead=true, role-less user CanRead=false (real identity difference)`);
 }
 
+/** @deprecated Use {@link CheckPe9EntityPermissionsDenyRolelessUser}. */
+export async function CheckPe9_EntityPermissionsDenyRolelessUser(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe9EntityPermissionsDenyRolelessUser(ctx);
+}
+
 /**
  * PE10 ★ — the AUTHORIZATION (capability) concern fails closed for a role-less identity.
  *
@@ -740,7 +790,7 @@ export async function CheckPe9_EntityPermissionsDenyRolelessUser(ctx: Integratio
  * capability gate (`Can Share Skills`, `Schema Management`, …) must refuse. If the evaluator ever
  * failed open on an empty role list, every feature gate in the product would open at once.
  */
-export async function CheckPe10_RolelessUserHasNoAuthorizations(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe10RolelessUserHasNoAuthorizations(ctx: IntegrationCheckContext): Promise<void> {
     const auths: AuthorizationInfo[] = ctx.Provider.Authorizations ?? [];
     if (auths.length === 0) {
         skipNote('PE10', 'no MJ: Authorizations defined in this deployment — the capability gate is unexercised');
@@ -761,6 +811,11 @@ export async function CheckPe10_RolelessUserHasNoAuthorizations(ctx: Integration
         `role-less user '${SEEDED_NOGRANT_EMAIL}' can execute ${leaked.length} authorization(s): ${leaked.join(', ')} (SECURITY — capability gate failed OPEN)`
     );
     console.log(`      → role-less user denied all ${auths.length} authorization(s)`);
+}
+
+/** @deprecated Use {@link CheckPe10RolelessUserHasNoAuthorizations}. */
+export async function CheckPe10_RolelessUserHasNoAuthorizations(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe10RolelessUserHasNoAuthorizations(ctx);
 }
 
 /**
@@ -821,7 +876,7 @@ async function withDomainRow(
  * safety-relevant and true (no crash at Config time, real domains unaffected, nothing granted);
  * PE13 pins the consequence that is NOT safe.
  */
-export async function CheckPe11_UnresolvableProviderIsContained(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe11UnresolvableProviderIsContained(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.PermissionEngineFixture;
     if (!fx) {
         skipNote('PE11', 'mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
@@ -862,13 +917,18 @@ export async function CheckPe11_UnresolvableProviderIsContained(ctx: Integration
     });
 }
 
+/** @deprecated Use {@link CheckPe11UnresolvableProviderIsContained}. */
+export async function CheckPe11_UnresolvableProviderIsContained(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe11UnresolvableProviderIsContained(ctx);
+}
+
 /**
  * PE12 — [mutation] a provider that THROWS (asynchronously, the normal failure mode) must not
  * crash the aggregate. `GetAllUserPermissions` fans out with `Promise.allSettled`, so one broken
  * domain degrades to "contributes nothing" rather than rejecting the whole call — which would
  * black-hole the Sharing Center and the audit surface for every user.
  */
-export async function CheckPe12_ThrowingProviderDoesNotCrashFanOut(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe12ThrowingProviderDoesNotCrashFanOut(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.PermissionEngineFixture;
     if (!fx) {
         skipNote('PE12', 'mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
@@ -899,6 +959,11 @@ export async function CheckPe12_ThrowingProviderDoesNotCrashFanOut(ctx: Integrat
     });
 }
 
+/** @deprecated Use {@link CheckPe12ThrowingProviderDoesNotCrashFanOut}. */
+export async function CheckPe12_ThrowingProviderDoesNotCrashFanOut(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe12ThrowingProviderDoesNotCrashFanOut(ctx);
+}
+
 /**
  * PE13 — [mutation] ⚠ EXPECTED RED: a single unresolvable ProviderClassName takes down the ENTIRE
  * unified-permission aggregate for every user.
@@ -925,7 +990,7 @@ export async function CheckPe12_ThrowingProviderDoesNotCrashFanOut(ctx: Integrat
  * This check is MUTATION-TIER (RUN_MUTATION_TESTS=1), so it does not block the default CI gate.
  * It turns GREEN the moment either fix lands.
  */
-export async function CheckPe13_UnresolvableProviderPoisonsFanOut(ctx: IntegrationCheckContext): Promise<void> {
+export async function CheckPe13UnresolvableProviderPoisonsFanOut(ctx: IntegrationCheckContext): Promise<void> {
     const fx = ctx.PermissionEngineFixture;
     if (!fx) {
         skipNote('PE13', 'mutation fixture not provisioned (RUN_MUTATION_TESTS is not 1)');
@@ -951,29 +1016,34 @@ export async function CheckPe13_UnresolvableProviderPoisonsFanOut(ctx: Integrati
     });
 }
 
+/** @deprecated Use {@link CheckPe13UnresolvableProviderPoisonsFanOut}. */
+export async function CheckPe13_UnresolvableProviderPoisonsFanOut(ctx: IntegrationCheckContext): Promise<void> {
+    return CheckPe13UnresolvableProviderPoisonsFanOut(ctx);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // registration
 // ─────────────────────────────────────────────────────────────────────────────────────────
 
 export const PermissionEngineChecks: NamedCheck[] = [
-    { Id: 'permission-engine.PE1', Name: 'PE1: every active Permission Domain ClassFactory-resolves a matching provider (fan-out)', Fn: CheckPe1_DomainFanOut },
-    { Id: 'permission-engine.PE2', Name: 'PE2: every provider conforms to the normalized PermissionAction / GranteeType vocabulary', Fn: CheckPe2_VocabularyConformance },
-    { Id: 'permission-engine.PE3', Name: 'PE3: catalog row actions/grantees match the provider class metadata (drift detector)', Fn: CheckPe3_CatalogMatchesClass },
-    { Id: 'permission-engine.PE3b', Name: 'PE3b: no domain ADVERTISES Deny support its provider does not implement', Fn: CheckPe3b_SupportsDenyAgreement },
-    { Id: 'permission-engine.PE4', Name: 'PE4: an unknown permission domain fails CLOSED with a self-explaining Reason', Fn: CheckPe4_UnknownDomainFailsClosed },
-    { Id: 'permission-engine.PE5', Name: 'PE5: the unified agent provider refuses a null resource and denies a stranger id', Fn: CheckPe5_AgentProviderDenies },
-    { Id: 'permission-engine.PE6', Name: 'PE6: agent dual-path default — cached helper OPEN vs unified provider CLOSED (by design)', Fn: CheckPe6_AgentDualPathDefault },
-    { Id: 'permission-engine.PE7', Name: 'PE7: skill dual-path default — cached helper OPEN vs unified provider CLOSED (by design)', Fn: CheckPe7_SkillDualPathDefault },
-    { Id: 'permission-engine.PE8', Name: 'PE8: any grant row closes the open default for non-matching users; hierarchy collapses downward only', Fn: CheckPe8_SkillGrantsCloseTheDefault },
-    { Id: 'permission-engine.PE9', Name: 'PE9: a role-less user has NO entity CRUD permission where the context user does', Fn: CheckPe9_EntityPermissionsDenyRolelessUser },
-    { Id: 'permission-engine.PE10', Name: 'PE10: a role-less user can execute ZERO Authorizations (capability gate fails closed)', Fn: CheckPe10_RolelessUserHasNoAuthorizations },
-    { Id: 'permission-engine.PE11', Name: 'PE11: a domain naming an unregistered provider class is contained (real domains intact, nothing granted)', Fn: CheckPe11_UnresolvableProviderIsContained, RequiresMutation: true },
-    { Id: 'permission-engine.PE12', Name: 'PE12: an async-throwing provider does not crash the GetAllUserPermissions fan-out', Fn: CheckPe12_ThrowingProviderDoesNotCrashFanOut, RequiresMutation: true },
+    { Id: 'permission-engine.PE1', Name: 'PE1: every active Permission Domain ClassFactory-resolves a matching provider (fan-out)', Fn: CheckPe1DomainFanOut },
+    { Id: 'permission-engine.PE2', Name: 'PE2: every provider conforms to the normalized PermissionAction / GranteeType vocabulary', Fn: CheckPe2VocabularyConformance },
+    { Id: 'permission-engine.PE3', Name: 'PE3: catalog row actions/grantees match the provider class metadata (drift detector)', Fn: CheckPe3CatalogMatchesClass },
+    { Id: 'permission-engine.PE3b', Name: 'PE3b: no domain ADVERTISES Deny support its provider does not implement', Fn: CheckPe3bSupportsDenyAgreement },
+    { Id: 'permission-engine.PE4', Name: 'PE4: an unknown permission domain fails CLOSED with a self-explaining Reason', Fn: CheckPe4UnknownDomainFailsClosed },
+    { Id: 'permission-engine.PE5', Name: 'PE5: the unified agent provider refuses a null resource and denies a stranger id', Fn: CheckPe5AgentProviderDenies },
+    { Id: 'permission-engine.PE6', Name: 'PE6: agent dual-path default — cached helper OPEN vs unified provider CLOSED (by design)', Fn: CheckPe6AgentDualPathDefault },
+    { Id: 'permission-engine.PE7', Name: 'PE7: skill dual-path default — cached helper OPEN vs unified provider CLOSED (by design)', Fn: CheckPe7SkillDualPathDefault },
+    { Id: 'permission-engine.PE8', Name: 'PE8: any grant row closes the open default for non-matching users; hierarchy collapses downward only', Fn: CheckPe8SkillGrantsCloseTheDefault },
+    { Id: 'permission-engine.PE9', Name: 'PE9: a role-less user has NO entity CRUD permission where the context user does', Fn: CheckPe9EntityPermissionsDenyRolelessUser },
+    { Id: 'permission-engine.PE10', Name: 'PE10: a role-less user can execute ZERO Authorizations (capability gate fails closed)', Fn: CheckPe10RolelessUserHasNoAuthorizations },
+    { Id: 'permission-engine.PE11', Name: 'PE11: a domain naming an unregistered provider class is contained (real domains intact, nothing granted)', Fn: CheckPe11UnresolvableProviderIsContained, RequiresMutation: true },
+    { Id: 'permission-engine.PE12', Name: 'PE12: an async-throwing provider does not crash the GetAllUserPermissions fan-out', Fn: CheckPe12ThrowingProviderDoesNotCrashFanOut, RequiresMutation: true },
     // Was KNOWN-RED when authored; the defect it pinned (B34) is fixed in #3197 — ClassFactory
     // now reports resolution failure explicitly instead of returning a hollow base instance, and
     // the fan-out defers each provider call so a SYNCHRONOUS throw becomes a rejection allSettled
     // can isolate. Verified green end-to-end 2026-07-19. It stays as the regression pin.
-    { Id: 'permission-engine.PE13', Name: 'PE13: an unresolvable provider class must not poison the GetAllUserPermissions fan-out', Fn: CheckPe13_UnresolvableProviderPoisonsFanOut, RequiresMutation: true }
+    { Id: 'permission-engine.PE13', Name: 'PE13: an unresolvable provider class must not poison the GetAllUserPermissions fan-out', Fn: CheckPe13UnresolvableProviderPoisonsFanOut, RequiresMutation: true }
 ];
 
 for (const check of PermissionEngineChecks) {

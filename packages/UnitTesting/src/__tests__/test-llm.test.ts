@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { BaseLLM, ChatResult, ModelUsage, type ChatParams } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
-import { TestLLM, registerTestLLM, type TestLLMOutcome } from '../ai/test-llm';
-import { makeChatParams, makeFailedChatResult, makeModelUsage } from '../ai/chat-result-factories';
-import { resetMJSingletons } from '../singleton-reset';
+import { TestLLM, RegisterTestLLM, type TestLLMOutcome } from '../ai/test-llm';
+import { MakeChatParams, MakeFailedChatResult, MakeModelUsage } from '../ai/chat-result-factories';
+import { ResetMJSingletons } from '../singleton-reset';
 
 let llm: TestLLM;
 beforeEach(() => {
@@ -39,15 +39,15 @@ describe('TestLLM — contract', () => {
   });
 
   it('ClassifyText and SummarizeText are unsupported (chat-scripting harness only)', async () => {
-    await expect(llm.ClassifyText(makeChatParams())).rejects.toThrow(/not supported/);
-    await expect(llm.SummarizeText(makeChatParams())).rejects.toThrow(/not supported/);
+    await expect(llm.ClassifyText(MakeChatParams())).rejects.toThrow(/not supported/);
+    await expect(llm.SummarizeText(MakeChatParams())).rejects.toThrow(/not supported/);
   });
 });
 
 describe('TestLLM — scripted outcomes', () => {
   it('succeed: resolves a real successful ChatResult with the scripted content', async () => {
     llm.Script({ kind: 'succeed', content: 'the answer' });
-    const result = await llm.ChatCompletion(makeChatParams());
+    const result = await llm.ChatCompletion(MakeChatParams());
     expect(result).toBeInstanceOf(ChatResult);
     expect(result.success).toBe(true);
     expect(result.data.choices[0].message.content).toBe('the answer');
@@ -56,8 +56,8 @@ describe('TestLLM — scripted outcomes', () => {
   });
 
   it('succeed: honors a scripted usage and reported model', async () => {
-    llm.Script({ kind: 'succeed', content: 'x', usage: makeModelUsage({ promptTokens: 7, completionTokens: 3 }), model: 'api-name' });
-    const result = await llm.ChatCompletion(makeChatParams());
+    llm.Script({ kind: 'succeed', content: 'x', usage: MakeModelUsage({ promptTokens: 7, completionTokens: 3 }), model: 'api-name' });
+    const result = await llm.ChatCompletion(MakeChatParams());
     expect(result.data.usage?.totalTokens).toBe(10);
     expect(result.data.model).toBe('api-name');
   });
@@ -67,28 +67,28 @@ describe('TestLLM — scripted outcomes', () => {
       { kind: 'succeed', content: 'first' },
       { kind: 'succeed', content: 'second' },
     );
-    expect((await llm.ChatCompletion(makeChatParams())).data.choices[0].message.content).toBe('first');
-    expect((await llm.ChatCompletion(makeChatParams())).data.choices[0].message.content).toBe('second');
-    expect((await llm.ChatCompletion(makeChatParams())).data.choices[0].message.content).toBe('test response'); // default
+    expect((await llm.ChatCompletion(MakeChatParams())).data.choices[0].message.content).toBe('first');
+    expect((await llm.ChatCompletion(MakeChatParams())).data.choices[0].message.content).toBe('second');
+    expect((await llm.ChatCompletion(MakeChatParams())).data.choices[0].message.content).toBe('test response'); // default
   });
 
   it('SetDefaultOutcome controls the exhausted-script behavior', async () => {
     llm.SetDefaultOutcome({ kind: 'succeed', content: '{}' });
-    expect((await llm.ChatCompletion(makeChatParams())).data.choices[0].message.content).toBe('{}');
+    expect((await llm.ChatCompletion(MakeChatParams())).data.choices[0].message.content).toBe('{}');
   });
 
   it('RepeatLastOutcome keeps replaying the final scripted entry', async () => {
     llm.RepeatLastOutcome = true;
     llm.Script({ kind: 'succeed', content: 'a' }, { kind: 'succeed', content: 'b' });
-    expect((await llm.ChatCompletion(makeChatParams())).data.choices[0].message.content).toBe('a');
-    expect((await llm.ChatCompletion(makeChatParams())).data.choices[0].message.content).toBe('b');
-    expect((await llm.ChatCompletion(makeChatParams())).data.choices[0].message.content).toBe('b');
-    expect((await llm.ChatCompletion(makeChatParams())).data.choices[0].message.content).toBe('b');
+    expect((await llm.ChatCompletion(MakeChatParams())).data.choices[0].message.content).toBe('a');
+    expect((await llm.ChatCompletion(MakeChatParams())).data.choices[0].message.content).toBe('b');
+    expect((await llm.ChatCompletion(MakeChatParams())).data.choices[0].message.content).toBe('b');
+    expect((await llm.ChatCompletion(MakeChatParams())).data.choices[0].message.content).toBe('b');
   });
 
   it('fail: RETURNS ChatResult{success:false} with real ErrorAnalyzer errorInfo (the historical failover bug class)', async () => {
     llm.Script({ kind: 'fail', error: new Error('Rate limit exceeded, too many requests') });
-    const result = await llm.ChatCompletion(makeChatParams());
+    const result = await llm.ChatCompletion(MakeChatParams());
     expect(result.success).toBe(false);
     expect(result.errorMessage).toContain('Rate limit exceeded');
     expect(result.errorInfo?.errorType).toBe('RateLimit');
@@ -96,9 +96,9 @@ describe('TestLLM — scripted outcomes', () => {
   });
 
   it('failResult: returns the test-supplied result verbatim (errorInfo intentionally absent)', async () => {
-    const custom = makeFailedChatResult({ errorMessage: 'provider exploded', omitData: true });
+    const custom = MakeFailedChatResult({ errorMessage: 'provider exploded', omitData: true });
     llm.Script({ kind: 'failResult', result: custom });
-    const result = await llm.ChatCompletion(makeChatParams());
+    const result = await llm.ChatCompletion(MakeChatParams());
     expect(result).toBe(custom);
     expect(result.errorInfo).toBeUndefined();
   });
@@ -106,13 +106,13 @@ describe('TestLLM — scripted outcomes', () => {
   it('throw: rejects SDK-style with the scripted error, and the call is still recorded', async () => {
     const boom = new Error('socket hang up');
     llm.Script({ kind: 'throw', error: boom });
-    await expect(llm.ChatCompletion(makeChatParams())).rejects.toBe(boom);
+    await expect(llm.ChatCompletion(MakeChatParams())).rejects.toBe(boom);
     expect(llm.CallCount).toBe(1);
   });
 
   it('hang: never settles (a hung provider socket)', async () => {
     llm.Script({ kind: 'hang' });
-    const hung = llm.ChatCompletion(makeChatParams());
+    const hung = llm.ChatCompletion(MakeChatParams());
     const winner = await Promise.race([
       hung.then(() => 'settled'),
       new Promise<string>((resolve) => setTimeout(() => resolve('still pending'), 50)),
@@ -123,7 +123,7 @@ describe('TestLLM — scripted outcomes', () => {
   it('delayMS: resolves only after the scripted delay', async () => {
     llm.Script({ kind: 'succeed', content: 'slow', delayMS: 40 });
     const start = Date.now();
-    const result = await llm.ChatCompletion(makeChatParams());
+    const result = await llm.ChatCompletion(MakeChatParams());
     expect(Date.now() - start).toBeGreaterThanOrEqual(35);
     expect(result.data.choices[0].message.content).toBe('slow');
   });
@@ -132,8 +132,8 @@ describe('TestLLM — scripted outcomes', () => {
 describe('TestLLM — call recording', () => {
   it('captures the REAL ChatParams of every call, in order', async () => {
     llm.Script({ kind: 'succeed', content: 'a' }, { kind: 'succeed', content: 'b' });
-    const p1 = makeChatParams({ model: 'api-claude' });
-    const p2 = makeChatParams({ model: 'api-gpt' });
+    const p1 = MakeChatParams({ model: 'api-claude' });
+    const p2 = MakeChatParams({ model: 'api-gpt' });
     await llm.ChatCompletion(p1);
     await llm.ChatCompletion(p2);
     expect(llm.CallCount).toBe(2);
@@ -144,13 +144,13 @@ describe('TestLLM — call recording', () => {
 
   it('records params handed to the driver including cancellationToken', async () => {
     const controller = new AbortController();
-    await llm.ChatCompletion(makeChatParams({ cancellationToken: controller.signal }));
+    await llm.ChatCompletion(MakeChatParams({ cancellationToken: controller.signal }));
     expect(llm.Calls[0].cancellationToken).toBe(controller.signal);
   });
 
   it('Reset() clears the recording and the script', async () => {
     llm.Script({ kind: 'succeed', content: 'a' }, { kind: 'succeed', content: 'b' });
-    await llm.ChatCompletion(makeChatParams());
+    await llm.ChatCompletion(MakeChatParams());
     expect(llm.PendingOutcomeCount).toBe(1);
     llm.Reset();
     expect(llm.CallCount).toBe(0);
@@ -161,11 +161,11 @@ describe('TestLLM — call recording', () => {
 describe('TestLLM — streaming through the real BaseLLM template method', () => {
   it('streams scripted chunks via OnContent and finalizes an accumulated real ChatResult', async () => {
     llm.SetSupportsStreaming(true);
-    llm.Script({ kind: 'stream', chunks: ['Hello', ' ', 'world'], usage: makeModelUsage({ promptTokens: 2, completionTokens: 3 }) });
+    llm.Script({ kind: 'stream', chunks: ['Hello', ' ', 'world'], usage: MakeModelUsage({ promptTokens: 2, completionTokens: 3 }) });
 
     const received: Array<{ chunk: string; isComplete: boolean }> = [];
     let finalFromCallback: ChatResult | undefined;
-    const params = makeChatParams({
+    const params = MakeChatParams({
       streaming: true,
       streamingCallbacks: {
         OnContent: (chunk, isComplete) => received.push({ chunk, isComplete }),
@@ -185,7 +185,7 @@ describe('TestLLM — streaming through the real BaseLLM template method', () =>
 
   it('falls back to non-streaming when the driver does not support streaming', async () => {
     llm.Script({ kind: 'stream', chunks: ['a', 'b'] }); // SupportsStreaming still false
-    const params = makeChatParams({ streaming: true, streamingCallbacks: { OnContent: () => undefined } });
+    const params = MakeChatParams({ streaming: true, streamingCallbacks: { OnContent: () => undefined } });
     const result = await llm.ChatCompletion(params);
     expect(result.success).toBe(true);
     expect(result.data.choices[0].message.content).toBe('ab'); // joined, non-streaming path
@@ -194,7 +194,7 @@ describe('TestLLM — streaming through the real BaseLLM template method', () =>
   it('a thrown scripted error surfaces as a rejected failed ChatResult from the streaming path', async () => {
     llm.SetSupportsStreaming(true);
     llm.Script({ kind: 'throw', error: new Error('stream exploded') });
-    const params = makeChatParams({ streaming: true, streamingCallbacks: { OnContent: () => undefined } });
+    const params = MakeChatParams({ streaming: true, streamingCallbacks: { OnContent: () => undefined } });
     await expect(llm.ChatCompletion(params)).rejects.toMatchObject({ success: false, errorMessage: 'stream exploded' });
   });
 });
@@ -205,7 +205,7 @@ describe('TestLLM — ChatCompletions (parallel, inherited from the real BaseLLM
       { kind: 'succeed', content: 'one' },
       { kind: 'throw', error: new Error('connect ECONNREFUSED 10.0.0.5:443') },
     );
-    const results = await llm.ChatCompletions([makeChatParams({ model: 'm1' }), makeChatParams({ model: 'm2' })]);
+    const results = await llm.ChatCompletions([MakeChatParams({ model: 'm1' }), MakeChatParams({ model: 'm2' })]);
     expect(results).toHaveLength(2);
     expect(results[0].success).toBe(true);
     expect(results[1].success).toBe(false);
@@ -214,29 +214,29 @@ describe('TestLLM — ChatCompletions (parallel, inherited from the real BaseLLM
   });
 });
 
-describe('registerTestLLM — real ClassFactory resolution', () => {
+describe('RegisterTestLLM — real ClassFactory resolution', () => {
   beforeEach(() => {
     // The ClassFactory has no unregister API; recreate the MJGlobal singleton so
     // each test registers into a fresh factory (no duplicate-registration noise).
-    resetMJSingletons();
+    ResetMJSingletons();
   });
 
   it('CreateInstance(BaseLLM, driverClass, apiKey) yields the SAME scripted instance', () => {
-    registerTestLLM(llm, 'AnthropicLLM');
+    RegisterTestLLM(llm, 'AnthropicLLM');
     const created = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'AnthropicLLM', 'sk-test');
     expect(created).toBe(llm);
   });
 
   it('one instance can stand in for multiple driver classes', async () => {
-    registerTestLLM(llm, ['AnthropicLLM', 'OpenAILLM']);
+    RegisterTestLLM(llm, ['AnthropicLLM', 'OpenAILLM']);
     const a = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'AnthropicLLM', 'sk-test');
     const b = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'OpenAILLM', 'sk-test');
     expect(a).toBe(llm);
     expect(b).toBe(llm);
 
     llm.Script({ kind: 'succeed', content: 'from claude' }, { kind: 'succeed', content: 'from gpt' });
-    await a?.ChatCompletion(makeChatParams({ model: 'api-claude' }));
-    await b?.ChatCompletion(makeChatParams({ model: 'api-gpt' }));
+    await a?.ChatCompletion(MakeChatParams({ model: 'api-claude' }));
+    await b?.ChatCompletion(MakeChatParams({ model: 'api-gpt' }));
     expect(llm.CalledModels).toEqual(['api-claude', 'api-gpt']); // single recorder across drivers
   });
 
@@ -247,7 +247,7 @@ describe('registerTestLLM — real ClassFactory resolution', () => {
     class ProductionAnthropicLLM extends TestLLM {}
     MJGlobal.Instance.ClassFactory.Register(BaseLLM, ProductionAnthropicLLM, 'AnthropicLLM');
 
-    const restore = registerTestLLM(llm, 'AnthropicLLM');
+    const restore = RegisterTestLLM(llm, 'AnthropicLLM');
     expect(MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'AnthropicLLM', 'sk-test')).toBe(llm);
 
     restore();
@@ -257,10 +257,10 @@ describe('registerTestLLM — real ClassFactory resolution', () => {
   });
 
   it('scripting applies to factory-created references (they ARE the scripted instance)', async () => {
-    registerTestLLM(llm, 'GroqLLM');
+    RegisterTestLLM(llm, 'GroqLLM');
     llm.Script({ kind: 'fail', error: new Error('Service temporarily unavailable') });
     const created = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, 'GroqLLM', 'sk-test');
-    const result = await created?.ChatCompletion(makeChatParams());
+    const result = await created?.ChatCompletion(MakeChatParams());
     expect(result?.success).toBe(false);
     expect(result?.errorInfo?.errorType).toBe('ServiceUnavailable');
   });
@@ -269,12 +269,12 @@ describe('registerTestLLM — real ClassFactory resolution', () => {
 describe('TestLLMOutcome — type is expressive enough for the drift-prone scenarios', () => {
   it('accepts every outcome kind used by the AI-stack suites', () => {
     const outcomes: TestLLMOutcome[] = [
-      { kind: 'succeed', content: 'ok', usage: makeModelUsage(), model: 'api', thinking: 't', delayMS: 1 },
+      { kind: 'succeed', content: 'ok', usage: MakeModelUsage(), model: 'api', thinking: 't', delayMS: 1 },
       { kind: 'fail', error: new Error('x') },
-      { kind: 'failResult', result: makeFailedChatResult() },
+      { kind: 'failResult', result: MakeFailedChatResult() },
       { kind: 'throw', error: new Error('y') },
       { kind: 'hang' },
-      { kind: 'stream', chunks: ['a'], usage: makeModelUsage() },
+      { kind: 'stream', chunks: ['a'], usage: MakeModelUsage() },
     ];
     expect(outcomes).toHaveLength(6);
   });
@@ -282,7 +282,7 @@ describe('TestLLMOutcome — type is expressive enough for the drift-prone scena
 
 describe('TestLLM — ChatParams typing sanity', () => {
   it('recorded calls are usable as real ChatParams without casts', async () => {
-    await llm.ChatCompletion(makeChatParams({ model: 'm', temperature: 0.5 }));
+    await llm.ChatCompletion(MakeChatParams({ model: 'm', temperature: 0.5 }));
     const call: ChatParams = llm.Calls[0];
     expect(call.temperature).toBe(0.5);
     expect(call.enableCaching).toBe(true); // defaulted by the REAL BaseLLM.ChatCompletion

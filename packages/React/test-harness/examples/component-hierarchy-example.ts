@@ -60,7 +60,7 @@ const exampleRootSpec: ComponentSpec = {
 };
 
 // Example usage in a test harness or application
-async function registerComponentHierarchyExample() {
+async function RegisterComponentHierarchyExample() {
   // Initialize compiler and registry
   const compiler = new ComponentCompiler({
     babel: {
@@ -142,7 +142,7 @@ async function registerComponentHierarchyExample() {
 }
 
 // Usage from Angular component (simplified)
-export async function registerFromAngular(
+export async function RegisterFromAngular(
   rootSpec: any, // SkipComponentRootSpec
   compiler: ComponentCompiler,
   registry: ComponentRegistry,
@@ -170,4 +170,19 @@ export async function registerFromAngular(
   );
 }
 
-export { registerComponentHierarchyExample };
+/** @deprecated Use {@link RegisterFromAngular}. */
+export async function registerFromAngular(
+  rootSpec: any, // SkipComponentRootSpec
+  compiler: ComponentCompiler,
+  registry: ComponentRegistry,
+  runtimeContext: any,
+  styles?: any
+): Promise<HierarchyRegistrationResult> {
+  return RegisterFromAngular(rootSpec, compiler, registry, runtimeContext, styles);
+}
+
+export {
+  RegisterComponentHierarchyExample,
+  /** @deprecated Use {@link RegisterComponentHierarchyExample} instead. */
+  RegisterComponentHierarchyExample as registerComponentHierarchyExample,
+};

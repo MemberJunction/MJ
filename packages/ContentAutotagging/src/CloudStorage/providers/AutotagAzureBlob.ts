@@ -48,7 +48,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
                 // The file has been created, add a new record for this file
                 const md = this.ProviderToUse
                 const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
-                const text = await this.extractText(blob.name)
+                const text = await this.ExtractText(blob.name)
                 contentItem.ContentSourceID = contentSourceParams.contentSourceID
                 contentItem.Name = blob.name
                 contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams)
@@ -68,7 +68,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
                 const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
                 const contentItemID = await this.engine.getContentItemIDFromURL(contentSourceParams, contextUser)
                 await contentItem.Load(contentItemID)
-                const text = await this.extractText(blob.name)
+                const text = await this.ExtractText(blob.name)
                 contentItem.Text = text
                 contentItem.Checksum = await this.engine.getChecksumFromText(text)
                 contentItem.Save()
@@ -79,15 +79,20 @@ export class AutotagAzureBlob extends CloudStorageBase {
         return contentItemsToProcess
     }
 
-    public async extractText(file: string): Promise<string> {
+    public async ExtractText(file: string): Promise<string> {
         const blockBlobClient = this.containerClient.getBlockBlobClient(file)
         const downloadBlockBlobResponse = await blockBlobClient.download()
-        const document: Buffer = await this.streamToBuffer(downloadBlockBlobResponse.readableStreamBody)
+        const document: Buffer = await this.StreamToBuffer(downloadBlockBlobResponse.readableStreamBody)
         const text: string = await this.engine.parsePDF(document)
         return text
     }
 
-    public async streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
+    /** @deprecated Use {@link ExtractText}. */
+    public async extractText(file: string): Promise<string> {
+        return this.ExtractText(file);
+    }
+
+    public async StreamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
         return new Promise((resolve, reject) => {
             const chunks: Buffer[] = [];
             readableStream.on("data", (data) => {
@@ -98,5 +103,10 @@ export class AutotagAzureBlob extends CloudStorageBase {
             });
             readableStream.on("error", reject);
         });
+    }
+
+    /** @deprecated Use {@link StreamToBuffer}. */
+    public async streamToBuffer(readableStream: NodeJS.ReadableStream): Promise<Buffer> {
+        return this.StreamToBuffer(readableStream);
     }
 }

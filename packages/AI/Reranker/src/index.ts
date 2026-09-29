@@ -38,7 +38,7 @@
 // Configuration types
 export {
     RerankerConfiguration,
-    parseRerankerConfiguration
+    ParseRerankerConfiguration, parseRerankerConfiguration
 } from './config.types';
 
 // Service
@@ -51,5 +51,5 @@ export {
 // LLM Reranker
 export {
     LLMReranker,
-    createLLMReranker
+    CreateLLMReranker, createLLMReranker
 } from './LLMReranker';

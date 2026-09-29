@@ -37,9 +37,9 @@ interface PlanModeState {
 /** Static utility — all state lives in UserInfoEngine's cache; this class only parses/writes. */
 export class PlanModePreference {
   /** `MJ: User Settings` key for the per-conversation plan-mode map. */
-  private static readonly PrefKey = 'mj.conversations.planMode.v2';
+  private static readonly prefKey = 'mj.conversations.planMode.v2';
   /** v1 stored a single global boolean — superseded by per-conversation scoping; deleted on sight. */
-  private static readonly LegacyPrefKey = 'mj.conversations.planMode.v1';
+  private static readonly legacyPrefKey = 'mj.conversations.planMode.v1';
   /** Cap on tracked conversations (oldest entries dropped beyond this). */
   private static readonly MAX_TRACKED = 100;
 
@@ -101,8 +101,8 @@ export class PlanModePreference {
   public static Warm(): void {
     UserInfoEngine.Instance.Config()
       .then(() => {
-        if (UserInfoEngine.Instance.GetSetting(this.LegacyPrefKey) !== undefined) {
-          void UserInfoEngine.Instance.DeleteSetting(this.LegacyPrefKey);
+        if (UserInfoEngine.Instance.GetSetting(this.legacyPrefKey) !== undefined) {
+          void UserInfoEngine.Instance.DeleteSetting(this.legacyPrefKey);
         }
       })
       .catch(() => { /* reads fall back to default (off) until the engine loads */ });
@@ -111,7 +111,7 @@ export class PlanModePreference {
   /** Read + memoize the persisted state. Defensive: any failure yields the last-known state. */
   private static read(): PlanModeState {
     try {
-      const raw = UserInfoEngine.Instance.GetSetting(this.PrefKey);
+      const raw = UserInfoEngine.Instance.GetSetting(this.prefKey);
       if (raw !== this.rawCache) {
         this.rawCache = raw;
         this.stateCache = raw ? (JSON.parse(raw) as PlanModeState) : {};
@@ -124,7 +124,7 @@ export class PlanModePreference {
 
   private static write(state: PlanModeState): void {
     try {
-      UserInfoEngine.Instance.SetSettingDebounced(this.PrefKey, JSON.stringify(state));
+      UserInfoEngine.Instance.SetSettingDebounced(this.prefKey, JSON.stringify(state));
     } catch (error) {
       console.warn('[PlanModePreference] Failed to persist plan-mode preference:', error);
     }

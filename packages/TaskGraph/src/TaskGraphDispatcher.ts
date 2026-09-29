@@ -145,6 +145,42 @@ function asRunQueryProvider(provider: IMetadataProvider): IRunQueryProvider | un
     const candidate = provider as unknown as Partial<IRunQueryProvider>;
     return typeof candidate.RunQuery === 'function' ? (candidate as IRunQueryProvider) : undefined;
 }
+
+/**
+ * True when a task's `InputPayload` is a well-formed name → value object, or absent entirely.
+ *
+ * A type predicate rather than a plain boolean check so `runTaskBody`'s `if (!isNameValuePayload(...))
+ * return ...` narrows `inputPayload` for the rest of the method — including the call into
+ * `mergedPayload` — instead of leaving it `unknown` and inviting a second, possibly-divergent
+ * array/scalar check downstream (MJ#4794 was exactly that: a shape decision duplicated in two
+ * places that disagreed).
+ */
+function isNameValuePayload(inputPayload: unknown): inputPayload is Record<string, unknown> | null {
+    return inputPayload == null || (typeof inputPayload === 'object' && !Array.isArray(inputPayload));
+}
+
+/**
+ * Parses a task's stored `InputPayload`, telling an ABSENT input apart from an UNREADABLE one.
+ *
+ * Both used to come out as `null`, and `null` is a legitimate "this node takes no input" — so a row
+ * whose payload could not be parsed ran with none of its inputs, the same silent outcome the shape
+ * guard in `runTaskBody` refuses for an array. A string that is not JSON reaches here through
+ * `TaskGraph.RetryTask` / `UpdateTaskInput`, which store a string payload verbatim.
+ */
+export function ParseTaskInputPayload(taskID: string, raw: string | null | undefined): { Payload: unknown } | { ErrorMessage: string } {
+    if (!raw) {
+        return { Payload: null };
+    }
+    try {
+        return { Payload: JSON.parse(raw) };
+    } catch (e) {
+        return {
+            ErrorMessage:
+                `Task ${taskID} has an InputPayload that is not valid JSON (${e instanceof Error ? e.message : String(e)}). ` +
+                `Its inputs cannot be mapped to parameters, so it was not run.`,
+        };
+    }
+}
 import { IsReinvokeCapReached, MAX_REINVOKE_DEPTH, ParseTaskGraphParentMetadata, TASK_TYPE_NAME, type TaskGraphParentMetadata } from './TaskGraphService';
 import {
     DEFAULT_DISPATCHER_CONFIG,
@@ -1091,14 +1127,17 @@ export class TaskGraphDispatcher implements IShutdownable {
             });
 
             const dependencyOutputs = await this.loadDependencyOutputs(provider, taskID);
-            let inputPayload: unknown = null;
-            if (task.InputPayload) {
-                try { inputPayload = JSON.parse(task.InputPayload); }
-                catch (e) { LogError(`[TaskGraphDispatcher] Task ${taskID} has malformed InputPayload: ${e}`); }
+            const parsed = ParseTaskInputPayload(taskID, task.InputPayload);
+            let result: TaskBodyOutcome;
+            if ('ErrorMessage' in parsed) {
+                // Refused through the normal Failed path below, like runTaskBody's shape guard — never
+                // run as though the node had no input.
+                LogError(`[TaskGraphDispatcher] ${parsed.ErrorMessage}`);
+                result = { Success: false, ErrorMessage: parsed.ErrorMessage };
+            } else {
+                const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
+                result = await this.runTaskBody(task, provider, parsed.Payload, dependencyOutputs, onProgress);
             }
-
-            const onProgress = this.nodeProgressEmitter(graphID, ownerUserID, taskID, task.Name);
-            const result = await this.runTaskBody(task, provider, inputPayload, dependencyOutputs, onProgress);
 
             // ONLY THE CONFIRMED OWNER MUTATES THE GRAPH (R2-10).
             //
@@ -3277,6 +3316,23 @@ export class TaskGraphDispatcher implements IShutdownable {
         dependencyOutputs: Map<string, unknown>,
         onProgress?: TaskRunProgressCallback,
     ): Promise<TaskBodyOutcome> {
+        // A node's input is a name → value object (`TaskGraphSpecNode.inputPayload: Record<string, unknown>`).
+        // `mergedPayload` below only merges objects, so anything else would be dropped without a word
+        // and the step would run with none of its inputs — how durable entity actions ran before MJ#4794
+        // (their redacted params were stored as an array). Rows written that way may still be queued, so
+        // refuse them loudly rather than run them empty. This is also the only place that narrows
+        // `inputPayload`'s type: everything downstream (`mergedPayload` included) receives the narrowed
+        // `Record<string, unknown> | null`, so the array/scalar case cannot recur as a second, divergent
+        // check further down the call chain.
+        if (!isNameValuePayload(inputPayload)) {
+            const found = Array.isArray(inputPayload) ? 'an array' : `a ${typeof inputPayload}`;
+            const message =
+                `Task ${task.ID} has an InputPayload that is ${found}; expected a name → value object. ` +
+                `Its inputs cannot be mapped to parameters, so it was not run.`;
+            LogError(`[TaskGraphDispatcher] ${message}`);
+            return { Success: false, ErrorMessage: message };
+        }
+
         const payload = this.mergedPayload(inputPayload, dependencyOutputs);
         const config = task.ConfigurationObject;
 
@@ -4112,16 +4168,21 @@ export class TaskGraphDispatcher implements IShutdownable {
      * than the flow it was compiled from. Merging in dependency order restores the accumulation.
      *
      * Later prerequisites win on a key collision, matching a flow's own last-write-wins behaviour.
+     *
+     * `inputPayload` arrives pre-narrowed: `runTaskBody`'s guard is the only place that decides
+     * whether it is a name → value object, so this method trusts that decision rather than
+     * re-checking it. `dependencyOutputs` is a separate input with no equivalent guard upstream, so
+     * its per-entry object/array check stays here.
      */
-    private mergedPayload(inputPayload: unknown, dependencyOutputs: Map<string, unknown>): Record<string, unknown> {
+    private mergedPayload(inputPayload: Record<string, unknown> | null, dependencyOutputs: Map<string, unknown>): Record<string, unknown> {
         const merged: Record<string, unknown> = {};
         for (const output of dependencyOutputs.values()) {
             if (output && typeof output === 'object' && !Array.isArray(output)) {
                 Object.assign(merged, output as Record<string, unknown>);
             }
         }
-        if (inputPayload && typeof inputPayload === 'object' && !Array.isArray(inputPayload)) {
-            Object.assign(merged, inputPayload as Record<string, unknown>);
+        if (inputPayload) {
+            Object.assign(merged, inputPayload);
         }
         return merged;
     }

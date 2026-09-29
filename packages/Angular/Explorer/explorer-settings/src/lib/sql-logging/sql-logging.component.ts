@@ -67,7 +67,16 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   protected override destroy$ = new Subject<void>();
 
   /** Whether the component is currently performing an async operation */
-  loading = false;
+  Loading = false;
+
+  /** @deprecated Use {@link Loading}. */
+  get loading() {
+    return this.Loading;
+  }
+  /** @deprecated Use {@link Loading}. */
+  set loading(value) {
+    this.Loading = value;
+  }
 
   /** Current error message to display to the user, if any */
   error: string | null = null;
@@ -76,49 +85,175 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   isOwner = false;
 
   /** Whether SQL logging is enabled in the server configuration */
-  configEnabled = false;
+  ConfigEnabled = false;
+
+  /** @deprecated Use {@link ConfigEnabled}. */
+  get configEnabled() {
+    return this.ConfigEnabled;
+  }
+  /** @deprecated Use {@link ConfigEnabled}. */
+  set configEnabled(value) {
+    this.ConfigEnabled = value;
+  }
 
   /** Current SQL logging configuration from the server */
-  sqlLoggingConfig: SqlLoggingConfig | null = null;
+  SqlLoggingConfig: SqlLoggingConfig | null = null;
+
+  /** @deprecated Use {@link SqlLoggingConfig}. */
+  get sqlLoggingConfig(): SqlLoggingConfig | null {
+    return this.SqlLoggingConfig;
+  }
+  /** @deprecated Use {@link SqlLoggingConfig}. */
+  set sqlLoggingConfig(value: SqlLoggingConfig | null) {
+    this.SqlLoggingConfig = value;
+  }
 
   /** List of currently active SQL logging sessions */
-  activeSessions: SqlLoggingSession[] = [];
+  ActiveSessions: SqlLoggingSession[] = [];
+
+  /** @deprecated Use {@link ActiveSessions}. */
+  get activeSessions(): SqlLoggingSession[] {
+    return this.ActiveSessions;
+  }
+  /** @deprecated Use {@link ActiveSessions}. */
+  set activeSessions(value: SqlLoggingSession[]) {
+    this.ActiveSessions = value;
+  }
 
   /** Currently selected session for viewing logs */
-  selectedSession: SqlLoggingSession | null = null;
+  SelectedSession: SqlLoggingSession | null = null;
+
+  /** @deprecated Use {@link SelectedSession}. */
+  get selectedSession(): SqlLoggingSession | null {
+    return this.SelectedSession;
+  }
+  /** @deprecated Use {@link SelectedSession}. */
+  set selectedSession(value: SqlLoggingSession | null) {
+    this.SelectedSession = value;
+  }
 
   /** Content of the currently viewed log file */
-  logContent = '';
+  LogContent = '';
+
+  /** @deprecated Use {@link LogContent}. */
+  get logContent() {
+    return this.LogContent;
+  }
+  /** @deprecated Use {@link LogContent}. */
+  set logContent(value) {
+    this.LogContent = value;
+  }
 
   /** Whether to automatically refresh session data */
-  autoRefresh = false;
+  AutoRefresh = false;
+
+  /** @deprecated Use {@link AutoRefresh}. */
+  get autoRefresh() {
+    return this.AutoRefresh;
+  }
+  /** @deprecated Use {@link AutoRefresh}. */
+  set autoRefresh(value) {
+    this.AutoRefresh = value;
+  }
 
   /** Interval in milliseconds for auto-refresh functionality */
-  refreshInterval = 5000; // 5 seconds
+  RefreshInterval = 5000;
+
+  /** @deprecated Use {@link RefreshInterval}. */
+  get refreshInterval() {
+    return this.RefreshInterval;
+  }
+  /** @deprecated Use {@link RefreshInterval}. */
+  set refreshInterval(value) {
+    this.RefreshInterval = value;
+  } // 5 seconds
 
   /** Whether the start session dialog is currently visible */
-  showStartSessionDialog = false;
+  ShowStartSessionDialog = false;
+
+  /** @deprecated Use {@link ShowStartSessionDialog}. */
+  get showStartSessionDialog() {
+    return this.ShowStartSessionDialog;
+  }
+  /** @deprecated Use {@link ShowStartSessionDialog}. */
+  set showStartSessionDialog(value) {
+    this.ShowStartSessionDialog = value;
+  }
 
   /** Whether to show the statistics cards section */
-  showStats = false;
+  ShowStats = false;
+
+  /** @deprecated Use {@link ShowStats}. */
+  get showStats() {
+    return this.ShowStats;
+  }
+  /** @deprecated Use {@link ShowStats}. */
+  set showStats(value) {
+    this.ShowStats = value;
+  }
 
   /** Whether the log viewer is in expanded (fullscreen) mode */
-  isLogViewerExpanded = false;
+  IsLogViewerExpanded = false;
+
+  /** @deprecated Use {@link IsLogViewerExpanded}. */
+  get isLogViewerExpanded() {
+    return this.IsLogViewerExpanded;
+  }
+  /** @deprecated Use {@link IsLogViewerExpanded}. */
+  set isLogViewerExpanded(value) {
+    this.IsLogViewerExpanded = value;
+  }
 
   /** Whether the start session dialog is in fullscreen mode */
-  isStartDialogFullscreen = false;
+  IsStartDialogFullscreen = false;
+
+  /** @deprecated Use {@link IsStartDialogFullscreen}. */
+  get isStartDialogFullscreen() {
+    return this.IsStartDialogFullscreen;
+  }
+  /** @deprecated Use {@link IsStartDialogFullscreen}. */
+  set isStartDialogFullscreen(value) {
+    this.IsStartDialogFullscreen = value;
+  }
 
   /** Whether the stop session confirmation dialog is visible */
-  showStopConfirmDialog = false;
+  ShowStopConfirmDialog = false;
+
+  /** @deprecated Use {@link ShowStopConfirmDialog}. */
+  get showStopConfirmDialog() {
+    return this.ShowStopConfirmDialog;
+  }
+  /** @deprecated Use {@link ShowStopConfirmDialog}. */
+  set showStopConfirmDialog(value) {
+    this.ShowStopConfirmDialog = value;
+  }
 
   /** Session pending stop confirmation (single session or null for all) */
-  sessionToStop: SqlLoggingSession | null = null;
+  SessionToStop: SqlLoggingSession | null = null;
+
+  /** @deprecated Use {@link SessionToStop}. */
+  get sessionToStop(): SqlLoggingSession | null {
+    return this.SessionToStop;
+  }
+  /** @deprecated Use {@link SessionToStop}. */
+  set sessionToStop(value: SqlLoggingSession | null) {
+    this.SessionToStop = value;
+  }
 
   /** Whether stopping all sessions (vs single session) */
-  isStoppingAll = false;
+  IsStoppingAll = false;
+
+  /** @deprecated Use {@link IsStoppingAll}. */
+  get isStoppingAll() {
+    return this.IsStoppingAll;
+  }
+  /** @deprecated Use {@link IsStoppingAll}. */
+  set isStoppingAll(value) {
+    this.IsStoppingAll = value;
+  }
 
   /** Options for creating a new SQL logging session */
-  newSessionOptions = {
+  NewSessionOptions = {
     /** Custom filename for the log file */
     fileName: '',
     /** Whether to filter SQL statements to current user only */
@@ -138,18 +273,45 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     defaultSchemaName: '__mj', // Default MJ schema
   };
 
+  /** @deprecated Use {@link NewSessionOptions}. */
+  get newSessionOptions() {
+    return this.NewSessionOptions;
+  }
+  /** @deprecated Use {@link NewSessionOptions}. */
+  set newSessionOptions(value) {
+    this.NewSessionOptions = value;
+  }
+
   /** Available options for SQL statement type filtering */
-  statementTypeOptions = [
+  StatementTypeOptions = [
     { text: 'Both Queries and Mutations', value: 'both' },
     { text: 'Queries Only', value: 'queries' },
     { text: 'Mutations Only', value: 'mutations' },
   ];
 
+  /** @deprecated Use {@link StatementTypeOptions}. */
+  get statementTypeOptions() {
+    return this.StatementTypeOptions;
+  }
+  /** @deprecated Use {@link StatementTypeOptions}. */
+  set statementTypeOptions(value) {
+    this.StatementTypeOptions = value;
+  }
+
   /** Options for Regex filter */
-  filterTypeOptions = [
+  FilterTypeOptions = [
     { text: 'Exclude Matching (default)', value: 'exclude' },
     { text: 'Include Matching Only', value: 'include' },
   ];
+
+  /** @deprecated Use {@link FilterTypeOptions}. */
+  get filterTypeOptions() {
+    return this.FilterTypeOptions;
+  }
+  /** @deprecated Use {@link FilterTypeOptions}. */
+  set filterTypeOptions(value) {
+    this.FilterTypeOptions = value;
+  }
 
   constructor(
     private sharedService: SharedService,
@@ -169,8 +331,8 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   protected async loadData(): Promise<void> {
     await this.checkUserPermissions();
     if (this.isOwner) {
-      await this.loadSqlLoggingConfig();
-      await this.loadActiveSessions();
+      await this.LoadSqlLoggingConfig();
+      await this.LoadActiveSessions();
     }
   }
 
@@ -187,13 +349,13 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    * @private
    */
   private startAutoRefresh() {
-    interval(this.refreshInterval)
+    interval(this.RefreshInterval)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        if (this.autoRefresh && this.isOwner) {
-          this.loadActiveSessions();
-          if (this.selectedSession) {
-            this.loadSessionLog(this.selectedSession);
+        if (this.AutoRefresh && this.isOwner) {
+          this.LoadActiveSessions();
+          if (this.SelectedSession) {
+            this.LoadSessionLog(this.SelectedSession);
           }
         }
       });
@@ -247,21 +409,26 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    * Opens the dialog for creating a new SQL logging session.
    * Sets default values for session name and filename.
    */
-  openStartSessionDialog() {
+  OpenStartSessionDialog() {
     // Set default session name
     const currentUser = this.ProviderToUse.CurrentUser;
-    this.newSessionOptions.sessionName = `SQL Logging - ${currentUser?.Name || currentUser?.Email || 'Unknown'} - ${new Date().toLocaleString()}`;
-    this.newSessionOptions.fileName = `sql-log-${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
-    this.showStartSessionDialog = true;
+    this.NewSessionOptions.sessionName = `SQL Logging - ${currentUser?.Name || currentUser?.Email || 'Unknown'} - ${new Date().toLocaleString()}`;
+    this.NewSessionOptions.fileName = `sql-log-${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
+    this.ShowStartSessionDialog = true;
+  }
+
+  /** @deprecated Use {@link OpenStartSessionDialog}. */
+  openStartSessionDialog() {
+    return this.OpenStartSessionDialog();
   }
 
   /**
    * Creates and starts a new SQL logging session with the configured options.
    * Shows success/error notifications and refreshes the sessions list.
    */
-  async startNewSession() {
+  async StartNewSession() {
     try {
-      this.loading = true;
+      this.Loading = true;
 
       const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const mutation = `
@@ -284,18 +451,18 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
 
       const variables = {
         input: {
-          fileName: this.newSessionOptions.fileName,
-          filterToCurrentUser: this.newSessionOptions.filterToCurrentUser,
+          fileName: this.NewSessionOptions.fileName,
+          filterToCurrentUser: this.NewSessionOptions.filterToCurrentUser,
           options: {
-            formatAsMigration: this.newSessionOptions.formatAsMigration,
-            statementTypes: this.newSessionOptions.statementTypes,
-            prettyPrint: this.newSessionOptions.prettyPrint,
-            sessionName: this.newSessionOptions.sessionName,
+            formatAsMigration: this.NewSessionOptions.formatAsMigration,
+            statementTypes: this.NewSessionOptions.statementTypes,
+            prettyPrint: this.NewSessionOptions.prettyPrint,
+            sessionName: this.NewSessionOptions.sessionName,
             // Regex Filter Option
-            filterPatterns: this.parseFilterPatterns(this.newSessionOptions.filterPatterns),
-            filterType: this.newSessionOptions.filterType,
-            verboseOutput: this.newSessionOptions.verboseOutput,
-            defaultSchemaName: this.newSessionOptions.defaultSchemaName,
+            filterPatterns: this.parseFilterPatterns(this.NewSessionOptions.filterPatterns),
+            filterType: this.NewSessionOptions.filterType,
+            verboseOutput: this.NewSessionOptions.verboseOutput,
+            defaultSchemaName: this.NewSessionOptions.defaultSchemaName,
           },
         },
       };
@@ -314,15 +481,20 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
 
       MJNotificationService.Instance.CreateSimpleNotification(`SQL logging session started: ${newSession.sessionName}`, 'success', 5000);
 
-      this.showStartSessionDialog = false;
-      await this.loadActiveSessions();
-      this.selectSession(newSession);
+      this.ShowStartSessionDialog = false;
+      await this.LoadActiveSessions();
+      this.SelectSession(newSession);
     } catch (error: any) {
       console.error('Error starting SQL logging session:', error);
       MJNotificationService.Instance.CreateSimpleNotification(`Error: ${error.message || 'Failed to start SQL logging session'}`, 'error', 5000);
     } finally {
-      this.loading = false;
+      this.Loading = false;
     }
+  }
+
+  /** @deprecated Use {@link StartNewSession}. */
+  async startNewSession() {
+    return this.StartNewSession();
   }
 
   /**
@@ -333,7 +505,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    */
   private async executeStopSession(session: SqlLoggingSession) {
     try {
-      this.loading = true;
+      this.Loading = true;
 
       const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const mutation = `
@@ -350,18 +522,18 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
 
       MJNotificationService.Instance.CreateSimpleNotification('SQL logging session stopped', 'success', 3000);
 
-      if (this.selectedSession?.id === session.id) {
-        this.selectedSession = null;
-        this.logContent = '';
+      if (this.SelectedSession?.id === session.id) {
+        this.SelectedSession = null;
+        this.LogContent = '';
       }
 
-      await this.loadActiveSessions();
+      await this.LoadActiveSessions();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to stop SQL logging session';
       console.error('Error stopping SQL logging session:', error);
       MJNotificationService.Instance.CreateSimpleNotification(`Error: ${errorMessage}`, 'error', 5000);
     } finally {
-      this.loading = false;
+      this.Loading = false;
     }
   }
 
@@ -371,7 +543,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    */
   private async executeStopAllSessions() {
     try {
-      this.loading = true;
+      this.Loading = true;
 
       const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const mutation = `
@@ -388,15 +560,15 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
 
       MJNotificationService.Instance.CreateSimpleNotification('All SQL logging sessions stopped', 'success', 3000);
 
-      this.selectedSession = null;
-      this.logContent = '';
-      await this.loadActiveSessions();
+      this.SelectedSession = null;
+      this.LogContent = '';
+      await this.LoadActiveSessions();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to stop all SQL logging sessions';
       console.error('Error stopping all SQL logging sessions:', error);
       MJNotificationService.Instance.CreateSimpleNotification(`Error: ${errorMessage}`, 'error', 5000);
     } finally {
-      this.loading = false;
+      this.Loading = false;
     }
   }
 
@@ -405,9 +577,14 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    *
    * @param session - The session to select
    */
+  SelectSession(session: any) {
+    this.SelectedSession = session;
+    this.LoadSessionLog(session);
+  }
+
+  /** @deprecated Use {@link SelectSession}. */
   selectSession(session: any) {
-    this.selectedSession = session;
-    this.loadSessionLog(session);
+    return this.SelectSession(session);
   }
 
   /**
@@ -416,7 +593,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    *
    * @param session - The session whose log to load
    */
-  async loadSessionLog(session: any) {
+  async LoadSessionLog(session: any) {
     try {
       const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const query = `
@@ -452,10 +629,10 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
         `-- Migration Format: ${session.options?.formatAsMigration ? 'Yes' : 'No'}\n` +
         `-- =====================================================\n\n`;
 
-      this.logContent = header + (logContent || '-- No SQL statements captured yet --');
+      this.LogContent = header + (logContent || '-- No SQL statements captured yet --');
     } catch (error: any) {
       console.error('Error loading session log:', error);
-      this.logContent =
+      this.LogContent =
         `-- Error loading log file --\n-- ${error.message || 'Unknown error occurred'} --\n\n` +
         `-- Session Info --\n` +
         `-- File: ${session.filePath}\n` +
@@ -464,13 +641,18 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link LoadSessionLog}. */
+  async loadSessionLog(session: any) {
+    return this.LoadSessionLog(session);
+  }
+
   /**
    * Loads the SQL logging configuration from the server.
    * Updates component state with current settings and capabilities.
    *
    * @private
    */
-  async loadSqlLoggingConfig() {
+  async LoadSqlLoggingConfig() {
     try {
       const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const query = `
@@ -509,18 +691,23 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
       const configData = result?.sqlLoggingConfig;
       console.log('Extracted config data:', configData);
 
-      this.sqlLoggingConfig = configData || null;
-      this.configEnabled = this.sqlLoggingConfig?.enabled || false;
+      this.SqlLoggingConfig = configData || null;
+      this.ConfigEnabled = this.SqlLoggingConfig?.enabled || false;
       this.cdr.detectChanges();
 
       console.log('Component state after update:');
-      console.log('  this.sqlLoggingConfig:', this.sqlLoggingConfig);
-      console.log('  this.configEnabled:', this.configEnabled);
+      console.log('  this.sqlLoggingConfig:', this.SqlLoggingConfig);
+      console.log('  this.configEnabled:', this.ConfigEnabled);
       console.log('  this.isOwner:', this.isOwner);
     } catch (error: any) {
       console.error('Error loading SQL logging config:', error);
       this.error = error.message || 'Failed to load SQL logging configuration';
     }
+  }
+
+  /** @deprecated Use {@link LoadSqlLoggingConfig}. */
+  async loadSqlLoggingConfig() {
+    return this.LoadSqlLoggingConfig();
   }
 
   /**
@@ -529,7 +716,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    *
    * @private
    */
-  async loadActiveSessions() {
+  async LoadActiveSessions() {
     try {
       const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const query = `
@@ -564,23 +751,28 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
       const sessionsData = result?.activeSqlLoggingSessions;
       console.log('Extracted sessions data:', sessionsData);
 
-      this.activeSessions = sessionsData || [];
+      this.ActiveSessions = sessionsData || [];
       this.cdr.detectChanges();
 
       // Update selected session if it still exists
-      if (this.selectedSession) {
-        const selectedId = this.selectedSession.id;
-        const stillExists = this.activeSessions.find((s) => s.id === selectedId);
+      if (this.SelectedSession) {
+        const selectedId = this.SelectedSession.id;
+        const stillExists = this.ActiveSessions.find((s) => s.id === selectedId);
         if (stillExists) {
-          this.selectedSession = stillExists;
+          this.SelectedSession = stillExists;
         } else {
-          this.selectedSession = null;
-          this.logContent = '';
+          this.SelectedSession = null;
+          this.LogContent = '';
         }
       }
     } catch (error: any) {
       console.error('Error loading active sessions:', error);
     }
+  }
+
+  /** @deprecated Use {@link LoadActiveSessions}. */
+  async loadActiveSessions() {
+    return this.LoadActiveSessions();
   }
 
   /**
@@ -589,7 +781,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    * @param startTime - ISO string of when the session started
    * @returns Formatted duration string (e.g., "2h 30m", "45m 23s", "12s")
    */
-  getSessionDuration(startTime: string): string {
+  GetSessionDuration(startTime: string): string {
     const start = new Date(startTime);
     const now = new Date();
     const diff = now.getTime() - start.getTime();
@@ -607,13 +799,18 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     }
   }
 
+  /** @deprecated Use {@link GetSessionDuration}. */
+  getSessionDuration(startTime: string): string {
+    return this.GetSessionDuration(startTime);
+  }
+
   /**
    * Refreshes user data and re-checks permissions.
    * Useful when user privileges have been updated.
    */
-  async refreshUserPermissions() {
+  async RefreshUserPermissions() {
     console.log('Refreshing user permissions...');
-    this.loading = true;
+    this.Loading = true;
 
     try {
       // Try to refresh SharedService data
@@ -629,8 +826,13 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     } catch (error) {
       console.error('Error refreshing permissions:', error);
     } finally {
-      this.loading = false;
+      this.Loading = false;
     }
+  }
+
+  /** @deprecated Use {@link RefreshUserPermissions}. */
+  async refreshUserPermissions() {
+    return this.RefreshUserPermissions();
   }
 
   /**
@@ -640,17 +842,27 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    * @param filePath - Full file path from server
    * @returns Just the filename portion
    */
-  getFileName(filePath: string): string {
+  GetFileName(filePath: string): string {
     if (!filePath) return 'unknown';
     return filePath.split(/[\\\/]/).pop() || 'unknown';
+  }
+
+  /** @deprecated Use {@link GetFileName}. */
+  getFileName(filePath: string): string {
+    return this.GetFileName(filePath);
   }
 
   /**
    * Calculates the total number of SQL statements across all active sessions.
    * @returns Total statement count
    */
+  GetTotalStatementCount(): number {
+    return this.ActiveSessions.reduce((sum, session) => sum + (session.statementCount || 0), 0);
+  }
+
+  /** @deprecated Use {@link GetTotalStatementCount}. */
   getTotalStatementCount(): number {
-    return this.activeSessions.reduce((sum, session) => sum + (session.statementCount || 0), 0);
+    return this.GetTotalStatementCount();
   }
 
   /**
@@ -673,15 +885,25 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   /**
    * Toggles the log viewer between normal and expanded (fullscreen) mode.
    */
+  ToggleLogViewerExpand() {
+    this.IsLogViewerExpanded = !this.IsLogViewerExpanded;
+  }
+
+  /** @deprecated Use {@link ToggleLogViewerExpand}. */
   toggleLogViewerExpand() {
-    this.isLogViewerExpanded = !this.isLogViewerExpanded;
+    return this.ToggleLogViewerExpand();
   }
 
   /**
    * Toggles the start session dialog between normal and fullscreen mode.
    */
+  ToggleStartDialogFullscreen() {
+    this.IsStartDialogFullscreen = !this.IsStartDialogFullscreen;
+  }
+
+  /** @deprecated Use {@link ToggleStartDialogFullscreen}. */
   toggleStartDialogFullscreen() {
-    this.isStartDialogFullscreen = !this.isStartDialogFullscreen;
+    return this.ToggleStartDialogFullscreen();
   }
 
   /**
@@ -690,14 +912,14 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    */
   @HostListener('document:keydown.escape')
   onEscapeKey() {
-    if (this.showStopConfirmDialog) {
-      this.cancelStopConfirm();
-    } else if (this.isLogViewerExpanded) {
-      this.isLogViewerExpanded = false;
-    } else if (this.isStartDialogFullscreen) {
-      this.isStartDialogFullscreen = false;
-    } else if (this.showStartSessionDialog) {
-      this.showStartSessionDialog = false;
+    if (this.ShowStopConfirmDialog) {
+      this.CancelStopConfirm();
+    } else if (this.IsLogViewerExpanded) {
+      this.IsLogViewerExpanded = false;
+    } else if (this.IsStartDialogFullscreen) {
+      this.IsStartDialogFullscreen = false;
+    } else if (this.ShowStartSessionDialog) {
+      this.ShowStartSessionDialog = false;
     }
   }
 
@@ -707,52 +929,72 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    * @param session - The session to stop
    * @param event - Optional event to stop propagation
    */
-  openStopSessionConfirm(session: SqlLoggingSession, event?: Event) {
+  OpenStopSessionConfirm(session: SqlLoggingSession, event?: Event) {
     if (event) {
       event.stopPropagation();
     }
-    this.sessionToStop = session;
-    this.isStoppingAll = false;
-    this.showStopConfirmDialog = true;
+    this.SessionToStop = session;
+    this.IsStoppingAll = false;
+    this.ShowStopConfirmDialog = true;
+  }
+
+  /** @deprecated Use {@link OpenStopSessionConfirm}. */
+  openStopSessionConfirm(session: SqlLoggingSession, event?: Event) {
+    return this.OpenStopSessionConfirm(session, event);
   }
 
   /**
    * Opens the confirmation dialog for stopping all sessions.
    */
+  OpenStopAllSessionsConfirm() {
+    this.SessionToStop = null;
+    this.IsStoppingAll = true;
+    this.ShowStopConfirmDialog = true;
+  }
+
+  /** @deprecated Use {@link OpenStopAllSessionsConfirm}. */
   openStopAllSessionsConfirm() {
-    this.sessionToStop = null;
-    this.isStoppingAll = true;
-    this.showStopConfirmDialog = true;
+    return this.OpenStopAllSessionsConfirm();
   }
 
   /**
    * Closes the stop confirmation dialog without taking action.
    */
+  CancelStopConfirm() {
+    this.ShowStopConfirmDialog = false;
+    this.SessionToStop = null;
+    this.IsStoppingAll = false;
+  }
+
+  /** @deprecated Use {@link CancelStopConfirm}. */
   cancelStopConfirm() {
-    this.showStopConfirmDialog = false;
-    this.sessionToStop = null;
-    this.isStoppingAll = false;
+    return this.CancelStopConfirm();
   }
 
   /**
    * Confirms and executes the stop action (single session or all sessions).
    */
-  async confirmStopSession() {
-    if (this.isStoppingAll) {
+  async ConfirmStopSession() {
+    if (this.IsStoppingAll) {
       await this.executeStopAllSessions();
-    } else if (this.sessionToStop) {
-      await this.executeStopSession(this.sessionToStop);
+    } else if (this.SessionToStop) {
+      await this.executeStopSession(this.SessionToStop);
     }
-    this.cancelStopConfirm();
+    this.CancelStopConfirm();
+  }
+
+  /** @deprecated Use {@link ConfirmStopSession}. */
+  async confirmStopSession() {
+    return this.ConfirmStopSession();
   }
 
   /**
    * Debug method to test contextUser flow for SQL filtering.
    * This shows how the new architecture handles user context without storing email in provider.
    */
-  async debugUserEmail() {
+  async DebugUserEmail() {
     try {
-      this.loading = true;
+      this.Loading = true;
 
       const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const query = `
@@ -774,7 +1016,12 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
       console.error('Error getting context user info:', error);
       alert(`Error: ${error.message || 'Failed to get debug info'}`);
     } finally {
-      this.loading = false;
+      this.Loading = false;
     }
+  }
+
+  /** @deprecated Use {@link DebugUserEmail}. */
+  async debugUserEmail() {
+    return this.DebugUserEmail();
   }
 }

@@ -31,7 +31,7 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunStepEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
@@ -46,7 +46,7 @@ import {
     RealtimeToolCall,
     RealtimeToolDefinition
 } from '@memberjunction/ai';
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult, AppContextSnapshot, FormatAppContextNote } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIAgentRunEntityExtended, MJAIPromptRunEntityExtended, AgentExecutionProgressCallback, ExecuteAgentResult, AppContextSnapshot, FormatAppContextNote, ResolvePromptRunUserID } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
 import { AgentMemoryContextBuilder } from '../agent-memory-context-builder';
@@ -508,7 +508,7 @@ export class RealtimeClientSessionService {
      * @param actions The action entities to index by wire name.
      * @returns Map of wire-name to action entity.
      */
-    public buildWireActionMap(actions: MJActionEntityExtended[]): Map<string, MJActionEntityExtended> {
+    public BuildWireActionMap(actions: MJActionEntityExtended[]): Map<string, MJActionEntityExtended> {
         const map = new Map<string, MJActionEntityExtended>();
         const seen = new Map<string, MJActionEntityExtended>();
         for (const action of actions) {
@@ -529,6 +529,11 @@ export class RealtimeClientSessionService {
             map.set(wireName, action);
         }
         return map;
+    }
+
+    /** @deprecated Use {@link BuildWireActionMap}. */
+    public buildWireActionMap(actions: MJActionEntityExtended[]): Map<string, MJActionEntityExtended> {
+        return this.BuildWireActionMap(actions);
     }
     /**
      * The seeded name of the `MJ: AI Prompts` row whose `TemplateText` carries the first-person
@@ -1020,7 +1025,7 @@ export class RealtimeClientSessionService {
         if (!promptID) {
             return null;
         }
-        const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+        const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
         promptRun.NewRecord();
         promptRun.PromptID = promptID;
         promptRun.ModelID = modelID;
@@ -1030,6 +1035,7 @@ export class RealtimeClientSessionService {
             promptRun.VendorID = vendorID;
         }
         promptRun.AgentID = coAgent.ID;
+        promptRun.UserID = ResolvePromptRunUserID({ ContextUser: contextUser });
         promptRun.RunAt = new Date();
         promptRun.RunType = 'Single';
         promptRun.Status = 'Running';
@@ -1272,7 +1278,7 @@ export class RealtimeClientSessionService {
         // Serialize the finalize against any in-flight message/usage writes so it can't race them — and so a
         // late usage flush queued behind it sees the run already Completed.
         await this.serializePromptRunWrite(promptRunID, async () => {
-            const run = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+            const run = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
             if (!(await run.Load(promptRunID)) || run.Status !== 'Running') {
                 return false;
             }
@@ -1318,7 +1324,7 @@ export class RealtimeClientSessionService {
         // the Messages we write here (and vice-versa). See promptRunWriteChains.
         return this.serializePromptRunWrite(promptRunID, async () => {
             try {
-                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
                 if (!(await promptRun.Load(promptRunID))) {
                     LogError(`AppendPromptRunMessage: co-agent prompt run ${promptRunID} not found — transcript turn dropped.`);
                     return false;
@@ -1363,7 +1369,7 @@ export class RealtimeClientSessionService {
     ): Promise<boolean> {
         return this.serializePromptRunWrite(promptRunID, async () => {
             try {
-                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', contextUser);
+                const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
                 if (!(await promptRun.Load(promptRunID))) {
                     LogError(`AccumulatePromptRunUsage: co-agent prompt run ${promptRunID} not found — usage delta dropped.`);
                     return false;
@@ -1838,7 +1844,7 @@ export class RealtimeClientSessionService {
         modelID?: string,
         modelVendorID?: string
     ): Promise<RealtimeSessionParams> {
-        const directTools = this.buildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
+        const directTools = this.BuildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
         const hasDirectTools = directTools.length > 0 || (input.ExtraTools != null && input.ExtraTools.length > 0);
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, hasDirectTools);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
@@ -2706,7 +2712,7 @@ export class RealtimeClientSessionService {
      * @param driverClass The resolved vendor's DriverClass.
      * @returns The array of projected direct action tools (empty if unsupported or disabled).
      */
-    public buildDirectActionTools(
+    public BuildDirectActionTools(
         targetAgentID: string | undefined,
         effectiveConfig?: RealtimeCoAgentConfig,
         driverClass?: string,
@@ -2726,7 +2732,7 @@ export class RealtimeClientSessionService {
             IsActionAllowedForDirectInvocation(action.Name, directConfig)
         );
 
-        const wireMap = this.buildWireActionMap(allowedActions);
+        const wireMap = this.BuildWireActionMap(allowedActions);
         if (agentSessionID) {
             this.sessionWireActionMaps.set(agentSessionID, wireMap);
             if (directConfig) {
@@ -2740,6 +2746,16 @@ export class RealtimeClientSessionService {
             tools.push(this.mapActionToToolDefinition(action, wireName));
         }
         return tools;
+    }
+
+    /** @deprecated Use {@link BuildDirectActionTools}. */
+    public buildDirectActionTools(
+        targetAgentID: string | undefined,
+        effectiveConfig?: RealtimeCoAgentConfig,
+        driverClass?: string,
+        agentSessionID?: string
+    ): RealtimeToolDefinition[] {
+        return this.BuildDirectActionTools(targetAgentID, effectiveConfig, driverClass, agentSessionID);
     }
 
     /**
@@ -2826,7 +2842,7 @@ export class RealtimeClientSessionService {
         }
 
         const candidateActions = this.getTargetAgentActions(target.ID);
-        const candidateWireMap = this.buildWireActionMap(candidateActions);
+        const candidateWireMap = this.BuildWireActionMap(candidateActions);
         const action = (input?.AgentSessionID ? this.sessionWireActionMaps.get(input.AgentSessionID)?.get(call.ToolName) : undefined)
             ?? candidateWireMap.get(call.ToolName)
             ?? Array.from(candidateWireMap.entries()).find(([w]) => w.toLowerCase() === call.ToolName.trim().toLowerCase())?.[1];

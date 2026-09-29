@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   DataFeatureSpec,
-  validateSpec,
-  resolveConstraint,
-  renderConstraintBlock,
+  ValidateSpec,
+  ResolveConstraint,
+  RenderConstraintBlock,
   EntityMetadataStub,
 } from '../spec/data-feature-spec.js';
-import { validateOutputValue } from '../validation/constraint-validator.js';
+import { ValidateOutputValue } from '../validation/constraint-validator.js';
 
 const sampleEntity: EntityMetadataStub = {
   Name: 'Contacts',
@@ -41,7 +41,7 @@ describe('DataFeatureSpec — pure validator (P1-1)', () => {
       Outputs: [],
       Caching: { Cacheable: true },
     };
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.some(i => i.Path === 'Outputs' && i.Severity === 'error')).toBe(true);
   });
 
@@ -60,7 +60,7 @@ describe('DataFeatureSpec — pure validator (P1-1)', () => {
       ],
       Caching: { Cacheable: false },
     };
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     const issue = issues.find(i => i.Field === 'NonExistentColumn');
     expect(issue).toBeDefined();
     expect(issue?.Message).toContain("Target field 'NonExistentColumn' does not exist");
@@ -82,7 +82,7 @@ describe('DataFeatureSpec — pure validator (P1-1)', () => {
       ],
       Caching: { Cacheable: true },
     };
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     const issue = issues.find(i => i.Field === 'CurrentJobTitle');
     expect(issue).toBeDefined();
     expect(issue?.Message).toContain('virtual/view column and cannot be written to');
@@ -105,7 +105,7 @@ describe('DataFeatureSpec — pure validator (P1-1)', () => {
       ],
       Caching: { Cacheable: false },
     };
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     const issue = issues.find(i => i.Field === 'SeniorityLevel');
     expect(issue).toBeDefined();
     expect(issue?.Message).toContain("Numeric constraint applied to non-numeric column 'SeniorityLevel'");
@@ -126,7 +126,7 @@ describe('DataFeatureSpec — pure validator (P1-1)', () => {
       ],
       Caching: { Cacheable: false },
     };
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     const issue = issues.find(i => i.Path.includes('RootTagID'));
     expect(issue).toBeDefined();
     expect(issue?.Message).toContain('requires a RootTagID');
@@ -147,7 +147,7 @@ describe('DataFeatureSpec — pure validator (P1-1)', () => {
       ],
       Caching: { Cacheable: true, KeyFields: ['ID', 'GhostColumn'] },
     };
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     const issue = issues.find(i => i.Field === 'GhostColumn');
     expect(issue).toBeDefined();
     expect(issue?.Message).toContain("Caching KeyField 'GhostColumn' does not exist");
@@ -192,7 +192,7 @@ describe('DataFeatureSpec — pure validator (P1-1)', () => {
       Caching: { Cacheable: true, KeyFields: ['CurrentJobTitle'], Scope: 'pipeline' },
       CaptureReasoning: true,
     };
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.filter(i => i.Severity === 'error')).toHaveLength(0);
   });
 });
@@ -211,7 +211,7 @@ describe('resolveConstraint & renderConstraintBlock (P1-1)', () => {
   };
 
   it('materializes FromFieldMetadata into a concrete allowed set', () => {
-    const resolved = resolveConstraint(
+    const resolved = ResolveConstraint(
       {
         Ref: '$.seniority',
         Name: 'SeniorityLevel',
@@ -243,7 +243,7 @@ describe('resolveConstraint & renderConstraintBlock (P1-1)', () => {
       },
     ];
 
-    const block = renderConstraintBlock(outputs);
+    const block = RenderConstraintBlock(outputs);
     expect(block).toContain('OUTPUT CONSTRAINTS & FORMATTING INSTRUCTIONS');
     expect(block).toContain('SeniorityLevel');
     expect(block).toContain('* "IC"');
@@ -260,7 +260,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
       Values: ['IC', 'Manager', 'Director', 'VP', 'C-Level'],
       OnViolation: 'fail' as const,
     };
-    const res = validateOutputValue('director', constraint);
+    const res = ValidateOutputValue('director', constraint);
     expect(res.valid).toBe(true);
     expect(res.value).toBe('Director');
     expect(res.coerced).toBe(true);
@@ -270,20 +270,20 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     const allowed = ['IC', 'Manager', 'Director'];
 
     // 1. fail
-    const failRes = validateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'fail' });
+    const failRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'fail' });
     expect(failRes.valid).toBe(false);
     expect(failRes.violationPolicyApplied).toBe('fail');
     expect(failRes.violationMessage).toContain("Value 'Astronaut' is not in the allowed vocabulary");
 
     // 2. null
-    const nullRes = validateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'null' });
+    const nullRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'null' });
     expect(nullRes.valid).toBe(true);
     expect(nullRes.value).toBeNull();
     expect(nullRes.coerced).toBe(true);
     expect(nullRes.violationPolicyApplied).toBe('null');
 
     // 3. coerce-to-other
-    const otherRes = validateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'coerce-to-other' });
+    const otherRes = ValidateOutputValue('Astronaut', { Type: 'enum', Values: allowed, OnViolation: 'coerce-to-other' });
     expect(otherRes.valid).toBe(true);
     expect(otherRes.value).toBe('Other');
     expect(otherRes.coerced).toBe(true);
@@ -294,12 +294,12 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
     const numConstraint = { Type: 'numeric' as const, Min: 0, Max: 100, OnViolation: 'fail' as const };
 
     // Strict reject when column is not typed numeric
-    const strictRes = validateOutputValue('42', numConstraint, { targetFieldTSType: 'string' });
+    const strictRes = ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'string' });
     expect(strictRes.valid).toBe(false);
     expect(strictRes.violationMessage).toContain('rejected quoted string value');
 
     // Coerces when column is typed numeric
-    const coerceRes = validateOutputValue('42', numConstraint, { targetFieldTSType: 'number' });
+    const coerceRes = ValidateOutputValue('42', numConstraint, { targetFieldTSType: 'number' });
     expect(coerceRes.valid).toBe(true);
     expect(coerceRes.value).toBe(42);
     expect(coerceRes.coerced).toBe(true);
@@ -308,24 +308,24 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
   it('enforces numeric bounds and integer constraint', () => {
     const intConstraint = { Type: 'numeric' as const, Min: 1, Max: 10, Integer: true, OnViolation: 'fail' as const };
 
-    expect(validateOutputValue(1, intConstraint).valid).toBe(true);
-    expect(validateOutputValue(5, intConstraint).valid).toBe(true);
-    expect(validateOutputValue(10, intConstraint).valid).toBe(true);
-    expect(validateOutputValue(5.5, intConstraint).valid).toBe(false);
-    expect(validateOutputValue(0, intConstraint).valid).toBe(false);
-    expect(validateOutputValue(11, intConstraint).valid).toBe(false);
+    expect(ValidateOutputValue(1, intConstraint).valid).toBe(true);
+    expect(ValidateOutputValue(5, intConstraint).valid).toBe(true);
+    expect(ValidateOutputValue(10, intConstraint).valid).toBe(true);
+    expect(ValidateOutputValue(5.5, intConstraint).valid).toBe(false);
+    expect(ValidateOutputValue(0, intConstraint).valid).toBe(false);
+    expect(ValidateOutputValue(11, intConstraint).valid).toBe(false);
   });
 
   it('handles enum constraint with empty allowed values gracefully', () => {
     const emptyEnum = { Type: 'enum' as const, Values: [], OnViolation: 'fail' as const };
-    const res = validateOutputValue('IC', emptyEnum);
+    const res = ValidateOutputValue('IC', emptyEnum);
     expect(res.valid).toBe(false);
     expect(res.violationMessage).toContain('no allowed values configured');
   });
 
   it('degrades coerce-to-other to null on non-enum constraint violations', () => {
     const numConstraint = { Type: 'numeric' as const, Min: 0, Max: 100, OnViolation: 'coerce-to-other' as const };
-    const res = validateOutputValue(150, numConstraint);
+    const res = ValidateOutputValue(150, numConstraint);
     expect(res.valid).toBe(true);
     expect(res.value).toBeNull();
     expect(res.coerced).toBe(true);
@@ -345,7 +345,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
         },
       ],
     };
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.some(i => i.Path?.includes('Constraint.OnViolation') && i.Severity === 'error')).toBe(true);
   });
 
@@ -369,7 +369,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
           },
         ],
       };
-      const issues = validateSpec(spec, sampleEntity);
+      const issues = ValidateSpec(spec, sampleEntity);
       const pollutionIssue = issues.find(i => i.Path === 'Outputs[0].Ref');
       expect(pollutionIssue).toBeDefined();
       expect(pollutionIssue?.Severity).toBe('error');
@@ -388,7 +388,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
         },
       ],
     };
-    const validIssues = validateSpec(validSpec, sampleEntity);
+    const validIssues = ValidateSpec(validSpec, sampleEntity);
     expect(validIssues.some(i => i.Message.includes('prototype pollution'))).toBe(false);
   });
 
@@ -422,7 +422,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
       ],
     };
 
-    const issues = validateSpec(malformedSpec as DataFeatureSpec, sampleEntity);
+    const issues = ValidateSpec(malformedSpec as DataFeatureSpec, sampleEntity);
     const modeIssue = issues.find(i => i.Path === 'Outputs[0].Target.Mode');
     expect(modeIssue).toBeDefined();
     expect(modeIssue?.Severity).toBe('error');
@@ -448,7 +448,7 @@ describe('validateOutputValue — runtime enforcement (P1-2)', () => {
       ],
     };
 
-    const issues = validateSpec(spec, sampleEntity);
+    const issues = ValidateSpec(spec, sampleEntity);
     expect(issues.some(i => i.Path === 'Outputs[0].Target.EntityName' && i.Severity === 'error')).toBe(true);
     expect(issues.some(i => i.Path === 'Outputs[0].Target.ParentField' && i.Severity === 'error')).toBe(true);
     expect(issues.some(i => i.Path === 'Outputs[0].Target.Map' && i.Severity === 'error')).toBe(true);

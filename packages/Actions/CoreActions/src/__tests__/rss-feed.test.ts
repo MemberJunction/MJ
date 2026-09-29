@@ -25,14 +25,14 @@ vi.mock('@memberjunction/actions-base', () => ({}));
 
 import {
     RELEVANCE_WEIGHTS,
-    computeRecencyScore,
-    computeRelevanceScore,
-    filterByAge,
-    filterRelevant,
-    parseFeedArticles,
-    parseFeedDate,
-    scoreAndRankArticles,
-    stripHtml,
+    ComputeRecencyScore,
+    ComputeRelevanceScore,
+    FilterByAge,
+    FilterRelevant,
+    ParseFeedArticles,
+    ParseFeedDate,
+    ScoreAndRankArticles,
+    StripHtml,
     type FeedArticle,
 } from '../custom/web/rss-feed-parsing';
 import { ReadRSSFeedAction } from '../custom/web/rss-feed-read.action';
@@ -92,7 +92,7 @@ const ATOM_FEED = `<?xml version="1.0" encoding="utf-8"?>
 
 describe('parseFeedArticles — RSS 2.0', () => {
     it('extracts every item field', () => {
-        const articles = parseFeedArticles(RSS_FEED, 'Example');
+        const articles = ParseFeedArticles(RSS_FEED, 'Example');
         expect(articles).toHaveLength(2);
         expect(articles[0]).toEqual({
             title: 'Membership dues are rising',
@@ -105,57 +105,57 @@ describe('parseFeedArticles — RSS 2.0', () => {
     });
 
     it('reads CDATA titles and descriptions', () => {
-        const articles = parseFeedArticles(RSS_FEED, 'Example');
+        const articles = ParseFeedArticles(RSS_FEED, 'Example');
         expect(articles[1].title).toBe('Retention playbooks');
         expect(articles[1].description).toBe('Retention tactics that worked');
     });
 
     it('falls back to a permalink guid when there is no link', () => {
-        const articles = parseFeedArticles(RSS_FEED, 'Example');
+        const articles = ParseFeedArticles(RSS_FEED, 'Example');
         expect(articles[1].link).toBe('https://example.org/retention');
     });
 
     it('does not pick up a non-permalink guid as the link', () => {
         // An opaque guid is not a URL; emitting it would produce a dead link.
         const xml = `<rss><channel><item><title>T</title><guid isPermaLink="false">abc-123</guid></item></channel></rss>`;
-        expect(parseFeedArticles(xml, 'F')[0].link).toBe('');
+        expect(ParseFeedArticles(xml, 'F')[0].link).toBe('');
     });
 
     it('ignores the channel-level title', () => {
         // The channel <title> sits outside every <item>, so item parsing must not see it.
-        expect(parseFeedArticles(RSS_FEED, 'Example').map(a => a.title)).not.toContain('Channel Title');
+        expect(ParseFeedArticles(RSS_FEED, 'Example').map(a => a.title)).not.toContain('Channel Title');
     });
 
     it('skips an item with no title, since there is nothing to rank', () => {
         const xml = `<rss><channel><item><link>https://x.test/a</link></item><item><title>Kept</title></item></channel></rss>`;
-        expect(parseFeedArticles(xml, 'F').map(a => a.title)).toEqual(['Kept']);
+        expect(ParseFeedArticles(xml, 'F').map(a => a.title)).toEqual(['Kept']);
     });
 
     it('reads content:encoded when there is no description', () => {
         const xml = `<rss><channel><item><title>T</title><content:encoded><![CDATA[<p>Body text</p>]]></content:encoded></item></channel></rss>`;
-        expect(parseFeedArticles(xml, 'F')[0].description).toBe('Body text');
+        expect(ParseFeedArticles(xml, 'F')[0].description).toBe('Body text');
     });
 
     it('truncates a description that inlines a whole article body', () => {
         const xml = `<rss><channel><item><title>T</title><description>${'x'.repeat(900)}</description></item></channel></rss>`;
-        expect(parseFeedArticles(xml, 'F')[0].description).toHaveLength(500);
+        expect(ParseFeedArticles(xml, 'F')[0].description).toHaveLength(500);
     });
 
     it('reads dc:date as a last resort', () => {
         const xml = `<rss><channel><item><title>T</title><dc:date>2026-08-01T00:00:00Z</dc:date></item></channel></rss>`;
-        expect(parseFeedArticles(xml, 'F')[0].publishedAt).toBe('2026-08-01T00:00:00.000Z');
+        expect(ParseFeedArticles(xml, 'F')[0].publishedAt).toBe('2026-08-01T00:00:00.000Z');
     });
 
     it('keeps an undated item rather than dropping it silently', () => {
         // Dropping it here would make it invisible; filterByAge decides its fate,
         // and reports the count when it does.
         const xml = `<rss><channel><item><title>No date</title></item></channel></rss>`;
-        expect(parseFeedArticles(xml, 'F')[0].publishedAt).toBeNull();
+        expect(ParseFeedArticles(xml, 'F')[0].publishedAt).toBeNull();
     });
 
     it('keeps an item with an unparseable date, as undated', () => {
         const xml = `<rss><channel><item><title>T</title><pubDate>last Thursday</pubDate></item></channel></rss>`;
-        expect(parseFeedArticles(xml, 'F')[0].publishedAt).toBeNull();
+        expect(ParseFeedArticles(xml, 'F')[0].publishedAt).toBeNull();
     });
 
     it('parses every item when one carries content a strict parser would reject', () => {
@@ -168,23 +168,23 @@ describe('parseFeedArticles — RSS 2.0', () => {
             `<item><title>Broken & unescaped</title></item>` +
             `<item><title>Second</title></item>` +
             `</channel></rss>`;
-        expect(parseFeedArticles(xml, 'F').map(a => a.title)).toEqual(['Broken & unescaped', 'Second']);
+        expect(ParseFeedArticles(xml, 'F').map(a => a.title)).toEqual(['Broken & unescaped', 'Second']);
     });
 
     it('returns nothing for an empty or non-feed document instead of throwing', () => {
-        expect(parseFeedArticles('', 'F')).toEqual([]);
-        expect(parseFeedArticles('<html><body>not a feed</body></html>', 'F')).toEqual([]);
+        expect(ParseFeedArticles('', 'F')).toEqual([]);
+        expect(ParseFeedArticles('<html><body>not a feed</body></html>', 'F')).toEqual([]);
     });
 
     it('does not match a tag that merely starts with the name it was asked for', () => {
         const xml = `<rss><channel><item><titleAlternate>Wrong</titleAlternate><title>Right</title></item></channel></rss>`;
-        expect(parseFeedArticles(xml, 'F')[0].title).toBe('Right');
+        expect(ParseFeedArticles(xml, 'F')[0].title).toBe('Right');
     });
 });
 
 describe('parseFeedArticles — Atom', () => {
     it('reads entries, href links, summaries and term categories', () => {
-        const articles = parseFeedArticles(ATOM_FEED, 'Atom');
+        const articles = ParseFeedArticles(ATOM_FEED, 'Atom');
         expect(articles).toHaveLength(1);
         expect(articles[0]).toEqual({
             title: 'Board governance changes',
@@ -198,55 +198,55 @@ describe('parseFeedArticles — Atom', () => {
 
     it('prefers published over updated', () => {
         const xml = `<feed><entry><title>T</title><published>2026-08-01T00:00:00Z</published><updated>2026-08-04T00:00:00Z</updated></entry></feed>`;
-        expect(parseFeedArticles(xml, 'F')[0].publishedAt).toBe('2026-08-01T00:00:00.000Z');
+        expect(ParseFeedArticles(xml, 'F')[0].publishedAt).toBe('2026-08-01T00:00:00.000Z');
     });
 
     it('uses updated when there is no published', () => {
         const xml = `<feed><entry><title>T</title><updated>2026-08-04T00:00:00Z</updated></entry></feed>`;
-        expect(parseFeedArticles(xml, 'F')[0].publishedAt).toBe('2026-08-04T00:00:00.000Z');
+        expect(ParseFeedArticles(xml, 'F')[0].publishedAt).toBe('2026-08-04T00:00:00.000Z');
     });
 
     it('reads a hybrid document that carries both items and entries', () => {
         const xml = `<feed><item><title>From item</title></item><entry><title>From entry</title></entry></feed>`;
-        expect(parseFeedArticles(xml, 'F').map(a => a.title)).toEqual(['From item', 'From entry']);
+        expect(ParseFeedArticles(xml, 'F').map(a => a.title)).toEqual(['From item', 'From entry']);
     });
 });
 
 describe('stripHtml and entity decoding', () => {
     it('strips tags and collapses whitespace', () => {
-        expect(stripHtml('<p>One</p>\n\n  <p>Two</p>')).toBe('One Two');
+        expect(StripHtml('<p>One</p>\n\n  <p>Two</p>')).toBe('One Two');
     });
 
     it('decodes named and numeric entities', () => {
-        expect(stripHtml('&quot;q&quot; &#39;a&#39; &#x27;b&#x27; &nbsp;end')).toBe('"q" \'a\' \'b\' end');
+        expect(StripHtml('&quot;q&quot; &#39;a&#39; &#x27;b&#x27; &nbsp;end')).toBe('"q" \'a\' \'b\' end');
     });
 
     it('strips markup that arrived escaped, which is how most feeds send it', () => {
         // Decoding after stripping would leave a literal "<p>" in the output for
         // every RSS description in the wild.
-        expect(stripHtml('&lt;p&gt;Body &lt;b&gt;text&lt;/b&gt;&lt;/p&gt;')).toBe('Body text');
+        expect(StripHtml('&lt;p&gt;Body &lt;b&gt;text&lt;/b&gt;&lt;/p&gt;')).toBe('Body text');
     });
 
     it('finishes decoding an ampersand that was escaped twice', () => {
         // Source rendering as "&" arrives as &amp;amp; through an escaped-HTML
         // description; one decode pass would leave a visible "&amp;".
-        expect(stripHtml('Raised &amp;amp; restructured')).toBe('Raised & restructured');
+        expect(StripHtml('Raised &amp;amp; restructured')).toBe('Raised & restructured');
     });
 
     it('drops an out-of-range numeric entity rather than throwing', () => {
-        expect(stripHtml('before &#1114112; after')).toBe('before after');
+        expect(StripHtml('before &#1114112; after')).toBe('before after');
     });
 });
 
 describe('parseFeedDate', () => {
     it('accepts RFC 822 and ISO 8601', () => {
-        expect(parseFeedDate('Tue, 04 Aug 2026 09:00:00 GMT')).toBe('2026-08-04T09:00:00.000Z');
-        expect(parseFeedDate('2026-08-04T09:00:00Z')).toBe('2026-08-04T09:00:00.000Z');
+        expect(ParseFeedDate('Tue, 04 Aug 2026 09:00:00 GMT')).toBe('2026-08-04T09:00:00.000Z');
+        expect(ParseFeedDate('2026-08-04T09:00:00Z')).toBe('2026-08-04T09:00:00.000Z');
     });
 
     it('returns null for missing or unparseable input', () => {
-        expect(parseFeedDate('')).toBeNull();
-        expect(parseFeedDate('sometime')).toBeNull();
+        expect(ParseFeedDate('')).toBeNull();
+        expect(ParseFeedDate('sometime')).toBeNull();
     });
 });
 
@@ -256,24 +256,24 @@ describe('parseFeedDate', () => {
 
 describe('filterByAge', () => {
     it('keeps in-window articles and counts what it dropped', () => {
-        const result = filterByAge([article({ ageDays: 1 }), article({ ageDays: 30 })], 7, NOW, false);
+        const result = FilterByAge([article({ ageDays: 1 }), article({ ageDays: 30 })], 7, NOW, false);
         expect(result.kept).toHaveLength(1);
         expect(result.tooOldCount).toBe(1);
     });
 
     it('counts undated articles whether or not they are kept', () => {
         const articles = [article({ ageDays: 1 }), article({ publishedAt: null })];
-        expect(filterByAge(articles, 7, NOW, false)).toMatchObject({ undatedCount: 1 });
-        expect(filterByAge(articles, 7, NOW, false).kept).toHaveLength(1);
-        expect(filterByAge(articles, 7, NOW, true).kept).toHaveLength(2);
+        expect(FilterByAge(articles, 7, NOW, false)).toMatchObject({ undatedCount: 1 });
+        expect(FilterByAge(articles, 7, NOW, false).kept).toHaveLength(1);
+        expect(FilterByAge(articles, 7, NOW, true).kept).toHaveLength(2);
     });
 
     it('keeps a future-dated article rather than deleting the newest item over clock skew', () => {
-        expect(filterByAge([article({ ageDays: -1 })], 7, NOW, false).kept).toHaveLength(1);
+        expect(FilterByAge([article({ ageDays: -1 })], 7, NOW, false).kept).toHaveLength(1);
     });
 
     it('keeps an article exactly at the window edge', () => {
-        expect(filterByAge([article({ ageDays: 7 })], 7, NOW, false).kept).toHaveLength(1);
+        expect(FilterByAge([article({ ageDays: 7 })], 7, NOW, false).kept).toHaveLength(1);
     });
 });
 
@@ -283,49 +283,49 @@ describe('filterByAge', () => {
 
 describe('computeRelevanceScore', () => {
     it('weights title above category above description', () => {
-        expect(computeRelevanceScore(article({ title: 'dues rising' }), ['dues']).score).toBe(RELEVANCE_WEIGHTS.title);
-        expect(computeRelevanceScore(article({ categories: ['Dues'] }), ['dues']).score).toBe(RELEVANCE_WEIGHTS.category);
-        expect(computeRelevanceScore(article({ description: 'about dues' }), ['dues']).score).toBe(RELEVANCE_WEIGHTS.description);
+        expect(ComputeRelevanceScore(article({ title: 'dues rising' }), ['dues']).score).toBe(RELEVANCE_WEIGHTS.title);
+        expect(ComputeRelevanceScore(article({ categories: ['Dues'] }), ['dues']).score).toBe(RELEVANCE_WEIGHTS.category);
+        expect(ComputeRelevanceScore(article({ description: 'about dues' }), ['dues']).score).toBe(RELEVANCE_WEIGHTS.description);
     });
 
     it('sums all three placements for one keyword', () => {
         const a = article({ title: 'Dues', categories: ['dues'], description: 'dues' });
-        expect(computeRelevanceScore(a, ['dues']).score).toBe(
+        expect(ComputeRelevanceScore(a, ['dues']).score).toBe(
             RELEVANCE_WEIGHTS.title + RELEVANCE_WEIGHTS.category + RELEVANCE_WEIGHTS.description,
         );
     });
 
     it('matches case-insensitively and reports which keywords hit', () => {
         const a = article({ title: 'DUES and Retention' });
-        const result = computeRelevanceScore(a, ['dues', 'retention', 'sponsorship']);
+        const result = ComputeRelevanceScore(a, ['dues', 'retention', 'sponsorship']);
         expect(result.matched).toEqual(['dues', 'retention']);
         expect(result.score).toBe(RELEVANCE_WEIGHTS.title * 2);
     });
 
     it('scores zero against no keywords, rather than treating everything as a match', () => {
-        expect(computeRelevanceScore(article({ title: 'anything' }), [])).toEqual({ score: 0, matched: [] });
+        expect(ComputeRelevanceScore(article({ title: 'anything' }), [])).toEqual({ score: 0, matched: [] });
     });
 
     it('ignores blank keywords instead of matching every article on the empty string', () => {
-        expect(computeRelevanceScore(article({ title: 'anything' }), ['', '  ']).score).toBe(0);
+        expect(ComputeRelevanceScore(article({ title: 'anything' }), ['', '  ']).score).toBe(0);
     });
 });
 
 describe('computeRecencyScore', () => {
     it('scores 1 for something published now and clamps future dates to 1', () => {
-        expect(computeRecencyScore(NOW.toISOString(), 7, NOW)).toBe(1);
-        expect(computeRecencyScore(new Date(NOW.getTime() + 86400000).toISOString(), 7, NOW)).toBe(1);
+        expect(ComputeRecencyScore(NOW.toISOString(), 7, NOW)).toBe(1);
+        expect(ComputeRecencyScore(new Date(NOW.getTime() + 86400000).toISOString(), 7, NOW)).toBe(1);
     });
 
     it('decays across the window, never below 0.1 while still in it', () => {
-        expect(computeRecencyScore(new Date(NOW.getTime() - 3.5 * 86400000).toISOString(), 7, NOW)).toBeCloseTo(0.5, 5);
-        expect(computeRecencyScore(new Date(NOW.getTime() - 7 * 86400000).toISOString(), 7, NOW)).toBe(0.1);
+        expect(ComputeRecencyScore(new Date(NOW.getTime() - 3.5 * 86400000).toISOString(), 7, NOW)).toBeCloseTo(0.5, 5);
+        expect(ComputeRecencyScore(new Date(NOW.getTime() - 7 * 86400000).toISOString(), 7, NOW)).toBe(0.1);
     });
 
     it('scores 0 out of window, for an undated article, and for a zero window', () => {
-        expect(computeRecencyScore(new Date(NOW.getTime() - 8 * 86400000).toISOString(), 7, NOW)).toBe(0);
-        expect(computeRecencyScore(null, 7, NOW)).toBe(0);
-        expect(computeRecencyScore(NOW.toISOString(), 0, NOW)).toBe(0);
+        expect(ComputeRecencyScore(new Date(NOW.getTime() - 8 * 86400000).toISOString(), 7, NOW)).toBe(0);
+        expect(ComputeRecencyScore(null, 7, NOW)).toBe(0);
+        expect(ComputeRecencyScore(NOW.toISOString(), 0, NOW)).toBe(0);
     });
 });
 
@@ -334,19 +334,19 @@ describe('scoreAndRankArticles', () => {
         // A week-old article about the topic beats a brand-new article about nothing.
         const relevant = article({ title: 'dues', ageDays: 6 });
         const fresh = article({ title: 'unrelated', ageDays: 0 });
-        const ranked = scoreAndRankArticles([fresh, relevant], ['dues'], 7, NOW);
+        const ranked = ScoreAndRankArticles([fresh, relevant], ['dues'], 7, NOW);
         expect(ranked[0].article.title).toBe('dues');
     });
 
     it('breaks relevance ties on recency', () => {
         const older = article({ title: 'dues one', ageDays: 5 });
         const newer = article({ title: 'dues two', ageDays: 1 });
-        const ranked = scoreAndRankArticles([older, newer], ['dues'], 7, NOW);
+        const ranked = ScoreAndRankArticles([older, newer], ['dues'], 7, NOW);
         expect(ranked.map(r => r.article.title)).toEqual(['dues two', 'dues one']);
     });
 
     it('ranks purely by recency when no keywords are supplied', () => {
-        const ranked = scoreAndRankArticles([article({ title: 'old', ageDays: 5 }), article({ title: 'new', ageDays: 1 })], [], 7, NOW);
+        const ranked = ScoreAndRankArticles([article({ title: 'old', ageDays: 5 }), article({ title: 'new', ageDays: 1 })], [], 7, NOW);
         expect(ranked.map(r => r.article.title)).toEqual(['new', 'old']);
         expect(ranked.every(r => r.relevanceScore === 0)).toBe(true);
     });
@@ -354,24 +354,24 @@ describe('scoreAndRankArticles', () => {
     it('keeps feed order among fully tied articles, so a re-read ranks identically', () => {
         const a = article({ title: 'dues a', ageDays: 2 });
         const b = article({ title: 'dues b', ageDays: 2 });
-        expect(scoreAndRankArticles([a, b], ['dues'], 7, NOW).map(r => r.article.title)).toEqual(['dues a', 'dues b']);
+        expect(ScoreAndRankArticles([a, b], ['dues'], 7, NOW).map(r => r.article.title)).toEqual(['dues a', 'dues b']);
     });
 });
 
 describe('filterRelevant', () => {
     it('drops articles that matched nothing and are not fresh', () => {
-        const scored = scoreAndRankArticles([article({ title: 'unrelated', ageDays: 5 })], ['dues'], 7, NOW);
-        expect(filterRelevant(scored, ['dues'])).toHaveLength(0);
+        const scored = ScoreAndRankArticles([article({ title: 'unrelated', ageDays: 5 })], ['dues'], 7, NOW);
+        expect(FilterRelevant(scored, ['dues'])).toHaveLength(0);
     });
 
     it('keeps a very fresh article that matched nothing, since a keyword list is never complete', () => {
-        const scored = scoreAndRankArticles([article({ title: 'unrelated', ageDays: 0 })], ['dues'], 7, NOW);
-        expect(filterRelevant(scored, ['dues'])).toHaveLength(1);
+        const scored = ScoreAndRankArticles([article({ title: 'unrelated', ageDays: 0 })], ['dues'], 7, NOW);
+        expect(FilterRelevant(scored, ['dues'])).toHaveLength(1);
     });
 
     it('keeps everything when no keywords were supplied', () => {
-        const scored = scoreAndRankArticles([article({ title: 'unrelated', ageDays: 6 })], [], 7, NOW);
-        expect(filterRelevant(scored, [])).toHaveLength(1);
+        const scored = ScoreAndRankArticles([article({ title: 'unrelated', ageDays: 6 })], [], 7, NOW);
+        expect(FilterRelevant(scored, [])).toHaveLength(1);
     });
 });
 

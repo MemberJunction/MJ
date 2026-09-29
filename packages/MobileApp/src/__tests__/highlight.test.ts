@@ -7,24 +7,24 @@ const PLAIN = Colors.ink;
 
 /** Concatenate run text — must always reconstruct the original source exactly. */
 function joined(runs: HighlightRun[]): string {
-    return runs.map((r) => r.text).join('');
+    return runs.map((r) => r.Text).join('');
 }
 
 describe('HighlightCode', () => {
     describe('fallbacks', () => {
         it('returns a single plain run for an unknown language', () => {
             const runs = HighlightCode('hello world', 'klingon');
-            expect(runs).toEqual([{ text: 'hello world', color: PLAIN }]);
+            expect(runs).toEqual([{ Text: 'hello world', Color: PLAIN }]);
         });
 
         it('returns a single plain run when no language is given', () => {
             const runs = HighlightCode('plain text', undefined);
-            expect(runs).toEqual([{ text: 'plain text', color: PLAIN }]);
+            expect(runs).toEqual([{ Text: 'plain text', Color: PLAIN }]);
         });
 
         it('returns a single (empty) plain run for empty input with a known grammar', () => {
             const runs = HighlightCode('', 'json');
-            expect(runs).toEqual([{ text: '', color: PLAIN }]);
+            expect(runs).toEqual([{ Text: '', Color: PLAIN }]);
         });
     });
 
@@ -33,7 +33,7 @@ describe('HighlightCode', () => {
             const code = '{"a": 1}';
             const runs = HighlightCode(code, 'json');
             expect(joined(runs)).toBe(code);
-            const colors = runs.map((r) => r.color);
+            const colors = runs.map((r) => r.Color);
             // "a" is a JSON property -> brand; 1 is a number -> agentAnalyst.
             expect(colors).toContain(Colors.brand);
             expect(colors).toContain(Colors.agentAnalyst);
@@ -44,7 +44,7 @@ describe('HighlightCode', () => {
             const runs = HighlightCode(code, 'ts');
             expect(joined(runs)).toBe(code);
             // `const` is a keyword -> agentResearch.
-            expect(runs.map((r) => r.color)).toContain(Colors.agentResearch);
+            expect(runs.map((r) => r.Color)).toContain(Colors.agentResearch);
         });
 
         it('normalizes language hints (trim + case + alias) before lookup', () => {
@@ -70,7 +70,7 @@ describe('HighlightCode', () => {
 
         it('emits at least one non-plain colored run for real code', () => {
             const runs = HighlightCode('# a comment\nx = 5', 'python');
-            expect(runs.some((r) => r.color !== PLAIN)).toBe(true);
+            expect(runs.some((r) => r.Color !== PLAIN)).toBe(true);
         });
     });
 });

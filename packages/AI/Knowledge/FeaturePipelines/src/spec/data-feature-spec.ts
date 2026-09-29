@@ -101,7 +101,7 @@ export type FieldResolver = (fieldName: string) => FieldMetadataStub | undefined
  * Pure validator for a DataFeatureSpec against optional entity metadata.
  * Returns structured problems naming the field and the fix recommendation.
  */
-export function validateSpec(
+export function ValidateSpec(
   spec: DataFeatureSpec,
   entityInfo?: EntityMetadataStub,
   fieldResolver?: FieldResolver
@@ -365,6 +365,15 @@ export function validateSpec(
   return issues;
 }
 
+/** @deprecated Use {@link ValidateSpec}. */
+export function validateSpec(
+  spec: DataFeatureSpec,
+  entityInfo?: EntityMetadataStub,
+  fieldResolver?: FieldResolver
+): SpecValidationIssue[] {
+  return ValidateSpec(spec, entityInfo, fieldResolver);
+}
+
 function checkTypeCompatibility(
   constraint: ValueConstraint,
   fieldTSType: string,
@@ -406,7 +415,7 @@ function checkTypeCompatibility(
  * Resolves an output's constraint against field metadata.
  * Materializes FromFieldMetadata into concrete allowed values.
  */
-export function resolveConstraint(
+export function ResolveConstraint(
   output: DataFeatureOutput,
   field?: FieldMetadataStub
 ): ResolvedConstraint | null {
@@ -494,10 +503,18 @@ export function resolveConstraint(
   return null;
 }
 
+/** @deprecated Use {@link ResolveConstraint}. */
+export function resolveConstraint(
+  output: DataFeatureOutput,
+  field?: FieldMetadataStub
+): ResolvedConstraint | null {
+  return ResolveConstraint(output, field);
+}
+
 /**
  * Pure function to render the exact constraint block text injected into prompts and shown in UI previews.
  */
-export function renderConstraintBlock(
+export function RenderConstraintBlock(
   outputs: DataFeatureOutput[],
   resolvedConstraints?: Map<string, ResolvedConstraint | null>
 ): string {
@@ -510,7 +527,7 @@ export function renderConstraintBlock(
   lines.push('You MUST adhere to the following output value constraints:');
 
   for (const out of outputs) {
-    const resolved = resolvedConstraints?.get(out.Name) ?? resolveConstraint(out);
+    const resolved = resolvedConstraints?.get(out.Name) ?? ResolveConstraint(out);
     lines.push(`- **${out.Name}** (${out.Ref}):`);
 
     if (!resolved) {
@@ -577,4 +594,12 @@ export function renderConstraintBlock(
   }
 
   return lines.join('\n');
+}
+
+/** @deprecated Use {@link RenderConstraintBlock}. */
+export function renderConstraintBlock(
+  outputs: DataFeatureOutput[],
+  resolvedConstraints?: Map<string, ResolvedConstraint | null>
+): string {
+  return RenderConstraintBlock(outputs, resolvedConstraints);
 }

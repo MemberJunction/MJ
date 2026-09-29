@@ -55,19 +55,19 @@ export class ArchiveProcessor {
     ): Promise<EntityProcessingResult> {
         const entityName = configEntity.Get('Entity') as string;
         const driverClassName = configEntity.Get('DriverClass') as string | null;
-        const batchSize = this.GetBatchSize(configEntity, config);
+        const batchSize = this.getBatchSize(configEntity, config);
         const basePath = (config.Get('RootPath') as string) ?? '';
 
         LogStatus(`ArchiveProcessor: Starting processing for entity "${entityName}" (batch size: ${batchSize})`);
 
-        const driver = this.ResolveDriver(driverClassName);
-        const fieldConfig = this.ParseFieldConfiguration(configEntity);
-        const filter = this.BuildRecordFilter(configEntity);
-        const records = await this.LoadEligibleRecords(entityName, filter, contextUser);
+        const driver = this.resolveDriver(driverClassName);
+        const fieldConfig = this.parseFieldConfiguration(configEntity);
+        const filter = this.buildRecordFilter(configEntity);
+        const records = await this.loadEligibleRecords(entityName, filter, contextUser);
 
         LogStatus(`ArchiveProcessor: Found ${records.length} eligible records for "${entityName}"`);
 
-        return this.ProcessRecordBatches(
+        return this.processRecordBatches(
             records, driver, fieldConfig, configEntity, config,
             archiveRun, storageManager, basePath, batchSize, contextUser
         );
@@ -81,7 +81,7 @@ export class ArchiveProcessor {
      * Resolves the archive driver by class name via ClassFactory, falling back
      * to DefaultArchiveDriver if no class name is specified or resolution fails.
      */
-    private ResolveDriver(driverClassName: string | null): BaseArchiveDriver {
+    private resolveDriver(driverClassName: string | null): BaseArchiveDriver {
         if (driverClassName) {
             const driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArchiveDriver>(
                 BaseArchiveDriver,
@@ -103,7 +103,7 @@ export class ArchiveProcessor {
      * Parses the FieldConfiguration JSON column from the ArchiveConfigurationEntity record.
      * The FieldConfiguration column is NVARCHAR(MAX) storing JSON conforming to ArchiveFieldConfiguration.
      */
-    private ParseFieldConfiguration(configEntity: BaseEntity): ArchiveFieldConfiguration {
+    private parseFieldConfiguration(configEntity: BaseEntity): ArchiveFieldConfiguration {
         const fieldConfigJson = configEntity.Get('FieldConfiguration') as string;
         if (!fieldConfigJson) {
             throw new Error(`ArchiveConfigurationEntity ${configEntity.Get('ID')} has no FieldConfiguration`);
@@ -111,7 +111,7 @@ export class ArchiveProcessor {
 
         try {
             const parsed = JSON.parse(fieldConfigJson) as ArchiveFieldConfiguration;
-            this.ValidateFieldConfiguration(parsed);
+            this.validateFieldConfiguration(parsed);
             return parsed;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -122,7 +122,7 @@ export class ArchiveProcessor {
     /**
      * Validates the parsed field configuration has the required structure.
      */
-    private ValidateFieldConfiguration(config: ArchiveFieldConfiguration): void {
+    private validateFieldConfiguration(config: ArchiveFieldConfiguration): void {
         if (!config.Fields || !Array.isArray(config.Fields)) {
             throw new Error('FieldConfiguration must have a Fields array');
         }
@@ -147,7 +147,7 @@ export class ArchiveProcessor {
      * Builds the SQL filter expression for querying eligible records.
      * Combines the retention date filter with any custom filter expression.
      */
-    private BuildRecordFilter(configEntity: BaseEntity): string {
+    private buildRecordFilter(configEntity: BaseEntity): string {
         const retentionDays = configEntity.Get('RetentionDays') as number | null;
         const dateField = configEntity.Get('DateField') as string | null;
         const customFilter = configEntity.Get('FilterExpression') as string | null;
@@ -171,7 +171,7 @@ export class ArchiveProcessor {
     /**
      * Loads records matching the archive filter from the database.
      */
-    private async LoadEligibleRecords(entityName: string, filter: string, contextUser: UserInfo): Promise<BaseEntity[]> {
+    private async loadEligibleRecords(entityName: string, filter: string, contextUser: UserInfo): Promise<BaseEntity[]> {
         const rv = new RunView();
         const result = await rv.RunView<BaseEntity>({
             EntityName: entityName,
@@ -193,7 +193,7 @@ export class ArchiveProcessor {
     /**
      * Determines the batch size from the entity config or parent config defaults.
      */
-    private GetBatchSize(configEntity: BaseEntity, config: BaseEntity): number {
+    private getBatchSize(configEntity: BaseEntity, config: BaseEntity): number {
         const entityBatchSize = configEntity.Get('BatchSize') as number | null;
         const defaultBatchSize = config.Get('DefaultBatchSize') as number | null;
         return entityBatchSize ?? defaultBatchSize ?? 100;
@@ -202,7 +202,7 @@ export class ArchiveProcessor {
     /**
      * Processes records in batches, calling the driver for each record and logging results.
      */
-    private async ProcessRecordBatches(
+    private async processRecordBatches(
         records: BaseEntity[],
         driver: BaseArchiveDriver,
         fieldConfig: ArchiveFieldConfiguration,
@@ -218,7 +218,7 @@ export class ArchiveProcessor {
 
         for (let offset = 0; offset < records.length; offset += batchSize) {
             const batch = records.slice(offset, offset + batchSize);
-            const batchResult = await this.ProcessSingleBatch(
+            const batchResult = await this.processSingleBatch(
                 batch, driver, fieldConfig, configEntity, config,
                 archiveRun, storageManager, basePath, contextUser
             );
@@ -234,7 +234,7 @@ export class ArchiveProcessor {
     /**
      * Processes a single batch of records.
      */
-    private async ProcessSingleBatch(
+    private async processSingleBatch(
         batch: BaseEntity[],
         driver: BaseArchiveDriver,
         fieldConfig: ArchiveFieldConfiguration,
@@ -248,7 +248,7 @@ export class ArchiveProcessor {
         const result: EntityProcessingResult = { Archived: 0, Failed: 0, Skipped: 0, Bytes: 0 };
 
         for (const record of batch) {
-            const recordResult = await this.ProcessSingleRecord(
+            const recordResult = await this.processSingleRecord(
                 record, driver, fieldConfig, configEntity, config,
                 archiveRun, storageManager, basePath, contextUser
             );
@@ -269,7 +269,7 @@ export class ArchiveProcessor {
      * Processes a single record: checks eligibility, archives, and logs the detail.
      * Returns 'skipped', 'failed', or the number of bytes archived.
      */
-    private async ProcessSingleRecord(
+    private async processSingleRecord(
         record: BaseEntity,
         driver: BaseArchiveDriver,
         fieldConfig: ArchiveFieldConfiguration,
@@ -296,7 +296,7 @@ export class ArchiveProcessor {
         }
 
         const archiveResult = await driver.ArchiveRecord(context);
-        await this.LogArchiveRunDetail(archiveRun, record, archiveResult, contextUser);
+        await this.logArchiveRunDetail(archiveRun, record, archiveResult, contextUser);
 
         if (!archiveResult.Success) {
             LogError(`Failed to archive record ${record.PrimaryKey.Values()} of "${record.EntityInfo.Name}": ${archiveResult.ErrorMessage}`);
@@ -309,7 +309,7 @@ export class ArchiveProcessor {
     /**
      * Creates an ArchiveRunDetail record to log the result of archiving a single record.
      */
-    private async LogArchiveRunDetail(
+    private async logArchiveRunDetail(
         archiveRun: BaseEntity,
         record: BaseEntity,
         archiveResult: { Success: boolean; StoragePath: string | null; BytesArchived: number; ErrorMessage?: string; Skipped?: boolean },

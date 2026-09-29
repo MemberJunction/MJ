@@ -2,16 +2,16 @@ import { RegisterClass } from '@memberjunction/global';
 import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, ErpPluginKey } from '../../../constants';
 import { JournalEntryLine } from '../../../types';
-import { journalEntryBalanceError, parseAndValidateJournalEntryLines, totalDebits } from '../../../journal-entry';
+import { JournalEntryBalanceError, ParseAndValidateJournalEntryLines, TotalDebits } from '../../../journal-entry';
 
 export type { JournalEntryLine } from '../../../types';
 
 /**
  * Action to create a journal entry in QuickBooks Online
  */
-@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.QuickBooksOnline))
+@RegisterClass(BaseAction, ErpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.QuickBooksOnline))
 @RegisterClass(BaseAction, 'CreateQuickBooksJournalEntryAction')
 export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
     
@@ -42,7 +42,7 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
             const linesData = this.getParamValue(params.Params, 'Lines');
             const adjustmentEntry = this.getParamValue(params.Params, 'AdjustmentEntry') || false;
 
-            const lines = parseAndValidateJournalEntryLines(linesData);
+            const lines = ParseAndValidateJournalEntryLines(linesData);
             for (let i = 0; i < lines.length; i++) {
                 if (!lines[i].accountId) {
                     throw new Error(`Line ${i + 1}: accountId is required for QuickBooks Online`);
@@ -50,7 +50,7 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
             }
 
             if (!this.validateJournalEntryBalance(lines)) {
-                return journalEntryBalanceError(params.Params);
+                return JournalEntryBalanceError(params.Params);
             }
 
             // Build the journal entry object for QuickBooks
@@ -86,7 +86,7 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
                 },
                 {
                     Name: 'TotalAmount',
-                    Value: createdEntry.TotalAmt ?? totalDebits(lines),
+                    Value: createdEntry.TotalAmt ?? TotalDebits(lines),
                     Type: 'Output'
                 },
                 {

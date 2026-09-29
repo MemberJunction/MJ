@@ -6,9 +6,9 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    buildFeaturePipelinesAgentContext,
-    resolvePipeline,
-    buildPipelineNotFoundError,
+    BuildFeaturePipelinesAgentContext,
+    ResolvePipeline,
+    BuildPipelineNotFoundError,
 } from '../KnowledgeHub/components/feature-pipelines/feature-pipelines-agent-context';
 import type { FeaturePipelineSummary } from '../KnowledgeHub/components/feature-pipelines/feature-pipeline.engine';
 
@@ -40,24 +40,24 @@ describe('resolvePipeline', () => {
         makePipeline({ ID: 'p-2', Name: 'Lapse Risk' }),
     ];
     it('resolves by exact id', () => {
-        expect(resolvePipeline('P-2', pipelines)?.Name).toBe('Lapse Risk');
+        expect(ResolvePipeline('P-2', pipelines)?.Name).toBe('Lapse Risk');
     });
     it('resolves by exact name (case-insensitive)', () => {
-        expect(resolvePipeline('renewal score', pipelines)?.ID).toBe('p-1');
+        expect(ResolvePipeline('renewal score', pipelines)?.ID).toBe('p-1');
     });
     it('falls back to contains', () => {
-        expect(resolvePipeline('lapse', pipelines)?.ID).toBe('p-2');
+        expect(ResolvePipeline('lapse', pipelines)?.ID).toBe('p-2');
     });
     it('returns null on empty / miss', () => {
-        expect(resolvePipeline('', pipelines)).toBeNull();
-        expect(resolvePipeline('nope', pipelines)).toBeNull();
+        expect(ResolvePipeline('', pipelines)).toBeNull();
+        expect(ResolvePipeline('nope', pipelines)).toBeNull();
     });
 });
 
 describe('buildPipelineNotFoundError', () => {
     it('lists a bounded sample of names', () => {
         const names = Array.from({ length: 14 }, (_, i) => `Pipeline ${i}`);
-        const msg = buildPipelineNotFoundError('xyz', names);
+        const msg = BuildPipelineNotFoundError('xyz', names);
         expect(msg).toContain('No feature pipeline matches "xyz"');
         expect(msg).toContain('(+4 more)');
     });
@@ -70,7 +70,7 @@ describe('buildFeaturePipelinesAgentContext', () => {
             makePipeline({ ID: 'p-2', Status: 'Disabled', LastRunStatus: 'Failed' }),
             makePipeline({ ID: 'p-3', Status: 'Draft', LastRunStatus: 'Never' }),
         ];
-        const ctx = buildFeaturePipelinesAgentContext({
+        const ctx = BuildFeaturePipelinesAgentContext({
             AllPipelines: all, FilteredPipelines: all, SearchQuery: '', RunningIDs: new Set(), IsLoading: false,
         });
         expect(ctx['PipelineCount']).toBe(3);
@@ -84,7 +84,7 @@ describe('buildFeaturePipelinesAgentContext', () => {
 
     it('reports running pipelines by name', () => {
         const all = [makePipeline({ ID: 'p-1', Name: 'Renewal Score' }), makePipeline({ ID: 'p-2', Name: 'Lapse Risk' })];
-        const ctx = buildFeaturePipelinesAgentContext({
+        const ctx = BuildFeaturePipelinesAgentContext({
             AllPipelines: all, FilteredPipelines: all, SearchQuery: '', RunningIDs: new Set(['p-2']), IsLoading: false,
         });
         expect(ctx['RunningCount']).toBe(1);
@@ -93,7 +93,7 @@ describe('buildFeaturePipelinesAgentContext', () => {
 
     it('publishes a bounded structured list of filtered pipelines and flags truncation', () => {
         const all = Array.from({ length: 30 }, (_, i) => makePipeline({ ID: `p-${i}`, Name: `Pipeline ${i}` }));
-        const ctx = buildFeaturePipelinesAgentContext({
+        const ctx = BuildFeaturePipelinesAgentContext({
             AllPipelines: all, FilteredPipelines: all, SearchQuery: '', RunningIDs: new Set(), IsLoading: false,
         });
         expect((ctx['Pipelines'] as unknown[]).length).toBe(25);
@@ -104,7 +104,7 @@ describe('buildFeaturePipelinesAgentContext', () => {
 
     it('tracks the active search query + filtered count', () => {
         const all = [makePipeline({ ID: 'p-1' }), makePipeline({ ID: 'p-2' })];
-        const ctx = buildFeaturePipelinesAgentContext({
+        const ctx = BuildFeaturePipelinesAgentContext({
             AllPipelines: all, FilteredPipelines: [all[0]], SearchQuery: 'renewal', RunningIDs: new Set(), IsLoading: false,
         });
         expect(ctx['SearchQuery']).toBe('renewal');

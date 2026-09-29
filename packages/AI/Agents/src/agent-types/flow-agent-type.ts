@@ -60,31 +60,31 @@ export type FlowExecutionMode = 'dispatch' | 'inRun';
  */
 export class FlowExecutionState {
     /** The agent ID for this flow execution */
-    agentId: string;
+    agentId: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** The current step being executed */
-    currentStepId?: string;
+    currentStepId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Set of completed step IDs */
-    completedStepIds: Set<string> = new Set();
+    completedStepIds: Set<string> = new Set();  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Map of step results by step ID */
-    stepResults: Map<string, unknown> = new Map();
+    stepResults: Map<string, unknown> = new Map();  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Ordered list of step IDs in execution order */
-    executionPath: string[] = [];
+    executionPath: string[] = [];  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /**
      * Where this run's steps execute. Decided once by `DetermineInitialStep` and read by every
      * later hook, so a run never switches engines part-way through.
      */
-    executionMode: FlowExecutionMode = 'dispatch';
+    executionMode: FlowExecutionMode = 'dispatch';  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
 
     /** Why {@link executionMode} was chosen. Unset until `DetermineInitialStep` has decided. */
-    executionModeReason?: string;
+    executionModeReason?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
     /** Special fields from action output mappings (message, reasoning, confidence) */
-    specialFields?: {
+    specialFields?: {  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
         message?: string;
         reasoning?: string;
         confidence?: number;
@@ -905,7 +905,7 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @public
      */
-    public processActionResult<P>(
+    public ProcessActionResult<P>(
         actionResult: Record<string, unknown>,
         _stepId: string,
         outputMapping?: string,
@@ -919,6 +919,16 @@ export class FlowAgentType extends BaseAgentType {
         // Note: Special fields are ignored in this legacy method
         // Use PostProcessActionStep for full special field support
         return result.payloadChange;
+    }
+
+    /** @deprecated Use {@link ProcessActionResult}. */
+    public processActionResult<P>(
+        actionResult: Record<string, unknown>,
+        _stepId: string,
+        outputMapping?: string,
+        currentPayload?: P
+    ): AgentPayloadChangeRequest<P> | null {
+        return this.ProcessActionResult(actionResult, _stepId, outputMapping, currentPayload);
     }
     
     /**
@@ -1823,6 +1833,16 @@ export class FlowAgentType extends BaseAgentType {
      * @override
      */
     public get RequiresAgentLevelPrompts(): boolean {
+        return false;
+    }
+
+    /**
+     * Flow action nodes are chosen by the graph, not by a model: failure paths may re-run a node
+     * with the same mapped inputs, and no model reads a failure directive. The breaker's rules
+     * would only block those retries, so Flow opts out (see BaseAgentType.UsesActionCircuitBreaker).
+     * @override
+     */
+    public get UsesActionCircuitBreaker(): boolean {
         return false;
     }
 

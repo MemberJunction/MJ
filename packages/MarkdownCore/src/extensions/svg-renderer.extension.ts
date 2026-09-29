@@ -51,7 +51,7 @@ export interface SvgCodeBlockToken extends Tokens.Generic {
  * trusted SVG content or sanitize it on the target platform when rendering
  * user-provided content.
  */
-export function createSvgRendererExtension(): MarkedExtension {
+export function CreateSvgRendererExtension(): MarkedExtension {
   return {
     extensions: [{
       name: 'svgCodeBlock',
@@ -70,7 +70,7 @@ export function createSvgRendererExtension(): MarkedExtension {
           const svgContent = match[1].trim();
 
           // Only process if it looks like valid SVG
-          if (isSvgContent(svgContent)) {
+          if (IsSvgContent(svgContent)) {
             const token: SvgCodeBlockToken = {
               type: 'svgCodeBlock',
               raw: match[0],
@@ -89,11 +89,16 @@ export function createSvgRendererExtension(): MarkedExtension {
   };
 }
 
+/** @deprecated Use {@link CreateSvgRendererExtension}. */
+export function createSvgRendererExtension(): MarkedExtension {
+  return CreateSvgRendererExtension();
+}
+
 /**
  * Basic validation to check if content appears to be SVG.
  * This is a simple check - it doesn't fully validate SVG syntax.
  */
-export function isSvgContent(content: string): boolean {
+export function IsSvgContent(content: string): boolean {
   // Check if it starts with <svg and contains closing </svg>
   const startsWithSvg = content.toLowerCase().startsWith('<svg');
   const hasSvgClosing = content.toLowerCase().includes('</svg>');
@@ -102,4 +107,9 @@ export function isSvgContent(content: string): boolean {
   const isSelfClosing = content.toLowerCase().match(/<svg[^>]*\/>/);
 
   return (startsWithSvg && hasSvgClosing) || !!isSelfClosing;
+}
+
+/** @deprecated Use {@link IsSvgContent}. */
+export function isSvgContent(content: string): boolean {
+  return IsSvgContent(content);
 }

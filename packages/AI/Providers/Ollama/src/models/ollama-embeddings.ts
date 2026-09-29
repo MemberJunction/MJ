@@ -27,8 +27,13 @@ export class OllamaEmbedding extends BaseEmbeddings {
     /**
      * Read only getter method to get the Ollama client instance
      */
-    public get client(): Ollama {
+    public get Client(): Ollama {
         return this.OllamaClient;
+    }
+
+    /** @deprecated Use {@link Client}. */
+    public get client(): Ollama {
+        return this.Client;
     }
 
     /**
@@ -75,7 +80,7 @@ export class OllamaEmbedding extends BaseEmbeddings {
             }
 
             // Make the embeddings request
-            const response: EmbeddingsResponse = await this.client.embeddings(embeddingsRequest);
+            const response: EmbeddingsResponse = await this.Client.embeddings(embeddingsRequest);
             
             const endTime = new Date();
 
@@ -134,7 +139,7 @@ export class OllamaEmbedding extends BaseEmbeddings {
                     Object.assign(embeddingsRequest, (params as any).additionalParams);
                 }
 
-                const response: EmbeddingsResponse = await this.client.embeddings(embeddingsRequest);
+                const response: EmbeddingsResponse = await this.Client.embeddings(embeddingsRequest);
                 embeddings.push(response.embedding);
                 totalPromptTokens += (response as any).prompt_eval_count || 0;
             }
@@ -166,14 +171,14 @@ export class OllamaEmbedding extends BaseEmbeddings {
     private async ensureModelAvailable(modelName: string): Promise<void> {
         try {
             // Check if model is available
-            const models = await this.client.list();
+            const models = await this.Client.list();
             const isAvailable = models.models.some((m: any) => 
                 m.name === modelName || m.name.startsWith(modelName + ':')
             );
 
             if (!isAvailable) {
                 console.log(`Model ${modelName} not found locally. Attempting to pull...`);
-                await this.client.pull({ model: modelName, stream: false });
+                await this.Client.pull({ model: modelName, stream: false });
                 console.log(`Model ${modelName} pulled successfully.`);
             }
         } catch (error) {
@@ -188,7 +193,7 @@ export class OllamaEmbedding extends BaseEmbeddings {
      */
     public async GetEmbeddingModels(): Promise<any> {
         try {
-            const models = await this.client.list();
+            const models = await this.Client.list();
             // Filter for common embedding models
             const embeddingKeywords = ['embed', 'e5', 'bge', 'gte', 'nomic', 'mxbai', 'all-minilm'];
             
@@ -212,9 +217,9 @@ export class OllamaEmbedding extends BaseEmbeddings {
     /**
      * List available embedding models in Ollama
      */
-    public async listEmbeddingModels(): Promise<string[]> {
+    public async ListEmbeddingModels(): Promise<string[]> {
         try {
-            const models = await this.client.list();
+            const models = await this.Client.list();
             // Filter for common embedding models (this is a heuristic as Ollama doesn't strictly categorize)
             const embeddingKeywords = ['embed', 'e5', 'bge', 'gte', 'nomic', 'mxbai', 'all-minilm'];
             
@@ -229,12 +234,17 @@ export class OllamaEmbedding extends BaseEmbeddings {
         }
     }
 
+    /** @deprecated Use {@link ListEmbeddingModels}. */
+    public async listEmbeddingModels(): Promise<string[]> {
+        return this.ListEmbeddingModels();
+    }
+
     /**
      * Get information about a specific embedding model
      */
-    public async getModelInfo(modelName: string): Promise<any> {
+    public async GetModelInfo(modelName: string): Promise<any> {
         try {
-            const response = await this.client.show({ model: modelName });
+            const response = await this.Client.show({ model: modelName });
             return response;
         } catch (error) {
             console.error(`Failed to get info for model ${modelName}:`, error);
@@ -242,14 +252,19 @@ export class OllamaEmbedding extends BaseEmbeddings {
         }
     }
 
+    /** @deprecated Use {@link GetModelInfo}. */
+    public async getModelInfo(modelName: string): Promise<any> {
+        return this.GetModelInfo(modelName);
+    }
+
     /**
      * Get the dimension size for a specific embedding model
      * This is useful for setting up vector databases
      */
-    public async getEmbeddingDimension(modelName: string): Promise<number | null> {
+    public async GetEmbeddingDimension(modelName: string): Promise<number | null> {
         try {
             // Generate a sample embedding to get dimensions
-            const response = await this.client.embeddings({
+            const response = await this.Client.embeddings({
                 model: modelName,
                 prompt: "test",
                 keep_alive: 0 // Don't keep model loaded for this test
@@ -260,5 +275,10 @@ export class OllamaEmbedding extends BaseEmbeddings {
             console.error(`Failed to get embedding dimension for ${modelName}:`, error);
             return null;
         }
+    }
+
+    /** @deprecated Use {@link GetEmbeddingDimension}. */
+    public async getEmbeddingDimension(modelName: string): Promise<number | null> {
+        return this.GetEmbeddingDimension(modelName);
     }
 }

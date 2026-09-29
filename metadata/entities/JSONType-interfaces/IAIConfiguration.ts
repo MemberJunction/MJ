@@ -4,7 +4,8 @@
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`LLMConfigurationSettings`, `RealtimeConfigurationSettings`,
- *    `VisionConfigurationSettings`, `AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `VisionConfigurationSettings`, `AudioConfigurationSettings`, `DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`IAIModelConfiguration`, `IAIPromptConfiguration`,
  *    `IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -13,7 +14,8 @@
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -100,6 +102,19 @@ export interface LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -171,6 +186,25 @@ export interface AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -189,6 +223,8 @@ export interface IAIModelConfiguration {
     Vision?: VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: DecisionConfigurationSettings | null;
 }
 
 /**
@@ -207,6 +243,8 @@ export interface IAIPromptConfiguration {
     Vision?: VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: DecisionConfigurationSettings | null;
 }
 
 /**
@@ -222,4 +260,24 @@ export interface IAIPromptModelConfiguration {
     Vision?: VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: IAIModelConfiguration | null;
 }

@@ -45,7 +45,7 @@ export type ExecutionStatus =
 /**
  * Normalize legacy status values to new semantic values
  */
-export function normalizeExecutionStatus(status: string): ExecutionStatus {
+export function NormalizeExecutionStatus(status: string): ExecutionStatus {
   switch (status) {
     case 'Passed':
     case 'Failed':
@@ -66,11 +66,21 @@ export function normalizeExecutionStatus(status: string): ExecutionStatus {
   }
 }
 
+/** @deprecated Use {@link NormalizeExecutionStatus}. */
+export function normalizeExecutionStatus(status: string): ExecutionStatus {
+  return NormalizeExecutionStatus(status);
+}
+
 /**
  * Get original status for display purposes (Passed/Failed distinction matters for legacy)
  */
-export function getDisplayStatus(status: string): string {
+export function GetDisplayStatus(status: string): string {
   return status;
+}
+
+/** @deprecated Use {@link GetDisplayStatus}. */
+export function getDisplayStatus(status: string): string {
+  return GetDisplayStatus(status);
 }
 
 /**
@@ -146,7 +156,7 @@ export interface EvaluationMetrics {
 /**
  * Calculate aggregated evaluation metrics from test runs
  */
-export function calculateEvaluationMetrics(runs: TestRunWithFeedback[]): EvaluationMetrics {
+export function CalculateEvaluationMetrics(runs: TestRunWithFeedback[]): EvaluationMetrics {
   const totalRuns = runs.length;
 
   if (totalRuns === 0) {
@@ -245,10 +255,15 @@ export function calculateEvaluationMetrics(runs: TestRunWithFeedback[]): Evaluat
   };
 }
 
+/** @deprecated Use {@link CalculateEvaluationMetrics}. */
+export function calculateEvaluationMetrics(runs: TestRunWithFeedback[]): EvaluationMetrics {
+  return CalculateEvaluationMetrics(runs);
+}
+
 /**
  * Determine overall "quality" color based on available metrics and user preferences
  */
-export function getQualityColor(
+export function GetQualityColor(
   run: TestRunWithFeedback,
   prefs: EvaluationPreferences
 ): 'success' | 'warning' | 'danger' | 'neutral' {
@@ -279,10 +294,18 @@ export function getQualityColor(
   return 'neutral';
 }
 
+/** @deprecated Use {@link GetQualityColor}. */
+export function getQualityColor(
+  run: TestRunWithFeedback,
+  prefs: EvaluationPreferences
+): 'success' | 'warning' | 'danger' | 'neutral' {
+  return GetQualityColor(run, prefs);
+}
+
 /**
  * Get primary display value based on preferences
  */
-export function getPrimaryDisplayValue(
+export function GetPrimaryDisplayValue(
   run: TestRunWithFeedback,
   prefs: EvaluationPreferences
 ): { type: 'human' | 'auto' | 'exec' | 'none'; value: string; } {
@@ -303,6 +326,14 @@ export function getPrimaryDisplayValue(
   return { type: 'none', value: '—' };
 }
 
+/** @deprecated Use {@link GetPrimaryDisplayValue}. */
+export function getPrimaryDisplayValue(
+  run: TestRunWithFeedback,
+  prefs: EvaluationPreferences
+): { type: 'human' | 'auto' | 'exec' | 'none'; value: string; } {
+  return GetPrimaryDisplayValue(run, prefs);
+}
+
 /**
  * Items needing review, sorted by priority
  */
@@ -315,7 +346,7 @@ export interface NeedsReviewItem {
 /**
  * Get items that need review, prioritized
  */
-export function getNeedsReviewItems(runs: TestRunWithFeedback[]): NeedsReviewItem[] {
+export function GetNeedsReviewItems(runs: TestRunWithFeedback[]): NeedsReviewItem[] {
   const items: NeedsReviewItem[] = [];
 
   runs.forEach(run => {
@@ -349,4 +380,9 @@ export function getNeedsReviewItems(runs: TestRunWithFeedback[]): NeedsReviewIte
   items.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 
   return items;
+}
+
+/** @deprecated Use {@link GetNeedsReviewItems}. */
+export function getNeedsReviewItems(runs: TestRunWithFeedback[]): NeedsReviewItem[] {
+  return GetNeedsReviewItems(runs);
 }

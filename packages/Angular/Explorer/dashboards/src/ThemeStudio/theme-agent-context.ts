@@ -63,7 +63,7 @@ function boundNames(names: string[]): { names: string[]; truncated: boolean; tot
 }
 
 /** Bounded, secret-free context published by the Theme Manager via SetAgentContext. */
-export function buildThemeManagerAgentContext(state: ThemeManagerAgentState): Record<string, unknown> {
+export function BuildThemeManagerAgentContext(state: ThemeManagerAgentState): Record<string, unknown> {
     const applied = state.AppliedThemeID
         ? state.Themes.find((t) => UUIDsEqual(t.ID, state.AppliedThemeID as string)) ?? null
         : null;
@@ -84,8 +84,13 @@ export function buildThemeManagerAgentContext(state: ThemeManagerAgentState): Re
     return context;
 }
 
+/** @deprecated Use {@link BuildThemeManagerAgentContext}. */
+export function buildThemeManagerAgentContext(state: ThemeManagerAgentState): Record<string, unknown> {
+    return BuildThemeManagerAgentContext(state);
+}
+
 /** Bounded, secret-free context published by the Theme Studio via SetAgentContext. */
-export function buildThemeStudioAgentContext(state: ThemeStudioAgentState): Record<string, unknown> {
+export function BuildThemeStudioAgentContext(state: ThemeStudioAgentState): Record<string, unknown> {
     const bounded = boundNames(state.Themes.map((t) => t.Name));
     const failingPairs = (checks: ContrastReport['light']) =>
         checks.filter((c) => !c.passes).map((c) => c.name).slice(0, THEME_NAME_LIST_CAP);
@@ -122,12 +127,17 @@ export function buildThemeStudioAgentContext(state: ThemeStudioAgentState): Reco
     return context;
 }
 
+/** @deprecated Use {@link BuildThemeStudioAgentContext}. */
+export function buildThemeStudioAgentContext(state: ThemeStudioAgentState): Record<string, unknown> {
+    return BuildThemeStudioAgentContext(state);
+}
+
 /**
  * Tolerant theme resolver: exact ID (case-insensitive GUID) → exact name →
  * partial name contains (all case-insensitive). Returns a structured failure
  * listing available names (bounded) on a miss.
  */
-export function resolveThemeByIDOrName(
+export function ResolveThemeByIDOrName(
     themes: ThemeSummaryRow[],
     rawRef: unknown
 ): { ok: true; value: ThemeSummaryRow } | { ok: false; error: string } {
@@ -157,6 +167,14 @@ export function resolveThemeByIDOrName(
         };
     }
     return { ok: false, error: `No theme matches '${ref}'. ${availableNames(themes)}` };
+}
+
+/** @deprecated Use {@link ResolveThemeByIDOrName}. */
+export function resolveThemeByIDOrName(
+    themes: ThemeSummaryRow[],
+    rawRef: unknown
+): { ok: true; value: ThemeSummaryRow } | { ok: false; error: string } {
+    return ResolveThemeByIDOrName(themes, rawRef);
 }
 
 function availableNames(themes: ThemeSummaryRow[]): string {
