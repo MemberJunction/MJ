@@ -19229,6 +19229,9 @@ export class MJAIVendor_ {
     @MaxLength(36)
     CredentialTypeID?: string;
         
+    @Field({nullable: true, description: `Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     CredentialType?: string;
@@ -19255,6 +19258,9 @@ export class CreateMJAIVendorInput {
     @Field({ nullable: true })
     CredentialTypeID: string | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -19276,6 +19282,9 @@ export class UpdateMJAIVendorInput {
 
     @Field({ nullable: true })
     CredentialTypeID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

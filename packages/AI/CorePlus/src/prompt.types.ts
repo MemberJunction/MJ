@@ -397,6 +397,21 @@ export class AIPromptParams extends AIModelRunParams {
   templateMessageRole?: TemplateMessageRole;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
 
   /**
+   * Child prompt templates already rendered by the caller, so `AIPromptRunner.ExecutePrompt` embeds
+   * them instead of rendering `childPrompts` a second time.
+   *
+   * - **Key**: the parent template's placeholder name — the `parentPlaceholder` of the matching
+   *   `ChildPromptParam` in `childPrompts`, e.g. `'agentSpecificPrompt'`.
+   * - **Value**: that child prompt's fully rendered text, exactly as `RenderChildPromptTemplates`
+   *   returns it in `renderedTemplates`.
+   *
+   * Set by the loop agent when it relocates a volatile specialization into the trailing runtime-state
+   * message: it must render the child once to build that message, and this hands the same text to the
+   * parent render. Absent (the normal case), the runner renders `childPrompts` itself.
+   */
+  PreRenderedChildTemplates?: Record<string, string>;
+
+  /**
    * Optional callback for receiving execution progress updates
    * Provides real-time information about the execution progress
    */
