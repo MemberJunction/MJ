@@ -236,6 +236,7 @@ vi.mock('../engines/artifacts', () => ({
 // Import the module under test AFTER mocks
 // ---------------------------------------------------------------------------
 import { ConversationEngine } from '../engines/conversations';
+import { ResourcePermissionEngine } from '../custom/ResourcePermissions/ResourcePermissionEngine';
 import { UserInfo } from '@memberjunction/core';
 
 // ---------------------------------------------------------------------------
@@ -265,6 +266,22 @@ function createMockConversation(overrides: Record<string, unknown> = {}) {
         TransactionGroup: null,
         ...overrides,
     };
+}
+
+/**
+ * Makes the next `GetUserAvailableResources` call report these conversations as shared
+ * with the user.
+ */
+function shareConversations(...conversationIds: string[]) {
+    const grants = conversationIds.map((id) => ({
+        ResourceRecordID: id,
+        SharedByUserID: null,
+        SharedByUser: null,
+        PermissionLevel: 'View',
+    }));
+    vi.mocked(ResourcePermissionEngine.Instance.GetUserAvailableResources).mockReturnValueOnce(
+        grants as unknown as ReturnType<typeof ResourcePermissionEngine.Instance.GetUserAvailableResources>
+    );
 }
 
 function createMockDetail(overrides: Record<string, unknown> = {}) {
@@ -513,6 +530,64 @@ describe('ConversationEngine', () => {
             runViewHook.before = originalRunView;
             runViewHook.firstSeen = false;
         });
+
+        it('filters to owned and shared, unarchived, Global/Both conversations in the environment', async () => {
+            shareConversations('conv-s1');
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser, true);
+
+            const params = runViewParamsLog.filter(p => p['EntityName'] === 'MJ: Conversations').at(-1)!;
+            expect(params['ExtraFilter']).toBe(
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+            );
+        });
+    });
+
+    // ========================================================================
+    // VISIBLE CONVERSATIONS FILTER
+    // ========================================================================
+    describe('GetVisibleConversationsFilter', () => {
+        it('limits rows to conversations the user owns or was granted, like the list', async () => {
+            shareConversations('conv-s1', 'conv-s2');
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
+
+            expect(filter).toBe(
+                "EnvironmentID='env-1' AND (UserID='user-1' OR ID IN ('conv-s1','conv-s2')) AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+            );
+        });
+
+        it('keeps only the ownership clause when nothing is shared with the user', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser);
+
+            expect(filter).toBe(
+                "EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0) AND ApplicationScope IN ('Global', 'Both')"
+            );
+        });
+
+        it('includes app-scoped conversations only when asked to', async () => {
+            shareConversations();
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', contextUser, { includeApplicationScoped: true });
+
+            expect(filter).toBe("EnvironmentID='env-1' AND (UserID='user-1') AND (IsArchived IS NULL OR IsArchived=0)");
+        });
+
+        it('asks the permission engine for the calling user, not a cached one', async () => {
+            shareConversations();
+            const other = new UserInfo();
+            other.ID = 'user-2';
+
+            const filter = await engine.GetVisibleConversationsFilter('env-1', other);
+
+            expect(ResourcePermissionEngine.Instance.GetUserAvailableResources).toHaveBeenLastCalledWith(
+                other,
+                '81D4BC3D-9FEB-EF11-B01A-286B35C04427'
+            );
+            expect(filter).toContain("UserID='user-2'");
+        });
     });
 
     // ========================================================================
@@ -672,6 +747,232 @@ describe('ConversationEngine', () => {
             const found = engine.GetConversation('c1');
             expect(found).toBeDefined();
             expect((found as unknown as Record<string, unknown>)['IsPinned']).toBe(true);
+        });
+    });
+
+    // ========================================================================
+    // BULK MOVE / PIN
+    // ========================================================================
+    describe('MoveMultipleConversationsToProject', () => {
+        async function loadTwo() {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [
+                    createMockConversation({ ID: 'c1', Name: 'First' }),
+                    createMockConversation({ ID: 'c2', Name: 'Second' }),
+                ],
+            });
+            await engine.LoadConversations('env-1', contextUser);
+        }
+
+        it('sets ProjectID on every conversation and reports them all successful', async () => {
+            await loadTwo();
+
+            const result = await engine.MoveMultipleConversationsToProject(['c1', 'c2'], 'proj-1', contextUser);
+
+            expect(result.Successful).toEqual(['c1', 'c2']);
+            expect(result.Failed).toEqual([]);
+            for (const id of ['c1', 'c2']) {
+                const found = engine.GetConversation(id) as unknown as Record<string, unknown>;
+                expect(found['ProjectID']).toBe('proj-1');
+            }
+        });
+
+        it('moves conversations out of every folder when projectId is null', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createMockConversation({ ID: 'c1', ProjectID: 'proj-1' })],
+            });
+            await engine.LoadConversations('env-1', contextUser);
+
+            await engine.MoveMultipleConversationsToProject(['c1'], null, contextUser);
+
+            const found = engine.GetConversation('c1') as unknown as Record<string, unknown>;
+            expect(found['ProjectID']).toBeNull();
+        });
+
+        it('emits the updated list once, not once per conversation', async () => {
+            await loadTwo();
+
+            const emitted: unknown[][] = [];
+            const sub = engine.Conversations$.subscribe(v => emitted.push(v));
+            emitted.length = 0; // drop the replayed current value
+
+            await engine.MoveMultipleConversationsToProject(['c1', 'c2'], 'proj-1', contextUser);
+            sub.unsubscribe();
+
+            expect(emitted).toHaveLength(1);
+        });
+
+        it('reports a failed save without abandoning the rest of the batch', async () => {
+            await loadTwo();
+            const failing = engine.GetConversation('c1') as unknown as { Save: ReturnType<typeof vi.fn>; LatestResult: unknown };
+            failing.Save.mockResolvedValue(false);
+            failing.LatestResult = { Success: false, Message: 'Permission denied' };
+
+            const result = await engine.MoveMultipleConversationsToProject(['c1', 'c2'], 'proj-1', contextUser);
+
+            expect(result.Successful).toEqual(['c2']);
+            expect(result.Failed).toHaveLength(1);
+            expect(result.Failed[0].ID).toBe('c1');
+            expect(result.Failed[0].Name).toBe('First');
+            expect(result.Failed[0].Error).toContain('Permission denied');
+        });
+
+        it('does nothing and emits nothing for an empty id list', async () => {
+            await loadTwo();
+
+            const emitted: unknown[][] = [];
+            const sub = engine.Conversations$.subscribe(v => emitted.push(v));
+            emitted.length = 0;
+
+            const result = await engine.MoveMultipleConversationsToProject([], 'proj-1', contextUser);
+            sub.unsubscribe();
+
+            expect(result).toEqual({ Successful: [], Failed: [] });
+            expect(emitted).toHaveLength(0);
+        });
+    });
+
+    describe('PinMultipleConversations', () => {
+        it('pins every conversation and re-sorts pinned ones to the top', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [
+                    createMockConversation({ ID: 'c1', IsPinned: false, __mj_UpdatedAt: new Date('2025-01-01') }),
+                    createMockConversation({ ID: 'c2', IsPinned: false, __mj_UpdatedAt: new Date('2025-06-01') }),
+                ],
+            });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const result = await engine.PinMultipleConversations(['c1'], true, contextUser);
+
+            expect(result.Successful).toEqual(['c1']);
+            const pinned = engine.GetConversation('c1') as unknown as Record<string, unknown>;
+            expect(pinned['IsPinned']).toBe(true);
+            expect(engine.Conversations[0].ID).toBe('c1');
+        });
+
+        it('unpins every conversation when isPinned is false', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [createMockConversation({ ID: 'c1', IsPinned: true })],
+            });
+            await engine.LoadConversations('env-1', contextUser);
+
+            await engine.PinMultipleConversations(['c1'], false, contextUser);
+
+            const found = engine.GetConversation('c1') as unknown as Record<string, unknown>;
+            expect(found['IsPinned']).toBe(false);
+        });
+
+        it('emits the updated list once for the whole batch', async () => {
+            runViewResultQueue.push({
+                Success: true,
+                Results: [
+                    createMockConversation({ ID: 'c1' }),
+                    createMockConversation({ ID: 'c2' }),
+                ],
+            });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const emitted: unknown[][] = [];
+            const sub = engine.Conversations$.subscribe(v => emitted.push(v));
+            emitted.length = 0;
+
+            await engine.PinMultipleConversations(['c1', 'c2'], true, contextUser);
+            sub.unsubscribe();
+
+            expect(emitted).toHaveLength(1);
+        });
+    });
+
+    // ========================================================================
+    // CAN SHARE CONVERSATION
+    // ========================================================================
+    /** Loads c-mine (owned), c-owner (Owner grant), c-edit (Edit grant) and c-view (View grant). */
+    const loadWithGrants = async () => {
+        vi.mocked(ResourcePermissionEngine.Instance.GetUserAvailableResources).mockReturnValueOnce([
+            { ResourceRecordID: 'c-owner', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'Owner' },
+            { ResourceRecordID: 'c-edit', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'Edit' },
+            { ResourceRecordID: 'c-view', SharedByUserID: null, SharedByUser: null, PermissionLevel: 'View' },
+        ] as unknown as ReturnType<typeof ResourcePermissionEngine.Instance.GetUserAvailableResources>);
+        runViewResultQueue.push({
+            Success: true,
+            Results: [
+                createMockConversation({ ID: 'c-mine', UserID: 'user-1' }),
+                createMockConversation({ ID: 'c-owner', UserID: 'user-2' }),
+                createMockConversation({ ID: 'c-edit', UserID: 'user-2' }),
+                createMockConversation({ ID: 'c-view', UserID: 'user-2' }),
+            ],
+        });
+        await engine.LoadConversations('env-1', contextUser);
+    };
+    const conversation = (id: string) =>
+        engine.GetConversation(id) as unknown as Parameters<typeof engine.CanShareConversation>[0];
+    const saveSpy = (id: string) =>
+        (engine.GetConversation(id) as unknown as { Save: ReturnType<typeof vi.fn> }).Save;
+
+    describe('CanShareConversation', () => {
+        it('lets the owner share, matching the user ID regardless of case', async () => {
+            await loadWithGrants();
+            expect(engine.CanShareConversation(conversation('c-mine'), 'USER-1')).toBe(true);
+        });
+
+        it('lets a person with an Owner-level grant share', async () => {
+            await loadWithGrants();
+            expect(engine.CanShareConversation(conversation('c-owner'), 'user-1')).toBe(true);
+        });
+
+        it('refuses a person with an Edit or View grant', async () => {
+            await loadWithGrants();
+            expect(engine.CanShareConversation(conversation('c-edit'), 'user-1')).toBe(false);
+            expect(engine.CanShareConversation(conversation('c-view'), 'user-1')).toBe(false);
+        });
+    });
+
+    // ========================================================================
+    // CAN EDIT CONVERSATION — who may move and pin
+    // ========================================================================
+    describe('CanEditConversation', () => {
+        it('lets the owner change the conversation', async () => {
+            await loadWithGrants();
+            expect(engine.CanEditConversation(conversation('c-mine'), 'USER-1')).toBe(true);
+        });
+
+        it('lets a person with an Edit or Owner grant change it', async () => {
+            await loadWithGrants();
+            expect(engine.CanEditConversation(conversation('c-edit'), 'user-1')).toBe(true);
+            expect(engine.CanEditConversation(conversation('c-owner'), 'user-1')).toBe(true);
+        });
+
+        it('refuses a person with a View grant', async () => {
+            await loadWithGrants();
+            expect(engine.CanEditConversation(conversation('c-view'), 'user-1')).toBe(false);
+        });
+    });
+
+    describe('Move and pin need Edit access', () => {
+        it('does not pin a conversation shared at View level, and says why', async () => {
+            await loadWithGrants();
+
+            const result = await engine.PinMultipleConversations(['c-view', 'c-edit'], true, contextUser);
+
+            expect(result.Successful).toEqual(['c-edit']);
+            expect(result.Failed.map(f => f.ID)).toEqual(['c-view']);
+            expect(result.Failed[0].Error).toContain('View access');
+            expect(saveSpy('c-view')).not.toHaveBeenCalled();
+            expect((engine.GetConversation('c-view') as unknown as Record<string, unknown>)['IsPinned']).toBe(false);
+        });
+
+        it('does not move a conversation shared at View level', async () => {
+            await loadWithGrants();
+
+            const result = await engine.MoveMultipleConversationsToProject(['c-view', 'c-mine'], 'proj-1', contextUser);
+
+            expect(result.Successful).toEqual(['c-mine']);
+            expect(result.Failed.map(f => f.ID)).toEqual(['c-view']);
+            expect(saveSpy('c-view')).not.toHaveBeenCalled();
         });
     });
 

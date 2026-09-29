@@ -225,6 +225,56 @@ finishes with Success, where 5.x failed with *"No active steps found"*.
 Sub-agent Flow agents need no change on 6.1.3 or later. See the
 [Workflows and Task Graphs Guide](guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md#when-a-flow-agent-runs-in-process-instead).
 
+### Value-list fields are validated on save
+
+Since 6.1.0, `BaseEntity.Validate()` refuses a save when a field whose `ValueListType` is `List`
+holds a value that is not in the field's value list (PR #3972). On 5.x only the database decided,
+and CodeGen emits an `IN (...)` CHECK constraint for some of these fields but not all, so a row
+whose `List` field held a comma-separated multi-select or free-text value saved fine before the
+upgrade and is refused after it:
+
+> *Phase must be one of: Discovery, Design, Build, Test, Launch. Current value is 'Design, Build'*
+
+Nothing warns at upgrade time. The failure shows up later, on the first save of an affected
+row, and it is easy to miss the connection to the upgrade. One consumer found 5 of 15 production
+rows affected on one field.
+
+**Migration:** for each field where existing data legitimately holds values outside the list,
+change the field's `ValueListType` from `List` to `ListOrUserEntry`. The list stays as UI
+suggestions and the validation rung no longer applies (it only applies to `List`):
+
+```sql
+UPDATE [__mj].[EntityField]
+SET    [ValueListType] = 'ListOrUserEntry'
+WHERE  [Entity] = '<entity name>' AND [Name] = '<field name>' AND [ValueListType] = 'List';
+```
+
+then restart MJAPI so the metadata cache picks it up. To find affected rows before you upgrade,
+compare each `List` field's column against its `EntityFieldValue` rows; a scan tool for this is
+tracked for 6.2.
+
+### `ng-filter-builder` renamed two public exports
+
+`@memberjunction/ng-filter-builder` renamed `createEmptyFilter` to `CreateEmptyFilter` and
+`isCompositeFilter` to `IsCompositeFilter` in 6.1.0, to match the PascalCase convention for
+exported functions. Consumers that import the old names fail at build time with *No matching
+export*. Published `@mj-biz-apps/sonar-ng` 0.4.1 to 0.6.0 import the old names, and 0.6.0's peer
+range names a `6.1.0-edge` prerelease, so it accepts 6.1.x stable and breaks only when you build.
+
+**Migration:** rename the imports. If you consume `sonar-ng`, wait for a release built against
+6.1.x stable, or disable its client entries until then.
+
+### Angular peer ranges moved to `^21.2.22`
+
+Every `@memberjunction/ng-*` package peered Angular at exactly `21.1.3` in 5.51.x. On 6.1 they
+peer `^21.2.22`. An app that pins Angular to exactly `21.1.3` gets a hard `ERESOLVE` failure on
+install. Angular 21.2 also rejects asset paths outside the workspace root
+(`../../node_modules/.../assets`), which npm workspaces that install at the root sometimes rely
+on; pnpm-linked apps such as MJ Explorer are not affected.
+
+**Migration:** move your Angular pin to `^21.2.22` and check `angular.json` asset paths that
+climb out of the project.
+
 ### Minor: ElevenLabs realtime session initiation
 
 `ElevenLabsRealtimeSession.SendInitiation` now takes the wire-shaped overrides object rather
@@ -296,7 +346,6 @@ Verified by diffing the `v5.51.0` and `v6.1.0-edge.0` tags directly:
 |---|---|
 | `@memberjunction/core` export surface | **Byte-identical** |
 | `RunView` / `RunViews` / `BaseEntity` / provider interfaces | **Byte-identical** |
-| Angular | 21.1.3 at both tags |
 | Node floor | `>=20.0.0`, unchanged |
 | TypeScript / zod / rxjs | unchanged (`5.9.x` / `^3.25.0` / `^7.8.2`) |
 | Published package inventory | none removed (one added: `@memberjunction/standards`) |

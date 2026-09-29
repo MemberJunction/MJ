@@ -28,7 +28,7 @@ import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
 } from '../../events/chat-events';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
 /**
@@ -1463,12 +1463,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (this.PendingArtifacts.length === 0) {
       return NO_PENDING_ARTIFACTS;
     }
-    // UUIDsEqual, not string equality: these two IDs come from different sources — one from the
+    // Case-insensitive, not string equality: these two IDs come from different sources — one from the
     // conversation query, one off a loaded entity — and SQL Server returns upper-case UUIDs where
     // PostgreSQL returns lower-case. A case-sensitive match left a placeholder sitting above the
     // very card it was waiting for. See guides/UUID_COMPARISON_GUIDE.md.
-    const loaded = this.DisplayArtifacts;
-    return this.PendingArtifacts.filter(p => !loaded.some(a => UUIDsEqual(a.artifact.ID, p.artifactId)));
+    // Normalize into a Set rather than a nested `.some(UUIDsEqual(...))`: UUIDsEqual's `===` fast
+    // path misses whenever the two IDs differ, so each miss allocated two lowercased strings, and
+    // the nested scan paid that n*m times. This getter is re-read on every change-detection pass of
+    // a CheckAlways component, once per message.
+    const loadedIds = new Set(this.DisplayArtifacts.map(a => NormalizeUUID(a.artifact.ID)));
+    return this.PendingArtifacts.filter(p => !loadedIds.has(NormalizeUUID(p.artifactId)));
   }
 
   /** @deprecated Use {@link PendingArtifactPlaceholders}. */

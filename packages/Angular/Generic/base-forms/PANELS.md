@@ -430,6 +430,45 @@ personal row is never dropped by a hide; they switch it off instead.
 The "Manage this form" drawer (`panel-manager/`) shows all of this in one list, grouped as
 yours, shared with you, hidden and fixed.
 
+## Counts and empty sections (`showCount` / `whenEmpty` / `count`)
+
+When a saved record opens, the container fetches the row count of every related section **and**
+the tag / attachment / version toolbar badges in **one** `RunViews` call of `count_only` views
+(the database provider runs an all-`count_only` batch as a single `UNION ALL`). Badges appear
+before any grid loads. Plan: [`/plans/form-section-counts.md`](../../../../plans/form-section-counts.md).
+
+A contribution opts in with three optional keys:
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:People:orders',
+    metadata: {
+        entity: 'MJ_BizApps_Common: People',
+        slot: 'after-related',
+        contributionKey: 'orders',
+        whenEmpty: 'more',              // 'show' (default) | 'hide' | 'more'
+        showCount: true,                // default true — badge the count
+        count: {                        // omit to derive from relatedEntity / relatedJoinField
+            entity: 'MJ_BizApps_Orders: Order Headers',
+            joinFields: ['BillToPersonID', 'ShipToPersonID'],   // ORed
+        },
+    },
+})
+```
+
+- `whenEmpty: 'hide'` — hidden while it has 0 rows. `'more'` — moved into the More folder while
+  empty, back to its normal place once it has rows. The "show empty fields" toolbar toggle reveals
+  everything.
+- A section that had rows this session is never hidden when it empties (no yank), and the open
+  rail item is never hidden.
+- If the panel's `<mj-collapsible-panel SectionKey>` differs from its `contributionKey` (or the
+  key derived from `relatedEntity`), set `sectionKey` so counts land on the section the user sees.
+- A contribution with no count source (`count: false`, no `relatedEntity`) can still report
+  `this.FormComponent.SetSectionRowCount(sectionKey, n)` after it loads; hide/more then applies.
+- Relationships use the same verbs in `EntityRelationship.Configuration.UI` (`whenEmpty`,
+  `showCount`); an entity-wide default lives in `Entity.Configuration.UI.Form`
+  (`RelatedWhenEmpty`, `ShowRelatedCounts`).
+
 ## Implementation files
 
 | File                                                                                  | Role                                                          |

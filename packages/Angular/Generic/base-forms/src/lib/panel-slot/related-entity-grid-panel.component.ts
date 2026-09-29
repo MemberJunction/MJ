@@ -23,6 +23,7 @@ import { SlotDisplayOrder } from './slot-order';
             Variant="related-entity"
             [Form]="FormComponent"
             [FormContext]="FormContext"
+            [BadgeCount]="FormComponent.GetSectionRowCount(Contribution.BakedSectionKey)"
             [DefaultExpanded]="false">
             @if (Record.IsSaved) {
                 <mj-explorer-entity-data-grid

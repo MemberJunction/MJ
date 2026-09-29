@@ -173,6 +173,21 @@ describe('MJDropdownComponent (DOM)', () => {
     expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter roles');
   });
 
+  it('treats punctuation as ending the word too, not just a space', () => {
+    // "Filter: roles" already begins with the word; a space-only check would prefix it anyway and
+    // announce "Filter Filter: roles".
+    const f = render({ Filterable: true, AriaLabel: 'Filter: roles' });
+    open(f);
+    expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter: roles');
+  });
+
+  it('still prefixes a name that merely starts with the same letters', () => {
+    // "Filters" is a different word from "Filter", so the box is "Filter Filters" — correct.
+    const f = render({ Filterable: true, AriaLabel: 'Filters' });
+    open(f);
+    expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-label')).toBe('Filter Filters');
+  });
+
   it("keeps the filter's visible placeholder inside its accessible name", () => {
     // WCAG 2.5.3: a voice-control user says what they SEE. The old placeholder said "Search..."
     // while the accessible name said "Filter …", so "click Search" matched nothing.

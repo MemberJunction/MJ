@@ -9,6 +9,10 @@ import {
     ReadRelationshipInclusion,
     ReadRelationshipJoinFields,
     ReadRelationshipSortKey,
+    ReadRelationshipShowCount,
+    ReadRelationshipWhenEmpty,
+    ResolveContributionShowCount,
+    ResolveContributionWhenEmpty,
     RELATED_ROLE_SCORE,
     ResolveFormLayout,
     ResolveRelatedFormRoles,
@@ -462,5 +466,39 @@ describe('ApplyFormChromeRules', () => {
             Inclusion: 'None',
         }])).toBe('None');
         expect(ContributionInclusionFromRules(parentId, 'addresses', [])).toBeNull();
+    });
+});
+
+describe('ReadRelationshipWhenEmpty / ReadRelationshipShowCount', () => {
+    it('defaults to show + counts on', () => {
+        expect(ReadRelationshipWhenEmpty(null, null)).toBe('show');
+        expect(ReadRelationshipShowCount(null, null)).toBe(true);
+    });
+    it('relationship (L1) wins over the parent entity default (L2)', () => {
+        const entity = JSON.stringify({ UI: { Form: { RelatedWhenEmpty: 'hide', ShowRelatedCounts: false } } });
+        expect(ReadRelationshipWhenEmpty(JSON.stringify({ UI: { whenEmpty: 'more' } }), entity)).toBe('more');
+        expect(ReadRelationshipShowCount({ UI: { showCount: true } }, entity)).toBe(true);
+    });
+    it('falls back to the parent entity default when the relationship is silent', () => {
+        const entity = { UI: { Form: { RelatedWhenEmpty: 'hide' as const, ShowRelatedCounts: false } } };
+        expect(ReadRelationshipWhenEmpty({ UI: { inclusion: 'Primary' } }, entity)).toBe('hide');
+        expect(ReadRelationshipShowCount({ UI: {} }, entity)).toBe(false);
+    });
+    it('ignores invalid values', () => {
+        expect(ReadRelationshipWhenEmpty('{"UI":{"whenEmpty":"sometimes"}}', '{bad json')).toBe('show');
+    });
+});
+
+describe('ResolveContributionWhenEmpty / ResolveContributionShowCount', () => {
+    const entity = { UI: { Form: { RelatedWhenEmpty: 'more' as const, ShowRelatedCounts: false } } };
+    it('registration value wins', () => {
+        expect(ResolveContributionWhenEmpty('hide', entity)).toBe('hide');
+        expect(ResolveContributionShowCount(true, entity)).toBe(true);
+    });
+    it('falls back to the entity default, then the built-in default', () => {
+        expect(ResolveContributionWhenEmpty(undefined, entity)).toBe('more');
+        expect(ResolveContributionShowCount(undefined, entity)).toBe(false);
+        expect(ResolveContributionWhenEmpty(undefined, null)).toBe('show');
+        expect(ResolveContributionShowCount(undefined, null)).toBe(true);
     });
 });

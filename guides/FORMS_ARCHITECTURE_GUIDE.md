@@ -563,6 +563,29 @@ when present). Users reorder first-class items by dragging the rail grip
 (or Manage Sections / reset in the toolbar). The centered / full-width
 toolbar toggle still applies.
 
+#### Section counts and empty sections
+
+When a saved record opens, the container prefetches **every** related section's row count plus the
+tag / attachment / version toolbar badges in **one** `RunViews` call of `count_only` views. The
+database provider runs an all-`count_only` batch as a single `UNION ALL` statement, with each view
+still passing through the normal RunView security path (CanRead, RLS, saved-view filters). The call
+is fire-and-forget, so it lands alongside form render; unsaved records skip it. Grid loads — including
+a manual grid refresh — keep counts current afterwards.
+
+Two metadata keys drive it, resolved **relationship / contribution (L1) → entity default (L2) →
+built-in default**:
+
+| Key | Where | Default | Effect |
+|---|---|---|---|
+| `showCount` | `EntityRelationship.Configuration.UI`, contribution metadata; entity default `UI.Form.ShowRelatedCounts` | `true` | Prefetch + badge the count. `false` for known-expensive related entities |
+| `whenEmpty` | same; entity default `UI.Form.RelatedWhenEmpty` | `'show'` | `'hide'` — hidden at 0 rows. `'more'` — moved into More at 0 rows, back when it has rows |
+
+Rules: layout (accordion vs left-nav) is decided **before** empty sections are removed, so counts
+arriving never flip it. A `'hide'` section is held off the rail until counts arrive (no show-then-yank);
+a section that had rows this session, or the open rail item, is never hidden; a failed count fails
+open. The "show empty fields" toolbar toggle reveals everything. The collapsed More folder shows the
+sum of its children's counts. Plan: [`/plans/form-section-counts.md`](../plans/form-section-counts.md).
+
 #### Section indicators — unsaved edits and invalid fields, per section
 
 A multi-section form says **which** section holds an edit or a failure, so a user does

@@ -71,4 +71,25 @@ export interface IEntityRelationshipUIConfiguration {
      * after lead contributions such as Overview). Omit = 0.
      */
     sortKey?: number;
+
+    /**
+     * What the parent form does with this section when it has 0 rows.
+     * Counts are fetched in one batched round trip when the record loads.
+     *
+     * - `'show'` — always show (use when users create the first row here).
+     * - `'hide'` — hide while empty. The "show empty fields" toolbar toggle reveals it.
+     * - `'more'` — move into the More folder while empty; returns to its normal
+     *   placement once it has rows.
+     *
+     * Omit = inherit the parent entity's `UI.Form.RelatedWhenEmpty`, else `'show'`.
+     */
+    whenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Prefetch this section's row count when the record loads and show it as a
+     * badge. Set `false` for known-expensive related entities.
+     *
+     * Omit = inherit the parent entity's `UI.Form.ShowRelatedCounts`, else `true`.
+     */
+    showCount?: boolean;
 }
