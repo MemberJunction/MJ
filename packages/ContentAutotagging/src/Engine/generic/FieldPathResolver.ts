@@ -1,5 +1,5 @@
 import { BaseEngineRegistry, BaseEntity, EntityInfo, IMetadataProvider, IRunViewProvider, LogError, UserInfo } from '@memberjunction/core';
-import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Resolves per-record values for field paths rooted at a batch of records — the generic
@@ -182,10 +182,10 @@ export class FieldPathResolver {
      * never reached.
      *
      * A `BaseEngine` full-set cache is complete only as of the moment it loaded. It refreshes on
-     * local entity saves, and nothing tells it about a row another PROCESS inserted. So on any
-     * deployment that writes through a second process — a worker, an importer, a sibling API
-     * instance — every record created after the reader booted resolves to nothing for the lifetime
-     * of that process.
+     * local entity saves, but unless Redis cross-server cache sync is configured, nothing tells it
+     * about a row another PROCESS inserted. So on any deployment that writes through a second
+     * process — a worker, an importer, a sibling API instance — every record created after the
+     * reader booted resolves to nothing for the lifetime of that process.
      *
      * That is not a cosmetic miss. This resolver feeds `GetSourceRecordFieldPaths`, whose values
      * route a record to its tenant partition, and a driver that requires one is entitled to fail
@@ -196,6 +196,12 @@ export class FieldPathResolver {
      *
      * The fast path is unchanged when the cache genuinely covers the batch; only the keys it did
      * not produce are queried, so a cold row costs one extra `IN (...)` rather than a full reload.
+     *
+     * Expected cost, not a regression: for an engine-cached IS-A CHILD entity, most keys are
+     * legitimately absent (with disjoint subtypes a record has a row in at most one child), so each
+     * such key now counts as missing and costs one `IN (...)` per child per batch where it used to
+     * cost nothing. It is bounded by the per-pass `recordCache` (a key is fetched at most once per
+     * resolver), and only engine-cached child entities pay it at all.
      */
     private async loadRowsByPK(entity: EntityInfo, pkValues: string[]): Promise<Record<string, unknown>[] | null> {
         if (pkValues.length === 0) return [];
@@ -214,7 +220,7 @@ export class FieldPathResolver {
         const missing = pkValues.filter(v => !served.has(this.cacheKey(v)));
         if (missing.length === 0) return cached;
 
-        const idList = missing.map(v => `'${v.replace(/'/g, "''")}'`).join(',');
+        const idList = missing.map(v => `'${EscapeSQLString(v)}'`).join(',');
         const rv = this.provider as unknown as IRunViewProvider;
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: entity.Name,

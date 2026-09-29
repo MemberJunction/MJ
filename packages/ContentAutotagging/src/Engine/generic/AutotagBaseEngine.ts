@@ -336,6 +336,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             batchNum++;
             anyItemsProcessed = true;
 
+            // The source's classification config and the type's model / tag limits are read from the
+            // KnowledgeHub cache per item; catch a source or type created after it loaded.
+            await this.ensureItemMetadataCached(batch, contextUser);
+
             // Rate limit before each batch of parallel LLM calls.
             await this.LLMRateLimiter.Acquire();
 
@@ -2710,14 +2714,22 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     /**
      * Load content source and content type records for all unique source/type IDs
      * referenced by the given items. Returns maps keyed by normalized ID.
+     *
+     * Every vectorization entry point (VectorizeContentItems, PurgeDeletedChunks,
+     * EmbedPendingChunks, vector dedup) builds its maps here, so this is where a stale
+     * KnowledgeHub cache is caught — see {@link ensureItemMetadataCached}. The per-item storage
+     * config ({@link resolveItemVectorStorageConfig}) reads the same cache later in the pass, so
+     * it sees the reloaded rows too.
      */
     private async loadContentSourceAndTypeMaps(
         items: MJContentItemEntity[],
-        _contextUser: UserInfo
+        contextUser: UserInfo
     ): Promise<{
         sourceMap: Map<string, Record<string, unknown>>;
         typeMap: Map<string, Record<string, unknown>>;
     }> {
+        await this.ensureItemMetadataCached(items, contextUser);
+
         const sourceIdSet = new Set(items.map(i => NormalizeUUID(i.ContentSourceID)));
         const typeIdSet = new Set(items.map(i => NormalizeUUID(i.ContentTypeID)));
 
@@ -2737,6 +2749,59 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
 
         return { sourceMap, typeMap };
+    }
+
+    /**
+     * Make sure the KnowledgeHub cache holds every content source and content type these items
+     * reference, reloading it ONCE when it does not.
+     *
+     * ── A MISS HERE MEANS THE CACHE IS STALE ────────────────────────────────────────────────────
+     * Both ids are required foreign keys on the item, so the rows exist; a miss means the cache
+     * loaded before they did. That is the normal state of a long-running worker: unless Redis
+     * cross-server cache sync is configured, nothing tells this process about a source another
+     * process created after it booted. And the source row is not decoration. It carries the item's
+     * routing (its EmbeddingModelID / VectorIndexID override) and its storage config
+     * (VectorIDStrategy, ChunkTextStorage, VectorMetadata, VectorEntityName). Read from a stale
+     * cache, every one of those silently falls back to the content type's values or the hard-coded
+     * defaults, so the item is embedded into the wrong index with the wrong vector ids until the
+     * worker restarts, and its later re-runs then write different ids.
+     *
+     * One `Config(true)` reloads all six KnowledgeHub sets in a single batched, cache-bypassing
+     * round trip. It runs only on a miss, so a warm cache costs nothing beyond the set lookups, and
+     * at most once per call however many items miss.
+     *
+     * Never makes things worse: a failed reload is logged and the pass continues on whatever the
+     * cache holds, which is exactly the pre-reload behavior (content type → default cascade).
+     */
+    private async ensureItemMetadataCached(items: MJContentItemEntity[], contextUser: UserInfo): Promise<void> {
+        const uncached = this.findUncachedItemMetadata(items);
+        if (uncached.length === 0) return;
+
+        LogStatus(`[Autotag] KnowledgeHub cache is missing ${uncached.length} row(s) these items reference (created after it loaded) — reloading it once: ${uncached.join(', ')}`);
+        try {
+            await this.khEngine.Config(true, contextUser, this.ProviderToUse);
+        } catch (e) {
+            LogError(`[Autotag] KnowledgeHub cache reload failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+
+        const stillUncached = this.findUncachedItemMetadata(items);
+        if (stillUncached.length > 0) {
+            LogError(`[Autotag] ${stillUncached.length} row(s) still absent from the KnowledgeHub cache after a reload: ${stillUncached.join(', ')} — items referencing them fall back to their content type / default configuration`);
+        }
+    }
+
+    /** The distinct content source / content type ids these items reference that the KnowledgeHub cache does not hold. */
+    private findUncachedItemMetadata(items: MJContentItemEntity[]): string[] {
+        const uncached = new Set<string>();
+        for (const item of items) {
+            if (item.ContentSourceID && !this.khEngine.GetContentSourceByID(item.ContentSourceID)) {
+                uncached.add(`content source ${NormalizeUUID(item.ContentSourceID)}`);
+            }
+            if (item.ContentTypeID && !this.khEngine.GetContentTypeByID(item.ContentTypeID)) {
+                uncached.add(`content type ${NormalizeUUID(item.ContentTypeID)}`);
+            }
+        }
+        return [...uncached];
     }
 
     /**
