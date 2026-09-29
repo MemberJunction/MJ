@@ -87,4 +87,16 @@ describe('parseRerankerConfiguration', () => {
             expect(result!.enabled).toBe(true);
         });
     });
+
+    describe('rerankExamples', () => {
+        it('should leave rerankExamples unset, so examples are not reranked, when the config omits it', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1' }));
+            expect(result?.rerankExamples).toBeUndefined();
+        });
+
+        it('should pass rerankExamples through when it is set', () => {
+            const result = ParseRerankerConfiguration(JSON.stringify({ rerankerModelId: 'model-1', rerankExamples: true }));
+            expect(result?.rerankExamples).toBe(true);
+        });
+    });
 });

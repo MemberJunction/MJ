@@ -132,6 +132,8 @@ export class AgentMemoryContextBuilder {
                 strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
                 maxExamples: agent.MaxExamplesToInject || 3,
                 contextUser: contextUser!,
+                // Examples are reranked only when the configuration sets rerankExamples
+                rerankerConfig,
                 primaryScopeEntityId,
                 primaryScopeRecordId,
                 secondaryScopes,

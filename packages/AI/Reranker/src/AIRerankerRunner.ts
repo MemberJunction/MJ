@@ -17,9 +17,10 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import { BaseModelRunner } from '@memberjunction/ai-prompts';
 import type { FailoverAttempt, ModelVendorCandidate } from '@memberjunction/ai-prompts';
+import { IsPromptBackedReranker } from './prompt-backed-rerankers';
 import type { AIRerankParams, AIRerankRunResult } from './rerank-runner.types';
 
-/** The driver class of the prompt-backed reranker, which needs no API key of its own. */
+/** The driver class of the seeded LLM reranker model, which has no model-vendor row to name it. */
 const LLM_RERANKER_DRIVER = 'LLMReranker';
 
 /** The prompt whose bindings choose the reranker when the caller names none. */
@@ -70,8 +71,8 @@ interface DriverResolution {
  * The configuration carrier is an `MJ: AI Prompts` row, `Default Rerank` unless the caller names
  * another. It makes no chat call: the runner reads only its model bindings and failover settings.
  * Drivers are built through the ClassFactory with the same two branches as
- * `RerankerService.GetReranker`: the prompt-backed `LLMReranker`, and native drivers such as
- * `CohereReranker`.
+ * `RerankerService.GetReranker`: the prompt-backed `LLMReranker` and `DecisionReranker`, and native
+ * drivers such as `CohereReranker`.
  */
 export class AIRerankerRunner extends BaseModelRunner {
     /** Reranks run only on `Reranker`-type models. */
@@ -84,11 +85,11 @@ export class AIRerankerRunner extends BaseModelRunner {
     }
 
     /**
-     * Whether a driver needs its own API key. `LLMReranker` does not: it runs an MJ chat prompt whose
-     * models resolve their own credentials.
+     * Whether a driver needs its own API key. A prompt-backed driver (`LLMReranker`, `DecisionReranker`)
+     * does not: it runs an MJ prompt whose models resolve their own credentials.
      */
     protected DriverRequiresCredentials(driverClass: string): boolean {
-        return driverClass !== LLM_RERANKER_DRIVER;
+        return !IsPromptBackedReranker(driverClass);
     }
 
     /** Treats a driver that needs no credentials as always available. */
@@ -310,17 +311,17 @@ export class AIRerankerRunner extends BaseModelRunner {
 
     /**
      * Builds the candidate's driver through the ClassFactory, with the same two branches as
-     * `RerankerService.GetReranker`. `LLMReranker` takes no key, the model's `APIName`, the ID of the
-     * chat prompt it runs and the context user; every other driver takes its key and API name.
-     * Returns an error message when the driver cannot be built.
+     * `RerankerService.GetReranker`. A prompt-backed driver (`LLMReranker`, `DecisionReranker`) takes
+     * no key, the model's `APIName`, the ID of the prompt it runs and the context user; every other
+     * driver takes its key and API name. Returns an error message when the driver cannot be built.
      */
     private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIRerankParams): BaseReranker | string {
         const factory = MJGlobal.Instance.ClassFactory;
         let resolution: DriverResolution;
-        if (candidate.driverClass === LLM_RERANKER_DRIVER) {
+        if (IsPromptBackedReranker(candidate.driverClass)) {
             const chatPromptID = params.ChatPromptID ?? this.findPromptByName(candidate.apiName)?.ID;
             if (!chatPromptID) {
-                return `LLMReranker's chat prompt '${candidate.apiName ?? ''}' was not found`;
+                return `${candidate.driverClass}'s chat prompt '${candidate.apiName ?? ''}' was not found`;
             }
             resolution = factory.TryCreateInstance<BaseReranker>(
                 BaseReranker, candidate.driverClass, '', candidate.model.APIName ?? '', chatPromptID, params.ContextUser

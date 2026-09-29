@@ -59,6 +59,8 @@ vi.mock('../AIRerankerRunner', () => ({
 import { RerankerService, RerankObservabilityOptions } from '../RerankerService';
 import { RerankerConfiguration } from '../config.types';
 import { GetGlobalObjectStore } from '@memberjunction/global';
+import type { MJAIAgentExampleEntity } from '@memberjunction/core-entities';
+import type { ExampleMatchResult } from '@memberjunction/aiengine';
 
 const mockUser = { ID: 'user-1', Name: 'Test' } as never;
 
@@ -306,4 +308,63 @@ describe('RerankerService', () => {
             delete process.env['AI_VENDOR_API_KEY__TD'];
         });
     });
+
+    describe('RerankExamples', () => {
+        const reset = exampleMatch({ ID: 'e1', ExampleInput: 'How do I reset my password?', ExampleOutput: 'Use the reset link.' }, 0.8);
+        const invoice = exampleMatch({ ID: 'e2', ExampleInput: 'Where is my invoice?', ExampleOutput: 'Under Billing.' }, 0.7);
+
+        it('returns no examples, and makes no rerank call, when there are none', async () => {
+            expect(await RerankerService.Instance.RerankExamples([], 'query', makeConfig(), mockUser)).toEqual([]);
+            expect(mockRunRerank).not.toHaveBeenCalled();
+        });
+
+        it("reranks each example's input and output with the configured model and prompt, keeping those at or above the threshold", async () => {
+            mockRunRerank.mockResolvedValue({
+                Success: true,
+                ExecutionTimeMS: 1,
+                Response: {
+                    success: true,
+                    durationMs: 1,
+                    results: [
+                        { id: 'e2', relevanceScore: 0.9, document: { id: 'e2', text: 'invoice' }, rank: 0 },
+                        { id: 'e1', relevanceScore: 0.3, document: { id: 'e1', text: 'reset' }, rank: 1 }
+                    ]
+                }
+            });
+
+            const result = await RerankerService.Instance.RerankExamples(
+                [reset, invoice], 'Where can I find my invoice?', makeConfig({ rerankPromptID: 'prompt-9', minRelevanceThreshold: 0.5 }), mockUser
+            );
+
+            expect(mockRunRerank).toHaveBeenCalledWith({
+                query: 'Where can I find my invoice?',
+                documents: [
+                    { id: 'e1', text: 'Input: How do I reset my password?\nOutput: Use the reset link.', originalScore: 0.8 },
+                    { id: 'e2', text: 'Input: Where is my invoice?\nOutput: Under Billing.', originalScore: 0.7 }
+                ],
+                topK: 2,
+                ContextUser: mockUser,
+                ModelID: 'model-1',
+                ChatPromptID: 'prompt-9',
+                AgentRunID: undefined
+            });
+            expect(result).toEqual([{ example: invoice.example, similarity: 0.9 }]);
+        });
+
+        it('throws when reranking fails, so the caller decides whether to fall back', async () => {
+            mockRunRerank.mockResolvedValue({ Success: false, ErrorMessage: 'Decision model is down', ExecutionTimeMS: 1 });
+
+            await expect(
+                RerankerService.Instance.RerankExamples([reset], 'query', makeConfig({ fallbackOnError: true }), mockUser)
+            ).rejects.toThrow('Decision model is down');
+        });
+    });
 });
+
+/** The example fields RerankExamples reads: all a test has to supply. */
+type ExampleFields = Pick<MJAIAgentExampleEntity, 'ID' | 'ExampleInput' | 'ExampleOutput'>;
+
+/** A vector search match for an example, through the seam onto the full entity RerankExamples is declared to take. */
+function exampleMatch(fields: ExampleFields, similarity: number): ExampleMatchResult {
+    return { example: fields as MJAIAgentExampleEntity, similarity };
+}

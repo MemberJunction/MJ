@@ -28,8 +28,9 @@ export interface AIRerankParams extends RerankParams {
     PromptID?: string;
 
     /**
-     * The chat prompt an `LLMReranker` candidate runs, in place of the one its model-vendor `APIName`
-     * names. `RerankerService.RerankNotes` passes `RerankerConfiguration.rerankPromptID` here.
+     * The prompt a prompt-backed candidate runs, in place of the one its model-vendor `APIName` names:
+     * the chat prompt of an `LLMReranker`, or the decision prompt of a `DecisionReranker`.
+     * `RerankerService.RerankNotes` passes `RerankerConfiguration.rerankPromptID` here.
      */
     ChatPromptID?: string;
 

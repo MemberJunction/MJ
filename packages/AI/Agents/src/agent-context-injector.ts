@@ -1,7 +1,7 @@
 import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { ToEpochMs, UUIDsEqual } from "@memberjunction/global";
 import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
-import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata } from "@memberjunction/aiengine";
+import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata, ExampleMatchResult } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 import { RerankerConfiguration, RerankerService } from "@memberjunction/ai-reranker";
 
@@ -77,6 +77,12 @@ export interface GetExamplesParams {
      * Defines per-dimension inheritance modes and validation rules.
      */
     secondaryScopeConfig?: SecondaryScopeConfig | null;
+    /**
+     * Optional reranker configuration. Examples are reranked only when it is enabled and its
+     * `rerankExamples` flag is true.
+     */
+    // case-violation-ok-legacy-back-compat: matches GetNotesParams.rerankerConfig and this interface's other camelCase members
+    rerankerConfig?: RerankerConfiguration | null;
 }
 
 /**
@@ -194,9 +200,22 @@ export class AgentContextInjector {
     }
 
     /**
-     * Get examples using semantic search via AIEngine
+     * Get examples using semantic search via AIEngine.
+     * Supports an optional reranking stage, off unless the reranker configuration sets `rerankExamples`.
+     *
+     * When example reranking is on:
+     * 1. Fetch N * retrievalMultiplier candidates via vector search
+     * 2. Rerank candidates with the same reranker and threshold as notes
+     * 3. Return top N reranked results, falling back as config.fallbackOnError says
      */
     private async getExamplesViaSemanticSearch(params: GetExamplesParams): Promise<MJAIAgentExampleEntity[]> {
+        const config = this.exampleRerankerConfig(params);
+
+        // Calculate candidates to fetch (more if reranking examples)
+        const fetchCount = config
+            ? params.maxExamples * config.retrievalMultiplier
+            : params.maxExamples;
+
         // Build scope pre-filter so FindNearest only returns scope-valid candidates
         const scopePreFilter = this.buildScopePreFilter<ExampleEmbeddingMetadata>(params, m => m.exampleEntity);
 
@@ -205,13 +224,49 @@ export class AgentContextInjector {
             params.agentId,
             params.userId,
             params.companyId,
-            params.maxExamples,
+            fetchCount,
             0.5,
             scopePreFilter
         );
 
-        // Return entities directly from vector service (no database round-trip)
-        return matches.map(m => m.example);
+        if (!config) {
+            // Return entities directly from vector service (no database round-trip)
+            return matches.map(m => m.example);
+        }
+        return this.rerankExamples(matches, params, config);
+    }
+
+    /**
+     * The reranker configuration for examples: the agent's configuration when it is enabled and sets
+     * `rerankExamples` to true, otherwise null.
+     */
+    private exampleRerankerConfig(params: GetExamplesParams): RerankerConfiguration | null {
+        const config = params.rerankerConfig;
+        return config?.enabled && config.rerankExamples === true ? config : null;
+    }
+
+    /**
+     * Stage 2 for examples: reranks the vector search candidates and returns the top N. On failure, falls
+     * back to the vector search results when config.fallbackOnError is true, and throws otherwise.
+     */
+    private async rerankExamples(
+        matches: ExampleMatchResult[],
+        params: GetExamplesParams,
+        config: RerankerConfiguration
+    ): Promise<MJAIAgentExampleEntity[]> {
+        LogStatus(`AgentContextInjector: Reranking ${matches.length} example candidates to top ${params.maxExamples}`);
+        try {
+            const reranked = await RerankerService.Instance.RerankExamples(matches, params.currentInput!, config, params.contextUser);
+            return reranked.slice(0, params.maxExamples).map(m => m.example);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (config.fallbackOnError) {
+                LogStatus(`AgentContextInjector: Example reranking failed (${message}), falling back to vector search results`);
+                return matches.slice(0, params.maxExamples).map(m => m.example);
+            }
+            LogError(`AgentContextInjector: Example reranking failed and fallbackOnError is false: ${message}`);
+            throw error;
+        }
     }
 
     /**

@@ -39,8 +39,9 @@ export interface RerankerConfiguration {
     minRelevanceThreshold: number;
 
     /**
-     * Optional: AIPrompt ID for LLM-based reranking.
-     * Only used when the reranker's DriverClass is 'LLMReranker'.
+     * Optional: AIPrompt ID for prompt-backed reranking.
+     * Only used when the reranker's DriverClass is 'LLMReranker' (the chat prompt it runs) or
+     * 'DecisionReranker' (the decision prompt it asks, 'Default Decision' otherwise).
      */
     rerankPromptID?: string;
 
@@ -57,6 +58,16 @@ export interface RerankerConfiguration {
      * Default: true
      */
     fallbackOnError: boolean;
+
+    /**
+     * Optional: whether examples get a reranking stage too.
+     * When true, example retrieval fetches maxExamples * retrievalMultiplier candidates and reranks
+     * them with the same reranker, threshold and fallbackOnError as notes.
+     * When absent or false, examples use vector search results directly.
+     * Default: false
+     */
+    // case-violation-ok-legacy-back-compat: a key of the camelCase JSON stored in AIAgent.RerankerConfiguration
+    rerankExamples?: boolean;
 }
 
 /**
@@ -93,7 +104,8 @@ export function ParseRerankerConfiguration(configJson: string | null | undefined
             minRelevanceThreshold: parsed.minRelevanceThreshold ?? 0.5,
             rerankPromptID: parsed.rerankPromptID,
             contextFields: parsed.contextFields ?? [],
-            fallbackOnError: parsed.fallbackOnError ?? true
+            fallbackOnError: parsed.fallbackOnError ?? true,
+            rerankExamples: parsed.rerankExamples
         };
     } catch {
         return null;

@@ -10,12 +10,13 @@
 
 import { IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, BaseSingleton } from '@memberjunction/global';
-import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
-import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
+import { AIEngine, ExampleMatchResult, NoteMatchResult } from '@memberjunction/aiengine';
+import { MJAIAgentExampleEntity, MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { BaseReranker, RerankDocument, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, ParseRerankerConfiguration, parseRerankerConfiguration } from './config.types';
 import { AIRerankerRunner } from './AIRerankerRunner';
+import { IsPromptBackedReranker } from './prompt-backed-rerankers';
 import type { AIRerankRunResult } from './rerank-runner.types';
 
 // Re-export config types for convenience
@@ -136,7 +137,7 @@ export class RerankerService extends BaseSingleton<RerankerService> {
      *
      * @param modelID - ID of the AIModel with type='Reranker'
      * @param contextUser - User context for operations
-     * @param promptID - Optional prompt ID for LLM-based rerankers
+     * @param promptID - Prompt ID for prompt-backed rerankers (`LLMReranker`, `DecisionReranker`), which require one
      * @returns Reranker instance or null if unavailable
      */
     public async GetReranker(
@@ -174,16 +175,16 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         try {
             let reranker: BaseReranker | null = null;
 
-            if (driverClass === 'LLMReranker') {
-                // LLM reranker needs promptID and contextUser
+            if (IsPromptBackedReranker(driverClass)) {
+                // A prompt-backed reranker (LLMReranker, DecisionReranker) needs promptID and contextUser
                 if (!promptID) {
-                    LogError(`RerankerService: LLMReranker requires a promptID`);
+                    LogError(`RerankerService: ${driverClass} requires a promptID`);
                     return null;
                 }
                 reranker = MJGlobal.Instance.ClassFactory.CreateInstance<BaseReranker>(
                     BaseReranker,
                     driverClass,
-                    '', // No API key for LLM reranker
+                    '', // No API key for a prompt-backed reranker
                     apiName || model.APIName || '',
                     promptID,
                     contextUser
@@ -407,6 +408,20 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         }));
 
         LogStatus(`RerankerService: Reranking ${documents.length} notes`);
+        return this.rerankDocuments(documents, query, config, contextUser, options?.agentRunID);
+    }
+
+    /**
+     * Reranks documents through {@link AIRerankerRunner}, pinned to the configured model and its
+     * configured prompt. Asks for every document back, since the caller filters by threshold.
+     */
+    private rerankDocuments(
+        documents: RerankDocument[],
+        query: string,
+        config: RerankerConfiguration,
+        contextUser: UserInfo,
+        agentRunID?: string
+    ): Promise<AIRerankRunResult> {
         return new AIRerankerRunner().RunRerank({
             query,
             documents,
@@ -414,8 +429,61 @@ export class RerankerService extends BaseSingleton<RerankerService> {
             ContextUser: contextUser,
             ModelID: config.rerankerModelId,
             ChatPromptID: config.rerankPromptID,
-            AgentRunID: options?.agentRunID
+            AgentRunID: agentRunID
         });
+    }
+
+    /**
+     * Rerank agent examples using the configured reranker: the examples stage that
+     * `RerankerConfiguration.rerankExamples` turns on. It uses the same model, prompt and
+     * `minRelevanceThreshold` as {@link RerankNotes}. Each document is the example's input and
+     * output. It records no run step.
+     *
+     * Like RerankNotes, this method throws when reranking fails. The calling code decides, from
+     * `config.fallbackOnError`, whether to fall back to the vector search results.
+     *
+     * @param examples - Vector search results to rerank
+     * @param query - User query for relevance scoring
+     * @param config - Reranker configuration from agent
+     * @param contextUser - User context for operations
+     * @returns The examples at or above the threshold, most relevant first, each with its rerank score as `similarity`
+     * @throws Error if reranking fails
+     */
+    public async RerankExamples(
+        examples: ExampleMatchResult[],
+        query: string,
+        config: RerankerConfiguration,
+        contextUser: UserInfo
+    ): Promise<ExampleMatchResult[]> {
+        if (examples.length === 0) {
+            return examples;
+        }
+        const documents: RerankDocument[] = examples.map(match => ({
+            id: match.example.ID,
+            text: this.buildExampleText(match.example),
+            originalScore: match.similarity
+        }));
+
+        LogStatus(`RerankerService: Reranking ${documents.length} examples`);
+        const run = await this.rerankDocuments(documents, query, config, contextUser);
+        if (!run.Success || !run.Response) {
+            throw new Error(run.ErrorMessage || 'Reranking failed');
+        }
+
+        const byID = new Map(examples.map(match => [match.example.ID, match.example]));
+        const reranked = run.Response.results
+            .filter(r => r.relevanceScore >= config.minRelevanceThreshold)
+            .flatMap(r => {
+                const example = byID.get(r.id);
+                return example ? [{ example, similarity: r.relevanceScore }] : [];
+            });
+        LogStatus(`RerankerService: Reranked to ${reranked.length} examples (threshold: ${config.minRelevanceThreshold})`);
+        return reranked;
+    }
+
+    /** Build document text from an example entity for reranking: its input and its output. */
+    private buildExampleText(example: MJAIAgentExampleEntity): string {
+        return `Input: ${example.ExampleInput}\nOutput: ${example.ExampleOutput}`;
     }
 
     /** @deprecated Use {@link RerankNotes}. */

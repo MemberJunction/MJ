@@ -7,6 +7,7 @@
  * Key Components:
  * - RerankerService: Singleton service for managing reranker instances
  * - LLMReranker: LLM-based reranker using AI Prompts system
+ * - DecisionReranker: Decision-based reranker, one Likelihood question per document
  * - RerankerConfiguration: Configuration types for agent-level settings
  *
  * Usage:
@@ -53,6 +54,9 @@ export {
     LLMReranker,
     CreateLLMReranker, createLLMReranker
 } from './LLMReranker';
+
+// Decision Reranker
+export { DecisionReranker } from './DecisionReranker';
 
 // Runner
 export { AIRerankerRunner } from './AIRerankerRunner';
