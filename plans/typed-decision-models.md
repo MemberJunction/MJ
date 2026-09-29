@@ -1043,12 +1043,11 @@ vendor claims.
 
 > **Status, 2026-09-29: measured.** The results and the recommendation are in
 > `typed-decision-phase2-results.md`. In short:
-> - **Jev** (calibrated balanced accuracy 0.937) beats **LLM Decision** (0.861), and is faster and
->   cheaper. Keep Jev as the primary, with LLM Decision as the failover.
+> - **Jev** (calibrated balanced accuracy 0.928, 301 points) beats **LLM Decision** (0.861), and is
+>   faster and cheaper. Keep Jev as the primary, with LLM Decision as the failover.
 > - Raw probabilities must be calibrated, per model.
 > - Conversation routing's thresholds are now set from data (#4876).
-> - The harness is #4875. Jev's sample was cut to 82 points when the OpenRouter credit ran out;
->   rerun it in full.
+> - The harness is #4875.
 
 ### Task 2.1 — Add a decision arm to the eval harness
 
