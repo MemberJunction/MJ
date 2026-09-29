@@ -101,18 +101,20 @@ interface AgentSpec {
     ID?: string;                    // Leave empty "" for new steps
     Name: string;                   // Step name (REQUIRED)
     Description?: string;           // What the step does
-    StepType: 'Prompt' | 'Action' | 'Sub-Agent' | 'ForEach' | 'While';  // REQUIRED
+    StepType: 'Prompt' | 'Action' | 'Sub-Agent' | 'ForEach' | 'While' | 'Decision';  // REQUIRED
     StartingStep: boolean;          // Is this the first step? (REQUIRED)
     ActionID?: string;              // For Action type steps
     SubAgentID?: string;            // For Sub-Agent type steps
-    PromptID?: string;              // For Prompt type steps (can use existing prompt)
+    PromptID?: string;              // For Prompt type steps (can use existing prompt), or optional custom prompt for Decision steps
     PromptText?: string;            // Or inline prompt text for Prompt type steps
     ActionInputMapping?: string | object;  // JSON string OR object: maps payload/static → action inputs
     ActionOutputMapping?: string | object; // JSON string OR object: maps action outputs → payload paths
 
-    // LOOP FIELDS - Only for ForEach / While steps (see "Loop Steps" below)
+    // LOOP & DECISION FIELDS
+    // For ForEach / While steps: see "Loop Steps" below
+    // For Decision steps: see "Decision Steps" below
     LoopBodyType?: 'Action' | 'Prompt' | 'Sub-Agent';  // REQUIRED for loops: what runs each pass
-    Configuration?: string | object;                    // REQUIRED for loops: the loop's bounds
+    Configuration?: string | object;                    // REQUIRED for loops & decisions: bounds or decision config
   }>;
 
   Paths?: Array<{
@@ -190,6 +192,98 @@ Two fields make it a loop:
    step, not a chain of near-identical steps.
 5. Paths in and out of a loop step work exactly as they do for any other step — the loop is one node
    in the flow, however many times its body runs.
+
+## Decision Steps — Fast Typed Decisions (Flow Agents Only)
+
+A **Decision** step evaluates typed questions (classification, triage, rating, numeric scoring) to route execution deterministically. It is one fast typed decision, not an LLM turn, so it runs in a fraction of the time and cost.
+
+### When to Use
+
+- **Use one** to route on a classification ("which kind of request is this?"), to triage, or as a yes/no gate.
+- **Don't use one** for anything that needs free-text reasoning or writing. That is a Prompt step.
+
+### Step Fields
+
+- **`StepType`**: `"Decision"` (REQUIRED)
+- **`Configuration`**: Object (or JSON string) defining `key` and `questions` (REQUIRED)
+- **`PromptID`**: Optional custom prompt ID. Leave empty/omitted to use the built-in Default Decision prompt.
+
+### Configuration Schema
+
+- **`key`** (string, REQUIRED): Unique identifier for this decision step (e.g. `"triage"`). Path conditions reference this key as `decisions.<key>.<question>.value`. Must match `/^[A-Za-z_][A-Za-z0-9_]*$/`.
+- **`questions`** (Record<string, QuestionDefinition>, REQUIRED): Map of question key to question definition. Must define at least one question.
+  - **`instructions`** (string, REQUIRED): The instructions/guidance for what to evaluate (alias: `text`).
+  - **`kind`** (string, REQUIRED): One of `"Choice"`, `"Likelihood"`, `"Score"`.
+  - **`options`** (Array<{ value: string, description: string }>, REQUIRED for `"Choice"`): The allowable answers. Each option has a `value` and a `description` (alias: `text`).
+  - **`levels`** (string[], REQUIRED for `"Score"`): Array of two or more scoring levels from lowest to highest.
+  - **`minConfidence`** (number, optional): Minimum confidence threshold (0.0 to 1.0).
+
+### Outgoing Path Conditions
+
+Outgoing paths route based on the decision outcome:
+- **Choice**: `decisions.<key>.<question>.value === '<optionValue>'`
+- **Likelihood**: `decisions.<key>.<question>.probability >= 0.8`
+- **Score**: `decisions.<key>.<question>.value >= 2`
+
+**Prefer routing on a Choice's `value`.** Probabilities are calibrated per model, so the same threshold can mean different things on different models. Use a Likelihood threshold only when a yes/no gate needs one, and write it as `>= 0.8`.
+
+### Choice Fork Rule
+
+When all outgoing paths from a step test the `value` of a single `Choice` question, they form a **Choice fork**. **A Choice fork must cover every option defined on that question.**
+
+### Example
+
+```json
+{
+  "ID": "",
+  "Name": "Triage support ticket",
+  "Description": "Classifies the incoming ticket category to determine routing",
+  "StepType": "Decision",
+  "StartingStep": true,
+  "Configuration": {
+    "key": "triage",
+    "questions": {
+      "category": {
+        "instructions": "What category best fits this ticket?",
+        "kind": "Choice",
+        "options": [
+          { "value": "billing", "description": "Billing or invoice inquiries" },
+          { "value": "technical", "description": "Technical defects or bugs" },
+          { "value": "general", "description": "General inquiries and feedback" }
+        ]
+      },
+      "urgent": {
+        "instructions": "The customer cannot work until this is resolved.",
+        "kind": "Likelihood"
+      }
+    }
+  }
+}
+```
+
+With outgoing paths covering every choice option:
+```json
+[
+  {
+    "OriginStepID": "Triage support ticket",
+    "DestinationStepID": "Handle billing issue",
+    "Condition": "decisions.triage.category.value === 'billing'",
+    "Priority": 10
+  },
+  {
+    "OriginStepID": "Triage support ticket",
+    "DestinationStepID": "Route to engineering",
+    "Condition": "decisions.triage.category.value === 'technical'",
+    "Priority": 10
+  },
+  {
+    "OriginStepID": "Triage support ticket",
+    "DestinationStepID": "Standard response",
+    "Condition": "decisions.triage.category.value === 'general'",
+    "Priority": 10
+  }
+]
+```
 
 ## Action I/O Mapping (Flow Agents Only)
 

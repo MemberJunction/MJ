@@ -2,8 +2,9 @@ import { BaseAgent, PayloadManager } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, BaseAgentNextStep, AgentSpec, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJActionEntity } from "@memberjunction/core-entities";
 import { RunView } from '@memberjunction/core';
-import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
-import { IsLoopStep, ValidateLoopStep } from '../flow-step-validation';
+import { RegisterClass, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
+import { IsLoopStep, ValidateLoopStep, IsDecisionStep, ValidateDecisionStep } from '../flow-step-validation';
 
 /**
  * Architect Agent - Transforms technical design into validated AgentSpec JSON
@@ -161,8 +162,9 @@ export class AgentArchitectAgent extends BaseAgent {
         }
 
         // 5. Validate agent type-specific requirements
-        const isLoopAgent = specWithType.TypeID?.includes('Loop');
-        const isFlowAgent = specWithType.TypeID?.includes('Flow');
+        const typeName = this.agentTypeName(specWithType.TypeID);
+        const isLoopAgent = typeName.includes('Loop');
+        const isFlowAgent = typeName.includes('Flow');
 
         if (isLoopAgent) {
             // Loop agents require at least one prompt
@@ -260,6 +262,11 @@ export class AgentArchitectAgent extends BaseAgent {
                     // rather than like a malformed step.
                     if (IsLoopStep(step)) {
                         errors.push(...ValidateLoopStep(step, i));
+                    }
+
+                    // Validate Decision steps
+                    if (IsDecisionStep(step)) {
+                        errors.push(...ValidateDecisionStep(step, i, { Steps: correctedSpec.Steps, Paths: correctedSpec.Paths }));
                     }
                 }
             }
@@ -390,8 +397,9 @@ export class AgentArchitectAgent extends BaseAgent {
                     errors.push(`❌ Child SubAgent[${i}] "${subAgent.SubAgent.Name}" is missing TypeID field`);
                 } else {
                     // Validate Loop/Flow specific requirements for child sub-agents
-                    const isLoopSubAgent = subAgent.SubAgent.TypeID.includes('Loop');
-                    const isFlowSubAgent = subAgent.SubAgent.TypeID.includes('Flow');
+                    const subAgentTypeName = this.agentTypeName(subAgent.SubAgent.TypeID);
+                    const isLoopSubAgent = subAgentTypeName.includes('Loop');
+                    const isFlowSubAgent = subAgentTypeName.includes('Flow');
 
                     if (isLoopSubAgent) {
                         // Loop sub-agents require at least one prompt
@@ -602,6 +610,18 @@ export class AgentArchitectAgent extends BaseAgent {
     /**
      * Simple hash function for string deduplication
      */
+    /**
+     * The agent type's name for a spec's `TypeID`. The Architect's template has the model write the
+     * type's ID (a GUID), which never contains 'Loop' or 'Flow', so the ID is resolved through
+     * AIEngine's agent types. Anything that is not a known type's ID (an older spec that wrote the
+     * name) is returned as written.
+     */
+    private agentTypeName(typeID: string | undefined): string {
+        if (!typeID) return '';
+        const type = AIEngine.Instance.AgentTypes.find(t => UUIDsEqual(t.ID, typeID));
+        return type?.Name ?? typeID;
+    }
+
     protected hashString(str: string): string {
         let hash = 0;
         for (let i = 0; i < str.length; i++) {

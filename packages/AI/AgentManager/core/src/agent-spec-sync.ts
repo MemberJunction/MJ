@@ -19,6 +19,7 @@ import {
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
+import { DecisionConfigurationText } from './flow-step-validation';
 
 /**
  * Represents a single database mutation performed by AgentSpecSync
@@ -748,9 +749,9 @@ export class AgentSpecSync {
             ActionID: step.ActionID || undefined,
             SubAgentID: step.SubAgentID || undefined,
             PromptID: step.PromptID || undefined,
-            // Loop steps round-trip their body type and bounds; without these, reading a flow agent
-            // that contains a loop and writing it back would silently turn the loop into an
-            // unconfigured step that iterates over nothing.
+            // Loop & Decision steps round-trip their configuration and bounds; without these, reading
+            // a flow agent that contains a decision or loop and writing it back would silently strip
+            // the step's logic or bounds.
             LoopBodyType: step.LoopBodyType || undefined,
             Configuration: step.Configuration || undefined,
             ActionInputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionInputMapping),
@@ -1388,7 +1389,11 @@ export class AgentSpecSync {
             // Configuration carries the bounds. Written for every step because a step that STOPS
             // being a loop must have these cleared, not left behind from its previous shape.
             stepEntity.LoopBodyType = stepSpec.LoopBodyType || null;
-            stepEntity.Configuration = stepSpec.Configuration || null;
+            // A Decision step's configuration is stored as JSON text with the model's aliases
+            // normalized, even when the model wrote it as an object.
+            stepEntity.Configuration = stepSpec.StepType === 'Decision'
+                ? DecisionConfigurationText(stepSpec.Configuration)
+                : stepSpec.Configuration || null;
 
             // Handle inline prompt creation for Prompt-type steps
             // If StepType is Prompt and PromptID is empty, create a new AIPrompt record

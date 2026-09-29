@@ -7,8 +7,8 @@
  * as a malformed step. That is precisely the class of error the Architect has to catch before save.
  */
 import { describe, it, expect } from 'vitest';
-import type { AgentStep } from '@memberjunction/ai-core-plus';
-import { IsLoopStep, ValidateLoopStep } from '../flow-step-validation';
+import type { AgentStep, AgentStepPath } from '@memberjunction/ai-core-plus';
+import { IsLoopStep, ValidateLoopStep, IsDecisionStep, ValidateDecisionStep, ValidateDecisionSteps } from '../flow-step-validation';
 
 const step = (over: Partial<AgentStep> = {}): AgentStep => ({
     ID: '',
@@ -159,3 +159,198 @@ describe('ValidateLoopStep — reporting', () => {
         expect(errors[0]).toContain('ForEach');
     });
 });
+
+const decisionStep = (over: Partial<AgentStep> = {}): AgentStep => ({
+    ID: 'step-decision-1',
+    Name: 'Triage Issue',
+    StepType: 'Decision',
+    StartingStep: true,
+    Configuration: JSON.stringify({
+        key: 'triage',
+        questions: {
+            category: {
+                text: 'What category best describes this issue?',
+                kind: 'Choice',
+                options: [
+                    { value: 'billing', text: 'Billing' },
+                    { value: 'technical', text: 'Technical' },
+                    { value: 'general', text: 'General' },
+                ],
+            },
+        },
+    }),
+    ...over,
+});
+
+describe('IsDecisionStep', () => {
+    it('recognises Decision steps', () => {
+        expect(IsDecisionStep({ StepType: 'Decision' })).toBe(true);
+        expect(IsDecisionStep({ StepType: 'ForEach' })).toBe(false);
+        expect(IsDecisionStep({ StepType: 'While' })).toBe(false);
+        expect(IsDecisionStep({ StepType: 'Action' })).toBe(false);
+        expect(IsDecisionStep({ StepType: 'Prompt' })).toBe(false);
+        expect(IsDecisionStep({ StepType: 'Sub-Agent' })).toBe(false);
+    });
+});
+
+describe('ValidateDecisionStep — happy paths', () => {
+    it('accepts a valid Decision step with string configuration', () => {
+        const s = decisionStep();
+        expect(ValidateDecisionStep(s, 0)).toEqual([]);
+    });
+
+    it('accepts a valid Decision step with object configuration', () => {
+        const s = decisionStep({
+            Configuration: {
+                key: 'triage',
+                questions: {
+                    category: {
+                        text: 'What category?',
+                        kind: 'Choice',
+                        options: [
+                            { value: 'a', text: 'A' },
+                            { value: 'b', text: 'B' },
+                        ],
+                    },
+                },
+            } as unknown as string,
+        });
+        expect(ValidateDecisionStep(s, 0)).toEqual([]);
+    });
+
+    it('accepts a complete Choice fork covering all options', () => {
+        const s = decisionStep();
+        const paths: AgentStepPath[] = [
+            { ID: 'p1', OriginStepID: 'Triage Issue', DestinationStepID: 'BillingStep', Condition: "decisions.triage.category.value === 'billing'", Priority: 1 },
+            { ID: 'p2', OriginStepID: 'Triage Issue', DestinationStepID: 'TechStep', Condition: "decisions.triage.category.value === 'technical'", Priority: 2 },
+            { ID: 'p3', OriginStepID: 'Triage Issue', DestinationStepID: 'GeneralStep', Condition: "decisions.triage.category.value === 'general'", Priority: 3 },
+        ];
+        expect(ValidateDecisionStep(s, 0, { Steps: [s], Paths: paths })).toEqual([]);
+    });
+
+    it('ignores non-decision steps entirely', () => {
+        expect(ValidateDecisionStep({ ID: '1', Name: 'ActionStep', StepType: 'Action', StartingStep: true }, 0)).toEqual([]);
+    });
+});
+
+describe('ValidateDecisionStep — bad configuration', () => {
+    it('reports missing configuration error verbatim from ReadFlowDecisionStepConfiguration', () => {
+        const s = decisionStep({ Configuration: undefined });
+        const errors = ValidateDecisionStep(s, 2);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('it has no configuration; it needs a key and at least one question');
+        expect(errors[0]).toContain('index 2');
+    });
+
+    it('reports invalid JSON error verbatim', () => {
+        const s = decisionStep({ Configuration: '{not json' });
+        const errors = ValidateDecisionStep(s, 0);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('its configuration is not valid JSON');
+    });
+
+    it('reports missing questions verbatim', () => {
+        const s = decisionStep({ Configuration: JSON.stringify({ key: 'triage' }) });
+        const errors = ValidateDecisionStep(s, 0);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('it asks no questions');
+    });
+
+    it('reports invalid question definition verbatim', () => {
+        const s = decisionStep({
+            Configuration: JSON.stringify({
+                key: 'triage',
+                questions: {
+                    category: { instructions: 'What category?', kind: 'Choice' },
+                },
+            }),
+        });
+        const errors = ValidateDecisionStep(s, 0);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('Choice question "category" needs at least two options');
+    });
+});
+
+describe('ValidateDecisionStep — duplicate keys', () => {
+    it('reports duplicate keys across Decision steps', () => {
+        const step1 = decisionStep({ ID: 's1', Name: 'Triage Step 1' });
+        const step2 = decisionStep({ ID: 's2', Name: 'Triage Step 2' });
+        const steps = [step1, step2];
+
+        const errors = ValidateDecisionStep(step1, 0, { Steps: steps });
+        expect(errors.join(' ')).toContain('both use the key "triage"');
+        expect(errors.join(' ')).toContain('duplicate key');
+    });
+});
+
+describe('ValidateDecisionStep — unknown key in path', () => {
+    it('reports when an outgoing path references an unknown decision key', () => {
+        const s = decisionStep();
+        const paths: AgentStepPath[] = [
+            { ID: 'p1', OriginStepID: 'Triage Issue', DestinationStepID: 'Next', Condition: "decisions.nonexistent.category.value === 'billing'", Priority: 1 },
+        ];
+        const errors = ValidateDecisionStep(s, 0, { Steps: [s], Paths: paths });
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('nonexistent');
+        expect(errors[0]).toContain('no Decision step in this workflow has the key "nonexistent"');
+    });
+});
+
+describe('ValidateDecisionStep — Choice fork exhaustiveness', () => {
+    it('reports an incomplete Choice fork when options are missing', () => {
+        const s = decisionStep();
+        const paths: AgentStepPath[] = [
+            { ID: 'p1', OriginStepID: 'Triage Issue', DestinationStepID: 'BillingStep', Condition: "decisions.triage.category.value === 'billing'", Priority: 1 },
+            { ID: 'p2', OriginStepID: 'Triage Issue', DestinationStepID: 'TechStep', Condition: "decisions.triage.category.value === 'technical'", Priority: 2 },
+        ];
+        const errors = ValidateDecisionStep(s, 0, { Steps: [s], Paths: paths });
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toContain('incomplete Choice fork');
+        expect(errors[0]).toContain('"general"');
+        expect(errors[0]).toContain('A Choice fork must cover every option');
+    });
+});
+
+describe('ValidateDecisionStep — several problems returned together', () => {
+    it('returns all errors when multiple validation checks fail', () => {
+        const step1 = decisionStep({
+            ID: 's1',
+            Name: 'Triage Step 1',
+            Configuration: JSON.stringify({
+                key: 'triage',
+                questions: {
+                    category: {
+                        instructions: 'What category?',
+                        kind: 'Choice',
+                        options: [
+                            { value: 'a', description: 'Option A' },
+                            { value: 'b', description: 'Option B' },
+                        ],
+                    },
+                },
+            }),
+        });
+        const step2 = decisionStep({ ID: 's2', Name: 'Triage Step 2' });
+        const paths: AgentStepPath[] = [
+            { ID: 'p1', OriginStepID: 'Triage Step 1', DestinationStepID: 'Next1', Condition: "decisions.unknown1.category.value === 'billing'", Priority: 1 },
+            { ID: 'p2', OriginStepID: 'Triage Step 1', DestinationStepID: 'Next2', Condition: "decisions.unknown2.category.value === 'general'", Priority: 2 },
+        ];
+
+        const errors = ValidateDecisionStep(step1, 0, { Steps: [step1, step2], Paths: paths });
+        expect(errors.length).toBeGreaterThanOrEqual(3);
+        expect(errors.join(' ')).toContain('both use the key "triage"');
+        expect(errors.join(' ')).toContain('unknown1');
+        expect(errors.join(' ')).toContain('unknown2');
+    });
+});
+
+describe('ValidateDecisionSteps', () => {
+    it('validates all Decision steps in a flow', () => {
+        const step1 = decisionStep({ ID: 's1', Name: 'Triage 1' });
+        const step2 = decisionStep({ ID: 's2', Name: 'Triage 2' });
+        const errors = ValidateDecisionSteps([step1, step2]);
+        expect(errors.length).toBeGreaterThanOrEqual(2);
+        expect(errors.join(' ')).toContain('both use the key "triage"');
+    });
+});
+
