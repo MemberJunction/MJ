@@ -8,6 +8,7 @@ import { FetchMigrationSlice, ResolveGitRef, type MigrationFetchResult } from '.
 import { VerifyDatabaseConnection } from '../../lib/db-preflight';
 import { ReadCurrentDbVersion } from '../../lib/db-version';
 import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
+import { ClearSharedCacheAfterWrite, SKIP_CACHE_CLEAR_ENV } from '../../lib/shared-cache';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
@@ -31,6 +32,9 @@ export default class Migrate extends Command {
     dir: Flags.string({ description: 'Migration source directory (overrides migrationsLocation from config)' }),
     'check-connection': Flags.boolean({
       description: 'Verify the database connection (including TLS) and exit without migrating',
+    }),
+    'skip-cache-clear': Flags.boolean({
+      description: `Do not clear the shared Redis cache (REDIS_URL) after migrating. Also: ${SKIP_CACHE_CLEAR_ENV}=1`,
     }),
   };
 
@@ -139,7 +143,7 @@ export default class Migrate extends Command {
   }
 
   /** Runs Skyway against the prepared config and reports the outcome. */
-  private async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string }, skywayConfig: SkywayConfig): Promise<void> {
+  private async executeMigration(config: MJConfig, flags: { verbose: boolean; tag?: string; 'skip-cache-clear'?: boolean }, skywayConfig: SkywayConfig): Promise<void> {
     const targetSchema = skywayConfig.Migrations.DefaultSchema;
     const skyway = new Skyway(skywayConfig);
 
@@ -201,6 +205,9 @@ export default class Migrate extends Command {
         }
       }
       await this.refreshMetadataAfterOpenAppMigrate(config, targetSchema, flags.verbose);
+      // Only when the database actually changed: a run that found nothing pending used to make the
+      // whole fleet drop its cache and reload every engine for no reason (plan §16.3 #13).
+      await this.clearSharedCache(flags['skip-cache-clear'], result.MigrationsApplied > 0);
     } else {
       spinner.fail();
       this.logToStderr(`\nMigration failed: ${result.ErrorMessage ?? 'unknown error'}\n`);
@@ -214,6 +221,10 @@ export default class Migrate extends Command {
             this.logToStderr(`    OK: ${detail.Migration.Filename} (${detail.ExecutionTimeMS}ms)`);
           }
           this.logToStderr('');
+          // Those migrations are committed, so running servers are holding pre-change rows. The
+          // policy is the same as `mj sync push`: clear whenever anything was written, failure or
+          // not (plan §16.3 #13).
+          await this.clearSharedCache(flags['skip-cache-clear'], true);
         }
 
         const failed = result.Details.filter((d) => !d.Success);
@@ -234,6 +245,25 @@ export default class Migrate extends Command {
 
       this.error('Migrations failed');
     }
+  }
+
+  /**
+   * Running servers never hear about a schema or data change made here, and a server-side cache
+   * hit is never re-validated, so without this they keep serving pre-migration rows (#4083).
+   * No-op without REDIS_URL. A failed clear is reported, not fatal: the migration succeeded.
+   */
+  /**
+   * @param wroteSomething - False when the run changed nothing (no migrations applied), in which
+   *   case no server can be holding stale rows and the fleet is left alone.
+   */
+  private async clearSharedCache(skip: boolean | undefined, wroteSomething: boolean): Promise<void> {
+    if (!wroteSomething) {
+      return;
+    }
+    const report = await ClearSharedCacheAfterWrite('mj migrate', skip);
+    if (!report) return;
+    if (report.Ok) this.log(report.Message);
+    else this.warn(report.Message);
   }
 
   /**
