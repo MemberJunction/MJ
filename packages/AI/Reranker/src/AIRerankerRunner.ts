@@ -107,6 +107,20 @@ export class AIRerankerRunner extends BaseModelRunner {
     }
 
     /**
+     * Makes an `LLMReranker`'s chat run a child of this rerank's run. The child's INSERT names this run
+     * as its `ParentID`, so this run's queued INSERT must land first. When that INSERT failed (the
+     * seeded `LLM Reranker` model has no model-vendor row, so its run fails validation on `VendorID`),
+     * there is no row to point at: the child would then fail its foreign key and go unrecorded too, so
+     * the chat run is left unlinked instead.
+     */
+    private async linkChildRun(driver: BaseReranker, promptRun: MJAIPromptRunEntityExtended): Promise<void> {
+        await this.WaitForPendingPromptRunSaves();
+        if (driver instanceof LLMReranker && promptRun.IsSaved) {
+            driver.ParentPromptRunID = promptRun.ID;
+        }
+    }
+
+    /**
      * Whether a driver makes its model call through a prompt run of its own, which this runner makes
      * a child of the rerank's run. `LLMReranker` does: it runs a chat prompt, so its cost is that
      * child run's cost, not the rerank run's own.
@@ -315,13 +329,12 @@ export class AIRerankerRunner extends BaseModelRunner {
                 return this.failedAttempt(err instanceof Error ? err.message : String(err), 'Authentication');
             }
         }
-        const driver = this.createDriver(candidate, apiKey, request.Params, promptRun.ID);
+        const driver = this.createDriver(candidate, apiKey, request.Params);
         if (typeof driver === 'string') {
             return this.failedAttempt(driver, 'ModelError');
         }
         if (this.driverRunsChildPrompt(candidate.driverClass)) {
-            // The driver's run names this run as its parent, so this run's queued INSERT must land first.
-            await this.WaitForPendingPromptRunSaves();
+            await this.linkChildRun(driver, promptRun);
         }
         return this.callDriver(driver, candidate, request.Params);
     }
@@ -331,11 +344,8 @@ export class AIRerankerRunner extends BaseModelRunner {
      * `RerankerService.GetReranker`. `LLMReranker` takes no key, the model's `APIName`, the ID of the
      * chat prompt it runs and the context user; every other driver takes its key and API name.
      * Returns an error message when the driver cannot be built.
-     *
-     * An `LLMReranker` is also given `parentRunId`, the rerank's run, as its `ParentPromptRunID`, so
-     * its chat run is a child of the rerank's run.
      */
-    private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIRerankParams, parentRunId: string): BaseReranker | string {
+    private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIRerankParams): BaseReranker | string {
         const factory = MJGlobal.Instance.ClassFactory;
         let resolution: DriverResolution;
         if (candidate.driverClass === LLM_RERANKER_DRIVER) {
@@ -346,9 +356,6 @@ export class AIRerankerRunner extends BaseModelRunner {
             resolution = factory.TryCreateInstance<BaseReranker>(
                 BaseReranker, candidate.driverClass, '', candidate.model.APIName ?? '', chatPromptID, params.ContextUser
             );
-            if (resolution.Instance instanceof LLMReranker) {
-                resolution.Instance.ParentPromptRunID = parentRunId;
-            }
         } else {
             resolution = factory.TryCreateInstance<BaseReranker>(
                 BaseReranker, candidate.driverClass, apiKey, candidate.apiName ?? candidate.model.APIName ?? ''

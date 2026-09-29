@@ -148,6 +148,10 @@ class FakePromptRun {
     public TotalCost?: number | null;
     public CostCurrency?: string | null;
     public LatestResult: { CompleteMessage: string } | null = null;
+    /** Whether a Save has succeeded, as `BaseEntity.IsSaved` reports it. */
+    public IsSaved = false;
+    /** When set, every Save fails, as the INSERT of a run with no VendorID does. */
+    public static FailSaves = false;
     [key: string]: unknown;
 
     public NewRecord(): boolean {
@@ -156,6 +160,11 @@ class FakePromptRun {
     }
 
     public async Save(): Promise<boolean> {
+        if (FakePromptRun.FailSaves) {
+            this.LatestResult = { CompleteMessage: 'Vendor cannot be null' };
+            return false;
+        }
+        this.IsSaved = true;
         return true;
     }
 }
@@ -283,6 +292,7 @@ beforeEach(() => {
     MockReranker.Calls = [];
     MockReranker.FailingModels = new Set();
     MockReranker.Usage = undefined;
+    FakePromptRun.FailSaves = false;
     stubDriverFactory();
     // BaseReranker logs a driver's exception to console.error; keep the test output clean.
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -487,6 +497,29 @@ describe('AIRerankerRunner', () => {
             expect(promptRuns[0].DescendantCost).toBe(0.0007);
             expect(promptRuns[0].TotalCost).toBe(0.0007);
             expect(promptRuns[0].Cost).toBeUndefined();
+            expect(result.Response?.Usage?.cost).toBe(0.0007);
+        });
+
+        it("leaves the chat run unlinked when the rerank run's INSERT failed, so the chat run can still be saved", async () => {
+            // The seeded LLM Reranker model has no model-vendor row, so its rerank run fails validation. A
+            // chat run naming that missing row as its ParentID would fail its foreign key too.
+            FakePromptRun.FailSaves = true;
+            vi.mocked(MJGlobal.Instance.ClassFactory.TryCreateInstance).mockRestore();
+            const executePrompt = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+                chatRunResult({
+                    success: true,
+                    result: [{ index: 1, score: 0.8 }, { index: 0, score: 0.3 }],
+                    promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'USD' }),
+                })
+            );
+            const runner = newRunner();
+
+            const result = await runner.RunRerank(rerankParams({ ModelID: LLM_MODEL_ID }));
+            await runner.WaitForPendingPromptRunSaves();
+
+            expect(result.Success).toBe(true);
+            expect(executePrompt).toHaveBeenCalledTimes(1);
+            expect(executePrompt.mock.calls[0][0].parentPromptRunId).toBeUndefined();
             expect(result.Response?.Usage?.cost).toBe(0.0007);
         });
 
