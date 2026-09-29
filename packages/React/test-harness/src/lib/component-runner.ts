@@ -25,6 +25,82 @@ import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
  
 
 /**
+ * Field properties carried into the browser's mock metadata.
+ *
+ * `EntityFieldInfo` exposes ~77 own properties at runtime. The list below is the subset the
+ * in-page React runtime actually reads — derived from its bundle, not assumed — plus a few
+ * cheap scalars component code plausibly touches (`Sequence`, `AllowsNull`, `DefaultInView`,
+ * `Description`). Everything omitted is a server-side concern: search predicates, generated
+ * form layout, schema auto-update settings. None of it is reachable from component code.
+ *
+ * Note that several of the most frequently read names — `CodeName`, `TSType`,
+ * `DisplayNameOrName`, `NeedsQuotes` — are prototype GETTERS. Serialization to the browser
+ * has never carried prototype members, so they are already `undefined` in the page today;
+ * they are listed here only so that a build which promotes them to own properties keeps
+ * working.
+ */
+const BROWSER_FIELD_PROPERTIES: ReadonlySet<string> = new Set([
+  'ID', 'EntityID', 'Name', 'DisplayName', 'Description', 'Sequence',
+  'Type', 'Length', 'MaxLength', 'Precision', 'Scale', 'AllowsNull', 'DefaultValue',
+  'IsPrimaryKey', 'IsUnique', 'IsVirtual', 'IsNameField', 'DefaultInView',
+  'ExtendedType', 'ValueListType', 'EntityFieldValues',
+  'RelatedEntityID', 'RelatedEntity', 'RelatedEntityFieldName',
+  'CodeName', 'TSType',
+]);
+
+/**
+ * Builds the entity metadata handed to the browser context.
+ *
+ * Replaces a `JSON.parse(JSON.stringify(entities))` deep clone, which was there to strip
+ * functions before the value reached `page.evaluate`. Playwright already does that — it
+ * serializes the argument itself and takes only own enumerable properties — so the round
+ * trip was redundant, and strictly worse in one respect: `JSON.stringify` throws on a
+ * circular graph, and the caller's catch then yields an EMPTY entity list silently, where
+ * Playwright would have handled the cycle by reference.
+ *
+ * The projection matters more than the clone removal. `page.evaluate` does not JSON-encode
+ * its argument; it walks the graph building a tagged protocol representation, so every
+ * property becomes additional objects and the cost scales with NODE COUNT rather than byte
+ * size. Field objects dominate that count: an entity with 1,043 fields at ~77 properties
+ * each contributes ~80,000 property slots on its own.
+ *
+ * Measured against a client with 363 entities and 32,209 fields: the injection blocked the
+ * event loop for ~18s and allocated ~2.6GB, tripping the caller's memory watchdog before the
+ * component rendered. With the caller also narrowing to the 7 entities a component declares,
+ * projecting fields took that injection from 1,059ms to 321ms — 23 of 77 properties kept,
+ * 75% smaller — and halved total component-test time.
+ *
+ * Entity-level properties are preserved as-is; only `Fields` is projected. The input is never
+ * mutated.
+ */
+function projectEntitiesForBrowser(entities: readonly unknown[]): unknown[] {
+  if (!Array.isArray(entities) || entities.length === 0) {
+    return entities as unknown[];
+  }
+
+  return entities.map(entity => {
+    if (!entity || typeof entity !== 'object') return entity;
+
+    const source = entity as Record<string, unknown>;
+    const projected: Record<string, unknown> = { ...source };
+    const fields = source.Fields;
+
+    if (Array.isArray(fields)) {
+      projected.Fields = fields.map(field => {
+        if (!field || typeof field !== 'object') return field;
+        const slim: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(field as Record<string, unknown>)) {
+          if (BROWSER_FIELD_PROPERTIES.has(key)) slim[key] = value;
+        }
+        return slim;
+      });
+    }
+
+    return projected;
+  });
+}
+
+/**
  * Pre-resolve a component spec for browser execution
  * Converts registry components to embedded format with all code included
  */
@@ -1484,22 +1560,30 @@ export class ComponentRunner {
       let screenshot: Buffer;
 
       try {
-        // Try to get HTML content with a reasonable size limit
-        html = await page.content();
-
         // Backstop only — the row ceilings on the data bridges (see DataCapOptions) stop a
         // runaway result set before it reaches the DOM. Deliberately far below Node's ~536MB
         // string limit: the harness shares a heap with the host process, so by the time a
         // page serializes to tens of megabytes the run is pathological whether or not the
         // string itself fits.
-        const htmlSizeEstimate = Buffer.byteLength(html, 'utf8');
         const maxSafeSize = 25 * 1024 * 1024; // 25MB
 
-        if (htmlSizeEstimate > maxSafeSize) {
-          console.warn(`⚠️ HTML content is very large (${Math.round(htmlSizeEstimate / 1024 / 1024)}MB). Truncating to prevent crashes.`);
-          // Truncate to a safe size
-          html = html.substring(0, maxSafeSize) + '\n<!-- TRUNCATED: Content exceeded safe size limit -->';
-          errors.push(`HTML content too large (${Math.round(htmlSizeEstimate / 1024 / 1024)}MB). This may indicate excessive data or a render issue.`);
+        // Measure and slice IN THE PAGE. `page.content()` materialises the entire document
+        // as a Node string first, so the ceiling below used to be enforced only after the
+        // allocation it exists to prevent — and beyond Node's string limit the transfer
+        // throws before any check can run. Extracting a bounded slice keeps this side
+        // bounded by the cap no matter how large the document is; the true length still
+        // crosses, so an oversized render is just as visible in the error.
+        const extracted: { length: number; html: string } = await page.evaluate((limit: number) => {
+          const full = document.documentElement.outerHTML;
+          return { length: full.length, html: full.length > limit ? full.slice(0, limit) : full };
+        }, maxSafeSize);
+
+        html = extracted.html;
+
+        if (extracted.length > maxSafeSize) {
+          console.warn(`⚠️ HTML content is very large (${Math.round(extracted.length / 1024 / 1024)}MB). Truncating to prevent crashes.`);
+          html += '\n<!-- TRUNCATED: Content exceeded safe size limit -->';
+          errors.push(`HTML content too large (${Math.round(extracted.length / 1024 / 1024)}MB). This may indicate excessive data or a render issue.`);
         }
       } catch (error: unknown) {
         const errorMsg = error instanceof Error ? error.message : String(error);
@@ -2444,23 +2528,53 @@ export class ComponentRunner {
     consoleLogs: { type: string; text: string }[],
     warnings: string[]
   ): void {
+    // Ceilings, not trimming. Normal runs land far below both — a passing component test was
+    // observed at ~1,800 messages and 0.7MB — so these exist only to stop a component stuck
+    // in a render or error loop from growing this array without bound. The harness shares a
+    // heap with its host process, so an unbounded collector here is the host's problem too.
+    const MAX_CONSOLE_MESSAGES = 5000;
+    const MAX_MESSAGE_CHARS = 32 * 1024;
+
+    // Membership test, not a linear scan: `warnings.includes` made de-duplication O(n^2) in
+    // the number of distinct warnings, on the event loop everything else shares. `warnings`
+    // stays an array because callers index it.
+    const seenWarnings = new Set<string>(warnings);
+    let overflowed = false;
+
+    const record = (type: string, text: string): void => {
+      const clipped = typeof text === 'string' && text.length > MAX_MESSAGE_CHARS
+        ? `${text.slice(0, MAX_MESSAGE_CHARS)}… [truncated, ${text.length} chars]`
+        : text;
+
+      if (consoleLogs.length < MAX_CONSOLE_MESSAGES) {
+        consoleLogs.push({ type, text: clipped });
+      } else if (!overflowed) {
+        // Record the overflow once, so a truncated run is never mistaken for a quiet one.
+        overflowed = true;
+        consoleLogs.push({
+          type: 'warning',
+          text: `[harness] console output exceeded ${MAX_CONSOLE_MESSAGES} messages; further `
+              + `messages are not retained. This usually indicates a render or error loop.`,
+        });
+      }
+    };
+
     page.on('console', (msg: any) => {
       const type = msg.type();
       const text = msg.text();
-      
-      consoleLogs.push({ type, text });
-      
+
+      record(type, text);
+
       // Note: We're already handling warnings in our console.error override
       // This catches any direct console.warn() calls
-      if (type === 'warning') {
-        if (!warnings.includes(text)) {
-          warnings.push(text);
-        }
+      if (type === 'warning' && !seenWarnings.has(text)) {
+        seenWarnings.add(text);
+        warnings.push(text);
       }
     });
 
     page.on('pageerror', (error: Error) => {
-      consoleLogs.push({ type: 'error', text: error.message });
+      record('error', error.message);
     });
   }
 
@@ -2666,13 +2780,15 @@ export class ComponentRunner {
 
     // Create a lightweight mock metadata object with serializable data
     // This avoids authentication/provider issues in the browser context
-    let entitiesData: any[] = [];
+    let entitiesData: unknown[] = [];
     try {
       // Try to get entities if available, otherwise use empty array
       if (util.md?.Entities) {
-        // Serialize the entities data (remove functions, keep data)
-        entitiesData = JSON.parse(JSON.stringify(util.md.Entities));
-        // Serialized entities for browser context
+        // Project to the properties the in-page runtime reads, rather than deep-cloning the
+        // whole EntityInfo graph. See `projectEntitiesForBrowser` for why this matters: the
+        // value goes to `page.evaluate`, whose cost scales with NODE COUNT, and field
+        // objects dominate that count on a wide schema.
+        entitiesData = projectEntitiesForBrowser(util.md.Entities);
       } else {
         // Metadata.Entities not available, using empty array
       }
