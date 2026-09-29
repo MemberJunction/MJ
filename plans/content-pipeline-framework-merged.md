@@ -4,6 +4,7 @@
 - **Status**: Draft — competing alternative (option 3 of 3)
 - **Created**: 2026-09-28
 - **Revised**: 2026-09-28 — per-record detail rows kept in queue mode; heartbeat with buffered progress; cooperative in-flight cancel; record-cap fix; scope-provider registry
+- **Revised**: 2026-09-29 — lease duration explained as an inactivity timeout; 30-second heartbeat ceiling made explicit; stall detection
 - **Author**: Dray + Claude
 - **Branch**: dray/content-pipeline-framework
 - **Depends on**: `feat/work-queue` landing on `next`, **and** a small set of generic additions to `packages/RecordSetProcessor` (see API Changes). This is the only one of the three plans in this PR that changes both systems rather than depending on one, unmodified.
@@ -74,7 +75,9 @@ Verified against source on the `feat/work-queue` branch:
 - Database transport capabilities include `CancelPending`, `CancelInFlight` and `PersistsProgress` (`engine/src/transports/database/databaseCapabilities.ts`).
 - `ExtendLease` is fenced on the lease token, `Status='InFlight'` and no cancel request (`spWorkQueueExtendLease`). It returns `'Held' | 'Lost' | 'Cancelled'`.
 - A heartbeat carries `WorkProgress { Percent?: 0..100; Message?: ≤500 chars; Checkpoint?: small JSON }` into `WorkQueueDelivery.Progress`. Each heartbeat **replaces** the previous value — it is a latest-status slot, not a log.
-- `HeartbeatIntervalSeconds(policy)` = `LeaseSeconds / 3`, capped. `ComputeBackoffSeconds` is exported. Both live in `@memberjunction/work-queue-core`.
+- `HeartbeatIntervalSeconds(policy)` = `min(LeaseSeconds / 3, 30)`. The 30-second ceiling is `HEARTBEAT_INTERVAL_MAX_SECONDS`, hard-coded in `@memberjunction/work-queue-core/src/backoff.ts`. `ComputeBackoffSeconds` is exported from the same package.
+- `LeaseSeconds` is a subscription column: default 60, minimum 5 (`CK_WorkQueueSubscription_LeaseSeconds`).
+- `MaxProcessingSeconds` (nullable subscription column) is not enforced by any database procedure; Work Queue's own consumer runtime applies it. This plan's bridge doesn't use that runtime, so it would have to honor the value itself.
 - Subscriptions carry `MaxAttempts`, backoff, `LeaseSeconds`, `HeartbeatMode`, `MaxProcessingSeconds`, and `HostType` (`'MJWorker' | 'External'`). An `External` subscription is not consumed by MJ's own Work Queue host, so it won't compete with this plan's consumers.
 - Consumer concurrency is host/process configuration, not a subscription column. N containers each running concurrency C process up to N×C records at once. Neither system enforces a global per-source rate limit across processes.
 
@@ -155,13 +158,33 @@ A queue-mode run, start to finish:
 
 ### Heartbeat and buffered progress
 
-A record can run for hours or longer — a whole-source Discover has taken more than a day — so a long lease is not a substitute for renewing it.
+A record can run for seconds or for more than a day — a whole-source Discover has — and the same source can vary widely between runs. Nothing here needs tuning per run or per source size.
 
-- The source runs one timer per run at `HeartbeatIntervalSeconds(policy)` (a third of the subscription's `LeaseSeconds`; a 90-second lease gives a 30-second heartbeat). Each tick renews every claimed, unsettled delivery.
+**The lease is an inactivity timeout, not a runtime limit.** `LeaseSeconds` is how long the queue waits without a heartbeat before assuming the container died and returning its records to `Pending`. Every heartbeat pushes the expiry forward again, so a record can run indefinitely on any lease length as long as heartbeats keep arriving.
+
+**The heartbeat interval is a third of the lease, never more than 30 seconds.** That ceiling is hard-coded in Work Queue, so every queue-scoped run heartbeats at least every 30 seconds regardless of lease length or record duration:
+
+| `LeaseSeconds` | Heartbeat interval | A dead container's records return after about |
+|---|---|---|
+| 60 (default) | 20 s | 1 min |
+| 90 | 30 s | 1.5 min |
+| 300 | 30 s | 5 min |
+| 600 | 30 s | 10 min |
+
+**Choosing the lease trades recovery speed against tolerance for hiccups** — not against how long the work takes. A short lease returns a crashed container's records quickly, but any stall longer than the lease — a network blip, a database pause, a blocked event loop — loses the claim and another container may start the same record. A long lease rides those out but leaves a crashed container's records idle until it runs out. Recommended starting point for pipeline subscriptions: 120–300 seconds.
+
+**`MaxProcessingSeconds` should stay empty** for these subscriptions. It's a hard runtime cap, not an inactivity timeout, and legitimate runs here have no reliable upper bound. It isn't enforced by the database, so it only takes effect if the source chooses to honor it.
+
+- The source runs one timer per run at `HeartbeatIntervalSeconds(policy)`. Each tick renews every claimed, unsettled delivery — including records still waiting their turn in the page, which would otherwise expire before they start.
 - A processor calls `context.ReportProgress({ Message, Percent, Checkpoint })` as often as it likes — the same places it would have written to the console. The source keeps only the latest value per record in memory, and each heartbeat sends it with the lease renewal. Reports between heartbeats cost nothing.
 - Because the delivery's `Progress` is overwritten on each heartbeat, it shows *current* status ("inserted 200 of 3000"). The full sequence of reports is kept by the source and written into the record's detail row at the end, so the history isn't lost.
 - `Checkpoint` carries small structured counters (e.g. `{ "Inserted": 200, "Total": 3000 }`) for a UI to render without parsing the message.
 - Heartbeats run on the Node event loop. A driver that does long synchronous CPU work blocks them and loses its lease; such work must yield or run in a worker thread. This is the same rule Work Queue documents for its own handlers.
+
+**Stall detection.** Because the heartbeat is a timer, it keeps a claim alive for as long as the process is alive — including when a driver is hung on a request that will never return. That record looks in progress forever and no other container takes it. The heartbeat proves the process is alive; only progress proves the work is moving. So:
+- The source stamps the time of the last `ReportProgress` call into each heartbeat's `Checkpoint` (e.g. `{ "LastProgressAt": "…" }`), so a monitoring view can show "alive, no progress for 2 hours" without guessing.
+- Optionally, a no-progress threshold, set in the Record Process's configuration so Work Queue needs no new column: if a record hasn't reported progress within it, the source aborts that record's signal with reason `'Stalled'` and stops renewing its lease, letting it fail or be retried. Off by default; drivers that report progress rarely would trip it falsely.
+- If a stalled driver responds to the signal, the tracker treats it as a transient failure (retry, or dead-letter at `MaxAttempts`). If it's truly hung and never returns, its lease simply expires and the sweeper returns the record to `Pending` with the attempt counted. Should the hung process wake up later, its settle call is refused because the lease token no longer matches — but any entity writes it makes still land, which is why stage commits need to be safe to repeat.
 
 ### Cancellation
 
@@ -212,7 +235,7 @@ export interface RecordProgress {
 // record-set-processor-base — interfaces.ts
 export interface RecordProcessorContext {
     // ...existing fields unchanged
-    /** Aborted when this record should stop: 'Cancelled', 'LeaseLost', or run shutdown. Absent for sources with no such concept. */
+    /** Aborted when this record should stop: 'Cancelled', 'LeaseLost', 'Stalled', or run shutdown. Absent for sources with no such concept. */
     Signal?: AbortSignal;
     /** Report status as often as convenient; the source decides how and when it's persisted. No-op when absent. */
     ReportProgress?: (progress: RecordProgress) => void;
@@ -302,6 +325,7 @@ Filter, View, List and SingleRecord scopes stay available platform-wide for ad h
 - **Cooperative cancel only.** A processor that never checks `context.Signal` runs to completion. Drivers need to be written with checkpoints where stopping is safe.
 - **Head-of-line blocking within a page.** The engine fetches the next page only after the current page fully settles, so a page moves at the speed of its slowest record. For stages mixing multi-hour and seconds-long records, use a small `BatchSize` (1 for whole-source Discover) until a rolling mode exists.
 - **Event-loop blocking** stops heartbeats (see Heartbeat). Needs to be in driver-author guidance.
+- **Hung drivers keep their claims.** A timer-based heartbeat can't tell a working driver from a hung one. The last-progress timestamp makes a stall visible; the optional no-progress threshold makes it recoverable. Which stages need the threshold, and at what value, is open.
 - **Progress is latest-value.** The delivery holds one status up to 500 characters plus percent and a small checkpoint; history lives in the detail row, written at the end. If history must be visible *while* a record runs, the tracker would also update the detail row in place — deferred until needed.
 - **No global per-source rate limit.** Concurrency is per process; isolating a source to one container with concurrency 1 is the only way to guarantee a strict ceiling today.
 - **Cross-team dependency.** Needs RSP and Work Queue codeowners' sign-off, though Work Queue itself needs no changes.
