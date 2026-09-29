@@ -97,6 +97,13 @@ export interface ResponseTypeInclusionRules {
     pipeline?: boolean;
 
     /**
+     * Include decisions field in the response interface.
+     * Auto-aligns with includeDecisionsDocs unless explicitly set.
+     * @default true
+     */
+    decisions?: boolean;
+
+    /**
      * Include `'Tasks'` in the nextStep.type union and the `tasks` property.
      * Auto-aligns with `enableTaskGraphs` unless explicitly set.
      *
@@ -120,6 +127,7 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     scratchpad: true,
     artifactToolCalls: true,
     pipeline: true,
+    decisions: true,
     // The one section that defaults OFF — see `enableTaskGraphs` (D3).
     tasks: false
 };
@@ -308,6 +316,26 @@ export interface LoopAgentTypePromptParams {
     includePipelineDocs?: boolean;
 
     /**
+     * Include decision-making documentation in the prompt.
+     * Disable for agents that should never request inline decisions.
+     * @default true
+     */
+    includeDecisionsDocs?: boolean;
+
+    /**
+     * Maximum number of items to process when `forEachItemIn` is used.
+     * Items beyond this limit are truncated.
+     * @default 100
+     */
+    decisionsMaxItems?: number;
+
+    /**
+     * Name of the decision prompt used for evaluating decisions.
+     * @default 'Default Decision'
+     */
+    decisionPromptName?: string;
+
+    /**
      * Allow this agent to emit durable task graphs (`nextStep.type === 'Tasks'`).
      *
      * **Defaults to false, unlike every other flag here, and is enforced rather than advisory.**
@@ -368,6 +396,9 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
+    includeDecisionsDocs: true,
+    decisionsMaxItems: 100,
+    decisionPromptName: 'Default Decision',
     // Deliberately false — a capability gate, not a token-savings flag (D3).
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,
