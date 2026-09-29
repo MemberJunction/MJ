@@ -445,6 +445,31 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   get allowMessageDelete(): ConversationChatAreaComponent['AllowMessageDelete'] {
     return this.AllowMessageDelete;
   }
+  /**
+   * Host-forced read-only. Hides every composer. A View share
+   * ({@link IsReadOnlyView}) with this left false keeps today's disabled composer.
+   */
+  @Input() ReadOnly = false;
+
+  /** @deprecated Use {@link ReadOnly}. */
+  @Input() set readOnly(value: boolean) {
+    this.ReadOnly = value;
+  }
+  /** @deprecated Use {@link ReadOnly}. */
+  get readOnly(): boolean {
+    return this.ReadOnly;
+  }
+  /** Banner copy when {@link ReadOnly} is set. Null uses the View-share text. */
+  @Input() ReadOnlyMessage: string | null = null;
+
+  /** @deprecated Use {@link ReadOnlyMessage}. */
+  @Input() set readOnlyMessage(value: string | null) {
+    this.ReadOnlyMessage = value;
+  }
+  /** @deprecated Use {@link ReadOnlyMessage}. */
+  get readOnlyMessage(): string | null {
+    return this.ReadOnlyMessage;
+  }
   /** Show the empty-state's built-in suggested-prompt chips (and the @mention tip). */
   @Input() ShowSuggestedPrompts = true;
 
@@ -4117,6 +4142,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   OpenProjectSelector(): void {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     this.ShowProjectSelector = true;
   }
 
@@ -4586,6 +4614,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return this.IsReadOnlyView;
   }
 
+  /** Read-only for any reason: the host said so, or the conversation is shared with View access. */
+  public get EffectiveReadOnly(): boolean {
+    return this.ReadOnly || this.IsReadOnlyView;
+  }
+
+  /** @deprecated Use {@link EffectiveReadOnly}. */
+  public get effectiveReadOnly(): boolean {
+    return this.EffectiveReadOnly;
+  }
+
   /**
    * `true` when the current user is allowed to create new shares on this
    * conversation: the owner, or a user with an Owner-level grant. Uses the same
@@ -4807,6 +4845,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Unpins a message from the pins panel — saves to DB and patches the cache.
    */
   async OnUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const previous = message.IsPinned;
     message.IsPinned = false;
     this.cdr.detectChanges();
@@ -4830,6 +4871,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Sends the selected response as a new user message WITHOUT modifying the visible input
    */
   async OnSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const messageText = event.customInput || event.text;
 
     // Get the active message input for the current conversation
@@ -6000,6 +6044,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     //   3. a generic re-prompt        — last resort if no user message found
     // OnAnalyzeArtifact prefilled messageText with 'Analyze "..." — '; we
     // overwrite that with the resolved followup before sending.
+    // Read-only (host flag or a View share) must not auto-send the follow-up.
+    if (this.EffectiveReadOnly) {
+      return;
+    }
     const messageInput = this.getActiveMessageInputComponent();
     if (messageInput) {
       let followup = command.followupMessage?.trim();

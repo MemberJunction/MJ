@@ -324,6 +324,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public get allowMessageDelete(): boolean {
     return this.AllowMessageDelete;
   }
+  /** Hides the response form and actionable commands on this message. */
+  @Input() public ReadOnly = false;
+
+  /** @deprecated Use {@link ReadOnly}. */
+  @Input() public set readOnly(value: boolean) {
+    this.ReadOnly = value;
+  }
+  /** @deprecated Use {@link ReadOnly}. */
+  public get readOnly(): boolean {
+    return this.ReadOnly;
+  }
   /** Host override for the AI message display name (white-label persona). Null = the agent record's name. */
   @Input() public AssistantDisplayName: string | null = null;
 

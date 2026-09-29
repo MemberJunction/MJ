@@ -222,6 +222,32 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   public get allowMessageDelete(): boolean {
     return this.AllowMessageDelete;
   }
+  /**
+   * Hides response forms and actionable commands on each message.
+   * Restamped onto already-rendered items — they are created dynamically.
+   */
+  @Input()
+  public set ReadOnly(value: boolean) {
+    if (value === this._readOnly) {
+      return;
+    }
+    this._readOnly = value;
+    this.restampAssistantIdentity();
+  }
+  public get ReadOnly(): boolean {
+    return this._readOnly;
+  }
+  private _readOnly = false;
+
+  /** @deprecated Use {@link ReadOnly}. */
+  @Input()
+  public set readOnly(value: boolean) {
+    this.ReadOnly = value;
+  }
+  /** @deprecated Use {@link ReadOnly}. */
+  public get readOnly(): boolean {
+    return this.ReadOnly;
+  }
 
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
@@ -1803,6 +1829,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.allowPinning = this.AllowPinning;
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;
+    instance.ReadOnly = this.ReadOnly;
     instance.assistantDisplayName = this.AssistantDisplayName;
     instance.assistantAvatarUrl = this.AssistantAvatarUrl;
   }
