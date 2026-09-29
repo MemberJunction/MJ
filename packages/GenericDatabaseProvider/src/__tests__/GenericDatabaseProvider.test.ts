@@ -38,6 +38,9 @@ import {
     QueryInfo,
     QueryCategoryInfo,
     Metadata,
+    ProviderBase,
+    ProviderConfigDataBase,
+    InMemoryLocalStorageProvider,
 } from '@memberjunction/core';
 import type { PostCommitToken, QueryExecutionSpec, RunViewParams } from '@memberjunction/core';
 import type { MJEntityAIActionEntity } from '@memberjunction/core-entities';
@@ -216,6 +219,36 @@ describe('GenericDatabaseProvider', () => {
 
     beforeEach(() => {
         provider = new TestGenericProvider();
+    });
+
+    describe('Config with a storage provider (plan N1)', () => {
+        it('installs the configured storage before the base configuration runs', async () => {
+            const shared = new InMemoryLocalStorageProvider();
+            let seenDuringConfig: unknown;
+            const baseConfig = vi.spyOn(ProviderBase.prototype, 'Config').mockImplementation(async function (this: ProviderBase) {
+                seenDuringConfig = this.LocalStorageProvider;
+                return true;
+            });
+            try {
+                const data = new ProviderConfigDataBase({});
+                data.LocalStorageProvider = shared;
+                expect(await provider.Config(data)).toBe(true);
+                expect(seenDuringConfig).toBe(shared);
+                expect(provider.LocalStorageProvider).toBe(shared);
+            } finally {
+                baseConfig.mockRestore();
+            }
+        });
+
+        it('keeps the default in-memory storage when none is configured', async () => {
+            const baseConfig = vi.spyOn(ProviderBase.prototype, 'Config').mockResolvedValue(true);
+            try {
+                await provider.Config(new ProviderConfigDataBase({}));
+                expect(provider.LocalStorageProvider).toBeInstanceOf(InMemoryLocalStorageProvider);
+            } finally {
+                baseConfig.mockRestore();
+            }
+        });
     });
 
     describe('Inheritance', () => {
