@@ -141,8 +141,9 @@ import {
     MiniMaxLLM,
 } from '@memberjunction/ai-minimax';
 
-// @memberjunction/ai-openrouter (1 classes)
+// @memberjunction/ai-openrouter (2 classes)
 import {
+    OpenRouterDecision,
     OpenRouterLLM,
 } from '@memberjunction/ai-openrouter';
 
@@ -194,7 +195,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (419 classes)
+// @memberjunction/core-entities (418 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -434,7 +435,6 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
-    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -903,8 +903,9 @@ import {
     TemplateRunServerOperation,
 } from '@memberjunction/templates';
 
-// @memberjunction/ai-prompts (1 classes)
+// @memberjunction/ai-prompts (2 classes)
 import {
+    LLMDecision,
     ParallelExecutionCoordinator,
 } from '@memberjunction/ai-prompts';
 
@@ -971,9 +972,8 @@ import {
     FormBuilderDesignerAgent,
 } from '@memberjunction/ai-form-builder';
 
-// @memberjunction/record-set-processor (6 classes)
+// @memberjunction/record-set-processor (5 classes)
 import {
-    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -1085,7 +1085,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (148 classes)
+// @memberjunction/core-actions (149 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1201,6 +1201,7 @@ import {
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
@@ -1300,6 +1301,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     InceptionLLM,
     LlamaCppLLM,
     MiniMaxLLM,
+    OpenRouterDecision,
     OpenRouterLLM,
     VertexLLM,
     xAILLM,
@@ -1461,11 +1463,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
-    MJContentFileTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
     MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
@@ -1555,7 +1557,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
-    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1946,6 +1947,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
+    LLMDecision,
     ParallelExecutionCoordinator,
     LLMReranker,
     PromptReasoningProvider,
@@ -1986,7 +1988,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderAgent,
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
-    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -2198,6 +2199,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduledGeocodingAction,
@@ -2255,7 +2257,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 962;
+export const CLASS_REGISTRATIONS_COUNT = 963;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
