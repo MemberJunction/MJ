@@ -265,6 +265,8 @@ describe('IsPrefixPromptCache — the catalog answers "is this serving path a by
         expect(ParseVendorConfiguration('[1,2]')).toBeNull();
         expect(ParseVendorConfiguration('{"ModelDefaults":{"LLM":{"PrefixPromptCache":true}}}')?.ModelDefaults?.LLM?.PrefixPromptCache).toBe(true);
         expect(ParseVendorConfiguration('{"SomethingElse":1}')?.ModelDefaults).toBeUndefined();
+    });
+});
 
 describe('Decision section — per-model typed-decision limits', () => {
     it('lets a vendor layer narrow one limit while keeping the model layer\'s others', () => {

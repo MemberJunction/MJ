@@ -1027,10 +1027,17 @@ describe('BaseAgent.Execute — a While whose condition cannot be evaluated', ()
     const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
 
     it('tells the model why on its next turn, so it can correct the loop', async () => {
+        // The trailing runtime-state fragment (metadata.volatileState) rides as the last message of
+        // EVERY request and is rebuilt each time; it is framework state, not a message the loop added,
+        // so it is excluded before the turns are compared.
+        const realMessages = (p: AIPromptParams): string[] =>
+            (p.conversationMessages ?? [])
+                .filter((m) => (m as { metadata?: { volatileState?: boolean } }).metadata?.volatileState !== true)
+                .map(contentOf);
         const turns: string[][] = [];
         const { agent, runner } = makeAgent([
-            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(badWhile()); },
-            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(successEnvelope()); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(badWhile()); },
+            (p) => { turns.push(realMessages(p)); return llmEnvelope(successEnvelope()); },
         ]);
 
         const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
