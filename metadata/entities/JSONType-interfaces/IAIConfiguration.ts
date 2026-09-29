@@ -4,7 +4,8 @@
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`LLMConfigurationSettings`, `RealtimeConfigurationSettings`,
- *    `VisionConfigurationSettings`, `AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `VisionConfigurationSettings`, `AudioConfigurationSettings`, `DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`IAIModelConfiguration`, `IAIPromptConfiguration`,
  *    `IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -185,6 +186,25 @@ export interface AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -203,6 +223,8 @@ export interface IAIModelConfiguration {
     Vision?: VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: DecisionConfigurationSettings | null;
 }
 
 /**
@@ -221,6 +243,8 @@ export interface IAIPromptConfiguration {
     Vision?: VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: DecisionConfigurationSettings | null;
 }
 
 /**
@@ -236,6 +260,8 @@ export interface IAIPromptModelConfiguration {
     Vision?: VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: DecisionConfigurationSettings | null;
 }
 
 /**

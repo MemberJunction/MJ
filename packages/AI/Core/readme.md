@@ -24,6 +24,7 @@ Every AI capability is represented by an abstract base class. Provider packages 
 | `BaseAudio` | Text-to-speech and speech-to-text | `TextToSpeech()`, `SpeechToText()` |
 | `BaseVideo` | Video generation from text/images | `GenerateVideo()` |
 | `BaseReranker` | Document reranking for retrieval | `Rerank()` |
+| `BaseDecision` | Typed decisions (Likelihood, Choice, Score) with a probability per answer | `Decide()` |
 | `BaseRealtimeModel` | Live, full-duplex, tool-calling realtime sessions (voice) | `StartSession()`, `CreateClientSession()` |
 
 All inherit from `BaseModel`, which manages API key storage and provides the `@RegisterClass` integration point.
@@ -61,6 +62,7 @@ One additional realtime primitive lives here that is *not* a `BaseModel` capabil
 | `SummarizeParams` / `SummarizeResult` | Text summarization (deprecated) |
 | `ClassifyParams` / `ClassifyResult` | Text classification (deprecated) |
 | `RerankParams` / `RerankResult` | Document reranking |
+| `DecisionParams` / `DecisionResult` | Typed decision parameters and structured results with probabilities |
 | `ModelUsage` | Token counts and cost tracking (prompt tokens, completion tokens, total cost, currency) |
 | `AIModelConfiguration` / `LLMConfigurationSettings` / `IsPrefixPromptCache` | The model catalog's `ModelConfiguration` JSONType bag (Model Types < Models < the vendor's `Configuration.ModelDefaults` (`AIVendorConfiguration`, parsed by `ParseVendorConfiguration`) < Model Vendors, resolved by `ResolveEffectiveModelConfiguration`). `LLMConfigurationSettings.PrefixPromptCache` (read via `IsPrefixPromptCache`) says whether a serving path's prompt cache is an exact byte-prefix match (OpenAI, xAI — set once under the vendor row's `Configuration.ModelDefaults`, inherited by every model it serves) rather than block/segment based, which decides whether the agent layer appends or replaces its trailing runtime-state message |
 | `BaseResult` | Common result base with success flag, timing, and error info |
