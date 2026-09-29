@@ -1426,6 +1426,12 @@ export abstract class BaseEntity<T = unknown> {
             parentEntityInfo.Name,
             this._contextCurrentUser
         );
+        // Link the parent back to this child, as a chain loaded through the parent is linked, so
+        // the parent's LeafEntity (and its save hooks) see the child. A parent that allows several
+        // subtypes keeps no single child (MJ#4870).
+        if (!parentEntityInfo.AllowMultipleSubtypes) {
+            this._parentEntity._childEntity = this;
+        }
         // Recursive: the parent's InitializeParentEntity() was called by GetEntityObject()
 
         // Cache the parent field names for O(1) routing lookups

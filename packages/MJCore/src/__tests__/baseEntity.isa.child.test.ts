@@ -15,6 +15,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { BaseEntity } from '../generic/baseEntity';
 import { EntityInfo, EntityPermissionType } from '../generic/entityInfo';
+import { EntitySaveOptions } from '../generic/interfaces';
 import { Metadata } from '../generic/metadata';
 import { ProviderBase } from '../generic/providerBase';
 import { UserInfo } from '../generic/securityInfo';
@@ -548,5 +549,85 @@ describe('BaseEntity.ISAParentEntity (deprecated)', () => {
     it('ISAParentEntity returns null for root', () => {
         const product = createEntity(productEntityInfo);
         expect(product.ISAParentEntity).toBeNull();
+    });
+});
+
+// ─── A child that builds its own parent is linked back (MJ#4870) ─────────
+
+class SpyMeeting extends MJTestEntity {
+    public SeenDirty: Array<{ name: string; oldValue: unknown; value: unknown }> = [];
+
+    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
+        if (options?.IsParentEntitySave) {
+            const leaf = this.LeafEntity;
+            this.SeenDirty = leaf.Fields
+                .filter(field => field.Dirty)
+                .map(field => ({ name: field.Name, oldValue: field.OldValue, value: field.Value }));
+        }
+        return super.Save(options);
+    }
+}
+
+function chainBuildingProvider(): { GetEntityObject(name: string, user?: UserInfo): Promise<BaseEntity> } {
+    const provider = {
+        Entities: entities,
+        CurrentUser: mockUser,
+        GetEntityObject: async (name: string, user?: UserInfo): Promise<BaseEntity> => {
+            const info = entities.find(entity => entity.Name.toLowerCase() === name.toLowerCase());
+            if (!info) {
+                throw new Error(`No mock entity named ${name}`);
+            }
+            const ent = name.toLowerCase() === 'meetings' ? new SpyMeeting(info) : new MJTestEntity(info);
+            ent.ContextCurrentUser = user ?? mockUser;
+            ent.BindProvider(provider as unknown as ProviderBase);
+            await ent.InitializeParentEntity();
+            return ent;
+        },
+    };
+    return provider;
+}
+
+describe('IS-A parent built by its child links back to that child (MJ#4870)', () => {
+    it('GetEntityObject on a child makes the parent LeafEntity that child', async () => {
+        const provider = chainBuildingProvider();
+        const webinar = await provider.GetEntityObject('Webinars', mockUser);
+        const meeting = webinar.ISAParent;
+        const product = meeting?.ISAParent;
+
+        expect(meeting).not.toBeNull();
+        expect(meeting!.LeafEntity).toBe(webinar);
+        expect(product!.LeafEntity).toBe(webinar);
+    });
+
+    it('a parent Save during the child save sees the child dirty field, its old value and its new value', async () => {
+        const provider = chainBuildingProvider();
+        const webinar = await provider.GetEntityObject('Webinars', mockUser);
+        const meeting = webinar.ISAParent as SpyMeeting;
+        // The first Set on a new field records the initial value, so it is not a change.
+        // A second Set is the edit a parent save hook has to see: old value and new value.
+        webinar.Set('PlatformURL', 'https://old.example/room');
+        webinar.Set('PlatformURL', 'https://example.test/room');
+
+        try {
+            await webinar.Save();
+        } catch {
+            // The chain has no database provider past the parent hook. The hook already ran.
+        }
+
+        const seen = meeting.SeenDirty.find(field => field.name === 'PlatformURL');
+        expect(seen).toBeDefined();
+        expect(seen!.value).toBe('https://example.test/room');
+        expect(seen!.oldValue).toBe('https://old.example/room');
+    });
+
+    it('a parent that allows several subtypes still returns itself as LeafEntity', async () => {
+        const provider = chainBuildingProvider();
+        const member = await provider.GetEntityObject('Members', mockUser);
+        const person = member.ISAParent;
+
+        expect(person).not.toBeNull();
+        expect(person!.EntityInfo.AllowMultipleSubtypes).toBe(true);
+        expect(person!.LeafEntity).toBe(person);
+        expect(person!.ISAChild).toBeNull();
     });
 });
