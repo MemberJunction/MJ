@@ -261,6 +261,28 @@ describe('compiling a Decision step', () => {
         expect(ValidateTaskGraphSpec(res.Spec!).Errors).toEqual([]);
     });
 
+    it('keeps every field of a path whose fields are getters, as an entity row\'s are', () => {
+        // A spread of an entity copies none of its fields, so a rewritten path built that way lost
+        // its ID, and two tied paths then failed to sort ("reading 'localeCompare'").
+        class GetterPath {
+            constructor(private readonly row: FlowCompilerPath) {}
+            get ID(): string { return this.row.ID; }
+            get OriginStepID(): string { return this.row.OriginStepID; }
+            get DestinationStepID(): string { return this.row.DestinationStepID; }
+            get Condition(): string | null | undefined { return this.row.Condition; }
+            get Priority(): number { return this.row.Priority; }
+            get PathPoints(): string | null | undefined { return this.row.PathPoints; }
+        }
+        const { steps, paths } = intentFork(['billing', 'refund']);
+        const tied: FlowCompilerPath[] = paths.map((p) => new GetterPath({ ...p, Priority: 0 }));
+
+        const res = CompileFlowToTaskGraph(steps, tied, options);
+
+        expect(res.Success).toBe(true);
+        expect(depsOf(res.Spec!, 'billing')[0].condition).toBe(`decisions['${TRIAGE_ID}'].intent.value === 'billing'`);
+        expect(depsOf(res.Spec!, 'refund')[0].condition).toBe(`decisions['${TRIAGE_ID}'].intent.value === 'refund'`);
+    });
+
     it('rewrites a later step\'s path that reads an earlier Decision step', () => {
         const steps = [decisionStep(), agentStep('gather', 'Gather'), agentStep('escalate', 'Escalate')];
         const paths = [path('p1', TRIAGE_ID, 'gather'), path('p2', 'gather', 'escalate', 'decisions.triage.urgent.probability >= 0.8')];

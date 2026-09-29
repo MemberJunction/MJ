@@ -319,7 +319,17 @@ function withDecisionStepIDs(
             });
         }
     }
-    return { ...path, Condition: rewrite.Expression };
+    if (rewrite.Expression === path.Condition) return path;
+    // Copied field by field, not spread: callers may pass entity objects, whose fields are getters
+    // that a spread silently drops.
+    return {
+        ID: path.ID,
+        OriginStepID: path.OriginStepID,
+        DestinationStepID: path.DestinationStepID,
+        Condition: rewrite.Expression,
+        Priority: path.Priority,
+        PathPoints: path.PathPoints,
+    };
 }
 
 /** Everything reachable from the entry by following paths forward. */
