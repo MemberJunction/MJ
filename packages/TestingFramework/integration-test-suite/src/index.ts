@@ -70,6 +70,7 @@ export * from './checks/ai-cost.checks';
 export * from './checks/ai-permissions.checks';
 export * from './checks/ai-embeddings.checks';
 export * from './checks/agent-loop-standin.checks';
+export * from './checks/trailing-runtime-state.checks';
 export * from './checks/transaction-groups.checks';
 export * from './checks/transaction-groups-batched.checks';
 export * from './checks/nested-transactions.checks';
