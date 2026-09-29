@@ -7921,30 +7921,6 @@
           "fields": {
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
-            "Currency": "USD",
-            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.5,
-            "OutputPricePerUnit": 0.77,
-            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Maverick pricing on Groq as of Jan 2025",
-            "CacheReadPricePerUnit": 0.25,
-            "CacheWritePricePerUnit": null
-          },
-          "primaryKey": {
-            "ID": "CCA0A4DC-497D-4E11-BEBB-392E0074A7CA"
-          },
-          "sync": {
-            "lastModified": "2026-06-05T02:25:05.838Z",
-            "checksum": "f0a727cc78d0957a0de340cf96937b839cb5fe12005c7cb38566ce1a48c66d42"
-          }
-        },
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "StartedAt": "2026-01-12T23:25:17.216Z",
             "Status": "Active",
             "Currency": "USD",
@@ -8384,30 +8360,6 @@
           "fields": {
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
-            "Currency": "USD",
-            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 1.5,
-            "OutputPricePerUnit": 7.5,
-            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Batch",
-            "Comments": "Claude 4 Sonnet batch pricing (50% discount) as of Jan 2025",
-            "CacheReadPricePerUnit": 0.15,
-            "CacheWritePricePerUnit": 1.875
-          },
-          "primaryKey": {
-            "ID": "6C644B8C-CB68-461D-A00B-36F62855539B"
-          },
-          "sync": {
-            "lastModified": "2026-06-05T02:25:05.954Z",
-            "checksum": "b542e0fdbd829d4191887dbb0087b8c4a2fadda98ead603058abfccf08537e3f"
-          }
-        },
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "StartedAt": "2026-01-12T23:25:17.216Z",
             "Status": "Active",
             "Currency": "USD",
@@ -8502,30 +8454,6 @@
         }
       ],
       "MJ: AI Model Costs": [
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
-            "Currency": "USD",
-            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 7.5,
-            "OutputPricePerUnit": 37.5,
-            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Batch",
-            "Comments": "Claude 4 Opus batch pricing (50% discount) as of Jan 2025",
-            "CacheReadPricePerUnit": 0.75,
-            "CacheWritePricePerUnit": 9.375
-          },
-          "primaryKey": {
-            "ID": "A727C77A-6F00-4990-9E1D-67B95F49CCF5"
-          },
-          "sync": {
-            "lastModified": "2026-06-05T02:25:05.996Z",
-            "checksum": "852754f9f7b92a23bc8ef402865a319135d8c744d81911d8d76cace031778a92"
-          }
-        },
         {
           "fields": {
             "ModelID": "@parent:ID",
@@ -8672,30 +8600,6 @@
         }
       ],
       "MJ: AI Model Costs": [
-        {
-          "fields": {
-            "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "StartedAt": "2026-01-08T14:56:00.690Z",
-            "Status": "Active",
-            "Currency": "USD",
-            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.11,
-            "OutputPricePerUnit": 0.34,
-            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
-            "ProcessingType": "Realtime",
-            "Comments": "Llama 4 Scout pricing on Groq as of Jan 2025",
-            "CacheReadPricePerUnit": 0.055,
-            "CacheWritePricePerUnit": null
-          },
-          "primaryKey": {
-            "ID": "DA3A0E18-83DD-4329-AC87-0D8E9D563F01"
-          },
-          "sync": {
-            "lastModified": "2026-06-05T02:25:06.061Z",
-            "checksum": "65b086f201426b892dfaba67a9f6b75c5f13b810083e7f791e56646d21f79d83"
-          }
-        },
         {
           "fields": {
             "ModelID": "@parent:ID",
