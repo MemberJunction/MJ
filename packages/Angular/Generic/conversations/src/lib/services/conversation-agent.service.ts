@@ -5,6 +5,7 @@ import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-da
 import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
+  ConversationEngine,
   MJConversationDetailEntity,
   MJArtifactVersionEntity,
   MJArtifactEntity
@@ -238,7 +239,11 @@ export class ConversationAgentService {
     onProgress?: AgentExecutionProgressCallback,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
-    requestedSkillIDs?: string[]
+    requestedSkillIDs?: string[],
+    /** The agents the conversation manager may delegate to. Null or omitted allows every agent. */
+    allowedAgentIDs?: readonly string[] | null,
+    /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
+    agentHistoryFrom?: Date | null
   ): Promise<ExecuteAgentResult | null> {
     // Warm the cached default-agent name for any synchronous consumers
     // before the runtime resolves on its own.
@@ -253,6 +258,8 @@ export class ConversationAgentService {
       onProgress,
       ...(planMode ? { planMode: true } : {}),
       ...(requestedSkillIDs?.length ? { requestedSkillIDs } : {}),
+      ...(allowedAgentIDs != null ? { AllowedAgentIDs: allowedAgentIDs } : {}),
+      ...(agentHistoryFrom ? { AgentHistoryFrom: agentHistoryFrom } : {}),
     });
   }
 
@@ -265,9 +272,11 @@ export class ConversationAgentService {
     onProgress?: AgentExecutionProgressCallback,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
-    requestedSkillIDs?: string[]
+    requestedSkillIDs?: string[],
+    allowedAgentIDs?: readonly string[] | null,
+    agentHistoryFrom?: Date | null
   ): Promise<ExecuteAgentResult | null> {
-    return this.ProcessMessage(conversationId, message, conversationHistory, conversationDetailId, onProgress, appContext, planMode, requestedSkillIDs);
+    return this.ProcessMessage(conversationId, message, conversationHistory, conversationDetailId, onProgress, appContext, planMode, requestedSkillIDs, allowedAgentIDs, agentHistoryFrom);
   }
 
   /**
@@ -386,7 +395,9 @@ export class ConversationAgentService {
     agentConfigurationPresetId?: string,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
-    requestedSkillIDs?: string[]
+    requestedSkillIDs?: string[],
+    /** The first moment of the conversation the run may read. Null or omitted reads all of it. */
+    agentHistoryFrom?: Date | null
   ): Promise<ExecuteAgentResult | null> {
     try {
       // Ensure AIEngineBase is configured
@@ -436,6 +447,7 @@ export class ConversationAgentService {
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
         ...(planMode ? { PlanMode: true } : {}),
         ...(requestedSkillIDs?.length ? { RequestedSkillIDs: requestedSkillIDs } : {}),
+        ...(agentHistoryFrom ? { AgentHistoryFrom: agentHistoryFrom } : {}),
         CreateArtifacts: true,
         CreateNotification: true,
         SourceArtifactId: sourceArtifactId,
@@ -487,9 +499,10 @@ export class ConversationAgentService {
     agentConfigurationPresetId?: string,
     appContext?: Record<string, unknown> | null,
     planMode?: boolean,
-    requestedSkillIDs?: string[]
+    requestedSkillIDs?: string[],
+    agentHistoryFrom?: Date | null
   ): Promise<ExecuteAgentResult | null> {
-    return this.InvokeSubAgent(agentName, conversationId, message, conversationHistory, reasoning, conversationDetailId, payload, onProgress, sourceArtifactId, sourceArtifactVersionId, agentConfigurationPresetId, appContext, planMode, requestedSkillIDs);
+    return this.InvokeSubAgent(agentName, conversationId, message, conversationHistory, reasoning, conversationDetailId, payload, onProgress, sourceArtifactId, sourceArtifactVersionId, agentConfigurationPresetId, appContext, planMode, requestedSkillIDs, agentHistoryFrom);
   }
 
   /**
@@ -703,13 +716,18 @@ ${compactHistory}${artifactContext}
    *
    * One round trip. The subquery walks details -> Output junctions, and versions carry
    * `__mj_CreatedAt`, so "newest" is expressible without joining back for `Sequence`.
+   *
+   * @param historyFrom The chat's history floor. When set, only artifacts on replies written at
+   *   or after it count: a run that may not read earlier messages must not pick up their work
+   *   as its payload either.
    */
   public async FindLatestAgentOutputVersion(
     conversationId: string,
-    agentId: string
+    agentId: string,
+    historyFrom?: Date | null
   ): Promise<AgentPayloadSource | null> {
     return this.runPayloadSourceQuery(
-      this.agentOutputVersionFilter(conversationId, agentId), '__mj_CreatedAt DESC'
+      this.agentOutputVersionFilter(conversationId, agentId, historyFrom), '__mj_CreatedAt DESC'
     );
   }
 
@@ -724,13 +742,14 @@ ${compactHistory}${artifactContext}
    * run would mean joining back to `MJ: AI Agent Runs` purely to restate a condition the
    * detail already carries.
    */
-  private agentOutputVersionFilter(conversationId: string, agentId: string): string {
+  private agentOutputVersionFilter(conversationId: string, agentId: string, historyFrom?: Date | null): string {
+    const floor = historyFrom ? ` AND ${ConversationEngine.HistoryFromFilter(historyFrom)}` : '';
     return `ID IN (
         SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
         WHERE Direction='Output' AND ConversationDetailID IN (
           SELECT ID FROM [__mj].[vwConversationDetails]
           WHERE ConversationID='${conversationId}' AND AgentID='${agentId}'
-            AND Role='AI' AND Status <> 'Error'
+            AND Role='AI' AND Status <> 'Error'${floor}
         )
       )`;
   }

@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, AfterViewInit, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { ViewConfigSummary, QuickSaveEvent, QuickSaveAdvancedEvent } from '../types';
 
@@ -33,7 +33,7 @@ import { ViewConfigSummary, QuickSaveEvent, QuickSaveAdvancedEvent } from '../ty
   templateUrl: './quick-save-dialog.component.html',
   styleUrls: ['./quick-save-dialog.component.css']
 })
-export class QuickSaveDialogComponent implements OnChanges {
+export class QuickSaveDialogComponent implements OnChanges, AfterViewInit {
   /**
    * Whether the dialog is open
    */
@@ -65,6 +65,14 @@ export class QuickSaveDialogComponent implements OnChanges {
   @Input() DefaultSaveAsNew: boolean = false;
 
   /**
+   * Name to pre-fill when creating a NEW view, so the user can accept it with a single click.
+   * The field is focused and its text selected on open, so typing replaces it outright.
+   *
+   * Ignored when {@link ViewEntity} is set — an existing view's own name always wins.
+   */
+  @Input() SuggestedName: string = '';
+
+  /**
    * Emitted when the user saves
    */
   @Output() Save = new EventEmitter<QuickSaveEvent>();
@@ -80,17 +88,41 @@ export class QuickSaveDialogComponent implements OnChanges {
    */
   @Output() OpenAdvanced = new EventEmitter<QuickSaveAdvancedEvent>();
 
+  /** The name input, focused and selected whenever the dialog opens. */
+  @ViewChild('nameInput') private nameInput?: ElementRef<HTMLInputElement>;
+
   // Form state
   public Name: string = '';
   public Description: string = '';
   public IsShared: boolean = false;
   public NameTouched: boolean = false;
 
+  /**
+   * True when the dialog opened before the view existed, so the focus has to wait for
+   * `ngAfterViewInit`. The panel is always in the DOM (only `[class.open]` toggles), so after
+   * the first render the ViewChild is resolved and opening can focus synchronously.
+   */
+  private focusPending: boolean = false;
+  private viewReady: boolean = false;
+
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['IsOpen'] && this.IsOpen) {
       this.initializeForm();
+      if (this.viewReady) {
+        this.focusNameField();
+      } else {
+        this.focusPending = true;
+      }
+    }
+  }
+
+  ngAfterViewInit(): void {
+    this.viewReady = true;
+    if (this.focusPending) {
+      this.focusPending = false;
+      this.focusNameField();
     }
   }
 
@@ -104,11 +136,30 @@ export class QuickSaveDialogComponent implements OnChanges {
       this.Description = this.ViewEntity.Description || '';
       this.IsShared = this.ViewEntity.IsShared;
     } else {
-      this.Name = '';
+      this.Name = this.SuggestedName || '';
       this.Description = '';
       this.IsShared = false;
     }
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Put the cursor in the name field with its text selected: one click accepts a suggested
+   * name, one keystroke replaces it.
+   *
+   * Deferred by a microtask because `ngModel` writes the seeded value to the element on one of
+   * its own — selecting first would select an empty field and leave the caret at the end once
+   * the value landed.
+   */
+  private focusNameField(): void {
+    queueMicrotask(() => {
+      const input = this.nameInput?.nativeElement;
+      if (!input || !this.IsOpen) {
+        return;
+      }
+      input.focus();
+      input.select();
+    });
   }
 
   /**
