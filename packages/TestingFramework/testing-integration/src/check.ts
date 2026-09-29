@@ -354,7 +354,7 @@ export interface EntityGraphClientFixture {
 }
 
 /**
- * Accumulator fixture for the `record-cloning` bundle (client transport; IT95).
+ * Accumulator fixture for the `record-cloning` bundle (client transport; IT96).
  *
  * Setup creates NO rows, so a deterministic-only run writes nothing: it only stamps the per-run
  * prefix and start time. The mutating checks provision the throwaway subject user (and its API-key
@@ -672,7 +672,7 @@ export interface IntegrationCheckContext {
     EntityWritesFixture?: EntityWritesFixture;
     /** Accumulator fixture for the `entity-graph-client` bundle (client transport, mutating). */
     EntityGraphClientFixture?: EntityGraphClientFixture;
-    /** Accumulator fixture for the `record-cloning` bundle (client transport, IT95). */
+    /** Accumulator fixture for the `record-cloning` bundle (client transport, IT96). */
     RecordCloningFixture?: RecordCloningFixture;
     /** Shared fixture for the `transaction-groups` bundle (client transport, mutating). */
     TransactionGroupsFixture?: TransactionGroupsFixture;

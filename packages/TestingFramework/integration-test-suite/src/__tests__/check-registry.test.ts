@@ -167,7 +167,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
         ['metadata-sync-push', MetadataSyncPushChecks, 8], // MSP1-MSP8 sync push atomicity, incl. server-derived child rows, mutation tier (IT94)
-        ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT95)
+        ['record-cloning', RecordCloningChecks, 13], // RC1-RC9 plan §13.2 + RC10-RC13 real-database dry runs, client transport (IT96)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -334,7 +334,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(95);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(96);
     });
 });
 

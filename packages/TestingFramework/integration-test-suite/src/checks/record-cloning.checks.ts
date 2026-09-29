@@ -1,5 +1,5 @@
 /**
- * record-cloning.checks.ts — the 'record-cloning' bundle (RC1–RC13, IT95): entity record graph
+ * record-cloning.checks.ts — the 'record-cloning' bundle (RC1–RC13, IT96): entity record graph
  * cloning exercised CLIENT-FIRST, over the real GraphQL wire.
  *
  * WHY CLIENT TRANSPORT. Cloning is entity CRUD plus a permission gate, and both have a client
@@ -204,7 +204,7 @@ function finalValue(node: RecordClonePlanDetails['Nodes'][number], field: string
 }
 
 function promptedValuesFor(f: RecordCloningFixture, label: string): Record<string, string> {
-    return { Email: `${f.Prefix}-${label}@integration.test`, FirstName: 'IT95', LastName: `${label} clone ${FIXTURE_TAG}` };
+    return { Email: `${f.Prefix}-${label}@integration.test`, FirstName: 'IT96', LastName: `${label} clone ${FIXTURE_TAG}` };
 }
 
 // ─────────────────────────────────────────────────────────────────── source records
@@ -292,7 +292,7 @@ async function ensureSubject(ctx: IntegrationCheckContext): Promise<{ UserID: st
         user.NewRecord();
         user.Name = `${f.Prefix}-subject`;
         user.Email = `${f.Prefix}-subject@integration.test`;
-        user.FirstName = 'IT95';
+        user.FirstName = 'IT96';
         user.LastName = `Subject ${FIXTURE_TAG}`;
         user.Title = FIXTURE_TAG;
         user.Type = 'User';
@@ -350,7 +350,7 @@ async function ensureSubject(ctx: IntegrationCheckContext): Promise<{ UserID: st
         // The denied identity: a user API key granted full_access, so the only thing that can stop
         // the subject is the clone authorization itself (scope enforcement fails closed otherwise).
         const engine = GetAPIKeyEngine();
-        const created = await engine.CreateAPIKey({ UserId: user.ID, Label: `IT95 record-cloning subject ${FIXTURE_TAG}` }, ctx.User);
+        const created = await engine.CreateAPIKey({ UserId: user.ID, Label: `IT96 record-cloning subject ${FIXTURE_TAG}` }, ctx.User);
         if (!created.Success || !created.RawKey || !created.APIKeyId) {
             throw new Error(`CreateAPIKey failed: ${created.Error ?? 'no raw key returned'}`);
         }
@@ -399,7 +399,7 @@ export const RecordCloningChecks: NamedCheck[] = [
             const out = await executeClone(md, {
                 EntityName: USERS,
                 SourceRecordKey: idKey(subjectId),
-                Options: { Preset: 'with-settings', PromptedValues: prompted, Reason: `IT95 RC1 ${FIXTURE_TAG}` },
+                Options: { Preset: 'with-settings', PromptedValues: prompted, Reason: `IT96 RC1 ${FIXTURE_TAG}` },
             }, 'RC1');
             trackExecute(ctx, out);
             Assert(out.Success && out.ResultCode === 'SUCCESS', `RC1: the user clone failed — ${describeFailure(out)}`);
@@ -657,7 +657,7 @@ export const RecordCloningChecks: NamedCheck[] = [
 
             const subject = await md.GetEntityObject<MJUserEntity>(USERS, ctx.User);
             Assert(await subject.Load(subjectId), 'RC7: could not load the subject user');
-            subject.Title = `IT95 RC7 changed ${Date.now()}`; // Title is nvarchar(50)
+            subject.Title = `IT96 RC7 changed ${Date.now()}`; // Title is nvarchar(50)
             Assert(await subject.Save(), `RC7: changing the source failed — ${subject.LatestResult?.CompleteMessage}`);
 
             const logsBefore = await countRows(md, CLONE_LOGS, `RootSourceRecordID = '${subjectId}' AND Status = 'Cancelled'`);
