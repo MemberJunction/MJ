@@ -6,13 +6,42 @@ import {
 import { RunView, CompositeKey, TransactionGroupBase } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
+import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig, PromptOption } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /** View mode for the agent editor */
 export type AgentEditorViewMode = 'diagram' | 'list';
+
+/**
+ * Generates a unique Decision step key among existing flow steps.
+ * Starts with 'decision', then 'decision_2', 'decision_3', etc.
+ */
+export function GenerateUniqueDecisionKey(steps: MJAIAgentStepEntity[]): string {
+  const existingKeys = new Set<string>();
+  for (const s of steps) {
+    if (s.StepType === 'Decision' && s.Configuration) {
+      try {
+        const parsed = JSON.parse(s.Configuration);
+        if (parsed && typeof parsed.key === 'string' && parsed.key.trim().length > 0) {
+          existingKeys.add(parsed.key.trim());
+        }
+      } catch {
+        // Ignore malformed JSON
+      }
+    }
+  }
+
+  if (!existingKeys.has('decision')) {
+    return 'decision';
+  }
+  let counter = 2;
+  while (existingKeys.has(`decision_${counter}`)) {
+    counter++;
+  }
+  return `decision_${counter}`;
+}
 
 /**
  * Flow Agent Editor — wraps the generic FlowEditorComponent with
@@ -95,8 +124,9 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   // Picker data (includes icon fields for node rendering)
   protected availableActions: Array<{ ID: string; Name: string; IconClass?: string | null }> = [];
-  protected availablePrompts: Array<{ ID: string; Name: string }> = [];
+  protected availablePrompts: PromptOption[] = [];
   protected availableAgents: Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }> = [];
+  protected decisionModelTypeID: string | null = null;
 
   // Permission state — cached once on init
   protected userCanUpdate = false;
@@ -198,7 +228,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   private async loadPickerData(): Promise<void> {
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const [actionsResult, promptsResult, agentsResult] = await rv.RunViews([
+    const [actionsResult, promptsResult, agentsResult, decisionModelTypeResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Actions',
         Fields: ['ID', 'Name', 'IconClass'],
@@ -208,7 +238,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       },
       {
         EntityName: 'MJ: AI Prompts',
-        Fields: ['ID', 'Name'],
+        Fields: ['ID', 'Name', 'AIModelType', 'AIModelTypeID'],
         ExtraFilter: '',
         OrderBy: 'Name ASC',
         ResultType: 'simple'
@@ -219,6 +249,12 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
         ExtraFilter: this.AgentID ? `ID <> '${this.AgentID}'` : '',
         OrderBy: 'Name ASC',
         ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: AI Model Types',
+        ExtraFilter: "Name='Decision'",
+        Fields: ['ID'],
+        ResultType: 'simple'
       }
     ]);
 
@@ -226,11 +262,14 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       ? (actionsResult.Results as Array<{ ID: string; Name: string; IconClass?: string | null }>)
       : [];
     this.availablePrompts = promptsResult.Success
-      ? (promptsResult.Results as Array<{ ID: string; Name: string }>)
+      ? (promptsResult.Results as PromptOption[])
       : [];
     this.availableAgents = agentsResult.Success
       ? (agentsResult.Results as Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }>)
       : [];
+    this.decisionModelTypeID = decisionModelTypeResult.Success && decisionModelTypeResult.Results && decisionModelTypeResult.Results.length > 0
+      ? (decisionModelTypeResult.Results[0] as { ID: string }).ID
+      : null;
   }
 
   private rebuildFlowModel(): void {
@@ -404,7 +443,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
     step.NewRecord(); // This generates a UUID immediately - available before Save()
     step.AgentID = this.AgentID;
     step.Name = event.Node.Label;
-    step.StepType = event.Node.Type as 'Action' | 'Prompt' | 'Sub-Agent' | 'ForEach' | 'While';
+    step.StepType = event.Node.Type as MJAIAgentStepEntity['StepType'];
     step.Status = 'Active';
     step.StartingStep = this.steps.length === 0; // First step is starting step
     step.PositionX = Math.round(event.DropPosition.X);
@@ -412,6 +451,12 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
     step.OnErrorBehavior = 'fail';
     step.RetryCount = 0;
     step.TimeoutSeconds = 600;
+
+    if (step.StepType === 'Decision') {
+      step.PromptID = null;
+      const key = GenerateUniqueDecisionKey(this.steps);
+      step.Configuration = JSON.stringify({ key, state: 'payload', questions: {} }, null, 2);
+    }
 
     // Add the unsaved step to the array - it already has a UUID from NewRecord()
     // This allows connections to be drawn immediately without waiting for a database save

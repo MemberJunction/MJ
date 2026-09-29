@@ -13,6 +13,8 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import { UUIDsEqual } from '@memberjunction/global';
+import type { MJAIPromptEntity } from '@memberjunction/core-entities';
 import type { TaskGraphDecisionQuestion } from './task-graph-spec';
 import { DecisionConfigurationProblems } from './task-graph-validator';
 
@@ -84,4 +86,22 @@ function keyProblems(key: unknown): string[] {
     return FLOW_DECISION_KEY_PATTERN.test(key)
         ? []
         : [`its key "${key}" cannot be named in a path condition; use letters, digits and underscores, not starting with a digit`];
+}
+
+/**
+ * Whether a prompt is for a Decision model type, so an editor offers it as a decision prompt. Prefer the ID: `AIModelType` is
+ * a view column, and cached engine entities may not populate it (see RunAIPromptResolver). The name is the fallback for rows
+ * read from the view without the ID. The runtime enforces the type on the models themselves
+ * (`AIDecisionRunner.RequiredModelType`); this only filters a picker.
+ */
+export function IsDecisionPrompt(
+    prompt: Pick<MJAIPromptEntity, 'AIModelType' | 'AIModelTypeID'> | null | undefined,
+    decisionModelTypeID?: string | null,
+): boolean {
+    if (!prompt) return false;
+    if (decisionModelTypeID && prompt.AIModelTypeID) {
+        return UUIDsEqual(prompt.AIModelTypeID, decisionModelTypeID);
+    }
+    const typeName = typeof prompt.AIModelType === 'string' ? prompt.AIModelType.trim().toLowerCase() : '';
+    return typeName === 'decision';
 }

@@ -9,7 +9,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { DecisionChoiceTestOf, DecisionReferencesIn, RewriteDecisionReferences } from '../task-graph/decision-conditions';
-import { ReadFlowDecisionStepConfiguration, type FlowDecisionStepConfiguration } from '../task-graph/flow-decision-step';
+import {
+    ReadFlowDecisionStepConfiguration,
+    IsDecisionPrompt,
+    type FlowDecisionStepConfiguration,
+} from '../task-graph/flow-decision-step';
 import {
     CollectDecisionStepKeys,
     CompileFlowToTaskGraph,
@@ -410,5 +414,38 @@ describe('Save as Workflow — a Decision node becomes a Decision step', () => {
         };
         expect(routing(compiled.Spec!)).toEqual(routing(original));
         expect(ConfigOf(compiled.Spec!.tasks.find((t) => t.kind === 'Decision')!, 'Decision')?.questions).toEqual(TRIAGE.questions);
+    });
+});
+
+describe('IsDecisionPrompt', () => {
+    const decisionTypeId = '11111111-2222-3333-4444-555555555555';
+
+    it('returns false for null or undefined', () => {
+        expect(IsDecisionPrompt(null)).toBe(false);
+        expect(IsDecisionPrompt(undefined)).toBe(false);
+    });
+
+    it('matches when both decisionModelTypeID and prompt.AIModelTypeID are set and match', () => {
+        expect(IsDecisionPrompt({ AIModelTypeID: decisionTypeId }, decisionTypeId)).toBe(true);
+        expect(IsDecisionPrompt({ AIModelTypeID: decisionTypeId, AIModelType: 'Decision' }, decisionTypeId)).toBe(true);
+    });
+
+    it('returns false on ID mismatch even when the name says Decision', () => {
+        const otherId = '99999999-9999-9999-9999-999999999999';
+        expect(IsDecisionPrompt({ AIModelTypeID: otherId, AIModelType: 'Decision' }, decisionTypeId)).toBe(false);
+        expect(IsDecisionPrompt({ AIModelTypeID: otherId, AIModelType: 'decision' }, decisionTypeId)).toBe(false);
+    });
+
+    it('falls back to AIModelType when either ID is absent', () => {
+        // No decisionModelTypeID passed
+        expect(IsDecisionPrompt({ AIModelType: 'Decision' })).toBe(true);
+        expect(IsDecisionPrompt({ AIModelType: 'decision' })).toBe(true);
+        expect(IsDecisionPrompt({ AIModelType: '  DECISION  ' })).toBe(true);
+        expect(IsDecisionPrompt({ AIModelType: 'Chat' })).toBe(false);
+
+        // decisionModelTypeID passed, but prompt has no AIModelTypeID
+        expect(IsDecisionPrompt({ AIModelType: 'Decision', AIModelTypeID: null }, decisionTypeId)).toBe(true);
+        expect(IsDecisionPrompt({ AIModelType: 'Chat', AIModelTypeID: null }, decisionTypeId)).toBe(false);
+        expect(IsDecisionPrompt({ AIModelType: 'Decision', AIModelTypeID: undefined }, decisionTypeId)).toBe(true);
     });
 });

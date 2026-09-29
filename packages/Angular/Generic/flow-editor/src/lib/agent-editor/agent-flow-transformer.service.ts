@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowConnectionStyle, FlowNodeTypeConfig, FlowNodePort } from '../interfaces/flow-types';
 import { UUIDsEqual } from '@memberjunction/global';
+import { ReadFlowDecisionStepConfiguration } from '@memberjunction/ai-core-plus';
 
 /** Picker item shape for Actions with optional icon */
 export interface ActionPickerItem { ID: string; Name: string; IconClass?: string | null; }
@@ -27,6 +28,17 @@ export const AGENT_STEP_TYPE_CONFIGS: FlowNodeTypeConfig[] = [
     Label: 'Prompt',
     Icon: 'fa-comment-dots',
     Color: '#8B5CF6',
+    Category: 'Steps',
+    DefaultPorts: [
+      { ID: 'input', Direction: 'input', Side: 'top', Multiple: true },
+      { ID: 'output', Direction: 'output', Side: 'bottom', Multiple: true }
+    ]
+  },
+  {
+    Type: 'Decision',
+    Label: 'Decision',
+    Icon: 'fa-scale-balanced',
+    Color: '#0891b2',
     Category: 'Steps',
     DefaultPorts: [
       { ID: 'input', Direction: 'input', Side: 'top', Multiple: true },
@@ -108,6 +120,14 @@ export class AgentFlowTransformerService {
         return this.buildLoopSubtitle(step, 'For Each');
       case 'While':
         return this.buildLoopSubtitle(step, 'While');
+      case 'Decision': {
+        const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+        if ('Config' in read) {
+          const count = Object.keys(read.Config.questions || {}).length;
+          return `${read.Config.key} · ${count} ${count === 1 ? 'question' : 'questions'}`;
+        }
+        return 'Unconfigured';
+      }
       default:
         return step.StepType;
     }
@@ -148,6 +168,10 @@ export class AgentFlowTransformerService {
       case 'ForEach':
       case 'While':
         return this.buildLoopWarningMessage(step);
+      case 'Decision': {
+        const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+        return 'Error' in read ? read.Error : null;
+      }
       default:
         return null;
     }
@@ -179,6 +203,10 @@ export class AgentFlowTransformerService {
       case 'ForEach':
       case 'While':
         return this.isLoopBodyMissingReference(step);
+      case 'Decision': {
+        const read = ReadFlowDecisionStepConfiguration(step.Configuration);
+        return 'Error' in read;
+      }
       default:
         return false;
     }
