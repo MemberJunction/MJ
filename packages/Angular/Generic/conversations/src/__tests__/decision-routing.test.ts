@@ -71,8 +71,9 @@ function likelihood(probability: number): LikelihoodAnswer {
     return { Kind: 'Likelihood', Probability: probability };
 }
 
+/** A successful decision, answered by Jev, whose thread likelihood routing has a calibration for. */
 function answered(answers: Record<string, DecisionAnswer>): RunDecisionResult {
-    return { Success: true, Answers: answers };
+    return { Success: true, Answers: answers, ModelName: 'Jev' };
 }
 
 /** A confident move away from Research, to the given agent. */
@@ -189,7 +190,8 @@ describe('decision routing', () => {
         });
 
         it('keeps continuity when the Likelihood is ambiguous', async () => {
-            const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.5) });
+            // Ambiguous after calibration: Jev's raw 0.8 is a calibrated 0.48 (a raw 0.5 is 0.10, a clear "leaves")
+            const ambiguous = answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.8) });
             expect((await RunRoutingDecision(input(), runner(ambiguous))).Verdict).toBe('KeptContinuity');
         });
 
@@ -221,7 +223,7 @@ describe('decision routing', () => {
             expect((await RunRoutingDecision(input(), runner(partial))).Verdict).toBe('KeptContinuity');
         });
 
-        it('keeps continuity when the answer takes more than 250 ms, and ignores it when it arrives', async () => {
+        it('keeps continuity when the answer takes longer than the timeout, and ignores it when it arrives', async () => {
             vi.useFakeTimers();
             const run = runner(() => new Promise(resolve => setTimeout(() => resolve(leaves(WRITER.ID)), DECISION_ROUTING_TIMEOUT_MS + 50)));
 
@@ -231,7 +233,7 @@ describe('decision routing', () => {
             await vi.advanceTimersByTimeAsync(100);
 
             expect(outcome.Verdict).toBe('KeptContinuity');
-            expect(outcome.Reason).toContain('250 ms');
+            expect(outcome.Reason).toContain(`${DECISION_ROUTING_TIMEOUT_MS} ms`);
         });
 
         it('uses an answer that arrives in time', async () => {

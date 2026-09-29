@@ -17,6 +17,7 @@ import {
     BuildRoutingQuestions,
     BuildRoutingState,
     BuildRoutingStateStructured,
+    CalibratedContinuesProbability,
     CanAskRoutingDecision,
     CollectRoutingParticipants,
     DECISION_ROUTING_MIN_CONFIDENCE,
@@ -25,6 +26,7 @@ import {
     IsAgentAllowed,
     KeptContinuityOutcome,
     ROUTING_ARTIFACT_QUESTION,
+    ROUTING_CONTINUES_CALIBRATION,
     ROUTING_CONTINUES_QUESTION,
     ROUTING_NO_ARTIFACT,
     ROUTING_ROUTE_QUESTION,
@@ -86,8 +88,9 @@ function likelihood(probability: number): LikelihoodAnswer {
     return { Kind: 'Likelihood', Probability: probability };
 }
 
-function answered(answers: Record<string, DecisionAnswer>): RoutingDecisionAnswers {
-    return { Success: true, Answers: answers };
+/** A successful decision, answered by a calibrated model unless the test says otherwise. */
+function answered(answers: Record<string, DecisionAnswer>, ModelName: string | undefined = 'Jev'): RoutingDecisionAnswers {
+    return { Success: true, Answers: answers, ModelName };
 }
 
 /** A confident move away from Research, to the given agent. */
@@ -113,9 +116,48 @@ function artifactSummary(name: string, versions: Array<[string, number, string |
 
 describe('conversation routing decision', () => {
     describe('the thresholds', () => {
-        it('are the brief\'s figures until calibration sets them', () => {
-            expect(DECISION_ROUTING_TIMEOUT_MS).toBe(250);
+        it('are the figures the Phase 2 Decision Eval set', () => {
+            expect(DECISION_ROUTING_TIMEOUT_MS).toBe(350);
             expect(DECISION_ROUTING_MIN_CONFIDENCE).toBe(0.7);
+            expect(ROUTING_CONTINUES_CALIBRATION).toEqual({ Jev: { A: 1.5035, B: -2.1629 }, 'LLM Decision': { A: 1.6508, B: -2.9110 } });
+        });
+    });
+
+    describe('the thread likelihood is calibrated per model', () => {
+        it('maps a raw probability through the answering model\'s Platt calibration', () => {
+            // Jev's raw 0.5 means about a 10% chance the thread continues
+            expect(CalibratedContinuesProbability(0.5, 'Jev')).toBeCloseTo(0.1031, 4);
+            expect(CalibratedContinuesProbability(0.5, 'LLM Decision')).toBeCloseTo(0.0516, 4);
+            expect(CalibratedContinuesProbability(0.5, '  Jev ')).toBeCloseTo(0.1031, 4);
+        });
+
+        it('has no calibrated probability for an unknown or unnamed model', () => {
+            expect(CalibratedContinuesProbability(0.5, 'Some Other Model')).toBeNull();
+            expect(CalibratedContinuesProbability(0.5, undefined)).toBeNull();
+        });
+
+        it('routes on a raw answer the uncalibrated check called unsure', () => {
+            // Raw 0.45 sits in the old 0.3–0.7 middle; calibrated for Jev it is about 0.08
+            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.45) }));
+            expect(outcome.Verdict).toBe('Routed');
+            expect(outcome.RoutedAgentId).toBe(WRITER.ID);
+        });
+
+        it('keeps continuity when the calibrated probability is still in the middle', () => {
+            // Raw 0.8 from Jev is a calibrated 0.48
+            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.8) }));
+            expect(outcome.Verdict).toBe('KeptContinuity');
+            expect(outcome.Reason).toContain('calibrated probability 0.480');
+        });
+
+        it('keeps continuity when the answering model is unnamed or uncalibrated, however sure it sounds', () => {
+            for (const model of [undefined, 'Some Other Model']) {
+                // Built directly: passing undefined to answered() would take its 'Jev' default
+                const result: RoutingDecisionAnswers = { Success: true, Answers: { route: choice(WRITER.ID, 0.99), continues: likelihood(0.01) }, ModelName: model };
+                const outcome = InterpretRoutingAnswers(input(), result);
+                expect(outcome.Verdict).toBe('KeptContinuity');
+                expect(outcome.Reason).toContain('uncalibrated');
+            }
         });
     });
 
