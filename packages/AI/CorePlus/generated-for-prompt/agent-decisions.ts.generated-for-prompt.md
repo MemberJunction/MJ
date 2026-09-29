@@ -24,7 +24,14 @@ interface AgentDecisionAnswerSummary {
     value?: string | number;  // A Choice's option value, or a Score's position from 0 (lowest level).
     confidence?: number;  // How confident the model is in `value` (0..1).
 }
+
+interface AgentFinishIf {
+    questions: string[];  // One to three yes/no questions about what the step's results show; each must be a confident yes.
+    message: string;  // The final reply to the user if every question passes. Write it as your final message.
+}
 ```
 
 Decisions are answered inline at no turn cost; the answers arrive on the next turn.
 Use them for small, known answer spaces; never for writing, arithmetic or dates.
+finishIf ends the run after actions or a sub-agent only when every question passes; otherwise you get your normal next turn.
+Use it when the step you are requesting should finish the task.

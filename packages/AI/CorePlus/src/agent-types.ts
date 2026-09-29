@@ -16,7 +16,7 @@ import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
-import { AgentDecisionRequest } from './agent-decisions';
+import { AgentDecisionRequest, AgentFinishIf } from './agent-decisions';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
@@ -773,6 +773,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * to decide whether to return Success or continue to another prompt.
      */
     terminateAfterExecution?: boolean;
+    /**
+     * Conditional completion gate for Actions or Sub-Agent steps.
+     * When present, if all questions evaluate to a probability >= threshold after the step completes,
+     * the run finishes immediately with `finishIf.message` at zero extra turn cost.
+     */
+    finishIf?: AgentFinishIf;
 }
 
 /**
