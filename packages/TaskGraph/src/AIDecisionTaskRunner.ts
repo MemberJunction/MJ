@@ -36,7 +36,13 @@ export class AIDecisionTaskRunner implements TaskDecisionRunner {
             decisionParams.State = params.State;
             // The node's options are read from its configuration on every dispatch, never cached: the
             // same options the validator checked the fork's coverage against.
-            decisionParams.Questions = AgentDecisionService.ToDecisionQuestions(params.Questions);
+            const mapping = AgentDecisionService.ToDecisionQuestions(params.Questions);
+            if (mapping.Invalid.length > 0) {
+                // The validator checks every question at submit, so this is a configuration that
+                // bypassed it. Refuse rather than drop a question an edge may read.
+                return { Success: false, ErrorMessage: `The Decision node's questions are invalid: ${mapping.Invalid.join('; ')}` };
+            }
+            decisionParams.Questions = mapping.Questions;
 
             const result = await new AIDecisionRunner().ExecuteDecision(decisionParams);
             if (!result.success) {
