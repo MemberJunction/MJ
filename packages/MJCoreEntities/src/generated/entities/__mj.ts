@@ -50323,7 +50323,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
  *    `MJAIModelTypeEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -50490,6 +50491,25 @@ export interface MJAIModelTypeEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelTypeEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -50508,6 +50528,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50526,6 +50548,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50541,6 +50565,8 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50746,7 +50772,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
  *    `MJAIModelVendorEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -50913,6 +50940,25 @@ export interface MJAIModelVendorEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelVendorEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -50931,6 +50977,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50949,6 +50997,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50964,6 +51014,8 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51361,7 +51413,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
  *    `MJAIModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -51528,6 +51581,25 @@ export interface MJAIModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -51546,6 +51618,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51564,6 +51638,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51579,6 +51655,8 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -52680,7 +52758,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
  *    `MJAIPromptModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -52847,6 +52926,25 @@ export interface MJAIPromptModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIPromptModelEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -52865,6 +52963,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -52883,6 +52983,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -52898,6 +53000,8 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55218,7 +55322,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
  *    `MJAIPromptEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -55385,6 +55490,25 @@ export interface MJAIPromptEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIPromptEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -55403,6 +55527,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55421,6 +55547,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55436,6 +55564,8 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
