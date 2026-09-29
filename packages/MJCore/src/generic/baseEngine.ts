@@ -502,7 +502,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // do a full deep copy of the array to ensure no tampering
         return JSON.parse(JSON.stringify(this._metadataConfigs));
     }
- 
+
+    /**
+     * The engine's metadata configs themselves, not a copy: read them, never change them.
+     *
+     * {@link Configs} deep-copies on every read. `BaseEngineRegistry.FindCachedEntity()` reads the
+     * configs of every loaded engine on each call, and runs for every record an IsA parent with an
+     * opted-in `SubtypeSelector` loads, so it reads this instead.
+     */
+    public get ReadonlyConfigs(): ReadonlyArray<Readonly<BaseEnginePropertyConfig>> {
+        return this._metadataConfigs;
+    }
+
     /**
      * Configures the engine by loading metadata from the database.
      * Subclasses must implement this method to define their configuration behavior.
