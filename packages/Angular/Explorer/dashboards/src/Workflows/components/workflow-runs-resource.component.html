@@ -307,6 +307,13 @@
                             <span class="wfr-row-status" [attr.data-status]="step.Status">{{ step.Status }}</span>
                           </div>
 
+                          @if (SelectedStepFailureReason; as reason) {
+                            <div class="wfr-insp-card wfr-insp-failure" role="status">
+                              <span class="wfr-insp-label">Why it failed</span>
+                              <span>{{ reason }}</span>
+                            </div>
+                          }
+
                           <button type="button" class="wfr-bp"
                                   [class.wfr-bp-on]="HasBreakpoint(step.ID)"
                                   [disabled]="ControlBusy"

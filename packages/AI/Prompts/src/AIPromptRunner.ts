@@ -17,6 +17,7 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
+import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -689,19 +690,30 @@ export class AIPromptRunner extends BaseModelRunner {
         this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
       }
 
+      // Apply this runner's model-type floor to everything the planner may choose from: a prompt
+      // typed differently fails here, and neither the model pool nor the prompt's bindings can admit
+      // a model of another type (the planner's own filters treat an empty AIModelTypeID as "any").
+      this.AssertPromptMatchesRequiredType(prompt);
+      if (modelSelectionPrompt !== prompt) {
+        this.AssertPromptMatchesRequiredType(modelSelectionPrompt);
+      }
+      const requiredTypeId = this.RequiredModelTypeID();
+      const typedModels = AIEngine.Instance.Models.filter(m => UUIDsEqual(m.AIModelTypeID, requiredTypeId));
+
       // Get prompt-specific model associations using the model selection prompt
       const promptModels = AIEngine.Instance.PromptModels.filter(
         (pm) =>
           UUIDsEqual(pm.PromptID, modelSelectionPrompt.ID) &&
           (pm.Status === 'Active' || pm.Status === 'Preview') &&
-          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)),
+          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)) &&
+          UUIDsEqual(AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID))?.AIModelTypeID, requiredTypeId),
       );
 
       // Create execution plan using the modelSelectionPrompt for model configurations
       executionTasks = this._executionPlanner.createExecutionPlan(
         modelSelectionPrompt,
         promptModels,
-        AIEngine.Instance.Models,
+        typedModels,
         renderedPromptText,
         params.contextUser,
         params.configurationId,
@@ -1604,6 +1616,12 @@ export class AIPromptRunner extends BaseModelRunner {
   private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
     const base = `No suitable model found for prompt ${promptName}`;
 
+    // A selection step that threw (for example the model-type floor) records its error here; show it
+    // rather than the generic "no candidates" text. Every other reason keeps its detailed message below.
+    if (selectionInfo?.selectionReason?.startsWith('Error during model selection:')) {
+      return `${base}. ${selectionInfo.selectionReason}`;
+    }
+
     if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
       return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
     }
@@ -2077,7 +2095,7 @@ export class AIPromptRunner extends BaseModelRunner {
       // Stop sequences are handled separately: the prompt value is comma-delimited and gated by
       // driver support; additionalParameters supplies a ready-made array that overrides it.
       if (prompt.StopSequences && this.shouldApplyStopSequences(prompt, model, vendorId, llm)) {
-        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.replace(AIPromptRunner.STOP_SEQUENCE_TRIM_REGEX, '')).filter((s: string) => s.length > 0);
+        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => TrimSpacesAndTabs(s)).filter((s: string) => s.length > 0);
       }
       if (params.additionalParameters?.stopSequences !== undefined) {
         chatParams.stopSequences = params.additionalParameters.stopSequences;
@@ -2373,7 +2391,6 @@ export class AIPromptRunner extends BaseModelRunner {
     const result: string[] = [];
     let inManifest = false;
     let mutated = false;
-    const entryRegex = /^\*\*[A-Z]+\*\* — .+? \[(?<mime>[^\]]+)\]/;
 
     for (const line of lines) {
       if (line.startsWith('## Available Artifacts')) {
@@ -2387,9 +2404,10 @@ export class AIPromptRunner extends BaseModelRunner {
       result.push(line);
 
       if (!inManifest) continue;
-      const match = entryRegex.exec(line);
-      if (!match) continue;
-      const mime = (match.groups?.mime ?? '').toLowerCase();
+      // `**A** — name [mime]`; parsed linearly (CodeQL js/polynomial-redos flagged the regex form).
+      const entryMime = ParseManifestEntryMime(line);
+      if (entryMime === null) continue;
+      const mime = entryMime.toLowerCase();
       const modality = mime.split('/')[0];
       if (modality !== 'image' && modality !== 'audio' && modality !== 'video') continue;
       if (this.driverSupportsModality(caps, mime)) continue;
@@ -2510,19 +2528,6 @@ export class AIPromptRunner extends BaseModelRunner {
 
     return messages;
   }
-
-  /**
-   * Regex used to trim only horizontal whitespace (spaces and tabs) from the start and end
-   * of each stop sequence token after comma-splitting.
-   *
-   * We intentionally do NOT use String.trim() here because stop sequences can legitimately
-   * begin or end with newline characters. For example, the sequence "\n```" is designed to
-   * match only a closing code fence (preceded by a newline), distinguishing it from an
-   * opening "```json" fence that does not start with a newline. Using trim() would strip
-   * that leading "\n", turning "\n```" into "```" and causing the stop to fire on the
-   * opening fence instead — producing an empty response for non-native prefill providers.
-   */
-  private static readonly STOP_SEQUENCE_TRIM_REGEX = /^[ \t]+|[ \t]+$/g;
 
   /**
    * Substrings that mark a provider failure as TOOLS-specific, so the native call is worth one
