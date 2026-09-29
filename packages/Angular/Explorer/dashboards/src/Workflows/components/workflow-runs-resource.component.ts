@@ -10,6 +10,7 @@ import { WorkflowRunLayout } from './workflow-run-layout';
 import {
     EmptyDebugState,
     ParseWorkflowRunParentBag,
+    StepFailureReason,
     TryParseJsonObject,
     type WorkflowRunDebugState,
     type WorkflowRunInvocation,
@@ -66,6 +67,8 @@ export type WorkflowRunStep = {
     StepType: string | null;
     StartedAt: Date | null;
     CompletedAt: Date | null;
+    /** Why the step failed — what the Workflow tab shows beside a Failed step. */
+    ErrorMessage: string | null;
     /** Every column of the row, for the JSON pane. */
     Record: Record<string, unknown>;
 };
@@ -793,6 +796,7 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
                 StepType: t.StepType,
                 StartedAt: t.StartedAt,
                 CompletedAt: t.CompletedAt,
+                ErrorMessage: t.ErrorMessage,
                 Record: t.GetAll(),
             }));
         } catch (e) {
@@ -828,6 +832,12 @@ export class WorkflowRunsResourceComponent extends BaseDashboard implements Afte
 
     public get SelectedStep(): WorkflowRunStep | null {
         return this.SelectedSteps.find((s) => UUIDsEqual(s.ID, this.SelectedStepID ?? '')) ?? null;
+    }
+
+    /** Why the selected step failed, or `null` — the inspector otherwise shows FAILED with no reason. */
+    public get SelectedStepFailureReason(): string | null {
+        const step = this.SelectedStep;
+        return step ? StepFailureReason(step.Status, step.ErrorMessage) : null;
     }
 
     /** The selected step, as formatted JSON for the viewer. */

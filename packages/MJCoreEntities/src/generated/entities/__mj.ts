@@ -25899,6 +25899,12 @@ export const MJProjectSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    OwnerUserID: z.string().nullable().describe(`
+        * * Field Name: OwnerUserID
+        * * Display Name: Owner User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.`),
     Environment: z.string().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -25907,6 +25913,10 @@ export const MJProjectSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    OwnerUser: z.string().nullable().describe(`
+        * * Field Name: OwnerUser
+        * * Display Name: Owner User
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -83133,6 +83143,21 @@ export interface MJEntityEntity_IEntitySubtypeSelectorConfig {
      * reading the target subtype entity name.
      */
     Path: string;
+
+    /**
+     * Whether `BaseEntity` also walks {@link Path} for a record it LOADS, not only for one it creates,
+     * so the load can fetch the named child's row directly instead of first querying every child's
+     * table. Optional; `false` or absent keeps loads as they were, with the discovery query.
+     *
+     * On load, only hops that a loaded `BaseEngine` holds as entity objects are walked. A hop that
+     * isn't cached gives no hint, never a query. Turn it on when records of a subtyped type have
+     * their subtype row: a record whose type names a child it has no row for costs one extra round
+     * trip per load.
+     *
+     * Ignored while an `EntitySubtypeResolver` is registered for the entity: the resolver owns the
+     * rule, and gives load hints by overriding its `ResolveLoadHint` method.
+     */
+    UseForLoadedRecords?: boolean;
 }
 
 /**
@@ -105317,6 +105342,20 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     }
 
     /**
+    * * Field Name: OwnerUserID
+    * * Display Name: Owner User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.
+    */
+    get OwnerUserID(): string | null {
+        return this.Get('OwnerUserID');
+    }
+    set OwnerUserID(value: string | null) {
+        this.Set('OwnerUserID', value);
+    }
+
+    /**
     * * Field Name: Environment
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
@@ -105332,6 +105371,15 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: OwnerUser
+    * * Display Name: Owner User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OwnerUser(): string | null {
+        return this.Get('OwnerUser');
     }
 
     /**
