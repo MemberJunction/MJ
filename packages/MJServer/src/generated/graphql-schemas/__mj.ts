@@ -8394,7 +8394,7 @@ export class MJAIAgentStep_ {
     @Field({nullable: true}) 
     Description?: string;
         
-    @Field({nullable: true, description: `Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`}) 
+    @Field({nullable: true, description: `Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`}) 
     @MaxLength(20)
     StepType?: string;
         
@@ -8455,7 +8455,7 @@ export class MJAIAgentStep_ {
     @MaxLength(50)
     LoopBodyType?: string;
         
-    @Field({nullable: true, description: `JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.`}) 
+    @Field({nullable: true, description: `JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.`}) 
     Configuration?: string;
         
     @Field({nullable: true}) 
