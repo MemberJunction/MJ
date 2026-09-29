@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, LogStatus } from '@memberjunction/core';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { AIPromptRunResult, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { AgentDecisionService, AgentDecisionAskParams } from '../AgentDecisionService';
 import { BaseAgent } from '../base-agent';
@@ -36,6 +37,8 @@ class MockStepEntity {
     public InputData?: string;
     public OutputData?: string;
     public ParentID?: string;
+    public TargetLogID?: string | null;
+    public PromptRun?: MJAIPromptRunEntity;
     constructor(id: string) {
         this.ID = id;
     }
@@ -343,6 +346,16 @@ describe('finishIf', () => {
             expect(result).toMatchObject({ step: 'Success', terminate: false });
         });
 
+        it('returns the sub-agent step unchanged, rather than throwing out of the loop, when the gate throws', async () => {
+            subAgentSucceeded();
+            vi.spyOn(decisions, 'Ask').mockRejectedValueOnce(new Error('network down'));
+
+            const result = await agent.TestExecuteNextStep(makeParams(), subAgentDecision());
+
+            expect(result).toMatchObject({ step: 'Success', terminate: false });
+            expect(finishChecks).toEqual([expect.objectContaining({ passed: false, reason: 'network down' })]);
+        });
+
         it.each([
             ['the sub-agent failed', { step: 'Failed' }],
             ['the step already terminates', { terminate: true }],
@@ -353,6 +366,130 @@ describe('finishIf', () => {
             await agent.TestExecuteNextStep(makeParams(), subAgentDecision());
 
             expect(ask).not.toHaveBeenCalled();
+        });
+    });
+
+    describe("the gate's guarantees", () => {
+        /** An ActionResult as the action engine returns it. */
+        const actionResult = (fields: Partial<ActionResult>): ActionResult => Object.assign(new ActionResult(), fields);
+
+        function twoActionsDecision(): BaseAgentNextStep {
+            return {
+                step: 'Actions',
+                terminate: false,
+                actions: [{ name: 'Create Record', params: {} }, { name: 'Create Record', params: { Name: 'Second' } }],
+                finishIf: FINISH_IF,
+            };
+        }
+
+        it.each([
+            ['returns Success: false', (): Promise<ActionResult> => Promise.resolve(actionResult({ Success: false, Message: 'Denied', Params: [] }))],
+            ['throws', (): Promise<ActionResult> => Promise.reject(new Error('Action timed out'))],
+        ])('never asks when one of two actions %s, so one success cannot end the run', async (_label, second) => {
+            vi.spyOn(internals, 'ExecuteSingleAction')
+                .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }))
+                .mockImplementationOnce(second);
+            const ask = vi.spyOn(decisions, 'Ask').mockResolvedValue(likelihoods(0.99));
+
+            const result = await executeActions(makeParams(), twoActionsDecision());
+
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(ask).not.toHaveBeenCalled();
+        });
+
+        it('ends the run when both of two actions succeed', async () => {
+            vi.spyOn(internals, 'ExecuteSingleAction')
+                .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }))
+                .mockResolvedValueOnce(actionResult({ Success: true, Message: 'Created', Params: [] }));
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.99));
+
+            const result = await executeActions(makeParams(), twoActionsDecision());
+
+            expect(result).toMatchObject({ step: 'Success', terminate: true, message: FINISH_IF.message });
+        });
+
+        it.each([
+            ['the default threshold', undefined, 0.9],
+            ['a configured threshold', 0.8, 0.8],
+        ])('passes a probability exactly at %s', async (_label, configured, probability) => {
+            internals._agentTypePromptParams = configured === undefined ? undefined : { finishIfThreshold: configured };
+            actionSucceeds();
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(probability));
+
+            const result = await executeActions(makeParams(), actionsDecision());
+
+            expect(result).toMatchObject({ step: 'Success', terminate: true });
+            expect(finishChecks[0]).toMatchObject({ passed: true, threshold: probability });
+        });
+
+        it.each([
+            ['a numeric string', '0.5'],
+            ['NaN', Number.NaN],
+            ['zero', 0],
+            ['a negative number', -0.2],
+            ['a number above 1', 1.5],
+        ])('falls back to the 0.9 threshold when finishIfThreshold is %s', async (_label, threshold) => {
+            internals._agentTypePromptParams = { finishIfThreshold: threshold };
+            actionSucceeds();
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.85));
+
+            const result = await executeActions(makeParams(), actionsDecision());
+
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(finishChecks[0]).toMatchObject({ passed: false, threshold: 0.9 });
+        });
+
+        it('does not end the run when checking Success validation throws', async () => {
+            actionSucceeds();
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce(likelihoods(0.99));
+            vi.mocked(internals.validateSuccessNextStep).mockRejectedValueOnce(new Error('validator crashed'));
+
+            const result = await executeActions(makeParams(), actionsDecision());
+
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(result.errorMessage).toBeUndefined();
+            expect(finishChecks).toEqual([expect.objectContaining({ passed: false, reason: 'validator crashed' })]);
+        });
+
+        it('skips the gate, and logs why, when an action returned AIDirectives the model must read', async () => {
+            vi.mocked(LogStatus).mockClear();
+            vi.spyOn(internals, 'ExecuteSingleAction').mockResolvedValueOnce(actionResult({
+                Success: true,
+                Message: 'Found a stored query',
+                Params: [],
+                AIDirectives: [{ Message: 'Call "Run Stored Query" with QueryID abc-123', Type: 'instruction', Priority: 'high' }],
+            }));
+            const ask = vi.spyOn(decisions, 'Ask').mockResolvedValue(likelihoods(0.99));
+            const params = makeParams();
+
+            const result = await executeActions(params, actionsDecision());
+
+            expect(result).toMatchObject({ step: 'Retry', terminate: false });
+            expect(ask).not.toHaveBeenCalled();
+            expect(params.conversationMessages.some(m => typeof m.content === 'string' && m.content.startsWith('IMPORTANT — Follow these directives'))).toBe(true);
+            const logged = vi.mocked(LogStatus).mock.calls.map(([message]) => String(message));
+            expect(logged.some(line => line.includes('Gate skipped') && line.includes('Create Record returned AIDirectives'))).toBe(true);
+        });
+
+        it("links the decision call's prompt run to the Finish check step, so the run counts its cost", async () => {
+            const steps: MockStepEntity[] = [];
+            internals._activeProvider = {
+                GetEntityObject: vi.fn(async () => {
+                    const step = new MockStepEntity(`step-${steps.length + 1}`);
+                    steps.push(step);
+                    return step;
+                }),
+            };
+            actionSucceeds();
+            const promptRun = { ID: 'prun-gate' } satisfies Pick<MJAIPromptRunEntity, 'ID'>;
+            vi.spyOn(decisions, 'Ask').mockResolvedValueOnce({ ...likelihoods(0.95), promptRun: promptRun as MJAIPromptRunEntity });
+
+            await executeActions(makeParams(), actionsDecision());
+
+            const finishCheck = steps.find(step => step.StepName?.includes('Finish check'));
+            expect(finishCheck?.StepType).toBe('Decision');
+            expect(finishCheck?.TargetLogID).toBe('prun-gate');
+            expect(finishCheck?.PromptRun?.ID).toBe('prun-gate');
         });
     });
 });

@@ -12,6 +12,7 @@
  */
 
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
+import { CURRENT_PAYLOAD_PLACEHOLDER } from '../constants';
 import type { NativeToolBinding } from '../native-tools/control-tools';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
@@ -98,7 +99,7 @@ export abstract class BaseAgentType {
      * Common placeholder for current payload injection
      * @static
      */
-    public static readonly CURRENT_PAYLOAD_PLACEHOLDER = '_CURRENT_PAYLOAD';
+    public static readonly CURRENT_PAYLOAD_PLACEHOLDER = CURRENT_PAYLOAD_PLACEHOLDER;
 
     /**
      * This method allows each agent type to initialize its agent-run-specific state package as required. Not all agent
@@ -566,6 +567,25 @@ export abstract class BaseAgentType {
      */
     public get RequiresAgentLevelPrompts(): boolean {
         return true; // Default: agent-level prompts are required
+    }
+
+    /**
+     * Whether action calls made under this agent type go through BaseAgent's run-scoped action
+     * circuit breaker (fatal lockout, identical-arguments rule, attempt budget) and receive its
+     * failure directives.
+     *
+     * The breaker exists for MODEL-DRIVEN retries: a model that keeps calling a broken tool needs
+     * to be stopped and told why. An agent type whose action steps are chosen programmatically —
+     * Flow, whose graph carries its own failure paths and may legitimately re-run a node with the
+     * same mapped inputs — has no model in that loop to act on the guidance, so the rules would
+     * only block its retries and the directive would be appended to a history nothing reads.
+     * Such a type returns false and BaseAgent passes `skipCircuitBreaker` for its action steps,
+     * the same exemption the ForEach / While operators and the pipeline registry use.
+     *
+     * Default: true.
+     */
+    public get UsesActionCircuitBreaker(): boolean {
+        return true;
     }
 
     /**

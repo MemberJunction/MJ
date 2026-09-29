@@ -1,6 +1,7 @@
 // Tests for .github/scripts/check-new-npm-packages.mjs
 // Run with: npx vitest run --config .github/scripts/vitest.config.mts
 import { describe, it, expect } from 'vitest';
+import { existsSync } from 'node:fs';
 import {
     parseManifest,
     publishableNames,
@@ -23,6 +24,7 @@ import {
     SEED_WORKFLOW_NAME,
     SEED_DISPATCH_INPUT,
     SEED_CONFIRM_INPUT,
+    SEED_SCRIPT_PATH,
     NPM_MEMBERS_URL,
     NPM_ESCALATION_HANDLE,
 } from '../check-new-npm-packages.mjs';
@@ -323,6 +325,11 @@ describe('formatGateFailure', () => {
         // send authors to one.
         expect(SEED_WORKFLOW_NAME).toBe('Build and publish new package versions');
         expect(message).not.toContain('seed-new-package');
+    });
+
+    it('offers the seed script with every blocked package, and the script exists', () => {
+        expect(message).toContain(`${SEED_SCRIPT_PATH} @memberjunction/alpha @memberjunction/beta`);
+        expect(existsSync(new URL(`../../../${SEED_SCRIPT_PATH}`, import.meta.url))).toBe(true);
     });
 
     it('no longer asks a human to paste anything', () => {
