@@ -569,6 +569,8 @@ work and none can be resolved by a research run. **A triage session is overdue.*
     **Muse Spark Contributor tier** and a first-party Meta route needing a `MetaLLM` driver class;
     **Cohere reranker API ids** (`rerank-v4-pro` vs `rerank-4-pro` — one of the two will fail at call
     time).
+18. **[Calendar — 2027-01-01]** Google's Gemini 3.x Flash introductory rate ($0.75/$3.75) ends and
+    $1.50/$7.50 begins. Expire and add; don't let it drift.
 19. **[Flagged — new, from review; NOT this PR]** **`ROUTINE_PROMPT.md:210` defines `Priority`
     backwards.** It says "Priority (lower=higher priority)", and has since `be40db4894`
     (2026-09-05), but `AIModelVendor.Priority` sorts **descending** — `BaseModelRunner`,
@@ -587,8 +589,6 @@ work and none can be resolved by a research run. **A triage session is overdue.*
     others inherit `BaseLLM`'s `false`). This run hit both halves of that gap and fixed them in
     review; **`GPT-6 Astra` and `Claude Fable 5.1` still carry it**, having landed in #4277 four days
     before the native-tool change in #4176. Credit: rkihm-BC on PR #4799.
-18. **[Calendar — 2027-01-01]** Google's Gemini 3.x Flash introductory rate ($0.75/$3.75) ends and
-    $1.50/$7.50 begins. Expire and add; don't let it drift.
 
 **Retired from this list:** the **Grok 4.7** watch (five slips, now shipped) and the **GLM-5.3-FlashX
 OpenRouter** follow-up.
