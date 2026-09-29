@@ -13,7 +13,9 @@ import type {
   MJAIPromptEntityExtended,
   MJAIModelEntityExtended,
   AIPromptParams,
+  AIPromptRunResult,
 } from '@memberjunction/ai-core-plus';
+import { AIPromptRunner } from '../AIPromptRunner';
 import { AIDecisionRunner } from '../decision/AIDecisionRunner';
 import { AIDecisionParams } from '../decision/decision-runner.types';
 import {
@@ -958,4 +960,137 @@ describe('AIDecisionRunner', () => {
     expect(result.success).toBe(false);
     expect(result.cancelled).toBe(true);
   });
+
+  describe("14. a decision answered through a child run carries that run's cost", () => {
+    /**
+     * Makes LLMDecision the model that answers: the native model loses its credential (LLMDecision
+     * needs none), and the prompt is bound to the LLMDecision model alone.
+     */
+    function bindLLMDecisionOnly(): void {
+      h.state.configuredDrivers.clear();
+      h.state.promptModels = [
+        { ID: 'pm-llm-decision-1', PromptID: 'decision-prompt-001', ModelID: LLM_DECISION_MODEL_ID, VendorID: VENDOR.OpenAI, Priority: 100, Status: 'Active', ConfigurationID: null },
+      ];
+    }
+
+    function likelihoodParams(): AIDecisionParams {
+      const params = new AIDecisionParams();
+      params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
+      params.Questions = { q_likelihood: defaultQuestions.q_likelihood };
+      params.State = 'Test state';
+      params.provider = fakeProvider;
+      return params;
+    }
+
+    it("14a. an LLMDecision built by the runner runs its chat prompt as a child of the decision's run", async () => {
+      bindLLMDecisionOnly();
+      // The real ClassFactory, so the runner builds a real LLMDecision.
+      vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockRestore();
+      const executePrompt = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+        chatRunResult({
+          success: true,
+          result: { q_likelihood: 0.7 },
+          promptTokens: 300,
+          completionTokens: 20,
+          promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'USD' }),
+        })
+      );
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.success).toBe(true);
+      expect(result.DriverClass).toBe(LLM_DRIVER);
+      expect(executePrompt).toHaveBeenCalledTimes(1);
+      expect(executePrompt.mock.calls[0][0].parentPromptRunId).toBe(lastPromptRun?.ID);
+      // The chat run's cost is the decision run's descendant cost, not its own.
+      expect(lastPromptRun?.DescendantCost).toBe(0.0007);
+      expect(lastPromptRun?.TotalCost).toBe(0.0007);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(result.cost).toBe(0.0007);
+    });
+
+    it('14b. for LLMDecision the runner records DescendantCost and TotalCost, and not Cost', async () => {
+      bindLLMDecisionOnly(); // the mock driver answers as LLMDecision, with Usage(120, 45, 0.002, 'USD')
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.DriverClass).toBe(LLM_DRIVER);
+      expect(lastPromptRun?.DescendantCost).toBe(0.002);
+      expect(lastPromptRun?.TotalCost).toBe(0.002);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.CostCurrency).toBe('USD');
+      // The decision run keeps its own tokens, as before.
+      expect(lastPromptRun?.TokensPrompt).toBe(120);
+      expect(lastPromptRun?.TokensCompletion).toBe(45);
+      expect(lastPromptRun?.TokensUsedRollup).toBe(165);
+    });
+
+    it('14c. for a driver that calls its model directly the runner records Cost, as before', async () => {
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.DriverClass).toBe(NATIVE_DRIVER);
+      expect(lastPromptRun?.Cost).toBe(0.002);
+      expect(lastPromptRun?.TotalCost).toBe(0.002);
+      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+    });
+
+    it('14d. with no cost the runner records neither Cost nor DescendantCost', async () => {
+      bindLLMDecisionOnly();
+      mockDriver.decideOverride = async () => {
+        const answered = new DecisionResult(true, new Date(), new Date());
+        answered.Answers = { q_likelihood: { Kind: 'Likelihood', Probability: 0.4 } };
+        answered.Usage = new ModelUsage(120, 45);
+        return answered;
+      };
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.success).toBe(true);
+      expect(lastPromptRun?.TokensUsed).toBe(165);
+      expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(lastPromptRun?.DescendantCost).toBeUndefined();
+      expect(lastPromptRun?.TotalCost).toBeUndefined();
+    });
+
+    it("14e. the decision run's INSERT lands before an LLMDecision driver runs, because its chat run names it as parent", async () => {
+      bindLLMDecisionOnly();
+      const waitForSaves = vi.spyOn(runner, 'WaitForPendingPromptRunSaves');
+      const decide = vi.fn(async () => {
+        const answered = new DecisionResult(true, new Date(), new Date());
+        answered.Answers = { q_likelihood: { Kind: 'Likelihood', Probability: 0.4 } };
+        return answered;
+      });
+      mockDriver.decideOverride = decide;
+
+      await runner.ExecuteDecision(likelihoodParams());
+
+      expect(waitForSaves).toHaveBeenCalledTimes(1);
+      expect(waitForSaves.mock.invocationCallOrder[0]).toBeLessThan(decide.mock.invocationCallOrder[0]);
+    });
+
+    it('14f. a driver that calls its model directly does not wait for the run to be saved', async () => {
+      const waitForSaves = vi.spyOn(runner, 'WaitForPendingPromptRunSaves');
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.DriverClass).toBe(NATIVE_DRIVER);
+      expect(waitForSaves).not.toHaveBeenCalled();
+    });
+  });
 });
+
+/** The chat prompt's result fields an LLMDecision reads. */
+type ChatRunResultFields = Pick<AIPromptRunResult, 'success' | 'result' | 'promptTokens' | 'completionTokens' | 'promptRun'>;
+
+/** The seam onto the full `AIPromptRunResult` that `AIPromptRunner.ExecutePrompt` returns. */
+function chatRunResult(fields: ChatRunResultFields): AIPromptRunResult {
+  return fields as AIPromptRunResult;
+}
+
+/** The prompt-run entity an `AIPromptRunResult` carries. */
+type ChatPromptRun = NonNullable<AIPromptRunResult['promptRun']>;
+
+/** The seam onto the full prompt-run entity, from the cost columns LLMDecision reads. */
+function asPromptRun(run: Pick<ChatPromptRun, 'Cost' | 'DescendantCost' | 'TotalCost' | 'CostCurrency'>): ChatPromptRun {
+  return run as ChatPromptRun;
+}

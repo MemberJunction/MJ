@@ -74,6 +74,13 @@ export class LLMDecision extends BaseDecision {
     private _cachedPrompt: MJAIPromptEntityExtended | null = null;
 
     /**
+     * The `MJ: AI Prompt Runs` row this decision is recorded under. When set, the chat prompt's run
+     * is created as its child (`ParentID`), so the chat call's cost rolls up to the decision's run.
+     * `AIDecisionRunner` sets it to its own run before it calls the driver.
+     */
+    public ParentPromptRunID?: string;
+
+    /**
      * Creates an instance of LLMDecision.
      *
      * @param apiKey - Optional API key for BaseDecision/BaseModel compatibility.
@@ -109,6 +116,10 @@ export class LLMDecision extends BaseDecision {
 
         const promptParams = this.buildPromptParams(prompt, params);
         const promptResult = await this._promptRunner.ExecutePrompt(promptParams);
+        // The chat run's cost is computed when its row is saved, and the runner saves it
+        // fire-and-forget. Wait for the save, so recordTelemetry can read the cost, and so the
+        // save's cost rollup to the parent run lands before the parent run is finalized.
+        await this._promptRunner.WaitForPendingPromptRunSaves();
         if (!promptResult || !promptResult.success) {
             return this.failure(promptResult?.errorMessage || 'Prompt execution failed', promptResult);
         }
@@ -178,6 +189,9 @@ export class LLMDecision extends BaseDecision {
         // keys. This driver maps the reply itself and BaseDecision validates the answers, so skip it.
         promptParams.skipValidation = true;
         promptParams.cancellationToken = params.CancellationToken;
+        if (this.ParentPromptRunID) {
+            promptParams.parentPromptRunId = this.ParentPromptRunID;
+        }
         promptParams.data = {
             state: this.formatState(params.State),
             questions: this.formatQuestionsSpec(params.Questions),
@@ -515,15 +529,44 @@ export class LLMDecision extends BaseDecision {
      * Populates Usage and ResolvedModel telemetry on DecisionResult from prompt result.
      */
     private recordTelemetry(decisionResult: DecisionResult, promptResult: AIPromptRunResult): void {
+        const cost = this.resolveCost(promptResult);
         decisionResult.Usage = new ModelUsage(
             promptResult.promptTokens ?? 0,
             promptResult.completionTokens ?? 0,
-            promptResult.cost,
-            promptResult.costCurrency
+            cost.cost,
+            cost.currency
         );
         if (promptResult.modelInfo?.modelName) {
             decisionResult.ResolvedModel = promptResult.modelInfo.modelName;
         }
+    }
+
+    /**
+     * The chat call's cost. The runner's reported cost wins when it has one. Otherwise it is the
+     * chat run's saved cost, which the server computes when the run is saved: `TotalCost`, else
+     * `Cost`. Unset when neither is known.
+     */
+    private resolveCost(promptResult: AIPromptRunResult): { cost?: number; currency?: string } {
+        if (promptResult.cost !== undefined) {
+            return { cost: promptResult.cost, currency: promptResult.costCurrency };
+        }
+        const run = promptResult.promptRun;
+        const runCost = run ? this.savedRunCost(run) : undefined;
+        if (runCost === undefined) {
+            return { currency: promptResult.costCurrency };
+        }
+        return { cost: runCost, currency: run?.CostCurrency ?? promptResult.costCurrency };
+    }
+
+    /**
+     * A saved run's cost: `TotalCost`, else `Cost`. The server writes `TotalCost = 0` for a run it
+     * could not price, so `TotalCost` counts only when the run has a `Cost` or a `DescendantCost`.
+     */
+    private savedRunCost(run: NonNullable<AIPromptRunResult['promptRun']>): number | undefined {
+        if (run.Cost == null && run.DescendantCost == null) {
+            return undefined;
+        }
+        return run.TotalCost ?? run.Cost ?? undefined;
     }
 }
 

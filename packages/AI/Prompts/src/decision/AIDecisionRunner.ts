@@ -9,6 +9,7 @@ import {
   DecisionQuestion,
   DecisionResult,
   ErrorAnalyzer,
+  ModelUsage,
 } from '@memberjunction/ai';
 import {
   MJAIPromptEntityExtended,
@@ -26,6 +27,7 @@ import {
   AIDecisionParams,
   AIDecisionRunResult,
 } from './decision-runner.types';
+import { LLMDecision } from './LLMDecision';
 
 /** The result of running a decision, and the candidate that produced it (after any failover). */
 interface DecisionRun {
@@ -83,6 +85,15 @@ export class AIDecisionRunner extends BaseModelRunner {
   }
 
   /**
+   * Whether a driver makes its model call through a prompt run of its own, which this runner makes
+   * a child of the decision's run. `LLMDecision` does: it runs a chat prompt, so its cost is that
+   * child run's cost, not the decision run's own.
+   */
+  private driverRunsChildPrompt(driverClass: string): boolean {
+    return driverClass === 'LLMDecision';
+  }
+
+  /**
    * Answers the questions in `params.Questions` about the state. Never throws: every failure is a
    * result with `success: false` and an `errorMessage`.
    */
@@ -117,7 +128,7 @@ export class AIDecisionRunner extends BaseModelRunner {
       const run = await this.runDecision(prompt, params, candidates, selection, state, promptRun);
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
-      await this.finalizeDecisionRun(promptRun, run.Result, endTime, executionTimeMS);
+      await this.finalizeDecisionRun(promptRun, run, endTime, executionTimeMS);
       return this.buildRunResult(run, promptRun, selectionInfo, executionTimeMS, params);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -243,7 +254,7 @@ export class AIDecisionRunner extends BaseModelRunner {
     let answeredBy = selection.Candidate;
     const attempt = (candidate: ModelVendorCandidate): Promise<DecisionResult> => {
       answeredBy = candidate;
-      return this.executeOnCandidate(candidate, state, params, prompt);
+      return this.executeOnCandidate(candidate, state, params, prompt, promptRun);
     };
     const failoverConfig = this.getFailoverConfiguration(prompt);
     const result = failoverConfig.strategy === 'None'
@@ -266,7 +277,8 @@ export class AIDecisionRunner extends BaseModelRunner {
     candidate: ModelVendorCandidate,
     state: string | Record<string, unknown>,
     params: AIDecisionParams,
-    prompt: MJAIPromptEntityExtended
+    prompt: MJAIPromptEntityExtended,
+    promptRun: MJAIPromptRunEntityExtended
   ): Promise<DecisionResult> {
     const limitError = this.checkModelLimits(candidate, params.Questions);
     if (limitError) {
@@ -280,9 +292,13 @@ export class AIDecisionRunner extends BaseModelRunner {
         return this.failedDecision(err instanceof Error ? err.message : String(err), 'Authentication');
       }
     }
-    const driver = this.createDriver(candidate, apiKey, params);
+    const driver = this.createDriver(candidate, apiKey, params, promptRun.ID);
     if (typeof driver === 'string') {
       return this.failedDecision(driver, 'ModelError');
+    }
+    if (this.driverRunsChildPrompt(candidate.driverClass)) {
+      // The driver's run names this run as its parent, so this run's queued INSERT must land first.
+      await this.WaitForPendingPromptRunSaves();
     }
     return this.callDriver(driver, candidate, state, params, prompt);
   }
@@ -322,8 +338,11 @@ export class AIDecisionRunner extends BaseModelRunner {
    * Builds the candidate's driver through the ClassFactory. `LLMDecision` takes the ID of the chat
    * prompt named by the model-vendor row's `APIName`; every other driver takes only its API key.
    * Returns an error message when the driver cannot be built.
+   *
+   * An `LLMDecision` is also given `parentRunId`, the decision's run, as its `ParentPromptRunID`, so
+   * its chat run is a child of the decision's run.
    */
-  private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIDecisionParams): BaseDecision | string {
+  private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIDecisionParams, parentRunId: string): BaseDecision | string {
     let driver: BaseDecision | null;
     if (candidate.driverClass === 'LLMDecision') {
       const target = candidate.apiName?.trim().toLowerCase();
@@ -332,6 +351,9 @@ export class AIDecisionRunner extends BaseModelRunner {
         return `LLMDecision's chat prompt '${candidate.apiName ?? ''}' was not found`;
       }
       driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, candidate.driverClass, apiKey, chatPrompt.ID, params.contextUser);
+      if (driver instanceof LLMDecision) {
+        driver.ParentPromptRunID = parentRunId;
+      }
     } else {
       driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, candidate.driverClass, apiKey);
     }
@@ -398,10 +420,12 @@ export class AIDecisionRunner extends BaseModelRunner {
    */
   private async finalizeDecisionRun(
     promptRun: MJAIPromptRunEntityExtended,
-    decisionResult: DecisionResult,
+    decisionRun: DecisionRun,
     endTime: Date,
     executionTimeMS: number
   ): Promise<void> {
+    const decisionResult = decisionRun.Result;
+    const costIsDescendant = this.driverRunsChildPrompt(decisionRun.AnsweredBy.driverClass);
     await this.FinalizeRunRecord(promptRun, decisionResult.success, endTime, executionTimeMS, run => {
       run.Result = JSON.stringify(decisionResult.Answers ?? {});
       if (decisionResult.ResolvedModel) {
@@ -409,20 +433,36 @@ export class AIDecisionRunner extends BaseModelRunner {
       }
       const usage = decisionResult.Usage;
       if (usage) {
-        run.TokensPrompt = usage.promptTokens;
-        run.TokensCompletion = usage.completionTokens;
-        run.TokensUsed = usage.totalTokens;
-        if (usage.cost !== undefined) {
-          run.Cost = usage.cost;
-        }
-        if (usage.costCurrency !== undefined) {
-          run.CostCurrency = usage.costCurrency;
-        }
+        this.applyUsage(run, usage, costIsDescendant);
       }
       if (!decisionResult.success && decisionResult.errorMessage) {
         run.ErrorMessage = decisionResult.errorMessage;
       }
     });
+  }
+
+  /**
+   * Records the driver's tokens and cost on the run. When the cost was incurred by a child run
+   * (`LLMDecision`'s chat prompt), it is the child's cost, so it is recorded as `DescendantCost`
+   * and in `TotalCost`, never as this run's `Cost`: a report summing `Cost` over every run would
+   * otherwise count the chat call twice. The child's save rolls the same `DescendantCost` up to
+   * this run's row, so the two writes agree.
+   */
+  private applyUsage(run: MJAIPromptRunEntityExtended, usage: ModelUsage, costIsDescendant: boolean): void {
+    run.TokensPrompt = usage.promptTokens;
+    run.TokensCompletion = usage.completionTokens;
+    run.TokensUsed = usage.totalTokens;
+    if (usage.cost !== undefined) {
+      if (costIsDescendant) {
+        run.DescendantCost = usage.cost;
+        run.TotalCost = (run.Cost ?? 0) + usage.cost;
+      } else {
+        run.Cost = usage.cost;
+      }
+    }
+    if (usage.costCurrency !== undefined) {
+      run.CostCurrency = usage.costCurrency;
+    }
   }
 
   /** Builds the caller's result from the driver's, naming the candidate that answered. */
