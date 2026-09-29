@@ -242,7 +242,7 @@ export class PushService {
   private syncEngine: SyncEngine;
   private contextUser: UserInfo;
   private warnings: string[] = [];
-  private changeDetails: RecordChangeDetail[] = [];
+  protected changeDetails: RecordChangeDetail[] = [];
   private syncConfig: SyncConfig | null = null;
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   private deferredRecords: DeferredRecord[] = [];
@@ -745,6 +745,51 @@ export class PushService {
   }
 
   /**
+   * When a directory wrote a metadata-dataset entity, reload inside the push transaction so the
+   * next directory sees those rows (MJ#4836). Dry runs never reload. A host that predates the
+   * reload API (unit-test fakes) is left alone.
+   *
+   * `since` is an index into `changeDetails`. Pass the index from before one directory to reload
+   * only for that directory; pass 0 before Phase 2 / 2.5 to reload again even if the last
+   * directory already did.
+   */
+  private async reloadMetadataIfTouched(since: number, dryRun: boolean): Promise<void> {
+    if (dryRun) {
+      return;
+    }
+    const host = this.hostProvider() as DatabaseProviderBase & {
+      IsMetadataDatasetMember?: (entityName: string) => boolean;
+      RefreshWithinTransaction?: () => Promise<boolean>;
+    };
+    const isMember = host.IsMetadataDatasetMember;
+    const refresh = host.RefreshWithinTransaction;
+    if (typeof isMember !== 'function' || typeof refresh !== 'function') {
+      return;
+    }
+    const touched = this.changeDetails.slice(since).some((change) => isMember.call(host, change.entityName));
+    if (touched) {
+      await refresh.call(host);
+    }
+  }
+
+  /**
+   * After a rollback, drop any metadata the within-transaction reloads copied in. A pool read
+   * sees only committed rows. A failure here must not hide the rollback error.
+   */
+  private async refreshHostMetadataAfterRollback(callbacks?: PushCallbacks): Promise<void> {
+    const host = this.hostProvider() as DatabaseProviderBase & { Refresh?: () => Promise<boolean> };
+    if (typeof host.Refresh !== 'function') {
+      return;
+    }
+    try {
+      await host.Refresh();
+    } catch (refreshError) {
+      const message = refreshError instanceof Error ? refreshError.message : String(refreshError);
+      callbacks?.onWarn?.(`⚠️  Metadata could not be reloaded after the push rolled back: ${message}`);
+    }
+  }
+
+  /**
    * Run every phase inside the push transaction, commit it, then do the post-commit work.
    * Never returns or throws with the transaction still open.
    */
@@ -779,15 +824,21 @@ export class PushService {
     // PHASE 1: creates and updates
     const totals = await this.processAllEntityDirectories(run);
 
-    // PHASE 2: deletions in reverse dependency order
+    // PHASE 2: deletions in reverse dependency order.
+    // Reload even when the last directory already did: a deletion reads the metadata the
+    // creates just wrote, and that reload has to land before this phase starts (MJ#4836).
     if (run.deletionAudit && totals.errors === 0) {
+      await this.reloadMetadataIfTouched(0, options.dryRun);
       const deletionResult = await this.processDeletionsFromAudit(run.deletionAudit, options, callbacks);
       totals.deleted += deletionResult.deleted;
       totals.errors += deletionResult.errors;
     }
 
-    // PHASE 2.5: deferred records (circular dependencies)
+    // PHASE 2.5: deferred records (circular dependencies).
+    // Same reload as between directories: deferred saves must see metadata written above,
+    // including a metadata row Phase 2 just deleted (MJ#4836).
     if (this.deferredRecords.length > 0 && totals.errors === 0) {
+      await this.reloadMetadataIfTouched(0, options.dryRun);
       const deferredResult = await this.processDeferredRecords(options, callbacks);
       totals.created += deferredResult.created;
       totals.updated += deferredResult.updated;
@@ -815,6 +866,11 @@ export class PushService {
     if (!options.dryRun) {
       callbacks?.onWarn?.('\n⚠️  Rolling back database transaction due to error...');
       rolledBack = await transactionManager.rollbackTransaction();
+      if (rolledBack) {
+        // The within-transaction reloads copied uncommitted rows into memory. A pool read
+        // puts back only what survived the rollback (MJ#4836).
+        await this.refreshHostMetadataAfterRollback(callbacks);
+      }
       await this.writeFilesWithCommittedRecords(run);
       for (const line of DescribeRollbackOutcome(rolledBack, this.committedWrites, configManager.getOriginalCwd())) {
         callbacks?.onWarn?.(line);
@@ -919,9 +975,13 @@ export class PushService {
       const dirName = path.relative(process.cwd(), entityDir) || '.';
       this.useDirectoryMode(entityDir, options);
       this.announceDirectory(dirName, progressPrefix, entityConfig.entity, entityDir, options, callbacks);
+      const firstChange = this.changeDetails.length;
       const result = await this.processEntityDirectory(
         entityDir, entityConfig, options, run.fileBackupManager, callbacks, run.configDir
       );
+      // Nested relatedEntities land in changeDetails under their own entity name, so the
+      // directory's configured entity is not what decides the reload (MJ#4836).
+      await this.reloadMetadataIfTouched(firstChange, options.dryRun);
       this.reportDirectoryResult(progressPrefix, dirName, result, options, callbacks);
       addPushTotals(totals, result);
       addPushTotals(this.runningTotals, result);

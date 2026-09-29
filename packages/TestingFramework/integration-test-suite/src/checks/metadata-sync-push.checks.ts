@@ -24,7 +24,7 @@ import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { BaseEngineRegistry, BaseEntity, RunView } from '@memberjunction/core';
+import { BaseEngineRegistry, BaseEntity, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { MJActionEntity, MJActionParamEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
@@ -265,6 +265,7 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('metadata-sync-push', {
         await deleteAll<MJActionParamEntity>(ctx, 'MJ: Action Params', `Action LIKE '${PREFIX}%'`);
         await deleteAll<MJActionEntity>(ctx, 'MJ: Actions', `Name LIKE '${PREFIX}%'`);
         await deleteAll<MJAIVendorEntity>(ctx, 'MJ: AI Vendors', `Name LIKE '${PREFIX}%'`);
+        await deleteAll<BaseEntity>(ctx, 'MJ: Authorizations', `Name LIKE '${PREFIX}%'`);
         if (fixture) {
             fs.rmSync(fixture.Root, { recursive: true, force: true });
         }
@@ -472,6 +473,65 @@ async function checkMsp8TemplateParamsFollowTheirPush(ctx: IntegrationCheckConte
     AssertEqual(await countRows(ctx, 'MJ: Template Params', `TemplateID='${templateID}'`), derived, 'MSP8: the failed push re-derived nothing that stuck');
 }
 
+/**
+ * MSP9 — a directory that creates an authorization must be visible to the next directory
+ * before that directory saves, while the push transaction is still open (MJ#4836).
+ * onProgress fires at the start of a directory, after the previous directory's reload.
+ */
+async function checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory(ctx: IntegrationCheckContext): Promise<void> {
+    const f = requireFixture();
+    const authName = `${PREFIX} MSP9 authorization ${Date.now()}`;
+    const authID = randomUUID().toUpperCase();
+    const vendorID = randomUUID().toUpperCase();
+    const dir = writeTree(path.join(f.Root, 'msp9'), [
+        {
+            Name: 'a-authorizations',
+            Entity: 'MJ: Authorizations',
+            Files: {
+                '.auth.json': {
+                    primaryKey: { ID: authID },
+                    fields: { Name: authName, IsActive: true, UseAuditLog: false, Description: 'MSP9' },
+                },
+            },
+        },
+        {
+            Name: 'b-vendors',
+            Entity: 'MJ: AI Vendors',
+            Files: {
+                '.vendor.json': {
+                    primaryKey: { ID: vendorID },
+                    fields: { Name: `${PREFIX} MSP9 vendor`, Description: 'MSP9' },
+                },
+            },
+        },
+    ], true);
+
+    let seenAtSecondFolder: boolean | undefined;
+    let pushError: unknown;
+    const engine = new SyncEngine(ctx.User);
+    await engine.initialize();
+    const service = new PushService(engine, ctx.User);
+    try {
+        await service.push({ dir }, {
+            onProgress: (message: string) => {
+                if (!message.includes('b-vendors')) {
+                    return;
+                }
+                const names = Metadata.Provider?.Authorizations?.map((auth) => auth.Name) ?? [];
+                seenAtSecondFolder = names.includes(authName);
+            },
+        });
+    } catch (error) {
+        pushError = error;
+    } finally {
+        await deleteAll<BaseEntity>(ctx, 'MJ: Authorizations', `ID='${authID}'`);
+        await deleteAll<BaseEntity>(ctx, 'MJ: AI Vendors', `ID='${vendorID}'`);
+    }
+
+    Assert(pushError === undefined, `MSP9: push failed: ${pushError instanceof Error ? pushError.message : String(pushError)}`);
+    Assert(seenAtSecondFolder === true, 'MSP9: the authorization created in the first folder was not in Metadata.Provider.Authorizations when the second folder started');
+}
+
 export const MetadataSyncPushChecks: NamedCheck[] = [
     {
         Id: 'metadata-sync-push.MSP1',
@@ -519,6 +579,12 @@ export const MetadataSyncPushChecks: NamedCheck[] = [
         Id: 'metadata-sync-push.MSP8',
         Name: 'MSP8: Template Params derived inside a save follow the push that derived them',
         Fn: checkMsp8TemplateParamsFollowTheirPush,
+        RequiresMutation: true,
+    },
+    {
+        Id: 'metadata-sync-push.MSP9',
+        Name: 'MSP9: an authorization created in one folder is in the provider cache when the next folder starts',
+        Fn: checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory,
         RequiresMutation: true,
     },
 ];
