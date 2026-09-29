@@ -10,7 +10,10 @@ import { CreateDefaultPublishDependencies, CreateWorkQueuePublishRouter } from '
 
 /** Adds a leading slash and drops trailing ones. The loader always supplies a non-blank RootPath. */
 export function NormalizeRootPath(rootPath: string | undefined): string {
-    const trimmed = (rootPath ?? '').trim().replace(/\/+$/, '');
+    let trimmed = (rootPath ?? '').trim();
+    while (trimmed.endsWith('/')) {
+        trimmed = trimmed.slice(0, -1);
+    }
     return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 

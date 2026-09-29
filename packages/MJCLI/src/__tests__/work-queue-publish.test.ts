@@ -16,10 +16,10 @@ describe('mj queue publish helpers', () => {
     });
 
     it('builds one request per copy, numbering copies and applying the dedup key to the first only', () => {
-        const single = BuildPublishRequests({ payload: { n: 1 }, attributes: { source: 'demo' }, count: 1, partitionKey: 'k1', dedupKey: 'once' });
+        const single = BuildPublishRequests({ Payload: { n: 1 }, Attributes: { source: 'demo' }, Count: 1, PartitionKey: 'k1', DedupKey: 'once' });
         expect(single).toEqual([{ Payload: { n: 1 }, Attributes: { source: 'demo' }, PartitionKey: 'k1', DeduplicationKey: 'once' }]);
 
-        const batch = BuildPublishRequests({ payload: {}, attributes: {}, count: 3, dedupKey: 'once' });
+        const batch = BuildPublishRequests({ Payload: {}, Attributes: {}, Count: 3, DedupKey: 'once' });
         expect(batch.map(r => r.Attributes)).toEqual([{ sequence: '1' }, { sequence: '2' }, { sequence: '3' }]);
         expect(batch.map(r => r.DeduplicationKey)).toEqual(['once', undefined, undefined]);
         expect(batch.every(r => r.PartitionKey === undefined)).toBe(true);

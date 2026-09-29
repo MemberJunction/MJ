@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { DEFAULT_WORK_QUEUE_CONFIG, workQueueSchema } from './services/workQueueConfig.js';
+import { DEFAULT_WORK_QUEUE_CONFIG, WorkQueueSchema } from './services/workQueueConfig.js';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
@@ -583,7 +583,7 @@ const configInfoSchema = z.object({
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
   integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
-  workQueue: workQueueSchema.optional().default({}),
+  workQueue: WorkQueueSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),

@@ -15,7 +15,7 @@ export type EntityPermissionLookup = (entityName: string, user: UserInfo) => { C
  * permissions are global metadata — identical on every provider of the process — so this is not a multi-provider hazard.
  */
 const metadataLookup: EntityPermissionLookup = (entityName, user) => {
-    const entity = Metadata.Provider.EntityByName(entityName);
+    const entity = Metadata.Provider.EntityByName(entityName); // global-provider-ok: Authorize receives no provider; entity permissions are process-global metadata
     return entity ? entity.GetUserPermisions(user) : null;
 };
 

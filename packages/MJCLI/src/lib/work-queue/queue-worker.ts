@@ -6,7 +6,7 @@ export interface StoppableWorkHost {
 }
 
 /** The slice of `process` RunUntilStopped needs; an EventEmitter satisfies it in tests. */
-export interface SignalSource {
+interface SignalSource {
   once(event: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
   off(event: 'SIGINT' | 'SIGTERM', listener: () => void): unknown;
 }

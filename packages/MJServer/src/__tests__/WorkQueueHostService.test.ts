@@ -10,7 +10,7 @@ vi.mock('@memberjunction/generic-database-provider', async (importOriginal) => (
 
 import type { DatabaseProviderBase, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { WorkQueueEngine, WorkQueueHostConfig, WorkQueueProviderSource } from '@memberjunction/work-queue-engine';
-import { workQueueSchema } from '../services/workQueueConfig.js';
+import { WorkQueueSchema } from '../services/workQueueConfig.js';
 import type { WorkQueueConfig } from '../services/workQueueConfig.js';
 import {
     BuildWorkQueueHostConfig, CreateWorkQueueInstanceID, IsWorkQueueHostDisabledByEnv, MJServerWorkQueueProviderSource,
@@ -52,12 +52,12 @@ function recorder(users: UserInfo[] = [SYSTEM_USER], env: Record<string, string 
 }
 
 function enabled(overrides: Partial<WorkQueueConfig> = {}): WorkQueueConfig {
-    return { ...workQueueSchema.parse({ enabled: true }), ...overrides };
+    return { ...WorkQueueSchema.parse({ enabled: true }), ...overrides };
 }
 
 describe('workQueue configuration', () => {
     it('defaults to disabled, running every MJWorker subscription once enabled', () => {
-        expect(workQueueSchema.parse({})).toEqual({
+        expect(WorkQueueSchema.parse({})).toEqual({
             enabled: false, systemUserEmail: 'system@memberjunction.org', subscriptions: [{ name: '*', concurrency: 4 }],
             idlePollMinMs: 250, idlePollMaxMs: 5000, shutdownDrainMs: 8000, sweeperEnabled: true, sweeperIntervalMs: 60000,
             reconcileIntervalMs: 30000,
@@ -65,7 +65,7 @@ describe('workQueue configuration', () => {
     });
 
     it('rejects an idle poll maximum below the minimum', () => {
-        expect(workQueueSchema.safeParse({ idlePollMinMs: 1000, idlePollMaxMs: 500 }).success).toBe(false);
+        expect(WorkQueueSchema.safeParse({ idlePollMinMs: 1000, idlePollMaxMs: 500 }).success).toBe(false);
     });
 });
 
@@ -94,7 +94,7 @@ describe('host configuration helpers', () => {
 describe('StartWorkQueueHost', () => {
     it('starts nothing when the section is disabled', async () => {
         const rec = recorder();
-        expect(await StartWorkQueueHost(workQueueSchema.parse({}), PROVIDER, PROVIDER_SOURCE, rec.Dependencies)).toBeNull();
+        expect(await StartWorkQueueHost(WorkQueueSchema.parse({}), PROVIDER, PROVIDER_SOURCE, rec.Dependencies)).toBeNull();
         expect(rec.EngineCalls).toBe(0);
     });
 

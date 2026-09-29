@@ -25,11 +25,11 @@ export type WorkQueuePartitionCondition = (typeof WORK_QUEUE_PARTITION_CONDITION
 /** Upper bound on any list published in the agent context; a companion count reports the true total. */
 export const WORK_QUEUE_CONTEXT_LIST_CAP = 25;
 
-export function isValidWorkQueueTab(value: unknown): value is WorkQueueTab {
+export function IsValidWorkQueueTab(value: unknown): value is WorkQueueTab {
     return typeof value === 'string' && (WORK_QUEUE_TABS as readonly string[]).includes(value);
 }
 
-export function isValidPartitionCondition(value: unknown): value is WorkQueuePartitionCondition {
+export function IsValidPartitionCondition(value: unknown): value is WorkQueuePartitionCondition {
     return typeof value === 'string' && (WORK_QUEUE_PARTITION_CONDITIONS as readonly string[]).includes(value);
 }
 
@@ -49,20 +49,20 @@ export interface WorkQueueSubscriptionSnapshot {
 }
 
 /** A subscription needs an operator when it holds dead letters or a blocked Ordered key. */
-export function needsAttention(snapshot: Pick<WorkQueueSubscriptionSnapshot, 'DeadLettered' | 'BlockedKeys'>): boolean {
+export function NeedsAttention(snapshot: Pick<WorkQueueSubscriptionSnapshot, 'DeadLettered' | 'BlockedKeys'>): boolean {
     return (snapshot.DeadLettered ?? 0) > 0 || (snapshot.BlockedKeys ?? 0) > 0;
 }
 
 /** Attention first, then by name; returns a new array. */
-export function sortByAttention<T extends Pick<WorkQueueSubscriptionSnapshot, 'DeadLettered' | 'BlockedKeys' | 'Name'>>(items: readonly T[]): T[] {
+export function SortByAttention<T extends Pick<WorkQueueSubscriptionSnapshot, 'DeadLettered' | 'BlockedKeys' | 'Name'>>(items: readonly T[]): T[] {
     return [...items].sort((a, b) => {
-        const attention = Number(needsAttention(b)) - Number(needsAttention(a));
+        const attention = Number(NeedsAttention(b)) - Number(NeedsAttention(a));
         return attention !== 0 ? attention : a.Name.localeCompare(b.Name);
     });
 }
 
 /** '—' for null, then s / m / h m / d h at the coarsest useful unit. */
-export function formatAge(seconds: number | null | undefined): string {
+export function FormatAge(seconds: number | null | undefined): string {
     if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
         return '—';
     }
@@ -90,7 +90,7 @@ export type SubscriptionResolution<T extends SubscriptionCandidate> =
  * Resolves an agent-supplied id or name tolerantly: exact id, then exact name (case-insensitive), then a unique
  * case-insensitive substring of the name. Several substring matches are reported as Ambiguous, never guessed.
  */
-export function resolveSubscription<T extends SubscriptionCandidate>(candidates: readonly T[], query: string): SubscriptionResolution<T> {
+export function ResolveSubscription<T extends SubscriptionCandidate>(candidates: readonly T[], query: string): SubscriptionResolution<T> {
     const needle = query.trim();
     if (needle === '') {
         return { Kind: 'NotFound' };
@@ -123,8 +123,8 @@ export interface WorkQueueAgentContextInput {
  * Shapes the dashboard state for NavigationService.SetAgentContext. Counts come only from loaded stats: before the
  * first stats read the aggregate fields are null rather than fabricated zeros.
  */
-export function buildWorkQueueAgentContext(input: WorkQueueAgentContextInput): Record<string, unknown> {
-    const attention = sortByAttention(input.Subscriptions).filter(needsAttention);
+export function BuildWorkQueueAgentContext(input: WorkQueueAgentContextInput): Record<string, unknown> {
+    const attention = SortByAttention(input.Subscriptions).filter(NeedsAttention);
     const totals = input.StatsLoaded
         ? input.Subscriptions.reduce(
             (acc, s) => ({
@@ -139,7 +139,7 @@ export function buildWorkQueueAgentContext(input: WorkQueueAgentContextInput): R
     const context: Record<string, unknown> = {
         Surface: 'WorkQueue',
         ActiveTab: input.ActiveTab,
-        ActiveTabLabel: isValidWorkQueueTab(input.ActiveTab) ? WORK_QUEUE_TAB_LABELS[input.ActiveTab] : input.ActiveTab,
+        ActiveTabLabel: IsValidWorkQueueTab(input.ActiveTab) ? WORK_QUEUE_TAB_LABELS[input.ActiveTab] : input.ActiveTab,
         SubscriptionCount: input.Subscriptions.length,
         Subscriptions: input.Subscriptions.slice(0, WORK_QUEUE_CONTEXT_LIST_CAP).map((s) => `${s.Name} (${s.Topic} / ${s.PartitionMode}, ${s.Status})`),
         StatsLoaded: input.StatsLoaded,

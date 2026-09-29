@@ -24,7 +24,7 @@ Design and contract: `02-implementation-overview.md` and `03-interfaces-and-tabl
 ## Data layer
 
 Every queue statement is a static stored procedure named `spWorkQueue*` (32 of them, in
-`migrations/v6/V202609241637__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql`). Runtime roles hold **EXECUTE on the
+`migrations/v6/V202609282001__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql`). Runtime roles hold **EXECUTE on the
 procedures only** — no direct DML on the queue tables — so the claim, settle, cancel and sweep rules cannot be
 bypassed by a caller with a connection string. The TypeScript builders render `EXEC` on SQL Server and
 `SELECT * FROM schema."proc"(...)` on PostgreSQL; the PostgreSQL functions are produced by the SQLConverter at release
