@@ -16,6 +16,7 @@ import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
+import { AgentDecisionRequest } from './agent-decisions';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionParam } from '@memberjunction/actions-base';
@@ -687,6 +688,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 2.46.0
      */
     scratchpad?: AgentScratchpad;
+    /**
+     * Decision requests from the agent's response.
+     * Processed inline (zero turn cost) alongside payload and scratchpad changes.
+     * Results are injected into the next turn's conversation.
+     */
+    decisions?: AgentDecisionRequest[];
     /**
      * Artifact tool calls from the agent's response.
      * Each entry identifies an artifact and the tool to execute against it.
