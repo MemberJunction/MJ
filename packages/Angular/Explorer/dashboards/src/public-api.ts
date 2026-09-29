@@ -54,7 +54,9 @@ export {
   AnalyticsErrorAnalysisComponent,
   LoadAnalyticsErrorAnalysis,
   AnalyticsUsagePatternsComponent,
-  LoadAnalyticsUsagePatterns
+  LoadAnalyticsUsagePatterns,
+  UsageExplorerComponent,
+  LoadUsageExplorer
 } from './AI/index';
 
 // Knowledge Hub components

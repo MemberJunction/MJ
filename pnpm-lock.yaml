@@ -278,6 +278,9 @@ importers:
       '@memberjunction/ai-anthropic':
         specifier: 6.2.0-edge.0
         version: link:../Providers/Anthropic
+      '@memberjunction/ai-betty':
+        specifier: 6.2.0-edge.0
+        version: link:../Providers/Betty
       '@memberjunction/ai-betty-bot':
         specifier: 6.2.0-edge.0
         version: link:../Providers/BettyBot
@@ -571,9 +574,15 @@ importers:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      '@types/nunjucks':
+        specifier: ^3.2.6
+        version: 3.2.6
       '@types/safe-regex':
         specifier: ^1.1.6
         version: 1.1.6
+      nunjucks:
+        specifier: 3.2.4
+        version: 3.2.4(chokidar@3.6.0)
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1576,6 +1585,25 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/AI/Providers/Betty:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.0
+        version: link:../../Core
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.0
+        version: link:../../../MJGlobal
+      '@memberjunction/network-utils':
+        specifier: 6.2.0-edge.0
+        version: link:../../../NetworkUtils
+      env-var:
+        specifier: ^7.5.0
+        version: 7.5.0
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/AI/Providers/BettyBot:
     dependencies:
       '@memberjunction/ai':
@@ -1643,6 +1671,9 @@ importers:
       '@memberjunction/ai-cohere':
         specifier: 6.2.0-edge.0
         version: link:../Cohere
+      '@memberjunction/ai-deepinfra':
+        specifier: 6.2.0-edge.0
+        version: link:../DeepInfra
       '@memberjunction/ai-elevenlabs':
         specifier: 6.2.0-edge.0
         version: link:../ElevenLabs
@@ -1691,6 +1722,9 @@ importers:
       '@memberjunction/ai-recommendations-rex':
         specifier: 6.2.0-edge.0
         version: link:../Recommendations-Rex
+      '@memberjunction/ai-siliconflow':
+        specifier: 6.2.0-edge.0
+        version: link:../SiliconFlow
       '@memberjunction/ai-vectors-pinecone':
         specifier: 6.2.0-edge.0
         version: link:../../Vectors/Providers/Pinecone
@@ -1745,6 +1779,28 @@ importers:
       '@types/node':
         specifier: 24.10.11
         version: 24.10.11
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/AI/Providers/DeepInfra:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.0
+        version: link:../../Core
+      '@memberjunction/ai-openai':
+        specifier: 6.2.0-edge.0
+        version: link:../OpenAI
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.0
+        version: link:../../../MJGlobal
+    devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.2.0-edge.0
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -2113,6 +2169,28 @@ importers:
         specifier: ^6.18.0
         version: 6.18.0(ws@8.19.0)(zod@4.3.6)
     devDependencies:
+      ts-node-dev:
+        specifier: ^2.0.0
+        version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/AI/Providers/SiliconFlow:
+    dependencies:
+      '@memberjunction/ai':
+        specifier: 6.2.0-edge.0
+        version: link:../../Core
+      '@memberjunction/ai-openai':
+        specifier: 6.2.0-edge.0
+        version: link:../OpenAI
+      '@memberjunction/global':
+        specifier: 6.2.0-edge.0
+        version: link:../../../MJGlobal
+    devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.2.0-edge.0
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -14076,6 +14154,9 @@ importers:
       '@memberjunction/ai-bedrock':
         specifier: 6.2.0-edge.0
         version: link:../AI/Providers/Bedrock
+      '@memberjunction/ai-betty':
+        specifier: 6.2.0-edge.0
+        version: link:../AI/Providers/Betty
       '@memberjunction/ai-betty-bot':
         specifier: 6.2.0-edge.0
         version: link:../AI/Providers/BettyBot
@@ -14109,6 +14190,9 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.0
         version: link:../AI/CorePlus
+      '@memberjunction/ai-deepinfra':
+        specifier: 6.2.0-edge.0
+        version: link:../AI/Providers/DeepInfra
       '@memberjunction/ai-elevenlabs':
         specifier: 6.2.0-edge.0
         version: link:../AI/Providers/ElevenLabs
@@ -14178,6 +14262,9 @@ importers:
       '@memberjunction/ai-segmentation':
         specifier: 6.2.0-edge.0
         version: link:../AI/Segmentation
+      '@memberjunction/ai-siliconflow':
+        specifier: 6.2.0-edge.0
+        version: link:../AI/Providers/SiliconFlow
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.0
         version: link:../AI/Vectors/Dupe
@@ -14446,6 +14533,9 @@ importers:
       '@memberjunction/ai-bedrock':
         specifier: 6.2.0-edge.0
         version: link:../AI/Providers/Bedrock
+      '@memberjunction/ai-betty':
+        specifier: 6.2.0-edge.0
+        version: link:../AI/Providers/Betty
       '@memberjunction/ai-betty-bot':
         specifier: 6.2.0-edge.0
         version: link:../AI/Providers/BettyBot
@@ -14461,6 +14551,9 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.2.0-edge.0
         version: link:../AI/CorePlus
+      '@memberjunction/ai-deepinfra':
+        specifier: 6.2.0-edge.0
+        version: link:../AI/Providers/DeepInfra
       '@memberjunction/ai-elevenlabs':
         specifier: 6.2.0-edge.0
         version: link:../AI/Providers/ElevenLabs
@@ -14524,6 +14617,9 @@ importers:
       '@memberjunction/ai-reranker':
         specifier: 6.2.0-edge.0
         version: link:../AI/Reranker
+      '@memberjunction/ai-siliconflow':
+        specifier: 6.2.0-edge.0
+        version: link:../AI/Providers/SiliconFlow
       '@memberjunction/ai-vector-dupe':
         specifier: 6.2.0-edge.0
         version: link:../AI/Vectors/Dupe
@@ -15014,6 +15110,9 @@ importers:
       '@memberjunction/ai-agents':
         specifier: 6.2.0-edge.0
         version: link:../../AI/Agents
+      '@memberjunction/ai-anthropic':
+        specifier: 6.2.0-edge.0
+        version: link:../../AI/Providers/Anthropic
       '@memberjunction/ai-bridge-base':
         specifier: 6.2.0-edge.0
         version: link:../../AI/RealtimeBridge/Base

@@ -17,6 +17,7 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { AIPromptTimeoutError } from './AIPromptTimeoutError';
+import { ParseManifestEntryMime, TrimSpacesAndTabs } from './linearTextScan';
 import { ResultSelectionConfig, type IParallelExecutionCoordinator } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -24,7 +25,8 @@ import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
 import {
     TemplateMessageRole,
     ChildPromptParam,
-    AIPromptParams
+    AIPromptParams,
+    ResolvePromptRunUserID
 } from '@memberjunction/ai-core-plus';
 // json5 is a CJS module: under this package's ESM output its import namespace has no
 // `parse` — only the default export does. `import * as JSON5` made JSON5.parse
@@ -108,7 +110,7 @@ export type { ExecutionBound, FailoverConfiguration } from './BaseModelRunner';
  * ExecutePrompt → executeSinglePrompt / executePromptInParallel without
  * discarding vendor-resolution data that would need to be re-derived.
  */
-interface ModelSelectionResult {
+export interface ModelSelectionResult {
   model: MJAIModelEntityExtended | null;
   vendorDriverClass?: string;
   vendorApiName?: string;
@@ -360,8 +362,10 @@ export class AIPromptRunner extends BaseModelRunner {
           renderedPromptText = params.systemPromptOverride;
           this.logStatus(`   Using system prompt override for prompt "${prompt.Name}" (bypassing hierarchical template rendering)`, true, params);
         } else {
-          // Render all child prompt templates recursively
-          childTemplateRenderingResult = await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
+          // Render all child prompt templates recursively (or reuse pre-rendered templates)
+          childTemplateRenderingResult = params.PreRenderedChildTemplates
+            ? { renderedTemplates: params.PreRenderedChildTemplates }
+            : await this.renderChildPromptTemplates(params.childPrompts, params, params.cancellationToken);
           // Render the parent prompt with child templates embedded
           renderedPromptText = await this.renderPromptWithChildTemplates(prompt, params, childTemplateRenderingResult.renderedTemplates);
         }
@@ -558,7 +562,7 @@ export class AIPromptRunner extends BaseModelRunner {
     }
 
     // Use existing prompt run if provided (hierarchical case) or create new one
-    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo);
+    const promptRun = existingPromptRun || await this.createPromptRun(prompt, selectedModel, params, renderedPromptText, startTime, params.override?.vendorId, modelSelectionInfo, params.RunType);
 
     // Check for cancellation before model execution
     if (params.cancellationToken?.aborted) {
@@ -725,13 +729,41 @@ export class AIPromptRunner extends BaseModelRunner {
       throw new Error(`No execution tasks created for parallel execution of prompt ${prompt.Name}`);
     }
 
+    const parallelUserId = ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser }) ?? undefined;
+    for (const task of executionTasks) {
+      task.AgentID = params.agentId;
+      task.UserID = parallelUserId;
+    }
+
     // Check for cancellation before executing tasks
     if (params.cancellationToken?.aborted) {
       throw new Error('Parallel execution was cancelled before task execution');
     }
 
-    // Execute tasks in parallel
-    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken);
+    // 1. Create (or reuse existingPromptRun) the consolidated parent BEFORE parallel tasks run (§5.1).
+    // Use the first task's model for the initial ModelID; after selection, set ModelID/VendorID to the selected arm's.
+    const initialModel = existingSelection?.model || executionTasks[0].model;
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(
+      prompt,
+      initialModel,
+      params,
+      renderedPromptText,
+      startTime,
+      params.override?.vendorId,
+      existingSelection?.selectionInfo,
+      'ParallelParent',
+    );
+    consolidatedPromptRun.RunType = 'ParallelParent';
+    consolidatedPromptRun.WasSelectedResult = false;
+
+    // Execute tasks in parallel - pass consolidatedPromptRun.ID as parentPromptRunId
+    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(
+      params,
+      executionTasks,
+      undefined,
+      consolidatedPromptRun.ID,
+      params.cancellationToken,
+    );
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -745,17 +777,37 @@ export class AIPromptRunner extends BaseModelRunner {
 
     let selectedResult = successfulResults[0]; // Default to first
 
-    // Use result selector if configured
+    // Use result selector if configured - pass consolidatedPromptRun.ID and contextUser
     if (successfulResults.length > 1 && prompt.ResultSelectorPromptID) {
       const selectionConfig: ResultSelectionConfig = {
         method: 'PromptSelector',
         selectorPromptId: prompt.ResultSelectorPromptID,
       };
 
-      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
+      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(
+        successfulResults,
+        selectionConfig,
+        consolidatedPromptRun.ID,
+        params.cancellationToken,
+        params.contextUser,
+      );
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
       }
+    }
+
+    // Update parent with selected arm's model and vendor
+    consolidatedPromptRun.ModelID = selectedResult.task.model.ID;
+    if (selectedResult.task.vendorId) {
+      consolidatedPromptRun.VendorID = selectedResult.task.vendorId;
+    } else if (selectedResult.task.promptModel?.VendorID) {
+      consolidatedPromptRun.VendorID = selectedResult.task.promptModel.VendorID;
+    }
+
+    // Ensure selectedResult child is marked WasSelectedResult = true
+    if (selectedResult.promptRun) {
+      selectedResult.promptRun.WasSelectedResult = true;
+      await selectedResult.promptRun.Save();
     }
 
     // Calculate total tokens and costs from all parallel executions
@@ -782,10 +834,6 @@ export class AIPromptRunner extends BaseModelRunner {
       }
     }
 
-    // Use existing prompt run if provided (hierarchical case) or create new one
-    // Use the model selection info if provided (from hierarchical execution)
-    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId, existingSelection?.selectionInfo);
-
     // Update with parallel execution metadata
     const endTime = new Date();
     consolidatedPromptRun.CompletedAt = endTime;
@@ -809,9 +857,8 @@ export class AIPromptRunner extends BaseModelRunner {
       // prices the full input including cached tokens rather than dropping them.
       consolidatedPromptRun.TokensCacheRead = selectedResultUsage.cacheReadTokens ?? 0;
       consolidatedPromptRun.TokensCacheWrite = selectedResultUsage.cacheWriteTokens ?? 0;
-      if (selectedResultUsage.cost !== undefined) {
-        consolidatedPromptRun.Cost = selectedResultUsage.cost;
-      }
+      // NOTE (§5.1): On the parent, do NOT assign Cost from the selected arm. Leave Cost = null.
+      // TotalCost is maintained by server-side TriggerParentCostRollup.
       if (selectedResultUsage.costCurrency !== undefined) {
         consolidatedPromptRun.CostCurrency = selectedResultUsage.costCurrency;
       }
@@ -836,19 +883,20 @@ export class AIPromptRunner extends BaseModelRunner {
       });
     }
 
-    // For parallel execution, set rollup fields to match totals (no child execution to roll up)
+    // For parallel execution, set rollup fields to match totals
     consolidatedPromptRun.TokensPromptRollup = totalPromptTokens;
     consolidatedPromptRun.TokensCompletionRollup = totalCompletionTokens;
     consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
     consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
     consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
     if (hasCost) {
+      consolidatedPromptRun.DescendantCost = totalCost;
       consolidatedPromptRun.TotalCost = totalCost;
     }
     
     // Set Status and WasSelectedResult for parallel execution
     consolidatedPromptRun.Status = parallelResult.successCount > 0 ? 'Completed' : 'Failed';
-    consolidatedPromptRun.WasSelectedResult = true; // This is the consolidated result chosen by judge
+    consolidatedPromptRun.WasSelectedResult = false; // WasSelectedResult stays on the selected child, not the parent
 
     // Persist the consolidated run fire-and-forget; the finalize UPDATE chains after its INSERT via
     // the save queue. These fields are set after all the awaited parallel work, so the INSERT has long
@@ -993,6 +1041,29 @@ export class AIPromptRunner extends BaseModelRunner {
    * @param cancellationToken - Cancellation token for aborting rendering
    * @returns Promise with rendered templates map
    */
+  /**
+   * Render a set of child prompt templates WITHOUT executing anything, returning the rendered text
+   * keyed by each child's parent placeholder — exactly what the hierarchical execution path embeds
+   * into the parent template.
+   *
+   * Exposed for callers that need a child's rendered text before the run: the loop agent uses it to
+   * relocate a volatile specialization into the trailing runtime-state message (see
+   * `ResolveSpecializationPlacement` in `@memberjunction/ai-agents`) while the system prompt renders a
+   * stub in its place. Rendering is deterministic for the same inputs, so a subsequent execution of
+   * the same params reproduces the same text.
+   *
+   * @param childPrompts The child prompt params, as they would be passed in `AIPromptParams.childPrompts`.
+   * @param params The parent params (context user, data, template data) the children render against.
+   * @param cancellationToken Optional abort signal.
+   */
+  public async RenderChildPromptTemplates(
+    childPrompts: ChildPromptParam[],
+    params: AIPromptParams,
+    cancellationToken?: AbortSignal
+  ): Promise<{ renderedTemplates: Record<string, string> }> {
+    return this.renderChildPromptTemplates(childPrompts, params, cancellationToken);
+  }
+
   private async renderChildPromptTemplates(
     childPrompts: ChildPromptParam[],
     params: AIPromptParams,
@@ -1263,7 +1334,7 @@ export class AIPromptRunner extends BaseModelRunner {
    * Uses the unified BuildModelVendorCandidates method to create an ordered list of candidates,
    * then selects the first one with an available API key.
    */
-  private async selectModel(
+  protected async selectModel(
     prompt: MJAIPromptEntityExtended,
     explicitModelId?: string,
     contextUser?: UserInfo,
@@ -1301,7 +1372,7 @@ export class AIPromptRunner extends BaseModelRunner {
         explicitModelId,
         configurationId,
         vendorId,
-        params.verbose
+        params?.verbose
       );
 
       // Track all models considered for selection info
@@ -2094,7 +2165,7 @@ export class AIPromptRunner extends BaseModelRunner {
       // Stop sequences are handled separately: the prompt value is comma-delimited and gated by
       // driver support; additionalParameters supplies a ready-made array that overrides it.
       if (prompt.StopSequences && this.shouldApplyStopSequences(prompt, model, vendorId, llm)) {
-        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.replace(AIPromptRunner.STOP_SEQUENCE_TRIM_REGEX, '')).filter((s: string) => s.length > 0);
+        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => TrimSpacesAndTabs(s)).filter((s: string) => s.length > 0);
       }
       if (params.additionalParameters?.stopSequences !== undefined) {
         chatParams.stopSequences = params.additionalParameters.stopSequences;
@@ -2390,7 +2461,6 @@ export class AIPromptRunner extends BaseModelRunner {
     const result: string[] = [];
     let inManifest = false;
     let mutated = false;
-    const entryRegex = /^\*\*[A-Z]+\*\* — .+? \[(?<mime>[^\]]+)\]/;
 
     for (const line of lines) {
       if (line.startsWith('## Available Artifacts')) {
@@ -2404,9 +2474,10 @@ export class AIPromptRunner extends BaseModelRunner {
       result.push(line);
 
       if (!inManifest) continue;
-      const match = entryRegex.exec(line);
-      if (!match) continue;
-      const mime = (match.groups?.mime ?? '').toLowerCase();
+      // `**A** — name [mime]`; parsed linearly (CodeQL js/polynomial-redos flagged the regex form).
+      const entryMime = ParseManifestEntryMime(line);
+      if (entryMime === null) continue;
+      const mime = entryMime.toLowerCase();
       const modality = mime.split('/')[0];
       if (modality !== 'image' && modality !== 'audio' && modality !== 'video') continue;
       if (this.driverSupportsModality(caps, mime)) continue;
@@ -2527,19 +2598,6 @@ export class AIPromptRunner extends BaseModelRunner {
 
     return messages;
   }
-
-  /**
-   * Regex used to trim only horizontal whitespace (spaces and tabs) from the start and end
-   * of each stop sequence token after comma-splitting.
-   *
-   * We intentionally do NOT use String.trim() here because stop sequences can legitimately
-   * begin or end with newline characters. For example, the sequence "\n```" is designed to
-   * match only a closing code fence (preceded by a newline), distinguishing it from an
-   * opening "```json" fence that does not start with a newline. Using trim() would strip
-   * that leading "\n", turning "\n```" into "```" and causing the stop to fire on the
-   * opening fence instead — producing an empty response for non-native prefill providers.
-   */
-  private static readonly STOP_SEQUENCE_TRIM_REGEX = /^[ \t]+|[ \t]+$/g;
 
   /**
    * Substrings that mark a provider failure as TOOLS-specific, so the native call is worth one
@@ -3572,7 +3630,12 @@ export class AIPromptRunner extends BaseModelRunner {
             ERROR_MESSAGE: trueError,
             MALFORMED_JSON: rawOutput
           },
-          skipValidation: true // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
+          skipValidation: true, // one shot, fix or no fix: no validation retries on the repair itself.
+          // attemptJSONRepair is deliberately NOT set, so a repair can never start a repair of its own.
+          // That keeps every run within two levels of an agent step's target, which is as far as
+          // vwAIUsageFacts looks for the agent run (pinned by the nesting-depth tests).
+          agentId: params.agentId,
+          UserID: ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser }) ?? undefined,
         });
         
         if (!repairResult.success || !repairResult.result) {
@@ -3747,7 +3810,8 @@ export class AIPromptRunner extends BaseModelRunner {
     systemPromptText: string,
     startTime: Date,
     vendorId?: string,
-    modelSelectionInfo?: AIModelSelectionInfo
+    modelSelectionInfo?: AIModelSelectionInfo,
+    runType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single'
   ): Promise<MJAIPromptRunEntityExtended> {
     return this.CreateRunRecord(
       prompt,
@@ -3756,7 +3820,13 @@ export class AIPromptRunner extends BaseModelRunner {
       startTime,
       vendorId,
       modelSelectionInfo,
-      (promptRun) => this.applyChatRequestFields(promptRun, prompt, model, params, systemPromptText, startTime, vendorId)
+      (promptRun) => {
+        this.applyChatRequestFields(promptRun, prompt, model, params, systemPromptText, startTime, vendorId);
+        // An explicit run type (the consolidated parallel parent) wins over params.RunType.
+        if (runType) {
+          promptRun.RunType = runType;
+        }
+      }
     );
   }
 
