@@ -442,5 +442,15 @@
       "lastModified": "2026-09-15T13:56:42.685Z",
       "checksum": "ffcb145b12e3690546bdd56181db4092ed845f55c858f1e2657aa6efd72ff7c5"
     }
+  },
+  {
+    "fields": {
+      "Name": "MemberJunction",
+      "Description": "MemberJunction \u2014 developer of Betty, the MJ-native organization-scoped assistant. Unlike a single hosted service, Betty is deployed per organization, so each instance configures its own API root (BETTY_API_BASE_URL) and the API key is presented directly as a bearer token rather than exchanged for a session credential.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "F684A68C-D3CB-4AFF-92AE-D189D22A69D9"
+    }
   }
 ]
