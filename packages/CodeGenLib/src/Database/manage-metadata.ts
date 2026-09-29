@@ -32,7 +32,7 @@ import {
 } from "./search-guardrails";
 import { MapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
-import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, EscapeSQLString, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
@@ -894,6 +894,37 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Schema a VirtualEntities entry resolves to when it names none. Same default as table entries.
+    */
+   protected resolveVirtualEntitySchema(ve: VirtualEntityConfig): string {
+      const schema = ve.SchemaName?.trim();
+      return schema && schema.length > 0 ? schema : 'dbo';
+   }
+
+   /**
+    * VirtualEntities entries that declare keys, in the table-entry shape applySoftPKFKConfig consumes.
+    * A virtual entity stores its view name in BaseTable, so the existing SchemaName + BaseTable lookup applies.
+    */
+   protected virtualEntityConfigsAsTableConfigs(config: Record<string, unknown>): SoftPKFKTableConfig[] {
+      return this.extractVirtualEntitiesFromConfig(config)
+         .filter(ve => (ve.PrimaryKey?.length ?? 0) > 0 || (ve.ForeignKeys?.length ?? 0) > 0)
+         .map(ve => ({
+            SchemaName: this.resolveVirtualEntitySchema(ve),
+            TableName: ve.ViewName,
+            Description: ve.Description,
+            PrimaryKey: (ve.PrimaryKey ?? []).map(fieldName => ({ FieldName: fieldName })),
+            ForeignKeys: ve.ForeignKeys ?? [],
+         }));
+   }
+
+   /**
+    * Every soft PK/FK target in the config: table entries first, then VirtualEntities entries.
+    */
+   protected softKeyTableConfigs(config: Record<string, unknown>): SoftPKFKTableConfig[] {
+      return [...this.extractTablesFromConfig(config), ...this.virtualEntityConfigsAsTableConfigs(config)];
+   }
+
+   /**
     * Extracts the MaterializedBaseViews array from the additionalSchemaInfo config file.
     * Each entry declares a 1:1 base-view materialization of an existing entity (plan §4.1).
     */
@@ -1589,26 +1620,27 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Processes virtual entity configurations from the additionalSchemaInfo config.
-    * For each configured virtual entity, checks if it already exists and creates
-    * it if not. Uses the spCreateVirtualEntity stored procedure.
-    * Must run BEFORE manageVirtualEntities() so newly created entities get field-synced.
+    * Creates the virtual entities declared in additionalSchemaInfo that do not exist yet.
+    * Creation is two logged statements (Entity row with a CodeGen-generated ID, then the first key
+    * column) so the CodeGen_Run capture replays on any database. Each new entity joins its schema's
+    * application, gets the default permissions, and is registered in NewEntityList so pass 2 and
+    * file generation include it in this same run. Must run BEFORE manageVirtualEntities().
     */
-   protected async processVirtualEntityConfig(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; createdCount: number }> {
-      const config = ManageMetadataBase.getSoftPKFKConfig();
-      if (!config) return { success: true, createdCount: 0 };
+   protected async processVirtualEntityConfig(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; createdCount: number; createdEntityNames: string[] }> {
+      const config = ManageMetadataBase.GetSoftPKFKConfig();
+      if (!config) return { success: true, createdCount: 0, createdEntityNames: [] };
 
       const virtualEntities = this.extractVirtualEntitiesFromConfig(config as Record<string, unknown>);
-      if (virtualEntities.length === 0) return { success: true, createdCount: 0 };
+      if (virtualEntities.length === 0) return { success: true, createdCount: 0, createdEntityNames: [] };
 
-      let createdCount = 0;
+      const createdEntityNames: string[] = [];
       const schema = MjCoreSchema();
 
       for (const ve of virtualEntities) {
-         const viewSchema = ve.SchemaName || schema;
+         const viewSchema = this.resolveVirtualEntitySchema(ve);
          const viewName = ve.ViewName;
          const entityName = ve.EntityName || this.deriveEntityNameFromView(viewName);
-         const pkField = ve.PrimaryKey?.[0] || 'ID';
+         const pkFields = ve.PrimaryKey && ve.PrimaryKey.length > 0 ? ve.PrimaryKey : ['ID'];
 
          // Check if entity already exists for this view
          const existsResult = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(schema, 'vwEntities')} WHERE BaseView = @ViewName AND SchemaName = @SchemaName`,
@@ -1631,32 +1663,28 @@ export class ManageMetadataBase {
             continue;
          }
 
-         // Create the virtual entity via the stored procedure
          try {
-            const createResult = await pool.executeStoredProcedure(`${this.qs(schema, 'spCreateVirtualEntity')}`,
-               { 'Name': entityName, 'BaseView': viewName, 'SchemaName': viewSchema, 'PrimaryKeyFieldName': pkField, 'Description': ve.Description || null }
-               );
-
-            const newEntityId = createResult.recordset?.[0]?.['']
-               || createResult.recordset?.[0]?.ID
-               || createResult.recordset?.[0]?.Column0;
+            const newEntityId = this.createNewUUID();
+            await this.logSQLAndExecute(pool,
+               this.buildVirtualEntityInsertSQL(newEntityId, entityName, viewSchema, viewName, ve.Description ?? null),
+               `SQL generated to create new virtual entity ${entityName}`);
+            await this.logSQLAndExecute(pool,
+               this.buildVirtualEntityPlaceholderPKSQL(this.createNewUUID(), newEntityId, pkFields[0], pkFields.length === 1),
+               `SQL generated to seed primary key field ${pkFields[0]} for virtual entity ${entityName}`);
 
             logStatus(`    > Created virtual entity "${entityName}" (ID: ${newEntityId}) for view [${viewSchema}].[${viewName}]`);
-            createdCount++;
+            createdEntityNames.push(entityName);
+            ManageMetadataBase.NewEntityList.push(entityName);
 
-            // Add virtual entity to the application for its schema and set default permissions
-            // (same logic as table-backed entities)
-            if (newEntityId) {
-               await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
-               await this.addDefaultPermissionsForEntity(pool, newEntityId, entityName);
-            }
+            await this.addEntityToApplicationForSchema(pool, newEntityId, entityName, viewSchema, currentUser);
+            await this.addDefaultPermissionsForEntity(pool, newEntityId, entityName);
          } catch (err) {
             const errMessage = err instanceof Error ? err.message : String(err);
             logError(`    > Failed to create virtual entity "${entityName}": ${errMessage}`);
          }
       }
 
-      return { success: true, createdCount };
+      return { success: true, createdCount: createdEntityNames.length, createdEntityNames };
    }
 
    /**
@@ -2642,6 +2670,22 @@ export class ManageMetadataBase {
          bSuccess = false;
       }
 
+      // Config-created virtual entities now have their fields. Apply their configured soft keys and
+      // build their relationships in this run — the same second pass external entities get below.
+      if (vecResult.createdEntityNames.length > 0) {
+         logStatus(`   Applying configured keys for ${vecResult.createdEntityNames.length} new virtual entit${vecResult.createdEntityNames.length === 1 ? 'y' : 'ies'}...`);
+         if (! await this.applySoftPKFKConfig(pool)) {
+            logError('   Error applying soft PK/FK configuration for new virtual entities');
+            bSuccess = false;
+         }
+         await md.Refresh();
+         logStatus('   Managing new virtual-entity relationships...');
+         if (! await this.manageEntityRelationships(pool, excludeSchemas, md)) {
+            logError('   Error managing new virtual-entity relationships');
+            bSuccess = false;
+         }
+      }
+
       // External-data-source entities: introspect the REMOTE schema and sync their EntityField rows
       // (the remote analogue of reading the local view's columns for a virtual entity).
       const eeResult = await this.manageExternalEntities(pool, currentUser)
@@ -3147,7 +3191,7 @@ export class ManageMetadataBase {
             const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const entity = md.EntityByName(virtualEntity.Name)
             if (entity) {
-               const removeList = [];
+               const removeList: string[] = [];
                const fieldsToRemove = entity.Fields.filter(f => !veFields.find((vf: any) => vf.FieldName === f.Name));
                for (const f of fieldsToRemove) {
                   removeList.push(f.ID);
@@ -3160,9 +3204,11 @@ export class ManageMetadataBase {
                   bUpdated = true;
                }
 
-               // check to see if any of the fields in the virtual entity have Pkey attribute set. If not, we will default to the first field
-               // as pkey and user can change this.
-               const hasPkey = entity.Fields.find(f => f.IsPrimaryKey) !== undefined;
+               // A key must survive the removal above; otherwise the first view column becomes the key.
+               const hasPkey = this.virtualEntityHasPrimaryKey(entity.Fields, new Set(removeList));
+               if (!hasPkey) {
+                  logStatus(`      ⚠️  Virtual entity ${virtualEntity.Name} has no primary key; using first view column ${veFields[0].FieldName}. Set PrimaryKey in additionalSchemaInfo to choose the key.`);
+               }
 
                // now create/update the fields that are in the view
                for (let i = 0; i < veFields.length; i++) {
@@ -3198,6 +3244,14 @@ export class ManageMetadataBase {
     */
    protected resolvePrimaryKeyFlags(makePrimaryKey: boolean, singleColumnPrimaryKey: boolean): { wantPrimaryKey: boolean; wantUnique: boolean } {
       return { wantPrimaryKey: makePrimaryKey, wantUnique: makePrimaryKey && singleColumnPrimaryKey };
+   }
+
+   /**
+    * True when a key field survives the removal of view columns that no longer exist.
+    * The cached field list still holds rows the sync just deleted, so they must be excluded.
+    */
+   protected virtualEntityHasPrimaryKey(fields: ReadonlyArray<Pick<EntityFieldInfo, 'ID' | 'IsPrimaryKey'>>, removedFieldIDs: ReadonlySet<string>): boolean {
+      return fields.some(f => f.IsPrimaryKey && !removedFieldIDs.has(f.ID));
    }
 
    /**
@@ -4674,7 +4728,8 @@ export class ManageMetadataBase {
          //   1. Schema-as-key (template format): { "dbo": [{ "TableName": "Orders", ... }] }
          //   2. Flat tables array (legacy format): { "tables": [{ "SchemaName": "dbo", "TableName": "Orders", ... }] }
          // Both use PascalCase property names.
-         const tables = this.extractTablesFromConfig(config);
+         //   VirtualEntities entries are included too (ViewName as TableName, string PrimaryKey normalized).
+         const tables = this.softKeyTableConfigs(config);
 
          for (const table of tables) {
             const tableSchema = table.SchemaName;
@@ -7074,6 +7129,41 @@ export class ManageMetadataBase {
       takenNames: string[]
    ): { name: string; suffix: string } {
       return this.ResolveUniqueEntityName(desiredName, schemaName, takenNames);
+   }
+
+   /**
+    * INSERT for a config-declared virtual entity's Entity row. Logged rather than a stored-procedure
+    * call so the CodeGen_Run capture replays it with the same ID on every database, exactly like
+    * table-backed entities. Column set and flags match spCreateVirtualEntity, plus Description.
+    */
+   protected buildVirtualEntityInsertSQL(entityId: string, entityName: string, viewSchema: string, viewName: string, description: string | null): string {
+      const q = (name: string) => this.qi(name);
+      const lit = (value: string) => `'${EscapeSQLString(value)}'`;
+      return `INSERT INTO ${this.qs(MjCoreSchema(), 'Entity')} (
+         ${q('ID')}, ${q('Name')}, ${q('Description')}, ${q('BaseTable')}, ${q('BaseView')}, ${q('SchemaName')},
+         ${q('VirtualEntity')}, ${q('IncludeInAPI')}, ${q('AllowCreateAPI')}, ${q('AllowUpdateAPI')}, ${q('AllowDeleteAPI')},
+         ${q('AllowRecordMerge')}, ${q('TrackRecordChanges')}, ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')}
+      ) VALUES (
+         ${this.uuidLit(entityId)}, ${lit(entityName)}, ${description ? lit(description) : 'NULL'}, ${lit(viewName)}, ${lit(viewName)}, ${lit(viewSchema)},
+         ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.boolLit(false)},
+         ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.utcNow()}, ${this.utcNow()}
+      )`;
+   }
+
+   /**
+    * Seeds the first configured key column before the view-column sync runs, so the sync sees a key
+    * and does not promote the first view column. Type is a placeholder the sync replaces.
+    */
+   protected buildVirtualEntityPlaceholderPKSQL(fieldId: string, entityId: string, pkFieldName: string, singleColumnPrimaryKey: boolean): string {
+      const q = (name: string) => this.qi(name);
+      const { wantPrimaryKey, wantUnique } = this.resolvePrimaryKeyFlags(true, singleColumnPrimaryKey);
+      return `INSERT INTO ${this.qs(MjCoreSchema(), 'EntityField')} (
+         ${q('ID')}, ${q('EntityID')}, ${q('Sequence')}, ${q('Name')}, ${q('IsPrimaryKey')}, ${q('IsUnique')}, ${q('Type')},
+         ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')}
+      ) VALUES (
+         ${this.uuidLit(fieldId)}, ${this.uuidLit(entityId)}, ${this.applyTimeEntityFieldSequenceSQL(entityId)}, '${EscapeSQLString(pkFieldName)}',
+         ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)}, 'int', ${this.utcNow()}, ${this.utcNow()}
+      )`;
    }
 
    protected createNewEntityInsertSQL(newEntityUUID: string, newEntityName: string, newEntity: any, newEntitySuffix: string, newEntityDisplayName: string | null): string {

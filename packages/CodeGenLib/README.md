@@ -1242,7 +1242,7 @@ Virtual entities are defined in `database-metadata-config.json` under the `Virtu
 
 - **`ViewName`**: The SQL view name (must already exist in the database)
 - **`EntityName`**: The MemberJunction entity name (appears in metadata, UI, APIs)
-- **`SchemaName`**: Database schema (typically `__mj` for core entities)
+- **`SchemaName`**: Database schema that holds the view (defaults to `dbo`)
 - **`Description`**: Entity description for metadata and documentation
 - **`PrimaryKey`**: Array of column names forming the primary key (supports composite keys)
 - **`ForeignKeys`**: Optional array of foreign key relationships to other entities (if omitted, LLM decoration discovers them)
@@ -1252,19 +1252,19 @@ Virtual entities are defined in `database-metadata-config.json` under the `Virtu
 CodeGen processes virtual entities through several specialized steps:
 
 #### 1. `processVirtualEntityConfig()` - Entity Creation
-Reads the `VirtualEntities` configuration and calls `spCreateVirtualEntity` for each entry:
+Reads the `VirtualEntities` configuration and, for each entry whose view exists and has no entity yet, writes two logged statements:
 
-```typescript
-// CodeGen calls this stored procedure for each virtual entity
-EXEC spCreateVirtualEntity
-    @Name = 'Sales Summary',
-    @SchemaName = '__mj',
-    @BaseView = 'vwSalesSummary',
-    @Description = 'Aggregated sales data...',
-    @PrimaryKeyColumnName = 'SummaryID'
+```sql
+-- Entity row with a CodeGen-generated ID (read-only flags, Description kept)
+INSERT INTO [__mj].[Entity] ([ID], [Name], [Description], [BaseTable], [BaseView], [SchemaName], [VirtualEntity], ...)
+VALUES (CAST('<new id>' AS uniqueidentifier), 'Sales Summary', 'Aggregated sales data...', 'vwSalesSummary', 'vwSalesSummary', 'dbo', 1, ...)
+
+-- First PrimaryKey column, typed later by the field sync
+INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name], [IsPrimaryKey], [IsUnique], [Type], ...)
+VALUES (..., (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM ...), 'SummaryID', 1, 1, 'int', ...)
 ```
 
-This creates the `Entity` metadata record with `VirtualEntity = 1`.
+Both statements go to the CodeGen_Run capture, so a migration replays them with the same entity ID. The entity is then added to its schema's application, gets the default permissions, and joins the new-entity list so its class, GraphQL type and form are generated in the same run.
 
 #### 2. `manageVirtualEntities()` - Field Synchronization
 Scans `sys.columns` on the virtual entity's view and creates `EntityField` metadata for each column:
@@ -1289,20 +1289,20 @@ WHERE
     object_id = OBJECT_ID('__mj.vwSalesSummary')
 ```
 
-#### 3. `applySoftPKFKConfig()` - Explicit Relationship Overrides
-Applies the `primaryKeyColumnName` and `foreignKeyDefinitions` from the config:
+#### 3. `applySoftPKFKConfig()` - Explicit Keys
+Applies every `PrimaryKey` column and every `ForeignKeys` entry from the config, right after the field sync:
 
-```typescript
-// Sets the primary key field
-UPDATE EntityField
-SET IsPrimaryKey = 1
-WHERE EntityID = @VirtualEntityID
-  AND Name = 'SummaryID'
+```sql
+-- Each PrimaryKey column (composite keys supported)
+UPDATE EntityField SET IsPrimaryKey = 1, IsSoftPrimaryKey = 1
+WHERE EntityID = @VirtualEntityID AND Name = 'SummaryID'
 
-// Creates foreign key relationships
-INSERT INTO EntityRelationship (...)
-SELECT ... FROM foreignKeyDefinitions
+-- Each ForeignKeys entry
+UPDATE EntityField SET RelatedEntityID = @RegionEntityID, RelatedEntityFieldName = 'ID', IsSoftForeignKey = 1
+WHERE EntityID = @VirtualEntityID AND Name = 'RegionID'
 ```
+
+`EntityRelationship` rows are then built from these soft foreign keys in the same run.
 
 **Why explicit FK definitions?** Views don't have database-level foreign keys, so CodeGen can't detect relationships automatically. The config provides this metadata.
 
