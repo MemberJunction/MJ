@@ -254,6 +254,32 @@ const cacheSettingsSchema = z.object({
    * every signed-in user may read every row of every entity.
    */
   recordDataBroadcastEntities: z.array(z.string()).optional().default([]),
+  /**
+   * Expiry, in seconds, of entries in the shared Redis cache (used when REDIS_URL is set). The
+   * REDIS_TTL_SECONDS environment variable overrides it. 0 stores entries without expiry. When
+   * neither is set, the Redis provider's default applies (one hour).
+   */
+  sharedCacheTTLSeconds: z.number().int().nonnegative().optional(),
+  /**
+   * How often, in seconds, loaded engines compare their rows with the database and reload what
+   * changed without an MJ event (direct SQL, other applications). With a shared cache one server
+   * does it per interval. 0 = disabled. Default: 300 (5 minutes).
+   */
+  engineSweepIntervalSeconds: z.number().int().nonnegative().optional().default(300),
+  /**
+   * How often, in seconds, the user cache compares two row counts and the newest update timestamp
+   * with the database and reloads only when they differ. The cache already refreshes on MJ writes
+   * (locally and, with a shared cache, on other servers); this covers changes made outside MJ.
+   * 0 = disabled. Default: 300 (5 minutes).
+   */
+  userCacheCheckIntervalSeconds: z.number().int().nonnegative().optional().default(300),
+  /**
+   * How long, in seconds, a server holds the shared warm-up turn while it loads its engines, so
+   * servers starting together load one at a time and the rest find the cache warm. The lease is
+   * renewed while the load runs; this value is both its expiry and how long another server waits
+   * for it. 0 disables the turn-taking. Default: 30.
+   */
+  startupWarmupLeaseSeconds: z.number().int().nonnegative().optional().default(30),
 });
 
 const loggingSettingsSchema = z.object({
@@ -926,6 +952,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     defaultTTLSeconds: 0,
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
+    engineSweepIntervalSeconds: 300,
   },
 
   // Logging settings defaults — variables logging is always off unless the operator

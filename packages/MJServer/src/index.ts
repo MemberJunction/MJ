@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ResolveStartupMode } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, DatabaseProviderBase, ProviderBase, ResolveStartupMode } from '@memberjunction/core';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -60,8 +60,9 @@ import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel, Lo
 import { getSystemUser, validateAuthProvidersRegistered } from './auth/index.js';
 import { createAuthProviderCatalogRouter, AUTH_CATALOG_MOUNT_PATH } from './auth/AuthProviderCatalogRouter.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
-import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
-import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { CacheManagerConfigFromSettings, CreateSharedCacheFromEnvironment, StartEngineSweeper, StartUserCacheChecks, WarmupLeaseMsFromSettings, WireSharedCacheEvents } from './sharedCache.js';
+// Type-only: the provider itself is built in ./sharedCache.ts; this file only hands it to the push-status fan-out.
+import type { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { ReconcileOrphanedConversationDetails } from './generic/OrphanedConversationDetailReconciler.js';
 import {
@@ -452,6 +453,22 @@ const setupComplete$ = new ReplaySubject(1);
   const dbType = GetDbType();
   const dataSources: DataSourceInfo[] = [];
 
+  // Shared cache first (plan N1): the database provider loads metadata and startup engines through
+  // it, so the first server to start fills it and later servers read it instead of each querying
+  // the database and broadcasting what they loaded. Subscribed before engines load so they hear
+  // other servers while they start.
+  const sharedCache = CreateSharedCacheFromEnvironment(configInfo.cacheSettings);
+  if (sharedCache) {
+    await WireSharedCacheEvents(sharedCache, () => (Metadata.Provider instanceof ProviderBase ? Metadata.Provider : undefined)); // global-provider-ok: bootstrap
+    // Both cross-instance fan-outs ride the same connection: push-status updates (MJ #4222) and
+    // handoff offers. Each is independent of the cache events wired above.
+    await wirePushStatusFanOut(sharedCache, startupLog);
+    await wireHandoffOfferFanOut(sharedCache, startupLog);
+    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+  }
+  const cacheManagerConfig = CacheManagerConfigFromSettings(configInfo.cacheSettings);
+  const warmupLeaseMs = WarmupLeaseMsFromSettings(configInfo.cacheSettings);
+
   if (dbType === 'postgresql') {
     // ─── PostgreSQL Path ───────────────────────────────────────────
     startupLog.BeginPhase('Connecting to database');
@@ -511,6 +528,7 @@ const setupComplete$ = new ReplaySubject(1);
       mj_core_schema,
       cacheRefreshInterval / 1000, // convert ms to seconds
     );
+    pgConfigData.LocalStorageProvider = sharedCache ?? undefined;
     const provider = new PostgreSQLDataProvider();
     await provider.Config(pgConfigData);
     SetProvider(provider);
@@ -522,7 +540,7 @@ const setupComplete$ = new ReplaySubject(1);
     const sysUser = UserCache.Instance.GetSystemUser();
     const backupSysUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
     const pgStartupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode });
+    await StartupManagerImport.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: pgStartupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // Both provider sources have now had their turn — config/env at module load, metadata via
     // AuthProviderEngine's startup hook — so "no providers at all" is finally a meaningful check.
@@ -680,10 +698,11 @@ const setupComplete$ = new ReplaySubject(1);
 
     // cacheRefreshInterval is configured in ms; checkRefreshIntervalSeconds declares seconds — see providerConfigUnits.ts
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, MetadataCacheRefreshIntervalSeconds(cacheRefreshInterval));
+    config.LocalStorageProvider = sharedCache ?? undefined;
     // MJAPI is a long-running server, so entry-point default is 'full' engine pre-warm;
     // MJ_STARTUP_MODE / mj.config.cjs startup.mode can override per the shared precedence chain
     const startupMode = ResolveStartupMode({ configValue: configInfo.startup?.mode, defaultMode: 'full' });
-    await setupSQLServerClient(config, { mode: startupMode.mode });
+    await setupSQLServerClient(config, { mode: startupMode.mode, cacheManagerConfig, warmupLeaseMs });
 
     // See the note on the PostgreSQL path above: this is the first point at which both the
     // config/env providers and the metadata catalog have been registered.
@@ -808,79 +827,18 @@ const setupComplete$ = new ReplaySubject(1);
     startupLog.LogIf('verbose', 'Server telemetry disabled');
   }
 
-  // Optionally inject Redis as the shared storage provider for cross-server cache invalidation
-  if (process.env.REDIS_URL) {
-    const redisProvider = new RedisLocalStorageProvider({
-      url: process.env.REDIS_URL,
-      keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
-      enablePubSub: true,
-      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
-    });
-    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
-    await redisProvider.StartListening();
-
-    // Connect Redis pub/sub events to LocalCacheManager callback dispatch
-    // so cross-server cache invalidation messages are routed to registered callbacks
-    redisProvider.OnCacheChanged((event) => {
-        const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
-        console.log(`[MJAPI] Redis pub/sub → DispatchCacheChange: ${event.Action} for "${event.CacheKey}" from server ${sourceShort}`);
-        LocalCacheManager.Instance.DispatchCacheChange(event);
-
-        // Also broadcast to connected browser clients via GraphQL subscription
-        // Extract entity name from the cache key (format: EntityName|Filter|OrderBy|...)
-        const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';
-        if (entityName) {
-            PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
-                entityName,
-                primaryKeyValues: null, // entity-level invalidation
-                action: event.Action || 'save',
-                sourceServerId: event.SourceServerId || 'unknown',
-                timestamp: new Date(),
-            });
-        }
-    });
-
-    // Fan push-status updates across server instances (MJ #4222).
-    //
-    // Behind a load balancer the browser's WebSocket lives on one replica while the mutation that
-    // drives the agent can be handled by another. The push topic is an in-process PubSub, so a
-    // completion published on replica B never reaches a subscriber on replica A — the browser waits
-    // forever for an event that was delivered to nobody. Replicating progress and completion over
-    // Redis closes that, and the durable tail query remains the backstop if Redis is down.
-    await wirePushStatusFanOut(redisProvider, startupLog);
-    await wireHandoffOfferFanOut(redisProvider, startupLog);
-
-    startupLog.LogIf('verbose', `Redis cache provider connected: ${process.env.REDIS_URL}`);
+  // The database provider already initialized LocalCacheManager from inside its own Config(), with
+  // no settings — this call is what makes `cacheSettings` take effect (Initialize merges a config
+  // handed to it later; plan §16.3 #1). Unconditional on purpose: the guard that used to sit here
+  // skipped exactly the case that needed it.
+  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheManagerConfig); // global-provider-ok: bootstrap
+  if (sharedCache) {
+    await LocalCacheManager.Instance.SetStorageProvider(sharedCache);
   }
-
-  // If Redis is available, swap LocalCacheManager's storage provider to Redis.
-  // LocalCacheManager may have already been initialized (with in-memory provider)
-  // during engine loading. SetStorageProvider migrates cached data to Redis.
-  if (process.env.REDIS_URL) {
-    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider); // global-provider-ok: bootstrap
-    startupLog.LogIf('verbose', 'LocalCacheManager: storage provider swapped to Redis');
-  }
-  // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
-  if (!LocalCacheManager.Instance.IsInitialized) {
-    // Build cache config from mj.config.cjs cacheSettings
-    const cs = configInfo.cacheSettings;
-    const cacheConfig = {
-      maxSizeBytes: (cs.maxMemoryMB ?? 150) * 1024 * 1024,
-      maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-      defaultTTLMs: (cs.defaultTTLSeconds ?? 0) * 1000,
-      evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
-      verboseLogging: cs.verboseLogging ?? false,
-    };
-    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig); // global-provider-ok: bootstrap
-    if (startupLog.IsAtLeast('verbose')) {
-      // eslint-disable-next-line no-console
-      console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
-        maxMemoryMB: cs.maxMemoryMB ?? 150,
-        maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
-        evictionSweepIntervalSeconds: cs.evictionSweepIntervalSeconds ?? 300,
-      }));
-    }
-  }
+  const engineSweepMs = StartEngineSweeper(configInfo.cacheSettings);
+  startupLog.LogIf('verbose', engineSweepMs > 0 ? `Engine/database sweep every ${engineSweepMs / 1000}s` : 'Engine/database sweep disabled');
+  const userCacheCheckMs = StartUserCacheChecks(configInfo.cacheSettings);
+  startupLog.LogIf('verbose', userCacheCheckMs > 0 ? `User cache staleness check every ${userCacheCheckMs / 1000}s` : 'User cache staleness check disabled');
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
   // This must happen before any request handler calls GetAPIKeyEngine()
