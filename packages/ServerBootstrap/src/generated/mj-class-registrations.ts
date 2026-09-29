@@ -1729,12 +1729,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
-    MJCompanyIntegrationRunAPILogEntity,
-    MJCompanyIntegrationRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunAPILogEntity,
+    MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
@@ -1933,12 +1933,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJRoleEntity,
     MJRowLevelSecurityFilterEntity,
     MJSQLDialectEntity,
-    MJScheduledJobEntity,
-    MJScheduledJobRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJScheduledJobEntity,
+    MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJScopedPromptConfigEntity,
@@ -2137,12 +2137,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferDeletePostAction,
     BufferGetAnalyticsAction,
     BufferGetChannelsAction,
-    BufferGetPendingPostsAction,
-    BufferGetSentPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    BufferGetPendingPostsAction,
+    BufferGetSentPostsAction,
     BufferReorderQueueAction,
     BufferSearchPostsAction,
     CreateVideoPostAction,
@@ -2341,12 +2341,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
@@ -2545,12 +2545,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ObjectExistsAction,
     PDFExtractorAction,
     ParallelExecuteAction,
-    PasswordStrengthAction,
-    PerplexitySearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    PasswordStrengthAction,
+    PerplexitySearchAction,
     PostalCodeLookupAction,
     PreviewDocumentAction,
     QRCodeAction,

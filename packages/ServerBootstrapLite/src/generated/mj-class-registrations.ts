@@ -1470,12 +1470,12 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJComponentEntityExtended,
     MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
-    MJComponentRegistryEntity,
-    MJContentFileTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentRegistryEntity,
+    MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
     MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
@@ -1674,12 +1674,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
-    MJSearchScopeEntityEntity,
-    MJSearchScopeExternalIndexEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopeEntityEntity,
+    MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -1878,12 +1878,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetTrendingHashtagsAction,
     GetUserVideosAction,
     GetVideoAnalyticsAction,
-    HootSuiteBulkSchedulePostsAction,
-    HootSuiteCreateScheduledPostAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteBulkSchedulePostsAction,
+    HootSuiteCreateScheduledPostAction,
     HootSuiteDeleteScheduledPostAction,
     HootSuiteGetAnalyticsAction,
     HootSuiteGetScheduledPostsAction,
@@ -2082,12 +2082,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
-    MJUserEntityServer,
-    MJUserRoleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
