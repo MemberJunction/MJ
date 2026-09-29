@@ -1,5 +1,5 @@
 /**
- * content-vectorization.checks.ts — the 'content-vectorization' bundle (CV1–CV6): the
+ * content-vectorization.checks.ts — the 'content-vectorization' bundle (CV1–CV10): the
  * ContentSource / autotag vectorization pipeline (AutotagBaseEngine), end-to-end against the live DB.
  *
  * TRANSPORT: **SERVER** — AutotagBaseEngine is a server-side engine with no client surface, so
@@ -17,19 +17,25 @@
  * WHAT IS PINNED: CV1 default chunk creation + chunk identity; CV2 multi-chunk + re-vectorize
  * soft-delete; CV3 PurgeDeletedChunks removes the superseded vectors and tombstones the rows;
  * CV4 EmbedPendingChunks backfills a Pending chunk; CV5 explicit metadata strategy is minimal;
- * CV6 dimensions + namespace routing thread through to the (captured) embed + upsert.
+ * CV6 dimensions + namespace routing thread through to the (captured) embed + upsert; CV7/CV8 a
+ * declared VectorEntityName omits Entity only when the reader can honor it; CV9 a content source
+ * another process created after the engine cache loaded still routes, stores and namespaces by its
+ * own configuration; CV10 FieldPathResolver queries a related row its engine cache has never seen.
+ *
+ * CV9/CV10 create that source with a raw INSERT through `ctx.Pool`, so they are SQL Server only and
+ * skip loudly without a pool (see insertSourceBehindEngine for why a BaseEntity save cannot do it).
  *
  * ANTI-VACUITY: needs a Vector Index to borrow an embedding model + vector DB from. If the
  * deployment has none, every check SKIPS-AS-PASS LOUDLY. All fixtures are name-prefixed per run
  * and tagged "(mj-integration-test — safe to delete)"; Teardown removes them children-first.
  */
-import { RunView, BaseEntity, CompositeKey } from '@memberjunction/core';
+import { RunView, BaseEntity, BaseEngineRegistry, CompositeKey } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, UUIDsEqual, uuidv4 } from '@memberjunction/global';
 import { Assert, AssertEqual } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
-import { AutotagBaseEngine } from '@memberjunction/content-autotagging';
+import { AutotagBaseEngine, FieldPathResolver } from '@memberjunction/content-autotagging';
 import { AIModelRunner } from '@memberjunction/ai-prompts';
 import { AIEngine } from '@memberjunction/aiengine';
 import {
@@ -156,21 +162,81 @@ async function ensureBase(ctx: IntegrationCheckContext): Promise<void> {
     S.BaseBuilt = true;
 }
 
-/** Create a content source (+ its content type), optionally with a VectorMetadata Configuration. */
-async function makeSource(ctx: IntegrationCheckContext, label: string, configuration?: Record<string, unknown>, vectorIndexID?: string): Promise<{ sourceID: string; contentTypeID: string }> {
+/** Create a content type; with `vectorIndexID` it also routes (EmbeddingModelID + VectorIndexID) to that index. */
+async function makeContentType(ctx: IntegrationCheckContext, label: string, vectorIndexID?: string): Promise<string> {
     const ct = await ctx.Provider.GetEntityObject<MJContentTypeEntity>('MJ: Content Types', ctx.User);
     ct.NewRecord(); ct.Name = `${S.Prefix}-ct-${label} ${MARKER}`; ct.AIModelID = S.EmbeddingModelID; ct.MinTags = 1; ct.MaxTags = 5;
+    if (vectorIndexID) { ct.EmbeddingModelID = S.EmbeddingModelID; ct.VectorIndexID = vectorIndexID; }
     Assert(await ct.Save(), `content-type save: ${ct.LatestResult?.CompleteMessage}`);
     S.Created.push({ entity: 'MJ: Content Types', id: ct.ID });
+    return ct.ID;
+}
+
+/** Create a content source (+ its content type), optionally with a VectorMetadata Configuration. */
+async function makeSource(ctx: IntegrationCheckContext, label: string, configuration?: Record<string, unknown>): Promise<{ sourceID: string; contentTypeID: string }> {
+    const contentTypeID = await makeContentType(ctx, label);
 
     const src = await ctx.Provider.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources', ctx.User);
     src.NewRecord(); src.Name = `${S.Prefix}-src-${label} ${MARKER}`;
-    src.ContentTypeID = ct.ID; src.ContentSourceTypeID = S.SourceTypeID; src.ContentFileTypeID = S.FileTypeID;
-    src.URL = 'https://example.com/it-cv'; src.EmbeddingModelID = S.EmbeddingModelID; src.VectorIndexID = vectorIndexID ?? S.VectorIndexID;
+    src.ContentTypeID = contentTypeID; src.ContentSourceTypeID = S.SourceTypeID; src.ContentFileTypeID = S.FileTypeID;
+    src.URL = 'https://example.com/it-cv'; src.EmbeddingModelID = S.EmbeddingModelID; src.VectorIndexID = S.VectorIndexID;
     if (configuration) src.Configuration = JSON.stringify(configuration);
     Assert(await src.Save(), `content-source save: ${src.LatestResult?.CompleteMessage}`);
     S.Created.push({ entity: 'MJ: Content Sources', id: src.ID });
-    return { sourceID: src.ID, contentTypeID: ct.ID };
+    return { sourceID: src.ID, contentTypeID };
+}
+
+/**
+ * Create a content source the way ANOTHER PROCESS would, as far as this one can tell: a raw INSERT
+ * through the fixture pool, so no BaseEntity save event fires here and KnowledgeHubMetadataEngine
+ * never hears about the row. A BaseEntity save cannot model that. The engine caches
+ * 'MJ: Content Sources' with AutoRefresh on (the BaseEngine default), so an in-process save pushes
+ * the new row straight into its cache, which is why the first version of CV9 passed with or
+ * without the fix it was written for. Direct DML skips the platform's save-side guarantees (audit,
+ * invalidation, validation) and that is precisely the point here; Teardown still deletes the row
+ * through BaseEntity. Callers assert the row is invisible to the engine before relying on it.
+ */
+async function insertSourceBehindEngine(
+    ctx: IntegrationCheckContext,
+    label: string,
+    contentTypeID: string,
+    vectorIndexID: string,
+    configuration?: Record<string, unknown>
+): Promise<{ sourceID: string; sourceName: string }> {
+    const entity = ctx.Provider.EntityByName('MJ: Content Sources');
+    Assert(!!entity && !!ctx.Pool, "insertSourceBehindEngine needs 'MJ: Content Sources' metadata and the server fixture pool");
+    const sourceID = uuidv4().toUpperCase();
+    const sourceName = `${S.Prefix}-src-${label} ${MARKER}`;
+    await ctx.Pool!.request()
+        .input('ID', sourceID)
+        .input('Name', sourceName)
+        .input('ContentTypeID', contentTypeID)
+        .input('ContentSourceTypeID', S.SourceTypeID)
+        .input('ContentFileTypeID', S.FileTypeID)
+        .input('URL', 'https://example.com/it-cv')
+        .input('EmbeddingModelID', S.EmbeddingModelID)
+        .input('VectorIndexID', vectorIndexID)
+        .input('Configuration', configuration ? JSON.stringify(configuration) : null)
+        .query(
+            `INSERT INTO [${entity!.SchemaName}].[${entity!.BaseTable}] ` +
+            `(ID, Name, ContentTypeID, ContentSourceTypeID, ContentFileTypeID, URL, EmbeddingModelID, VectorIndexID, Configuration) ` +
+            `VALUES (@ID, @Name, @ContentTypeID, @ContentSourceTypeID, @ContentFileTypeID, @URL, @EmbeddingModelID, @VectorIndexID, @Configuration)`
+        );
+    S.Created.push({ entity: 'MJ: Content Sources', id: sourceID });
+    return { sourceID, sourceName };
+}
+
+/** CV9/CV10 need the fixture pool (server transport, SQL Server) to create a row behind the engine cache. */
+function guardNoPool(ctx: IntegrationCheckContext, id: string): boolean {
+    if (ctx.Pool) return false;
+    skipNote(id, 'no SQL fixture pool on this context (SQL Server server transport only) — cannot create a row this process never hears about');
+    return true;
+}
+
+/** Anti-vacuity for CV9/CV10: a row this process's KnowledgeHub cache already holds proves nothing. */
+function assertInvisibleToEngine(sourceID: string): void {
+    Assert(KnowledgeHubMetadataEngine.Instance.GetContentSourceByID(sourceID) === undefined,
+        `precondition: content source ${sourceID} must be invisible to this process's KnowledgeHub cache, or the check cannot fail`);
 }
 async function makeItem(ctx: IntegrationCheckContext, sourceID: string, contentTypeID: string, name: string, text: string): Promise<string> {
     const item = await ctx.Provider.GetEntityObject<MJContentItemEntity>('MJ: Content Items', ctx.User);
@@ -436,47 +502,89 @@ export const ContentVectorizationChecks: NamedCheck[] = [
     },
     {
         Id: 'content-vectorization.CV9',
-        Name: 'CV9: a dotted namespaceField resolves for a content source created AFTER the engine cache loaded',
+        Name: 'CV9: a content source another process created after the engine cache loaded still routes, stores and namespaces by its own configuration',
         RequiresMutation: true,
         Fn: async (ctx): Promise<void> => {
-            if (guardSkip('CV9')) return;
+            if (guardSkip('CV9') || guardNoPool(ctx, 'CV9')) return;
             await ensureBase(ctx);
 
-            // THE LANE CV6 DELIBERATELY DOES NOT COVER. CV6 routes on a PLAIN field, which lives on
-            // the item, so `resolveDriverFieldPaths` short-circuits and FieldPathResolver never runs.
-            // The single-hop form is the one production uses to reach a tenant id that lives on the
-            // SOURCE, and it had no integration coverage at all.
-            const vi = await ctx.Provider.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', ctx.User);
-            vi.NewRecord(); vi.Name = `${S.Prefix}-index-hop ${MARKER}`;
-            vi.EmbeddingModelID = S.EmbeddingModelID; vi.VectorDatabaseID = S.VectorDatabaseID; vi.Dimensions = 1536;
-            vi.ProviderConfig = JSON.stringify({ namespaceField: 'ContentSourceID.Name' });
-            Assert(await vi.Save(), `vector-index save: ${vi.LatestResult?.CompleteMessage}`);
-            S.Created.push({ entity: 'MJ: Vector Indexes', id: vi.ID });
+            // The production shape: a long-running vectorization worker loaded its KnowledgeHub cache,
+            // then ANOTHER process created a source. That row decides where and how its items are
+            // stored, and this process can see it only through a stale cache, so each assertion below
+            // names a different way that goes wrong.
+            //
+            // The source's own index routes on a DOTTED namespaceField, the single-hop form production
+            // uses to reach a tenant id that lives on the source. CV6 routes on a plain field on the
+            // item, so FieldPathResolver never runs there.
+            const hop = await ctx.Provider.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', ctx.User);
+            hop.NewRecord(); hop.Name = `${S.Prefix}-index-hop ${MARKER}`;
+            hop.EmbeddingModelID = S.EmbeddingModelID; hop.VectorDatabaseID = S.VectorDatabaseID; hop.Dimensions = 1536;
+            hop.ProviderConfig = JSON.stringify({ namespaceField: 'ContentSourceID.Name' });
+            Assert(await hop.Save(), `vector-index save: ${hop.LatestResult?.CompleteMessage}`);
+            S.Created.push({ entity: 'MJ: Vector Indexes', id: hop.ID });
 
-            // PRIME THE CACHE WHILE THE SOURCE STILL DOES NOT EXIST — this ordering IS the check.
-            // KnowledgeHubMetadataEngine caches 'MJ: Content Sources' with no AutoRefresh, so a source
-            // created after this point is invisible to it for the life of the process. That is the
-            // production shape: the vectorization worker boots, a customer's source is created later,
-            // and every item on it must still resolve its namespace.
+            // The content type routes somewhere ELSE: the base fixture index, whose namespaceField is
+            // the plain 'ContentSourceID'. That is where the item lands when the source's override is
+            // lost, so the routing assertion can tell the two apart.
+            const contentTypeID = await makeContentType(ctx, 'cv9', S.VectorIndexID);
+
+            // Prime the cache with the index and the type while the source does not exist yet.
             await refreshEngines(ctx);
+            const { sourceID, sourceName } = await insertSourceBehindEngine(ctx, 'cv9', contentTypeID, hop.ID, { ChunkTextStorage: 'mixed' });
+            assertInvisibleToEngine(sourceID);
 
-            const { sourceID, contentTypeID } = await makeSource(ctx, 'cv9', undefined, vi.ID);
-            const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv9-item', 'Single-hop namespace resolution.');
-            // NO refreshEngines() HERE, ON PURPOSE. Refreshing would hide the defect this check exists
-            // for: with a warm cache the old code resolved the hop correctly too.
+            const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv9-item', 'A content item on a source another process created.');
             resetCaptures();
 
             await AutotagBaseEngine.Instance.VectorizeContentItems(await loadItems(ctx, [itemID]), ctx.User);
 
-            const expected = `${S.Prefix}-src-cv9 ${MARKER}`;
             const up = S.Upserts[S.Upserts.length - 1];
-            const directives = up?.records[0]?.providerTemporaryDirectives as Record<string, unknown> | undefined;
-            // Before the FieldPathResolver fix this was `undefined`: the stale cache returned an empty
-            // subset, the resolver read that as "no such source", and a driver that requires a routing
-            // value is entitled to reject the record outright — a silent, total refusal to write.
-            Assert(directives?.['namespace'] === expected,
-                `single-hop namespace resolved off the uncached source row (expected "${expected}"): ${JSON.stringify(directives)}`);
-            console.log('      → CV9: ContentSourceID.Name resolved for a source created after the cache loaded');
+            Assert(!!up, 'the item was upserted at all (a routing refusal writes nothing)');
+            // 1. Routing: the SOURCE's own index, not the content type's.
+            AssertEqual(up.providerConfig?.['namespaceField'], 'ContentSourceID.Name',
+                "upserted through the source's own vector index, not the content type's");
+            // 2. Namespace: the dotted path resolved off the source row.
+            AssertEqual(up.records[0]?.providerTemporaryDirectives?.['namespace'], sourceName,
+                'the dotted namespaceField resolved off the source row');
+            // 3. Storage: the source's ChunkTextStorage='mixed' keeps a single-chunk item at item level,
+            //    so the item carries the vector id and no chunk row is written. The default
+            //    (alwaysChunk) does the opposite; CV1 pins that.
+            const item = (await loadItems(ctx, [itemID]))[0];
+            const chunks = await loadChunks(ctx, itemID);
+            Assert(item.VectorRecordID != null && chunks.length === 0,
+                `the source's ChunkTextStorage='mixed' applied: item VectorRecordID=${item.VectorRecordID}, chunk rows=${chunks.length}`);
+            console.log("      → CV9: late source routed to its own index, namespace resolved, its storage config applied");
+        }
+    },
+    {
+        Id: 'content-vectorization.CV10',
+        Name: 'CV10: FieldPathResolver queries a related row its engine cache has never seen instead of reporting it absent',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            if (guardSkip('CV10') || guardNoPool(ctx, 'CV10')) return;
+            await ensureBase(ctx);
+
+            // The resolver seam on its own, against the real registry, engine and database. CV9 cannot
+            // show it: the vectorization pass reloads the KnowledgeHub cache when it sees the miss, so
+            // by the time the resolver runs there the row is cached. Other callers, and hops into other
+            // engine-cached entities, get no such reload.
+            const contentTypeID = await makeContentType(ctx, 'cv10');
+            await refreshEngines(ctx);
+            const { sourceID, sourceName } = await insertSourceBehindEngine(ctx, 'cv10', contentTypeID, S.VectorIndexID);
+            assertInvisibleToEngine(sourceID);
+            // The resolver asks the registry first. Without a full-set cache on offer it would query
+            // anyway, and this check would pass on the old code too.
+            Assert(BaseEngineRegistry.Instance.TryGetCachedRecords('MJ: Content Sources', { unfilteredOnly: true }) != null,
+                "precondition: an engine offers a full-set cache of 'MJ: Content Sources'");
+
+            const itemID = await makeItem(ctx, sourceID, contentTypeID, 'cv10-item', 'FieldPathResolver seam.');
+            const resolver = new FieldPathResolver(ctx.Provider, ctx.User, 'MJ: Content Items');
+            const values = await resolver.ResolveForItems(await loadItems(ctx, [itemID]), 'ContentSourceID.Name');
+
+            // Before the fix this was undefined: the cache's filtered subset was read as "no such source".
+            AssertEqual(values.get(NormalizeUUID(itemID)), sourceName,
+                'ContentSourceID.Name resolved for a source the engine cache has never seen');
+            console.log('      → CV10: the resolver queried the source its engine cache had never seen');
         }
     }
 ];

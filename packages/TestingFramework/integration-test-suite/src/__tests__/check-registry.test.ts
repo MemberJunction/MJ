@@ -145,7 +145,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['view-security', ViewSecurityChecks, 4], // two-identity V14/V15/V16 + RV17 (IT64)
         ['ai-providers', AiProvidersChecks, 3], // AI7/AI13/AI15 model-resolution seams (IT65)
         ['app-behavioral', AppBehavioralChecks, 3], // S4/S6/S8 Application behaviors (IT66)
-        ['content-vectorization', ContentVectorizationChecks, 9], // CV1-CV9 content vectorization pipeline (IT67)
+        ['content-vectorization', ContentVectorizationChecks, 10], // CV1-CV10 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
@@ -244,7 +244,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'codegen-determinism': 6,
         'communication': 5,
         'concurrent': 2,
-        'content-vectorization': 9,
+        'content-vectorization': 10,
         'conversation-compaction': 18,
         'dataset-cache': 3,
         'entity-actions': 8,
@@ -380,6 +380,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'cache-immutability.F12',
         'client-cache.C10',
         'content-vectorization.CV1',
+        'content-vectorization.CV10',
         'content-vectorization.CV2',
         'content-vectorization.CV3',
         'content-vectorization.CV4',
