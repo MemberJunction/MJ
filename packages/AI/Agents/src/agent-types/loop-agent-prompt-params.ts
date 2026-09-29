@@ -338,6 +338,13 @@ export interface LoopAgentTypePromptParams {
     decisionsMaxItems?: number;
 
     /**
+     * Maximum number of decision requests answered from one agent turn. Requests beyond this
+     * limit are not run; each gets a failed result saying why.
+     * @default MAX_DECISION_REQUESTS_PER_TURN (8)
+     */
+    decisionsMaxRequests?: number;
+
+    /**
      * Name of the decision prompt used for evaluating decisions.
      * @default 'Default Decision'
      */
@@ -415,6 +422,13 @@ export interface LoopAgentTypePromptParams {
 }
 
 /**
+ * The most decision requests answered from one agent turn, unless `decisionsMaxRequests` overrides
+ * it. Each request can itself make up to `decisionsMaxItems` calls through `forEachItemIn`, so this
+ * bounds how many decision calls one turn can start.
+ */
+export const MAX_DECISION_REQUESTS_PER_TURN = 8;
+
+/**
  * Default values for LoopAgentTypePromptParams.
  * All section flags default to true (include), limits default to -1 (include all).
  */
@@ -435,6 +449,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includePipelineDocs: true,
     includeDecisionsDocs: true,
     decisionsMaxItems: 100,
+    decisionsMaxRequests: MAX_DECISION_REQUESTS_PER_TURN,
     decisionPromptName: 'Default Decision',
     includeFinishIfDocs: true,
     finishIfThreshold: 0.9,
