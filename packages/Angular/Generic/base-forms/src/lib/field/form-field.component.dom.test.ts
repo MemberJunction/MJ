@@ -391,9 +391,17 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(text(f, '.mj-forms-field-value')).toBe(WIDGET_ID);
     });
 
-    it('flags a required (non-nullable) field with the required-empty modifier when empty', () => {
-      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+    it('flags a required (non-nullable) field with the required-empty modifier when it has no value', () => {
+      const f = render({ Record: makeWidget({ Name: null }), FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+    });
+
+    it('does NOT flag a required field holding an empty string — that is a value, not absence (#4359)', () => {
+      // A NOT NULL string column accepts '' in SQL Server and in EntityField.Validate(), so the
+      // form must not paint red a value the save will happily accept. Requiring text is a separate
+      // constraint, not an inference from nullability.
+      const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
+      expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
     });
 
     it('does not flag a required field as required-empty when it has a value', () => {
