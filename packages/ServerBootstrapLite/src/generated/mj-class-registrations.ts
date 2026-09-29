@@ -876,25 +876,6 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/search-engine (15 classes)
-import {
-    AzureAISearchProvider,
-    BGEReRanker,
-    CohereReRanker,
-    ElasticsearchSearchProvider,
-    EntitySearchProvider,
-    FullTextSearchProvider,
-    NoopReRanker,
-    OpenAIReRanker,
-    OpenSearchSearchProvider,
-    SearchScopePermissionResolver,
-    StorageSearchProvider,
-    TagSearchProvider,
-    TypesenseSearchProvider,
-    VectorSearchProvider,
-    VoyageReRanker,
-} from '@memberjunction/search-engine';
-
 // @memberjunction/templates (3 classes)
 import {
     AIPromptExtension,
@@ -916,6 +897,25 @@ import {
 import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
+
+// @memberjunction/search-engine (15 classes)
+import {
+    AzureAISearchProvider,
+    BGEReRanker,
+    CohereReRanker,
+    ElasticsearchSearchProvider,
+    EntitySearchProvider,
+    FullTextSearchProvider,
+    NoopReRanker,
+    OpenAIReRanker,
+    OpenSearchSearchProvider,
+    SearchScopePermissionResolver,
+    StorageSearchProvider,
+    TagSearchProvider,
+    TypesenseSearchProvider,
+    VectorSearchProvider,
+    VoyageReRanker,
+} from '@memberjunction/search-engine';
 
 // @memberjunction/ai-agents (22 classes)
 import {
@@ -1925,6 +1925,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordComparisonCompareServerOperation,
     MJScheduledJobEntityExtended,
     TagEngineBase,
+    AIPromptExtension,
+    TemplateEmbedExtension,
+    TemplateRunServerOperation,
+    ParallelExecutionCoordinator,
+    LLMReranker,
+    PromptReasoningProvider,
     AzureAISearchProvider,
     BGEReRanker,
     CohereReRanker,
@@ -1940,12 +1946,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TypesenseSearchProvider,
     VectorSearchProvider,
     VoyageReRanker,
-    AIPromptExtension,
-    TemplateEmbedExtension,
-    TemplateRunServerOperation,
-    ParallelExecutionCoordinator,
-    LLMReranker,
-    PromptReasoningProvider,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
     CSVToolLibrary,
@@ -2308,11 +2308,11 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/record-comparison',
     '@memberjunction/scheduling-engine-base',
     '@memberjunction/tag-engine-base',
-    '@memberjunction/search-engine',
     '@memberjunction/templates',
     '@memberjunction/ai-prompts',
     '@memberjunction/ai-reranker',
     '@memberjunction/ai-vector-dupe',
+    '@memberjunction/search-engine',
     '@memberjunction/ai-agents',
     '@memberjunction/ai-agent-harness',
     '@memberjunction/ai-agent-manager',
