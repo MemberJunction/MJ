@@ -5,6 +5,7 @@
 - **Created**: 2026-09-28
 - **Revised**: 2026-09-28 — per-record detail rows kept in queue mode; heartbeat with buffered progress; cooperative in-flight cancel; record-cap fix; scope-provider registry
 - **Revised**: 2026-09-29 — lease semantics and the 30-second heartbeat ceiling; `MaxProcessingSeconds` honored by the source; stall detection; deployment guidance removed
+- **Revised**: 2026-09-29 — attempt info for final failures; child results; run-time queue scope; delivery reference without a foreign key
 - **Author**: Dray + Claude
 - **Branch**: dray/content-pipeline-framework
 - **Depends on**: `feat/work-queue` landing on `next`, **and** a small set of generic additions to `packages/RecordSetProcessor` (see API Changes). This is the only one of the three plans in this PR that changes both systems rather than depending on one, unmodified.
@@ -107,7 +108,7 @@ erDiagram
     MJProcessRunDetail {
         uuid ID
         uuid ProcessRunID
-        uuid WorkQueueDeliveryID "new, nullable — set in queue mode"
+        uuid WorkQueueDeliveryID "new, nullable, no FK constraint — set in queue mode"
         json ResultPayload "substance: what was done, plus progress history"
     }
     WorkQueueDelivery {
@@ -124,7 +125,7 @@ erDiagram
     WorkQueueDelivery ||--o| MJProcessRunDetail : "logistics of — queue mode"
 ```
 
-`WorkQueueDeliveryID` on the detail row is the join between "what happened" and "where and how it ran." It could live in `ResultPayload` instead, but a real column lets the Record Process UI link straight to the delivery.
+`WorkQueueDeliveryID` on the detail row is the join between "what happened" and "where and how it ran." It is a plain column with no foreign-key constraint. Work Queue's sweeper deletes completed and discarded deliveries once a topic's retention period passes (`spWorkQueuePurgeTerminalDeliveries`); a constraint would make those deletes fail and let RSP data block Work Queue's retention. The detail row is the durable record; the delivery is logistics that may be purged, after which the reference simply no longer resolves.
 
 ### Component / Flow Design
 
@@ -204,6 +205,8 @@ After writing the detail row, the tracker decides what the queue should do, chec
 
 That's the entire retry policy on this side. The backoff math is Work Queue's own exported function, not a re-implementation.
 
+**Knowing a failure is final.** A processor often records the outcome on the entity itself, for example a status field that decides whether the record is queued again. It must write a terminal failure only when the queue won't retry. So each record's binding carries its attempt: the delivery's attempt number and the subscription's `MaxAttempts`. A processor that fails fatally, or fails on its final attempt, records a terminal failure; one that fails transiently before its final attempt leaves the entity alone and lets the retry happen. Without this, a dead-lettered record's entity would still look ready, and whatever publishes ready records would queue it again indefinitely.
+
 ### API Changes
 
 All additive and generic. None of them mention Work Queue.
@@ -214,6 +217,8 @@ export interface RecordResult {
     // ...existing fields unchanged
     /** Lets a tracker that supports retries distinguish "never retry" from "try again". Ignored by GenericProcessRunTracker. */
     FailureKind?: 'Fatal' | 'Transient';
+    /** Records the processor produced inside this call (items a crawl found, parts a document split into). The tracker writes one detail row per child. */
+    Children?: { Record: RecordRef; Result: RecordResult }[];
 }
 
 export interface RecordProgress {
@@ -225,6 +230,8 @@ export interface RecordProgress {
 // record-set-processor-base — interfaces.ts
 export interface RecordProcessorContext {
     // ...existing fields unchanged
+    /** From the source's binding; absent for sources that don't retry. */
+    Attempt?: { Number: number; Max: number };
     /** Aborted when this record should stop: 'Cancelled', 'LeaseLost', 'MaxProcessingSeconds', 'Stalled', or run shutdown. Absent for sources with no such concept. */
     Signal?: AbortSignal;
     /** Report status as often as convenient; the source decides how and when it's persisted. No-op when absent. */
@@ -234,6 +241,8 @@ export interface RecordProcessorContext {
 export interface RecordBinding {
     Signal?: AbortSignal;
     ReportProgress?: (progress: RecordProgress) => void;
+    /** Present when the source retries records: this attempt's number and the maximum. */
+    Attempt?: { Number: number; Max: number };
 }
 
 export interface IRecordSetSource {
@@ -241,6 +250,14 @@ export interface IRecordSetSource {
     /** Optional. Supplies per-record controls; the engine merges them into that record's context. */
     BindRecord?(record: RecordRef): RecordBinding | undefined;
 }
+
+// core-entities — RecordProcess.RunNow remote operation input (generated from its metadata)
+export type RecordProcessScopeOverride =
+    | { Kind: 'records'; RecordIDs: string[] }
+    | { Kind: 'view'; ViewID: string }
+    | { Kind: 'list'; ListID: string }
+    | { Kind: 'filter'; Filter?: string }
+    | { Kind: 'queue'; SubscriptionID: string };   // new
 
 // record-set-processor-base — registry.ts (alongside RecordProcessorRegistry)
 /** Builds the source and its paired tracker for a ScopeType the executor doesn't handle natively. */
@@ -252,6 +269,8 @@ Engine and executor changes:
 - **Record cap:** ask the source for `min(batchSize, maxRecords - processed)`, not `batchSize`, so nothing is claimed that won't be processed.
 - **Per-record context:** build each record's context from the page context plus `source.BindRecord?.(record)`. For the `ProcessBatch` path there is one call per page, so it receives a page-level signal (aborted on run shutdown) and a page-level progress reporter. Per-record cancels are honored when results are settled.
 - **Scope provider:** `RecordProcessExecutor` handles the built-in scopes as today, then consults `RecordScopeProviderRegistry`, then fails — the same fall-through `BuildProcessor` already uses for work types. When a provider supplies a tracker, `Run()` passes it into `Process()`.
+- **Run-time queue scope:** a run can override a queue-scoped Record Process's subscription with `{ Kind: 'queue', SubscriptionID }`, the same way it can already override a filter or view. One Record Process can then drain many subscriptions, for example one per source, without a Record Process row per subscription.
+- **Child results:** `GenericProcessRunTracker` writes one detail row per entry in `RecordResult.Children`, in both scopes. A child's `RecordID` is its real key once committed, or its ephemeral identity when nothing was committed, as in a dry run.
 
 The source and its tracker come from one factory because they share state: which deliveries are claimed, their lease tokens, their signals and progress buffers.
 
@@ -263,18 +282,18 @@ The source and its tracker come from one factory because they share state: which
 The engine requests no more than the remaining cap from the source. Fixes a latent issue for any claiming source, and saves a wasted read for query sources. Unit test: a run capped at 30 with a page size of 100 requests 30.
 
 ### Phase M1 — Contract additions
-`RecordResult.FailureKind`; `RecordProcessorContext.Signal` / `ReportProgress`; `RecordProgress`; `IRecordSetSource.BindRecord?`. The engine builds a per-record context. Existing sources, processors and trackers are unaffected — every new member is optional and absent today.
+`RecordResult.FailureKind` and `Children`; `RecordProcessorContext.Signal` / `ReportProgress` / `Attempt`; `RecordProgress`; `IRecordSetSource.BindRecord?`. The engine builds a per-record context. `GenericProcessRunTracker` writes child detail rows. Existing sources, processors and trackers are unaffected — every new member is optional and absent today.
 
 ### Phase M2 — Scope-provider registry
-`RecordScopeProviderRegistry` in base; `RecordProcessExecutor.BuildSource` and `Run()` consult it and pass the provider's tracker into `Process()`. Built-in scopes behave exactly as today.
+`RecordScopeProviderRegistry` in base; `RecordProcessExecutor.BuildSource` and `Run()` consult it and pass the provider's tracker into `Process()`. Built-in scopes behave exactly as today. The `RecordProcess.RunNow` remote operation's input gains the `queue` override kind (metadata, then CodeGen).
 
 ### Phase M3 — `ScopeType = 'Queue'`
-Migration dropping and re-adding `CK_RecordProcess_ScopeType` with `'Queue'`; new nullable `ScopeWorkQueueSubscriptionID` (FK to `WorkQueueSubscription`); new nullable `WorkQueueDeliveryID` on `ProcessRunDetail`; CodeGen. Record Process UI surfaces that switch on `ScopeType` need the new value handled.
+Migration dropping and re-adding `CK_RecordProcess_ScopeType` with `'Queue'`; new nullable `ScopeWorkQueueSubscriptionID` (FK to `WorkQueueSubscription`); new nullable `WorkQueueDeliveryID` on `ProcessRunDetail`, deliberately without a foreign-key constraint (see Data Model Changes); CodeGen. Record Process UI surfaces that switch on `ScopeType` need the new value handled.
 
 ### Phase M4 — `WorkQueueSource` (bridge package)
 - `NextBatch` calls `DatabaseTransportConsumer.Receive(n)` and returns claimed deliveries as `RecordRef`s; `Exhausted` when fewer than requested come back. The cursor is unused and resume is disabled.
 - Starts the heartbeat timer on first claim: renews every unsettled delivery with the latest buffered progress; maps `'Cancelled'` and `'Lost'` to that record's abort signal; retries a thrown `ExtendLease` on the next tick.
-- `BindRecord` returns the record's signal and a `ReportProgress` that updates its buffer and appends to its history.
+- `BindRecord` returns the record's signal, a `ReportProgress` that updates its buffer and appends to its history, and its attempt (the delivery's attempt count and the subscription's `MaxAttempts`).
 
 ### Phase M5 — `QueueAwareTracker` (bridge package)
 - Delegates the Process Run header, checkpoints, pause/cancel handshake and completion to a wrapped `GenericProcessRunTracker`.
@@ -288,7 +307,9 @@ No-op processor against a real `ScopeType='Queue'` Record Process, then:
 - an in-flight cancel honored via the signal, ending `Discarded` with a detail row;
 - a lease deliberately lost, confirming no settle and no double completion;
 - two concurrent runs of the same Record Process, confirming no record is processed twice;
-- a capped run, confirming nothing is claimed beyond the cap.
+- a capped run, confirming nothing is claimed beyond the cap;
+- a processor failing on its final attempt, confirming it sees the final attempt and the delivery is dead-lettered;
+- a processor returning child results, confirming one detail row per child in both scopes.
 
 ### Phase M7 — Apply to the pipeline stages
 Each stage's Record Process uses `ScopeType='Queue'`, pointed at a subscription. How subscriptions are laid out — one per stage, or per source for resource isolation — is a deployment choice; the framework supports either. Stage logic, working record and drivers are the same as in the other two plans. Drivers that run long check `context.Signal` at safe points and report status through `context.ReportProgress`.
@@ -300,8 +321,9 @@ Filter, View, List and SingleRecord scopes stay available platform-wide for ad h
 
 - `CK_RecordProcess_ScopeType` re-created with `'Queue'`.
 - `RecordProcess.ScopeWorkQueueSubscriptionID` — nullable FK.
-- `ProcessRunDetail.WorkQueueDeliveryID` — nullable FK.
-- `RecordResult.FailureKind`, `RecordProgress`, the context members and `BindRecord` are TypeScript only.
+- `ProcessRunDetail.WorkQueueDeliveryID` — nullable, no foreign-key constraint.
+- `RecordProcess.RunNow` remote operation input: new `queue` scope-override kind.
+- `RecordResult.FailureKind` and `Children`, `RecordProgress`, the context members and `BindRecord` are TypeScript only.
 - No changes to any Work Queue table or procedure.
 
 ## Testing Strategy
@@ -328,8 +350,10 @@ Filter, View, List and SingleRecord scopes stay available platform-wide for ad h
 
 | File / Package | Change |
 |---|---|
-| `packages/RecordSetProcessor/base/src/types.ts` | `RecordResult.FailureKind`, `RecordProgress` |
-| `packages/RecordSetProcessor/base/src/interfaces.ts` | `RecordProcessorContext.Signal` / `ReportProgress`, `RecordBinding`, `IRecordSetSource.BindRecord?` |
+| `packages/RecordSetProcessor/base/src/types.ts` | `RecordResult.FailureKind` and `Children`, `RecordProgress` |
+| `packages/RecordSetProcessor/base/src/interfaces.ts` | `RecordProcessorContext.Signal` / `ReportProgress` / `Attempt`, `RecordBinding`, `IRecordSetSource.BindRecord?` |
+| `packages/RecordSetProcessor/engine/src/trackers/GenericProcessRunTracker.ts` | One detail row per child result |
+| `RecordProcess.RunNow` remote operation metadata | `queue` scope-override kind; regenerates `RecordProcessScopeOverride` in `packages/MJCoreEntities/src/generated/remote_operations.ts` |
 | `packages/RecordSetProcessor/base/src/registry.ts` | `RecordScopeProviderRegistry` |
 | `packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts` | Cap-aware page request; per-record context |
 | `packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts` | Scope-provider fall-through; pass provider tracker into `Process()` |
