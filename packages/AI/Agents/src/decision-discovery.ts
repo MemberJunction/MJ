@@ -16,7 +16,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import type { DecisionAnswer, DecisionQuestion } from '@memberjunction/ai';
+import { ApplyPlattCalibration, type DecisionAnswer, type DecisionQuestion, type PlattCalibration } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ConversationUtility, type MentionContent, type SpecialContent } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -33,11 +33,69 @@ import { IsPlainObject, NormalizeUUID, UUIDsEqual } from '@memberjunction/global
 export const DECISION_DISCOVERY_MAX_OPTIONS = 25;
 
 /**
- * The least confidence at which the suggestion is shown. Both the Choice's confidence and the
- * Likelihood that any agent applies must reach it. A starting value: calibration (plan Task 2.4)
- * sets it from data.
+ * The least **calibrated** confidence at which the suggestion is shown (see
+ * {@link DECISION_DISCOVERY_CALIBRATION}). Both the Choice's confidence and the Likelihood that any
+ * agent applies must reach it.
+ *
+ * Set from the agent-discovery Decision Eval (plan Task 3.1, 2026-09-29): 258 labelled requests, 198
+ * for one of 33 agents and 60 for none, three repeats per model. At a calibrated 0.85, Jev's
+ * suggestion covered 23.7% of the requests meant for an agent, and named the right agent for 95.7% of
+ * those it covered. It was shown for 6.7% of the requests meant for no agent, all of them multi-agent
+ * workflows. LLM Decision covered 19.0% at 91.2% precision, and was shown for 4.4%. A wrong suggestion
+ * costs more than a missed one, which is only the two-turn flow the agent used before, so the
+ * threshold favours precision. On raw probabilities the old 0.7 almost never fired: Jev's raw
+ * any-applies Likelihood never passed 0.8, so it covered 6.9%.
  */
-export const DECISION_DISCOVERY_MIN_CONFIDENCE = 0.7;
+export const DECISION_DISCOVERY_MIN_CONFIDENCE = 0.85;
+
+/** A decision model's Platt calibration of the two discovery answers. */
+export interface DecisionDiscoveryCalibration {
+    /** The Choice's confidence, as the probability that the chosen agent is the right one. */
+    Confidence: PlattCalibration;
+    /** The Likelihood that a specialist agent should handle the request. */
+    AnyApplies: PlattCalibration;
+}
+
+/**
+ * Platt calibration of the discovery answers, per decision model, keyed by the name MJ gives the
+ * model that answered (`modelInfo.modelName`). A model's raw answers are not calibrated: Jev's raw
+ * any-applies Likelihood sits between 0.1 and 0.8 whatever the request. A model with no entry here
+ * is treated as unsure, so its answer suggests nothing.
+ *
+ * Fitted on the agent-discovery Decision Eval (2026-09-29) with 5-fold out-of-fold checks; the
+ * Choice's confidence against whether it named the labelled agent, and the Likelihood against
+ * whether the request was meant for an agent. Refit whenever a model, its version, the questions or
+ * the catalog's shape changes.
+ */
+export const DECISION_DISCOVERY_CALIBRATION: Readonly<Record<string, DecisionDiscoveryCalibration>> = Object.freeze({
+    'Jev': Object.freeze({ Confidence: Object.freeze({ A: 0.4412, B: 0.4571 }), AnyApplies: Object.freeze({ A: 1.2469, B: 1.7700 }) }),
+    'LLM Decision': Object.freeze({ Confidence: Object.freeze({ A: 1.4301, B: -0.0755 }), AnyApplies: Object.freeze({ A: 0.7114, B: 0.9073 }) })
+});
+
+/**
+ * The answers with the Choice's confidence and the Likelihood calibrated for the model that gave
+ * them, or null when that model has no discovery calibration. Other answers, and the Choice's
+ * distribution, are returned as they are.
+ */
+export function CalibrateDiscoveryAnswers(
+    answers: Record<string, DecisionAnswer>,
+    modelName: string | undefined
+): Record<string, DecisionAnswer> | null {
+    const calibration = modelName ? DECISION_DISCOVERY_CALIBRATION[modelName.trim()] : undefined;
+    if (!calibration) {
+        return null;
+    }
+    const calibrated: Record<string, DecisionAnswer> = { ...answers };
+    const choice = answers[DECISION_DISCOVERY_AGENT_QUESTION];
+    if (choice?.Kind === 'Choice' && isFiniteNumber(choice.Confidence)) {
+        calibrated[DECISION_DISCOVERY_AGENT_QUESTION] = { ...choice, Confidence: ApplyPlattCalibration(choice.Confidence, calibration.Confidence) };
+    }
+    const applies = answers[DECISION_DISCOVERY_APPLIES_QUESTION];
+    if (applies?.Kind === 'Likelihood' && isFiniteNumber(applies.Probability)) {
+        calibrated[DECISION_DISCOVERY_APPLIES_QUESTION] = { ...applies, Probability: ApplyPlattCalibration(applies.Probability, calibration.AnyApplies) };
+    }
+    return calibrated;
+}
 
 /**
  * The longest decision discovery may delay the run's first prompt. Past it the run moves on, the
@@ -379,9 +437,9 @@ function probabilitiesByName(probabilities: Record<string, number> | undefined, 
 }
 
 /**
- * What a finished decision call means for the prompt: the suggestion when both answers are
- * confident, otherwise nothing, with the reason. A failed call, or an answer that cannot be used,
- * is a failed discovery.
+ * What a finished decision call means for the prompt: the suggestion when both **calibrated**
+ * answers are confident, otherwise nothing, with the reason. A failed call, or an answer that cannot
+ * be used, is a failed discovery. An answer from a model with no discovery calibration is unsure.
  */
 export function DecisionDiscoveryFromResult(
     result: AIDecisionRunResult,
@@ -391,7 +449,17 @@ export function DecisionDiscoveryFromResult(
     if (!result.success) {
         return { Injected: false, Succeeded: false, Reason: result.errorMessage || 'the decision call failed', Result: result };
     }
-    const verdict = JudgeDecisionDiscovery(result.Answers, options, minConfidence);
+    const raw = JudgeDecisionDiscovery(result.Answers, options, minConfidence);
+    if (!raw.Answer) {
+        return { Injected: false, Succeeded: false, Reason: raw.Reason, Result: result };
+    }
+    const modelName = result.modelInfo?.modelName;
+    const calibrated = CalibrateDiscoveryAnswers(result.Answers, modelName);
+    if (!calibrated) {
+        const reason = `the answering model '${modelName ?? 'unknown'}' has no discovery calibration, so its answer is treated as unsure`;
+        return { Injected: false, Succeeded: true, Reason: reason, Answer: raw.Answer, Result: result };
+    }
+    const verdict = JudgeDecisionDiscovery(calibrated, options, minConfidence);
     if (!verdict.Answer) {
         return { Injected: false, Succeeded: false, Reason: verdict.Reason, Result: result };
     }

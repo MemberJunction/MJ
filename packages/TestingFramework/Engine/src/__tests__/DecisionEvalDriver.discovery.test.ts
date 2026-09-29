@@ -13,6 +13,7 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
     BuildDecisionDiscoveryOptionSet,
     BuildDecisionDiscoveryQuestions,
+    DECISION_DISCOVERY_MIN_CONFIDENCE,
     type DecisionDiscoveryAgent
 } from '@memberjunction/ai-agents';
 import {
@@ -220,7 +221,10 @@ describe('DecisionEvalDriver — agent discovery', () => {
             expect(actual).toMatchObject({
                 Decision: 'agent-discovery', Arm: 'decision', PromptName: 'Default Decision',
                 ChosenAgentId: BILLING.ID, ChosenAgentName: 'Billing Agent', Confidence: 0.9, AnyApplies: 0.9,
-                WouldInject: true, MinConfidence: 0.7, VerdictReason: null, LabelledAgentOffered: true,
+                // The raw answers are recorded; production judges them calibrated for the answering
+                // model, and Jev's calibrated confidence for a raw 0.9 is about 0.81.
+                WouldInject: false, MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
+                VerdictReason: expect.stringContaining(`below ${DECISION_DISCOVERY_MIN_CONFIDENCE}`), LabelledAgentOffered: true,
                 Options: { Count: 3, Limit: 25, CatalogSize: 3, WithoutDescription: 0, DeclaredCap: null, NarrowedFrom: null },
                 Baseline: null, PromptRunId: 'prun-1', CostUSD: 0.002, Error: null, WithinProductionTimeout: true
             });
@@ -231,10 +235,15 @@ describe('DecisionEvalDriver — agent discovery', () => {
             expect(result).toMatchObject({ status: 'Passed', targetType: 'AI Prompt', targetLogId: 'prun-1', totalCost: 0.002 });
         });
 
+        it('records that production would inject when the calibrated answers clear its threshold', async () => {
+            const { result } = await run({ respond: async () => decided(BILLING.ID, 0.99, 0.9) });
+            expect(actualOf(result)).toMatchObject({ WouldInject: true, VerdictReason: null, Confidence: 0.99, AnyApplies: 0.9 });
+        });
+
         it("judges an unsure answer as production would: no injection, and why", async () => {
             const { result } = await run({ respond: async () => decided(BILLING.ID, 0.6, 0.9) });
             expect(actualOf(result)).toMatchObject({ WouldInject: false, Confidence: 0.6 });
-            expect(actualOf(result).VerdictReason).toContain('below 0.7');
+            expect(actualOf(result).VerdictReason).toContain(`below ${DECISION_DISCOVERY_MIN_CONFIDENCE}`);
             // The agent label is still right: top-1 is the Choice, whatever its confidence.
             expect(result.status).toBe('Passed');
         });
@@ -254,7 +263,7 @@ describe('DecisionEvalDriver — agent discovery', () => {
 
         it('passes a none label when discovery would not inject, and fails it when it would', async () => {
             expect((await run({ expected: NONE_LABEL, respond: async () => decided(BILLING.ID, 0.9, 0.3) })).result.status).toBe('Passed');
-            expect((await run({ expected: NONE_LABEL, respond: async () => decided(BILLING.ID, 0.9, 0.8) })).result.status).toBe('Failed');
+            expect((await run({ expected: NONE_LABEL, respond: async () => decided(BILLING.ID, 0.99, 0.8) })).result.status).toBe('Failed');
         });
 
         it('fails, without an answer to score, when the Choice names no option', async () => {

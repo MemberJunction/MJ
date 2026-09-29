@@ -3,6 +3,7 @@
  * calibrations, the injection operating table, production's verdict, repeatability, latency, cost,
  * and the baseline's metrics.
  */
+import { DECISION_DISCOVERY_MIN_CONFIDENCE } from '@memberjunction/ai-agents';
 import { describe, it, expect } from 'vitest';
 import {
     AssignCaseFolds,
@@ -178,7 +179,7 @@ describe('ComputeDiscoveryDecisionMetrics', () => {
         }))));
         expect(metrics.Injection.Calibrated).toHaveLength(10);
         expect(metrics.Production).toEqual({
-            MinConfidence: 0.7,
+            MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
             Coverage: 0.5,
             Precision: 0.5,
             FalseInjectionRate: 2 / 3,

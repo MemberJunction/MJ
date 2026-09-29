@@ -18,6 +18,7 @@ import {
     DECISION_DISCOVERY_TIMEOUT_MS,
     DecisionDiscoveryAgentSearch,
     DecisionDiscoveryCatalog,
+    DecisionDiscoveryFromResult,
     DecisionDiscoveryRunnableAgents,
     DecisionPromptOptionCap,
     JudgeDecisionDiscovery,
@@ -713,8 +714,11 @@ export function BuildDiscoveryEvalActualOutput(
 ): DiscoveryEvalActualOutput {
     const { Result: result, OptionSet: optionSet } = call;
     const answers = result.success ? result.Answers : {};
+    // The raw answers are recorded, because calibration is fitted on them; whether production would
+    // inject, and why not, come from production's own calibrated path.
     const verdict = result.success ? JudgeDecisionDiscovery(answers, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
     const answer = verdict?.Answer;
+    const production = answer ? DecisionDiscoveryFromResult(result, optionSet.Options, DECISION_DISCOVERY_MIN_CONFIDENCE) : null;
     return {
         Decision: 'agent-discovery',
         Arm: 'decision',
@@ -726,9 +730,9 @@ export function BuildDiscoveryEvalActualOutput(
         ChosenAgentName: answer?.Agent.Name ?? null,
         Confidence: answer?.Confidence ?? null,
         AnyApplies: answer?.AnyApplies ?? null,
-        WouldInject: answer && verdict ? verdict.Confident : null,
+        WouldInject: production ? production.Injected : null,
         MinConfidence: DECISION_DISCOVERY_MIN_CONFIDENCE,
-        VerdictReason: verdict?.Reason ?? null,
+        VerdictReason: production ? production.Reason ?? null : verdict?.Reason ?? null,
         Baseline: null,
         Model: modelRecord(config, result),
         Sampling: samplingRecord(config),

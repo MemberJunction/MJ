@@ -4,15 +4,17 @@
  * the injected message.
  */
 import { describe, it, expect } from 'vitest';
-import type { DecisionAnswer } from '@memberjunction/ai';
+import { ApplyPlattCalibration, type DecisionAnswer } from '@memberjunction/ai';
 import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import {
     AgentsWithoutDescription,
     BuildDecisionDiscoveryQuestions,
+    CalibrateDiscoveryAnswers,
     CanSearchEntities,
     DECISION_DISCOVERY_AGENT_QUESTION,
     DECISION_DISCOVERY_APPLIES_INSTRUCTIONS,
     DECISION_DISCOVERY_APPLIES_QUESTION,
+    DECISION_DISCOVERY_CALIBRATION,
     DECISION_DISCOVERY_HOST_AGENTS_KEY,
     DECISION_DISCOVERY_MAX_OPTIONS,
     DECISION_DISCOVERY_MAX_RECORDED_IDS,
@@ -63,10 +65,18 @@ function answers(value: string, confidence: number, applies: number): Record<str
     };
 }
 
+/** The judge's tests pin their own threshold, so they test its rule rather than the production value. */
+const JUDGE_THRESHOLD = 0.7;
+
+/** A raw probability as the named model's discovery calibration maps it. */
+function calibrated(model: string, question: 'Confidence' | 'AnyApplies', p: number): number {
+    return ApplyPlattCalibration(p, DECISION_DISCOVERY_CALIBRATION[model][question]);
+}
+
 describe('the named constants', () => {
     it('start where the brief puts them', () => {
         expect(DECISION_DISCOVERY_MAX_OPTIONS).toBe(25);
-        expect(DECISION_DISCOVERY_MIN_CONFIDENCE).toBe(0.7);
+        expect(DECISION_DISCOVERY_MIN_CONFIDENCE).toBe(0.85);
         expect(DECISION_DISCOVERY_TIMEOUT_MS).toBe(1500);
         expect(DECISION_DISCOVERY_MAX_RECORDED_IDS).toBe(50);
         expect(DECISION_DISCOVERY_HOST_AGENTS_KEY).toBe('ALL_AVAILABLE_AGENTS');
@@ -229,7 +239,7 @@ describe('BuildDecisionDiscoveryQuestions', () => {
 
 describe('JudgeDecisionDiscovery', () => {
     it('is confident when both answers reach the threshold, and reports the answer by name', () => {
-        const verdict = JudgeDecisionDiscovery(answers(BILLING.ID, 0.84, 0.9), OPTIONS);
+        const verdict = JudgeDecisionDiscovery(answers(BILLING.ID, 0.84, 0.9), OPTIONS, JUDGE_THRESHOLD);
 
         expect(verdict.Confident).toBe(true);
         expect(verdict.Reason).toBeUndefined();
@@ -242,14 +252,14 @@ describe('JudgeDecisionDiscovery', () => {
     });
 
     it('counts a confidence exactly at the threshold as confident', () => {
-        expect(JudgeDecisionDiscovery(answers(BILLING.ID, 0.7, 0.7), OPTIONS).Confident).toBe(true);
+        expect(JudgeDecisionDiscovery(answers(BILLING.ID, 0.7, 0.7), OPTIONS, JUDGE_THRESHOLD).Confident).toBe(true);
     });
 
     it.each([
         ['a low Choice confidence', 0.69, 0.95, 'agent confidence 0.69'],
         ['a low Likelihood', 0.95, 0.4, 'any agent applies, 0.40'],
     ])('is not confident with %s, and says why', (_label, confidence, applies, reason) => {
-        const verdict = JudgeDecisionDiscovery(answers(BILLING.ID, confidence, applies), OPTIONS);
+        const verdict = JudgeDecisionDiscovery(answers(BILLING.ID, confidence, applies), OPTIONS, JUDGE_THRESHOLD);
 
         expect(verdict.Confident).toBe(false);
         expect(verdict.Answer?.Agent).toEqual(BILLING);
@@ -277,15 +287,28 @@ describe('JudgeDecisionDiscovery', () => {
 });
 
 describe('DecisionDiscoveryFromResult', () => {
-    function result(success: boolean, given: Record<string, DecisionAnswer>, errorMessage?: string): AIDecisionRunResult {
-        return { success, errorMessage, Answers: given };
+    /** A decision result; `modelName` null means the result names no model. */
+    function result(success: boolean, given: Record<string, DecisionAnswer>, errorMessage?: string, modelName: string | null = 'Jev'): AIDecisionRunResult {
+        return { success, errorMessage, Answers: given, modelInfo: modelName ? { modelId: 'model-1', modelName } : undefined };
     }
 
-    it('injects the suggestion for a confident answer', () => {
+    it('injects the suggestion for an answer whose calibrated values are confident', () => {
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.8)), OPTIONS);
+        const confidence = calibrated('Jev', 'Confidence', 0.99);
+
+        expect(confidence).toBeGreaterThanOrEqual(DECISION_DISCOVERY_MIN_CONFIDENCE);
+        expect(outcome).toMatchObject({ Injected: true, Succeeded: true, Message: SuggestedAgentMessage(BILLING, confidence) });
+        expect(outcome.Answer?.Agent).toEqual(BILLING);
+        expect(outcome.Answer?.AnyApplies).toBeCloseTo(calibrated('Jev', 'AnyApplies', 0.8), 10);
+    });
+
+    it('judges the calibrated values, not the raw ones', () => {
+        // Raw 0.84 and 0.9 clear the old raw 0.7; Jev's calibrated confidence for 0.84 is about 0.77.
         const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.84, 0.9)), OPTIONS);
 
-        expect(outcome).toMatchObject({ Injected: true, Succeeded: true, Message: SuggestedAgentMessage(BILLING, 0.84) });
-        expect(outcome.Answer?.Agent).toEqual(BILLING);
+        expect(calibrated('Jev', 'Confidence', 0.84)).toBeLessThan(DECISION_DISCOVERY_MIN_CONFIDENCE);
+        expect(outcome).toMatchObject({ Injected: false, Succeeded: true });
+        expect(outcome.Reason).toContain(`below ${DECISION_DISCOVERY_MIN_CONFIDENCE}`);
     });
 
     it('injects nothing, as a success, for an unsure answer', () => {
@@ -293,7 +316,18 @@ describe('DecisionDiscoveryFromResult', () => {
 
         expect(outcome).toMatchObject({ Injected: false, Succeeded: true });
         expect(outcome.Message).toBeUndefined();
-        expect(outcome.Reason).toContain('below 0.7');
+        expect(outcome.Reason).toContain(`below ${DECISION_DISCOVERY_MIN_CONFIDENCE}`);
+    });
+
+    it.each([
+        ['a model with no calibration', 'Some Other Model'],
+        ['an unnamed model', null],
+    ])('treats an answer from %s as unsure, and keeps the raw answer', (_label, modelName) => {
+        const outcome = DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.99, 0.99), undefined, modelName), OPTIONS);
+
+        expect(outcome).toMatchObject({ Injected: false, Succeeded: true });
+        expect(outcome.Reason).toContain('has no discovery calibration');
+        expect(outcome.Answer).toMatchObject({ Agent: BILLING, Confidence: 0.99, AnyApplies: 0.99 });
     });
 
     it('fails for a failed call or an unusable answer', () => {
@@ -303,6 +337,34 @@ describe('DecisionDiscoveryFromResult', () => {
 
     it('uses the threshold it is given', () => {
         expect(DecisionDiscoveryFromResult(result(true, answers(BILLING.ID, 0.5, 0.5)), OPTIONS, 0.5).Injected).toBe(true);
+    });
+});
+
+describe('CalibrateDiscoveryAnswers', () => {
+    it('calibrates the Choice confidence and the Likelihood with the model\'s Platt parameters', () => {
+        for (const model of Object.keys(DECISION_DISCOVERY_CALIBRATION)) {
+            const out = CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), model);
+            const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
+            const applies = out?.[DECISION_DISCOVERY_APPLIES_QUESTION];
+
+            expect(choice?.Kind === 'Choice' ? choice.Confidence : null).toBeCloseTo(calibrated(model, 'Confidence', 0.6), 10);
+            expect(applies?.Kind === 'Likelihood' ? applies.Probability : null).toBeCloseTo(calibrated(model, 'AnyApplies', 0.3), 10);
+        }
+    });
+
+    it('leaves the Choice value and distribution as they are, and trims the model name', () => {
+        const given = answers(BILLING.ID, 0.6, 0.3);
+        const out = CalibrateDiscoveryAnswers(given, ' Jev ');
+        const choice = out?.[DECISION_DISCOVERY_AGENT_QUESTION];
+        const original = given[DECISION_DISCOVERY_AGENT_QUESTION];
+
+        expect(choice?.Kind === 'Choice' ? choice.Value : null).toBe(BILLING.ID);
+        expect(choice?.Kind === 'Choice' && original.Kind === 'Choice' ? choice.Probabilities : null).toEqual(original.Kind === 'Choice' ? original.Probabilities : null);
+    });
+
+    it('returns null for a model with no calibration', () => {
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), 'Some Other Model')).toBeNull();
+        expect(CalibrateDiscoveryAnswers(answers(BILLING.ID, 0.6, 0.3), undefined)).toBeNull();
     });
 });
 
