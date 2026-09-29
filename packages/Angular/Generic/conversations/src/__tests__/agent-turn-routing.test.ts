@@ -147,6 +147,29 @@ describe('ResolveAgentTurn — the routing matrix', () => {
     });
 });
 
+describe('ResolveAgentTurn — a continuity candidate a routing decision chose', () => {
+    const routed = candidates({ ContinuityAgentId: OTHER, ContinuityDecisionRouted: true, HostDefaultAgentId: HOST });
+
+    it('is labelled DecisionRouted, in continuity\'s place in the order', () => {
+        expect(ResolveAgentTurn(routed, rules('Always'), isKnown)).toEqual({ AgentId: OTHER, Route: 'DecisionRouted' });
+    });
+
+    it('still loses to a tag, and still starts no turn under MentionOnly', () => {
+        expect(ResolveAgentTurn({ ...routed, MentionedAgentIds: [TAGGED] }, rules('Always'), isKnown))
+            .toEqual({ AgentId: TAGGED, Route: 'Mention' });
+        expect(ResolveAgentTurn(routed, rules('MentionOnly'), isKnown)).toBeNull();
+    });
+
+    it('is skipped like any candidate the host does not allow', () => {
+        expect(ResolveAgentTurn(routed, rules('Always', [HOST]), isKnown)).toEqual({ AgentId: HOST, Route: 'HostDefault' });
+    });
+
+    it('without the flag, the same candidate is plain continuity', () => {
+        expect(ResolveAgentTurn({ ...routed, ContinuityDecisionRouted: false }, rules('Always'), isKnown))
+            .toEqual({ AgentId: OTHER, Route: 'Continuity' });
+    });
+});
+
 describe('IsAgentAllowed', () => {
     it('allows every agent when there is no list', () => {
         expect(IsAgentAllowed(OTHER, null)).toBe(true);
