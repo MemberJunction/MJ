@@ -17,8 +17,9 @@
 import Redis from 'ioredis';
 import type { RedisOptions } from 'ioredis';
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
 import { ILocalStorageProvider, LogStatus, LogError } from '@memberjunction/core';
-import type { CacheChangedEvent } from '@memberjunction/core';
+import type { CacheChangedEvent, LocalStorageWriteOptions } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 
 /**
@@ -76,13 +77,31 @@ export interface RedisProviderConfig {
 
     /**
      * Default time-to-live in seconds applied to every `SetItem` call
-     * unless overridden by the `ttlSeconds` parameter.
+     * unless the call passes its own TTL.
      *
-     * Set to `0` or `undefined` to store keys without expiration (persistent).
+     * Event-driven invalidation stays the primary freshness mechanism; the TTL bounds how long
+     * an entry written by a process that never publishes (a direct SQL change, another
+     * application) can be served, and gives a `volatile-*` eviction policy something to evict —
+     * Redis never evicts a key without an expiry under those policies.
      *
-     * @default undefined (no expiration)
+     * Set to `0` to store keys without expiration (persistent).
+     *
+     * @default 3600 (one hour)
      */
     defaultTTLSeconds?: number;
+
+    /**
+     * Expiry per category, overriding {@link defaultTTLSeconds} (0 = no expiry). Defaults to
+     * `{ default: 0 }`.
+     *
+     * The `default` category holds **proxy keys**: entries that vouch for other entries. The
+     * metadata snapshot's timestamps key is written after the payload it describes, and a dataset's
+     * `_date` key after its blob — so under one blanket TTL the proxy outlives what it vouches for,
+     * and a reader finds a freshness claim with nothing behind it. A server booting into that
+     * window adopted the timestamps and served empty metadata as current; the dataset check threw.
+     * Plan §16.3 #3.
+     */
+    categoryTTLSeconds?: Readonly<Record<string, number>>;
 
     /**
      * Maximum number of connection retry attempts before giving up.
@@ -113,13 +132,188 @@ export interface RedisProviderConfig {
      * @default false
      */
     enablePubSub?: boolean;
+
+    /**
+     * What a `set` or `removed` publishes, per category (the category `default` covers writes
+     * without one). `category_cleared` is always published in full.
+     *
+     * - `'full'` — the event carries the stored value in `Data`, so a subscriber can apply it
+     *   without reading Redis. Right for categories whose values subscribers adopt (the RunView
+     *   cache: engines apply the rows).
+     * - `'notice'` — the event names the key but carries no value. Right for large values that
+     *   subscribers only need to know changed (the metadata snapshot: a server that hears about it
+     *   re-checks its metadata against the database).
+     * - `'none'` — nothing is published.
+     *
+     * Categories not listed use {@link defaultPublishMode}.
+     */
+    publishModes?: Readonly<Record<string, CachePublishMode>>;
+
+    /**
+     * Publish mode for categories not named in {@link publishModes}.
+     * @default 'full' (every change carries its value — the behaviour before modes existed)
+     */
+    defaultPublishMode?: CachePublishMode;
 }
+
+/** How much a cache write publishes. See {@link RedisProviderConfig.publishModes}. */
+export type CachePublishMode = 'full' | 'notice' | 'none';
 
 /**
  * Default category used when none is specified in storage operations.
  * @internal
  */
 const DEFAULT_CATEGORY = 'default';
+
+/**
+ * Categories whose expiry differs from the default. The `default` category never expires on its
+ * own: it holds keys that vouch for other keys, and a proxy that outlives its subject is worse
+ * than one that never expires. See {@link RedisProviderConfig.categoryTTLSeconds}.
+ * @internal
+ */
+const DEFAULT_CATEGORY_TTL_SECONDS: Readonly<Record<string, number>> = { default: 0 };
+
+/** Expiry applied when the configuration does not set `defaultTTLSeconds`. @internal */
+const DEFAULT_TTL_SECONDS = 3600;
+
+/** Keys requested per `SCAN` step. @internal */
+const SCAN_BATCH = 500;
+
+/**
+ * Adds a key to an index-group set and keeps the set alive at least as long as its longest-lived
+ * member, atomically.
+ *
+ * KEYS[1] = the group set, ARGV[1] = the member key, ARGV[2] = the member's TTL in seconds (0 = none).
+ *
+ * - A member stored without expiry makes the set persistent.
+ * - A member with a TTL extends the set's expiry when the set would otherwise expire first.
+ * - A set that is persistent and already holds other members keeps no expiry: every TTL write
+ *   gives the set an expiry, so a persistent set with more than one member holds a persistent
+ *   member.
+ *
+ * Only `SADD`/`TTL`/`SCARD`/`EXPIRE`/`PERSIST` — no Redis 7-only flags, so it runs on the 6.x
+ * tiers that hosted Redis services still offer.
+ * @internal
+ */
+/**
+ * Prunes one index group and returns its live members, atomically.
+ *
+ * Every step — reading the set, testing each member, removing the dead ones, dropping a set that
+ * ends up empty — has to happen without another process's `SADD` landing in between. Done as
+ * separate round trips (SMEMBERS, a pipeline of EXISTS, then SREM/DEL), a peer adding a key after
+ * the read was removed by a DEL that had never seen it, and that slot lost its invalidation hook
+ * permanently: no later save could find it through the index, so every server served it stale until
+ * it expired. Plan §22.
+ *
+ * KEYS[1] = the group set, ARGV[1] = the `{prefix}:{category}:` prefix of a member's own key.
+ * @internal
+ */
+const PRUNE_GROUP_SCRIPT = `
+local members = redis.call('SMEMBERS', KEYS[1])
+if #members == 0 then
+  return {}
+end
+local alive = {}
+local dead = {}
+for i = 1, #members do
+  if redis.call('EXISTS', ARGV[1] .. members[i]) == 1 then
+    alive[#alive + 1] = members[i]
+  else
+    dead[#dead + 1] = members[i]
+  end
+end
+if #dead > 0 then
+  if #alive == 0 then
+    -- Deleting beats emptying: a set made persistent by a member without expiry stays persistent
+    -- once that member goes, and a volatile-* maxmemory policy can never evict it (§16.3 #11).
+    redis.call('DEL', KEYS[1])
+  else
+    redis.call('SREM', KEYS[1], unpack(dead))
+  end
+end
+return alive
+`;
+
+const ADD_TO_GROUP_SCRIPT = `
+redis.call('SADD', KEYS[1], ARGV[1])
+local ttl = tonumber(ARGV[2])
+if ttl <= 0 then
+  redis.call('PERSIST', KEYS[1])
+  return 0
+end
+local current = redis.call('TTL', KEYS[1])
+if current == -1 and redis.call('SCARD', KEYS[1]) > 1 then
+  return 0
+end
+if current < ttl then
+  redis.call('EXPIRE', KEYS[1], ttl)
+end
+return 1
+`;
+
+/** Deletes a lock key only if it still holds the caller's token. @internal */
+const RELEASE_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+`;
+
+/** How long a key lock lives if its holder dies, and how long a caller waits for one. @internal */
+const KEY_LOCK_TTL_MS = 10000;
+const KEY_LOCK_WAIT_MS = 5000;
+const KEY_LOCK_RETRY_MS = 20;
+/** How often a held lock is extended while its work runs. Must be well under the TTL. @internal */
+const KEY_LOCK_RENEW_MS = 3000;
+/**
+ * The longest a lock is renewed for. Renewal keeps a slow read-modify-write safe; without a cap it
+ * also keeps a HUNG one holding the key forever, which is worse than the expiry it replaced — no
+ * other process could ever take that slot again. Past this, renewal stops and the lock expires on
+ * its own TTL, as it did before renewal existed (plan §22).
+ * @internal
+ */
+const KEY_LOCK_MAX_HOLD_MS = 60000;
+
+/** Extends a lock's expiry only if the caller still holds it. @internal */
+const RENEW_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+`;
+
+/**
+ * Thrown by {@link RedisLocalStorageProvider.WithKeyLock} when the lock could not be taken in
+ * time — distinct from anything `work` itself throws, so a caller can tell "another process is
+ * holding this slot" (fall back to invalidating it) from "my own read-modify-write is broken"
+ * (a bug, which must not be silently downgraded to an invalidation). Plan §16.3 #12.
+ */
+export class KeyLockTimeoutError extends Error {
+    public constructor(public readonly LockKey: string, waitedMs: number) {
+        super(`timed out after ${waitedMs} ms waiting for another process's lock`);
+        this.name = 'KeyLockTimeoutError';
+    }
+}
+
+/**
+ * Thrown when a held lock expired before its work finished — the work may have raced another
+ * writer, so its result must not be trusted.
+ */
+export class KeyLockLostError extends Error {
+    public constructor(public readonly LockKey: string) {
+        super(`the lock expired before the work completed; another process may have written the same key`);
+        this.name = 'KeyLockLostError';
+    }
+}
+
+/**
+ * Escapes the glob metacharacters Redis `MATCH` understands, so a literal prefix or category can
+ * be embedded in a pattern.
+ * @internal
+ */
+function escapeGlob(literal: string): string {
+    return literal.replace(/[*?[\]\\]/g, ch => `\\${ch}`);
+}
 
 /**
  * Redis-backed implementation of the MemberJunction {@link ILocalStorageProvider} interface.
@@ -137,8 +331,11 @@ const DEFAULT_CATEGORY = 'default';
  * - **category** — maps to the MJ cache category (`RunViewCache`, `Metadata`, `DatasetCache`, etc.)
  * - **key** — the original key from the caller
  *
- * Categories are tracked in a Redis Set at `{prefix}:__categories__:{category}` so that
- * `ClearCategory()` and `GetCategoryKeys()` operations are efficient.
+ * Keys written with an `IndexGroup` are also recorded in a Redis Set at
+ * `{prefix}:__group__:{category}:{group}` (the RunView cache uses the entity name), which
+ * `GetIndexGroupKeys()` reads and prunes. `ClearCategory()` and `GetCategoryKeys()` walk the
+ * keyspace with `SCAN`; no category-wide set is kept, because expiry never removes set members
+ * and such a set grows without bound once keys carry a TTL.
  *
  * ### TTL Support
  *
@@ -174,10 +371,19 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      */
     public readonly SharesReferences = false;
 
+    /**
+     * `true` — every process configured with the same URL and key prefix shares this keyspace.
+     * See {@link ILocalStorageProvider.SharedAcrossProcesses}.
+     */
+    public readonly SharedAcrossProcesses = true;
+
     private _client: Redis;
     private _keyPrefix: string;
-    private _defaultTTLSeconds: number | undefined;
+    private _defaultTTLSeconds: number;
+    private _categoryTTLSeconds: Readonly<Record<string, number>>;
     private _enableLogging: boolean;
+    /** Tokens of the leases this provider holds, so it releases only its own. */
+    private readonly _leaseTokens = new Map<string, string>();
     private _connected: boolean = false;
 
     // Pub/sub fields
@@ -227,7 +433,8 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     constructor(config: RedisProviderConfig = {}) {
         this._config = config;
         this._keyPrefix = config.keyPrefix ?? 'mj';
-        this._defaultTTLSeconds = config.defaultTTLSeconds;
+        this._defaultTTLSeconds = config.defaultTTLSeconds ?? DEFAULT_TTL_SECONDS;
+        this._categoryTTLSeconds = config.categoryTTLSeconds ?? DEFAULT_CATEGORY_TTL_SECONDS;
         this._enableLogging = config.enableLogging ?? true;
         this._enablePubSub = config.enablePubSub ?? false;
         this._pubSubChannel = `${this._keyPrefix}:__pubsub__`;
@@ -347,6 +554,56 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
+     * Builds the Redis Set key that indexes the keys written with one
+     * {@link LocalStorageWriteOptions.IndexGroup} in a category.
+     *
+     * Format: `{prefix}:__group__:{category}:{group}`
+     * @internal
+     */
+    private buildGroupSetKey(category: string, group: string): string {
+        return `${this._keyPrefix}:__group__:${category}:${group}`;
+    }
+
+    /**
+     * Resolves the TTL for one write: the per-call value when given (a bare number is the legacy
+     * `ttlSeconds` argument), then the category's own expiry, then the configured default. `0`
+     * means no expiry.
+     * @internal
+     */
+    private resolveWriteOptions(options: number | LocalStorageWriteOptions | undefined, category: string): { ttlSeconds: number; group?: string } {
+        const explicit = typeof options === 'number' ? options : options?.TTLSeconds;
+        const ttlSeconds = explicit ?? this._categoryTTLSeconds[category] ?? this._defaultTTLSeconds;
+        const group = typeof options === 'object' ? options.IndexGroup : undefined;
+        return { ttlSeconds: ttlSeconds > 0 ? Math.ceil(ttlSeconds) : 0, group };
+    }
+
+    /**
+     * Lists every Redis key matching a glob pattern with `SCAN`, which never blocks the server
+     * the way `KEYS` does. Used only for category-wide operations, not on the per-save path.
+     * @internal
+     */
+    private async scanKeys(pattern: string): Promise<string[]> {
+        const found: string[] = [];
+        let cursor = '0';
+        do {
+            const [next, batch] = await this._client.scan(cursor, 'MATCH', pattern, 'COUNT', SCAN_BATCH);
+            found.push(...batch);
+            cursor = next;
+        } while (cursor !== '0');
+        return found;
+    }
+
+    /**
+     * Deletes Redis keys in fixed-size batches so one call never sends an unbounded argument list.
+     * @internal
+     */
+    private async deleteKeys(redisKeys: string[]): Promise<void> {
+        for (let i = 0; i < redisKeys.length; i += SCAN_BATCH) {
+            await this._client.del(...redisKeys.slice(i, i + SCAN_BATCH));
+        }
+    }
+
+    /**
      * Retrieves a value from Redis by key and optional category.
      *
      * Redis stores values as strings — this method JSON-deserializes the stored value
@@ -450,33 +707,33 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * lose their prototype on retrieval; functions, Maps, Sets, and Dates have JSON's
      * usual limitations.
      *
-     * If a `ttlSeconds` is provided, the key will automatically expire after that
-     * duration. Otherwise, the configured `defaultTTLSeconds` is used. If neither
-     * is set, the key persists indefinitely.
+     * The key expires after the per-call TTL when one is given, otherwise after the configured
+     * `defaultTTLSeconds`. If neither is set (or the value is `0`), the key persists indefinitely.
      *
-     * The key is also added to a Redis Set that tracks all keys in the category,
-     * enabling efficient `ClearCategory()` and `GetCategoryKeys()` operations.
+     * When the options carry an `IndexGroup`, the key is also added to that group's Redis Set so
+     * {@link GetIndexGroupKeys} can find it. The set is kept alive at least as long as its
+     * longest-lived member. There is no category-wide set: one would grow for ever once keys
+     * expire, because expiry never removes set members. Category-wide operations use `SCAN`.
      *
      * @typeParam T - Type of the value being stored. Caller-controlled.
      * @param key - The key to store under
      * @param value - The value to store (will be JSON-serialized internally)
      * @param category - Optional category for key isolation (defaults to `"default"`)
-     * @param ttlSeconds - Optional time-to-live in seconds. Overrides `defaultTTLSeconds` from config.
+     * @param options - Expiry and index group. A bare number is accepted as the TTL in seconds.
      *
      * @example
      * ```typescript
      * // Store with default TTL
      * await provider.SetItem('view:users', { results, maxUpdatedAt }, 'RunViewCache');
      *
-     * // Store with explicit 10-minute TTL
-     * await provider.SetItem('view:users', { results }, 'RunViewCache', 600);
+     * // Store with explicit 10-minute TTL, indexed under the entity name
+     * await provider.SetItem('Users|…', { results }, 'RunViewCache', { TTLSeconds: 600, IndexGroup: 'Users' });
      * ```
      */
-    public async SetItem<T>(key: string, value: T, category?: string, ttlSeconds?: number): Promise<void> {
+    public async SetItem<T>(key: string, value: T, category?: string, options?: number | LocalStorageWriteOptions): Promise<void> {
         try {
             const cat = category ?? DEFAULT_CATEGORY;
             const redisKey = this.buildKey(key, cat);
-            const categorySetKey = this.buildCategorySetKey(cat);
 
             // Serialize once. We need the string for both the Redis SET and (optionally)
             // the pub/sub publishChange payload, so build it up front.
@@ -490,21 +747,17 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 return;
             }
 
-            const effectiveTTL = ttlSeconds ?? this._defaultTTLSeconds;
-
-            // Use pipeline for atomic set + category tracking
+            const { ttlSeconds, group } = this.resolveWriteOptions(options, cat);
             const pipeline = this._client.pipeline();
-
-            if (effectiveTTL && effectiveTTL > 0) {
-                pipeline.setex(redisKey, effectiveTTL, serialized);
+            if (ttlSeconds > 0) {
+                pipeline.setex(redisKey, ttlSeconds, serialized);
             } else {
                 pipeline.set(redisKey, serialized);
             }
-
-            // Track this key in the category set for ClearCategory/GetCategoryKeys
-            pipeline.sadd(categorySetKey, key);
-
-            await pipeline.exec();
+            if (group) {
+                pipeline.eval(ADD_TO_GROUP_SCRIPT, 1, this.buildGroupSetKey(cat, group), key, ttlSeconds);
+            }
+            this.logPipelineErrors(await pipeline.exec(), `SetItem "${key}"`);
 
             // Publish cache change event for cross-server invalidation
             this.publishChange(key, cat, 'set', serialized);
@@ -529,13 +782,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     public async Remove(key: string, category?: string): Promise<void> {
         try {
             const cat = category ?? DEFAULT_CATEGORY;
-            const redisKey = this.buildKey(key, cat);
-            const categorySetKey = this.buildCategorySetKey(cat);
-
-            const pipeline = this._client.pipeline();
-            pipeline.del(redisKey);
-            pipeline.srem(categorySetKey, key);
-            await pipeline.exec();
+            // Index-group membership is not touched here: the caller does not say which group the
+            // key was in, and GetIndexGroupKeys drops members whose key no longer exists.
+            await this._client.del(this.buildKey(key, cat));
 
             // Publish cache change event for cross-server invalidation
             this.publishChange(key, cat, 'removed');
@@ -547,10 +796,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * Clears all keys belonging to a specific category.
+     * Clears all keys belonging to a specific category, together with the category's index-group
+     * sets and the category set older versions of this provider maintained.
      *
-     * Uses the category tracking Set to find all member keys, deletes them
-     * in a single pipeline call, then removes the tracking Set itself.
+     * Keys are found with `SCAN`, so the operation also removes keys a peer wrote and keys whose
+     * index entry was lost.
      *
      * @param category - The category to clear. If empty, clears the `"default"` category.
      *
@@ -561,45 +811,44 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * ```
      */
     public async ClearCategory(category: string): Promise<void> {
+        await this.ClearCategoryChecked(category);
+    }
+
+    /**
+     * {@link ClearCategory}, but reporting what happened instead of swallowing it. An administrator
+     * running `mj cache clear` needs to know a category did NOT go: the old path logged (with
+     * logging off, by default, in the CLI) and returned normally, so the command printed a key
+     * count and "servers will reload" for a clear that never happened (plan §16.3 #15).
+     *
+     * @returns Ok, plus the error when it failed.
+     */
+    public async ClearCategoryChecked(category: string): Promise<{ Ok: boolean; Error?: string }> {
         try {
             const cat = category || DEFAULT_CATEGORY;
-            const categorySetKey = this.buildCategorySetKey(cat);
-
-            // Get all keys in this category
-            const keys = await this._client.smembers(categorySetKey);
-
-            if (keys.length > 0) {
-                const pipeline = this._client.pipeline();
-
-                // Delete each key
-                for (const key of keys) {
-                    pipeline.del(this.buildKey(key, cat));
-                }
-
-                // Delete the category set itself
-                pipeline.del(categorySetKey);
-
-                await pipeline.exec();
-            } else {
-                // Category set might still exist even if empty
-                await this._client.del(categorySetKey);
-            }
+            const prefix = escapeGlob(this._keyPrefix);
+            const escapedCat = escapeGlob(cat);
+            const entryKeys = await this.scanKeys(`${prefix}:${escapedCat}:*`);
+            const groupKeys = await this.scanKeys(`${prefix}:__group__:${escapedCat}:*`);
+            await this.deleteKeys([...entryKeys, ...groupKeys, this.buildCategorySetKey(cat)]);
 
             // Publish category-level change event
             this.publishChange(cat, cat, 'category_cleared');
+            return { Ok: true };
         } catch (err) {
+            const message = (err as Error).message;
             if (this._enableLogging) {
-                LogError(`Redis ClearCategory failed for "${category}": ${(err as Error).message}`);
+                LogError(`Redis ClearCategory failed for "${category}": ${message}`);
             }
+            return { Ok: false, Error: message };
         }
     }
 
     /**
-     * Returns all keys belonging to a specific category.
+     * Returns all live keys belonging to a specific category.
      *
-     * Reads from the category tracking Set, so the result reflects keys
-     * that were added via `SetItem` (some may have expired via TTL but
-     * will still appear in the set until cleaned up).
+     * Walks the keyspace with `SCAN`, so the cost grows with the whole keyspace. Meant for
+     * administration and diagnostics; per-entity lookups on the save path use
+     * {@link GetIndexGroupKeys}.
      *
      * @param category - The category to list keys from
      * @returns Array of original key names (without the Redis prefix/category prefix)
@@ -613,13 +862,175 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     public async GetCategoryKeys(category: string): Promise<string[]> {
         try {
             const cat = category || DEFAULT_CATEGORY;
-            const categorySetKey = this.buildCategorySetKey(cat);
-            return await this._client.smembers(categorySetKey);
+            const redisPrefix = this.buildKey('', cat);
+            const redisKeys = await this.scanKeys(`${escapeGlob(redisPrefix)}*`);
+            return redisKeys.map(k => k.substring(redisPrefix.length));
         } catch (err) {
             if (this._enableLogging) {
                 LogError(`Redis GetCategoryKeys failed for "${category}": ${(err as Error).message}`);
             }
             return [];
+        }
+    }
+
+    /**
+     * Returns the keys written to `category` with `IndexGroup = group` that still exist.
+     *
+     * Members whose key has expired or been removed are dropped from the group set as a side
+     * effect, so the set shrinks back to the live keys whenever it is read. The read and the prune
+     * are one Lua script: a peer's `SADD` cannot land between them and be pruned unseen (§22).
+     *
+     * @param category - The category the keys were written to
+     * @param group - The index group (for the RunView cache, the entity name)
+     * @returns The live keys, without the Redis prefix/category prefix
+     */
+    public async GetIndexGroupKeys(category: string, group: string): Promise<string[]> {
+        try {
+            const cat = category || DEFAULT_CATEGORY;
+            const groupSetKey = this.buildGroupSetKey(cat, group);
+            const alive = await this._client.eval(PRUNE_GROUP_SCRIPT, 1, groupSetKey, this.buildKey('', cat));
+            return Array.isArray(alive) ? alive.map(m => String(m)) : [];
+        } catch (err) {
+            if (this._enableLogging) {
+                LogError(`Redis GetIndexGroupKeys failed for "${category}"/"${group}": ${(err as Error).message}`);
+            }
+            return [];
+        }
+    }
+
+    /**
+     * Runs `work` holding an exclusive lock on `key` across every process sharing this keyspace.
+     *
+     * The lock is `SET {prefix}:__lock__:{category}:{key} <token> NX PX 10000`, retried every 20 ms
+     * for up to 5 s, and released only by its holder (compare-and-delete). The 10 s expiry frees a
+     * lock whose holder died; `work` is expected to be a short read-modify-write.
+     *
+     * @throws when the lock is not acquired in time; `work` has not run
+     */
+    public async WithKeyLock<T>(key: string, category: string, work: () => Promise<T>): Promise<T> {
+        const lockKey = `${this._keyPrefix}:__lock__:${category || DEFAULT_CATEGORY}:${key}`;
+        const token = randomUUID();
+        await this.acquireLock(lockKey, token);
+        // Work longer than the TTL used to lose the lock silently: it expired, another process took
+        // it, and both wrote — the very lost update this lock exists to prevent. The lock is now
+        // extended while the work runs, and a lock that was lost anyway (a stalled renewal, a
+        // failover) is reported rather than ignored (plan §16.3 #12).
+        const renewUntil = Date.now() + KEY_LOCK_MAX_HOLD_MS;
+        const renewal = setInterval(() => {
+            if (Date.now() >= renewUntil) {
+                clearInterval(renewal);
+                LogError(`Redis key lock "${lockKey}" has been held for ${KEY_LOCK_MAX_HOLD_MS} ms; no longer renewing it, so it expires on its own and other processes can proceed. The work holding it is hung.`);
+                return;
+            }
+            this.renewLock(lockKey, token).catch(() => undefined);
+        }, KEY_LOCK_RENEW_MS);
+        if (typeof renewal === 'object' && renewal !== null && 'unref' in renewal) {
+            (renewal as { unref(): void }).unref();
+        }
+        try {
+            const result = await work();
+            if (!(await this.stillHoldsLock(lockKey, token))) {
+                throw new KeyLockLostError(lockKey);
+            }
+            return result;
+        } finally {
+            clearInterval(renewal);
+            await this.releaseLock(lockKey, token);
+        }
+    }
+
+    /** Extends this holder's lock. @internal */
+    private async renewLock(lockKey: string, token: string): Promise<void> {
+        await this._client.eval(RENEW_LOCK_SCRIPT, 1, lockKey, token, String(KEY_LOCK_TTL_MS));
+    }
+
+    /** Whether this holder's token is still the one in the lock. @internal */
+    private async stillHoldsLock(lockKey: string, token: string): Promise<boolean> {
+        try {
+            return (await this._client.get(lockKey)) === token;
+        } catch {
+            return true; // cannot tell; do not turn an unreadable check into a failed write
+        }
+    }
+
+    /**
+     * Claims `{prefix}:__lease__:{name}` for `ttlMs` with `SET NX PX`, so one process in the fleet
+     * runs a periodic job per period. The lease is not released; it expires.
+     */
+    public async TryAcquireLease(name: string, ttlMs: number): Promise<boolean> {
+        const token = randomUUID();
+        const claimed = (await this._client.set(this.leaseKey(name), token, 'PX', Math.max(1, Math.floor(ttlMs)), 'NX')) === 'OK';
+        if (claimed) {
+            this._leaseTokens.set(name, token);
+        }
+        return claimed;
+    }
+
+    /**
+     * Extends a lease this provider holds, without being able to extend anyone else's: the script
+     * only acts when the stored token is this provider's. A lease that has already expired and been
+     * taken by another process is NOT stolen back — the caller learns it lost its turn.
+     *
+     * @returns true when this process still holds the lease afterwards.
+     */
+    public async RenewLease(name: string, ttlMs: number): Promise<boolean> {
+        const token = this._leaseTokens.get(name);
+        if (!token) {
+            return false;
+        }
+        const extended = await this._client.eval(RENEW_LOCK_SCRIPT, 1, this.leaseKey(name), token, String(Math.max(1, Math.floor(ttlMs))));
+        return Number(extended) === 1;
+    }
+
+    /** Ends a lease this provider claimed, if it still holds it (compare-and-delete). */
+    public async ReleaseLease(name: string): Promise<void> {
+        const token = this._leaseTokens.get(name);
+        if (!token) {
+            return;
+        }
+        this._leaseTokens.delete(name);
+        await this.releaseLock(this.leaseKey(name), token);
+    }
+
+    private leaseKey(name: string): string {
+        return `${this._keyPrefix}:__lease__:${name}`;
+    }
+
+    /** @internal */
+    private async acquireLock(lockKey: string, token: string): Promise<void> {
+        const deadline = Date.now() + KEY_LOCK_WAIT_MS;
+        for (;;) {
+            if ((await this._client.set(lockKey, token, 'PX', KEY_LOCK_TTL_MS, 'NX')) === 'OK') {
+                return;
+            }
+            if (Date.now() >= deadline) {
+                throw new KeyLockTimeoutError(lockKey, KEY_LOCK_WAIT_MS);
+            }
+            await new Promise(resolve => setTimeout(resolve, KEY_LOCK_RETRY_MS));
+        }
+    }
+
+    /** @internal */
+    private async releaseLock(lockKey: string, token: string): Promise<void> {
+        try {
+            await this._client.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, token);
+        } catch (err) {
+            // The lock expires on its own; a failed release only delays the next writer.
+            if (this._enableLogging) {
+                LogError(`Redis lock release failed for "${lockKey}": ${(err as Error).message}`);
+            }
+        }
+    }
+
+    /** Logs any per-command failure a pipeline reported; `exec()` itself does not throw for them. @internal */
+    private logPipelineErrors(results: [Error | null, unknown][] | null, context: string): void {
+        if (!this._enableLogging || !results) {
+            return;
+        }
+        for (const [err] of results) {
+            if (err) {
+                LogError(`Redis ${context}: ${err.message}`);
+            }
         }
     }
 
@@ -937,6 +1348,13 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
         if (!this._enablePubSub) {
             return;
         }
+        const mode = action === 'category_cleared' ? 'full' : this.publishModeFor(category);
+        if (mode === 'none') {
+            return;
+        }
+        if (mode === 'notice') {
+            data = undefined;
+        }
 
         const event: CacheChangedEvent = {
             CacheKey: cacheKey,
@@ -958,6 +1376,11 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
                 LogError(`Redis pub/sub publish failed: ${(err as Error).message}`);
             }
         });
+    }
+
+    /** The configured publish mode for a category. @internal */
+    private publishModeFor(category: string): CachePublishMode {
+        return this._config.publishModes?.[category] ?? this._config.defaultPublishMode ?? 'full';
     }
 
     /**
