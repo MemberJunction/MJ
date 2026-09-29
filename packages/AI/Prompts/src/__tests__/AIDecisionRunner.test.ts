@@ -132,6 +132,7 @@ const h = vi.hoisted(() => {
   return {
     state,
     engine,
+    logStatus: vi.fn(),
     getApiKey: (d: string) => (state.configuredDrivers.has(d) ? 'test-api-key' : ''),
     mockTemplatesArray,
     mockRenderTemplate,
@@ -141,6 +142,11 @@ const h = vi.hoisted(() => {
 vi.mock('@memberjunction/aiengine', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return { ...actual, AIEngine: { Instance: h.engine } };
+});
+
+vi.mock('@memberjunction/core', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, LogStatus: h.logStatus };
 });
 
 vi.mock('@memberjunction/ai', async (importOriginal) => {
@@ -744,57 +750,11 @@ describe('AIDecisionRunner', () => {
 
   // 9. Failover on retriable error
   it('9. fails over to secondary candidate when primary fails with retriable error', async () => {
-    // Add two candidates to prompt: primary native model, secondary LLM decision model
-    const SECONDARY_MODEL_ID = 'secondary-decision-model';
-    const secondaryModel = {
-      ID: SECONDARY_MODEL_ID,
-      Name: 'Secondary Decision Model',
-      AIModelTypeID: DECISION_MODEL_TYPE_ID,
-      DriverClass: NATIVE_DRIVER,
-      APIName: 'secondary-v1',
-      Status: 'Active',
-      IsActive: true,
-      PowerRank: 40,
-      ModelVendors: [
-        {
-          ID: 'mv-sec-1',
-          ModelID: SECONDARY_MODEL_ID,
-          VendorID: VENDOR.Anthropic,
-          Priority: 50,
-          Status: 'Active',
-          DriverClass: NATIVE_DRIVER,
-        },
-      ],
-    };
-    h.state.models.push(secondaryModel);
-    h.state.modelVendors.push(secondaryModel.ModelVendors[0]);
-    h.state.configuredDrivers.add(NATIVE_DRIVER);
-
     const prompt = makeDecisionPrompt({
       FailoverStrategy: 'NextInList',
       MaxFailoverAttempts: 3,
     });
-    // Wire prompt models for both
-    h.state.promptModels = [
-      {
-        ID: 'pm-1',
-        PromptID: prompt.ID,
-        ModelID: DECISION_MODEL_ID,
-        VendorID: VENDOR.OpenAI,
-        Priority: 100,
-        Status: 'Active',
-        ConfigurationID: null,
-      },
-      {
-        ID: 'pm-2',
-        PromptID: prompt.ID,
-        ModelID: SECONDARY_MODEL_ID,
-        VendorID: VENDOR.Anthropic,
-        Priority: 50,
-        Status: 'Active',
-        ConfigurationID: null,
-      },
-    ];
+    const SECONDARY_MODEL_ID = addSecondaryCandidate(prompt.ID);
 
     let callCount = 0;
     mockDriver.decideOverride = async (p: DecisionParams) => {
@@ -805,7 +765,7 @@ describe('AIDecisionRunner', () => {
         fail.errorMessage = 'Rate limit exceeded 429';
         fail.errorInfo = {
           errorType: 'RateLimit',
-          severity: 'Retryable',
+          severity: 'Retriable',
           canFailover: true,
         };
         return fail;
@@ -831,6 +791,8 @@ describe('AIDecisionRunner', () => {
     expect(callCount).toBe(2);
     expect(result.success).toBe(true);
     expect(result.Answers.q_likelihood).toEqual({ Kind: 'Likelihood', Probability: 0.99 });
+    // The result names the model that answered, not the one first selected.
+    expect(result.modelInfo?.modelId).toBe(SECONDARY_MODEL_ID);
   });
 
   it('10. an unregistered driver class fails with a clear message and never throws', async () => {
@@ -870,6 +832,97 @@ describe('AIDecisionRunner', () => {
     expect(lastPromptRun?.ErrorMessage).toBe('Model rejected the request');
   });
 
+  /** Adds a second, lower-priority native decision model bound to the prompt, and returns its ID. */
+  function addSecondaryCandidate(promptId: string): string {
+    const SECONDARY_MODEL_ID = 'secondary-decision-model';
+    const secondaryModel = {
+      ID: SECONDARY_MODEL_ID, Name: 'Secondary Decision Model', AIModelTypeID: DECISION_MODEL_TYPE_ID,
+      DriverClass: NATIVE_DRIVER, APIName: 'secondary-v1', Status: 'Active', IsActive: true, PowerRank: 40,
+      ModelVendors: [{ ID: 'mv-sec-1', ModelID: SECONDARY_MODEL_ID, VendorID: VENDOR.Anthropic, Priority: 50, Status: 'Active', DriverClass: NATIVE_DRIVER }],
+    };
+    // Drop the LLMDecision model, so the secondary is the only failover target.
+    h.state.models = h.state.models.filter(m => m.ID !== LLM_DECISION_MODEL_ID);
+    h.state.modelVendors = h.state.modelVendors.filter(mv => mv.ModelID !== LLM_DECISION_MODEL_ID);
+    h.state.models.push(secondaryModel);
+    h.state.modelVendors.push(secondaryModel.ModelVendors[0]);
+    h.state.promptModels = [
+      { ID: 'pm-1', PromptID: promptId, ModelID: DECISION_MODEL_ID, VendorID: VENDOR.OpenAI, Priority: 100, Status: 'Active', ConfigurationID: null },
+      { ID: 'pm-2', PromptID: promptId, ModelID: SECONDARY_MODEL_ID, VendorID: VENDOR.Anthropic, Priority: 50, Status: 'Active', ConfigurationID: null },
+    ];
+    return SECONDARY_MODEL_ID;
+  }
+
+  it('9b. a limit breach on the first model fails over to the next, which answers', async () => {
+    h.state.modelConfigs.set(DECISION_MODEL_ID.toLowerCase(), { Decision: { MaxQuestionsPerCall: 1 } });
+    const prompt = makeDecisionPrompt({ FailoverStrategy: 'NextInList', MaxFailoverAttempts: 3 });
+    const secondaryId = addSecondaryCandidate(prompt.ID);
+    const params = new AIDecisionParams();
+    params.prompt = prompt;
+    params.Questions = defaultQuestions; // 3 questions, over the first model's limit of 1
+    params.State = 'Test state';
+    params.provider = fakeProvider;
+
+    const result = await runner.ExecuteDecision(params);
+
+    expect(result.success).toBe(true);
+    expect(mockDriver.lastParams?.Model).toBe('secondary-v1');
+    expect(result.modelInfo?.modelId).toBe(secondaryId);
+    expect(result.DriverClass).toBe(NATIVE_DRIVER);
+  });
+
+  it("9c. warns once when a higher-priority candidate is skipped for lack of a credential", async () => {
+    h.logStatus.mockClear();
+    // A model no other test uses: the warn-once set lasts for the process.
+    const UNKEYED_ID = 'unkeyed-decision-model';
+    const unkeyed = {
+      ID: UNKEYED_ID, Name: 'Unkeyed Decision Model', AIModelTypeID: DECISION_MODEL_TYPE_ID, DriverClass: 'UnkeyedDriver',
+      APIName: 'unkeyed-v1', Status: 'Active', IsActive: true, PowerRank: 60,
+      ModelVendors: [{ ID: 'mv-unkeyed-1', ModelID: UNKEYED_ID, VendorID: VENDOR.OpenAI, Priority: 100, Status: 'Active', DriverClass: 'UnkeyedDriver' }],
+    };
+    h.state.models.push(unkeyed);
+    h.state.modelVendors.push(unkeyed.ModelVendors[0]);
+    const prompt = makeDecisionPrompt();
+    h.state.promptModels = [
+      { ID: 'pm-1', PromptID: prompt.ID, ModelID: UNKEYED_ID, VendorID: VENDOR.OpenAI, Priority: 100, Status: 'Active', ConfigurationID: null },
+      { ID: 'pm-2', PromptID: prompt.ID, ModelID: LLM_DECISION_MODEL_ID, VendorID: VENDOR.OpenAI, Priority: 50, Status: 'Active', ConfigurationID: null },
+    ];
+    h.state.configuredDrivers.clear(); // the unkeyed model has no key; LLMDecision needs none
+    const run = async (): Promise<void> => {
+      const params = new AIDecisionParams();
+      params.prompt = prompt;
+      params.Questions = defaultQuestions;
+      params.State = 'Test state';
+      params.provider = fakeProvider;
+      const result = await runner.ExecuteDecision(params);
+      expect(result.DriverClass).toBe(LLM_DRIVER);
+    };
+
+    await run();
+    await run();
+
+    const warnings = h.logStatus.mock.calls.filter(c => String(c[0]).includes('AI_VENDOR_API_KEY__UNKEYEDDRIVER'));
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('9d. an exception after the run row is created finalizes the row as failed', async () => {
+    vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockImplementation(() => {
+      throw new Error('factory exploded');
+    });
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt({ FailoverStrategy: 'None' });
+    params.Questions = defaultQuestions;
+    params.State = 'Test state';
+    params.provider = fakeProvider;
+
+    const result = await runner.ExecuteDecision(params);
+
+    expect(result.success).toBe(false);
+    expect(result.errorMessage).toBe('factory exploded');
+    expect(lastPromptRun?.Success).toBe(false);
+    expect(lastPromptRun?.Status).not.toBe('Running');
+    expect(lastPromptRun?.ErrorMessage).toBe('factory exploded');
+  });
+
   it("12. the caller's cancellation token reaches the driver", async () => {
     const controller = new AbortController();
     const params = new AIDecisionParams();
@@ -882,5 +935,27 @@ describe('AIDecisionRunner', () => {
     await runner.ExecuteDecision(params);
 
     expect(mockDriver.lastParams?.CancellationToken).toBe(controller.signal);
+  });
+
+  it('13. a decision whose caller cancelled is reported as cancelled', async () => {
+    const controller = new AbortController();
+    mockDriver.decideOverride = async () => {
+      controller.abort();
+      const fail = new DecisionResult(false, new Date(), new Date());
+      fail.errorMessage = 'Cancelled';
+      fail.errorInfo = { errorType: 'Unknown', severity: 'Fatal', canFailover: false };
+      return fail;
+    };
+    const params = new AIDecisionParams();
+    params.prompt = makeDecisionPrompt();
+    params.Questions = defaultQuestions;
+    params.State = 'Test state';
+    params.provider = fakeProvider;
+    params.cancellationToken = controller.signal;
+
+    const result = await runner.ExecuteDecision(params);
+
+    expect(result.success).toBe(false);
+    expect(result.cancelled).toBe(true);
   });
 });
