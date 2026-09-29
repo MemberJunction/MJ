@@ -313,6 +313,27 @@ describe('BaseEntity Delete delegation to leaf', () => {
         leafDeleteSpy.mockRestore();
     });
 
+    it('Delete on a parent whose leaf calls back up the chain settles instead of waiting on itself (MJ#4850)', async () => {
+        const { product, webinar } = createFullChain();
+        const leafDeleteSpy = vi.spyOn(webinar, 'Delete').mockImplementation(() => product.Delete({ IsParentEntityDelete: true }));
+
+        const outcome = await Promise.race([
+            product.Delete().then(
+                (value) => ({ settled: true as const, value }),
+                (error: unknown) => ({ settled: true as const, error })
+            ),
+            new Promise<{ settled: false }>((resolve) => setTimeout(() => resolve({ settled: false }), 300)),
+        ]);
+
+        leafDeleteSpy.mockRestore();
+        expect(outcome.settled).toBe(true);
+        // _innerDelete records a missing provider as a failed result and returns false.
+        // Either shape is the failure the unfixed hang never reaches.
+        if ('value' in outcome) {
+            expect(outcome.value).toBe(false);
+        }
+    });
+
     it('Delete with IsParentEntityDelete flag does NOT delegate to child', async () => {
         const { product, webinar } = createFullChain();
 

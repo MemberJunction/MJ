@@ -2090,7 +2090,6 @@ export abstract class BaseEntity<T = unknown> {
             this._childEntity = childEntity;
 
             const dirtySnapshots = this.captureChainDirtyState();
-
             if (this.PrimaryKey && this.PrimaryKey.HasValue) {
                 const loaded = await childEntity.InnerLoad(this.PrimaryKey);
                 if (!loaded) {
@@ -2099,7 +2098,6 @@ export abstract class BaseEntity<T = unknown> {
             } else {
                 this.mirrorSharedKeysToChild(childEntity);
             }
-
             this.restoreChainDirtyState(dirtySnapshots);
 
             // Recursively discover grandchildren if the child is also a parent type
@@ -2125,7 +2123,6 @@ export abstract class BaseEntity<T = unknown> {
             this.replaceChildParentChain(childEntity);
 
             const dirtySnapshots = this.captureChainDirtyState();
-
             if (this.PrimaryKey && this.PrimaryKey.HasValue) {
                 const loaded = await childEntity.InnerLoad(this.PrimaryKey);
                 if (!loaded) {
@@ -2134,7 +2131,6 @@ export abstract class BaseEntity<T = unknown> {
             } else {
                 this.mirrorSharedKeysToChild(childEntity);
             }
-
             this.restoreChainDirtyState(dirtySnapshots);
 
             if (childEntity.EntityInfo.IsParentType) {
@@ -5794,6 +5790,13 @@ export abstract class BaseEntity<T = unknown> {
             if (plan.NodeCount > 1) {
                 return this.deleteGraph(plan, options);
             }
+        }
+
+        // IS-A parent chain deletes bypass the debounce, as parent chain saves do: the leaf's
+        // call back up the chain would otherwise wait on the pending delete that handed the
+        // delete to the leaf, and Delete() would never return (MJ#4850).
+        if (options?.IsParentEntityDelete) {
+            return this._innerDelete(options);
         }
 
         // If a delete is already in progress, return its promise.
