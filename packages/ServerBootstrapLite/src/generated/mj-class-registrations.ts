@@ -1248,9 +1248,10 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/testing-engine (2 classes)
+// @memberjunction/testing-engine (3 classes)
 import {
     AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
 } from '@memberjunction/testing-engine';
 
@@ -2241,6 +2242,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
+    DecisionEvalDriver,
     PromptEvalDriver,
 ];
 
@@ -2257,7 +2259,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 963;
+export const CLASS_REGISTRATIONS_COUNT = 964;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
