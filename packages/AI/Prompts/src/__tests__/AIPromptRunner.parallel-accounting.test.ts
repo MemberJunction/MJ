@@ -404,3 +404,75 @@ describe('Spec §5 — Parallel-execution accounting', () => {
     expect(child1Run.JudgeScore).toBe(6.0);
   });
 });
+
+/**
+ * The nesting-depth contract behind usage attribution.
+ *
+ * vwAIUsageFacts finds a prompt run's agent run through AIAgentRunStep.TargetLogID, looking at the
+ * run itself, its parent and its grandparent (the s0 / s1 / s2 OUTER APPLYs) — so every prompt run
+ * must sit at most two levels below the run an agent step targets. A deeper run is not an error in
+ * the view; it silently resolves to no agent run (SourceKind 'Direct'). These tests pin each edge a
+ * producer creates, so a change that nests deeper fails here instead:
+ *
+ *   parallel arm      → parallel parent        (1 level)
+ *   result selector   → parallel parent        (1 level; asserted in the test above)
+ *   JSON repair       → the run it repairs     (+1, and never repaired itself)
+ *
+ * The deepest chain is therefore repair → arm-or-selector → parallel parent: two levels. If you add a
+ * producer, or let one recurse, extend the view's OUTER APPLY chain with it.
+ */
+describe('Prompt-run nesting depth (vwAIUsageFacts resolves self, parent, grandparent)', () => {
+  const testUser: UserInfo = { ID: 'u-depth-1', Name: 'Depth User', Email: 'depth@example.com' } as UserInfo;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    prSeq = 0;
+    createdPromptRuns.length = 0;
+    loadCatalog(buildRealisticCatalog());
+    vi.spyOn(AIEngineBase.Instance, 'EnsureLoaded').mockResolvedValue(undefined);
+  });
+
+  it('creates a parallel arm one level below the parallel parent', async () => {
+    const coordinator = new ParallelExecutionCoordinator();
+    (coordinator as unknown as { Provider: typeof fakeProvider }).Provider = fakeProvider;
+    const createArm = (coordinator as unknown as {
+      createChildPromptRun(task: Record<string, unknown>, startTime: Date, parentPromptRunId: string, executionOrder?: number): Promise<FakePromptRun>;
+    }).createChildPromptRun.bind(coordinator);
+
+    const arm = await createArm(
+      { taskId: 't1', prompt: { ID: 'p1' }, model: { ID: 'm1' }, executionGroup: 0, priority: 1, renderedPrompt: 'x', contextUser: testUser },
+      new Date(),
+      'parallel-parent-1',
+      0,
+    );
+
+    expect(arm.RunType).toBe('ParallelChild');
+    expect(arm.ParentID).toBe('parallel-parent-1');
+  });
+
+  it('runs a JSON repair one level below the run it repairs, and never lets it start a repair of its own', async () => {
+    h.state.prompts = [{ ID: 'repair-json', Name: 'Repair JSON', Category: 'MJ: System', Status: 'Active', OutputType: 'object' }];
+    const runner = new AIPromptRunner();
+    const execute = vi.spyOn(runner, 'ExecutePrompt').mockResolvedValue({ success: true, result: '{"total": 1}' } as Awaited<ReturnType<AIPromptRunner['ExecutePrompt']>>);
+    const attemptJSONRepair = (runner as unknown as {
+      attemptJSONRepair(rawOutput: string, originalError: Error, params: Record<string, unknown>, currentPromptRun: { ID: string }): Promise<unknown>;
+    }).attemptJSONRepair.bind(runner);
+
+    // Malformed beyond what the local (JSON5, lexical) repairs can fix, so the AI repair runs.
+    const repaired = await attemptJSONRepair(
+      '{"total": }',
+      new Error('Unexpected token }'),
+      { contextUser: testUser, attemptJSONRepair: true, agentId: 'agent-1', provider: fakeProvider },
+      { ID: 'run-being-repaired' },
+    );
+
+    expect(repaired).toEqual({ total: 1 });
+    expect(execute).toHaveBeenCalledTimes(1);
+    const repairParams = execute.mock.calls[0][0];
+    // One level below the repaired run...
+    expect(repairParams.parentPromptRunId).toBe('run-being-repaired');
+    // ...and a leaf: a repair is only ever started when attemptJSONRepair is set, and the repair's
+    // own run does not set it, so its output can never trigger a second, deeper repair.
+    expect(repairParams.attemptJSONRepair).toBeFalsy();
+  });
+});

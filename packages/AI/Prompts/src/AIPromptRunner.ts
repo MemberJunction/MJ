@@ -3605,7 +3605,10 @@ export class AIPromptRunner extends BaseModelRunner {
             ERROR_MESSAGE: trueError,
             MALFORMED_JSON: rawOutput
           },
-          skipValidation: true, // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
+          skipValidation: true, // one shot, fix or no fix: no validation retries on the repair itself.
+          // attemptJSONRepair is deliberately NOT set, so a repair can never start a repair of its own.
+          // That keeps every run within two levels of an agent step's target, which is as far as
+          // vwAIUsageFacts looks for the agent run (pinned by the nesting-depth tests).
           agentId: params.agentId,
           UserID: ResolvePromptRunUserID({ UserID: params.UserID, ContextUser: params.contextUser }) ?? undefined,
         });
