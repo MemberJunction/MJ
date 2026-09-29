@@ -94,6 +94,19 @@ export class AIDecisionRunner extends BaseModelRunner {
   }
 
   /**
+   * Makes an `LLMDecision`'s chat run a child of this decision's run. The child's INSERT names this
+   * run as its `ParentID`, so this run's queued INSERT must land first. When that INSERT failed there
+   * is no row to point at: the child would then fail its foreign key and go unrecorded too, so the
+   * chat run is left unlinked instead.
+   */
+  private async linkChildRun(driver: BaseDecision, promptRun: MJAIPromptRunEntityExtended): Promise<void> {
+    await this.WaitForPendingPromptRunSaves();
+    if (driver instanceof LLMDecision && promptRun.IsSaved) {
+      driver.ParentPromptRunID = promptRun.ID;
+    }
+  }
+
+  /**
    * Answers the questions in `params.Questions` about the state. Never throws: every failure is a
    * result with `success: false` and an `errorMessage`.
    */
@@ -292,13 +305,12 @@ export class AIDecisionRunner extends BaseModelRunner {
         return this.failedDecision(err instanceof Error ? err.message : String(err), 'Authentication');
       }
     }
-    const driver = this.createDriver(candidate, apiKey, params, promptRun.ID);
+    const driver = this.createDriver(candidate, apiKey, params);
     if (typeof driver === 'string') {
       return this.failedDecision(driver, 'ModelError');
     }
     if (this.driverRunsChildPrompt(candidate.driverClass)) {
-      // The driver's run names this run as its parent, so this run's queued INSERT must land first.
-      await this.WaitForPendingPromptRunSaves();
+      await this.linkChildRun(driver, promptRun);
     }
     return this.callDriver(driver, candidate, state, params, prompt);
   }
@@ -338,11 +350,8 @@ export class AIDecisionRunner extends BaseModelRunner {
    * Builds the candidate's driver through the ClassFactory. `LLMDecision` takes the ID of the chat
    * prompt named by the model-vendor row's `APIName`; every other driver takes only its API key.
    * Returns an error message when the driver cannot be built.
-   *
-   * An `LLMDecision` is also given `parentRunId`, the decision's run, as its `ParentPromptRunID`, so
-   * its chat run is a child of the decision's run.
    */
-  private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIDecisionParams, parentRunId: string): BaseDecision | string {
+  private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIDecisionParams): BaseDecision | string {
     let driver: BaseDecision | null;
     if (candidate.driverClass === 'LLMDecision') {
       const target = candidate.apiName?.trim().toLowerCase();
@@ -351,9 +360,6 @@ export class AIDecisionRunner extends BaseModelRunner {
         return `LLMDecision's chat prompt '${candidate.apiName ?? ''}' was not found`;
       }
       driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, candidate.driverClass, apiKey, chatPrompt.ID, params.contextUser);
-      if (driver instanceof LLMDecision) {
-        driver.ParentPromptRunID = parentRunId;
-      }
     } else {
       driver = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, candidate.driverClass, apiKey);
     }

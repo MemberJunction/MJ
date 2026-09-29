@@ -274,6 +274,10 @@ class FakePromptRun {
   public CostCurrency?: string;
   public LatestResult: { CompleteMessage: string } | null = null;
   public saveCount = 0;
+  /** Whether a Save has succeeded, as `BaseEntity.IsSaved` reports it. */
+  public IsSaved = false;
+  /** When set, every Save fails, as an INSERT that fails validation does. */
+  public static FailSaves = false;
   [k: string]: unknown;
 
   NewRecord(): boolean {
@@ -282,6 +286,11 @@ class FakePromptRun {
   }
   async Save(): Promise<boolean> {
     this.saveCount++;
+    if (FakePromptRun.FailSaves) {
+      this.LatestResult = { CompleteMessage: 'Vendor cannot be null' };
+      return false;
+    }
+    this.IsSaved = true;
     return true;
   }
 }
@@ -433,6 +442,7 @@ describe('AIDecisionRunner', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    FakePromptRun.FailSaves = false;
     setupCatalog();
     h.mockTemplatesArray.length = 0;
     h.mockTemplatesArray.push({
@@ -1006,6 +1016,27 @@ describe('AIDecisionRunner', () => {
       expect(lastPromptRun?.DescendantCost).toBe(0.0007);
       expect(lastPromptRun?.TotalCost).toBe(0.0007);
       expect(lastPromptRun?.Cost).toBeUndefined();
+      expect(result.cost).toBe(0.0007);
+    });
+
+    it("14a2. leaves the chat run unlinked when the decision run's INSERT failed, so the chat run can still be saved", async () => {
+      // A chat run naming a decision run that was never inserted as its ParentID would fail its foreign key.
+      FakePromptRun.FailSaves = true;
+      bindLLMDecisionOnly();
+      vi.mocked(MJGlobal.Instance.ClassFactory.CreateInstance).mockRestore();
+      const executePrompt = vi.spyOn(AIPromptRunner.prototype, 'ExecutePrompt').mockResolvedValue(
+        chatRunResult({
+          success: true,
+          result: { q_likelihood: 0.7 },
+          promptRun: asPromptRun({ Cost: 0.0007, DescendantCost: null, TotalCost: 0.0007, CostCurrency: 'USD' }),
+        })
+      );
+
+      const result = await runner.ExecuteDecision(likelihoodParams());
+
+      expect(result.success).toBe(true);
+      expect(executePrompt).toHaveBeenCalledTimes(1);
+      expect(executePrompt.mock.calls[0][0].parentPromptRunId).toBeUndefined();
       expect(result.cost).toBe(0.0007);
     });
 
