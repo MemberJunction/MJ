@@ -289,7 +289,7 @@ export class MJDialogComponent implements OnDestroy {
 
   /** First element that can take focus. The ✕ is skipped only for the button fallback. */
   private firstEnabled(nodes: NodeListOf<HTMLElement>, skipClose = false): HTMLElement | null {
-    for (const el of nodes) {
+    for (const el of Array.from(nodes)) {
       if (skipClose && el.classList.contains('mj-dialog-close')) continue;
       if (this.isDisabled(el)) continue;
       if (el instanceof HTMLInputElement && el.type === 'hidden') continue;
