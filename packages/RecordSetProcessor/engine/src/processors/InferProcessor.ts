@@ -31,6 +31,7 @@ import {
     renderConstraintBlock,
     validateOutputValue,
     type ViolationPolicy,
+    type FeaturePipelineFieldValueLookup,
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
 import type { OutputMappingConfig } from '../writeBack';
@@ -134,6 +135,7 @@ export class InferProcessor implements IRecordProcessor {
             }
         }
 
+        const fieldValues = this.buildFieldValuesLookup(context);
         // The pipeline type's driver turns the record's context into its outputs (for LLM: the prompt run and its hooks)
         const computed = await resolution.Driver.ComputeOutputs({
             Record: record,
@@ -141,6 +143,7 @@ export class InferProcessor implements IRecordProcessor {
             Prompt: prompt,
             Spec: this.spec,
             Hooks: this.buildComputeHooks(),
+            FieldValues: fieldValues,
         });
 
         const aiPromptRunID = computed.AIPromptRunID;
@@ -498,7 +501,7 @@ export class InferProcessor implements IRecordProcessor {
         const pipelineType = await this.findPipelineType(typeName, context);
         const driver = pipelineType ? this.createDriver(pipelineType) : this.createDriverWithoutCatalogRow(typeName);
         if (this.spec) {
-            this.assertDriverProducesOutputs(driver, typeName, this.spec);
+            this.assertDriverProducesOutputs(driver, typeName, this.spec, context);
         }
         return driver;
     }
@@ -546,9 +549,38 @@ export class InferProcessor implements IRecordProcessor {
         return driver;
     }
 
+    /**
+     * Builds a field values lookup scoped to the pipeline's entity from the processor context.
+     * Consults only that entity's fields; returns undefined if no entity or fields are found.
+     */
+    private buildFieldValuesLookup(context: RecordProcessorContext): FeaturePipelineFieldValueLookup | undefined {
+        const entityID = context.entityID;
+        if (!entityID) {
+            return undefined;
+        }
+        const provider = context.provider ?? Metadata.Provider;
+        if (!provider || typeof provider.EntityByID !== 'function') {
+            return undefined;
+        }
+        const entity = provider.EntityByID(entityID);
+        if (!entity || !entity.Fields) {
+            return undefined;
+        }
+        return (fieldName: string) => {
+            const field = entity.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
+            return field?.EntityFieldValues;
+        };
+    }
+
     /** Fails when the driver cannot produce one or more of the spec's outputs, naming every one. */
-    private assertDriverProducesOutputs(driver: BaseFeaturePipelineDriver, typeName: string, spec: DataFeatureSpec): void {
-        const messages = driver.ValidateOutputs(spec);
+    private assertDriverProducesOutputs(
+        driver: BaseFeaturePipelineDriver,
+        typeName: string,
+        spec: DataFeatureSpec,
+        context: RecordProcessorContext
+    ): void {
+        const fieldValues = this.buildFieldValuesLookup(context);
+        const messages = driver.ValidateOutputs(spec, fieldValues);
         if (messages.length > 0) {
             throw new Error(`Feature Pipeline type '${typeName}' cannot produce every output: ${messages.join(' ')}`);
         }

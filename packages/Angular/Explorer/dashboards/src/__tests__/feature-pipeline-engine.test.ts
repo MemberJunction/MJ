@@ -23,6 +23,7 @@ interface RPDouble {
   EntityID: string;
   Entity: string;
   OutputMapping: string | null;
+  Configuration?: string | null;
   OnDemandEnabled: boolean;
   ScheduleEnabled: boolean;
 }
@@ -49,6 +50,7 @@ function rp(overrides: Partial<RPDouble> = {}): MJRecordProcessEntity {
     EntityID: 'ENT-MEMBERS',
     Entity: 'Members',
     OutputMapping: JSON.stringify({ field: 'EngagementScore' }),
+    Configuration: null,
     OnDemandEnabled: true,
     ScheduleEnabled: false,
     ...overrides,
@@ -107,4 +109,16 @@ describe('FeaturePipelineEngine.BuildSummaries (KH)', () => {
   it('exposes the seeded category name', () => {
     expect(FEATURE_PIPELINE_CATEGORY_NAME).toBe('Feature Pipeline');
   });
+
+  it('derives PipelineType defaulting to LLM or reading from Configuration', () => {
+    const [sDefault] = FeaturePipelineEngine.BuildSummaries([rp()], []);
+    expect(sDefault.PipelineType).toBe('LLM');
+
+    const [sDecision] = FeaturePipelineEngine.BuildSummaries([rp({ Configuration: JSON.stringify({ PipelineType: 'Decision' }) })], []);
+    expect(sDecision.PipelineType).toBe('Decision');
+
+    const [sMalformed] = FeaturePipelineEngine.BuildSummaries([rp({ Configuration: '{invalid json' })], []);
+    expect(sMalformed.PipelineType).toBe('LLM');
+  });
 });
+

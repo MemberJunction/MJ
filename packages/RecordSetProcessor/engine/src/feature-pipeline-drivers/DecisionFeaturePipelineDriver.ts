@@ -57,83 +57,6 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
     }
 
     /**
-     * Validates that the spec conforms to Decision pipeline requirements:
-     * - Rejects pipelines with `CaptureReasoning: true` (decision models do not produce reasoning).
-     * - Enforces that every output has a valid constraint (boolean, enum, or leveled numeric).
-     * - Validates numeric constraints require between 2 and 10 Level descriptions.
-     * - Validates enum constraints have <= 255 values, each with a description.
-     */
-    public override ValidateOutputs(spec: DataFeatureSpec): string[] {
-        const messages: string[] = [];
-
-        if (spec.CaptureReasoning) {
-            messages.push('Decision pipelines do not produce reasoning; remove CaptureReasoning or use an LLM pipeline.');
-        }
-
-        messages.push(...super.ValidateOutputs(spec));
-
-        for (const output of spec.Outputs ?? []) {
-            if (!output.Constraint) {
-                messages.push(`Output '${output.Name}' has no constraint; Decision pipelines require boolean, enum, or leveled numeric constraints.`);
-                continue;
-            }
-
-            if (output.Constraint.Type === 'numeric') {
-                const levels = output.Constraint.Levels;
-                if (!levels || !Array.isArray(levels) || levels.length < 2 || levels.length > 10) {
-                    messages.push(`Numeric output '${output.Name}' requires between 2 and 10 Level descriptions.`);
-                }
-            } else if (output.Constraint.Type === 'enum') {
-                let values = output.Constraint.Values ? [...output.Constraint.Values] : [];
-                const descriptions: Record<string, string> = { ...(output.Constraint.ValueDescriptions ?? {}) };
-
-                if (output.Target?.Mode === 'field') {
-                    const fieldName = output.Target.EntityFieldName ?? (output.Target as { Field?: string }).Field;
-                    if (fieldName) {
-                        try {
-                            const provider = Metadata.Provider;
-                            if (provider?.Entities) {
-                                for (const entity of provider.Entities) {
-                                    const field = entity.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
-                                    if (field?.EntityFieldValues && field.EntityFieldValues.length > 0) {
-                                        if (values.length === 0) {
-                                            values = field.EntityFieldValues.map((v) => v.Value);
-                                        }
-                                        for (const efv of field.EntityFieldValues) {
-                                            if (efv.Description && !descriptions[efv.Value]) {
-                                                descriptions[efv.Value] = efv.Description;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } catch {
-                            // metadata lookup failure will be checked below against values & descriptions
-                        }
-                    }
-                }
-
-                if (values.length > 255) {
-                    messages.push(`Enum output '${output.Name}' has ${values.length} values; maximum supported for Decision is 255.`);
-                }
-
-                if (values.length === 0) {
-                    messages.push(`Enum output '${output.Name}' has no values defined.`);
-                } else {
-                    const missingDesc = values.filter((v) => !descriptions[v] || descriptions[v].trim().length === 0);
-                    if (missingDesc.length > 0) {
-                        messages.push(
-                            `Enum output '${output.Name}' values missing descriptions: ${missingDesc.join(', ')}. Decision models require a description for every choice option.`
-                        );
-                    }
-                }
-            }
-        }
-
-        return messages;
-    }
-
-    /**
      * Executes the Decision pipeline for a single record:
      * 1. Validates that the prompt is bound to a Decision model type.
      * 2. Renders the record state via `BeforeBuildContext` and `BuildPromptData`, canonicalizing it.
@@ -325,14 +248,19 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
                 if (output.Target?.Mode === 'field') {
                     const fieldName = output.Target.EntityFieldName ?? (output.Target as { Field?: string }).Field;
                     if (fieldName) {
-                        const entity = request.Context.provider?.EntityByID(request.Record.EntityID)
-                            ?? Metadata.Provider?.EntityByID(request.Record.EntityID);
-                        const field = entity?.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
-                        if (field?.EntityFieldValues) {
+                        const efvs = request.FieldValues
+                            ? request.FieldValues(fieldName)
+                            : (() => {
+                                  const entityID = request.Context.entityID ?? request.Record.EntityID;
+                                  const provider = request.Context.provider ?? Metadata.Provider;
+                                  const entity = entityID && provider ? provider.EntityByID(entityID) : undefined;
+                                  return entity?.Fields?.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase())?.EntityFieldValues;
+                              })();
+                        if (efvs && efvs.length > 0) {
                             if (values.length === 0) {
-                                values = field.EntityFieldValues.map((v) => v.Value);
+                                values = efvs.map((v) => v.Value);
                             }
-                            for (const efv of field.EntityFieldValues) {
+                            for (const efv of efvs) {
                                 if (efv.Description && !descriptions[efv.Value]) {
                                     descriptions[efv.Value] = efv.Description;
                                 }

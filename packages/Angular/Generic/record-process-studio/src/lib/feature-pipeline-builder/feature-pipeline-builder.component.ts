@@ -22,7 +22,13 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityFieldInfo, LogError, RunView, UserInfo } from '@memberjunction/core';
-import { MJRecordProcessEntity, MJAIPromptEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
+import {
+    MJRecordProcessEntity,
+    MJAIPromptEntity,
+    MJEntityDocumentEntity,
+    KnowledgeHubMetadataEngine,
+    MJFeaturePipelineTypeEntity,
+} from '@memberjunction/core-entities';
 import {
     DataFeatureSpec,
     DataFeatureOutput,
@@ -31,23 +37,51 @@ import {
     ViolationPolicy,
     renderConstraintBlock,
     validateSpec,
+    GetFeaturePipelineCapabilities,
+    ValidateOutputsAgainstCapabilities,
+    type FeaturePipelineDriverCapabilities,
+    type FeaturePipelineFieldValueLookup,
     type SpecValidationIssue,
     type EntityMetadataStub,
 } from '@memberjunction/feature-pipelines';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
 
 export type PromptOption = Pick<MJAIPromptEntity, 'ID' | 'Name' | 'Description'>;
 
 export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'EntityID'>;
 
+export interface PipelineTypeOption {
+    Name: string;
+    DisplayName?: string;
+    Description?: string | null;
+}
+
 @Component({
     selector: 'mj-feature-pipeline-builder',
     standalone: true,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    imports: [CommonModule, FormsModule, MJButtonDirective],
+    imports: [CommonModule, FormsModule, MJButtonDirective, MJConfirmDialogComponent],
     template: `
         <div class="fpb">
+            <!-- PIPELINE TYPE SELECTOR -->
+            <section class="rpe-sec fpb-type-sec">
+                <div class="rpe-grid2">
+                    <div class="field">
+                        <label>Pipeline Type</label>
+                        <select class="mj-input" [value]="CurrentPipelineTypeName" (change)="OnPipelineTypeSelect($event)">
+                            @for (t of AvailablePipelineTypes; track t.Name) {
+                                <option [value]="t.Name">{{ t.DisplayName || t.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Type Description</label>
+                        <div class="rpe-static-text">{{ SelectedPipelineTypeDescription || '—' }}</div>
+                    </div>
+                </div>
+            </section>
+
             <!-- STAGE 1: CONTEXT SOURCE -->
             <section class="rpe-sec">
                 <div class="rpe-sec-h">
@@ -135,7 +169,7 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
                         <i class="fa-solid fa-plus"></i> Add Output
                     </button>
                 </div>
-                <p class="rpe-desc">Define the structured outputs produced by the LLM, their type constraints, and target write-back destinations.</p>
+                <p class="rpe-desc">Define the structured outputs produced by the pipeline, their type constraints, and target write-back destinations.</p>
 
                 @if (!spec.Outputs || spec.Outputs.length === 0) {
                     <div class="fpb-empty-outputs">
@@ -144,11 +178,11 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
                     </div>
                 } @else {
                     <div class="fpb-outputs-list">
-                        @for (output of spec.Outputs; track $index) {
+                        @for (output of spec.Outputs; track $index; let outputIndex = $index) {
                             <div class="fpb-output-card">
                                 <div class="fpb-output-head">
-                                    <h4>Output #{{ $index + 1 }}: {{ output.Name || '(unnamed)' }}</h4>
-                                    <button mjButton size="sm" variant="flat" (click)="removeOutput($index)">
+                                    <h4>Output #{{ outputIndex + 1 }}: {{ output.Name || '(unnamed)' }}</h4>
+                                    <button mjButton size="sm" variant="flat" (click)="removeOutput(outputIndex)">
                                         <i class="fa-solid fa-trash"></i> Remove
                                     </button>
                                 </div>
@@ -156,18 +190,18 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
                                 <div class="rpe-grid3">
                                     <div class="field">
                                         <label>Output Name</label>
-                                        <input class="mj-input" [value]="output.Name" (input)="updateOutputProp($index, 'Name', $event)" placeholder="e.g. SentimentScore">
+                                        <input class="mj-input" [value]="output.Name" (input)="updateOutputProp(outputIndex, 'Name', $event)" placeholder="e.g. SentimentScore">
                                     </div>
                                     <div class="field">
                                         <label>JSON Path / Ref</label>
-                                        <input class="mj-input mono" [value]="output.Ref" (input)="updateOutputProp($index, 'Ref', $event)" placeholder="e.g. $.sentiment or $">
+                                        <input class="mj-input mono" [value]="output.Ref" (input)="updateOutputProp(outputIndex, 'Ref', $event)" placeholder="e.g. $.sentiment or $">
                                     </div>
                                     <div class="field">
                                         <label>Target Mode</label>
-                                        <select class="mj-input" [value]="output.Target.Mode" (change)="updateTargetMode($index, $event)">
-                                            <option value="field">Entity Column (field)</option>
-                                            <option value="child">Child Rows (child)</option>
-                                            <option value="tags">Taxonomy Tags (tags)</option>
+                                        <select class="mj-input" [value]="output.Target.Mode" (change)="updateTargetMode(outputIndex, $event)">
+                                            @for (m of AvailableTargetModes; track m.Value) {
+                                                <option [value]="m.Value">{{ m.Label }}</option>
+                                            }
                                         </select>
                                     </div>
                                 </div>
@@ -177,7 +211,7 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
                                     @if (output.Target.Mode === 'field') {
                                         <div class="field">
                                             <label>Target Field</label>
-                                            <select class="mj-input" [value]="output.Target.EntityFieldName" (change)="updateFieldTarget($index, $event)">
+                                            <select class="mj-input" [value]="output.Target.EntityFieldName" (change)="updateFieldTarget(outputIndex, $event)">
                                                 <option value="" disabled>— Select Column —</option>
                                                 @for (f of entityFields; track f.Name) {
                                                     <option [value]="f.Name">{{ f.DisplayName || f.Name }} ({{ f.TSType }})</option>
@@ -189,7 +223,7 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
                                     @if (output.Target.Mode === 'child') {
                                         <div class="field">
                                             <label>Child Entity</label>
-                                            <select class="mj-input" [value]="output.Target.EntityName" (change)="updateChildTargetEntity($index, $event)">
+                                            <select class="mj-input" [value]="output.Target.EntityName" (change)="updateChildTargetEntity(outputIndex, $event)">
                                                 <option value="" disabled>— Select Entity —</option>
                                                 @for (e of availableEntities; track e.ID) {
                                                     <option [value]="e.Name">{{ e.DisplayName || e.Name }}</option>
@@ -201,19 +235,20 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
                                     <!-- Constraint details -->
                                     <div class="field">
                                         <label>Constraint Type</label>
-                                        <select class="mj-input" [value]="output.Constraint?.Type || 'none'" (change)="updateConstraintType($index, $event)">
-                                            <option value="none">None / Unconstrained</option>
-                                            <option value="enum">Enum (Allowed Values)</option>
-                                            <option value="numeric">Numeric (Min/Max)</option>
-                                            <option value="boolean">Boolean</option>
-                                            <option value="freetext">Free Text</option>
+                                        <select class="mj-input" [value]="output.Constraint?.Type || 'none'" (change)="updateConstraintType(outputIndex, $event)">
+                                            @if (!output.Constraint?.Type && IsDecisionPipeline) {
+                                                <option value="none" disabled>— Select Constraint —</option>
+                                            }
+                                            @for (t of AvailableConstraintTypes; track t.Value) {
+                                                <option [value]="t.Value">{{ t.Label }}</option>
+                                            }
                                         </select>
                                     </div>
 
                                     @if (output.Constraint) {
                                         <div class="field">
                                             <label>Violation Policy</label>
-                                            <select class="mj-input" [value]="output.Constraint.OnViolation || 'fail'" (change)="updateViolationPolicy($index, $event)">
+                                            <select class="mj-input" [value]="output.Constraint.OnViolation || 'fail'" (change)="updateViolationPolicy(outputIndex, $event)">
                                                 <option value="fail">Fail Row</option>
                                                 <option value="null">Set Output to Null</option>
                                                 <option value="coerce-to-other">Coerce / Fallback</option>
@@ -226,19 +261,109 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
                                 @if (output.Constraint?.Type === 'enum') {
                                     <div class="field rpe-mt">
                                         <label>Allowed Values (comma separated)</label>
-                                        <input class="mj-input" [value]="getEnumValuesCsv(output.Constraint)" (input)="updateEnumValues($index, $event)" placeholder="e.g. Positive, Neutral, Negative">
+                                        <input class="mj-input" [value]="getEnumValuesCsv(output.Constraint)" (input)="updateEnumValues(outputIndex, $event)" placeholder="e.g. Positive, Neutral, Negative">
                                     </div>
+                                    @if (IsDecisionPipeline && GetEnumValues(output).length > 0) {
+                                        <div class="field rpe-mt">
+                                            <label>Value Descriptions <span class="muted">— Decision models require a description for every choice option</span></label>
+                                            <div class="fpb-enum-descriptions">
+                                                @for (val of GetEnumValues(output); track val) {
+                                                    <div class="fpb-enum-desc-row">
+                                                        <span class="fpb-enum-val-badge">{{ val }}</span>
+                                                        <input
+                                                            class="mj-input"
+                                                            [value]="GetEnumValueDescription(output, val)"
+                                                            (input)="UpdateEnumValueDescription(outputIndex, val, $event)"
+                                                            [placeholder]="'Description for ' + val">
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
                                 }
                                 @if (output.Constraint?.Type === 'numeric') {
-                                    <div class="rpe-grid2 rpe-mt">
-                                        <div class="field">
-                                            <label>Min Value</label>
-                                            <input class="mj-input" type="number" [value]="getNumericMin(output.Constraint)" (input)="updateNumericMin($index, $event)">
+                                    @if (IsDecisionPipeline) {
+                                        <div class="field rpe-mt">
+                                            <div class="fpb-levels-header">
+                                                <label>Numeric Levels <span class="muted">(Ordered: lowest to highest, 2 to 10 levels)</span></label>
+                                                <button
+                                                    mjButton
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    type="button"
+                                                    [disabled]="GetNumericLevels(output).length >= 10"
+                                                    (click)="AddNumericLevel(outputIndex)">
+                                                    <i class="fa-solid fa-plus"></i> Add Level
+                                                </button>
+                                            </div>
+                                            <div class="fpb-levels-list">
+                                                @for (lvl of GetNumericLevels(output); track $index; let lvlIdx = $index; let first = $first; let last = $last) {
+                                                    <div class="fpb-level-row">
+                                                        <span class="fpb-level-num">{{ lvlIdx + 1 }}</span>
+                                                        <input
+                                                            class="mj-input"
+                                                            [value]="lvl"
+                                                            (input)="UpdateNumericLevel(outputIndex, lvlIdx, $event)"
+                                                            placeholder="Level label (e.g. Low, Medium, High)">
+                                                        <button
+                                                            mjButton
+                                                            size="sm"
+                                                            variant="flat"
+                                                            type="button"
+                                                            [disabled]="first"
+                                                            (click)="MoveNumericLevel(outputIndex, lvlIdx, 'up')"
+                                                            title="Move Up">
+                                                            <i class="fa-solid fa-arrow-up"></i>
+                                                        </button>
+                                                        <button
+                                                            mjButton
+                                                            size="sm"
+                                                            variant="flat"
+                                                            type="button"
+                                                            [disabled]="last"
+                                                            (click)="MoveNumericLevel(outputIndex, lvlIdx, 'down')"
+                                                            title="Move Down">
+                                                            <i class="fa-solid fa-arrow-down"></i>
+                                                        </button>
+                                                        <button
+                                                            mjButton
+                                                            size="sm"
+                                                            variant="flat"
+                                                            type="button"
+                                                            [disabled]="GetNumericLevels(output).length <= 2"
+                                                            (click)="RemoveNumericLevel(outputIndex, lvlIdx)"
+                                                            title="Remove Level">
+                                                            <i class="fa-solid fa-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
                                         </div>
-                                        <div class="field">
-                                            <label>Max Value</label>
-                                            <input class="mj-input" type="number" [value]="getNumericMax(output.Constraint)" (input)="updateNumericMax($index, $event)">
+                                    } @else {
+                                        <div class="rpe-grid2 rpe-mt">
+                                            <div class="field">
+                                                <label>Min Value</label>
+                                                <input class="mj-input" type="number" [value]="getNumericMin(output.Constraint)" (input)="updateNumericMin(outputIndex, $event)">
+                                            </div>
+                                            <div class="field">
+                                                <label>Max Value</label>
+                                                <input class="mj-input" type="number" [value]="getNumericMax(output.Constraint)" (input)="updateNumericMax(outputIndex, $event)">
+                                            </div>
                                         </div>
+                                    }
+                                }
+                                @if (output.Constraint?.Type === 'boolean' && IsDecisionPipeline) {
+                                    <div class="field rpe-mt">
+                                        <label>Decision Threshold (0.0 to 1.0) <span class="muted">— calibrated probability threshold for true</span></label>
+                                        <input
+                                            class="mj-input"
+                                            type="number"
+                                            min="0"
+                                            max="1"
+                                            step="0.05"
+                                            placeholder="0.5"
+                                            [value]="GetBooleanThreshold(output) ?? ''"
+                                            (input)="UpdateBooleanThreshold(outputIndex, $event)">
                                     </div>
                                 }
                             </div>
@@ -312,12 +437,30 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
                     </ul>
                 </div>
             }
+
+            <!-- TYPE SWITCH CONFIRMATION DIALOG -->
+            <mj-confirm-dialog
+                [(Visible)]="ShowTypeSwitchConfirm"
+                Type="warning"
+                Title="Switch Pipeline Type"
+                [Message]="'Switching to ' + (PendingPipelineType || 'selected type') + ' will affect existing outputs:'"
+                ConfirmText="Switch Anyway"
+                CancelText="Cancel"
+                (Confirmed)="OnTypeSwitchConfirmed()"
+                (Cancelled)="OnTypeSwitchCancelled()">
+                <ul class="fpb-confirm-issues">
+                    @for (issue of TypeSwitchIssues; track $index) {
+                        <li>{{ issue }}</li>
+                    }
+                </ul>
+            </mj-confirm-dialog>
         </div>
     `,
     styles: [`
         .fpb { display: flex; flex-direction: column; gap: 20px; }
         .rpe-desc { font-size: 13px; color: var(--mj-text-secondary); margin: -6px 0 16px 0; }
         .rpe-sec { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: var(--mj-radius-md, 10px); padding: 18px 20px; }
+        .fpb-type-sec { border-left: 3px solid var(--mj-brand-primary); }
         .rpe-sec-h { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
         .rpe-sec-h h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--mj-text-primary); }
         .rpe-sec-h .num { width: 24px; height: 24px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
@@ -341,6 +484,15 @@ export type EntityDocOption = Pick<MJEntityDocumentEntity, 'ID' | 'Name' | 'Enti
         .fpb-issues-card--error { background: rgba(239, 68, 68, 0.08); border: 1px solid var(--mj-status-error); color: var(--mj-status-error-text); }
         .fpb-issues-card h4 { margin: 0 0 8px 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
         .fpb-issues-card ul { margin: 0; padding-left: 20px; }
+        .fpb-confirm-issues { margin: 10px 0 0 0; padding-left: 20px; color: var(--mj-status-error-text, var(--mj-text-primary)); font-size: 13px; }
+        .fpb-confirm-issues li { margin-bottom: 4px; }
+        .fpb-levels-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .fpb-levels-list { display: flex; flex-direction: column; gap: 8px; }
+        .fpb-level-row { display: flex; align-items: center; gap: 8px; }
+        .fpb-level-num { width: 22px; height: 22px; display: grid; place-items: center; font-size: 11px; font-weight: 700; border-radius: var(--mj-radius-sm, 4px); background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); flex-shrink: 0; }
+        .fpb-enum-descriptions { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+        .fpb-enum-desc-row { display: flex; align-items: center; gap: 10px; }
+        .fpb-enum-val-badge { min-width: 90px; padding: 4px 8px; background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); border: 1px solid var(--mj-border-subtle); border-radius: var(--mj-radius-sm, 4px); font-size: 12px; font-weight: 600; text-align: center; flex-shrink: 0; }
     `],
 })
 export class FeaturePipelineBuilderComponent extends BaseAngularComponent implements OnInit, OnChanges {
@@ -360,6 +512,61 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         Outputs: [],
         Caching: { Cacheable: false },
     };
+
+    public AvailablePipelineTypes: PipelineTypeOption[] = [
+        { Name: 'LLM', Description: null },
+    ];
+    public ShowTypeSwitchConfirm = false;
+    public PendingPipelineType: string | null = null;
+    public TypeSwitchIssues: string[] = [];
+
+    public get CurrentPipelineTypeName(): string {
+        return this.spec.PipelineType?.trim() || 'LLM';
+    }
+
+    public get CurrentCapabilities(): FeaturePipelineDriverCapabilities {
+        return GetFeaturePipelineCapabilities(this.CurrentPipelineTypeName);
+    }
+
+    public get IsDecisionPipeline(): boolean {
+        return this.CurrentPipelineTypeName.toLowerCase() === 'decision';
+    }
+
+    public get SelectedPipelineTypeDescription(): string {
+        const cur = this.CurrentPipelineTypeName.toLowerCase();
+        const opt = this.AvailablePipelineTypes.find((t) => t.Name.toLowerCase() === cur);
+        return opt?.Description ?? '';
+    }
+
+    public get AvailableTargetModes(): Array<{ Value: OutputTarget['Mode']; Label: string }> {
+        const all: Array<{ Value: OutputTarget['Mode']; Label: string }> = [
+            { Value: 'field', Label: 'Entity Column (field)' },
+            { Value: 'child', Label: 'Child Rows (child)' },
+            { Value: 'tags', Label: 'Taxonomy Tags (tags)' },
+        ];
+        const supported = this.CurrentCapabilities.TargetModes;
+        return all.filter((m) => supported.includes(m.Value));
+    }
+
+    public get AvailableConstraintTypes(): Array<{ Value: string; Label: string }> {
+        const options: Array<{ Value: string; Label: string }> = [];
+        if (!this.IsDecisionPipeline) {
+            options.push({ Value: 'none', Label: 'None / Unconstrained' });
+        }
+        if (this.CurrentCapabilities.ConstraintTypes.includes('boolean')) {
+            options.push({ Value: 'boolean', Label: 'Boolean' });
+        }
+        if (this.CurrentCapabilities.ConstraintTypes.includes('enum')) {
+            options.push({ Value: 'enum', Label: 'Enum (Allowed Values)' });
+        }
+        if (this.CurrentCapabilities.ConstraintTypes.includes('numeric')) {
+            options.push({ Value: 'numeric', Label: this.IsDecisionPipeline ? 'Numeric (Levels)' : 'Numeric (Min/Max)' });
+        }
+        if (this.CurrentCapabilities.ConstraintTypes.includes('freetext')) {
+            options.push({ Value: 'freetext', Label: 'Free Text' });
+        }
+        return options;
+    }
 
     public AvailablePrompts: PromptOption[] = [];
 
@@ -467,6 +674,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         this.AvailableEntities = [...this.ProviderToUse.Entities].sort((a, b) =>
             (a.DisplayName || a.Name).localeCompare(b.DisplayName || b.Name)
         );
+        await this.loadPipelineTypes();
         await this.loadPrompts();
         await this.loadEntityDocs();
         this.SyncFromRecord();
@@ -491,6 +699,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                     this.spec.Context = parsed.Context ?? {};
                     this.spec.Caching = parsed.Caching ?? { Cacheable: false };
                     this.spec.ProcessorExtensionKey = parsed.ProcessorExtensionKey;
+                    this.spec.PipelineType = parsed.PipelineType;
                 }
             }
         }
@@ -525,6 +734,7 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             this.SelectedPrompt = this.AvailablePrompts.find((p) => UUIDsEqual(p.ID, this.Record?.PromptID)) ?? null;
         }
 
+        this.ensureLoadedTypeIncluded();
         this.recomputeValidation();
         this.cdr.detectChanges();
     }
@@ -532,6 +742,73 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
     /** @deprecated Use {@link SyncFromRecord}. */
     public syncFromRecord(): void {
         return this.SyncFromRecord();
+    }
+
+    private async loadPipelineTypes(): Promise<void> {
+        let activeRows: MJFeaturePipelineTypeEntity[] = [];
+        try {
+            await KnowledgeHubMetadataEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+            const engineTypes = KnowledgeHubMetadataEngine.Instance.FeaturePipelineTypes;
+            if (Array.isArray(engineTypes)) {
+                activeRows = engineTypes.filter((t) => t.Status === 'Active');
+            }
+        } catch (error) {
+            LogError('Error loading Feature Pipeline Types from KnowledgeHubMetadataEngine', undefined, error);
+        }
+
+        if (activeRows.length > 0) {
+            this.AvailablePipelineTypes = activeRows.map((t) => ({
+                Name: t.Name,
+                Description: t.Description || null,
+            }));
+            if (!this.AvailablePipelineTypes.some((t) => t.Name.toLowerCase() === 'llm')) {
+                this.AvailablePipelineTypes.unshift({
+                    Name: 'LLM',
+                    Description: null,
+                });
+            }
+        } else {
+            this.AvailablePipelineTypes = [
+                {
+                    Name: 'LLM',
+                    Description: null,
+                },
+            ];
+        }
+        this.ensureLoadedTypeIncluded();
+    }
+
+    private ensureLoadedTypeIncluded(): void {
+        const typeName = this.spec.PipelineType?.trim();
+        if (!typeName || typeName.toLowerCase() === 'llm') {
+            return;
+        }
+        const exists = this.AvailablePipelineTypes.some((t) => t.Name.toLowerCase() === typeName.toLowerCase());
+        if (exists) {
+            return;
+        }
+
+        let isInactive = false;
+        let desc: string | null = null;
+        try {
+            const engineTypes = KnowledgeHubMetadataEngine.Instance.FeaturePipelineTypes;
+            if (Array.isArray(engineTypes)) {
+                const match = engineTypes.find((t) => t.Name?.trim().toLowerCase() === typeName.toLowerCase());
+                if (match) {
+                    isInactive = match.Status !== 'Active';
+                    desc = match.Description || null;
+                }
+            }
+        } catch {
+            // Ignore
+        }
+
+        const label = isInactive ? `${typeName} (inactive)` : `${typeName} (unrecognized)`;
+        this.AvailablePipelineTypes.push({
+            Name: typeName,
+            DisplayName: label,
+            Description: desc,
+        });
     }
 
     private async loadPrompts(): Promise<void> {
@@ -655,6 +932,12 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                 EntityFieldName: this.EntityFields.length > 0 ? this.EntityFields[0].Name : '',
             },
         };
+        if (this.IsDecisionPipeline) {
+            newOutput.Constraint = {
+                Type: 'boolean',
+                OnViolation: 'fail',
+            };
+        }
         this.spec.Outputs.push(newOutput);
         this.emitChanges();
     }
@@ -714,6 +997,9 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         const target = this.spec.Outputs[index].Target;
         if (target.Mode === 'field') {
             target.EntityFieldName = fieldName;
+            if (this.spec.Outputs[index].Constraint?.Type === 'enum') {
+                this.prefillEnumValuesFromField(this.spec.Outputs[index]);
+            }
         }
         this.emitChanges();
     }
@@ -744,8 +1030,13 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             output.Constraint = undefined;
         } else if (type === 'enum') {
             output.Constraint = { Type: 'enum', Values: [], OnViolation: 'fail' };
+            this.prefillEnumValuesFromField(output);
         } else if (type === 'numeric') {
-            output.Constraint = { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'fail' };
+            if (this.IsDecisionPipeline) {
+                output.Constraint = { Type: 'numeric', Levels: ['Low', 'Medium', 'High'], OnViolation: 'fail' };
+            } else {
+                output.Constraint = { Type: 'numeric', Min: 0, Max: 100, OnViolation: 'fail' };
+            }
         } else if (type === 'boolean') {
             output.Constraint = { Type: 'boolean', OnViolation: 'fail' };
         } else if (type === 'freetext') {
@@ -921,7 +1212,211 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
         return this.UpdateCacheScope(event);
     }
 
+    public OnPipelineTypeSelect(event: Event): void {
+        const target = event.target as HTMLSelectElement;
+        const newType = target.value;
+        const currentType = this.CurrentPipelineTypeName;
+        if (newType.toLowerCase() === currentType.toLowerCase()) {
+            return;
+        }
+
+        const isNewTypeLLM = newType.trim().toLowerCase() === 'llm';
+        const candidateSpec: DataFeatureSpec = {
+            ...this.spec,
+            PipelineType: isNewTypeLLM ? undefined : newType.trim(),
+        };
+
+        const newCapabilities = GetFeaturePipelineCapabilities(newType);
+        const lookup = this.buildFieldValuesLookup();
+        const capIssues = ValidateOutputsAgainstCapabilities(candidateSpec, newCapabilities, lookup);
+
+        let specIssues: string[] = [];
+        const entity = this.Record?.EntityID ? this.ProviderToUse.EntityByID(this.Record.EntityID) : null;
+        if (entity) {
+            const stub: EntityMetadataStub = {
+                Name: entity.Name,
+                Fields: (entity.Fields ?? []).map((f) => ({
+                    Name: f.Name,
+                    TSType: f.TSType,
+                    IsVirtual: f.IsVirtual,
+                    AllowsNull: f.AllowsNull,
+                    RelatedEntity: f.RelatedEntity,
+                    RelatedEntityID: f.RelatedEntityID,
+                    EntityFieldValues: f.EntityFieldValues ? f.EntityFieldValues.map((v) => ({ Value: v.Value, Code: v.Code })) : undefined,
+                })),
+            };
+            specIssues = validateSpec(candidateSpec, stub).filter((i) => i.Severity === 'error').map((i) => i.Message);
+        }
+
+        const allIssues = Array.from(new Set([...capIssues, ...specIssues]));
+
+        if (allIssues.length > 0) {
+            target.value = currentType;
+            this.PendingPipelineType = newType;
+            this.TypeSwitchIssues = allIssues;
+            this.ShowTypeSwitchConfirm = true;
+            this.cdr.detectChanges();
+        } else {
+            this.ApplyPipelineTypeChange(newType);
+        }
+    }
+
+    public OnTypeSwitchConfirmed(): void {
+        this.ShowTypeSwitchConfirm = false;
+        if (this.PendingPipelineType) {
+            this.ApplyPipelineTypeChange(this.PendingPipelineType);
+            this.PendingPipelineType = null;
+        }
+        this.TypeSwitchIssues = [];
+        this.cdr.detectChanges();
+    }
+
+    public OnTypeSwitchCancelled(): void {
+        this.ShowTypeSwitchConfirm = false;
+        this.PendingPipelineType = null;
+        this.TypeSwitchIssues = [];
+        this.cdr.detectChanges();
+    }
+
+    public ApplyPipelineTypeChange(newType: string): void {
+        if (newType.trim().toLowerCase() === 'llm') {
+            delete this.spec.PipelineType;
+        } else {
+            this.spec.PipelineType = newType.trim();
+        }
+        this.emitChanges();
+    }
+
+    public GetNumericLevels(output: DataFeatureOutput): string[] {
+        if (!output.Constraint || output.Constraint.Type !== 'numeric' || !Array.isArray(output.Constraint.Levels)) {
+            return [];
+        }
+        return output.Constraint.Levels;
+    }
+
+    public AddNumericLevel(index: number): void {
+        const output = this.spec.Outputs[index];
+        if (output?.Constraint?.Type === 'numeric') {
+            if (!Array.isArray(output.Constraint.Levels) || output.Constraint.Levels.length === 0) {
+                output.Constraint.Levels = ['Low', 'Medium', 'High'];
+                this.emitChanges();
+                return;
+            }
+            if (output.Constraint.Levels.length < 10) {
+                output.Constraint.Levels.push(`Level ${output.Constraint.Levels.length + 1}`);
+                this.emitChanges();
+            }
+        }
+    }
+
+    public RemoveNumericLevel(outputIndex: number, levelIndex: number): void {
+        const output = this.spec.Outputs[outputIndex];
+        if (output?.Constraint?.Type === 'numeric' && Array.isArray(output.Constraint.Levels)) {
+            if (output.Constraint.Levels.length > 2) {
+                output.Constraint.Levels.splice(levelIndex, 1);
+                this.emitChanges();
+            }
+        }
+    }
+
+    public UpdateNumericLevel(outputIndex: number, levelIndex: number, event: Event): void {
+        const val = (event.target as HTMLInputElement).value;
+        const output = this.spec.Outputs[outputIndex];
+        if (output?.Constraint?.Type === 'numeric' && Array.isArray(output.Constraint.Levels)) {
+            output.Constraint.Levels[levelIndex] = val;
+            this.emitChanges();
+        }
+    }
+
+    public MoveNumericLevel(outputIndex: number, levelIndex: number, direction: 'up' | 'down'): void {
+        const output = this.spec.Outputs[outputIndex];
+        if (output?.Constraint?.Type === 'numeric' && Array.isArray(output.Constraint.Levels)) {
+            const targetIndex = direction === 'up' ? levelIndex - 1 : levelIndex + 1;
+            if (targetIndex >= 0 && targetIndex < output.Constraint.Levels.length) {
+                const item = output.Constraint.Levels.splice(levelIndex, 1)[0];
+                output.Constraint.Levels.splice(targetIndex, 0, item);
+                this.emitChanges();
+            }
+        }
+    }
+
+    public GetEnumValues(output: DataFeatureOutput): string[] {
+        if (output.Constraint && output.Constraint.Type === 'enum' && Array.isArray(output.Constraint.Values)) {
+            return output.Constraint.Values;
+        }
+        return [];
+    }
+
+    public GetEnumValueDescription(output: DataFeatureOutput, val: string): string {
+        if (output.Constraint && output.Constraint.Type === 'enum') {
+            return output.Constraint.ValueDescriptions?.[val] ?? '';
+        }
+        return '';
+    }
+
+    public UpdateEnumValueDescription(outputIndex: number, val: string, event: Event): void {
+        const desc = (event.target as HTMLInputElement).value;
+        const output = this.spec.Outputs[outputIndex];
+        if (output?.Constraint && output.Constraint.Type === 'enum') {
+            if (!output.Constraint.ValueDescriptions) {
+                output.Constraint.ValueDescriptions = {};
+            }
+            output.Constraint.ValueDescriptions[val] = desc;
+            this.emitChanges();
+        }
+    }
+
+    public GetBooleanThreshold(output: DataFeatureOutput): number | null {
+        if (output.Constraint && output.Constraint.Type === 'boolean' && output.Constraint.Threshold !== undefined) {
+            return output.Constraint.Threshold;
+        }
+        return null;
+    }
+
+    public UpdateBooleanThreshold(outputIndex: number, event: Event): void {
+        const raw = (event.target as HTMLInputElement).value.trim();
+        const output = this.spec.Outputs[outputIndex];
+        if (output?.Constraint && output.Constraint.Type === 'boolean') {
+            if (raw === '') {
+                delete output.Constraint.Threshold;
+            } else {
+                const val = parseFloat(raw);
+                output.Constraint.Threshold = isNaN(val) ? undefined : val;
+            }
+            this.emitChanges();
+        }
+    }
+
+    private prefillEnumValuesFromField(output: DataFeatureOutput): void {
+        if (output.Target.Mode !== 'field' || output.Constraint?.Type !== 'enum') {
+            return;
+        }
+        const fieldName = output.Target.EntityFieldName;
+        if (!fieldName) {
+            return;
+        }
+        const field = this.EntityFields.find((f) => f.Name === fieldName);
+        if (field && Array.isArray(field.EntityFieldValues) && field.EntityFieldValues.length > 0) {
+            if (!output.Constraint.Values || output.Constraint.Values.length === 0) {
+                output.Constraint.Values = field.EntityFieldValues.map((v) => v.Value);
+            }
+            if (this.IsDecisionPipeline) {
+                if (!output.Constraint.ValueDescriptions) {
+                    output.Constraint.ValueDescriptions = {};
+                }
+                for (const v of field.EntityFieldValues) {
+                    if (!output.Constraint.ValueDescriptions[v.Value] && v.Description) {
+                        output.Constraint.ValueDescriptions[v.Value] = v.Description;
+                    }
+                }
+            }
+        }
+    }
+
     private emitChanges(): void {
+        if (this.spec.PipelineType && this.spec.PipelineType.trim().toLowerCase() === 'llm') {
+            delete this.spec.PipelineType;
+        }
         if (this.Record) {
             this.spec.Name = this.Record.Name || '';
             this.spec.Description = this.Record.Description || '';
@@ -947,6 +1442,13 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
             }
         }
         this.Record.OutputMapping = JSON.stringify({ fields });
+    }
+
+    private buildFieldValuesLookup(): FeaturePipelineFieldValueLookup {
+        return (fieldName: string) => {
+            const field = this.EntityFields.find((f) => f.Name.toLowerCase() === fieldName.toLowerCase());
+            return field?.EntityFieldValues ? field.EntityFieldValues.map((v) => ({ Value: v.Value, Description: v.Description })) : undefined;
+        };
     }
 
     private recomputeValidation(): void {
@@ -976,6 +1478,18 @@ export class FeaturePipelineBuilderComponent extends BaseAngularComponent implem
                 }]
                 : [];
         }
+
+        const lookup = this.buildFieldValuesLookup();
+        const capIssues = ValidateOutputsAgainstCapabilities(this.spec, this.CurrentCapabilities, lookup);
+        for (const capIssue of capIssues) {
+            this.ValidationErrors.push({
+                Path: 'Outputs',
+                Severity: 'error',
+                Message: capIssue,
+                FixRecommendation: 'Adjust output configuration to match the selected pipeline capabilities.',
+            });
+        }
+
         const hasErrors = this.ValidationErrors.some((i) => i.Severity === 'error');
         this.ValidChange.emit(!hasErrors);
     }

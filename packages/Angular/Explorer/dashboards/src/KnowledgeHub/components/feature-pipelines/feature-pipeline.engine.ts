@@ -65,6 +65,8 @@ export interface FeaturePipelineSummary {
   LastRunSuccess: number | null;
   /** Records that errored in the most recent run, or null. */
   LastRunErrors: number | null;
+  /** The pipeline type ('LLM' or 'Decision' or custom). Defaults to 'LLM' when unset. */
+  PipelineType: string;
 }
 
 /**
@@ -181,6 +183,7 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
       LastRunProcessed: latest?.ProcessedItems ?? null,
       LastRunSuccess: latest?.SuccessCount ?? null,
       LastRunErrors: latest?.ErrorCount ?? null,
+      PipelineType: FeaturePipelineEngine.derivePipelineType(p.Configuration),
     };
   }
 
@@ -256,4 +259,22 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     }
     return [];
   }
+
+  /**
+   * Best-effort pipeline type derived from the Record Process `Configuration` JSON
+   * (which serializes `DataFeatureSpec`). Returns 'LLM' when unset, empty, or unparseable.
+   */
+  private static derivePipelineType(config: string | null): string {
+    if (!config) return 'LLM';
+    try {
+      const parsed = JSON.parse(config);
+      if (parsed && typeof parsed === 'object' && typeof parsed.PipelineType === 'string' && parsed.PipelineType.trim().length > 0) {
+        return parsed.PipelineType.trim();
+      }
+    } catch {
+      // malformed JSON, default to LLM
+    }
+    return 'LLM';
+  }
 }
+
