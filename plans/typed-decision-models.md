@@ -1041,6 +1041,15 @@ write an `AIPromptRun` with cost, and are covered by unit tests. A flow step can
 **Goal:** decide whether a native provider earns its dependency, using MJ's own harness rather than
 vendor claims.
 
+> **Status, 2026-09-29: measured.** The results and the recommendation are in
+> `typed-decision-phase2-results.md`. In short:
+> - **Jev** (calibrated balanced accuracy 0.937) beats **LLM Decision** (0.861), and is faster and
+>   cheaper. Keep Jev as the primary, with LLM Decision as the failover.
+> - Raw probabilities must be calibrated, per model.
+> - Conversation routing's thresholds are now set from data (#4876).
+> - The harness is #4875. Jev's sample was cut to 82 points when the OpenRouter credit ran out;
+>   rerun it in full.
+
 ### Task 2.1 — Add a decision arm to the eval harness
 
 MJ already has a `Prompt Eval` test type: *"Evaluates a SINGLE model decision from frozen mid-loop
