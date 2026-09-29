@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vite
 import { EventEmitter } from '@angular/core';
 import type { ChoiceAnswer, DecisionAnswer, LikelihoodAnswer } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ConversationUtility, type MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { ConversationUtility, DECISION_ROUTING_TIMEOUT_MS, type MJAIAgentEntityExtended, type RoutingAgent } from '@memberjunction/ai-core-plus';
 import type { RunDecisionParams, RunDecisionResult } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -25,7 +25,6 @@ import type { BeforeAgentTurnEventArgs } from '../lib/events/chat-events';
 import { PlanModePreference } from '../lib/utils/plan-mode-preference';
 import type { AgentArtifactSummary } from '../lib/utils/agent-artifact-summary';
 import type { AgentPayloadSource } from '../lib/services/conversation-agent.service';
-import { DECISION_ROUTING_TIMEOUT_MS, type RoutingAgent } from '../lib/utils/decision-routing';
 import type { MentionParseResult } from '../lib/models/conversation-state.model';
 
 const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.' } satisfies RoutingAgent;

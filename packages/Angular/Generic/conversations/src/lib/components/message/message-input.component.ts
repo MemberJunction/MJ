@@ -9,22 +9,25 @@ import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { BeforeAgentTurnEventArgs, AfterAgentTurnEventArgs } from '../../events/chat-events';
 import type { AgentReplyMode, AgentTurnHandler, AgentTurnRequest, AgentTurnResult, AgentTurnTarget } from '../../models/agent-turn.model';
-import { ResolveAgentTurn, IsAgentAllowed, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
+import { ResolveAgentTurn, FindDisallowedTaskGraphAgents, type AgentTurnCandidates, type AgentTurnRules } from '../../utils/agent-turn-routing';
 import {
   ApplyRoutingDecision,
   ArtifactVersionForTurn,
+  RunRoutingDecision,
+  ShouldRunRoutingDecision
+} from '../../utils/decision-routing';
+import {
   BuildRecentTurns,
   BuildRoutingArtifactVersions,
   CanAskRoutingDecision,
   CollectRoutingParticipants,
-  RunRoutingDecision,
-  ShouldRunRoutingDecision,
+  IsAgentAllowed,
   type RoutingAgent,
   type RoutingArtifactVersion,
   type RoutingDecisionInput,
   type RoutingDecisionOutcome,
   type RoutingParticipant
-} from '../../utils/decision-routing';
+} from '@memberjunction/ai-core-plus';
 import type { MentionPerson } from '@memberjunction/conversations-runtime';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
