@@ -1,5 +1,5 @@
 /**
- * permission-engine.checks.ts — the 'permission-engine' bundle (PE1–PE12): live proof of the
+ * permission-engine.checks.ts — the 'permission-engine' bundle (PE1–PE15): live proof of the
  * UNIFIED PERMISSIONS model described in guides/UNIFIED_PERMISSIONS_GUIDE.md.
  *
  * TRANSPORT: **CLIENT-FIRST**. Every check here runs over the real GraphQL wire via
@@ -66,7 +66,12 @@
  * throwaway `MJ: Permission Domains` rows tagged `(mj-integration-test — safe to delete)`, removed
  * in a best-effort Teardown. No existing record — and no real user's permissions — is ever touched.
  */
-import { RunView, UserInfo, UserRoleInfo, PermissionProviderBase, AuthorizationEvaluator } from '@memberjunction/core';
+import { randomUUID } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { BaseEntity, RunView, UserInfo, UserRoleInfo, PermissionProviderBase, AuthorizationEvaluator } from '@memberjunction/core';
+import { PushService, SyncEngine } from '@memberjunction/metadata-sync';
 import type {
     IMetadataProvider,
     NormalizedPermission,
@@ -1021,6 +1026,96 @@ export async function CheckPe13_UnresolvableProviderPoisonsFanOut(ctx: Integrati
     return CheckPe13UnresolvableProviderPoisonsFanOut(ctx);
 }
 
+const RLS_ENTITY = 'MJ: Row Level Security Filters';
+
+/**
+ * PE14 — Developer can create and update row-level security filters (MJ#4837).
+ *
+ * The grant lives in metadata, not a migration. GetUserPermisions is the check Save()
+ * runs, so this fails on a migrations-only database and passes once MJ metadata is pushed.
+ * The Developer row is asserted on its own so a different role cannot make the check pass.
+ */
+export async function CheckPe14DeveloperCanWriteRowLevelSecurityFilters(ctx: IntegrationCheckContext): Promise<void> {
+    const entity = ctx.Provider.EntityByName(RLS_ENTITY);
+    if (!entity) {
+        Assert(false, `PE14: '${RLS_ENTITY}' is not loaded`);
+        return;
+    }
+    const developer = entity.Permissions.find((row) => row.Role === 'Developer' && !row.IsDeny);
+    if (!developer) {
+        Assert(false, `PE14: Developer has no Allow row on '${RLS_ENTITY}'`);
+        return;
+    }
+    AssertEqual(!!developer.CanCreate, true, 'PE14: Developer Allow row CanCreate');
+    AssertEqual(!!developer.CanUpdate, true, 'PE14: Developer Allow row CanUpdate');
+
+    const perms = entity.GetUserPermisions(ctx.User);
+    if (!perms) {
+        Assert(false, 'PE14: GetUserPermisions returned null');
+        return;
+    }
+    AssertEqual(perms.CanCreate, true, `PE14: context user CanCreate on '${RLS_ENTITY}' (MJ#4837)`);
+    AssertEqual(perms.CanUpdate, true, `PE14: context user CanUpdate on '${RLS_ENTITY}' (MJ#4837)`);
+}
+
+/**
+ * PE15 — a one-record push of an MJ: Row Level Security Filters row succeeds (MJ#4837).
+ * Before the Developer grant, System's save is refused with a Create permission error.
+ */
+export async function CheckPe15OneRecordPushOfARowLevelSecurityFilter(ctx: IntegrationCheckContext): Promise<void> {
+    const name = `zzz-pe15 RLS ${Date.now()}`;
+    const id = randomUUID().toUpperCase();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-pe15-'));
+    const folder = path.join(root, 'filters');
+    let pushError: unknown;
+    try {
+        fs.mkdirSync(folder);
+        fs.writeFileSync(path.join(root, '.mj-sync.json'), JSON.stringify({
+            version: '1.0.0',
+            push: { autoCreateMissingRecords: true },
+            directoryOrder: ['filters'],
+        }));
+        fs.writeFileSync(path.join(folder, '.mj-sync.json'), JSON.stringify({
+            entity: RLS_ENTITY,
+            filePattern: '**/.*.json',
+        }));
+        fs.writeFileSync(path.join(folder, '.filter.json'), JSON.stringify({
+            primaryKey: { ID: id },
+            fields: { Name: name, Description: 'PE15', FilterText: '1 = 0' },
+        }));
+        const engine = new SyncEngine(ctx.User);
+        await engine.initialize();
+        const service = new PushService(engine, ctx.User);
+        try {
+            await service.push({ dir: root });
+        } catch (error) {
+            pushError = error;
+        }
+        Assert(pushError === undefined, `PE15: pushing one '${RLS_ENTITY}' record failed: ${pushError instanceof Error ? pushError.message : String(pushError)}`);
+        const rv = new RunView();
+        const found = await rv.RunView({
+            EntityName: RLS_ENTITY,
+            ExtraFilter: `ID='${id}'`,
+            ResultType: 'count_only',
+        }, ctx.User);
+        Assert(found.Success, `PE15: counting the new filter failed: ${found.ErrorMessage}`);
+        AssertEqual(found.TotalRowCount, 1, 'PE15: the pushed filter is not in the database');
+    } finally {
+        const rv = new RunView();
+        const listed = await rv.RunView<BaseEntity>({
+            EntityName: RLS_ENTITY,
+            ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
+            ResultType: 'entity_object',
+        }, ctx.User);
+        if (listed.Success) {
+            for (const row of listed.Results) {
+                await row.Delete();
+            }
+        }
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────────────────
 // registration
 // ─────────────────────────────────────────────────────────────────────────────────────────
@@ -1043,7 +1138,9 @@ export const PermissionEngineChecks: NamedCheck[] = [
     // now reports resolution failure explicitly instead of returning a hollow base instance, and
     // the fan-out defers each provider call so a SYNCHRONOUS throw becomes a rejection allSettled
     // can isolate. Verified green end-to-end 2026-07-19. It stays as the regression pin.
-    { Id: 'permission-engine.PE13', Name: 'PE13: an unresolvable provider class must not poison the GetAllUserPermissions fan-out', Fn: CheckPe13UnresolvableProviderPoisonsFanOut, RequiresMutation: true }
+    { Id: 'permission-engine.PE13', Name: 'PE13: an unresolvable provider class must not poison the GetAllUserPermissions fan-out', Fn: CheckPe13UnresolvableProviderPoisonsFanOut, RequiresMutation: true },
+    { Id: 'permission-engine.PE14', Name: 'PE14: Developer can create and update MJ: Row Level Security Filters', Fn: CheckPe14DeveloperCanWriteRowLevelSecurityFilters },
+    { Id: 'permission-engine.PE15', Name: 'PE15: a one-record push of an MJ: Row Level Security Filters row succeeds', Fn: CheckPe15OneRecordPushOfARowLevelSecurityFilter, RequiresMutation: true },
 ];
 
 for (const check of PermissionEngineChecks) {
