@@ -121,8 +121,8 @@ import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from
 import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
-import { AgentDecisionService } from './AgentDecisionService';
-import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from './agent-types/loop-agent-prompt-params';
+import { AgentDecisionService, DecisionQuestionMapping } from './AgentDecisionService';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS, MAX_DECISION_REQUESTS_PER_TURN } from './agent-types/loop-agent-prompt-params';
 import {
     ApplyCatalogNarrowing,
     BuildCatalogNarrowingQuestions,
@@ -442,6 +442,19 @@ type DecisionOutcome =
         SkippedCount?: number;
     }
     | { Error: string };
+
+/**
+ * Decision requests a prompt did not run straight away, because the step that carried them can end
+ * the run, and then no turn would read their answers.
+ */
+interface HeldDecisionRequests {
+    Requests: AgentDecisionRequest[];
+    /** The payload the prompt left, which the requests' `payload.` paths read. */
+    Payload: unknown;
+    PromptParams: Record<string, unknown> | undefined;
+    /** Why they were held, for the log line when they are skipped. */
+    Reason: string;
+}
 
 export class BaseAgent {
     /**
@@ -1148,6 +1161,13 @@ export class BaseAgent {
 
     /** The longest the catalog narrowing decision may take before the run shows the full catalog. */
     private static readonly CATALOG_NARROWING_TIMEOUT_MS = 30000;
+
+    /**
+     * Decision requests held back by the prompt that made them, because the step that carried them
+     * can end the run. They run before the next prompt, or are skipped when the run ends first.
+     * @private
+     */
+    private _heldDecisions: HeldDecisionRequests | undefined;
 
     /**
      * IDs of skills already activated during this run. Prevents re-activation from re-appending
@@ -3220,6 +3240,7 @@ export class BaseAgent {
             // Check if we should continue or terminate
             if (nextStep.terminate) {
                 continueExecution = false;
+                this.skipHeldDecisions(params);
                 this.logStatus(`🏁 Agent '${params.agent.Name}' terminating after ${stepCount} steps with result: ${nextStep.step}`, true, params);
             } else {
                 currentNextStep = nextStep;
@@ -7076,18 +7097,25 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Runs `fn` over `items` with at most `limit` calls in flight, keeping results in input order.
+     * One call's failure never rejects the others: a call that throws is settled with `onError`'s
+     * result in its place.
      */
     private async runWithConcurrencyLimit<T, R>(
         items: T[],
         limit: number,
-        fn: (item: T, index: number) => Promise<R>
+        fn: (item: T, index: number) => Promise<R>,
+        onError: (error: unknown, item: T, index: number) => R
     ): Promise<R[]> {
         const results = new Array<R>(items.length);
         let next = 0;
         const worker = async (): Promise<void> => {
             while (next < items.length) {
                 const index = next++;
-                results[index] = await fn(items[index], index);
+                try {
+                    results[index] = await fn(items[index], index);
+                } catch (error) {
+                    results[index] = onError(error, items[index], index);
+                }
             }
         };
         await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
@@ -7099,6 +7127,9 @@ The context is now within limits. Please retry your request with the recovered c
      * (StepType 'Decision'), with bounded concurrency. A failed request never fails the run: it
      * becomes that request's `success: false`, which the agent reads on its next turn.
      *
+     * At most `decisionsMaxRequests` requests run (default {@link MAX_DECISION_REQUESTS_PER_TURN}).
+     * Each request over the cap is not run and records no step; its result says why.
+     *
      * @since 2.132.0
      */
     protected async executeDecisionRequestsAsSteps(
@@ -7107,13 +7138,45 @@ The context is now within limits. Please retry your request with the recovered c
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
     ): Promise<AgentDecisionResult[]> {
-        return this.runWithConcurrencyLimit(requests, BaseAgent.DECISION_CONCURRENCY,
-            req => this.executeSingleDecisionRequestAsStep(req, finalPayload, agentTypePromptParams, params));
+        const cap = this.decisionRequestCap(agentTypePromptParams);
+        const overCap = requests.slice(cap);
+        if (overCap.length > 0) {
+            this.logStatus(`[Decisions] ${requests.length} decision requests on one turn — answering the first ${cap}, skipping ${overCap.length} (per-turn cap)`, true, params);
+        }
+        const results = await this.runWithConcurrencyLimit(requests.slice(0, cap), BaseAgent.DECISION_CONCURRENCY,
+            req => this.executeSingleDecisionRequestAsStep(req, finalPayload, agentTypePromptParams, params),
+            (error, req, index): AgentDecisionResult => ({
+                id: this.decisionRequestId(req, index),
+                success: false,
+                error: `The decision request failed: ${error instanceof Error ? error.message : String(error)}`,
+            }));
+        const skipped = overCap.map((req, i): AgentDecisionResult => ({
+            id: this.decisionRequestId(req, cap + i),
+            success: false,
+            error: `Not run: at most ${cap} decision requests are answered per turn. Ask again next turn if you still need it.`,
+        }));
+        return [...results, ...skipped];
+    }
+
+    /** The most decision requests one turn may run: `decisionsMaxRequests`, or {@link MAX_DECISION_REQUESTS_PER_TURN}. */
+    private decisionRequestCap(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        const configured = agentTypePromptParams?.decisionsMaxRequests;
+        return typeof configured === 'number' && Number.isInteger(configured) && configured >= 0
+            ? configured
+            : MAX_DECISION_REQUESTS_PER_TURN;
+    }
+
+    /** A request's id for its result, or its position when the model sent no usable id. */
+    private decisionRequestId(request: AgentDecisionRequest, index: number): string {
+        const id = request && typeof request === 'object' ? request.id : undefined;
+        return typeof id === 'string' && id.length > 0 ? id : `request ${index + 1}`;
     }
 
     /**
      * Answers one decision request, either once against its `state` or once per item of its
-     * `forEachItemIn` array, and records it as a Decision step.
+     * `forEachItemIn` array, and records it as a Decision step. The request is unchecked model
+     * output, so any error finishes the step as failed rather than escaping: this never throws
+     * once the step exists.
      *
      * @since 2.132.0
      */
@@ -7129,16 +7192,40 @@ The context is now within limits. Please retry your request with the recovered c
             contextUser: params.contextUser,
             inputData: { id: request.id, state: request.state, forEachItemIn: request.forEachItemIn, questions: request.questions },
         });
-        const questions = request.questions && typeof request.questions === 'object'
-            ? AgentDecisionService.ToDecisionQuestions(request.questions)
-            : {};
-        if (Object.keys(questions).length === 0) {
-            return this.finishDecisionStep(step, request, { Error: 'At least one question is required' });
+        try {
+            const mapping: DecisionQuestionMapping = request.questions && typeof request.questions === 'object'
+                ? AgentDecisionService.ToDecisionQuestions(request.questions)
+                : { Questions: {}, Invalid: [] };
+            if (Object.keys(mapping.Questions).length === 0) {
+                const error = mapping.Invalid.length > 0
+                    ? `No valid questions: ${mapping.Invalid.join('; ')}`
+                    : 'At least one question is required';
+                return await this.finishDecisionStep(step, request, { Error: error });
+            }
+            if (mapping.Invalid.length > 0) {
+                this.logStatus(`[Decisions] "${request.id}": dropped ${mapping.Invalid.length} invalid question(s): ${mapping.Invalid.join('; ')}`, true, params);
+            }
+            const ask = this.decisionAsker(mapping.Questions, agentTypePromptParams, params);
+            const outcome = request.forEachItemIn
+                ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, step, ask)
+                : await this.askOnce(request, finalPayload, step, ask);
+            return await this.finishDecisionStep(step, request, outcome, mapping.Invalid);
+        } catch (error) {
+            const message = `The decision request failed: ${error instanceof Error ? error.message : String(error)}`;
+            return this.finishDecisionStep(step, request, { Error: message });
         }
+    }
+
+    /** Asks the request's questions about one state, with the configured decision prompt. */
+    private decisionAsker(
+        questions: Record<string, DecisionQuestion>,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams
+    ): (state: string) => Promise<AIDecisionRunResult> {
         const promptName = typeof agentTypePromptParams?.decisionPromptName === 'string'
             ? agentTypePromptParams.decisionPromptName
             : AgentDecisionService.DEFAULT_PROMPT_NAME;
-        const ask = (state: string): Promise<AIDecisionRunResult> => this._agentDecisionService.Ask({
+        return (state: string): Promise<AIDecisionRunResult> => this._agentDecisionService.Ask({
             State: state,
             Questions: questions,
             ContextUser: params.contextUser,
@@ -7146,16 +7233,13 @@ The context is now within limits. Please retry your request with the recovered c
             PromptName: promptName,
             CancellationToken: params.cancellationToken,
         });
-        const outcome = request.forEachItemIn
-            ? await this.askForEachItem(request, finalPayload, agentTypePromptParams, params, ask)
-            : await this.askOnce(request, finalPayload, ask);
-        return this.finishDecisionStep(step, request, outcome);
     }
 
     /** Asks the questions once, against the request's state. */
     private async askOnce(
         request: AgentDecisionRequest,
         finalPayload: unknown,
+        step: MJAIAgentRunStepEntityExtended,
         ask: (state: string) => Promise<AIDecisionRunResult>
     ): Promise<DecisionOutcome> {
         const state = this.resolveDecisionState(request.state, finalPayload);
@@ -7163,18 +7247,24 @@ The context is now within limits. Please retry your request with the recovered c
             return state;
         }
         const result = await ask(state.State);
+        this.attachDecisionPromptRun(step, result);
         if (!result.success) {
             return { Error: result.errorMessage || 'Decision evaluation failed' };
         }
         return { Answers: AgentDecisionService.SummarizeAnswers(result.Answers), Results: [result] };
     }
 
-    /** Asks the same questions of each item of a payload array, up to `decisionsMaxItems`. */
+    /**
+     * Asks the same questions of each item of a payload array, up to `decisionsMaxItems`. Each item's
+     * call is its own child Decision step of the request's step, carrying that call's prompt run, as
+     * each iteration of a ForEach is a child step of its loop step.
+     */
     private async askForEachItem(
         request: AgentDecisionRequest,
         finalPayload: unknown,
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams,
+        step: MJAIAgentRunStepEntityExtended,
         ask: (state: string) => Promise<AIDecisionRunResult>
     ): Promise<DecisionOutcome> {
         const target = this.resolvePayloadPath(request.forEachItemIn ?? '', finalPayload);
@@ -7187,12 +7277,53 @@ The context is now within limits. Please retry your request with the recovered c
         if (skippedCount) {
             this.logStatus(`[Decisions] "${request.forEachItemIn}" has ${target.length} items; asking the first ${maxItems} (${skippedCount} skipped)`, true, params);
         }
-        const results = await this.runWithConcurrencyLimit(items, BaseAgent.DECISION_CONCURRENCY, item => ask(this.decisionStateText(item)));
+        const results = await this.runWithConcurrencyLimit(items, BaseAgent.DECISION_CONCURRENCY,
+            (item, index) => this.askItemAsStep(request, item, index, step, ask, params),
+            (error): AIDecisionRunResult => ({ success: false, errorMessage: error instanceof Error ? error.message : String(error), Answers: {} }));
         const failedIndex = results.findIndex(r => !r.success);
         if (failedIndex >= 0) {
             return { Error: `Item ${failedIndex}: ${results[failedIndex].errorMessage || 'decision evaluation failed'}` };
         }
         return { Answers: results.map(r => AgentDecisionService.SummarizeAnswers(r.Answers)), Results: results, SkippedCount: skippedCount };
+    }
+
+    /** Asks about one item of a `forEachItemIn` request, recorded as a child step of the request's step. */
+    private async askItemAsStep(
+        request: AgentDecisionRequest,
+        item: unknown,
+        index: number,
+        parentStep: MJAIAgentRunStepEntityExtended,
+        ask: (state: string) => Promise<AIDecisionRunResult>,
+        params: ExecuteAgentParams
+    ): Promise<AIDecisionRunResult> {
+        const itemStep = await this.createStepEntity({
+            stepType: 'Decision',
+            stepName: `Decision: ${request.id} (item ${index})`,
+            contextUser: params.contextUser,
+            inputData: { id: request.id, item: index },
+            parentId: parentStep.ID,
+        });
+        let result: AIDecisionRunResult;
+        try {
+            result = await ask(this.decisionStateText(item));
+        } catch (error) {
+            result = { success: false, errorMessage: `The decision call failed: ${error instanceof Error ? error.message : String(error)}`, Answers: {} };
+        }
+        this.attachDecisionPromptRun(itemStep, result);
+        await this.finalizeStepEntity(itemStep, result.success, result.success ? undefined : result.errorMessage,
+            result.success ? { answers: AgentDecisionService.SummarizeAnswers(result.Answers) } : undefined);
+        return result;
+    }
+
+    /**
+     * Links a decision call's prompt run to its step, as the Prompt step links its own, so the run's
+     * cost and token totals and its `MaxCostPerRun` / `MaxTokensPerRun` checks count the call.
+     */
+    private attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
+        if (result.promptRun?.ID) {
+            step.TargetLogID = result.promptRun.ID;
+            step.PromptRun = result.promptRun; // transient related object (not a persisted field)
+        }
     }
 
     /** A literal state, or a value read from the payload by a `payload.` path. */
@@ -7225,7 +7356,8 @@ The context is now within limits. Please retry your request with the recovered c
     private async finishDecisionStep(
         step: MJAIAgentRunStepEntityExtended,
         request: AgentDecisionRequest,
-        outcome: DecisionOutcome
+        outcome: DecisionOutcome,
+        droppedQuestions: string[] = []
     ): Promise<AgentDecisionResult> {
         if ('Error' in outcome) {
             await this.finalizeStepEntity(step, false, outcome.Error, { error: outcome.Error });
@@ -7240,8 +7372,90 @@ The context is now within limits. Please retry your request with the recovered c
             model: first?.DecisionResult?.ResolvedModel ?? first?.modelInfo?.modelName,
             promptRunId: first?.promptRun?.ID,
             driverClass: first?.DriverClass,
+            ...(droppedQuestions.length > 0 && { droppedQuestions }),
         });
         return { id: request.id, success: true, answers: outcome.Answers, skippedCount: outcome.SkippedCount };
+    }
+
+    /**
+     * Answers the decision requests a prompt returned, or holds them when the step that carries
+     * them can end the run, because then no turn would read their answers. Held requests run before
+     * the next prompt ({@link runHeldDecisions}), or are skipped if the run ends first
+     * ({@link skipHeldDecisions}).
+     */
+    private async processTurnDecisions(
+        decisions: AgentDecisionRequest[],
+        nextStep: BaseAgentNextStep,
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        const responseTypeRules = agentTypePromptParams?.includeResponseTypeDefinition as Record<string, unknown> | undefined;
+        if (responseTypeRules?.decisions === false) {
+            this.logStatus(`[Decisions] LLM requested decisions but feature is disabled (includeResponseTypeDefinition.decisions=false) — skipped`, true, params);
+            return;
+        }
+        if (!Array.isArray(decisions)) {
+            this.injectDecisionResultsMessage(params, [{ id: 'decisions', success: false, error: '"decisions" must be an array of decision requests' }]);
+            return;
+        }
+        const ids = decisions.map((d, i) => this.decisionRequestId(d, i)).join(', ');
+        const holdReason = this.decisionsHoldReason(nextStep);
+        if (holdReason) {
+            this._heldDecisions = { Requests: decisions, Payload: finalPayload, PromptParams: agentTypePromptParams, Reason: holdReason };
+            this.logStatus(`[Decisions] Holding ${decisions.length} decision request(s) (${ids}) until the step has run: ${holdReason}`, true, params);
+            return;
+        }
+        this.logStatus(`[Decisions] LLM requested ${decisions.length} decision request(s): ${ids}`, true, params);
+        const decisionResults = await this.executeDecisionRequestsAsSteps(decisions, finalPayload, agentTypePromptParams, params);
+        this.injectDecisionResultsMessage(params, decisionResults);
+    }
+
+    /**
+     * Why the decisions sent with this step would be paid for and never read, or `undefined` when
+     * the next turn reads them. Three ways a step's own outcome ends the run: a passing finishIf gate
+     * (only an Actions step or a single sub-agent is gated), a sub-agent's `terminateAfter`, and
+     * client tools sent with `taskComplete`, which end the run once the tools return. Every other
+     * step, including client tools without `taskComplete`, goes on to a prompt that reads them.
+     */
+    private decisionsHoldReason(step: BaseAgentNextStep): string | undefined {
+        const isSingleSubAgent = step.step === 'Sub-Agent' && !!step.subAgent && !step.subAgents?.length;
+        if (step.finishIf && (step.step === 'Actions' || isSingleSubAgent) && this.finishIfSettings().Enabled) {
+            return `the ${step.step} step carries a finishIf gate, and a passing gate ends the run`;
+        }
+        if (step.step === 'Sub-Agent' && this.getRequestedSubAgents(step).some(r => r.terminateAfter === true)) {
+            return 'the Sub-Agent step has terminateAfter, which ends the run after it';
+        }
+        if (step.step === 'ClientTools' as string && step.terminate === true) {
+            return 'the client tools were sent with taskComplete, which ends the run once they return';
+        }
+        return undefined;
+    }
+
+    /**
+     * Runs the decision requests a prompt held back, now that the step that carried them has run
+     * without ending the run, so the prompt about to run reads their answers.
+     */
+    private async runHeldDecisions(params: ExecuteAgentParams): Promise<void> {
+        const held = this._heldDecisions;
+        if (!held) {
+            return;
+        }
+        this._heldDecisions = undefined;
+        this.logStatus(`[Decisions] The run continues, so answering ${held.Requests.length} held decision request(s)`, true, params);
+        const results = await this.executeDecisionRequestsAsSteps(held.Requests, held.Payload, held.PromptParams, params);
+        this.injectDecisionResultsMessage(params, results);
+    }
+
+    /** Skips the decision requests a prompt held back, because the step that carried them ended the run. */
+    private skipHeldDecisions(params: ExecuteAgentParams): void {
+        const held = this._heldDecisions;
+        if (!held) {
+            return;
+        }
+        this._heldDecisions = undefined;
+        const ids = held.Requests.map((d, i) => this.decisionRequestId(d, i)).join(', ');
+        this.logStatus(`[Decisions] Skipped ${held.Requests.length} held decision request(s) (${ids}) without asking them: the run ended after the step that carried them (${held.Reason}), so no turn would read the answers`, false, params);
     }
 
     /**
@@ -7991,6 +8205,12 @@ The context is now within limits. Please retry your request with the recovered c
         if (!actionResults.every(r => r.success && r.result?.Success === true)) {
             return undefined;
         }
+        // AIDirectives are instructions for the model's next turn, which a passing gate would take away.
+        const withDirectives = actionSummaries.filter(a => (a.aiDirectives?.length ?? 0) > 0).map(a => a.actionName);
+        if (withDirectives.length > 0) {
+            this.logStatus(`[finishIf] Gate skipped: ${withDirectives.join(', ')} returned AIDirectives, which the model must see on its next turn`, false, params);
+            return undefined;
+        }
         const state = capFinishIfState(actionSummaries.map(formatActionForFinishIf).join('\n\n'));
         const outcome = await this.evaluateFinishIf(finishIf, state, params, decision, payload, parentStepId);
         return outcome.Passed
@@ -8039,7 +8259,7 @@ The context is now within limits. Please retry your request with the recovered c
                 inputData: { questions: finishIf.questions, state: state.slice(0, FINISH_IF_STATE_EXCERPT) },
                 parentId: parentStepId
             });
-            outcome = await this.askFinishIf(finishIf, state, settings, params);
+            outcome = await this.askFinishIf(finishIf, state, settings, params, step);
             if (outcome.Passed) {
                 const refusal = await this.finishIfValidationRefusal(params, this.finishIfSuccessStep(finishIf, decision, payload), payload, step);
                 if (refusal) {
@@ -8054,12 +8274,16 @@ The context is now within limits. Please retry your request with the recovered c
         return outcome;
     }
 
-    /** Asks each finishIf question as a Likelihood. Every one must reach the threshold. */
+    /**
+     * Asks each finishIf question as a Likelihood. Every one must reach the threshold. The call's
+     * prompt run is linked to the `Finish check` step, so the run's cost and tokens count it.
+     */
     private async askFinishIf(
         finishIf: AgentFinishIf,
         state: string,
         settings: FinishIfSettings,
-        params: ExecuteAgentParams
+        params: ExecuteAgentParams,
+        step: MJAIAgentRunStepEntityExtended
     ): Promise<FinishIfOutcome> {
         const questions: Record<string, DecisionQuestion> = {};
         finishIf.questions.forEach((question, i) => {
@@ -8073,6 +8297,7 @@ The context is now within limits. Please retry your request with the recovered c
             PromptName: settings.PromptName,
             CancellationToken: params.cancellationToken
         });
+        this.attachDecisionPromptRun(step, result);
         if (!result.success) {
             return { Passed: false, Probabilities: {}, Reason: `The decision call failed: ${result.errorMessage ?? 'no error message'}` };
         }
@@ -9287,6 +9512,7 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
+        this._heldDecisions = undefined;
 
         // Resolve action-result compression config for this run (default on; opt out via
         // crushActionResults: false in the agent-type prompt params).
@@ -10266,6 +10492,10 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision?: BaseAgentNextStep,
         stepCount: number = 0
     ): Promise<BaseAgentNextStep<P>> {
+        // Decisions the last prompt held back: the step that carried them did not end the run, so
+        // answer them now, where this prompt will read the answers
+        await this.runHeldDecisions(params);
+
         // Ask the agent type if it has a custom prompt for this step
         const promptToUse = await this.AgentTypeInstance.GetPromptForStep(params, config, previousDecision?.newPayload || previousDecision?.previousPayload, this.AgentTypeState, previousDecision);
         const promptId = promptToUse?.ID;
@@ -10565,25 +10795,12 @@ The context is now within limits. Please retry your request with the recovered c
                 this.injectPipelineResultMessage(params, pipelineResult);
             }
 
-            // Execute decision requests if provided (zero turn cost — processed inline)
-            const decisions = initialNextStep.decisions as AgentDecisionRequest[] | undefined;
+            // Execute decision requests if provided (zero turn cost — processed inline), unless the
+            // step that carries them can end the run: then they are held until it has run
+            const decisions = initialNextStep.decisions;
             if (decisions?.length) {
                 const agentTypePromptParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
-                const responseTypeRules = agentTypePromptParams?.includeResponseTypeDefinition as Record<string, unknown> | undefined;
-                const decisionsEnabled = responseTypeRules?.decisions !== false;
-
-                if (decisionsEnabled) {
-                    this.logStatus(`[Decisions] LLM requested ${decisions.length} decision request(s): ${decisions.map(d => d.id).join(', ')}`, true, params);
-                    const decisionResults = await this.executeDecisionRequestsAsSteps(
-                        decisions,
-                        finalPayload,
-                        agentTypePromptParams,
-                        params,
-                    );
-                    this.injectDecisionResultsMessage(params, decisionResults);
-                } else {
-                    this.logStatus(`[Decisions] LLM requested decisions but feature is disabled (includeResponseTypeDefinition.decisions=false) — skipped`, true, params);
-                }
+                await this.processTurnDecisions(decisions, initialNextStep, finalPayload, agentTypePromptParams, params);
             }
 
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
@@ -15377,8 +15594,10 @@ The context is now within limits. Please retry your request with the recovered c
         // Iterate through the agent run's steps to sum up tokens
         if (this._agentRun?.Steps) {
             for (const step of this._agentRun.Steps) {
-                if ((step.StepType === 'Prompt' || step.StepType === 'Compaction') && step.PromptRun) {
-                    // Add tokens from prompt runs (rollup fields include any nested child prompt runs)
+                if ((step.StepType === 'Prompt' || step.StepType === 'Compaction' || step.StepType === 'Decision') && step.PromptRun) {
+                    // Add tokens from prompt runs (rollup fields include any nested child prompt runs).
+                    // A Decision step carries its own decision call's run — the Finish check, a single-state
+                    // request, or one item of a forEachItemIn request — so each call is counted once.
                     totalTokens += step.PromptRun.TokensUsedRollup || 0;
                     promptTokens += step.PromptRun.TokensPromptRollup || 0;
                     completionTokens += step.PromptRun.TokensCompletionRollup || 0;
