@@ -914,8 +914,10 @@ import {
     LLMReranker,
 } from '@memberjunction/ai-reranker';
 
-// @memberjunction/ai-vector-dupe (1 classes)
+// @memberjunction/ai-vector-dupe (3 classes)
 import {
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
@@ -1950,6 +1952,8 @@ const CLASS_REGISTRATIONS_3: any[] = [
     LLMDecision,
     ParallelExecutionCoordinator,
     LLMReranker,
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -2073,12 +2077,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
-    MJTagScopeEntityServer,
-    MJTemplateContentEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJTagScopeEntityServer,
+    MJTemplateContentEntityServer,
     MJUserEntityServer,
     MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
@@ -2257,7 +2261,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 963;
+export const CLASS_REGISTRATIONS_COUNT = 965;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -14,6 +14,7 @@
  */
 
 import { LogError } from '@memberjunction/core';
+import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
 import {
     DuplicateReasoningInput,
     DuplicateReasoningOutput,
@@ -27,6 +28,10 @@ import {
 export const PROMPT_REASONING_PROVIDER_KEY = 'Prompt';
 /** Class-factory key for the agent provider (registered in @memberjunction/ai-agents). */
 export const AGENT_REASONING_PROVIDER_KEY = 'Agent';
+/** Class-factory key for the typed-decision provider, which recommends and never merges. */
+export const DECISION_REASONING_PROVIDER_KEY = 'Decision' satisfies MJEntityDocumentEntity['ReasoningMode'];
+/** Class-factory key for the chained mode: the decision filters, then the prompt reasons over the survivors. */
+export const DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY = 'DecisionThenPrompt' satisfies MJEntityDocumentEntity['ReasoningMode'];
 
 /**
  * Abstract reasoning provider. Subclasses implement {@link Reason} for their runtime.
