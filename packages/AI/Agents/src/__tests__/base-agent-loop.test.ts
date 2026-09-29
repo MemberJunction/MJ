@@ -1014,3 +1014,52 @@ describe('BaseAgent.Execute — iteration guardrails', () => {
         ).toBe(true);
     });
 });
+
+describe('BaseAgent.Execute — a While whose condition cannot be evaluated', () => {
+    // `payload.count =` does not parse, so the loop fails before its first iteration.
+    const badWhile = (): LoopAgentResponse => ({
+        taskComplete: false,
+        reasoning: 'Tick until the count reaches 3',
+        nextStep: { type: 'While', while: { condition: 'payload.count =', itemVariable: 'attempt', action: { name: ACTION_NAME, params: {} } } },
+    });
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    it('tells the model why on its next turn, so it can correct the loop', async () => {
+        const turns: string[][] = [];
+        const { agent, runner } = makeAgent([
+            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(badWhile()); },
+            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(successEnvelope()); },
+        ]);
+
+        const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
+
+        expect(result.success).toBe(true);
+        expect(runner.Calls).toHaveLength(2);
+        expect(harness.runActionCalls).toHaveLength(0); // the loop body never ran
+        // A Failed loop step is answered by another prompt, and nothing on that path reads the
+        // step's errorMessage. Turn 2 saw exactly one new message: the loop result carrying the error.
+        const added = turns[1].slice(turns[0].length);
+        expect(added).toHaveLength(1);
+        expect(added[0]).toContain("While condition 'payload.count =' could not be evaluated");
+        expect(added[0]).toContain('not a parseable single expression');
+        // The While step itself is recorded as failed with the same message.
+        const whileStep = harness.steps.find((s) => s.StepType === 'While');
+        expect(whileStep?.Status).toBe('Failed');
+        expect(whileStep?.ErrorMessage).toContain('could not be evaluated');
+    });
+
+    it('a model that keeps emitting the bad While is stopped by the per-run iteration limit', async () => {
+        // The consecutive-failed-steps breaker cannot catch this: each prompt's While decision
+        // resets it, so the run alternates Prompt → Failed While until an iteration limit trips.
+        harness.agent = makeAgentRow({ MaxIterationsPerRun: 4 });
+        const { agent, runner } = makeAgent([() => llmEnvelope(badWhile())]);
+
+        const result = await agent.Execute(makeParams({ payload: { count: 0 } }));
+
+        expect(result.success).toBe(false);
+        expect(runner.Calls).toHaveLength(4);
+        expect(harness.run.Status).toBe('Failed');
+        expect(harness.run.ErrorMessage).toContain('Maximum iteration limit of 4 exceeded');
+        expect(harness.steps.filter((s) => s.StepType === 'While').map((s) => s.Status)).toEqual(['Failed', 'Failed', 'Failed']);
+    });
+});

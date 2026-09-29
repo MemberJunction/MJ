@@ -342,7 +342,7 @@
         class="mj-grid-state-fill"
         [Size]="EmptyStateSize"
         Icon="fa-solid fa-inbox"
-        Title="No data to display" />
+        [Title]="EntityInfo ? 'No ' + EntityInfo.DisplayNamePlural + ' to display' : 'No data to display'" />
     }
 
     <!-- AG Grid (Client-side mode) -->
