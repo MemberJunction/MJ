@@ -573,7 +573,7 @@ export function ComputeCellMetrics(
             ? raw.Accuracy * repeatability.MeanVerdictAgreement
             : null,
         Latency: summarizeLatency(usable),
-        Cost: summarizeCost(observations),
+        Cost: summarizeCost(usable),
         Ambiguous: summarizeAmbiguous([...cases.values()], threshold)
     };
 }
@@ -623,9 +623,13 @@ function summarizeLatency(usable: readonly DecisionEvalObservation[]): LatencySu
     return { Runs: latencies.length, P50: Quantile(latencies, 0.5), P95: Quantile(latencies, 0.95) };
 }
 
-/** Mean cost of the runs with a known cost, per thousand runs. */
-function summarizeCost(observations: readonly DecisionEvalObservation[]): CostSummary {
-    const costs = observations.map(o => o.CostUSD).filter((c): c is number => c !== null);
+/**
+ * Mean cost per thousand **answered** decisions, over the usable runs that recorded a cost. A run
+ * that failed before the model answered records a cost of 0, and averaging it in would understate
+ * what a decision costs: a cell with many failed calls looked several times cheaper.
+ */
+function summarizeCost(usable: readonly DecisionEvalObservation[]): CostSummary {
+    const costs = usable.map(o => o.CostUSD).filter((c): c is number => c !== null);
     const mean = Mean(costs);
     return { RunsWithCost: costs.length, CostPer1kUSD: mean === null ? null : mean * 1000 };
 }

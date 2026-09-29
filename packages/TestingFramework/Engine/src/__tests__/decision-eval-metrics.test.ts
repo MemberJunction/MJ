@@ -301,13 +301,14 @@ describe('Decision Eval metrics', () => {
             expect(metrics.Repeatability.Worst[0].CaseId).toBe('b');
         });
 
-        it('reports latency over usable runs and cost per thousand over every run with a cost', () => {
+        it('reports latency and cost per thousand over the usable runs only', () => {
             const metrics = ComputeCellMetrics(runs, { BootstrapResamples: 100 });
             // Usable latencies: 100, 200, 300, 400, 500, 100, 100, 100.
             expect(metrics.Latency).toEqual({ Runs: 8, P50: 150, P95: Quantile([100, 200, 300, 400, 500, 100, 100, 100], 0.95) });
-            // Nine runs at 0.001 and one at 0.003: mean 0.0012, per thousand 1.2.
-            expect(metrics.Cost.RunsWithCost).toBe(10);
-            expect(metrics.Cost.CostPer1kUSD).toBeCloseTo(1.2, 12);
+            // The eight usable runs cost 0.001 each. d (no answer, 0.003) and c's excluded failover are
+            // left out: a failed call is not a decision, so it must not dilute what a decision costs.
+            expect(metrics.Cost.RunsWithCost).toBe(8);
+            expect(metrics.Cost.CostPer1kUSD).toBeCloseTo(1.0, 12);
         });
 
         it('keeps a failed-over run when the cell allowed failover', () => {
