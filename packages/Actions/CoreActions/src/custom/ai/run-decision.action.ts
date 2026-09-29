@@ -5,7 +5,7 @@ import { UserInfo } from "@memberjunction/core";
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult } from "@memberjunction/ai-prompts";
-import { DecisionQuestion, DecisionAnswer } from "@memberjunction/ai";
+import { ChoiceOption, DecisionQuestion, DecisionAnswer } from "@memberjunction/ai";
 
 /**
  * Result codes produced by RunDecisionAction.
@@ -212,26 +212,11 @@ export class RunDecisionAction extends BaseAction {
         }
 
         if (kind === "Choice") {
-            const options = q["Options"];
-            if (!Array.isArray(options)) {
-                return { valid: false, message: `Question '${key}' of Kind 'Choice' must have an Options array` };
+            const options = this.validateChoiceOptions(q["Options"]);
+            if (typeof options === "string") {
+                return { valid: false, message: `Question '${key}' ${options}` };
             }
-            for (const opt of options) {
-                if (!this.isObject(opt) || typeof opt["Value"] !== "string" || typeof opt["Description"] !== "string") {
-                    return { valid: false, message: `Question '${key}' Options must contain objects with string Value and Description` };
-                }
-            }
-            return {
-                valid: true,
-                question: {
-                    Kind: "Choice",
-                    Instructions: instructions,
-                    Options: options.map(o => ({
-                        Value: String((o as Record<string, unknown>)["Value"]),
-                        Description: String((o as Record<string, unknown>)["Description"]),
-                    })),
-                },
-            };
+            return { valid: true, question: { Kind: "Choice", Instructions: instructions, Options: options } };
         }
 
         const levels = q["Levels"];
@@ -251,6 +236,21 @@ export class RunDecisionAction extends BaseAction {
                 Levels: [...levels],
             },
         };
+    }
+
+    /** Returns the validated options, or the reason they are invalid. */
+    private validateChoiceOptions(options: unknown): ChoiceOption[] | string {
+        if (!Array.isArray(options)) {
+            return "of Kind 'Choice' must have an Options array";
+        }
+        const validated: ChoiceOption[] = [];
+        for (const opt of options) {
+            if (!this.isObject(opt) || typeof opt["Value"] !== "string" || typeof opt["Description"] !== "string") {
+                return "Options must contain objects with string Value and Description";
+            }
+            validated.push({ Value: opt["Value"], Description: opt["Description"] });
+        }
+        return validated;
     }
 
     private buildSummaryMessage(answers: Record<string, DecisionAnswer>): string {
