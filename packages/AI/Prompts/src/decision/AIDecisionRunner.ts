@@ -1,4 +1,5 @@
 import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { LogStatus } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import {
@@ -26,6 +27,12 @@ import {
   AIDecisionRunResult,
 } from './decision-runner.types';
 
+/** The result of running a decision, and the candidate that produced it (after any failover). */
+interface DecisionRun {
+  Result: DecisionResult;
+  AnsweredBy: ModelVendorCandidate;
+}
+
 /** The candidate selected for a decision, with the credential probes made while selecting it. */
 interface DecisionSelection {
   Candidate: ModelVendorCandidate;
@@ -35,8 +42,9 @@ interface DecisionSelection {
 /**
  * Runs typed decisions (Likelihood, Choice, Score) on `Decision`-type models. It does for a decision
  * what `AIPromptRunner` does for a chat call: selects a model from the decision prompt's bindings,
- * resolves credentials, bounds the call with the prompt's timeout and the caller's cancellation,
- * fails over, and writes an `MJ: AI Prompt Runs` row with tokens and cost.
+ * resolves credentials, bounds each call with the caller's cancellation and `params.timeoutMS` (when
+ * set; there is no default timeout, as for chat prompts), fails over, and writes an
+ * `MJ: AI Prompt Runs` row with tokens and cost.
  *
  * It owns no parsing: drivers return typed answers and `BaseDecision` validates them. The
  * configuration carrier is an `MJ: AI Prompts` row whose template renders the state when the caller
@@ -106,15 +114,26 @@ export class AIDecisionRunner extends BaseModelRunner {
       promptRun = await this.CreateRunRecord(prompt, selected.model, params, startTime, selected.vendorId, selectionInfo, run => {
         run.Messages = JSON.stringify({ State: state, Questions: params.Questions });
       });
-      const decisionResult = await this.runDecision(prompt, params, candidates, selection, state, promptRun);
+      const run = await this.runDecision(prompt, params, candidates, selection, state, promptRun);
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
-      await this.finalizeDecisionRun(promptRun, decisionResult, endTime, executionTimeMS);
-      return this.buildRunResult(decisionResult, promptRun, selected, selectionInfo, executionTimeMS);
+      await this.finalizeDecisionRun(promptRun, run.Result, endTime, executionTimeMS);
+      return this.buildRunResult(run, promptRun, selectionInfo, executionTimeMS, params);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      return this.failedRunResult(message, startTime, promptRun, selected);
+      if (promptRun) {
+        await this.finalizeFailedRun(promptRun, message, startTime);
+      }
+      return this.failedRunResult(message, startTime, promptRun, selected, params);
     }
+  }
+
+  /** Finalizes a run row as failed, so an exception after it was created never leaves it 'Running'. */
+  private async finalizeFailedRun(promptRun: MJAIPromptRunEntityExtended, message: string, startTime: Date): Promise<void> {
+    const endTime = new Date();
+    await this.FinalizeRunRecord(promptRun, false, endTime, endTime.getTime() - startTime.getTime(), run => {
+      run.ErrorMessage = message;
+    });
   }
 
   /** Returns an error message when the request cannot run, otherwise undefined. */
@@ -144,6 +163,9 @@ export class AIDecisionRunner extends BaseModelRunner {
     }
   }
 
+  /** Candidates already warned about for lacking credentials, so each warning appears once per process. */
+  private static readonly warnedMissingCredentials = new Set<string>();
+
   /** Selects the first candidate with credentials, or returns an error listing every candidate. */
   private selectCandidate(
     prompt: MJAIPromptEntityExtended,
@@ -159,6 +181,7 @@ export class AIDecisionRunner extends BaseModelRunner {
         selected = candidate;
       }
     }
+    this.warnSkippedCandidates(candidates, selected, credentialAvailability);
     if (!selected) {
       const summary = candidates
         .map(c => `[Model: ${c.model.Name}, Vendor: ${c.vendorName ?? 'default'}, Driver: ${c.driverClass}]`)
@@ -166,6 +189,29 @@ export class AIDecisionRunner extends BaseModelRunner {
       return `No Decision model has credentials available for prompt '${prompt.Name}'. Candidates: ${summary}`;
     }
     return { Candidate: selected, CredentialAvailability: credentialAvailability };
+  }
+
+  /**
+   * Warns, once per process per model, when a higher-priority candidate is skipped for lack of a
+   * credential. Otherwise a host without, say, Jev's key would silently send every decision to the
+   * fallback model.
+   */
+  private warnSkippedCandidates(
+    candidates: ModelVendorCandidate[],
+    selected: ModelVendorCandidate | undefined,
+    credentialAvailability: Map<string, boolean>
+  ): void {
+    for (const candidate of candidates) {
+      if (candidate === selected) {
+        return;
+      }
+      const key = this.candidateKey(candidate);
+      if (credentialAvailability.get(key) === false && !AIDecisionRunner.warnedMissingCredentials.has(key)) {
+        AIDecisionRunner.warnedMissingCredentials.add(key);
+        LogStatus(`AIDecisionRunner: skipping '${candidate.model.Name}' (${candidate.driverClass}): no credential. ` +
+          `Set AI_VENDOR_API_KEY__${candidate.driverClass.toUpperCase()} or bind a credential to use it.`);
+      }
+    }
   }
 
   /** The caller's explicit state, or the prompt's template rendered with the caller's data. */
@@ -182,7 +228,10 @@ export class AIDecisionRunner extends BaseModelRunner {
       : { Error: rendered.errorMessage ?? 'Failed to render the state from the prompt template' };
   }
 
-  /** Runs the selected candidate alone when failover is off, otherwise the base failover loop. */
+  /**
+   * Runs the selected candidate alone when failover is off, otherwise the base failover loop. Tracks
+   * the candidate that produced the result, so the caller reports the model that actually answered.
+   */
   private async runDecision(
     prompt: MJAIPromptEntityExtended,
     params: AIDecisionParams,
@@ -190,21 +239,26 @@ export class AIDecisionRunner extends BaseModelRunner {
     selection: DecisionSelection,
     state: string | Record<string, unknown>,
     promptRun: MJAIPromptRunEntityExtended
-  ): Promise<DecisionResult> {
+  ): Promise<DecisionRun> {
+    let answeredBy = selection.Candidate;
+    const attempt = (candidate: ModelVendorCandidate): Promise<DecisionResult> => {
+      answeredBy = candidate;
+      return this.executeOnCandidate(candidate, state, params, prompt);
+    };
     const failoverConfig = this.getFailoverConfiguration(prompt);
-    if (failoverConfig.strategy === 'None') {
-      return this.executeOnCandidate(selection.Candidate, state, params, prompt);
-    }
-    return this.ExecuteWithFailover<DecisionResult>(
-      prompt,
-      params,
-      candidates,
-      failoverConfig,
-      candidate => this.executeOnCandidate(candidate, state, params, prompt),
-      (err, attempts) => this.createFailoverErrorResult(err, attempts),
-      promptRun,
-      selection.CredentialAvailability
-    );
+    const result = failoverConfig.strategy === 'None'
+      ? await attempt(selection.Candidate)
+      : await this.ExecuteWithFailover<DecisionResult>(
+          prompt,
+          params,
+          candidates,
+          failoverConfig,
+          attempt,
+          (err, attempts) => this.createFailoverErrorResult(err, attempts),
+          promptRun,
+          selection.CredentialAvailability
+        );
+    return { Result: result, AnsweredBy: answeredBy };
   }
 
   /** Makes the decision on one candidate: checks its limits, builds its driver, and calls it. */
@@ -287,7 +341,7 @@ export class AIDecisionRunner extends BaseModelRunner {
     return driver;
   }
 
-  /** Calls the driver, bounded by the prompt's timeout and the caller's cancellation. */
+  /** Calls the driver, bounded by the caller's cancellation and `params.timeoutMS` when set. */
   private async callDriver(
     driver: BaseDecision,
     candidate: ModelVendorCandidate,
@@ -313,12 +367,15 @@ export class AIDecisionRunner extends BaseModelRunner {
     }
   }
 
-  /** A failed decision that allows failover to the next candidate. */
+  /**
+   * A failed decision that allows failover to the next candidate. The severity must not be 'Fatal':
+   * the failover loop stops on any Fatal error before it reads `canFailover`.
+   */
   private failedDecision(message: string, errorType: AIErrorType): DecisionResult {
     const now = new Date();
     const failed = new DecisionResult(false, now, now);
     failed.errorMessage = message;
-    failed.errorInfo = { errorType, severity: 'Fatal', canFailover: true };
+    failed.errorInfo = { errorType, severity: 'Retriable', canFailover: true };
     return failed;
   }
 
@@ -368,18 +425,19 @@ export class AIDecisionRunner extends BaseModelRunner {
     });
   }
 
-  /** Builds the caller's result from the driver's. */
+  /** Builds the caller's result from the driver's, naming the candidate that answered. */
   private buildRunResult(
-    decisionResult: DecisionResult,
+    run: DecisionRun,
     promptRun: MJAIPromptRunEntityExtended,
-    selected: ModelVendorCandidate,
     selectionInfo: AIModelSelectionInfo,
-    executionTimeMS: number
+    executionTimeMS: number,
+    params: AIDecisionParams
   ): AIDecisionRunResult {
+    const decisionResult = run.Result;
     return {
       success: decisionResult.success,
       status: decisionResult.success ? 'Completed' : 'Failed',
-      cancelled: false,
+      cancelled: params.cancellationToken?.aborted === true,
       errorMessage: decisionResult.errorMessage,
       promptRun,
       executionTimeMS,
@@ -388,11 +446,11 @@ export class AIDecisionRunner extends BaseModelRunner {
       tokensUsed: decisionResult.Usage?.totalTokens,
       cost: decisionResult.Usage?.cost,
       costCurrency: decisionResult.Usage?.costCurrency,
-      modelInfo: this.modelInfoFor(selected),
+      modelInfo: this.modelInfoFor(run.AnsweredBy),
       modelSelectionInfo: selectionInfo,
       Answers: decisionResult.success ? decisionResult.Answers ?? {} : {},
       DecisionResult: decisionResult,
-      DriverClass: selected.driverClass,
+      DriverClass: run.AnsweredBy.driverClass,
     };
   }
 
@@ -401,12 +459,13 @@ export class AIDecisionRunner extends BaseModelRunner {
     errorMessage: string,
     startTime: Date,
     promptRun?: MJAIPromptRunEntityExtended,
-    selected?: ModelVendorCandidate
+    selected?: ModelVendorCandidate,
+    params?: AIDecisionParams
   ): AIDecisionRunResult {
     return {
       success: false,
       status: 'Failed',
-      cancelled: false,
+      cancelled: params?.cancellationToken?.aborted === true,
       errorMessage,
       promptRun,
       executionTimeMS: new Date().getTime() - startTime.getTime(),
@@ -440,7 +499,7 @@ export class AIDecisionRunner extends BaseModelRunner {
     const selected = selection.Candidate;
     info.ModelSelected = selected.model;
     info.vendorSelected = selected.vendorId ? AIEngine.Instance.VendorsByID.get(NormalizeUUID(selected.vendorId)) : undefined;
-    info.selectionStrategy = (prompt.SelectionStrategy as 'Default' | 'Specific' | 'ByPower') || 'Specific';
+    info.selectionStrategy = prompt.SelectionStrategy || 'Specific';
     info.SelectionReason = 'First candidate with available credentials';
     info.FallbackUsed = false;
     info.ModelsConsidered = candidates.map(c => {
