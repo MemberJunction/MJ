@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, ErrorAnalyzer, AIErrorInfo, ResolveFileInputStrategy, AIPromptConfiguration, EncodeToolTurnsAsText } from '@memberjunction/ai';
 import {
   BaseModelRunner,
   type ExecutionBound,
@@ -9,7 +9,7 @@ import {
 import { GetToolCallingDecision, GetToolCallingMode, NativeToolCallingDecision, RecordToolCallingDecision, RecordToolCallingMode, ResolveNativeToolCalling } from './nativeToolCallingGate';
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
-import { LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
+import { LogStatus, IsVerboseLoggingEnabled, Metadata, UserInfo } from '@memberjunction/core';
 import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -689,19 +689,30 @@ export class AIPromptRunner extends BaseModelRunner {
         this.logStatus(`   Using prompt "${modelSelectionPrompt.Name}" for model selection in parallel execution`, true, params);
       }
 
+      // Apply this runner's model-type floor to everything the planner may choose from: a prompt
+      // typed differently fails here, and neither the model pool nor the prompt's bindings can admit
+      // a model of another type (the planner's own filters treat an empty AIModelTypeID as "any").
+      this.AssertPromptMatchesRequiredType(prompt);
+      if (modelSelectionPrompt !== prompt) {
+        this.AssertPromptMatchesRequiredType(modelSelectionPrompt);
+      }
+      const requiredTypeId = this.RequiredModelTypeID();
+      const typedModels = AIEngine.Instance.Models.filter(m => UUIDsEqual(m.AIModelTypeID, requiredTypeId));
+
       // Get prompt-specific model associations using the model selection prompt
       const promptModels = AIEngine.Instance.PromptModels.filter(
         (pm) =>
           UUIDsEqual(pm.PromptID, modelSelectionPrompt.ID) &&
           (pm.Status === 'Active' || pm.Status === 'Preview') &&
-          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)),
+          (!params.configurationId || !pm.ConfigurationID || UUIDsEqual(pm.ConfigurationID, params.configurationId)) &&
+          UUIDsEqual(AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID))?.AIModelTypeID, requiredTypeId),
       );
 
       // Create execution plan using the modelSelectionPrompt for model configurations
       executionTasks = this._executionPlanner.createExecutionPlan(
         modelSelectionPrompt,
         promptModels,
-        AIEngine.Instance.Models,
+        typedModels,
         renderedPromptText,
         params.contextUser,
         params.configurationId,
@@ -1604,6 +1615,12 @@ export class AIPromptRunner extends BaseModelRunner {
   private buildNoModelFoundMessage(promptName: string, selectionInfo?: AIModelSelectionInfo): string {
     const base = `No suitable model found for prompt ${promptName}`;
 
+    // A selection step that threw (for example the model-type floor) records its error here; show it
+    // rather than the generic "no candidates" text. Every other reason keeps its detailed message below.
+    if (selectionInfo?.selectionReason?.startsWith('Error during model selection:')) {
+      return `${base}. ${selectionInfo.selectionReason}`;
+    }
+
     if (!selectionInfo?.modelsConsidered || selectionInfo.modelsConsidered.length === 0) {
       return `${base}. No model-vendor candidates were available. Please ensure AI models are configured for this prompt.`;
     }
@@ -1691,10 +1708,11 @@ export class AIPromptRunner extends BaseModelRunner {
    * to the configured failover strategy when errors occur.
    * 
    * Candidates come from model selection (`allCandidates`), already filtered to the prompt's
-   * model type by ID. The method calls several smaller, focused helper methods:
-   * - updatePromptRunWithFailoverSuccess: Records successful failover metadata
-   * - updatePromptRunWithFailoverFailure: Records failed failover metadata
-   * - createFailoverErrorResult: Creates standardized error response
+   * model type by ID. When failover applies, the loop itself is
+   * {@link BaseModelRunner.ExecuteWithFailover}: this method supplies the chat call on each candidate
+   * (`executeModel` with that candidate's model, vendor, driver, effort level and prompt-model
+   * configuration) and the final error result (`createFailoverErrorResult`). The base records
+   * failover success or failure on the prompt run.
    */
   protected async executeModelWithFailover(
     model: MJAIModelEntityExtended,
@@ -1726,189 +1744,66 @@ export class AIPromptRunner extends BaseModelRunner {
         promptModelConfiguration
       );
     }
+    return this.ExecuteWithFailover(
+      prompt,
+      params,
+      allCandidates,
+      failoverConfig,
+      (candidate) => this.executeModel(
+        candidate.model,
+        renderedPrompt,
+        prompt,
+        params,
+        candidate.vendorId || null,
+        conversationMessages,
+        templateMessageRole,
+        cancellationToken,
+        candidate.driverClass,
+        candidate.apiName,
+        candidate.supportsEffortLevel,
+        candidate.effortLevel,
+        candidate.promptModelConfiguration
+      ),
+      (lastError, failoverAttempts) => this.createFailoverErrorResult(lastError, failoverAttempts),
+      promptRun,
+      credentialAvailability
+    );
+  }
 
-    // Track failover attempts
-    const failoverAttempts: FailoverAttempt[] = [];
-    let lastError: Error | null = null;
+  /**
+   * Creates an error result for failed failover attempts
+   */
+  private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
+    const startTime = new Date();
+    const endTime = new Date();
 
-    // Cache credential availability per driver:model:vendor for the duration of this failover
-    // scan so we don't repeat env-var / binding lookups while walking the candidate list.
-    //
-    // PERF: seed it with the probes model SELECTION already performed (same key format). Selection
-    // walks the priority list until it finds the first credentialed candidate, so this map holds
-    // the prefix it rejected (known false) PLUS the selected candidate (known true) — which is
-    // exactly the segment failover re-walks on the happy path. Reusing those results means the
-    // common case (and any caller looping failover) does ZERO redundant HasCredentialsAvailable
-    // calls. The not-evaluated tail is intentionally absent, so failover still lazily probes it
-    // only if a real failure forces it to walk down there.
-    const failoverCredentialCache = credentialAvailability
-      ? new Map<string, boolean>(credentialAvailability)
-      : new Map<string, boolean>();
-    const candidateHasCredentials = (c: ModelVendorCandidate): boolean => {
-      const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
-      let has = failoverCredentialCache.get(key);
-      if (has === undefined) {
-        has = this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);
-        failoverCredentialCache.set(key, has);
+    // Check if this is a ContextLengthExceeded error - if so, mark as Fatal
+    const hasContextLengthError = failoverAttempts.some(a =>
+      a.errorType === 'ContextLengthExceeded' ||
+      ErrorAnalyzer.analyzeError(a.error).errorType === 'ContextLengthExceeded'
+    );
+
+    // If ContextLengthExceeded and all failover attempts failed, this is fatal
+    let errorInfo: AIErrorInfo | undefined;
+    if (lastError) {
+      errorInfo = ErrorAnalyzer.analyzeError(lastError);
+      // Override severity to Fatal if context length exceeded and no larger models exist
+      if (hasContextLengthError && errorInfo.errorType === 'ContextLengthExceeded') {
+        errorInfo.severity = 'Fatal';
       }
-      return has;
+    }
+
+    return {
+      success: false,
+      startTime: startTime,
+      endTime: endTime,
+      errorMessage: lastError?.message || 'Unknown error',
+      exception: lastError,
+      errorInfo: errorInfo,
+      statusText: `Failover failed after ${failoverAttempts.length} attempts`,
+      timeElapsed: endTime.getTime() - startTime.getTime(),
+      data: null
     };
-    let skippedForCredentials = 0;
-
-    // Iterate through all candidates in priority order with instant failover
-    for (let i = 0; i < allCandidates.length; i++) {
-      const candidate = allCandidates[i];
-      const attemptStartTime = Date.now();
-
-      // Skip candidates with no credentials configured. `allCandidates` is intentionally the
-      // FULL priority-ordered list (see the DECISION note in selectModelWithAPIKeyTracked),
-      // so it can include vendors that have no API key in this environment. Firing a live
-      // request at one of those produces a misleading "401 invalid API key" — and because an
-      // Authentication error is treated as fatal, it would halt failover before any
-      // credentialed candidate is ever reached. Skipping here makes failover land on the
-      // first candidate that can actually authenticate (mirroring model selection's own
-      // highest-priority-with-credentials rule).
-      if (!candidateHasCredentials(candidate)) {
-        skippedForCredentials++;
-        continue;
-      }
-
-      try {
-        // Log the attempt if not the first one
-        if (i > 0) {
-          const vendorName = candidate.vendorName || 'default';
-          LogStatusEx({
-            message: `🔄 Trying candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName}`,
-            category: 'AI',
-            additionalArgs: [{
-              promptId: prompt.ID,
-              modelId: candidate.model.ID,
-              model: candidate.model.Name,
-              vendorId: candidate.vendorId,
-              vendor: candidate.vendorName,
-              attemptNumber: i + 1
-            }]
-          });
-        }
-
-        // Execute the model with this candidate
-        const result = await this.executeModel(
-          candidate.model,
-          renderedPrompt,
-          prompt,
-          params,
-          candidate.vendorId || null,
-          conversationMessages,
-          templateMessageRole,
-          cancellationToken,
-          candidate.driverClass,
-          candidate.apiName,
-          candidate.supportsEffortLevel,
-          candidate.effortLevel,
-          candidate.promptModelConfiguration
-        );
-
-        // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
-        // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
-        // instead of throwing, so we must check result.success here.
-        if (!result.success && result.errorInfo?.canFailover) {
-          lastError = result.exception || new Error(result.errorMessage || 'Model execution failed');
-
-          // Use shared failover error handling logic
-          const decision = await this.processFailoverError(
-            lastError,
-            result.errorInfo,
-            candidate,
-            attemptStartTime,
-            i,
-            allCandidates,
-            failoverAttempts,
-            prompt,
-            failoverConfig
-          );
-
-          // Update candidates list (may have been filtered)
-          allCandidates = decision.updatedCandidates;
-
-          if (decision.shouldRetry) {
-            i--; // Retry same model/vendor
-            continue;
-          }
-
-          if (decision.shouldContinue) {
-            continue; // Try next candidate
-          }
-
-          // Otherwise break (fatal error or last candidate)
-          break;
-        }
-
-        // A failure that is not eligible for failover (structural error, or none diagnosed) is
-        // returned as-is — but never silently: callers often see only an empty result.
-        if (!result.success) {
-          this.logError(
-            `Model call failed and is not eligible for failover (${result.errorInfo?.errorType ?? 'undiagnosed'}): ${result.errorMessage ?? 'no error message'}`,
-            { prompt, model: candidate.model, metadata: { vendorId: candidate.vendorId, driverClass: candidate.driverClass } }
-          );
-        }
-
-        // Update promptRun with failover information if we had prior failures
-        if (failoverAttempts.length > 0 && promptRun) {
-          this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);
-        }
-
-        return result;
-
-      } catch (error) {
-        lastError = error as Error;
-
-        // Analyze error to get error info
-        const errorInfo = ErrorAnalyzer.analyzeError(lastError);
-
-        // Use shared failover error handling logic
-        const decision = await this.processFailoverError(
-          lastError,
-          errorInfo,
-          candidate,
-          attemptStartTime,
-          i,
-          allCandidates,
-          failoverAttempts,
-          prompt,
-          failoverConfig
-        );
-
-        // Update candidates list (may have been filtered)
-        allCandidates = decision.updatedCandidates;
-
-        if (decision.shouldRetry) {
-          i--; // Retry same model/vendor
-          continue;
-        }
-
-        if (decision.shouldContinue) {
-          continue; // Try next candidate
-        }
-
-        // Otherwise break (fatal error or last candidate)
-        break;
-      }
-    }
-
-    // All candidates failed
-    if (promptRun && failoverAttempts.length > 0) {
-      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
-    }
-
-    // If every candidate was skipped for missing credentials we never attempted a call and
-    // have no underlying error to report — surface an actionable message instead of null.
-    if (!lastError && failoverAttempts.length === 0 && skippedForCredentials > 0) {
-      lastError = new Error(
-        `No API credentials configured for any of the ${skippedForCredentials} candidate model-vendor combination(s) for prompt "${prompt.Name}".`
-      );
-    }
-
-    return this.createFailoverErrorResult(lastError, failoverAttempts);
   }
 
   /**

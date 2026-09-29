@@ -39,7 +39,7 @@ import {
   AIModelSelectionInfo
 } from '@memberjunction/ai-core-plus';
 import {
-  ChatResult,
+  BaseResult,
   ErrorAnalyzer,
   AIErrorInfo,
   GetAIAPIKey,
@@ -127,10 +127,6 @@ export interface FailoverAttempt {
  *
  * `AIPromptRunner`, the chat runner, is built on it. Subclasses declare the model type they run
  * through {@link BaseModelRunner.RequiredModelType}.
- *
- * **Its protected API is still settling.** This class arrives in a short series of changes meant to
- * ship in one release (#4767 through #4801). Until the series is complete, protected members may
- * still be renamed or narrowed back to `private`, so do not subclass it from outside this package yet.
  */
 export abstract class BaseModelRunner {
   /**
@@ -140,15 +136,19 @@ export abstract class BaseModelRunner {
    *
    * The contract:
    * - It is a name, not an ID, so a subclass can declare it without a metadata lookup. The base
-   *   resolves it to the type's ID through `AIEngine.Instance.ModelTypes` (a case-insensitive name
-   *   match) and compares each model's `AIModelTypeID` with that ID using `UUIDsEqual`. Names are
-   *   never compared with each other, and a name that matches no model type is an error.
-   * - It is a hard floor. `AIPrompt.AIModelTypeID` may equal it but never widen it, and a prompt whose
-   *   `AIModelTypeID` is null runs on the runner's type, not on any type.
-   *
-   * Declared but not yet enforced: candidate selection does not read it until the last change in this
-   * series (#4801), which implements the resolution and the floor above. Until then, a prompt with a
-   * null `AIModelTypeID` can still draw a model of any type.
+   *   resolves it to the type's ID through `AIEngine.Instance.ModelTypes` ({@link RequiredModelTypeID}:
+   *   a case-insensitive, trimmed name match) and compares each model's `AIModelTypeID` with that ID
+   *   using `UUIDsEqual`, on every candidate-selection path. Names are never compared with each other,
+   *   and a name that matches no model type is an error.
+   * - It is a hard floor. `AIPrompt.AIModelTypeID` may equal it. Model types are flat, so a prompt type
+   *   that differs would widen or contradict the floor, and the runner refuses the prompt with an error
+   *   naming both the prompt's configured type and the runner's required type.
+   * - `AIPrompt.AIModelTypeID = NULL` means "whatever the runner requires" (not "any model").
+   *   This closes a footgun where prompts with an unset column drew models of every type.
+   * - Bound models (`AIPromptModel`) of a different type are skipped during candidate building
+   *   with a `LogStatus` warning, but do not fail the prompt unless no valid candidates remain.
+   * - Model overrides of a different type return no candidate (an override cannot violate the
+   *   runner's hard floor).
    */
   public abstract get RequiredModelType(): string;
 
@@ -583,6 +583,54 @@ export abstract class BaseModelRunner {
     const apiKey = GetAIAPIKey(driverClass, params?.apiKeys, params?.verbose);
     return this.isValidAPIKey(apiKey);
   }
+
+  /**
+   * Resolves the runner's {@link RequiredModelType} name against `AIEngine.Instance.ModelTypes`
+   * (case-insensitive, trimmed) and returns its UUID. Callers compare models' `AIModelTypeID` with it
+   * using `UUIDsEqual`.
+   * Throws a descriptive error if the model type is not found in the engine metadata.
+   */
+  protected RequiredModelTypeID(): string {
+    const requiredType = this.RequiredModelType?.trim().toLowerCase();
+    if (!requiredType) {
+      throw new Error(`Runner requires a model type, but RequiredModelType is empty`);
+    }
+    const match = AIEngine.Instance.ModelTypes.find(
+      mt => mt.Name?.trim().toLowerCase() === requiredType
+    );
+    if (!match) {
+      throw new Error(
+        `Required model type "${this.RequiredModelType}" was not found in AIEngine.Instance.ModelTypes`
+      );
+    }
+    return match.ID;
+  }
+
+  /** The name of a model type for messages, or its ID when the engine doesn't know it. */
+  private modelTypeName(modelTypeId: string): string {
+    return AIEngine.Instance.ModelTypesByID.get(NormalizeUUID(modelTypeId))?.Name ?? modelTypeId;
+  }
+
+  /**
+   * Asserts that the prompt's configured model type matches the runner's required model type.
+   * If `prompt.AIModelTypeID` is null or undefined, does not throw (the runner's required type applies).
+   * If `prompt.AIModelTypeID` is set and does not match {@link RequiredModelTypeID}, throws a descriptive
+   * error naming the prompt, the prompt's configured type (resolved to name if possible), and the runner's
+   * required type.
+   */
+  protected AssertPromptMatchesRequiredType(prompt: MJAIPromptEntityExtended): void {
+    if (!prompt.AIModelTypeID) {
+      return;
+    }
+    const requiredTypeId = this.RequiredModelTypeID();
+    if (!UUIDsEqual(prompt.AIModelTypeID, requiredTypeId)) {
+      const promptTypeName = this.modelTypeName(prompt.AIModelTypeID);
+      throw new Error(
+        `Prompt "${prompt.Name}" requires model type "${promptTypeName}" (${prompt.AIModelTypeID}), but this runner requires "${this.RequiredModelType}" (${requiredTypeId})`
+      );
+    }
+  }
+
   /**
    * Builds a unified, ordered list of model-vendor candidates based on all selection criteria.
    * Uses a 3-phase approach to properly handle SelectionStrategy='Specific' with AIPromptModel priorities.
@@ -604,6 +652,8 @@ export abstract class BaseModelRunner {
     preferredVendorId?: string,
     verbose?: boolean
   ): ModelVendorCandidate[] {
+    this.AssertPromptMatchesRequiredType(prompt);
+
     // PHASE 1: Handle explicit model ID (highest priority)
     if (explicitModelId) {
       return this.buildCandidatesForExplicitModel(explicitModelId, prompt, preferredVendorId);
@@ -621,7 +671,9 @@ export abstract class BaseModelRunner {
 
   /**
    * PHASE 1: Build candidates for explicitly specified model ID.
-   * Returns candidates for the single model if it's active and compatible.
+   * Returns candidates for the single model if it's active. Throws if the model is of a different type
+   * than the runner requires: the caller asked for that model by ID, so running a different one instead
+   * would be wrong, and an empty result would surface only a generic "no candidates" message.
    */
   private buildCandidatesForExplicitModel(
     explicitModelId: string,
@@ -633,9 +685,12 @@ export abstract class BaseModelRunner {
       return [];
     }
 
-    // Check model type compatibility
-    if (prompt.AIModelTypeID && !UUIDsEqual(model.AIModelTypeID, prompt.AIModelTypeID)) {
-      return [];
+    // Check model type compatibility against runner's required model type
+    const requiredTypeId = this.RequiredModelTypeID();
+    if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+      throw new Error(
+        `Model override "${model.Name}" is type "${this.modelTypeName(model.AIModelTypeID)}", but this runner requires "${this.RequiredModelType}"`
+      );
     }
 
     const candidates = this.createCandidatesForModel(model, 20000, 'explicit', preferredVendorId);
@@ -666,7 +721,7 @@ export abstract class BaseModelRunner {
     const sortedPromptModels = this.sortPromptModelsForSpecificStrategy(promptModels, configurationId);
 
     // Build candidates maintaining order
-    const candidates = this.buildCandidatesFromPromptModels(sortedPromptModels);
+    const candidates = this.buildCandidatesFromPromptModels(sortedPromptModels, prompt);
 
     // If RequireSpecificModels is true (or no candidates at all), enforce strict behavior
     if (candidates.length === 0 && prompt.RequireSpecificModels) {
@@ -717,12 +772,14 @@ export abstract class BaseModelRunner {
     // Compute target power rank from the configured models
     const targetPowerRank = this.computeTargetPowerRank(configuredPromptModels);
 
-    // Get all active models matching the prompt's model type, excluding already-present models
+    const requiredTypeId = this.RequiredModelTypeID();
+
+    // Get all active models matching the runner's required model type, excluding already-present models
     const existingModelIds = new Set(candidates.map(c => c.model.ID));
     const fallbackPool = AIEngine.Instance.Models.filter(
       m => m.IsActive &&
            !existingModelIds.has(m.ID) &&
-           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID))
+           UUIDsEqual(m.AIModelTypeID, requiredTypeId)
     );
 
     if (fallbackPool.length === 0) return;
@@ -814,7 +871,7 @@ export abstract class BaseModelRunner {
 
     if (promptModels.length > 0) {
       // Use prompt-specific models with blended priorities
-      this.addPromptSpecificCandidates(candidates, promptModels, preferredVendorId);
+      this.addPromptSpecificCandidates(candidates, promptModels, preferredVendorId, prompt);
 
       // Add configuration fallback candidates if needed
       if (configurationId) {
@@ -897,9 +954,11 @@ export abstract class BaseModelRunner {
    * Expands VendorID=null to all vendors for that model.
    */
   private buildCandidatesFromPromptModels(
-    promptModels: MJAIPromptModelEntity[]
+    promptModels: MJAIPromptModelEntity[],
+    prompt?: MJAIPromptEntityExtended
   ): ModelVendorCandidate[] {
     const candidates: ModelVendorCandidate[] = [];
+    const requiredTypeId = this.RequiredModelTypeID();
 
     for (let i = 0; i < promptModels.length; i++) {
       const pm = promptModels[i];
@@ -907,6 +966,14 @@ export abstract class BaseModelRunner {
       const computedPriority = promptModels.length - i;
       const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
       if (!model || !model.IsActive) continue;
+
+      if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+        const modelTypeName = this.modelTypeName(model.AIModelTypeID);
+        LogStatus(
+          `Skipping model "${model.Name}" for prompt "${prompt?.Name ?? pm.PromptID}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
+        );
+        continue;
+      }
 
       if (pm.VendorID) {
         // Specific vendor specified - create single candidate
@@ -1056,11 +1123,20 @@ export abstract class BaseModelRunner {
   private addPromptSpecificCandidates(
     candidates: ModelVendorCandidate[],
     promptModels: MJAIPromptModelEntity[],
-    preferredVendorId?: string
+    preferredVendorId?: string,
+    prompt?: MJAIPromptEntityExtended
   ): void {
+    const requiredTypeId = this.RequiredModelTypeID();
     for (const pm of promptModels) {
       const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
       if (model && model.IsActive) {
+        if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+          const modelTypeName = this.modelTypeName(model.AIModelTypeID);
+          LogStatus(
+            `Skipping model "${model.Name}" for prompt "${prompt?.Name ?? pm.PromptID}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
+          );
+          continue;
+        }
         const modelCandidates = this.createCandidatesForModel(
           model,
           5000,
@@ -1085,6 +1161,7 @@ export abstract class BaseModelRunner {
     verbose?: boolean
   ): void {
     const chain = AIEngine.Instance.GetConfigurationChain(configurationId);
+    const requiredTypeId = this.RequiredModelTypeID();
 
     // Add models from parent configs (skip index 0 which is the direct config, already handled)
     for (let i = 1; i < chain.length; i++) {
@@ -1102,6 +1179,13 @@ export abstract class BaseModelRunner {
       for (const pm of parentModels) {
         const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
         if (model && model.IsActive) {
+          if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+            const modelTypeName = this.modelTypeName(model.AIModelTypeID);
+            LogStatus(
+              `Skipping model "${model.Name}" for prompt "${prompt.Name}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
+            );
+            continue;
+          }
           // Decrease base priority for each level up the chain (3000, 2500, 2000, etc.)
           const basePriority = 3000 - (i * 500);
           const modelCandidates = this.createCandidatesForModel(
@@ -1130,6 +1214,13 @@ export abstract class BaseModelRunner {
     for (const pm of nullConfigModels) {
       const model = AIEngine.Instance.ModelsByID.get(NormalizeUUID(pm.ModelID));
       if (model && model.IsActive) {
+        if (!UUIDsEqual(model.AIModelTypeID, requiredTypeId)) {
+          const modelTypeName = this.modelTypeName(model.AIModelTypeID);
+          LogStatus(
+            `Skipping model "${model.Name}" for prompt "${prompt.Name}": model type "${modelTypeName}" does not match runner required type "${this.RequiredModelType}"`
+          );
+          continue;
+        }
         const modelCandidates = this.createCandidatesForModel(
           model,
           1000, // Lowest priority tier
@@ -1168,9 +1259,10 @@ export abstract class BaseModelRunner {
     prompt: MJAIPromptEntityExtended,
     preferredVendorName?: string
   ): MJAIModelEntityExtended[] {
+    const requiredTypeId = this.RequiredModelTypeID();
     return AIEngine.Instance.Models.filter(
       m => m.IsActive &&
-           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID)) &&
+           UUIDsEqual(m.AIModelTypeID, requiredTypeId) &&
            (!preferredVendorName ||
             m.ModelVendors.some(mv =>
               mv.Status === 'Active' &&
@@ -1489,7 +1581,7 @@ export abstract class BaseModelRunner {
   /**
    * Updates prompt run with failover failure tracking data
    */
-  protected updatePromptRunWithFailoverFailure(
+  private updatePromptRunWithFailoverFailure(
     promptRun: MJAIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
@@ -1505,39 +1597,196 @@ export abstract class BaseModelRunner {
   }
 
   /**
-   * Creates an error result for failed failover attempts
+   * Runs one model call across the failover candidates, in priority order: skips candidates with no
+   * credentials, lets processFailoverError decide retry / next candidate / stop, and records failover
+   * success or failure on the prompt run. The model call itself and the final error result are
+   * supplied by the subclass, so the loop works for any result type that extends BaseResult.
+   *
+   * For prompt-based runners: it takes the `AIPrompt` and `AIPromptParams` the call is for, and
+   * candidates that carry prompt-model fields (effort level, the `AIPromptModel` configuration).
+   *
+   * @param executeOnCandidate Makes the call on one candidate. It must use the candidate's own model,
+   *   vendor, driver and prompt-model fields, not those of the first candidate.
+   * @param createErrorResult Builds the result returned when every candidate has failed.
    */
-  protected createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
-    const startTime = new Date();
-    const endTime = new Date();
+  protected async ExecuteWithFailover<TResult extends BaseResult>(
+    prompt: MJAIPromptEntityExtended,
+    params: AIPromptParams,
+    allCandidates: ModelVendorCandidate[],
+    failoverConfig: FailoverConfiguration,
+    executeOnCandidate: (candidate: ModelVendorCandidate) => Promise<TResult>,
+    createErrorResult: (lastError: Error | null, failoverAttempts: FailoverAttempt[]) => TResult,
+    promptRun?: MJAIPromptRunEntityExtended,
+    credentialAvailability?: Map<string, boolean>
+  ): Promise<TResult> {
+    // Track failover attempts
+    const failoverAttempts: FailoverAttempt[] = [];
+    let lastError: Error | null = null;
 
-    // Check if this is a ContextLengthExceeded error - if so, mark as Fatal
-    const hasContextLengthError = failoverAttempts.some(a =>
-      a.errorType === 'ContextLengthExceeded' ||
-      ErrorAnalyzer.analyzeError(a.error).errorType === 'ContextLengthExceeded'
-    );
+    // Cache credential availability per driver:model:vendor for the duration of this failover
+    // scan so we don't repeat env-var / binding lookups while walking the candidate list.
+    //
+    // PERF: seed it with the probes model SELECTION already performed (same key format). Selection
+    // walks the priority list until it finds the first credentialed candidate, so this map holds
+    // the prefix it rejected (known false) PLUS the selected candidate (known true) — which is
+    // exactly the segment failover re-walks on the happy path. Reusing those results means the
+    // common case (and any caller looping failover) does ZERO redundant HasCredentialsAvailable
+    // calls. The not-evaluated tail is intentionally absent, so failover still lazily probes it
+    // only if a real failure forces it to walk down there.
+    const failoverCredentialCache = credentialAvailability
+      ? new Map<string, boolean>(credentialAvailability)
+      : new Map<string, boolean>();
+    const candidateHasCredentials = (c: ModelVendorCandidate): boolean => {
+      const key = `${c.driverClass}:${c.model.ID}:${c.vendorId || 'default'}`;
+      let has = failoverCredentialCache.get(key);
+      if (has === undefined) {
+        has = this.HasCredentialsAvailable(c.driverClass, prompt.ID, c.model.ID, c.vendorId, params);
+        failoverCredentialCache.set(key, has);
+      }
+      return has;
+    };
+    let skippedForCredentials = 0;
 
-    // If ContextLengthExceeded and all failover attempts failed, this is fatal
-    let errorInfo: AIErrorInfo | undefined;
-    if (lastError) {
-      errorInfo = ErrorAnalyzer.analyzeError(lastError);
-      // Override severity to Fatal if context length exceeded and no larger models exist
-      if (hasContextLengthError && errorInfo.errorType === 'ContextLengthExceeded') {
-        errorInfo.severity = 'Fatal';
+    // Iterate through all candidates in priority order with instant failover
+    for (let i = 0; i < allCandidates.length; i++) {
+      const candidate = allCandidates[i];
+      const attemptStartTime = Date.now();
+
+      // Skip candidates with no credentials configured. `allCandidates` is intentionally the
+      // FULL priority-ordered list (see the DECISION note in selectModelWithAPIKeyTracked),
+      // so it can include vendors that have no API key in this environment. Firing a live
+      // request at one of those produces a misleading "401 invalid API key" — and because an
+      // Authentication error is treated as fatal, it would halt failover before any
+      // credentialed candidate is ever reached. Skipping here makes failover land on the
+      // first candidate that can actually authenticate (mirroring model selection's own
+      // highest-priority-with-credentials rule).
+      if (!candidateHasCredentials(candidate)) {
+        skippedForCredentials++;
+        continue;
+      }
+
+      try {
+        // Log the attempt if not the first one
+        if (i > 0) {
+          const vendorName = candidate.vendorName || 'default';
+          LogStatusEx({
+            message: `🔄 Trying candidate ${i + 1}/${allCandidates.length}: ${candidate.model.Name} via ${vendorName}`,
+            category: 'AI',
+            additionalArgs: [{
+              promptId: prompt.ID,
+              modelId: candidate.model.ID,
+              model: candidate.model.Name,
+              vendorId: candidate.vendorId,
+              vendor: candidate.vendorName,
+              attemptNumber: i + 1
+            }]
+          });
+        }
+
+        // Execute the model with this candidate
+        const result = await executeOnCandidate(candidate);
+
+        // CRITICAL FIX: Check if result failed but is retriable (network errors, rate limits, etc.)
+        // Provider drivers (GeminiLLM, OpenAILLM, etc.) catch errors internally and return ChatResult{success: false}
+        // instead of throwing, so we must check result.success here.
+        if (!result.success && result.errorInfo?.canFailover) {
+          lastError = result.exception || new Error(result.errorMessage || 'Model execution failed');
+
+          // Use shared failover error handling logic
+          const decision = await this.processFailoverError(
+            lastError,
+            result.errorInfo,
+            candidate,
+            attemptStartTime,
+            i,
+            allCandidates,
+            failoverAttempts,
+            prompt,
+            failoverConfig
+          );
+
+          // Update candidates list (may have been filtered)
+          allCandidates = decision.updatedCandidates;
+
+          if (decision.shouldRetry) {
+            i--; // Retry same model/vendor
+            continue;
+          }
+
+          if (decision.shouldContinue) {
+            continue; // Try next candidate
+          }
+
+          // Otherwise break (fatal error or last candidate)
+          break;
+        }
+
+        // A failure that is not eligible for failover (structural error, or none diagnosed) is
+        // returned as-is — but never silently: callers often see only an empty result.
+        if (!result.success) {
+          this.logError(
+            `Model call failed and is not eligible for failover (${result.errorInfo?.errorType ?? 'undiagnosed'}): ${result.errorMessage ?? 'no error message'}`,
+            { prompt, model: candidate.model, metadata: { vendorId: candidate.vendorId, driverClass: candidate.driverClass } }
+          );
+        }
+
+        // Update promptRun with failover information if we had prior failures
+        if (failoverAttempts.length > 0 && promptRun) {
+          this.updatePromptRunWithFailoverSuccess(promptRun, failoverAttempts, candidate.model, candidate.vendorId || null);
+        }
+
+        return result;
+
+      } catch (error) {
+        lastError = error as Error;
+
+        // Analyze error to get error info
+        const errorInfo = ErrorAnalyzer.analyzeError(lastError);
+
+        // Use shared failover error handling logic
+        const decision = await this.processFailoverError(
+          lastError,
+          errorInfo,
+          candidate,
+          attemptStartTime,
+          i,
+          allCandidates,
+          failoverAttempts,
+          prompt,
+          failoverConfig
+        );
+
+        // Update candidates list (may have been filtered)
+        allCandidates = decision.updatedCandidates;
+
+        if (decision.shouldRetry) {
+          i--; // Retry same model/vendor
+          continue;
+        }
+
+        if (decision.shouldContinue) {
+          continue; // Try next candidate
+        }
+
+        // Otherwise break (fatal error or last candidate)
+        break;
       }
     }
 
-    return {
-      success: false,
-      startTime: startTime,
-      endTime: endTime,
-      errorMessage: lastError?.message || 'Unknown error',
-      exception: lastError,
-      errorInfo: errorInfo,
-      statusText: `Failover failed after ${failoverAttempts.length} attempts`,
-      timeElapsed: endTime.getTime() - startTime.getTime(),
-      data: null
-    };
+    // All candidates failed
+    if (promptRun && failoverAttempts.length > 0) {
+      this.updatePromptRunWithFailoverFailure(promptRun, failoverAttempts);
+    }
+
+    // If every candidate was skipped for missing credentials we never attempted a call and
+    // have no underlying error to report — surface an actionable message instead of null.
+    if (!lastError && failoverAttempts.length === 0 && skippedForCredentials > 0) {
+      lastError = new Error(
+        `No API credentials configured for any of the ${skippedForCredentials} candidate model-vendor combination(s) for prompt "${prompt.Name}".`
+      );
+    }
+
+    return createErrorResult(lastError, failoverAttempts);
   }
   /**
    * Engine-level default model-call timeout, in milliseconds, applied when the caller supplies no
@@ -1780,7 +2029,7 @@ export abstract class BaseModelRunner {
    *
    * @returns Decision object indicating whether to retry same model, continue to next candidate, or stop
    */
-  protected async processFailoverError(
+  private async processFailoverError(
     error: Error,
     errorInfo: AIErrorInfo,
     candidate: ModelVendorCandidate,
