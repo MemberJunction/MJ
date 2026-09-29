@@ -929,7 +929,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         testRun.FailedChecks = result.failedChecks;
         testRun.TotalChecks = result.totalChecks;
         testRun.TargetType = result.targetType;
-        testRun.TargetLogID = result.targetLogId;
+        // A driver with no target (nothing ran) returns an empty string; the column is a nullable FK
+        testRun.TargetLogID = result.targetLogId || null;
         // Set the proper Entity FK for target linkage
         if (result.targetLogEntityId) {
             testRun.TargetLogEntityID = result.targetLogEntityId;

@@ -288,15 +288,18 @@ describe('DecisionEvalDriver', () => {
             expect(driver.Runner.Calls).toHaveLength(0);
         });
 
-        it('makes no call when the point has nothing to decide', async () => {
+        it('makes no call, and skips the point, when production would ask nothing', async () => {
             const lonely: DecisionEvalEnvironment = { ...ENVIRONMENT, Catalog: { FindAgent: () => undefined, ConversationManager: null } };
             const driver = new TestDriver(new FakeRunner(async () => decided(0.2)), lonely);
             const onlyOneAgent = testEntity({});
             const single = { ...POINTS[0] };
             onlyOneAgent.InputDefinition = JSON.stringify({ point: single });
             const result = await driver.Execute(context(onlyOneAgent));
-            expect(result.status).toBe('Error');
+            // Skipped, not Error: there is no decision to measure, so nothing counts against the model
+            expect(result.status).toBe('Skipped');
             expect(result.errorMessage).toContain('Nothing to decide');
+            // No prompt ran, so there is no target to link; the engine stores this as NULL
+            expect(result.targetLogId).toBe('');
             expect(driver.Runner.Calls).toHaveLength(0);
         });
     });

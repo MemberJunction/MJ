@@ -105,6 +105,7 @@ async function loadSuiteTestIds(rv: RunView, suite: string, user: UserInfo): Pro
         EntityName: 'MJ: Test Suite Tests',
         ExtraFilter: `Suite = '${EscapeSQLString(suite)}'`,
         Fields: ['TestID'],
+        IgnoreMaxRows: true, // a suite easily has more tests than the entity's 1000-row view cap
         ResultType: 'simple'
     }, user);
     if (!result.Success) {
@@ -113,7 +114,13 @@ async function loadSuiteTestIds(rv: RunView, suite: string, user: UserInfo): Pro
     return [...new Set(result.Results.map(r => r.TestID))];
 }
 
-/** The suite's test runs in the window, read in batches of test IDs. */
+/**
+ * The suite's test runs in the window, read in batches of test IDs.
+ *
+ * `IgnoreMaxRows`: `MJ: Test Runs` caps a view at its `UserViewMaxRows` (1000), and a capped result
+ * is silently short (a non-paged view reports no larger total). A suite of 1,496 tests × 5 repeats
+ * read in batches of 300 tests came back as exactly 5 × 1,000 runs before this.
+ */
 async function loadTestRuns(rv: RunView, testIds: readonly string[], args: ScorecardArgs, user: UserInfo): Promise<TestRunRow[]> {
     const window = [
         args.Since ? `StartedAt >= '${EscapeSQLString(args.Since)}'` : null,
@@ -124,6 +131,7 @@ async function loadTestRuns(rv: RunView, testIds: readonly string[], args: Score
         ExtraFilter: [`TestID IN (${inList(ids)})`, ...window].join(' AND '),
         Fields: ['ID', 'Test', 'Status', 'ExpectedOutputData', 'ActualOutputData', 'ResultDetails', 'CostUSD', 'TargetLogID'],
         OrderBy: 'StartedAt',
+        IgnoreMaxRows: true,
         ResultType: 'simple' as const
     })), user);
     return results.flatMap(result => {
@@ -144,6 +152,7 @@ async function loadPromptRunCosts(rv: RunView, runs: readonly TestRunRow[], user
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID IN (${inList(chunk)})`,
         Fields: ['ID', 'Cost', 'TotalCost'],
+        IgnoreMaxRows: true,
         ResultType: 'simple' as const
     })), user);
     const costs = new Map<string, number | null>();

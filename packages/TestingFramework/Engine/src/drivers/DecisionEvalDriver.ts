@@ -168,8 +168,13 @@ export class DecisionEvalDriver extends BaseTestDriver {
         const environment = await this.LoadEnvironment(test.Config, context);
         const input = MapPointToRoutingInput(test.Input.point, environment.Catalog);
         if (!CanAskRoutingDecision(input)) {
-            return this.errorResult('Nothing to decide: the previous agent is not among the history\'s agents, '
-                + 'or the agent Choice would have fewer than two options. Production makes no call here.', test, null, [], startedAt);
+            // Production asks nothing for this point, so there is no decision to measure: Skipped,
+            // not Error, which would read as a failure of the model under test
+            return {
+                ...this.errorResult('Nothing to decide: the previous agent is not among the history\'s agents, '
+                    + 'or the agent Choice would have fewer than two options. Production makes no call here.', test, null, [], startedAt),
+                status: 'Skipped'
+            };
         }
         this.logToTestRun(context, 'info', `Deciding point ${test.Input.point.id} with '${environment.Prompt.Name}' (${test.Config.stateLayout} state)`);
         const call = await this.callDecision(test.Config, input, environment.Prompt, context);
