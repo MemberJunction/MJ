@@ -427,6 +427,7 @@ describe('Feature Pipeline driver seam', () => {
             const result = await processor.ProcessRecord(makeRecord(), context);
 
             expect(result.Status).toBe('Succeeded');
+            expect(result.Confidence).toEqual({ Seniority: 0.87 });
             expect(processor.HistoryParams[0].outputConfidence).toEqual({ Seniority: 0.87 });
             const outputs = recordFeatureValues.mock.calls[0][0].outputs as Array<{ featureName: string; confidence?: number | null }>;
             expect(outputs).toEqual([expect.objectContaining({ featureName: 'Seniority', confidence: 0.87 })]);

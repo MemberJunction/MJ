@@ -217,6 +217,7 @@ export class InferProcessor implements IRecordProcessor {
             AIPromptRunID: aiPromptRunID,
             PromptVersionHash: promptVersionHash,
             FeatureValueCacheID: featureValueCacheID,
+            ...(computed.Confidence ? { Confidence: computed.Confidence } : {}),
         };
     }
 
@@ -340,6 +341,7 @@ export class InferProcessor implements IRecordProcessor {
                                 constraintHash,
                                 aiPromptRunID: singleResult.AIPromptRunID,
                                 featureValueCacheID: singleResult.FeatureValueCacheID,
+                                ...(singleResult.Confidence ? { outputConfidence: singleResult.Confidence } : {}),
                             });
                         }
                         results.set(rec.RecordID, { ...singleResult });

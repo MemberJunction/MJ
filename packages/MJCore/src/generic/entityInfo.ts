@@ -803,10 +803,11 @@ export class EntityFieldValueInfo extends BaseInfo {
      * Returns a plain object suitable for JSON serialization.
      * Called automatically by JSON.stringify().
      */
-    toJSON(): { Value: string; Code: string } {
+    toJSON(): { Value: string; Code: string; Description?: string } {
         return {
             Value: this.Value,
             Code: this.Code,
+            Description: this.Description ?? undefined,
         };
     }
 }

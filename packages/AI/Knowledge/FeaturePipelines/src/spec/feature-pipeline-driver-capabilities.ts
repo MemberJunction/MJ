@@ -64,3 +64,15 @@ export const LLM_FEATURE_PIPELINE_CAPABILITIES: Readonly<FeaturePipelineDriverCa
   ProducesReasoning: true,
   ProducesConfidence: false,
 });
+
+/**
+ * The `Decision` pipeline type's capabilities: boolean, enum, and numeric constraint types,
+ * field target mode only, producing confidence without reasoning.
+ */
+export const DECISION_FEATURE_PIPELINE_CAPABILITIES: Readonly<FeaturePipelineDriverCapabilities> = Object.freeze({
+  ConstraintTypes: Object.freeze(['boolean', 'enum', 'numeric'] as FeaturePipelineConstraintType[]),
+  TargetModes: Object.freeze(['field'] as FeaturePipelineTargetMode[]),
+  ProducesReasoning: false,
+  ProducesConfidence: true,
+});
+
