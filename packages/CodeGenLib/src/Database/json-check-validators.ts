@@ -79,7 +79,7 @@ export interface JSONCheckStore {
 
 /** The slice of `AdvancedGeneration` the resolver uses (so tests can supply a stub). */
 export interface JSONCheckTranslator {
-    featureEnabled(featureName: string): boolean;
+    featureEnabled(featureName: string): boolean;  // case-violation-ok-legacy-back-compat: mirrors AdvancedGeneration.featureEnabled, which subclasses override and so cannot be renamed
     ParseJSONCheck(
         checkText: string,
         scope: JSONCheckScopeInfo,
