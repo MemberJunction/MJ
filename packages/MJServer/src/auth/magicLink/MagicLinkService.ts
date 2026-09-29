@@ -52,7 +52,7 @@ const ANONYMOUS_USER_ID = '273910DF-28F1-45C1-A8F8-6E9AD8E5F008';
 type ConsumeOutcome = 'won' | 'lost' | 'failed';
 
 /**
- * The SQL Server guarded single-use procedure (migration V202609251600__v6.2.x__MagicLink_Consume_Invite_Sproc).
+ * The SQL Server guarded single-use procedure (migration V202609291627__v6.2.x__MagicLink_Consume_Invite_Sproc).
  * A procedure, not raw DML, because on SQL Server MJ grants its runtime roles EXECUTE on procedures
  * and SELECT on views — never DML on base tables — so on any host whose MJAPI login is not db_owner
  * a raw UPDATE is refused (#4753). Ownership chaining lets the procedure update the table on the
