@@ -462,8 +462,10 @@ have no registered class anywhere in this repo.** They are `ZAILLM` (the Z.AI ro
 GLM 5.3, GLM 5V Turbo, GLM-5.3-Flash and GLM-5.3-FlashX), `DeepSeekLLM`, `KimiLLM` and
 `MoonshotLLM`. The class that exists for Z.AI is `ZhipuLLM`, which GLM 5 and 5.1 use. No driver can be
 resolved for a Z.AI-direct call on those GLM models. This run did not check whether the prompt
-runner then fails over to the next route by priority (OpenRouter, Fireworks, and now DeepInfra and
-SiliconFlow for GLM-5.3-Flash) or fails the call.
+runner then fails over to the next route by priority or fails the call. Note that `Priority` sorts
+**descending** (`BaseModelRunner` sorts `b.Priority - a.Priority`, so a higher number is tried
+first), which means the unresolvable `ZAILLM` route is tried **last**, not first: for GLM-5.3-Flash
+the order is SiliconFlow (80), DeepInfra (70), Fireworks (60), OpenRouter (50), then Z.AI (1).
 Fixing it means either renaming the routes to `ZhipuLLM` or registering an alias. That is a
 decision for the vendor-routing owner, not a metadata refresh.
 
@@ -567,6 +569,24 @@ work and none can be resolved by a research run. **A triage session is overdue.*
     **Muse Spark Contributor tier** and a first-party Meta route needing a `MetaLLM` driver class;
     **Cohere reranker API ids** (`rerank-v4-pro` vs `rerank-4-pro` — one of the two will fail at call
     time).
+19. **[Flagged — new, from review; NOT this PR]** **`ROUTINE_PROMPT.md:210` defines `Priority`
+    backwards.** It says "Priority (lower=higher priority)", and has since `be40db4894`
+    (2026-09-05), but `AIModelVendor.Priority` sorts **descending** — `BaseModelRunner`,
+    `AIModelRunner` and `ExecutionPlanner` all sort `b.Priority - a.Priority`, so a higher number is
+    tried first. The whole catalogue follows the routine's inverted rule (first-party 1, Bedrock and
+    Azure 5, OpenRouter 50), so when a caller does not pin a vendor, or on failover, **OpenRouter is
+    tried before Bedrock, and Bedrock before the first-party route**. All 385 prompt bindings in
+    `metadata/` pin a vendor, so everyday routing is unaffected; the exposure is scoped configs with
+    no `VendorID`, the AI test harness, and MCP's `modelId`. The numbers in this PR follow the
+    existing catalogue convention deliberately — fixing the routine prompt and renumbering the
+    catalogue belongs in one deliberate pass, not here. Credit: rkihm-BC on PR #4799.
+20. **[Flagged — new, from review; NOT this PR]** **This routine does not carry `ModelConfiguration`
+    forward to new models.** It should copy the prior version's `ModelConfiguration` and set
+    `LLM.SupportsNativeToolCalling: false` on any vendor row whose `DriverClass` is outside
+    `native-posture.cjs`'s `CAPABLE` set (`AzureLLM`, `BedrockLLM`, `FireworksLLM`, `MistralLLM` and
+    others inherit `BaseLLM`'s `false`). This run hit both halves of that gap and fixed them in
+    review; **`GPT-6 Astra` and `Claude Fable 5.1` still carry it**, having landed in #4277 four days
+    before the native-tool change in #4176. Credit: rkihm-BC on PR #4799.
 18. **[Calendar — 2027-01-01]** Google's Gemini 3.x Flash introductory rate ($0.75/$3.75) ends and
     $1.50/$7.50 begins. Expire and add; don't let it drift.
 
