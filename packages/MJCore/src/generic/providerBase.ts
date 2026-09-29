@@ -4,7 +4,8 @@ import { IEntityDataProvider, IMetadataProvider, ProviderConfigDataBase, Metadat
 import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
-import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
+import { LocalCacheManager, CachedRunViewResult, CacheCategory } from "./localCacheManager";
+import type { CacheChangedEvent } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
@@ -284,6 +285,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
     private _localMetadata: AllMetadata = new AllMetadata();
+    /**
+     * The stored timestamps value (raw string) that describes the snapshot this process last
+     * loaded from or saved to local storage; null when that load found none. Undefined until a load
+     * or save has happened. See {@link syncLocalMetadataFromStorage}.
+     */
+    private _storedTimestampsRaw: string | null | undefined = undefined;
     private _entityMapByName = new Map<string, EntityInfo>();
     private _entityMapByID = new Map<string, EntityInfo>();
     // Bounded LRU (unlike its siblings above, this cache holds one entry per distinct
@@ -724,6 +731,118 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 LogError(`Metadata refresh after a member-entity change failed: ${e instanceof Error ? e.message : String(e)}`);
             });
         }, this.MetadataMemberRefreshDelayMs);
+    }
+
+    // ── Metadata change notices from other servers ─────────────────────
+    /** When the current run of undebounced peer notices began; caps how long the check is deferred. */
+    private _peerMetadataNoticeFirstAt: number | null = null;
+
+    /** Windows the pending peer-notice check has waited for an ambient transaction to settle. */
+    private _peerMetadataNoticeRetries: number = 0;
+
+    /** Debounce timer for {@link HandlePeerMetadataNotice}. */
+    private _peerMetadataNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /**
+     * Upper bound, in milliseconds, of the random delay added to {@link HandlePeerMetadataNotice}'s
+     * debounce. A tool that changes the schema removes the shared snapshot, which reaches every
+     * server at once; the spread lets the first server reload and republish, so the others adopt
+     * its snapshot instead of all querying the database together.
+     */
+    public static PeerMetadataNoticeJitterMs: number = 2000;
+
+    /**
+     * How long a peer notice may be deferred by later notices before the check runs anyway. The
+     * debounce timer is reset by each arrival, so a fleet publishing steadily — exactly what a bulk
+     * import looks like — could postpone the check indefinitely (plan §16.3 #22).
+     */
+    public static PeerMetadataNoticeMaxDeferralMs: number = 15000;
+
+    /**
+     * True when a shared-cache event says the metadata snapshot changed: another process saved one
+     * (`set`), or a tool that changed the database removed it (`removed`, e.g. `mj migrate`). Only
+     * the timestamps key counts — it is written last (see {@link SaveLocalMetadataToStorage}) and
+     * removed last — so each save or removal is one notice.
+     */
+    public IsMetadataChangeNotice(event: CacheChangedEvent): boolean {
+        return (event.Action === 'set' || event.Action === 'removed')
+            && (event.Category || CacheCategory.Default) === CacheCategory.Default
+            && event.CacheKey === this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey;
+    }
+
+    /**
+     * Reacts to another server saving its metadata snapshot: after a short debounce, runs the
+     * normal staleness check ({@link RefreshIfNeeded}, bypassing the check throttle). The check
+     * compares this process's timestamps with the database and adopts the shared snapshot, so a
+     * metadata change made on one server reaches the others in seconds instead of at the next
+     * poll. A server that is already current does no refresh and saves nothing, so notices do not
+     * echo around the fleet.
+     *
+     * @returns true when the event was a metadata notice (and a check was scheduled)
+     */
+    public HandlePeerMetadataNotice(event: CacheChangedEvent): boolean {
+        if (!this.IsMetadataChangeNotice(event)) {
+            return false;
+        }
+        const now = Date.now();
+        this._peerMetadataNoticeFirstAt ??= now;
+        if (now - this._peerMetadataNoticeFirstAt >= ProviderBase.PeerMetadataNoticeMaxDeferralMs) {
+            // Notices have been arriving without a pause for longer than the deferral budget: stop
+            // resetting the timer and let the pending check run now.
+            return true;
+        }
+        if (this._peerMetadataNoticeTimer) {
+            clearTimeout(this._peerMetadataNoticeTimer);
+        }
+        const timer = setTimeout(() => {
+            this._peerMetadataNoticeTimer = null;
+            this._peerMetadataNoticeFirstAt = null;
+            // A provider inside a transaction cannot run the check now (its reads would see the
+            // transaction's own uncommitted world, and SQL Server's RefreshIfNeeded refuses
+            // outright). Re-arm instead of dropping the notice, which used to lose it entirely.
+            if (this.MetadataMemberRefreshMustWait) {
+                this.handlePeerMetadataNoticeRetry();
+                return;
+            }
+            this.RefreshIfNeeded(undefined, true).catch((e: unknown) => {
+                LogError(`Metadata check after another server's change failed: ${e instanceof Error ? e.message : String(e)}`);
+            });
+        }, ProviderBase.MetadataDatasetRefreshDebounceMs + Math.floor(Math.random() * ProviderBase.PeerMetadataNoticeJitterMs));
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+            (timer as { unref(): void }).unref();
+        }
+        this._peerMetadataNoticeTimer = timer;
+        return true;
+    }
+
+    /**
+     * Re-arms the peer-notice check when the provider was inside a transaction at the moment it
+     * came due. Bounded by the same budget as the debounce, so a provider that never leaves its
+     * transaction (a leaked handle) stops re-arming rather than holding a timer open forever; the
+     * next notice, or the periodic poll, picks the change up.
+     */
+    private handlePeerMetadataNoticeRetry(): void {
+        this._peerMetadataNoticeRetries++;
+        if (this._peerMetadataNoticeRetries > ProviderBase.MaxMetadataMemberRefreshWaits) {
+            LogError(`Metadata check after another server's change was dropped: this provider has been inside a transaction for ${this._peerMetadataNoticeRetries} windows. The next notice or the periodic check will pick the change up.`);
+            this._peerMetadataNoticeRetries = 0;
+            return;
+        }
+        const timer = setTimeout(() => {
+            this._peerMetadataNoticeTimer = null;
+            if (this.MetadataMemberRefreshMustWait) {
+                this.handlePeerMetadataNoticeRetry();
+                return;
+            }
+            this._peerMetadataNoticeRetries = 0;
+            this.RefreshIfNeeded(undefined, true).catch((e: unknown) => {
+                LogError(`Metadata check after another server's change failed: ${e instanceof Error ? e.message : String(e)}`);
+            });
+        }, this.MetadataMemberRefreshDelayMs);
+        if (typeof timer === 'object' && timer !== null && 'unref' in timer) {
+            (timer as { unref(): void }).unref();
+        }
+        this._peerMetadataNoticeTimer = timer;
     }
 
     /**
@@ -4205,35 +4324,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     protected extractMaxUpdatedAt(results: unknown[]): string {
-        let maxDate: Date | null = null;
-
-        // Early exit: SQL result rows are uniform — if the first row carries neither
-        // timestamp column, none do, and the full O(rows) scan is pointless.
-        if (results.length > 0 && results[0] && typeof results[0] === 'object') {
-            const probe = results[0] as Record<string, unknown>;
-            if (probe['__mj_UpdatedAt'] === undefined && probe['UpdatedAt'] === undefined) {
-                return '';
-            }
-        }
-
-        for (const item of results) {
-            if (item && typeof item === 'object') {
-                const record = item as Record<string, unknown>;
-                // Check for __mj_UpdatedAt field (standard MJ timestamp field)
-                const updatedAt = record['__mj_UpdatedAt'] || record['UpdatedAt'];
-                if (updatedAt) {
-                    const date = updatedAt instanceof Date ? updatedAt : new Date(updatedAt as string);
-                    if (!isNaN(date.getTime()) && (!maxDate || date > maxDate)) {
-                        maxDate = date;
-                    }
-                }
-            }
-        }
-
-        // Return empty string for empty/timestamp-less results instead of current server time.
-        // Using current time would make empty result sets perpetually "stale" — each smart-cache-check
-        // would see a different timestamp and force an unnecessary DB refresh.
-        return maxDate ? maxDate.toISOString() : '';
+        // Delegates so the RunView write path and the engine/slot path cannot drift apart: they
+        // used to be two implementations with different fallback columns and different answers for
+        // timestamp-less rows, which stamped the same rows differently depending on which funnel
+        // wrote the slot (plan §16.3 #19).
+        //
+        // Empty string, never the current time, for empty or timestamp-less results: a clock value
+        // would make such a slot perpetually "stale", since every check would see a new timestamp.
+        return LocalCacheManager.MaxUpdatedAtOfRows(results) ?? '';
     }
 
     /**
@@ -5482,8 +5580,34 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (gotTimestamps) {
             this._lastRefreshCheckAt = Date.now();
         }
-        await this.LoadLocalMetadataFromStorage();
+        await this.syncLocalMetadataFromStorage();
         return this.LocalMetadataObsolete();
+    }
+
+    /**
+     * Brings the in-memory metadata up to the stored snapshot before a staleness check.
+     *
+     * The full snapshot (several MB compressed) is read only when it may differ from what this
+     * process holds: nothing is held yet, or the stored timestamps are not the ones this process
+     * last loaded or saved — another process sharing the store wrote a newer snapshot, or the
+     * store was cleared. Otherwise only the small timestamps key is read. Reading and parsing the
+     * whole snapshot on every periodic check cost each server ~230 ms per poll on a shared cache
+     * (plan F12).
+     */
+    private async syncLocalMetadataFromStorage(): Promise<void> {
+        const ls = this.LocalStorageProvider;
+        if (ls && this._storedTimestampsRaw !== undefined && this._localMetadata?.AllEntities?.length) {
+            try {
+                const tsKey = this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey;
+                const stored = (await ls.GetItems<string>([tsKey])).get(tsKey) ?? null;
+                if (stored === this._storedTimestampsRaw) {
+                    return;
+                }
+            } catch (e) {
+                LogError(`[Metadata Cache] Reading stored metadata timestamps failed, loading the full snapshot: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+        await this.LoadLocalMetadataFromStorage();
     }
 
     /**
@@ -5791,6 +5915,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // in this situation, the last thing we check is for each entity, if the rowcount is the same as the server, if it is, we're good
                     // iterate through all of the entities and check the row counts
                     const localDataset = await this.GetCachedDataset(datasetName, itemFilters);
+                    if (!localDataset?.Results) {
+                        // The date key outlived the blob it vouches for (they expire independently),
+                        // so there is nothing to compare row counts against — treat the cache as out
+                        // of date rather than dereferencing it (plan §16.3 #3).
+                        return false;
+                    }
                     for (const eu of status.EntityUpdateDates) {
                         const localEntity = localDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
                         if (!localEntity || localEntity.Results.length !== eu.RowCount) {
@@ -6113,7 +6243,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const raw = all.get(dataKey) ?? null;
             const membershipRaw = all.get(membershipKey) ?? null;
 
-            this._latestLocalMetadataTimestamps = tsRaw ? JSON.parse(tsRaw) : null;
+            // The timestamps are a freshness claim FOR THE PAYLOAD, so they are only adopted when the
+            // payload is there to adopt with them. Timestamps without a payload happen whenever the
+            // two keys do not disappear together: the timestamps key is written last (and removed
+            // last by a cache clear), so it outlives the payload under any per-key expiry. Adopting
+            // them alone left this process claiming to be current while holding no metadata at all
+            // — the staleness check then confirms "current" and nothing ever reloads (plan §16.3 #3).
+            const claimUsable = !!tsRaw && !!raw;
+            if (claimUsable) {
+                this._latestLocalMetadataTimestamps = JSON.parse(tsRaw as string);
+            } else if (!this._localMetadata?.AllEntities?.length) {
+                // Nothing usable stored and nothing held: fall back to asking the database.
+                this._latestLocalMetadataTimestamps = null;
+            }
+            // A store without timestamps says nothing about the metadata this process already holds
+            // (another process may have just cleared it), so held timestamps survive: the staleness
+            // check then compares what is held with the database instead of assuming it is stale.
+            this._storedTimestampsRaw = claimUsable ? tsRaw : null;
+            if (tsRaw && !raw) {
+                LogStatusEx({ message: '[Metadata Cache] stored timestamps have no payload behind them (the payload expired or was cleared first) — ignoring the claim and checking the database', verboseOnly: true });
+            }
 
             // Restore the metadata-member entity set so the event-driven refresh works on a warm
             // boot that never calls GetAllMetadata (the stale-while-revalidate fast start). The
@@ -6249,7 +6398,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Timestamps LAST: they are the freshness claim for everything written above, so they
             // must be the final thing to land.
-            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
+            const timestampsRaw = JSON.stringify(this._latestLocalMetadataTimestamps);
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, timestampsRaw);
+            this._storedTimestampsRaw = timestampsRaw;
 
             this.logMetadataSaveComplete(Date.now() - start, jsonString.length, snapshot);
         }

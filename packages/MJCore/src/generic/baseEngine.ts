@@ -5,9 +5,10 @@ import { buffer, debounceTime, filter } from "rxjs/operators";
 
 import { UserInfo } from "./securityInfo";
 import { RunView, RunViewParams } from "../views/runView";
-import { LogError, LogStatus } from "./logging";
+import { LogError, LogStatus, LogStatusEx, LogWarning } from "./logging";
+import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
-import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewResult } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, IMetadataProvider, IRunViewProvider, ProviderType, RunViewDatabaseStatus, RunViewResult } from "./interfaces";
 import { BaseInfo } from "./baseInfo";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { CompositeKey, KeyValuePair } from "./compositeKey";
@@ -216,7 +217,106 @@ export interface EngineDataMapEntry {
      * permission on its entity. The data array will be empty `[]`.
      */
     permissionDenied?: boolean;
+    /**
+     * True when a load of this config failed and the permission classifier said the user cannot
+     * read the entity, so the config was loaded empty. Cache events never fill it; `Config(true)`
+     * re-evaluates it.
+     */
+    readDenied?: boolean;
 }
+
+/**
+ * What one engine property holds right now. See {@link BaseEngine.GetStateCensus}.
+ */
+export interface EnginePropertyCensus {
+    PropertyName: string;
+    EntityName?: string;
+    DatasetName?: string;
+    RowCount: number;
+    /** Newest `__mj_UpdatedAt` among the rows (ISO), or null when the rows carry none. */
+    MaxUpdatedAt: string | null;
+    /**
+     * Hash of the sorted (primary key, `__mj_UpdatedAt`) pairs, or null when it cannot be computed
+     * (dataset configs, entities without the column). Equal hashes on two processes mean they hold
+     * the same row versions.
+     */
+    IdentityHash: string | null;
+    LoadedSuccessfully: boolean;
+    PermissionDenied: boolean;
+}
+
+/**
+ * A read-only snapshot of an engine's state — the rows it holds and the state it derived from
+ * them. Row counts alone cannot show a broken engine (the incident behind plan N6 had every
+ * count correct and every derived collection empty), so the census carries both.
+ */
+export interface EngineStateCensus {
+    EngineClass: string;
+    Loaded: boolean;
+    PermissionConstrained: boolean;
+    Properties: EnginePropertyCensus[];
+    /** Engine-specific derived-state counts from {@link BaseEngine.GetDerivedStateCensus}. */
+    Derived: Record<string, number>;
+}
+
+/** What {@link BaseEngine.VerifyDerivedStateIdempotent} found. */
+export interface DerivedStateIdempotencyResult {
+    EngineClass: string;
+    /** True when a second `AdditionalLoading` run left every row array and derived count as the first did. */
+    Idempotent: boolean;
+    AfterFirst: Record<string, number>;
+    AfterSecond: Record<string, number>;
+}
+
+/** The parts of a census that a repeated rebuild must not change. */
+function censusFingerprint(census: EngineStateCensus): string {
+    const properties = census.Properties.map(p => `${p.PropertyName}:${p.RowCount}:${p.IdentityHash ?? ''}`);
+    const derived = Object.keys(census.Derived).sort().map(k => `${k}=${census.Derived[k]}`);
+    return JSON.stringify([properties, derived]);
+}
+
+/** What {@link BaseEngine.SweepAgainstDatabase} found and did. */
+export interface EngineSweepResult {
+    EngineClass: string;
+    /** Configs compared with the database. */
+    Checked: number;
+    /** Properties whose rows differed from the database and were reloaded. */
+    Reloaded: string[];
+    /** Problems that kept a config from being checked or reloaded. */
+    Errors: string[];
+}
+
+/**
+ * Timestamps closer than this are treated as equal, as the smart-cache check does: the database
+ * and JavaScript round datetimes differently.
+ */
+const SWEEP_TIMESTAMP_TOLERANCE_MS = 1000;
+
+/** Resolves on a later macrotask, after I/O callbacks already queued have run. Works in browsers too. */
+function yieldToEventLoop(): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+/**
+ * 64-bit FNV-1a over a list of strings, as hex. Synchronous and dependency-free so it runs in the
+ * browser too; for comparing snapshots, not for security.
+ * @internal
+ */
+function hashStrings(values: ReadonlyArray<string>): string {
+    let h1 = 0x811c9dc5;
+    let h2 = 0x01000193 ^ 0x5bd1e995;
+    for (const value of values) {
+        for (let i = 0; i < value.length; i++) {
+            const c = value.charCodeAt(i);
+            h1 = Math.imul(h1 ^ c, 0x01000193);
+            h2 = Math.imul(h2 ^ c, 0x01000193);
+        }
+        h1 = Math.imul(h1 ^ 0x0a, 0x01000193);   // separator, so ['ab','c'] != ['a','bc']
+        h2 = Math.imul(h2 ^ 0x0b, 0x01000193);
+    }
+    return (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+}
+
 
 /**
  * Thrown when engine data is accessed but was never loaded because the
@@ -290,6 +390,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             .then(async () => {
                 try {
                     await this.AdditionalLoading(contextUser);
+                    if (BaseEngine.VerifyDerivedStateOnRebuild) {
+                        await this.reportNonIdempotentRebuild(contextUser);
+                    }
                 } catch (e) {
                     LogError(
                         `${this.constructor.name}: derived-state rebuild after a cache change failed — ` +
@@ -299,6 +402,50 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             });
         return this._derivedStateRebuild;
     }
+
+    /**
+     * When true, every {@link RebuildDerivedState} runs `AdditionalLoading` a second time and logs
+     * an error naming the engine if the second run changes the engine's census. A rebuild that is
+     * not idempotent accumulates or loses derived state each time an event triggers it (plan §10,
+     * Phase 5). Off by default: some overrides do I/O per run. Turn it on in development and test
+     * processes; {@link VerifyDerivedStateIdempotent} checks one engine on demand.
+     */
+    public static VerifyDerivedStateOnRebuild = false;
+
+    /**
+     * Runs `AdditionalLoading` twice, in the rebuild queue, and compares the engine's census after
+     * each run. Row arrays and derived counts must be unchanged by the second run.
+     */
+    public VerifyDerivedStateIdempotent(contextUser?: UserInfo): Promise<DerivedStateIdempotencyResult> {
+        const check = this._derivedStateRebuild
+            .catch(() => undefined)
+            .then(() => this.compareRebuilds(contextUser ?? this._contextUser));
+        this._derivedStateRebuild = check.then(() => undefined, () => undefined);
+        return check;
+    }
+
+    private async compareRebuilds(contextUser?: UserInfo): Promise<DerivedStateIdempotencyResult> {
+        await this.AdditionalLoading(contextUser);
+        const first = this.GetStateCensus();
+        await this.AdditionalLoading(contextUser);
+        const second = this.GetStateCensus();
+        return {
+            EngineClass: this.constructor.name,
+            Idempotent: censusFingerprint(first) === censusFingerprint(second),
+            AfterFirst: first.Derived,
+            AfterSecond: second.Derived,
+        };
+    }
+
+    /** The on-rebuild variant of {@link VerifyDerivedStateIdempotent}: one extra run, logged. */
+    private async reportNonIdempotentRebuild(contextUser?: UserInfo): Promise<void> {
+        const before = censusFingerprint(this.GetStateCensus());
+        await this.AdditionalLoading(contextUser);
+        if (censusFingerprint(this.GetStateCensus()) !== before) {
+            LogError(`${this.constructor.name}: AdditionalLoading is not idempotent — running it again changed the engine's rows or derived state. Rebuilds after cache events will drift.`);
+        }
+    }
+
     private _propertySubjects: Map<string, BehaviorSubject<BaseEntity[]>> = new Map();
     private _isPermissionConstrained: boolean = false;
     private _deniedEntityNames: string[] = [];
@@ -724,10 +871,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             this._systemUserApplied = true;
         } else if (!BaseEngine._systemUserFallbackWarned.has(this.constructor.name)) {
             BaseEngine._systemUserFallbackWarned.add(this.constructor.name);
-            LogStatus(
+            LogWarning(
                 `${this.constructor.name}: could not resolve the MJ system user for server-side loading — ` +
                 `falling back to the calling user. This engine's data will reflect that user's permissions ` +
-                `and is cached process-wide, so a restricted caller can leave incomplete data cached for everyone.`
+                `and is cached process-wide, so a restricted caller can leave incomplete data cached for everyone.`,
+                'Cache'
             );
         }
     }
@@ -1625,7 +1773,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (config.CacheLocal) {
             this.syncLocalCacheForConfig(config, event).catch(e => {
                 // Log status but don't fail - cache will self-correct on next fetch
-                LogStatus(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`);
+                LogWarning(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`, 'Cache');
             });
         }
     }
@@ -1671,6 +1819,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         const entity = event.baseEntity;
+        // Inside a batch the cache manager records this change and rewrites every slot indexed for
+        // the entity — this config's included — once, when the batch closes (plan N11).
+        if (LocalCacheManager.Instance.IsBatchingEntityEvents(entity?.ProviderToUse)) {
+            return;
+        }
 
         // Get the connection string from the provider for fingerprint generation
         // The provider is needed because fingerprints include connection prefix
@@ -1822,21 +1975,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const user = contextUser || this.ProviderToUse?.CurrentUser;
         if (!user) return configs; // Can't check without a user — proceed with normal loading
 
-        const md = this.ProviderToUse;
-        const deniedEntities: string[] = [];
-
-        for (const config of configs) {
-            if (!config.EntityName) continue;
-            const entityInfo = md.EntityByName(config.EntityName);
-            if (!entityInfo) continue; // Entity not in metadata — let RunView handle it
-            const perms = entityInfo.GetUserPermisions(user);
-            if (!perms || !perms.CanRead) {
-                deniedEntities.push(config.EntityName);
-            }
-        }
+        const deniedEntities = this.findUnreadableEntities(configs, user);
 
         if (deniedEntities.length > 0) {
-            LogStatus(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`);
+            LogWarning(`${this.constructor.name}: Skipping ${configs.length} entity config(s) — user ${user.Email} lacks read permission on: ${deniedEntities.join(', ')}`, 'Cache');
 
             // Mark all entity configs as successfully loaded with empty data.
             // This is not a failure — it's expected behavior for limited-permission users.
@@ -1863,17 +2005,33 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         return configs;
     }
 
+    /** The entity names among `configs` that `user` cannot read, per current metadata. */
+    private findUnreadableEntities(configs: BaseEnginePropertyConfig[], user: UserInfo): string[] {
+        const md = this.ProviderToUse;
+        const denied: string[] = [];
+        for (const config of configs) {
+            if (!config.EntityName) continue;
+            const entityInfo = md.EntityByName(config.EntityName);
+            if (!entityInfo) continue; // Entity not in metadata — let RunView handle it
+            const perms = entityInfo.GetUserPermisions(user);
+            if (!perms || !perms.CanRead) {
+                denied.push(config.EntityName);
+            }
+        }
+        return denied;
+    }
+
     /**
      * Loads a single metadata configuration.
      * @param config - The metadata configuration to load
      * @param contextUser - The context user information
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
+    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false, suppressEmit: boolean = false): Promise<void> {
         if (config.Type === 'dataset')
             return await this.LoadSingleDatasetConfig(config, contextUser, bypassCache);
         else
-            return await this.LoadSingleEntityConfig(config, contextUser, bypassCache);
+            return await this.LoadSingleEntityConfig(config, contextUser, bypassCache, suppressEmit);
     }
 
     /**
@@ -1903,6 +2061,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * to ensure the fingerprint-affecting params (EntityName, ExtraFilter, OrderBy,
      * IgnoreMaxRows) are always consistent — preventing cache key mismatches that break
      * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
+     *
+     * **Row-level security is not part of the fingerprints built from these params.** The engine
+     * builds them with `GenerateRunViewFingerprint(params, connection)`, without the RLS clause the
+     * provider adds for the reading user. On a server that is correct: engines load as the system
+     * user, whose RLS clause is empty, so the provider's fingerprint for the same read matches. An
+     * engine loaded by an RLS-scoped user (possible on a client) would compute an unscoped
+     * fingerprint for a slot the provider stored under a scoped one, so its cache callbacks and
+     * `syncLocalCacheForConfig` would target a different slot. Pass the RLS clause here if such an
+     * engine is ever needed.
      */
     protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
         return {
@@ -1924,7 +2091,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param contextUser
      * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
+    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false, suppressEmit: boolean = false): Promise<void> {
         // Claim a refresh generation BEFORE the awaited RunView. If another full refresh for
         // this same property starts while our RunView is in flight, ours becomes stale and must
         // not commit — otherwise concurrent refreshes (the filtered/OrderBy path, e.g.
@@ -1945,7 +2112,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         }
 
         this.HandleSingleViewResult(config, result, contextUser);
-        this.emitPropertyChange(config.PropertyName);
+        if (!suppressEmit) {
+            // A caller that rebuilds derived state afterwards emits itself, once, AFTER the
+            // rebuild — subscribers must never observe a property whose derived state is still
+            // the previous load's (the invariant stated on OnExternalCacheChange; §16.3 #20).
+            this.emitPropertyChange(config.PropertyName);
+        }
     }
 
     /**
@@ -1974,7 +2146,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // the user still gets no data. Logged at status level, not error, because
             // for a restricted role this is expected, not a fault.
             this.MarkConfigEmptyLoaded(config);
-            LogStatus(`BaseEngine: ${config.EntityName} not readable by current role — loaded empty (restricted-role degradation).`);
+            LogWarning(`BaseEngine: ${config.EntityName} not readable by current role — loaded empty (restricted-role degradation).`, 'Cache');
         } else {
             // TRANSIENT failure (network, MJAPI restart, etc.) — leave loadedSuccessfully
             // false so EnsureLoaded()/Config() retries on the next attempt.
@@ -2035,7 +2207,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (config.AddToObject !== false) {
             (this as any)[config.PropertyName] = [];
         }
-        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true });
+        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true, readDenied: true });
         this.NotifyDataChange(config, []);
     }
 
@@ -2165,18 +2337,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         this._cacheChangeUnsubscribers = [];
 
         if (!LocalCacheManager.Instance.IsInitialized) {
+            this.deferCacheChangeRegistration(entityConfigs);
             return;
         }
 
-        const connectionPrefix = this.RunViewProviderToUse instanceof ProviderBase
-            ? (this.RunViewProviderToUse as ProviderBase).InstanceConnectionString
-            : undefined;
-
         for (const config of entityConfigs) {
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-                this.BuildRunViewParamsForConfig(config),
-                connectionPrefix
-            );
+            const fingerprint = this.configFingerprint(config);
 
             const unsubscribe = LocalCacheManager.Instance.RegisterChangeCallback(
                 fingerprint,
@@ -2184,6 +2350,30 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             );
             this._cacheChangeUnsubscribers.push(unsubscribe);
         }
+    }
+
+    /** Configs waiting for the cache manager to initialize before their callbacks can register. */
+    private _deferredCacheCallbackConfigs: BaseEnginePropertyConfig[] | null = null;
+
+    /**
+     * An engine that loads before `LocalCacheManager` is initialized (a custom host, a script that
+     * touches an engine before `StartupManager` runs) would otherwise never hear another server's
+     * cache changes: nothing registers its callbacks later except a forced reload. Registration is
+     * deferred to initialization instead; only the latest config list is kept.
+     */
+    private deferCacheChangeRegistration(entityConfigs: BaseEnginePropertyConfig[]): void {
+        const alreadyWaiting = this._deferredCacheCallbackConfigs !== null;
+        this._deferredCacheCallbackConfigs = entityConfigs;
+        if (alreadyWaiting) {
+            return;
+        }
+        LocalCacheManager.Instance.WhenInitialized(() => {
+            const configs = this._deferredCacheCallbackConfigs;
+            this._deferredCacheCallbackConfigs = null;
+            if (configs) {
+                this.RegisterCacheChangeCallbacks(configs);
+            }
+        });
     }
 
     /**
@@ -2200,16 +2390,35 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         config: BaseEnginePropertyConfig,
         event: CacheChangedEvent
     ): Promise<void> {
+        // A config the current user cannot read stays empty: neither a peer's rows nor a reload
+        // may fill it. The per-record event path applies the same rule.
+        if (this._isPermissionConstrained || this._dataMap.get(config.PropertyName)?.readDenied) {
+            return;
+        }
         // If the event includes the new data, try to apply it directly
         if (event.Data && event.Action === 'set') {
             try {
                 const parsed = JSON.parse(event.Data);
                 if (parsed?.results && Array.isArray(parsed.results)) {
+                    // A payload carrying exactly the rows this engine already holds tells it nothing.
+                    // Skipping it leaves the engine as if the event had not arrived: no generation is
+                    // claimed, so a reload already in flight still commits its (possibly newer) rows.
+                    if (this.payloadMatchesHeldRows(config, parsed.results)) {
+                        LogStatusEx({ message: `BaseEngine.OnExternalCacheChange: '${config.PropertyName}' already holds the payload's rows — skipped`, verboseOnly: true });
+                        return;
+                    }
                     // Claim a refresh generation BEFORE the awaited materialization — the same
                     // protocol LoadSingleConfig uses around its awaited RunView. Without it, two
                     // overlapping cache events (or an event racing a full reload) can resolve out
                     // of order and the stale result would be the one that assigns last.
                     const generation = this.beginConfigRefresh(config.PropertyName);
+                    // A burst of payloads for one slot usually arrives together. Let the rest of the
+                    // burst claim its generations first, so only the newest payload is materialized
+                    // instead of every one of them (plan N11, receive side).
+                    await yieldToEventLoop();
+                    if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+                        return;
+                    }
                     const rows = await this.materializeCacheEventRows(config, parsed.results);
                     if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
                         return; // superseded while materializing — the newer refresh owns the property
@@ -2246,16 +2455,292 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // materialization failures (e.g. an entity class that cannot construct in
                 // this process), and without a trace the only symptom is every cache event
                 // turning into a database reload.
-                LogStatus(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`);
+                LogWarning(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`, 'Cache');
             }
         }
-        // Fallback: reload this config from the database. This also replaces the property,
-        // so the derived state has to be rebuilt here too.
-        await this.LoadSingleConfig(config, this._contextUser);
+        // Fallback: reload this config from the database. This also replaces the property, so the
+        // derived state has to be rebuilt here too — and the reload must NOT emit on its own, or a
+        // subscriber wakes between the new rows and the rebuild and reads derived state still
+        // pointing at the instances this reload discarded (plan §22).
+        await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
         await this.RebuildDerivedState(this._contextUser);
+        this.emitPropertyChange(config.PropertyName);
     }
 
     /**
+     * True when `payloadRows` are the same row versions this config currently holds: the same
+     * number of rows, and the same multiset of (primary key, `__mj_UpdatedAt`) pairs.
+     *
+     * Identity is derived from what the engine holds right now, never remembered, so no other
+     * assignment path has to keep anything in step with it. (An earlier version remembered the last
+     * payload applied and went stale whenever another path replaced the property.) Comparing rows,
+     * not the writer's `maxUpdatedAt`, keeps it independent of how the writer stamped the slot, and
+     * catches a delete paired with an insert.
+     *
+     * Returns false — apply the payload — whenever identity cannot be established: the config is not
+     * loaded, the entity has no `__mj_UpdatedAt` column, or a timestamp cannot be read.
+     * Known limit: a change that does not bump `__mj_UpdatedAt` (direct SQL) is invisible here, as it
+     * is to the client smart-cache check.
+     */
+    protected payloadMatchesHeldRows(config: BaseEnginePropertyConfig, payloadRows: Array<Record<string, unknown>>): boolean {
+        try {
+            return this.compareHeldRows(config, payloadRows);
+        } catch (e) {
+            // The skip is an optimization; failing to decide must never stop the payload applying.
+            LogStatusEx({ message: `BaseEngine.payloadMatchesHeldRows: could not compare '${config.PropertyName}' (${e instanceof Error ? e.message : String(e)}) — applying the payload`, verboseOnly: true });
+            return false;
+        }
+    }
+
+    private compareHeldRows(config: BaseEnginePropertyConfig, payloadRows: Array<Record<string, unknown>>): boolean {
+        const entry = this._dataMap.get(config.PropertyName);
+        if (!entry?.loadedSuccessfully || !config.EntityName || !Array.isArray(entry.data)) {
+            return false;
+        }
+        if (entry.data.length !== payloadRows.length) {
+            return false;
+        }
+        const entityInfo = this.ProviderToUse?.EntityByName(config.EntityName);
+        if (!entityInfo || !entityInfo.Fields.some(f => f.IsUpdatedAtField)) {
+            return false;
+        }
+        const keyFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
+        const held = this.rowVersionKeys(entry.data, keyFields, (row, field) =>
+            row instanceof BaseEntity ? row.Get(field) : (row as Record<string, unknown>)[field]);
+        const incoming = this.rowVersionKeys(payloadRows, keyFields, (row, field) => row[field]);
+        if (!held || !incoming) {
+            return false;
+        }
+        return held.every((key, i) => key === incoming[i]);
+    }
+
+    /**
+     * Sorted `pk|epochMs` strings for a row set, or null when any row lacks a readable timestamp.
+     * Key values are lower-cased so GUID casing differences between sources do not matter.
+     */
+    private rowVersionKeys<R>(rows: ReadonlyArray<R>, keyFields: string[], read: (row: R, field: string) => unknown): string[] | null {
+        const keys: string[] = [];
+        for (const row of rows) {
+            const raw = read(row, EntityInfo.UpdatedAtFieldName);
+            const stamp = raw instanceof Date ? raw.getTime() : new Date(String(raw)).getTime();
+            if (raw == null || Number.isNaN(stamp)) {
+                return null;
+            }
+            const pk = keyFields.map(f => String(read(row, f) ?? '').toLowerCase()).join('');
+            keys.push(`${pk}${stamp}`);
+        }
+        return keys.sort();
+    }
+
+    // ========================================================================
+    // RECONCILIATION WITH THE DATABASE (plan Phase 3.1)
+    // ========================================================================
+
+    /**
+     * Compares each loaded entity config with the database — row count and newest
+     * `__mj_UpdatedAt` — and reloads the ones that differ. Finds changes that never raised an MJ
+     * event: direct SQL, other applications, restores. Everything else reaches engines through
+     * events and does not need this.
+     *
+     * One batched status query for the whole engine. A reloaded config is written to the cache
+     * once, so on a shared cache every other server adopts the fresh rows from that one write.
+     * Derived state is rebuilt once, after all reloads.
+     *
+     * Limits: an UPDATE that does not change `__mj_UpdatedAt` or the row count is invisible, as it
+     * is to the smart-cache check. Entities without `__mj_UpdatedAt` are compared by row count
+     * only; dataset configs are not checked.
+     *
+     * @returns What was checked and reloaded. Never throws.
+     */
+    public async SweepAgainstDatabase(): Promise<EngineSweepResult> {
+        const result: EngineSweepResult = { EngineClass: this.constructor.name, Checked: 0, Reloaded: [], Errors: [] };
+        const provider = this.RunViewProviderToUse;
+        const configs = this.sweepableConfigs();
+        if (!this.Loaded || this._isPermissionConstrained || !provider?.GetRunViewsDatabaseStatus || configs.length === 0) {
+            return result;
+        }
+        try {
+            const statuses = await provider.GetRunViewsDatabaseStatus(configs.map(c => this.BuildRunViewParamsForConfig(c)), this._contextUser);
+            const stale = this.staleConfigs(configs, statuses, result);
+            await this.reloadStaleConfigs(stale, result);
+        } catch (e) {
+            result.Errors.push(e instanceof Error ? e.message : String(e));
+        }
+        if (result.Errors.length > 0) {
+            LogWarning(`BaseEngine.SweepAgainstDatabase(${result.EngineClass}): ${result.Errors.join('; ')}`, 'Cache');
+        }
+        return result;
+    }
+
+    /** Entity configs holding a successful, readable load. */
+    private sweepableConfigs(): BaseEnginePropertyConfig[] {
+        return this._metadataConfigs.filter(config => {
+            const entry = this._dataMap.get(config.PropertyName);
+            return config.Type === 'entity' && !!entry?.loadedSuccessfully && !entry.readDenied && !entry.permissionDenied;
+        });
+    }
+
+    /** The configs whose held rows disagree with what the database reports. */
+    private staleConfigs(configs: BaseEnginePropertyConfig[], statuses: RunViewDatabaseStatus[], result: EngineSweepResult): BaseEnginePropertyConfig[] {
+        const stale: BaseEnginePropertyConfig[] = [];
+        configs.forEach((config, i) => {
+            const status = statuses[i];
+            if (!status?.Success) {
+                result.Errors.push(`${config.PropertyName}: ${status?.ErrorMessage ?? 'no status returned'}`);
+                return;
+            }
+            result.Checked++;
+            if (!this.heldRowsMatchDatabase(config, status)) {
+                stale.push(config);
+            }
+        });
+        return stale;
+    }
+
+    /**
+     * Row count and newest `__mj_UpdatedAt` of the held rows against the database's.
+     *
+     * The held stamp is computed the way SQL's `MAX` computes the database's — **ignoring rows
+     * whose timestamp is null** — rather than taken from the census, whose stamp is null unless
+     * EVERY row carries one (it also backs an identity hash, which needs them all). Comparing a
+     * census stamp with a SQL `MAX` made one un-stamped row in a config mean "stale" on every
+     * sweep, forever: a reload every interval, each one rewriting the shared slot and making every
+     * peer reload too (plan §16.3 #10). Two sides that both have no stamp at all agree; one with
+     * and one without is a real difference.
+     */
+    private heldRowsMatchDatabase(config: BaseEnginePropertyConfig, status: RunViewDatabaseStatus): boolean {
+        const entry = this._dataMap.get(config.PropertyName);
+        if (!entry) {
+            return true;
+        }
+        const rows = Array.isArray(entry.data) ? entry.data : [];
+        if (rows.length !== status.RowCount) {
+            return false;
+        }
+        const entityInfo = this.ProviderToUse?.EntityByName(config.EntityName);
+        if (!entityInfo?.Fields.some(f => f.IsUpdatedAtField) || rows.length === 0) {
+            return true; // nothing to compare beyond the count
+        }
+        const heldMax = LocalCacheManager.MaxUpdatedAtOfRows(rows.map(row => row instanceof BaseEntity ? row.GetAll() : row));
+        if (!heldMax && !status.MaxUpdatedAt) {
+            return true; // neither side has a usable stamp; the counts already agreed
+        }
+        if (!heldMax || !status.MaxUpdatedAt) {
+            return false;
+        }
+        return Math.abs(Date.parse(heldMax) - Date.parse(status.MaxUpdatedAt)) < SWEEP_TIMESTAMP_TOLERANCE_MS;
+    }
+
+    /** Reloads each stale config from the database, stores it once, then rebuilds derived state. */
+    private async reloadStaleConfigs(stale: BaseEnginePropertyConfig[], result: EngineSweepResult): Promise<void> {
+        for (const config of stale) {
+            await this.LoadSingleConfig(config, this._contextUser, true, /*suppressEmit*/ true);
+            if (!this._dataMap.get(config.PropertyName)?.loadedSuccessfully) {
+                result.Errors.push(`${config.PropertyName}: reload failed`);
+                continue;
+            }
+            await this.storeConfigRows(config);
+            result.Reloaded.push(config.PropertyName);
+        }
+        if (result.Reloaded.length === 0) {
+            return;
+        }
+        await this.RebuildDerivedState(this._contextUser);
+        for (const propertyName of result.Reloaded) {
+            this.emitPropertyChange(propertyName);
+        }
+        LogStatusEx({ message: `BaseEngine.SweepAgainstDatabase(${result.EngineClass}): reloaded ${result.Reloaded.join(', ')}`, verboseOnly: false });
+    }
+
+    /**
+     * Writes a config's rows to the cache slot the engine reads and listens on. The reload
+     * bypassed the cache, so without this the slot — and every server reading it — would keep the
+     * old rows.
+     */
+    private async storeConfigRows(config: BaseEnginePropertyConfig): Promise<void> {
+        const cache = LocalCacheManager.Instance;
+        const rows = this._dataMap.get(config.PropertyName)?.data;
+        if (!cache.IsInitialized || !Array.isArray(rows)) {
+            return;
+        }
+        const plainRows = rows.map(row => row instanceof BaseEntity ? row.GetAll() : row);
+        const params = this.BuildRunViewParamsForConfig(config);
+        // Never the clock: a stamp the database cannot reproduce makes the slot permanently
+        // "stale" — every currency check sees a different value and refetches, and the next sweep
+        // stamps it again with a newer one. `''` is what the database's own MAX reports for rows
+        // with no timestamp, and what the other two write funnels store (plan §16.3 #19, §22).
+        const maxUpdatedAt = LocalCacheManager.MaxUpdatedAtOfRows(plainRows) ?? '';
+        // Under the slot's cross-process lock: a peer may be part-way through its own
+        // read-modify-write of this slot, and an unlocked replace would clobber it (§16.3 #6).
+        await cache.ReplaceRunViewResultLocked(this.configFingerprint(config), params, plainRows, maxUpdatedAt, plainRows.length, this.ProviderToUse);
+
+    }
+
+    /** The cache fingerprint of a config's slot, as {@link RegisterCacheChangeCallbacks} computes it. */
+    protected configFingerprint(config: BaseEnginePropertyConfig): string {
+        const provider = this.RunViewProviderToUse;
+        const connectionPrefix = provider instanceof ProviderBase ? provider.InstanceConnectionString : undefined;
+        return LocalCacheManager.Instance.GenerateRunViewFingerprint(this.BuildRunViewParamsForConfig(config), connectionPrefix);
+    }
+
+    /**
+     * Snapshot of what this engine holds: per property, the row count, newest `__mj_UpdatedAt`,
+     * and a hash of the row versions; plus the engine's own derived-state counts. Read-only and
+     * cheap enough for diagnostics and startup checks (O(rows)).
+     */
+    public GetStateCensus(): EngineStateCensus {
+        const properties: EnginePropertyCensus[] = [];
+        for (const [propertyName, entry] of this._dataMap) {
+            properties.push(this.censusForProperty(propertyName, entry));
+        }
+        properties.sort((a, b) => a.PropertyName.localeCompare(b.PropertyName));
+        return {
+            EngineClass: this.constructor.name,
+            Loaded: this.Loaded,
+            PermissionConstrained: this._isPermissionConstrained,
+            Properties: properties,
+            Derived: this.GetDerivedStateCensus(),
+        };
+    }
+
+    /**
+     * Counts that describe the state a subclass derives in {@link AdditionalLoading} — grouped
+     * child collections, lookup maps. Override to expose them; the default reports nothing.
+     * Must be read-only and must not throw.
+     */
+    protected GetDerivedStateCensus(): Record<string, number> {
+        return {};
+    }
+
+    private censusForProperty(propertyName: string, entry: EngineDataMapEntry): EnginePropertyCensus {
+        const rows = Array.isArray(entry.data) ? entry.data : [];
+        const census: EnginePropertyCensus = {
+            PropertyName: propertyName,
+            EntityName: entry.entityName,
+            DatasetName: entry.datasetName,
+            RowCount: rows.length,
+            MaxUpdatedAt: null,
+            IdentityHash: null,
+            LoadedSuccessfully: entry.loadedSuccessfully,
+            PermissionDenied: entry.permissionDenied === true || entry.readDenied === true,
+        };
+        const entityInfo = entry.entityName ? this.ProviderToUse?.EntityByName(entry.entityName) : undefined;
+        if (!entityInfo) {
+            return census;
+        }
+        const read = (row: unknown, field: string): unknown =>
+            row instanceof BaseEntity ? row.Get(field) : (row as Record<string, unknown>)?.[field];
+        const keys = this.rowVersionKeys(rows, entityInfo.PrimaryKeys.map(pk => pk.Name), read);
+        if (keys) {
+            census.IdentityHash = hashStrings(keys);
+            const newest = keys.reduce((max, k) => Math.max(max, Number(k.slice(k.lastIndexOf('\u0002') + 1))), Number.NEGATIVE_INFINITY);
+            census.MaxUpdatedAt = Number.isFinite(newest) ? new Date(newest).toISOString() : null;
+        }
+        return census;
+    }
+
+    /**
+     * Converts rows from a cache-change payload into the shape this config's property expects.    /**
      * Converts rows from a cache-change payload into the shape this config's property expects.
      *
      * Cache payloads are JSON, so their rows are plain objects with string dates. A config loaded
@@ -2324,12 +2809,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     /**
      * Refreshes a specific item.
+     *
+     * Rebuilds derived state before notifying subscribers: this replaces the property's array, so
+     * anything a subclass derived from the previous instances — grouped child collections, memoized
+     * lookups — refers to objects the engine has just discarded. This is also the callback the
+     * expiration timer fires, so without the rebuild a config with an expiry quietly served stale
+     * derived state until something else happened to rebuild it (plan §22).
+     *
      * @param propertyName - The name of the property to refresh
      */
     public async RefreshItem(propertyName: string): Promise<void> {
         const config = this._metadataConfigs.find(c => c.PropertyName === propertyName) || this._dynamicConfigs.get(propertyName);
         if (config) {
-            await this.LoadSingleConfig(config, this._contextUser);
+            await this.LoadSingleConfig(config, this._contextUser, /*bypassCache*/ false, /*suppressEmit*/ true);
+            await this.RebuildDerivedState(this._contextUser);
+            this.emitPropertyChange(config.PropertyName);
         }
     }
 
