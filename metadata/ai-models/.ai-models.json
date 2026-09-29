@@ -25855,6 +25855,57 @@
   },
   {
     "fields": {
+      "Name": "Betty",
+      "Description": "The MJ-native, organization-scoped assistant, reached through the Betty Public API v1. Answers are grounded in the organization's own content and come back with citations, which the driver surfaces as additional choices. Distinct from the Betty Bot model, which is a different service on a different wire protocol.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "PowerRank": 0,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MemberJunction",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "BettyLLM",
+            "APIName": "betty",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D8F9E8B2-3D1D-46DF-93F1-0CF8C10EA78B"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MemberJunction",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "E5F772B2-8FBF-4932-8CB4-855AFB3B2A3B"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F5F57DC2-8FE4-47F6-B23E-D37B88B172EE"
+    }
+  },
+  {
+    "fields": {
       "Name": "Eleven v4",
       "PowerRank": 10,
       "Description": "ElevenLabs' flagship v4 text-to-speech model, announced September 2026. Successor to Eleven v3, with broader language coverage and richer audio-tag control over delivery and emotion. Called through the ElevenLabs API as model_id eleven_v4.",
