@@ -175,7 +175,6 @@ A data context in MemberJunction consists of:
 | `@memberjunction/global` | Global utilities |
 | `@memberjunction/ng-container-directives` | Container directives |
 | `@memberjunction/ng-shared` | Shared Angular utilities |
-| `@memberjunction/ng-ui-components` | Grid with virtual scrolling |
 | `@memberjunction/ng-ui-components` | Loading indicators |
 | `@memberjunction/ng-ui-components` | Dialog component |
 | `@memberjunction/ng-ui-components` | Button components |

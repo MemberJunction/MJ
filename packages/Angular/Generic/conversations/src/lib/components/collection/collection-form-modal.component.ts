@@ -28,7 +28,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             </label>
             <input
               type="text"
-              class="k-textbox form-control"
+              class="form-control"
               [(ngModel)]="formData.name"
               placeholder="Collection name"
               #nameInput
@@ -37,7 +37,7 @@ import { UUIDsEqual } from '@memberjunction/global';
           <div class="form-group">
             <label class="form-label">Description</label>
             <textarea
-              class="k-textarea form-control"
+              class="form-control"
               [(ngModel)]="formData.description"
               placeholder="Optional description"
               rows="3">

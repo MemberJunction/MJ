@@ -142,4 +142,3 @@ export class YourModule {}
 
 - [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, RunView, BaseEntity
 - [@memberjunction/ng-shared](../shared/README.md) -- Shared Angular utilities
-- `@memberjunction/ng-ui-components` -- Grid rendering

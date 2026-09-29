@@ -40,7 +40,6 @@ npm install @memberjunction/ng-entity-permissions
 |---|---|
 | `@memberjunction/core` | Metadata, RunView |
 | `@memberjunction/core-entities` | EntityPermissionEntity |
-| `@memberjunction/ng-ui-components` | Permissions grid |
 | `@memberjunction/ng-ui-components` | Entity/role selector |
 
 ## Usage

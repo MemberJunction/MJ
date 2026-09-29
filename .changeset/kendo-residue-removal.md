@@ -44,7 +44,7 @@
 "@memberjunction/ng-ui-components": patch
 ---
 
-Finish the Kendo removal: no Kendo references remain in shipped code, styles, templates, package metadata, or live docs.
+Finish the Kendo removal: no Kendo references remain in shipped code, templates, package metadata, or live docs. One stylesheet is deliberately left alone: `explorer-app/src/lib/styles/_common.scss` keeps 12 dead `.k-*` rules because it also defines the legacy `.mj-btn` block, which `check:ui-buttons` grades the moment the file is touched; that block's removal is a separate migration.
 
 Kendo was already gone from the dependency graph — zero `@progress/kendo*` entries in any `package.json`, zero TypeScript imports. What was left was residue, and some of it was not inert:
 
@@ -56,7 +56,7 @@ Kendo was already gone from the dependency graph — zero `@progress/kendo*` ent
 
 **Broken templates fixed** — three components still applied Kendo utility classes that no longer resolve:
 - `add-item.component` — `k-actions k-actions-end` was supplying the footer's flex row, so `.customBtn button { flex: 1 }` had no flex container. `.popup-actions` now provides it.
-- `delete-item.component` — `k-m-7.5 k-text-center` never applied at all (`k-m-7.5` is not a valid single class token), leaving the confirmation copy unstyled. Replaced with a real `.confirm-message` class.
+- `delete-item.component` — `k-m-7.5 k-text-center` were Kendo spacing/alignment utilities (30px margin, centered) whose theme CSS left with the removal, so the confirmation copy had been rendering unstyled. Replaced with a real `.confirm-message` class.
 - `add-item` and `ng-data-context-dialog` each carried a `<div class="k-overlay">` backdrop. `mj-window` deliberately has no backdrop, so these are now unstyled empty divs — **deleted, which means both dialogs currently render with no backdrop.** Restoring one is a UX call, not a cleanup.
 
 **Filter payload is MJ's own type**

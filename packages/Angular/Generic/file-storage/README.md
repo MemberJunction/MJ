@@ -4,7 +4,7 @@ Angular components for managing file storage in MemberJunction applications, pro
 
 ## Overview
 
-The `@memberjunction/ng-file-storage` package provides three core components that together form a file management interface: a hierarchical category tree for organizing files, a AG Grid for browsing and managing files within categories, and an upload component with provider integration and overwrite protection. All file operations flow through MemberJunction's entity system and storage provider abstraction, supporting Azure Blob Storage, AWS S3, and other backends.
+The `@memberjunction/ng-file-storage` package provides three core components that together form a file management interface: a hierarchical category tree for organizing files, an AG Grid for browsing and managing files within categories, and an upload component with provider integration and overwrite protection. All file operations flow through MemberJunction's entity system and storage provider abstraction, supporting Azure Blob Storage, AWS S3, and other backends.
 
 ```mermaid
 flowchart TD
@@ -290,7 +290,6 @@ type FileUploadEvent =
 | `@memberjunction/ng-shared` | Shared Angular services |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
 | `ag-grid-angular` | Data grid |
-| `ag-grid-angular` | Category tree |
 | `@memberjunction/ng-ui-components` | File upload |
 | `@memberjunction/ng-ui-components` | Confirmation dialogs |
 | `@memberjunction/ng-ui-components` | Button components |

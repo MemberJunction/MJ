@@ -104,7 +104,6 @@ export class YourModule {}
 ## Dependencies
 
 - [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, BaseEntity
-- `@memberjunction/ng-ui-components` -- Dual listbox rendering
 - `@memberjunction/ng-ui-components` -- Toolbar buttons
 
 ## Related Packages

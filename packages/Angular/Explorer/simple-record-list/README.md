@@ -54,7 +54,6 @@ npm install @memberjunction/ng-simple-record-list
 | `@memberjunction/core` | Metadata, BaseEntity, RunView |
 | `@memberjunction/ng-entity-form-dialog` | Record editing dialog |
 | `@memberjunction/ng-notifications` | Notification service |
-| `@memberjunction/ng-ui-components` | Grid display |
 | `@memberjunction/ng-ui-components` | Confirmation dialogs |
 
 ## Usage

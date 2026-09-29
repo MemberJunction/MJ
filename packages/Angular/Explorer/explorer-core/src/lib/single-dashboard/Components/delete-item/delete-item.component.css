@@ -20,9 +20,9 @@
       gap: 20px;
   }
 
-/* Confirmation copy inside the dialog body. The previous utility classes here never
-   applied (one was not even a valid single class token), so this paragraph had been
-   rendering unstyled. */
+/* Confirmation copy inside the dialog body. The previous Kendo utility classes
+   (k-m-7.5 = 30px margin, k-text-center) lost their theme CSS with the Kendo removal,
+   so this paragraph had been rendering unstyled. */
 .confirm-message {
     margin: var(--mj-space-6);
     text-align: center;

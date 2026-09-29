@@ -172,4 +172,3 @@ The service automatically handles these MJGlobal events:
 - [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- UserNotificationEntity
 - [@memberjunction/global](../../../MJGlobal/README.md) -- MJGlobal event system
 - [@memberjunction/graphql-dataprovider](../../../GraphQLDataProvider/README.md) -- Push notification subscriptions
-- `@memberjunction/ng-ui-components` -- Toast notification rendering
