@@ -38,6 +38,7 @@ import {
     validateSpec,
     type ViolationPolicy,
     type FeaturePipelineFieldValueLookup,
+    FindOutputByName,
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
 import type { OutputMappingConfig } from '../writeBack';
@@ -50,7 +51,6 @@ import {
 import { LLMFeaturePipelineDriver } from '../feature-pipeline-drivers/LLMFeaturePipelineDriver';
 import {
     FeaturePipelineEscalator,
-    FindOutputByName,
     type BelowFloorOutput,
     type EscalatedAnswer,
     type EscalationOutcome,
@@ -271,7 +271,6 @@ export class InferProcessor implements IRecordProcessor {
             }
         }
 
-        const fieldValues = this.buildFieldValuesLookup(context);
         // The pipeline type's driver turns the record's context into its outputs (for LLM: the prompt run and its hooks)
         const sample = await this.computeSample({ keyInfo, records: [record] }, context, run);
         // A decision below the escalation floor escalates; any other answer is validated and recorded as it is
@@ -283,6 +282,7 @@ export class InferProcessor implements IRecordProcessor {
     /** Runs the driver on a key group's first record, and notes which outputs, if any, are below the escalation floor. */
     private async computeSample(group: CacheKeyGroup, context: RecordProcessorContext, run: PipelineRunState): Promise<ComputedSample> {
         const sample = group.records[0];
+        const fieldValues = this.buildFieldValuesLookup(context);
         const computed = await run.Driver.ComputeOutputs({
             Record: sample,
             Context: context,

@@ -38,8 +38,8 @@ import {
     BuildEscalationNote,
     DescribeBelowFloor,
     FeaturePipelineEscalator,
-    FindEscalationTargetSpecProblem,
 } from '../processors/FeaturePipelineEscalation';
+import { FindEscalationTargetSpecProblem } from '@memberjunction/feature-pipelines';
 
 // ---------------------------------------------------------------------------
 // Stub drivers, registered as the catalog's DriverClass values

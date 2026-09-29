@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 import type { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { renderComponentFixture, query, queryAll, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { FeaturePipelineBuilderComponent } from './feature-pipeline-builder.component';
+import { FeaturePipelineBuilderComponent, type EscalationTargetCandidate } from './feature-pipeline-builder.component';
 import type { DataFeatureSpec } from '@memberjunction/feature-pipelines';
 
 try {
@@ -312,5 +312,228 @@ describe('FeaturePipelineBuilderComponent (DOM & Type Switching)', () => {
     const opt = f.componentInstance.AvailablePipelineTypes.find((t) => t.Name === 'CustomLegacy');
     expect(opt).toBeDefined();
     expect(opt?.DisplayName).toBe('CustomLegacy (unrecognized)');
+  });
+
+  it('renders escalation section only for Decision pipelines', () => {
+    const llmRec = makeRecord({ PipelineType: 'LLM' });
+    const f1 = render(llmRec);
+    expect(query(f1, '.fpb-escalation-sec')).toBeNull();
+
+    const decisionRec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+    });
+    const f2 = render(decisionRec);
+    expect(query(f2, '.fpb-escalation-sec')).not.toBeNull();
+  });
+
+  it('toggles escalation on and off and updates spec.Escalation', () => {
+    const rec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+    });
+    const f = render(rec);
+    expect(f.componentInstance.IsEscalationEnabled).toBe(false);
+    expect(f.componentInstance.spec.Escalation).toBeUndefined();
+
+    // Toggle ON
+    f.componentInstance.OnEscalationToggle({ target: { checked: true } } as unknown as Event);
+    f.detectChanges();
+    expect(f.componentInstance.IsEscalationEnabled).toBe(true);
+    expect(f.componentInstance.spec.Escalation).toEqual({
+      PipelineID: '',
+      BelowConfidence: 0.7,
+    });
+
+    // Toggle OFF
+    f.componentInstance.OnEscalationToggle({ target: { checked: false } } as unknown as Event);
+    f.detectChanges();
+    expect(f.componentInstance.IsEscalationEnabled).toBe(false);
+    expect(f.componentInstance.spec.Escalation).toBeUndefined();
+  });
+
+  it('populates escalation target candidates and identifies problems with invalid targets', () => {
+    const rec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+      Escalation: {
+        PipelineID: '',
+        BelowConfidence: 0.7,
+      },
+    });
+    const f = render(rec);
+
+    const validCandidate: EscalationTargetCandidate = {
+      ID: 'target-1',
+      Name: 'Full LLM Pipeline',
+      WorkType: 'Infer',
+      Status: 'Active',
+      EntityID: 'e1',
+      Entity: 'Accounts',
+      ParsedSpec: {
+        Name: 'Full LLM Pipeline',
+        Description: 'Full LLM',
+        Outputs: [
+          {
+            Name: 'IsAtRisk',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          },
+        ],
+      },
+    };
+
+    const wrongEntityCandidate: EscalationTargetCandidate = {
+      ID: 'target-2',
+      Name: 'Wrong Entity Pipeline',
+      WorkType: 'Infer',
+      Status: 'Active',
+      EntityID: 'e2',
+      Entity: 'Contacts',
+    };
+
+    const missingOutputCandidate: EscalationTargetCandidate = {
+      ID: 'target-3',
+      Name: 'Incomplete Pipeline',
+      WorkType: 'Infer',
+      Status: 'Active',
+      EntityID: 'e1',
+      Entity: 'Accounts',
+      ParsedSpec: {
+        Name: 'Incomplete',
+        Description: 'Incomplete',
+        Outputs: [
+          {
+            Name: 'OtherOutput',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'Rating' },
+          },
+        ],
+      },
+    };
+
+    const decisionCandidate: EscalationTargetCandidate = {
+      ID: 'target-4',
+      Name: 'Another Decision Pipeline',
+      WorkType: 'Infer',
+      Status: 'Active',
+      EntityID: 'e1',
+      Entity: 'Accounts',
+      ParsedSpec: {
+        Name: 'Another Decision',
+        Description: 'Another Decision',
+        PipelineType: 'Decision',
+        Outputs: [
+          {
+            Name: 'IsAtRisk',
+            Ref: '$',
+            Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          },
+        ],
+      },
+    };
+
+    f.componentInstance.AvailableEscalationTargets = [
+      validCandidate,
+      wrongEntityCandidate,
+      missingOutputCandidate,
+      decisionCandidate,
+    ];
+    f.componentInstance.EscalationTargetsLoaded = true;
+    f.detectChanges();
+
+    expect(f.componentInstance.GetTargetProblem(validCandidate)).toBeNull();
+    expect(f.componentInstance.GetTargetProblem(wrongEntityCandidate)).toContain("is on entity 'Contacts'");
+    expect(f.componentInstance.GetTargetProblem(missingOutputCandidate)).toContain("it has no output named 'IsAtRisk'");
+    expect(f.componentInstance.GetTargetProblem(decisionCandidate)).toContain("is a 'Decision' pipeline");
+
+    // Select valid candidate
+    f.componentInstance.OnEscalationTargetChange({ target: { value: 'target-1' } } as unknown as Event);
+    expect(f.componentInstance.spec.Escalation?.PipelineID).toBe('target-1');
+    expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.PipelineID')).toBe(false);
+
+    // Select invalid candidate
+    f.componentInstance.OnEscalationTargetChange({ target: { value: 'target-3' } } as unknown as Event);
+    expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.PipelineID')).toBe(true);
+  });
+
+  it('handles confidence floor changes without clamping invalid inputs', () => {
+    const rec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+      Escalation: {
+        PipelineID: 'target-1',
+        BelowConfidence: 0.7,
+      },
+    });
+    const f = render(rec);
+
+    const inputEvent = (val: string) => ({ target: { value: val } } as unknown as Event);
+
+    // Set valid floor
+    f.componentInstance.OnEscalationFloorChange(inputEvent('0.85'));
+    expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBe(0.85);
+
+    // Set invalid floor (1.5) - not clamped, but caught by validateSpec
+    f.componentInstance.OnEscalationFloorChange(inputEvent('1.5'));
+    expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBe(1.5);
+    expect(f.componentInstance.ValidationErrors.some((e) => e.Path === 'Escalation.BelowConfidence')).toBe(true);
+
+    // Clear floor
+    f.componentInstance.OnEscalationFloorChange(inputEvent(''));
+    expect(f.componentInstance.spec.Escalation?.BelowConfidence).toBeUndefined();
+  });
+
+  it('deletes Escalation when switching away from Decision pipeline', () => {
+    const rec = makeRecord({
+      PipelineType: 'Decision',
+      Outputs: [
+        {
+          Name: 'IsAtRisk',
+          Ref: '$',
+          Target: { Mode: 'field', EntityFieldName: 'IsAtRisk' },
+          Constraint: { Type: 'boolean', OnViolation: 'fail' },
+        },
+      ],
+      Escalation: {
+        PipelineID: 'target-1',
+        BelowConfidence: 0.7,
+      },
+    });
+    const f = render(rec);
+    expect(f.componentInstance.spec.Escalation).toBeDefined();
+
+    // Switch to LLM
+    f.componentInstance.ApplyPipelineTypeChange('LLM');
+    expect(f.componentInstance.spec.Escalation).toBeUndefined();
+    expect(f.componentInstance.IsEscalationEnabled).toBe(false);
   });
 });
