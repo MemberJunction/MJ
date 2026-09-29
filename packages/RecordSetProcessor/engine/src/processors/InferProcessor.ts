@@ -6,15 +6,17 @@
  *
  * Supports DataFeatureSpec context (EntityDocumentID template rendering with __Parent context,
  * QueryID parameterized execution, Field projections), Layer-1 constraint injection, Layer-2
- * constraint validation with OnViolation policies, and lifecycle hooks (P1-6).
+ * constraint validation with OnViolation policies, and lifecycle hooks (P1-6). A Decision pipeline
+ * whose spec sets `Escalation` re-runs its below-floor records through an LLM pipeline
+ * (see `FeaturePipelineEscalation`).
  *
  * @module @memberjunction/record-set-processor
  */
 
 import { createHash } from 'node:crypto';
-import { LogError, Metadata, RunQuery, RunView } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
-import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity } from '@memberjunction/core-entities';
+import { type IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView } from '@memberjunction/core';
+import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, SafeJSONParse, resolveMappingRef, resolveValueMapping } from '@memberjunction/global';
+import { KnowledgeHubMetadataEngine, type MJFeaturePipelineTypeEntity, type MJRecordProcessEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams, type AIPromptRunResult, type MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import {
@@ -28,27 +30,90 @@ import {
     DataFeatureOutput,
     FeatureValueCacheService,
     type CacheKeyResult,
+    IsLLMPipelineType,
+    LLM_PIPELINE_TYPE,
     renderConstraintBlock,
+    validateMaterializationTargets,
     validateOutputValue,
+    validateSpec,
     type ViolationPolicy,
 } from '@memberjunction/feature-pipelines';
 import { EntityDocumentCache, EntityDocumentTemplateParser } from '@memberjunction/entity-documents';
 import type { OutputMappingConfig } from '../writeBack';
-import { BaseFeaturePipelineDriver, type FeaturePipelineComputeHooks } from '../feature-pipeline-drivers/BaseFeaturePipelineDriver';
+import {
+    BaseFeaturePipelineDriver,
+    type FeaturePipelineComputeHooks,
+    type FeaturePipelineComputeResult,
+    type FeaturePipelineComputeSuccess,
+} from '../feature-pipeline-drivers/BaseFeaturePipelineDriver';
 import { LLMFeaturePipelineDriver } from '../feature-pipeline-drivers/LLMFeaturePipelineDriver';
+import {
+    FeaturePipelineEscalator,
+    FindOutputByName,
+    type BelowFloorOutput,
+    type EscalatedAnswer,
+    type EscalationOutcome,
+} from './FeaturePipelineEscalation';
 
-/** The pipeline type a spec without `PipelineType` runs as. */
-const LLM_PIPELINE_TYPE = 'LLM';
-
-/** Whether a pipeline type name means `LLM` (case-insensitive, trimmed). */
-function isLLMPipelineType(typeName: string): boolean {
-    return typeName.trim().toLowerCase() === LLM_PIPELINE_TYPE.toLowerCase();
+/** What one processing pass has resolved: the pipeline's prompt and driver, and the hashes that version its answers. */
+interface PipelineRunState {
+    Prompt: MJAIPromptEntityExtended;
+    Driver: BaseFeaturePipelineDriver;
+    IsCacheable: boolean;
+    PromptVersionHash: string;
+    ConstraintHash: string;
 }
 
-/** Runs an AI Prompt per record and returns its structured output (write-back is the wrapper's job). */
+/** Records that share a Dedup Cache key, computed once through the first of them. */
+interface CacheKeyGroup {
+    keyInfo?: CacheKeyResult;
+    records: RecordRef[];
+}
+
+/** A key group's first record, what the driver computed for it, and the outputs below the escalation floor. */
+interface ComputedSample {
+    Group: CacheKeyGroup;
+    Sample: RecordRef;
+    Computed: FeaturePipelineComputeResult;
+    BelowFloor: BelowFloorOutput[];
+}
+
+/** The history row fields a key group's sample was recorded with, shared by the group's other records. */
+type GroupHistory = Omit<Parameters<InferProcessor['recordFeatureValuesHistory']>[0], 'record'>;
+
+/** A sample's final result, and the history its group's other records get (absent when it failed). */
+interface FinalizedSample {
+    Result: RecordResult;
+    History?: GroupHistory;
+}
+
+/** Whether a value is a plain JSON object (not null, not an array). */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Runs an AI Prompt per record and returns its structured output (write-back is the wrapper's job).
+ * A pipeline whose spec sets `Escalation` computes a whole batch before recording any of it, so its batch
+ * path does not call {@link ProcessRecord} once per record: an extension that overrides `ProcessRecord`
+ * does not see those records.
+ */
 export class InferProcessor implements IRecordProcessor {
     /** The driver resolution, started on first use and shared by every record this processor runs. */
     private driverResolution?: Promise<BaseFeaturePipelineDriver>;
+
+    /** The escalation of below-floor decisions, created on first use when the spec has `Escalation`. */
+    private _escalator?: FeaturePipelineEscalator;
+
+    /** How many records this processor has escalated. */
+    private escalatedRecordCount = 0;
+
+    /**
+     * Whether this processor writes `MJ: Feature Values` history rows. On for every pipeline run. A
+     * Decision pipeline turns it off on its escalation target, because it records the final answers of
+     * the records it escalates itself.
+     */
+    public WritesHistory = true;
 
     /**
      * @param promptID - The `MJ: AI Prompts` ID to run for each record.
@@ -61,29 +126,100 @@ export class InferProcessor implements IRecordProcessor {
         protected readonly spec?: DataFeatureSpec,
     ) {}
 
+    /**
+     * Builds the processor for an Infer Feature Pipeline from its `MJ: Record Processes` row: parses and
+     * validates the DataFeatureSpec in `Configuration` (and its materialization targets), and creates the
+     * spec's `ProcessorExtensionKey` subclass when it names one. `RecordProcessExecutor` builds every
+     * Infer pipeline this way, and so does a Decision pipeline's escalation to an LLM pipeline.
+     *
+     * @param rp - The pipeline's row (WorkType `Infer`).
+     * @param provider - The provider whose metadata the materialization targets are checked against (default: the global one).
+     * @throws Error when the row has no PromptID, its Configuration is not valid JSON, its spec or
+     * materialization targets are invalid, or its ProcessorExtensionKey is not registered.
+     */
+    public static FromRecordProcess(rp: MJRecordProcessEntity, provider?: IMetadataProvider): InferProcessor {
+        if (!rp.PromptID) {
+            throw new Error(`Record Process '${rp.Name}': WorkType=Infer requires PromptID`);
+        }
+        const inputMapping = rp.InputMapping ? SafeJSONParse<Record<string, string>>(rp.InputMapping) : undefined;
+        const spec = InferProcessor.parseSpec(rp, provider);
+        if (spec?.ProcessorExtensionKey) {
+            const custom = MJGlobal.Instance.ClassFactory.CreateInstance<InferProcessor>(InferProcessor, spec.ProcessorExtensionKey, rp.PromptID, inputMapping, spec);
+            if (custom && custom.constructor !== InferProcessor) {
+                return custom;
+            } else {
+                throw new Error(`Record Process '${rp.Name}': ProcessorExtensionKey '${spec.ProcessorExtensionKey}' not found in ClassFactory`);
+            }
+        }
+        return new InferProcessor(rp.PromptID, inputMapping, spec);
+    }
+
+    /** Parses and validates the DataFeatureSpec in an Infer pipeline row's `Configuration`; undefined when it has none. */
+    private static parseSpec(rp: MJRecordProcessEntity, provider?: IMetadataProvider): DataFeatureSpec | undefined {
+        let spec: DataFeatureSpec | undefined;
+        if (rp.Configuration && rp.Configuration.trim().length > 0) {
+            try {
+                spec = JSON.parse(rp.Configuration) as DataFeatureSpec;
+            } catch (e) {
+                throw new Error(`Record Process '${rp.Name}': Configuration is invalid JSON: ${e instanceof Error ? e.message : String(e)}`);
+            }
+            const issues = validateSpec(spec);
+            const errors = issues.filter((i) => i.Severity === 'error');
+            if (errors.length > 0) {
+                throw new Error(`Record Process '${rp.Name}': invalid DataFeatureSpec in Configuration: ${errors.map((err) => err.Message).join('; ')}`);
+            }
+
+            const targetProvider = provider ?? Metadata.Provider;
+            if (targetProvider && rp.EntityID) {
+                const materializationIssues = validateMaterializationTargets(spec, targetProvider, rp.EntityID);
+                const matErrors = materializationIssues.filter((i) => i.Severity === 'error');
+                if (matErrors.length > 0) {
+                    throw new Error(`Record Process '${rp.Name}': invalid materialization targets: ${matErrors.map((err) => `${err.Field ? `[${err.Field}] ` : ''}${err.Message} Fix: ${err.FixRecommendation}`).join('; ')}`);
+                }
+            }
+        }
+        return spec;
+    }
+
+    /** The pipeline's DataFeatureSpec, when it has one. */
+    public get Spec(): DataFeatureSpec | undefined {
+        return this.spec;
+    }
+
+    /** The `MJ: AI Prompts` ID this processor runs for each record. */
+    public get PromptID(): string {
+        return this.promptID;
+    }
+
+    /** The hash that versions this pipeline's output constraints, as its Dedup Cache and history record it. */
+    public get ConstraintHash(): string {
+        return this.computeConstraintHash(this.spec);
+    }
+
+    /**
+     * How many records this processor has escalated to its spec's `Escalation` pipeline. A processor
+     * serves one run, so this is the run's count. It counts every record whose answer was escalated,
+     * including the records that shared a Dedup Cache key with one, and the escalations that failed.
+     */
+    public get EscalatedRecordCount(): number {
+        return this.escalatedRecordCount;
+    }
+
     public async ProcessRecord(
         record: RecordRef,
         context: RecordProcessorContext,
         options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
     ): Promise<RecordResult> {
         await this.ensureRecordsLoaded([record], context);
-        await AIEngine.Instance.Config(false, context.contextUser);
-        const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
-        if (!prompt) {
-            return { Status: 'Failed', ErrorMessage: `AI Prompt '${this.promptID}' not found` };
+        const run = await this.resolveRunState(context);
+        if ('ErrorMessage' in run) {
+            return { Status: 'Failed', ErrorMessage: run.ErrorMessage };
         }
-        const resolution = await this.resolveDriverOrError(context);
-        if ('ErrorMessage' in resolution) {
-            return { Status: 'Failed', ErrorMessage: resolution.ErrorMessage };
-        }
-
-        const isCacheable = this.spec?.Caching?.Cacheable === true;
-        const promptVersionHash = this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec);
-        const constraintHash = this.computeConstraintHash(this.spec);
+        const { Prompt: prompt, PromptVersionHash: promptVersionHash, ConstraintHash: constraintHash } = run;
         let keyInfo: CacheKeyResult | undefined;
 
         // P1-7c Dedup Cache lookup
-        if (isCacheable) {
+        if (run.IsCacheable) {
             keyInfo =
                 options?.keyInfo ??
                 (await FeatureValueCacheService.Instance.computeCacheKey({
@@ -135,22 +271,67 @@ export class InferProcessor implements IRecordProcessor {
         }
 
         // The pipeline type's driver turns the record's context into its outputs (for LLM: the prompt run and its hooks)
-        const computed = await resolution.Driver.ComputeOutputs({
-            Record: record,
+        const sample = await this.computeSample({ keyInfo, records: [record] }, context, run);
+        // A decision below the escalation floor escalates; any other answer is validated and recorded as it is
+        const outcomes = await this.escalateBelowFloor([sample], context);
+        const finalized = await this.finalizeSample(sample, outcomes, context, run);
+        return finalized.Result;
+    }
+
+    /** Runs the driver on a key group's first record, and notes which outputs, if any, are below the escalation floor. */
+    private async computeSample(group: CacheKeyGroup, context: RecordProcessorContext, run: PipelineRunState): Promise<ComputedSample> {
+        const sample = group.records[0];
+        const computed = await run.Driver.ComputeOutputs({
+            Record: sample,
             Context: context,
-            Prompt: prompt,
+            Prompt: run.Prompt,
             Spec: this.spec,
             Hooks: this.buildComputeHooks(),
         });
+        return { Group: group, Sample: sample, Computed: computed, BelowFloor: this.belowFloor(computed) };
+    }
 
-        const aiPromptRunID = computed.AIPromptRunID;
+    /**
+     * Finishes a computed sample: a driver failure fails it, a below-floor decision takes its escalation's
+     * outcome, and any other answer is validated, cached and recorded.
+     */
+    private async finalizeSample(
+        sample: ComputedSample,
+        outcomes: Map<string, EscalationOutcome>,
+        context: RecordProcessorContext,
+        run: PipelineRunState
+    ): Promise<FinalizedSample> {
+        const computed = sample.Computed;
         if ('ErrorMessage' in computed) {
             return {
-                Status: 'Failed',
-                ErrorMessage: computed.ErrorMessage,
-                AIPromptRunID: aiPromptRunID,
+                Result: {
+                    Status: 'Failed',
+                    ErrorMessage: computed.ErrorMessage,
+                    AIPromptRunID: computed.AIPromptRunID,
+                },
             };
         }
+        if (sample.BelowFloor.length > 0) {
+            const outcome = outcomes.get(sample.Sample.RecordID);
+            return this.finalizeEscalated(sample.Sample, context, outcome, computed.AIPromptRunID);
+        }
+        const result = await this.finalizeComputed(sample.Sample, context, run, sample.Group.keyInfo, computed);
+        return { Result: result, History: this.missFanOutHistory(result, context, run) };
+    }
+
+    /**
+     * Validates a driver's outputs against the constraints (applying each OnViolation policy), stores
+     * them in the Dedup Cache, and records their history.
+     */
+    private async finalizeComputed(
+        record: RecordRef,
+        context: RecordProcessorContext,
+        run: PipelineRunState,
+        keyInfo: CacheKeyResult | undefined,
+        computed: FeaturePipelineComputeSuccess
+    ): Promise<RecordResult> {
+        const { Prompt: prompt, PromptVersionHash: promptVersionHash, ConstraintHash: constraintHash } = run;
+        const aiPromptRunID = computed.AIPromptRunID;
         const rawResult = computed.RawResult;
 
         // Layer 2: Validate outputs against constraints and apply OnViolation policy
@@ -173,7 +354,7 @@ export class InferProcessor implements IRecordProcessor {
         const reasoning = typeof rawResult === 'object' && rawResult !== null ? (rawResult as Record<string, unknown>).reasoning as string | undefined : undefined;
 
         // P1-7c Dedup Cache store
-        if (isCacheable && keyInfo) {
+        if (run.IsCacheable && keyInfo) {
             try {
                 const stored = await FeatureValueCacheService.Instance.Store({
                     recordProcessID: context.recordProcessID,
@@ -230,34 +411,24 @@ export class InferProcessor implements IRecordProcessor {
         await this.ensureRecordsLoaded(records, context);
         const results = new Map<string, RecordResult>();
         if (!this.spec?.Caching?.Cacheable || records.length === 0) {
+            if (this.escalator && records.length > 0) {
+                return this.processUncachedBatchWithEscalation(records, context);
+            }
             for (const r of records) {
                 results.set(r.RecordID, await this.ProcessRecord(r, context));
             }
             return results;
         }
 
-        await AIEngine.Instance.Config(false, context.contextUser);
-        const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
-        if (!prompt) {
-            for (const r of records) {
-                results.set(r.RecordID, { Status: 'Failed', ErrorMessage: `AI Prompt '${this.promptID}' not found` });
-            }
-            return results;
-        }
         // Resolve before the cache phases, so a type that cannot run fails every record rather than serving cache hits
-        const resolution = await this.resolveDriverOrError(context);
-        if ('ErrorMessage' in resolution) {
-            for (const r of records) {
-                results.set(r.RecordID, { Status: 'Failed', ErrorMessage: resolution.ErrorMessage });
-            }
-            return results;
+        const run = await this.resolveRunState(context);
+        if ('ErrorMessage' in run) {
+            return this.failEvery(records, run.ErrorMessage, results);
         }
-
-        const promptVersionHash = this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec);
-        const constraintHash = this.computeConstraintHash(this.spec);
+        const { Prompt: prompt, PromptVersionHash: promptVersionHash, ConstraintHash: constraintHash } = run;
 
         // Phase 1: Compute distinct cache keys across the batch
-        const keyGroupMap = new Map<string, { keyInfo: CacheKeyResult; records: RecordRef[] }>();
+        const keyGroupMap = new Map<string, CacheKeyGroup>();
         for (const record of records) {
             const recordData = this.recordToPlain(record);
             const keyInfo = await FeatureValueCacheService.Instance.computeCacheKey({
@@ -286,6 +457,7 @@ export class InferProcessor implements IRecordProcessor {
         });
 
         // Phase 3: Fan out hits; execute misses ONCE per distinct key and fan out
+        const escalatingMisses: CacheKeyGroup[] = [];
         for (const [keyHash, group] of keyGroupMap.entries()) {
             const cached = cacheMap.get(keyHash);
             if (cached) {
@@ -318,6 +490,9 @@ export class InferProcessor implements IRecordProcessor {
                         FeatureValueCacheID: cached.ID,
                     });
                 }
+            } else if (this.escalator) {
+                // CACHE MISS, escalating pipeline: computed together below, so the below-floor records escalate together
+                escalatingMisses.push(group);
             } else {
                 // CACHE MISS: Execute prompt ONCE for the distinct key (using the first record in the group)
                 const sampleRecord = group.records[0];
@@ -327,52 +502,281 @@ export class InferProcessor implements IRecordProcessor {
                 });
 
                 // Fan out result to all records in this group
-                for (const rec of group.records) {
-                    if (rec.RecordID === sampleRecord.RecordID) {
-                        results.set(rec.RecordID, singleResult);
-                    } else {
-                        if (singleResult.Status === 'Succeeded') {
-                            await this.recordFeatureValuesHistory({
-                                record: rec,
-                                context,
-                                payload: singleResult.ResultPayload,
-                                promptID: prompt.ID,
-                                promptVersionHash,
-                                constraintHash,
-                                aiPromptRunID: singleResult.AIPromptRunID,
-                                featureValueCacheID: singleResult.FeatureValueCacheID,
-                                ...(singleResult.Confidence ? { outputConfidence: singleResult.Confidence } : {}),
-                            });
-                        }
-                        results.set(rec.RecordID, { ...singleResult });
-                    }
-                }
+                await this.fanOutGroupResult(group, sampleRecord, singleResult, this.missFanOutHistory(singleResult, context, run), results);
             }
         }
+        await this.computeGroupsWithEscalation(escalatingMisses, context, run, results);
 
         return results;
+    }
+
+    /** Fails every record with one message. */
+    private failEvery(records: RecordRef[], errorMessage: string, results: Map<string, RecordResult>): Map<string, RecordResult> {
+        for (const r of records) {
+            results.set(r.RecordID, { Status: 'Failed', ErrorMessage: errorMessage });
+        }
+        return results;
+    }
+
+    /**
+     * Resolves what one processing pass needs: the prompt, the driver, and the hashes that version the
+     * pipeline's answers. Returns why the pipeline cannot run instead, when the prompt is missing or the
+     * driver cannot be resolved.
+     */
+    private async resolveRunState(context: RecordProcessorContext): Promise<PipelineRunState | { ErrorMessage: string }> {
+        await AIEngine.Instance.Config(false, context.contextUser);
+        const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, this.promptID));
+        if (!prompt) {
+            return { ErrorMessage: `AI Prompt '${this.promptID}' not found` };
+        }
+        const resolution = await this.resolveDriverOrError(context);
+        if ('ErrorMessage' in resolution) {
+            return { ErrorMessage: resolution.ErrorMessage };
+        }
+        return {
+            Prompt: prompt,
+            Driver: resolution.Driver,
+            IsCacheable: this.spec?.Caching?.Cacheable === true,
+            PromptVersionHash: this.computePromptVersionHash(prompt as MJAIPromptEntityExtended, this.spec),
+            ConstraintHash: this.computeConstraintHash(this.spec),
+        };
+    }
+
+    /**
+     * Gives every record in a key group its sample's result. The other records get a copy of it, and their
+     * own history row from `history` (which is absent when the sample failed).
+     */
+    private async fanOutGroupResult(
+        group: CacheKeyGroup,
+        sample: RecordRef,
+        result: RecordResult,
+        history: GroupHistory | undefined,
+        results: Map<string, RecordResult>
+    ): Promise<void> {
+        for (const rec of group.records) {
+            if (rec.RecordID === sample.RecordID) {
+                results.set(rec.RecordID, result);
+            } else {
+                if (history) {
+                    await this.recordFeatureValuesHistory({ ...history, record: rec });
+                }
+                results.set(rec.RecordID, { ...result });
+            }
+        }
+    }
+
+    /** The history a key group's other records get from its sample's computed result: none when it failed. */
+    private missFanOutHistory(result: RecordResult, context: RecordProcessorContext, run: PipelineRunState): GroupHistory | undefined {
+        if (result.Status !== 'Succeeded') {
+            return undefined;
+        }
+        return {
+            context,
+            payload: result.ResultPayload,
+            promptID: run.Prompt.ID,
+            promptVersionHash: run.PromptVersionHash,
+            constraintHash: run.ConstraintHash,
+            aiPromptRunID: result.AIPromptRunID,
+            featureValueCacheID: result.FeatureValueCacheID,
+            ...(result.Confidence ? { outputConfidence: result.Confidence } : {}),
+        };
+    }
+
+    // -------------------------------------------------------------------------------------------------
+    // Escalation (DataFeatureSpec.Escalation): below-floor decisions re-run through an LLM pipeline
+    // -------------------------------------------------------------------------------------------------
+
+    /** The escalation of below-floor decisions, when the spec has `Escalation`; created once. */
+    private get escalator(): FeaturePipelineEscalator | undefined {
+        if (!this.spec?.Escalation) {
+            return undefined;
+        }
+        this._escalator ??= new FeaturePipelineEscalator(
+            this.spec.Escalation,
+            this.spec.Outputs ?? [],
+            (pipeline, provider) => InferProcessor.FromRecordProcess(pipeline, provider)
+        );
+        return this._escalator;
+    }
+
+    /** A successful decision's outputs below the escalation floor; empty when the pipeline does not escalate. */
+    private belowFloor(computed: FeaturePipelineComputeResult): BelowFloorOutput[] {
+        const escalator = this.escalator;
+        if (!escalator || 'ErrorMessage' in computed) {
+            return [];
+        }
+        return escalator.BelowFloor(computed.Confidence);
+    }
+
+    /** An uncached batch of a pipeline that escalates: every record is its own group, computed together. */
+    private async processUncachedBatchWithEscalation(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, RecordResult>> {
+        const results = new Map<string, RecordResult>();
+        const run = await this.resolveRunState(context);
+        if ('ErrorMessage' in run) {
+            return this.failEvery(records, run.ErrorMessage, results);
+        }
+        await this.computeGroupsWithEscalation(records.map((r) => ({ records: [r] })), context, run, results);
+        return results;
+    }
+
+    /**
+     * Computes key groups for a pipeline that escalates. The driver answers each group's first record; the
+     * below-floor answers escalate together, in one pass through the target; then each group's final
+     * answer is recorded once and fanned out to its records.
+     */
+    private async computeGroupsWithEscalation(
+        groups: CacheKeyGroup[],
+        context: RecordProcessorContext,
+        run: PipelineRunState,
+        results: Map<string, RecordResult>
+    ): Promise<void> {
+        const samples: ComputedSample[] = [];
+        for (const group of groups) {
+            samples.push(await this.computeSample(group, context, run));
+        }
+        const outcomes = await this.escalateBelowFloor(samples, context);
+        for (const sample of samples) {
+            const finalized = await this.finalizeSample(sample, outcomes, context, run);
+            await this.fanOutGroupResult(sample.Group, sample.Sample, finalized.Result, finalized.History, results);
+        }
+    }
+
+    /**
+     * Escalates, together, the samples whose decision was below the floor, and counts and logs the records
+     * that escalated. Returns each escalated sample's outcome by record ID; empty when none escalated.
+     */
+    private async escalateBelowFloor(samples: ComputedSample[], context: RecordProcessorContext): Promise<Map<string, EscalationOutcome>> {
+        const escalator = this.escalator;
+        const escalating = samples.filter((s) => s.BelowFloor.length > 0);
+        if (!escalator || escalating.length === 0) {
+            return new Map<string, EscalationOutcome>();
+        }
+        const outcomes = await escalator.Escalate(escalating.map((s) => ({ Record: s.Sample, BelowFloor: s.BelowFloor })), context);
+        this.countEscalations(escalating, outcomes, escalator);
+        return outcomes;
+    }
+
+    /** Adds a pass's escalated records (each group's records, fan-out included) to the run's count, and logs it. */
+    private countEscalations(escalating: ComputedSample[], outcomes: Map<string, EscalationOutcome>, escalator: FeaturePipelineEscalator): void {
+        let escalated = 0;
+        let failed = 0;
+        for (const sample of escalating) {
+            const outcome = outcomes.get(sample.Sample.RecordID);
+            escalated += sample.Group.records.length;
+            if (!outcome || 'ErrorMessage' in outcome) {
+                failed += sample.Group.records.length;
+            }
+        }
+        this.escalatedRecordCount += escalated;
+        LogStatus(
+            `InferProcessor: escalated ${escalated} record(s) whose decision confidence was below ${escalator.BelowConfidence} ` +
+            `to Feature Pipeline '${escalator.PipelineID}' (${failed} failed); ${this.escalatedRecordCount} escalated in this run.`
+        );
+    }
+
+    /**
+     * Finishes a record whose decision was below the escalation floor. A failed escalation fails the record
+     * with both reasons, and the low-confidence decision is never cached, recorded or returned. A successful
+     * one replaces the decision: the target's validated payload, in this pipeline's shape, is recorded in
+     * history under the target's prompt, prompt run, hashes and cache entry, with the escalation note as the
+     * history row's reasoning. It is not written to this pipeline's Dedup Cache, which holds only answers
+     * the decision model gave with confidence; the target caches its own answers.
+     */
+    private async finalizeEscalated(
+        record: RecordRef,
+        context: RecordProcessorContext,
+        outcome: EscalationOutcome | undefined,
+        decisionRunID: string | undefined
+    ): Promise<FinalizedSample> {
+        if (!outcome) {
+            const message = `Escalation to Feature Pipeline '${this.spec?.Escalation?.PipelineID}' returned no outcome`;
+            return { Result: { Status: 'Failed', ErrorMessage: message, AIPromptRunID: decisionRunID } };
+        }
+        if ('ErrorMessage' in outcome) {
+            return { Result: { Status: 'Failed', ErrorMessage: outcome.ErrorMessage, AIPromptRunID: outcome.AIPromptRunID ?? decisionRunID } };
+        }
+        const payload = this.projectEscalatedPayload(outcome);
+        const history: GroupHistory = {
+            context,
+            payload,
+            reasoning: outcome.Note,
+            promptID: outcome.PromptID,
+            promptVersionHash: outcome.PromptVersionHash,
+            constraintHash: outcome.ConstraintHash,
+            aiPromptRunID: outcome.AIPromptRunID,
+            featureValueCacheID: outcome.FeatureValueCacheID,
+        };
+        await this.recordFeatureValuesHistory({ ...history, record });
+        return {
+            Result: {
+                Status: 'Succeeded',
+                ResultPayload: payload,
+                AIPromptRunID: outcome.AIPromptRunID,
+                PromptVersionHash: outcome.PromptVersionHash,
+                FeatureValueCacheID: outcome.FeatureValueCacheID,
+            },
+            History: history,
+        };
+    }
+
+    /**
+     * The escalated payload in this pipeline's shape: the target's validated payload, with each output's
+     * value also placed at this pipeline's Ref for it, so write-back and history (which read this
+     * pipeline's Refs) find the escalated values. When both pipelines use the same Refs, it is the target's
+     * payload as is.
+     */
+    private projectEscalatedPayload(outcome: EscalatedAnswer): unknown {
+        let projected: unknown = isPlainRecord(outcome.Payload) ? structuredClone(outcome.Payload) : outcome.Payload;
+        for (const output of this.spec?.Outputs ?? []) {
+            const source = FindOutputByName(outcome.TargetOutputs, output.Name);
+            if (!source || source.Ref === output.Ref) {
+                continue;
+            }
+            const value = ResolveMappingRef(source.Ref, { $: outcome.Payload });
+            if (output.Ref === '$') {
+                projected = value;
+            } else if (output.Ref.startsWith('$.')) {
+                const target: Record<string, unknown> = isPlainRecord(projected) ? projected : {};
+                SetNestedValue(target, output.Ref.substring(2), value);
+                projected = target;
+            }
+        }
+        return projected;
     }
 
     /**
      * Computes a deterministic SHA-256 hash representing the prompt version and constraint instructions.
      * A pipeline type other than `LLM` is part of the hash, so switching a pipeline's type never serves
      * the old type's cached values. An LLM pipeline's hash is unchanged by the type's introduction.
+     * So are the `Escalation` settings: the floor decides which decision answers are confident enough to
+     * keep, so changing it (or the target) invalidates the answers cached under the old settings. A
+     * pipeline without `Escalation` keeps its hash.
      */
     protected computePromptVersionHash(prompt: MJAIPromptEntityExtended, spec?: DataFeatureSpec): string {
         const promptText = prompt.TemplateText ?? prompt.Description ?? prompt.Name ?? '';
         const outputsStr = spec?.Outputs ? JSON.stringify(spec.Outputs) : '';
         const constraintBlock = spec?.Outputs ? renderConstraintBlock(spec.Outputs) : '';
-        const hashBasis = `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}${this.pipelineTypeHashSuffix(spec)}`;
+        const hashBasis = `${prompt.ID}::${promptText}::${outputsStr}::${constraintBlock}${this.pipelineTypeHashSuffix(spec)}${this.escalationHashSuffix(spec)}`;
         return createHash('sha256').update(hashBasis).digest('hex');
     }
 
     /** The pipeline type's part of the prompt version hash: empty when the type is absent or `LLM`. */
     private pipelineTypeHashSuffix(spec?: DataFeatureSpec): string {
         const pipelineType = spec?.PipelineType?.trim();
-        if (!pipelineType || isLLMPipelineType(pipelineType)) {
+        if (!pipelineType || IsLLMPipelineType(pipelineType)) {
             return '';
         }
         return `::PipelineType=${pipelineType.toLowerCase()}`;
+    }
+
+    /** The escalation settings' part of the prompt version hash: empty without `Escalation`. */
+    private escalationHashSuffix(spec?: DataFeatureSpec): string {
+        const escalation = spec?.Escalation;
+        if (!escalation) {
+            return '';
+        }
+        const settings = { PipelineID: escalation.PipelineID?.trim().toLowerCase(), BelowConfidence: escalation.BelowConfidence };
+        return `::Escalation=${Canonicalize(settings)}`;
     }
 
     /** Computes a deterministic SHA-256 hash representing the output constraints. */
@@ -391,7 +795,7 @@ export class InferProcessor implements IRecordProcessor {
     /**
      * Records historical audit rows in MJ: Feature Values for all outputs on a record.
      * `outputConfidence` (from a driver that produces confidence) sets each output's confidence by
-     * output name, ahead of the single `confidence`.
+     * output name, ahead of the single `confidence`. Records nothing when {@link WritesHistory} is off.
      */
     protected async recordFeatureValuesHistory(params: {
         record: RecordRef;
@@ -406,7 +810,7 @@ export class InferProcessor implements IRecordProcessor {
         aiPromptRunID?: string | null;
         featureValueCacheID?: string | null;
     }): Promise<void> {
-        if (!this.spec?.Outputs || this.spec.Outputs.length === 0 || !params.context.recordProcessID || !params.context.entityID) {
+        if (!this.WritesHistory || !this.spec?.Outputs || this.spec.Outputs.length === 0 || !params.context.recordProcessID || !params.context.entityID) {
             return;
         }
 
@@ -514,7 +918,7 @@ export class InferProcessor implements IRecordProcessor {
             return KnowledgeHubMetadataEngine.Instance.FeaturePipelineTypes.find((t) => t.Name?.trim().toLowerCase() === wanted);
         } catch (e) {
             const reason = e instanceof Error ? e.message : String(e);
-            if (!isLLMPipelineType(typeName)) {
+            if (!IsLLMPipelineType(typeName)) {
                 throw new Error(`Feature Pipeline type '${typeName}' could not be resolved: MJ: Feature Pipeline Types could not be read: ${reason}`);
             }
             LogError(`InferProcessor: MJ: Feature Pipeline Types could not be read (${reason}); running as LLM`);
@@ -524,7 +928,7 @@ export class InferProcessor implements IRecordProcessor {
 
     /** The driver for a type with no catalog row: `LLM` still runs; any other name is an error. */
     private createDriverWithoutCatalogRow(typeName: string): BaseFeaturePipelineDriver {
-        if (isLLMPipelineType(typeName)) {
+        if (IsLLMPipelineType(typeName)) {
             return new LLMFeaturePipelineDriver();
         }
         throw new Error(`Feature Pipeline type '${typeName}' was not found in MJ: Feature Pipeline Types.`);
