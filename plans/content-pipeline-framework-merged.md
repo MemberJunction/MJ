@@ -5,7 +5,7 @@
 - **Created**: 2026-09-28
 - **Revised**: 2026-09-28 — per-record detail rows kept in queue mode; heartbeat with buffered progress; cooperative in-flight cancel; record-cap fix; scope-provider registry
 - **Revised**: 2026-09-29 — lease semantics and the 30-second heartbeat ceiling; `MaxProcessingSeconds` honored by the source; stall detection; deployment guidance removed
-- **Revised**: 2026-09-29 — attempt info for final failures; child results; run-time queue scope; delivery reference without a foreign key
+- **Revised**: 2026-09-29 — attempt info for final failures; child results; run-time queue scope; delivery reference without a foreign key; queue-scoped subscriptions use `HostType='MJWorker'` with no handler (the Database transport rejects `External`)
 - **Author**: Dray + Claude
 - **Branch**: dray/content-pipeline-framework
 - **Depends on**: `feat/work-queue` landing on `next`, **and** a small set of generic additions to `packages/RecordSetProcessor` (see API Changes). This is the only one of the three plans in this PR that changes both systems rather than depending on one, unmodified.
@@ -79,7 +79,8 @@ Verified against source on the `feat/work-queue` branch:
 - `HeartbeatIntervalSeconds(policy)` = `min(LeaseSeconds / 3, 30)`. The 30-second ceiling is `HEARTBEAT_INTERVAL_MAX_SECONDS`, hard-coded in `@memberjunction/work-queue-core/src/backoff.ts`. `ComputeBackoffSeconds` is exported from the same package.
 - `LeaseSeconds` is a subscription column: default 60, minimum 5 (`CK_WorkQueueSubscription_LeaseSeconds`).
 - `MaxProcessingSeconds` (nullable subscription column) is not enforced by any database procedure; Work Queue's own consumer runtime applies it. The bridge doesn't use that runtime, so it honors the value itself (see Heartbeat and progress).
-- Subscriptions carry `MaxAttempts`, backoff, `LeaseSeconds`, `HeartbeatMode`, `MaxProcessingSeconds`, and `HostType` (`'MJWorker' | 'External'`). An `External` subscription is not consumed by MJ's own Work Queue host, so it won't compete with this plan's consumers.
+- Subscriptions carry `MaxAttempts`, backoff, `LeaseSeconds`, `HeartbeatMode`, `MaxProcessingSeconds`, `HostType` (`'MJWorker' | 'External'`) and an optional `HandlerKey`. The Database transport rejects `HostType='External'` (`DatabaseTransportDriver.ValidateBindings`: "External hosts cannot consume the Database transport"; also enforced by `SubscriptionUnsupportedReason` on save and host start). Queue-scoped Record Processes therefore consume `'MJWorker'` subscriptions.
+- MJ's Work Queue host runs only the subscriptions its configuration names, or all `'MJWorker'` subscriptions under a wildcard. A subscription with no `HandlerKey`, or one whose key has no registered `BaseWorkHandler`, is planned as `HandlerNotRegistered` and never consumed by the host (`HostedSubscriptionPlanner`). That is what keeps the host from competing with this plan's consumers: queue-scoped subscriptions carry no `HandlerKey`.
 - Consumer concurrency is host/process configuration, not a subscription column. N containers each running concurrency C process up to N×C records at once. Neither system enforces a global per-source rate limit across processes.
 
 ## Architecture / Design
@@ -97,7 +98,8 @@ erDiagram
     WorkQueueSubscription {
         uuid ID
         uuid TopicID
-        string HostType "'External' for queue-scoped Record Processes"
+        string HostType "'MJWorker'"
+        string HandlerKey "empty for queue-scoped Record Processes"
         int LeaseSeconds
         int MaxAttempts
     }
@@ -341,7 +343,8 @@ Filter, View, List and SingleRecord scopes stay available platform-wide for ad h
 - **Hung processors keep their claims.** A timer-based heartbeat can't tell a working processor from a hung one. The last-progress timestamp makes a stall visible; the optional no-progress threshold makes it recoverable. Whether the threshold should have a platform default is open.
 - **Progress is latest-value.** The delivery holds one status up to 500 characters plus percent and a small checkpoint; history lives in the detail row, written at the end. If history must be visible *while* a record runs, the tracker would also update the detail row in place — deferred until needed.
 - **No cross-process concurrency or rate ceiling.** Consumer concurrency is per process, and neither system enforces a limit across processes. A strict ceiling today requires a single consumer process.
-- **Cross-team dependency.** Needs RSP and Work Queue codeowners' sign-off, though Work Queue itself needs no changes.
+- **Handler-less subscriptions look broken to Work Queue's host.** A host configured with a wildcard reports every queue-scoped subscription as `HandlerNotRegistered`. It consumes nothing, so correctness holds, but the operator dashboard shows a healthy subscription as a problem, and registering a handler under a matching key would make the host compete. The clean fix is a small, optional Work Queue addition: a way to mark a subscription as consumed by something other than the host, for example a third `HostType` value or a flag, so its state reads as intended. Until then, host configuration should name its subscriptions explicitly rather than use a wildcard where queue-scoped subscriptions exist.
+- **Cross-team dependency.** Needs RSP and Work Queue codeowners' sign-off. Work Queue needs no changes to function; the optional host-state addition above is the only one proposed.
 - **`FailureKind` inference.** Explicit per processor for now; revisit if a thrown-error convention (like Work Queue's `FatalWorkError`) proves simpler.
 - **Declarative work types at queue scale.** `Action`/`Agent`/`FieldRules`/`ML Model` Record Processes become runnable against queue scope for free; worth confirming with their owners that no extra guardrails are wanted.
 - **No batch-handler addition to Work Queue.** `ProcessBatch` already covers bulk work for queue-scoped records, so the batch-handler addition proposed in the Work-Queue-only plan isn't needed here.
@@ -358,7 +361,7 @@ Filter, View, List and SingleRecord scopes stay available platform-wide for ad h
 | `packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts` | Cap-aware page request; per-record context |
 | `packages/RecordSetProcessor/engine/src/RecordProcessExecutor.ts` | Scope-provider fall-through; pass provider tracker into `Process()` |
 | New `@memberjunction/record-set-processor-work-queue` | `WorkQueueSource`, `QueueAwareTracker`, `'Queue'` provider registration |
-| `packages/WorkQueue/*` | None |
+| `packages/WorkQueue/*` | None required. Optional: a way to mark a subscription as consumed outside the host (see Risks) |
 | `migrations/v6/` | `ScopeType` CHECK, two nullable FK columns |
 | `packages/MJCoreEntities` (generated) | Via CodeGen |
 | Record Process Explorer UI | Handle `ScopeType='Queue'`; link detail rows to deliveries |
