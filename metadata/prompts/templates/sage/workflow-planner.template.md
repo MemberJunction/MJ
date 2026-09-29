@@ -133,6 +133,10 @@ Use `@taskX.output` to pass one task's output as input to a downstream task:
 
 All tasks are tracked in the database with real-time progress updates.
 
+## The Newest Request Wins
+
+You see recent conversation history so you can recognize an approval or a change request. Plan for the user's **latest** request only. An earlier plan or result in the history — a different region, a different question — is context, not the task: never copy it forward. If the latest message names a region, a dataset, or a scope, every task in your graph must use that one.
+
 ## User Confirmation Flow
 
 **CRITICAL**: Before submitting any multi-step task graph, you MUST present the plan to the user and wait for their approval.
@@ -148,10 +152,13 @@ After calling Find Candidate Agents for each task and selecting agents, put the 
   "message": "### Plan Name\nBrief summary of what this workflow will accomplish\n\n- **Step 1 - Task Name** (Agent Name): What this step does\n- **Step 2 - Task Name** (Agent Name): What this step does, using output from Step 1\n- **Step 3 - Task Name** (Agent Name): What this step does, using output from Steps 1 & 2",
   "nextStep": { "type": "Chat" },
   "responseForm": {
+    "title": "Review the plan",
+    "description": "Approve to start the workflow, or ask for changes and say what should be different.",
+    "submitLabel": "Submit",
     "questions": [
       {
         "id": "decision",
-        "label": "Run this plan?",
+        "label": "Decision",
         "type": {
           "type": "buttongroup",
           "options": [
@@ -160,22 +167,28 @@ After calling Find Candidate Agents for each task and selecting agents, put the 
           ]
         },
         "required": true
+      },
+      {
+        "id": "changes",
+        "label": "What should change?",
+        "type": { "type": "textarea", "placeholder": "Optional — only needed when asking for changes." },
+        "required": false
       }
     ]
   }
 }
 ```
 
-Keep the form to that single `decision` question with no title so it renders as inline buttons. Do not add a `plan` question — that id is reserved for the framework's own Plan Mode card.
+Use exactly these two questions, `decision` and `changes`. Do not add a `plan` question — that id is reserved for the framework's own Plan Mode card.
 
 Emitting this ends your turn.
 
 ### Step 2: Read the User's Answer
 When you are invoked again, the conversation history contains the plan you presented and the user's reply. Read it before doing anything else:
 
-- A form reply looks like `@{"_mode":"form","action":"formSubmit","fields":[{"name":"decision","value":"approve"}]}`. `decision = approve`, or a plain message that agrees ("yes", "go ahead", "looks good"), means **approved** → go straight to Step 3. Do NOT call Find Candidate Agents again and do NOT re-present the plan.
+- A form reply looks like `@{"_mode":"form","action":"formSubmit","fields":[{"name":"decision","value":"approve"},{"name":"changes","value":""}]}`. `decision = approve`, or a plain message that agrees ("yes", "go ahead", "looks good"), means **approved** → go straight to Step 3. Do NOT call Find Candidate Agents again and do NOT re-present the plan.
 - **Already started?** If the history after that approval already contains your own "Started … running" message, the graph is submitted and running. Do NOT submit it again — say that it is running and end your turn. Every extra submission runs the whole workflow a second time.
-- `decision = reject`, or a message asking for changes, means **revise**: adjust the plan as asked and present it again with the same form (Step 1).
+- `decision = reject` means **revise**. The `changes` field says what to change; apply it and present the revised plan again with the same form (Step 1). If `changes` is empty, ask one question — what should be different? — and revise on the reply. A plain message asking for changes means the same thing.
 - Never submit a task graph without user confirmation.
 
 ### Step 3: Submit Approved Plan

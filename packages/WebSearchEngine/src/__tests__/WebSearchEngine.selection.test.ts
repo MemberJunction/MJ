@@ -119,8 +119,12 @@ class FakeProvider extends BaseWebSearchProvider {
         }
     }
 
-    public async ExecuteSearch(_params: WebSearchParams): Promise<WebSearchProviderResponse> {
+    /** The params of the most recent call, so a test can see what the engine actually asked for. */
+    public lastParams: WebSearchParams | null = null;
+
+    public async ExecuteSearch(params: WebSearchParams): Promise<WebSearchProviderResponse> {
         this.callCount++;
+        this.lastParams = params;
         return this.behaviour();
     }
 }
@@ -418,19 +422,37 @@ describe('WebSearchEngine selection', () => {
             expect(hitsOnly.callCount).toBe(0);
         });
 
-        it('reports NO_ELIGIBLE_PROVIDER when nothing can answer', async () => {
-            configureProviders([
-                {
-                    name: 'HitsOnly',
-                    driver: 'HitsOnlyDriver',
-                    priority: 10,
-                    provider: new FakeProvider(ok(), { Answer: false }),
-                },
-            ]);
+        it('falls back to plain results when nothing can answer, and says so', async () => {
+            // The case that motivated this: a Google Custom Search install, a model that set
+            // IncludeAnswer because it sounded helpful, and five searches that all failed for it.
+            const hitsOnly = new FakeProvider(() => ({ Success: true, Hits: [hit('https://plain')] }), { Answer: false });
+            configureProviders([{ name: 'HitsOnly', driver: 'HitsOnlyDriver', priority: 10, provider: hitsOnly }]);
 
             const result = await (await freshEngine()).Search({ Query: 'q', IncludeAnswer: true }, USER);
 
-            expect(result.ResultCode).toBe('NO_ELIGIBLE_PROVIDER');
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
+            expect(result.ProviderUsed).toBe('HitsOnly');
+            expect(result.Hits.map((h) => h.URL)).toEqual(['https://plain']);
+            expect(result.Answer).toBeUndefined();
+            expect(result.Notice).toMatch(/no available provider can synthesize an answer/i);
+            expect(result.Notice).toContain('HitsOnly');
+            // The driver must not be asked for what it cannot give.
+            expect(hitsOnly.lastParams?.IncludeAnswer).toBe(false);
+        });
+
+        it('does not set Notice when an answerer served the request', async () => {
+            const answerer = new FakeProvider(
+                () => ({ Success: true, Hits: [hit('https://ans')], Answer: 'the answer' }),
+                { Answer: true },
+            );
+            configureProviders([{ name: 'Answerer', driver: 'AnswererDriver', priority: 10, provider: answerer }]);
+
+            const result = await (await freshEngine()).Search({ Query: 'q', IncludeAnswer: true }, USER);
+
+            expect(result.Answer).toBe('the answer');
+            expect(result.Notice).toBeUndefined();
+            expect(answerer.lastParams?.IncludeAnswer).toBe(true);
         });
     });
 
