@@ -45,5 +45,18 @@
     "deleteRecord": {
       "delete": true
     }
+  },
+  {
+    "fields": {
+      "Name": "Decision",
+      "Description": "Models that answer typed questions about a state with probabilities instead of text: a Likelihood (the probability a statement is true), a Choice (one option from a described set, with a probability per option) or a Score (a position on an ordered rubric, with a probability per level). Used for fast judgments such as routing, gating, relevance and evaluation. Exposed through the BaseDecision primitive and resolved through the ClassFactory by AIModelType + DriverClass, the same as LLM/Embeddings/Reranker models. A driver is either a native decision model, which returns typed answers with nothing to parse, or LLMDecision, which answers the same questions with a chat model through an MJ prompt. Per-model limits (questions per call, options per Choice, levels per Score, state size) belong in the Decision section of ModelConfiguration.",
+      "DefaultInputModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+      "DefaultOutputModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+      "SupportsPrefill": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "54866355-E16E-49ED-80A9-79E151A81281"
+    }
   }
 ]
