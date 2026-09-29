@@ -4,9 +4,11 @@ import { ParseManifestEntryMime, TrimSpacesAndTabs } from '../linearTextScan';
 /** Deterministic pseudo-random strings over a small alphabet, so equivalence runs are reproducible. */
 function corpus(alphabet: readonly string[], count: number, maxLength: number): string[] {
     let seed = 7;
+    // 32-bit LCG in integer arithmetic. A plain multiply overflows 2^53 and rounds away the low bits,
+    // so the sequence repeats early and `% n` sees a skewed distribution; the high 16 bits are the good ones.
     const next = (): number => {
-        seed = (seed * 1103515245 + 12345) % 2147483648;
-        return seed;
+        seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+        return seed >>> 16;
     };
     const out: string[] = [];
     for (let n = 0; n < count; n++) {
