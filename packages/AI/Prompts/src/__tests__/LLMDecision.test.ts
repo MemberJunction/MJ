@@ -148,7 +148,7 @@ describe('LLMDecision', () => {
             expect(callParams.data.state).toBe(JSON.stringify(params.State, null, 1));
 
             // Verify questions spec
-            const parsedQuestions = JSON.parse(callParams.data.questions);
+            const parsedQuestions = JSON.parse(String(callParams.data.questions));
             expect(parsedQuestions).toEqual({
                 q_likelihood: {
                     kind: 'Likelihood',
@@ -706,7 +706,7 @@ describe('LLMDecision', () => {
             const result = await decision.Decide({
                 Model: 'LLM',
                 State: 'test',
-                Questions: { toString: { Kind: 'Likelihood', Instructions: 'Check' } },
+                Questions: { toString: { Kind: 'Likelihood' as const, Instructions: 'Check' } },
             });
 
             expect(result.success).toBe(false);
