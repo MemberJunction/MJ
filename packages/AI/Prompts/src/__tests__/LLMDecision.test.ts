@@ -170,22 +170,48 @@ describe('LLMDecision', () => {
                 },
             });
 
-            // Verify outputFormat template
-            const parsedOutputFormat = JSON.parse(callParams.data.outputFormat);
-            expect(parsedOutputFormat).toEqual({
-                q_likelihood: '<probability 0-1>',
-                q_choice: {
-                    frontend: '<probability>',
-                    backend: '<probability>',
-                    database: '<probability>',
-                },
-                q_score: {
-                    low: '<probability>',
-                    medium: '<probability>',
-                    high: '<probability>',
-                    critical: '<probability>',
+            // Verify outputFormat template: JSON's layout, with the placeholders unquoted so the
+            // model does not copy them as strings
+            expect(callParams.data.outputFormat).toBe(
+                [
+                    '{',
+                    ' "q_likelihood": <probability 0-1>,',
+                    ' "q_choice": {',
+                    '  "frontend": <probability>,',
+                    '  "backend": <probability>,',
+                    '  "database": <probability>',
+                    ' },',
+                    ' "q_score": {',
+                    '  "low": <probability>,',
+                    '  "medium": <probability>,',
+                    '  "high": <probability>,',
+                    '  "critical": <probability>',
+                    ' }',
+                    '}',
+                ].join('\n')
+            );
+        });
+
+        it('JSON-encodes option values and level names in outputFormat', async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(makeSuccessRunResult({ q: { 'say "hi"': 1 } }));
+
+            await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: {
+                    q: {
+                        Kind: 'Choice',
+                        Instructions: 'Pick',
+                        Options: [{ Value: 'say "hi"', Description: 'Greet' }, { Value: 'a\\b', Description: 'Path' }],
+                    },
                 },
             });
+
+            const callParams = executePromptSpy.mock.calls[0][0] as AIPromptParams;
+            expect(callParams.data.outputFormat).toBe(
+                '{\n "q": {\n  "say \\"hi\\"": <probability>,\n  "a\\\\b": <probability>\n }\n}'
+            );
         });
 
         it('passes string state as-is without re-encoding', async () => {

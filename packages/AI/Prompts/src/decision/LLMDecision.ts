@@ -41,6 +41,12 @@ const MAX_REPLY_IN_ERROR = 500;
  */
 const LIKELIHOOD_CLAMP_TOLERANCE = 0.01;
 
+/** Where `outputFormat` shows the model a Likelihood's number. Written unquoted, like a number. */
+const LIKELIHOOD_PLACEHOLDER = '<probability 0-1>';
+
+/** Where `outputFormat` shows the model an option's or level's number. Written unquoted, like a number. */
+const DISTRIBUTION_PLACEHOLDER = '<probability>';
+
 /**
  * Driver that answers typed decision questions with a chat LLM through an MJ prompt. It is the
  * fallback `BaseDecision` driver: everything downstream can be written against `BaseDecision`
@@ -50,7 +56,8 @@ const LIKELIHOOD_CLAMP_TOLERANCE = 0.01;
  * The prompt receives three template variables:
  * - `state`: the decision state, as-is when it is a string, otherwise as indented JSON;
  * - `questions`: JSON mapping each question key to `{ kind, instructions, options?, levels? }`;
- * - `outputFormat`: JSON showing the reply's shape, with every option or level listed.
+ * - `outputFormat`: the reply's shape as JSON, with every option or level listed and an unquoted
+ *   placeholder where each number goes.
  *
  * It must reply with one JSON object with the same keys: a number for a Likelihood, and an object
  * mapping every option value (Choice) or level name (Score) to a number. Choice and Score
@@ -228,30 +235,22 @@ export class LLMDecision extends BaseDecision {
     }
 
     /**
-     * Formats output template specification into JSON string.
+     * Formats the reply's shape: JSON laid out as `JSON.stringify(value, null, 1)` would, except that
+     * each placeholder is unquoted. A quoted placeholder shows the value as a string, and a chat model
+     * copied it, writing `"0.1"` for `0.1`. Keys are still JSON-encoded, so any option value or level
+     * name is shown exactly.
      */
     private formatOutputTemplate(questions: Record<string, DecisionQuestion>): string {
-        const template: Record<string, string | Record<string, string>> = {};
-
-        for (const [key, q] of Object.entries(questions)) {
+        const entries = Object.entries(questions).map(([key, q]) => {
             if (q.Kind === 'Likelihood') {
-                template[key] = '<probability 0-1>';
-            } else if (q.Kind === 'Choice') {
-                const optionMap: Record<string, string> = {};
-                for (const opt of q.Options) {
-                    optionMap[opt.Value] = '<probability>';
-                }
-                template[key] = optionMap;
-            } else if (q.Kind === 'Score') {
-                const levelMap: Record<string, string> = {};
-                for (const lvl of q.Levels) {
-                    levelMap[lvl] = '<probability>';
-                }
-                template[key] = levelMap;
+                return ` ${JSON.stringify(key)}: ${LIKELIHOOD_PLACEHOLDER}`;
             }
-        }
+            const names = q.Kind === 'Choice' ? q.Options.map(opt => opt.Value) : q.Levels;
+            const lines = names.map(name => `  ${JSON.stringify(name)}: ${DISTRIBUTION_PLACEHOLDER}`);
+            return ` ${JSON.stringify(key)}: {\n${lines.join(',\n')}\n }`;
+        });
 
-        return JSON.stringify(template, null, 1);
+        return `{\n${entries.join(',\n')}\n}`;
     }
 
     /**
