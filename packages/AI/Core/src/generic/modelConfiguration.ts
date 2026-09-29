@@ -1,13 +1,14 @@
 /**
  * The canonical AI configuration shapes + the pure cascade resolvers.
  *
- * The AI stack carries `nvarchar(max)` JSONType configuration bags at five levels, in two cascades.
+ * The AI stack carries `nvarchar(max)` JSONType configuration bags at six levels, in two cascades.
  * The MODEL CATALOG cascade describes the model:
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  * ```
  *
  * The PROMPT cascade describes what a given prompt asks for, and layers on top of the catalog:
@@ -272,6 +273,26 @@ export interface LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI). Per-iteration framework state must then be appended, never
+     * replaced, or the reusable prefix ends at the system prompt. Absent or `false` means a block or
+     * segment cache (Anthropic's explicit breakpoints, Gemini's implicit cache, Cerebras's sliding
+     * cache), where a trailing per-iteration message can be replaced in place — the safe default,
+     * since replace-in-place costs a block-cache provider nothing whereas append-only only grows the
+     * context.
+     *
+     * Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it, so a host that serves many models (Fireworks, Cerebras, Azure, Bedrock) can
+     * carry a per-model answer that differs from the vendor default.
+     *
+     * Consumed by the loop agent's trailing runtime-state layout: see `TrailingStateMode` in
+     * `@memberjunction/ai-agents`.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /** Vision knobs. Reserved — no consumers yet. */
@@ -352,25 +373,52 @@ export type LLMModelConfigurationSection = LLMConfigurationSettings;
  * @returns The parsed configuration, or `null` when the layer contributes nothing.
  */
 export function ParseModelConfiguration(json: string | null | undefined): AIModelConfiguration | null {
+    return parseConfigurationBag<AIModelConfiguration>(json, 'ParseModelConfiguration', 'ModelConfiguration');
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag (lockstep with
+ * `IAIVendorConfiguration` in the metadata interface). General-purpose; its first key,
+ * {@link AIVendorConfiguration.ModelDefaults}, is the vendor layer of the model-configuration cascade.
+ */
+export interface AIVendorConfiguration {
+    /**
+     * The default model configuration for every model this vendor serves. Resolved ABOVE the
+     * model's own bag and BELOW the model-vendor row (the tie-breaker); merged per key, so it only
+     * touches the keys it sets.
+     */
+    ModelDefaults?: AIModelConfiguration | null;
+}
+
+/**
+ * Tolerant parse of one `AIVendor.Configuration` column value — the same contract as
+ * {@link ParseModelConfiguration}: absent, blank, malformed or non-object JSON contributes nothing.
+ */
+export function ParseVendorConfiguration(json: string | null | undefined): AIVendorConfiguration | null {
+    return parseConfigurationBag<AIVendorConfiguration>(json, 'ParseVendorConfiguration', 'Configuration');
+}
+
+/** Shared tolerant parse: a plain object or nothing, never a throw. */
+function parseConfigurationBag<T>(json: string | null | undefined, caller: string, column: string): T | null {
     if (typeof json !== 'string' || json.trim().length === 0) {
         return null;
     }
     try {
         const parsed: unknown = JSON.parse(json);
         if (IsPlainObject(parsed)) {
-            return parsed as AIModelConfiguration;
+            return parsed as T;
         }
-        console.warn('[ParseModelConfiguration] Model configuration JSON is not a plain object; skipping layer.');
+        console.warn(`[${caller}] ${column} JSON is not a plain object; skipping layer.`);
         return null;
     } catch (err) {
-        console.warn('[ParseModelConfiguration] Failed to parse ModelConfiguration JSON; skipping malformed layer:', err);
+        console.warn(`[${caller}] Failed to parse ${column} JSON; skipping malformed layer:`, err);
         return null;
     }
 }
 
 /**
  * Resolves the EFFECTIVE model configuration by deep-merging the catalog layers, base first —
- * type default < model < model-vendor. Merge semantics are identical to the realtime config
+ * type default < model < vendor default < model-vendor. Merge semantics are identical to the realtime config
  * cascade (`DeepMergeConfigs` in `@memberjunction/ai-agents` — duplicated here because package
  * layering runs the other way):
  *
@@ -415,4 +463,14 @@ function mergeInto(target: JSONObject, source: JSONObject): void {
             target[key] = incoming;
         }
     }
+}
+
+/**
+ * Whether an effective model configuration declares a byte-prefix prompt cache
+ * (`LLM.PrefixPromptCache === true`). Absent, `null` or `false` all mean a block cache. Read through
+ * {@link ResolveEffectiveModelConfiguration} (or `AIEngineBase.GetEffectiveModelConfiguration`) so
+ * the most specific layer's answer wins.
+ */
+export function IsPrefixPromptCache(config: AIModelConfiguration | null | undefined): boolean {
+    return config?.LLM?.PrefixPromptCache === true;
 }
