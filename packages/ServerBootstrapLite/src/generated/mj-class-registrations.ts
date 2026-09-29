@@ -194,7 +194,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (418 classes)
+// @memberjunction/core-entities (419 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -434,6 +434,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -970,8 +971,9 @@ import {
     FormBuilderDesignerAgent,
 } from '@memberjunction/ai-form-builder';
 
-// @memberjunction/record-set-processor (5 classes)
+// @memberjunction/record-set-processor (6 classes)
 import {
+    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -1553,6 +1555,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineTypeEntity,
     MJFeatureValueCacheEntity,
     MJFeatureValueEntity,
     MJFileCategoryEntity,
@@ -1663,11 +1666,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchProviderEntity,
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
-    MJSearchScopeExternalIndexEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -1867,11 +1870,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     GetUserVideosAction,
     GetVideoAnalyticsAction,
     HootSuiteBulkSchedulePostsAction,
-    HootSuiteCreateScheduledPostAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteCreateScheduledPostAction,
     HootSuiteDeleteScheduledPostAction,
     HootSuiteGetAnalyticsAction,
     HootSuiteGetScheduledPostsAction,
@@ -1983,6 +1986,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     FormBuilderAgent,
     FormBuilderBuilderAgent,
     FormBuilderDesignerAgent,
+    LLMFeaturePipelineDriver,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
     RecordProcessPauseRunServerOperation,
@@ -2070,12 +2074,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
-    MJUserEntityServer,
-    MJUserRoleEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -2251,7 +2255,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 960;
+export const CLASS_REGISTRATIONS_COUNT = 962;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
