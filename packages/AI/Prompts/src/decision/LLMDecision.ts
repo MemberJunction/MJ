@@ -47,7 +47,8 @@ const MAX_REPLY_IN_ERROR = 500;
  *
  * It must reply with one JSON object with the same keys: a number for a Likelihood, and an object
  * mapping every option value (Choice) or level name (Score) to a number. Choice and Score
- * distributions are normalised here, so `BaseDecision.Decide` can validate them strictly.
+ * distributions are normalised here, so `BaseDecision.Decide` can validate them strictly. A value
+ * that is present but is not a usable number fails the question; it is never read as 0.
  *
  * Registered with ClassFactory under BaseDecision with key 'LLMDecision'.
  */
@@ -284,7 +285,7 @@ export class LLMDecision extends BaseDecision {
         question: DecisionQuestion,
         reply: Record<string, unknown>
     ): { success: true; answer: DecisionAnswer } | { success: false; error: string } {
-        if (!Object.prototype.hasOwnProperty.call(reply, key) || reply[key] === undefined) {
+        if (!this.isPresent(reply, key)) {
             return { success: false, error: `Question '${key}': Missing answer in model reply` };
         }
 
@@ -314,7 +315,7 @@ export class LLMDecision extends BaseDecision {
         if (value === undefined) {
             return {
                 success: false,
-                error: `Question '${key}': Likelihood value must be a finite number, got ${typeof rawVal === 'string' ? `"${rawVal}"` : String(rawVal)}`,
+                error: `Question '${key}': Likelihood value must be a finite number, got ${this.describeValue(rawVal)}`,
             };
         }
 
@@ -404,8 +405,9 @@ export class LLMDecision extends BaseDecision {
 
     /**
      * Normalizes a probability distribution for Choice or Score questions.
-     * Validates object shape, ignores unexpected keys with LogStatus, takes non-negative finite numbers (0 otherwise),
-     * fails if sum <= 0, and divides each by the sum.
+     * Validates object shape, ignores unexpected keys with LogStatus, counts a missing entry as 0,
+     * fails on an entry that is present but not a finite non-negative number, fails if sum <= 0,
+     * and divides each by the sum.
      */
     private normalizeDistribution(
         questionKey: string,
@@ -429,14 +431,26 @@ export class LLMDecision extends BaseDecision {
             }
         }
 
+        const entityName = kind === 'Choice' ? 'option' : 'level';
         const rawProbs: Record<string, number> = {};
         let sum = 0;
         for (const expectedKey of expectedKeys) {
+            if (!this.isPresent(rawRecord, expectedKey)) {
+                rawProbs[expectedKey] = 0;
+                continue;
+            }
+            // Reading a malformed entry such as "80%" as 0 would demote what may be the model's
+            // favourite and hand another answer its share, with nothing to show for it.
             const itemVal = rawRecord[expectedKey];
             const parsed = this.toFiniteNumber(itemVal);
-            const num = parsed !== undefined && parsed >= 0 ? parsed : 0;
-            rawProbs[expectedKey] = num;
-            sum += num;
+            if (parsed === undefined || parsed < 0) {
+                return {
+                    success: false,
+                    error: `Question '${questionKey}': ${kind} probability for ${entityName} '${expectedKey}' must be a finite non-negative number, got ${this.describeValue(itemVal)}`,
+                };
+            }
+            rawProbs[expectedKey] = parsed;
+            sum += parsed;
         }
 
         if (sum <= 0) {
@@ -467,6 +481,21 @@ export class LLMDecision extends BaseDecision {
             return Number.isFinite(parsed) ? parsed : undefined;
         }
         return undefined;
+    }
+
+    /**
+     * Whether the reply holds a value under `key`. Only an own key counts, so a question or option
+     * named after an `Object.prototype` member (`toString`) is not answered by the prototype.
+     */
+    private isPresent(record: Record<string, unknown>, key: string): boolean {
+        return Object.prototype.hasOwnProperty.call(record, key) && record[key] !== undefined;
+    }
+
+    /**
+     * Renders a reply value for an error message, quoting a string so `"80%"` reads as the text it was.
+     */
+    private describeValue(value: unknown): string {
+        return typeof value === 'string' ? `"${value}"` : String(value);
     }
 
     /**

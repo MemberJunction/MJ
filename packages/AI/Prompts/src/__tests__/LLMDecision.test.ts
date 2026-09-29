@@ -405,6 +405,103 @@ describe('LLMDecision', () => {
             expect(answer.Confidence).toBeCloseTo(0.7);
         });
 
+        it('treats an option named after an Object.prototype member as missing, not malformed', async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(makeSuccessRunResult({ q: { other: 1 } }));
+
+            const result = await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: {
+                    q: {
+                        Kind: 'Choice',
+                        Instructions: 'Pick',
+                        Options: [{ Value: 'toString', Description: 'T' }, { Value: 'other', Description: 'O' }],
+                    },
+                },
+            });
+
+            expect(result.success).toBe(true);
+            const answer = result.Answers.q as ChoiceAnswer;
+            expect(answer.Probabilities).toEqual({ toString: 0, other: 1 });
+            expect(answer.Value).toBe('other');
+        });
+
+        it('fails when a present entry is malformed, rather than reading it as 0 (review repro)', async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(
+                makeSuccessRunResult({
+                    q_choice: { apple: '80%', banana: 0.2, cherry: 0 },
+                })
+            );
+
+            const result = await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: choiceQuestions,
+            });
+
+            // Read as 0, '80%' made 'banana' a certain answer
+            expect(result.success).toBe(false);
+            expect(result.Answers).toEqual({});
+            expect(result.errorMessage).toBe(
+                `Question 'q_choice': Choice probability for option 'apple' must be a finite non-negative number, got "80%"`
+            );
+            // The model call still cost money
+            expect(result.Usage?.promptTokens).toBe(150);
+            expect(result.Usage?.completionTokens).toBe(50);
+            expect(result.Usage?.cost).toBe(0.003);
+            expect(result.ResolvedModel).toBe('gpt-4o');
+        });
+
+        it.each([
+            [null, 'null'],
+            ['high', '"high"'],
+            ['', '""'],
+            [true, 'true'],
+            [{ p: 0.8 }, '[object Object]'],
+        ])('fails when a present entry is not a number (%j)', async (entry, shown) => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(
+                makeSuccessRunResult({
+                    q_choice: { apple: 0.5, banana: entry, cherry: 0.5 },
+                })
+            );
+
+            const result = await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: choiceQuestions,
+            });
+
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toBe(
+                `Question 'q_choice': Choice probability for option 'banana' must be a finite non-negative number, got ${shown}`
+            );
+        });
+
+        it('fails on a negative entry instead of counting it as 0', async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(makeSuccessRunResult({ q: { a: -0.2, b: 0.8 } }));
+
+            const result = await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: {
+                    q: {
+                        Kind: 'Choice',
+                        Instructions: 'Pick',
+                        Options: [{ Value: 'a', Description: 'A' }, { Value: 'b', Description: 'B' }],
+                    },
+                },
+            });
+
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toBe(
+                `Question 'q': Choice probability for option 'a' must be a finite non-negative number, got -0.2`
+            );
+        });
+
         it('ignores unexpected keys and logs them with LogStatus', async () => {
             const decision = new LLMDecision('', PROMPT_ID, mockUser);
             executePromptSpy.mockResolvedValueOnce(
@@ -514,6 +611,26 @@ describe('LLMDecision', () => {
             const answer = result.Answers.q_score as ScoreAnswer;
             expect(answer.Value).toBeCloseTo(1.4);
             expect(answer.Confidence).toBeCloseTo(0.6);
+        });
+
+        it('fails when a present level entry is malformed, naming the level', async () => {
+            const decision = new LLMDecision('', PROMPT_ID, mockUser);
+            executePromptSpy.mockResolvedValueOnce(
+                makeSuccessRunResult({
+                    q_score: { low: null, mid: 0.5, high: 0.5 },
+                })
+            );
+
+            const result = await decision.Decide({
+                Model: 'LLM',
+                State: 'test',
+                Questions: scoreQuestions,
+            });
+
+            expect(result.success).toBe(false);
+            expect(result.errorMessage).toBe(
+                `Question 'q_score': Score probability for level 'low' must be a finite non-negative number, got null`
+            );
         });
     });
 
