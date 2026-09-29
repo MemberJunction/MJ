@@ -17,7 +17,7 @@
  * so both this module and the client bootstrap publish/read the same install.
  */
 import sql from 'mssql';
-import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider } from '@memberjunction/core';
+import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider, StartupManager } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
@@ -83,7 +83,7 @@ export async function BootstrapIntegrationServer(opts: BootstrapServerOptions = 
     await LoadDynamicPackages({ processId: INTEGRATION_TESTS_PROCESS_ID, tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
 
     // FIRST-CALLER cache init — MUST precede any provider setup (load-bearing on both backends).
-    const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
+    const storage = new InstrumentedLocalStorageProvider(opts.SharedStorage ?? new InMemoryLocalStorageProvider());
     await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: opts.VerboseCacheLogging ?? false });
     SetActiveStorage(storage);
 
@@ -113,7 +113,11 @@ async function setupSqlServerProvider(
         options: { encrypt: false, trustServerCertificate: true }
     }).connect();
 
-    const provider = await setupSQLServerClient(new SQLServerProviderConfigData(pool, db.Schema));
+    const config = new SQLServerProviderConfigData(pool, db.Schema);
+    if (opts.SharedStorage) {
+        config.LocalStorageProvider = storage; // shared store from the first read (plan N1)
+    }
+    const provider = await setupSQLServerClient(config);
     await UserCache.Instance.Refresh(provider);
 
     const user = resolveContextUser(opts.ContextUserEmail);
@@ -142,9 +146,16 @@ async function setupPostgreSQLProvider(
         db.Schema,
         1 // checkRefreshIntervalSeconds > 0 → load metadata on Config
     );
+    if (opts.SharedStorage) {
+        pgConfig.LocalStorageProvider = storage; // shared store from the first read (plan N1)
+    }
     await provider.Config(pgConfig);
     SetProvider(provider as unknown as IMetadataProvider);
     await UserCache.Instance.Refresh(provider);
+    // setupSQLServerClient runs the startup engines itself; the PostgreSQL provider does not, so
+    // run them here as MJAPI does. Without this, engine-backed checks ran against unloaded engines.
+    const systemUser = UserCache.Instance.GetSystemUser() ?? UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
+    await StartupManager.Instance.Startup(false, systemUser, provider as unknown as IMetadataProvider);
 
     const user = resolveContextUser(opts.ContextUserEmail);
     return {

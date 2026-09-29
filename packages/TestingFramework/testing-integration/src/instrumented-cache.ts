@@ -5,7 +5,7 @@
  * (InMemoryLocalStorageProvider, ILocalStorageProvider) is imported from
  * @memberjunction/core, never copied.
  */
-import type { ILocalStorageProvider } from '@memberjunction/core';
+import type { ILocalStorageProvider, LocalStorageWriteOptions } from '@memberjunction/core';
 
 /**
  * Wraps any ILocalStorageProvider with call counters so tests can prove cache
@@ -26,13 +26,50 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
         return this.inner.SharesReferences;
     }
 
+    /** Delegated, like {@link SharesReferences}: sharing is a property of the inner store. */
+    public get SharedAcrossProcesses(): boolean | undefined {
+        return this.inner.SharedAcrossProcesses;
+    }
+
     public GetItemCount = 0;
     public GetItemsCount = 0;
     public SetItemCount = 0;
     public RemoveCount = 0;
     private perCategory = new Map<string, { Gets: number; Sets: number }>();
 
-    constructor(private readonly inner: ILocalStorageProvider) {}
+    /**
+     * Present only when the inner provider has it: `LocalCacheManager` chooses its lookup path by
+     * whether the method exists, so the wrapper must not add one the real provider lacks.
+     */
+    public readonly GetIndexGroupKeys?: (category: string, group: string) => Promise<string[]>;
+
+    /** Present only when the inner provider has it, for the same reason as {@link GetIndexGroupKeys}. */
+    public readonly WithKeyLock?: <T>(key: string, category: string, work: () => Promise<T>) => Promise<T>;
+
+    /** Present only when the inner provider has it, for the same reason as {@link GetIndexGroupKeys}. */
+    public readonly TryAcquireLease?: (name: string, ttlMs: number) => Promise<boolean>;
+
+    /** Present only when the inner provider has it, for the same reason as {@link GetIndexGroupKeys}. */
+    public readonly ReleaseLease?: (name: string) => Promise<void>;
+
+    constructor(private readonly inner: ILocalStorageProvider) {
+        const innerGroupKeys = inner.GetIndexGroupKeys;
+        if (innerGroupKeys) {
+            this.GetIndexGroupKeys = (category, group) => innerGroupKeys.call(inner, category, group);
+        }
+        const innerLock = inner.WithKeyLock;
+        if (innerLock) {
+            this.WithKeyLock = <T>(key: string, category: string, work: () => Promise<T>) => innerLock.call(inner, key, category, work) as Promise<T>;
+        }
+        const innerLease = inner.TryAcquireLease;
+        if (innerLease) {
+            this.TryAcquireLease = (name, ttlMs) => innerLease.call(inner, name, ttlMs);
+        }
+        const innerRelease = inner.ReleaseLease;
+        if (innerRelease) {
+            this.ReleaseLease = (name) => innerRelease.call(inner, name);
+        }
+    }
 
     public ResetCounts(): void {
         this.GetItemCount = 0;
@@ -75,10 +112,10 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
         return this.inner.GetItems<T>(keys, category);
     }
 
-    public async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
+    public async SetItem<T>(key: string, value: T, category?: string, options?: LocalStorageWriteOptions): Promise<void> {
         this.SetItemCount++;
         this.bump(category, 'Sets');
-        return this.inner.SetItem<T>(key, value, category);
+        return this.inner.SetItem<T>(key, value, category, options);
     }
 
     public async Remove(key: string, category?: string): Promise<void> {
