@@ -10,6 +10,7 @@ import { configInfo, DbPlatform, MjCoreSchema, ResolveEntityImportPackage, type 
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection, ResolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
 import { CodeGenReporter } from './codegen-reporter';
+import { NormalizeGeneratedValidatorText } from './validator-text';
 import { v4 as uuidv4 } from 'uuid';
 import { WriteFileIfChanged } from './file-write';
 import { EmitStats } from './emit-stats';
@@ -1442,8 +1443,7 @@ VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelI
       const validationFunctions = validators.map((f) => {
         // output the function text and the function description in a JSDoc block
 
-        // first format the function text to ensure that escaped \n, \t, and \" are replaced with actual characters
-        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
+        const cleansedText = NormalizeGeneratedValidatorText(f.functionText);
         // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 

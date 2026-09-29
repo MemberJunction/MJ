@@ -2535,8 +2535,8 @@ export const MJAIAgentRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
-        * * Default Value: 0.000000
+        * * SQL Data Type: decimal(19, 8)
+        * * Default Value: 0.00000000
         * * Description: Total estimated cost for all AI model usage during this agent run`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -6407,7 +6407,7 @@ export const MJAIPromptRunSchema = z.object({
     TotalCost: z.number().nullable().describe(`
         * * Field Name: TotalCost
         * * Display Name: Total Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.`),
     Success: z.boolean().describe(`
         * * Field Name: Success
@@ -6536,7 +6536,7 @@ export const MJAIPromptRunSchema = z.object({
     DescendantCost: z.number().nullable().describe(`
         * * Field Name: DescendantCost
         * * Display Name: Descendant Cost
-        * * SQL Data Type: decimal(18, 6)
+        * * SQL Data Type: decimal(19, 8)
         * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.`),
     ValidationAttemptCount: z.number().nullable().describe(`
         * * Field Name: ValidationAttemptCount
@@ -6833,6 +6833,12 @@ export const MJAIPromptRunSchema = z.object({
     *   * NativeFallback
     *   * NativeImplicit
         * * Description: Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -6881,6 +6887,10 @@ export const MJAIPromptRunSchema = z.object({
         * * Field Name: UsageType
         * * Display Name: Usage Type
         * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -8073,6 +8083,12 @@ export const MJAIVendorSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credential Types (vwCredentialTypes.ID)
         * * Description: Reference to the type of credential this vendor expects (e.g., API Key, GCP Service Account, Azure Service Principal). Used for type-based default credential resolution when no explicit binding exists, and for UI guidance when creating credentials.`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIVendorEntity_IAIVendorConfiguration
+        * * Description: Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.`),
     CredentialType: z.string().nullable().describe(`
         * * Field Name: CredentialType
         * * Display Name: Credential Type
@@ -19324,7 +19340,7 @@ export const MJEntityFormContributionSchema = z.object({
         * * Description: Pin to the details or more chrome bucket instead of an own rail item.`),
     Presentation: z.union([z.literal('bare'), z.literal('panel')]).describe(`
         * * Field Name: Presentation
-        * * Display Name: Presentation Style
+        * * Display Name: Presentation
         * * SQL Data Type: nvarchar(10)
         * * Default Value: panel
     * * Value List Type: List
@@ -19402,23 +19418,23 @@ export const MJEntityFormContributionSchema = z.object({
         * * Default Value: getutcdate()`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity Name
+        * * Display Name: Entity
         * * SQL Data Type: nvarchar(255)`),
     Component: z.string().describe(`
         * * Field Name: Component
-        * * Display Name: Component Name
+        * * Display Name: Component
         * * SQL Data Type: nvarchar(500)`),
     RelatedEntity: z.string().nullable().describe(`
         * * Field Name: RelatedEntity
-        * * Display Name: Related Entity Name
+        * * Display Name: Related Entity
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Role: z.string().nullable().describe(`
         * * Field Name: Role
-        * * Display Name: Role Name
+        * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -26113,6 +26129,12 @@ export const MJProjectSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    OwnerUserID: z.string().nullable().describe(`
+        * * Field Name: OwnerUserID
+        * * Display Name: Owner User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.`),
     Environment: z.string().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -26121,6 +26143,10 @@ export const MJProjectSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    OwnerUser: z.string().nullable().describe(`
+        * * Field Name: OwnerUser
+        * * Display Name: Owner User
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -42329,8 +42355,8 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
-    * * Default Value: 0.000000
+    * * SQL Data Type: decimal(19, 8)
+    * * Default Value: 0.00000000
     * * Description: Total estimated cost for all AI model usage during this agent run
     */
     get TotalCost(): number | null {
@@ -50527,7 +50553,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelTypeEntity_LLMConfigurationSettings`, `MJAIModelTypeEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelTypeEntity_VisionConfigurationSettings`, `MJAIModelTypeEntity_AudioConfigurationSettings`, `MJAIModelTypeEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelTypeEntity_IAIModelConfiguration`, `MJAIModelTypeEntity_IAIPromptConfiguration`,
  *    `MJAIModelTypeEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -50536,7 +50563,8 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -50623,6 +50651,19 @@ export interface MJAIModelTypeEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -50694,6 +50735,25 @@ export interface MJAIModelTypeEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelTypeEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -50712,6 +50772,8 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50730,6 +50792,8 @@ export interface MJAIModelTypeEntity_IAIPromptConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -50745,6 +50809,26 @@ export interface MJAIModelTypeEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelTypeEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelTypeEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelTypeEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelTypeEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelTypeEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -50950,7 +51034,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelVendorEntity_LLMConfigurationSettings`, `MJAIModelVendorEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelVendorEntity_VisionConfigurationSettings`, `MJAIModelVendorEntity_AudioConfigurationSettings`, `MJAIModelVendorEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelVendorEntity_IAIModelConfiguration`, `MJAIModelVendorEntity_IAIPromptConfiguration`,
  *    `MJAIModelVendorEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -50959,7 +51044,8 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -51046,6 +51132,19 @@ export interface MJAIModelVendorEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -51117,6 +51216,25 @@ export interface MJAIModelVendorEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelVendorEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -51135,6 +51253,8 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51153,6 +51273,8 @@ export interface MJAIModelVendorEntity_IAIPromptConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51168,6 +51290,26 @@ export interface MJAIModelVendorEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelVendorEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelVendorEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelVendorEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -51565,7 +51707,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIModelEntity_LLMConfigurationSettings`, `MJAIModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIModelEntity_VisionConfigurationSettings`, `MJAIModelEntity_AudioConfigurationSettings`, `MJAIModelEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIModelEntity_IAIModelConfiguration`, `MJAIModelEntity_IAIPromptConfiguration`,
  *    `MJAIModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -51574,7 +51717,8 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -51661,6 +51805,19 @@ export interface MJAIModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -51732,6 +51889,25 @@ export interface MJAIModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIModelEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -51750,6 +51926,8 @@ export interface MJAIModelEntity_IAIModelConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51768,6 +51946,8 @@ export interface MJAIModelEntity_IAIPromptConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -51783,6 +51963,26 @@ export interface MJAIModelEntity_IAIPromptModelConfiguration {
     Vision?: MJAIModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIModelEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIModelEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIModelEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -52884,7 +53084,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptModelEntity_LLMConfigurationSettings`, `MJAIPromptModelEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIPromptModelEntity_VisionConfigurationSettings`, `MJAIPromptModelEntity_AudioConfigurationSettings`, `MJAIPromptModelEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptModelEntity_IAIModelConfiguration`, `MJAIPromptModelEntity_IAIPromptConfiguration`,
  *    `MJAIPromptModelEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -52893,7 +53094,8 @@ export class MJAIPromptCategoryEntity extends BaseEntity<MJAIPromptCategoryEntit
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -52980,6 +53182,19 @@ export interface MJAIPromptModelEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -53051,6 +53266,25 @@ export interface MJAIPromptModelEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIPromptModelEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -53069,6 +53303,8 @@ export interface MJAIPromptModelEntity_IAIModelConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -53087,6 +53323,8 @@ export interface MJAIPromptModelEntity_IAIPromptConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -53102,6 +53340,26 @@ export interface MJAIPromptModelEntity_IAIPromptModelConfiguration {
     Vision?: MJAIPromptModelEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptModelEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptModelEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIPromptModelEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIPromptModelEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -54128,7 +54386,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: TotalCost
     * * Display Name: Total Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: Total cost of this prompt run including its own cost plus all descendant costs. Calculated as Cost + DescendantCost. This value is stored (not computed) for query performance. Currency is specified in CostCurrency field.
     */
     get TotalCost(): number | null {
@@ -54443,7 +54701,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * * Field Name: DescendantCost
     * * Display Name: Descendant Cost
-    * * SQL Data Type: decimal(18, 6)
+    * * SQL Data Type: decimal(19, 8)
     * * Description: The total cost of all descendant (child and grandchild) prompt runs, excluding this run's own cost. For leaf nodes (no children), this is 0. Updated when child costs change.
     */
     get DescendantCost(): number | null {
@@ -55173,6 +55431,20 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
 
     /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user on whose behalf this prompt was executed, written when the run is created. NULL for automated/unauthenticated runs and for runs that pre-date this column. For an agent-driven run the agent run's user is also reachable through AIAgentRunStep.TargetLogID, which vwAIUsageFacts falls back to.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
     * * Field Name: Prompt
     * * Display Name: Prompt
     * * SQL Data Type: nvarchar(255)
@@ -55278,6 +55550,15 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     */
     get UsageType(): string | null {
         return this.Get('UsageType');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 
     /**
@@ -55422,7 +55703,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * Two kinds of type live here, and the distinction is the whole point of the file:
  *
  * 1. **Shared modality sections** (`MJAIPromptEntity_LLMConfigurationSettings`, `MJAIPromptEntity_RealtimeConfigurationSettings`,
- *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`) — what "the LLM configuration"
+ *    `MJAIPromptEntity_VisionConfigurationSettings`, `MJAIPromptEntity_AudioConfigurationSettings`, `MJAIPromptEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
  *    MEANS, defined once and reused by every layer that carries a configuration bag.
  * 2. **Per-table outer types** (`MJAIPromptEntity_IAIModelConfiguration`, `MJAIPromptEntity_IAIPromptConfiguration`,
  *    `MJAIPromptEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
@@ -55431,7 +55713,8 @@ export class MJAIPromptTypeEntity extends BaseEntity<MJAIPromptTypeEntityType> {
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
  *   < MJ: AI Models . ModelConfiguration      (per-model)
- *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
  *
  * MJ: AI Prompts . PromptConfiguration        (per-prompt)
  *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
@@ -55518,6 +55801,19 @@ export interface MJAIPromptEntity_LLMConfigurationSettings {
      * only when the gate resolves native.
      */
     NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
 }
 
 /**
@@ -55589,6 +55885,25 @@ export interface MJAIPromptEntity_AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIPromptEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
 // =============================================================================
 // Per-table outer types — one per JSONType, composing the sections above
 // =============================================================================
@@ -55607,6 +55922,8 @@ export interface MJAIPromptEntity_IAIModelConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55625,6 +55942,8 @@ export interface MJAIPromptEntity_IAIPromptConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
 }
 
 /**
@@ -55640,6 +55959,26 @@ export interface MJAIPromptEntity_IAIPromptModelConfiguration {
     Vision?: MJAIPromptEntity_VisionConfigurationSettings | null;
     /** Audio knobs. Reserved. */
     Audio?: MJAIPromptEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIPromptEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIPromptEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIPromptEntity_IAIModelConfiguration | null;
 }
 
 /**
@@ -58549,6 +58888,290 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
 
 
 /**
+ * The AI stack's per-modality configuration bags — ONE source of truth for every layer.
+ *
+ * Two kinds of type live here, and the distinction is the whole point of the file:
+ *
+ * 1. **Shared modality sections** (`MJAIVendorEntity_LLMConfigurationSettings`, `MJAIVendorEntity_RealtimeConfigurationSettings`,
+ *    `MJAIVendorEntity_VisionConfigurationSettings`, `MJAIVendorEntity_AudioConfigurationSettings`, `MJAIVendorEntity_DecisionConfigurationSettings`) —
+ *    what "the LLM configuration"
+ *    MEANS, defined once and reused by every layer that carries a configuration bag.
+ * 2. **Per-table outer types** (`MJAIVendorEntity_IAIModelConfiguration`, `MJAIVendorEntity_IAIPromptConfiguration`,
+ *    `MJAIVendorEntity_IAIPromptModelConfiguration`) — one per `JSONType`, so each table names its own type even
+ *    though they compose the same sections.
+ *
+ * ```
+ * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
+ *   < MJ: AI Models . ModelConfiguration      (per-model)
+ *     < MJ: AI Vendors . Configuration.ModelDefaults   (host-wide default for every model this vendor serves)
+ *       < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the tie-breaker, wins)
+ *
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
+ * ```
+ *
+ * The catalog cascade is resolved base-first with per-key deep merge by
+ * `ResolveEffectiveModelConfiguration` in `@memberjunction/ai`; the prompt cascade is resolved by
+ * the prompt runner, which layers the prompt bags ON TOP of the catalog result.
+ *
+ * **Why one file**: `EntityField.JSONTypeDefinition` stores this text VERBATIM, and CodeGen emits
+ * it inline above each entity class with every top-level name prefixed (`MJAIModelEntity_…`). It
+ * therefore has to be self-contained — a definition cannot `import` a sibling, and `@file:`
+ * substitutes a whole file rather than splicing one into another. Keeping every AI configuration
+ * type in ONE file is what makes a shared section possible at all; the cost is that each of the
+ * five entities emits the full (prefixed) set, including outer types it does not use.
+ *
+ * **Lockstep contract**: this file is the JSONType SOURCE; its package-side mirror is
+ * `packages/AI/Core/src/generic/modelConfiguration.ts` in `@memberjunction/ai`, which runtime code
+ * compiles against. Keep the two in step when adding a section or property — the same pact
+ * `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ *
+ * **Boundary rule**: anything the engine filters, sorts, or joins on stays a COLUMN (`PowerRank`,
+ * `IsActive`, `Priority`, `Status` — SQL cannot cheaply predicate into this bag); anything a driver
+ * or runner consumes at call time belongs HERE. New capability knobs go in the bag — do not add a
+ * capability column per knob. A knob graduates to a real column when it needs a foreign key or
+ * becomes a first-class thing the platform reasons about.
+ */
+
+// =============================================================================
+// Shared modality sections — defined once, composed by every outer type below
+// =============================================================================
+
+/**
+ * Text-generation knobs, consumed by the LLM drivers and the prompt runner at call time.
+ *
+ * Every flag is TRI-STATE (`boolean | null | absent`) and the three differ: the cascade REPLACES on
+ * any explicit value (including `null`) and only skips a layer that OMITS the property. So absent
+ * means "inherit", while an explicit value at a higher layer overrides a lower one even when false.
+ *
+ * Properties are marked with the layers that HONOR them. A property set at a layer that does not
+ * honor it is inert, not an error — that tolerance is deliberate, so a knob can move between layers
+ * without a schema change.
+ */
+export interface MJAIVendorEntity_LLMConfigurationSettings {
+    /**
+     * **Catalog layers only** (model type / model / model vendor). Whether this model — or this
+     * vendor's serving of it — supports native tool/function calling.
+     *
+     * CAPABILITY flag, and a hard gate: no policy or preference at any layer can force tools onto a
+     * (model, vendor) whose resolved value is not true. Set `false` only for a model or serving path
+     * verified NOT to support tools; leave absent when support is unknown, because absent is the
+     * honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link MJAIVendorEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only** (prompt / prompt model). Whether THIS prompt asks for native tool
+     * calling. PREFERENCE — it outranks the catalog's `DefaultToNativeToolCalling`, and is still
+     * subordinate to the capability gate. Absent means "no preference; fall through to the model's
+     * default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link MJAIVendorEntity_LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether this serving path's prompt cache is an exact BYTE-PREFIX match:
+     * it reuses a prior request only when that request's entire prompt is a prefix of the new one
+     * (OpenAI's automatic cache, xAI), so per-iteration framework state must be appended, never
+     * replaced. Absent or `false` means a block or segment cache (Anthropic breakpoints, Gemini
+     * implicit cache, Cerebras sliding cache), where a trailing per-iteration message can be replaced
+     * in place — the safe default. Set `true` under `Configuration.ModelDefaults` on the VENDOR row of a prefix-cache provider so
+     * every model it serves inherits it (the vendor default beats the model's own bag); a MODEL-VENDOR
+     * row overrides it for one model on that host.
+     * Consumed by the loop agent's trailing runtime-state layout.
+     */
+    PrefixPromptCache?: boolean | null;
+}
+
+/**
+ * MJ-normalized turn-detection settings for realtime (speech-to-speech) models. Every field is
+ * optional; absent fields contribute nothing. Provider profiles translate this vocabulary to their
+ * native wire block, and an unsupported value is diagnostic-logged and falls back to the profile
+ * default — a wrong inherited value degrades safely, it never rejects a session.
+ */
+export interface MJAIVendorEntity_RealtimeTurnDetectionSettings {
+    /**
+     * - `'default'` — let the provider profile decide (today's behavior).
+     * - `'serverVad'` — classic silence-based server VAD.
+     * - `'semanticVad'` — semantic end-of-utterance detection (OpenAI `semantic_vad`).
+     * - `'native'` — this model's smartest documented turn/duplex mode, whatever the profile maps it
+     *   to; the forward slot for full-duplex reasoning voice models.
+     */
+    Mode?: 'default' | 'serverVad' | 'semanticVad' | 'native' | null;
+    /** Semantic-VAD aggressiveness (OpenAI `eagerness`); ignored without a mapping. */
+    Eagerness?: 'low' | 'auto' | 'high' | null;
+    /** Server-VAD activation threshold (0–1); ignored without a mapping. */
+    Threshold?: number | null;
+    /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
+    SilenceDurationMs?: number | null;
+}
+
+/**
+ * Reasoning-plane settings for realtime models — dual delegation configuration. Absent defaults to
+ * `'local'`.
+ */
+export interface MJAIVendorEntity_RealtimeReasoningSettings {
+    /**
+     * Which plane handles reasoning:
+     * - `'local'` — application/agent loop (default).
+     * - `'remote'` — delegated to remote model or hosted agent.
+     */
+    Plane?: 'local' | 'remote' | null;
+    /** Remote reasoning target configuration. */
+    Remote?: {
+        Kind?: 'model' | 'hostedAgent' | null;
+        Ref?: string | null;
+        Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+        MaxOutputTokens?: number | null;
+    } | null;
+}
+
+/** Realtime (speech-to-speech) knobs. */
+export interface MJAIVendorEntity_RealtimeConfigurationSettings {
+    /**
+     * Catalog-level turn-detection default for this model. Folded into the realtime session Config
+     * bag as the `turnDetection` key BELOW the agent/app config cascade
+     * (`realtime.session.turnDetection`) and the runtime override — the catalog supplies the
+     * default, agents/apps/callers refine it.
+     */
+    TurnDetection?: MJAIVendorEntity_RealtimeTurnDetectionSettings | null;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration. Absent defaults to `'local'`.
+     */
+    Reasoning?: MJAIVendorEntity_RealtimeReasoningSettings | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface MJAIVendorEntity_VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface MJAIVendorEntity_AudioConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/**
+ * Typed-decision knobs, consumed at call time by the decision runner. They declare what a decision
+ * model accepts, so an oversized request can be refused with a clear message before the call,
+ * instead of being truncated or rejected by the provider. Each is a limit of the model itself: set
+ * it on the catalog layers (`MJ: AI Models`, `MJ: AI Model Vendors`). Absent means no limit is
+ * declared. A decision always needs at least two Choice options or Score levels; that minimum
+ * belongs to `BaseDecision`, not to this bag.
+ */
+export interface MJAIVendorEntity_DecisionConfigurationSettings {
+    /** The most questions one call may carry. */
+    MaxQuestionsPerCall?: number | null;
+    /** The most options one Choice question may list. */
+    MaxChoiceOptions?: number | null;
+    /** The most levels one Score question may list. */
+    MaxScoreLevels?: number | null;
+    /** The largest state the model reads, in tokens. */
+    MaxStateTokens?: number | null;
+}
+
+// =============================================================================
+// Per-table outer types — one per JSONType, composing the sections above
+// =============================================================================
+
+/**
+ * The `ModelConfiguration` column on the three MODEL-CATALOG entities (`MJ: AI Model Types`,
+ * `MJ: AI Models`, `MJ: AI Model Vendors`), which form an inherit-with-override cascade. Sections
+ * are per-modality so one catalog row can configure everything its model does.
+ */
+export interface MJAIVendorEntity_IAIModelConfiguration {
+    /** Text-generation knobs. Honors the catalog-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio (TTS/STT) knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Honored at the catalog layers. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered ON TOP of the
+ * resolved model-catalog configuration by the prompt runner.
+ *
+ * The same anti-widening argument that produced `ModelConfiguration` applies here with more force:
+ * `AIPrompt` already carries fifty-odd columns. New per-prompt call-time knobs land here.
+ */
+export interface MJAIVendorEntity_IAIPromptConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export interface MJAIVendorEntity_IAIPromptModelConfiguration {
+    /** Text-generation knobs. Honors the prompt-layer properties. */
+    LLM?: MJAIVendorEntity_LLMConfigurationSettings | null;
+    /** Realtime knobs. Reserved at this layer. */
+    Realtime?: MJAIVendorEntity_RealtimeConfigurationSettings | null;
+    /** Vision knobs. Reserved. */
+    Vision?: MJAIVendorEntity_VisionConfigurationSettings | null;
+    /** Audio knobs. Reserved. */
+    Audio?: MJAIVendorEntity_AudioConfigurationSettings | null;
+    /** Typed-decision limits. Reserved at this layer. */
+    Decision?: MJAIVendorEntity_DecisionConfigurationSettings | null;
+}
+
+/**
+ * `MJ: AI Vendors . Configuration` — the vendor's own configuration bag. General-purpose: a vendor
+ * row carries settings that describe how this host serves models, of which the first key is
+ * `ModelDefaults`. Add further vendor-level sections here as they arise; do not add capability
+ * columns to AIVendor per knob.
+ */
+export interface MJAIVendorEntity_IAIVendorConfiguration {
+    /**
+     * The default model configuration for EVERY model this vendor serves — the vendor layer of the
+     * model-configuration cascade. Resolved ABOVE the model's own bag and BELOW the model-vendor row:
+     * a host's statement about how it serves models beats the model's generic description, and the
+     * model-vendor row is the tie-breaker where a host diverges for one model. The merge is per key,
+     * so a default here only touches the keys it actually sets. First use: `LLM.PrefixPromptCache`
+     * on OpenAI and x.ai, inherited by every model they serve.
+     */
+    ModelDefaults?: MJAIVendorEntity_IAIModelConfiguration | null;
+}
+
+/**
  * MJ: AI Vendors - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIVendor
@@ -58649,6 +59272,41 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
     }
     set CredentialTypeID(value: string | null) {
         this.Set('CredentialTypeID', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIVendorEntity_IAIVendorConfiguration
+    * * Description: Vendor configuration bag (JSON, IAIVendorConfiguration shape). Its ModelDefaults key is an IAIModelConfiguration bag (LLM / Realtime / Vision / Audio sections) that forms the default model configuration for every model this vendor serves: the vendor layer of the ModelConfiguration cascade, above AIModelType and AIModel and below AIModelVendor, which may override it per key. NULL = contributes nothing.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    private _ConfigurationObject_cached: MJAIVendorEntity_IAIVendorConfiguration | null | undefined = undefined;
+    private _ConfigurationObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Configuration — returns parsed JSON as MJAIVendorEntity_IAIVendorConfiguration.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ConfigurationObject(): MJAIVendorEntity_IAIVendorConfiguration | null {
+        const raw = this.Configuration;
+        if (raw !== this._ConfigurationObject_lastRaw) {
+            this._ConfigurationObject_cached = raw ? JSON.parse(raw) : null;
+            this._ConfigurationObject_lastRaw = raw;
+        }
+        return this._ConfigurationObject_cached!;
+    }
+    set ConfigurationObject(value: MJAIVendorEntity_IAIVendorConfiguration | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Configuration = raw;
+        this._ConfigurationObject_cached = value;
+        this._ConfigurationObject_lastRaw = raw;
     }
 
     /**
@@ -83324,6 +83982,20 @@ export interface MJEntityEntity_IEntityFormConfiguration {
      * `inclusion: 'Primary'` is never capped by this number.
      */
     PrimaryRelatedBudget?: number;
+
+    /**
+     * Default empty-section behaviour for this form's related sections when a
+     * relationship does not set `UI.whenEmpty` itself.
+     * `'show'` | `'hide'` | `'more'` — see `IEntityRelationshipUIConfiguration.whenEmpty`.
+     * Omit to treat as `'show'`.
+     */
+    RelatedWhenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Default for prefetching related-section row counts (badges) when a
+     * relationship does not set `UI.showCount` itself. Omit to treat as `true`.
+     */
+    ShowRelatedCounts?: boolean;
 }
 
 /**
@@ -83347,6 +84019,21 @@ export interface MJEntityEntity_IEntitySubtypeSelectorConfig {
      * reading the target subtype entity name.
      */
     Path: string;
+
+    /**
+     * Whether `BaseEntity` also walks {@link Path} for a record it LOADS, not only for one it creates,
+     * so the load can fetch the named child's row directly instead of first querying every child's
+     * table. Optional; `false` or absent keeps loads as they were, with the discovery query.
+     *
+     * On load, only hops that a loaded `BaseEngine` holds as entity objects are walked. A hop that
+     * isn't cached gives no hint, never a query. Turn it on when records of a subtyped type have
+     * their subtype row: a record whose type names a child it has no row for costs one extra round
+     * trip per load.
+     *
+     * Ignored while an `EntitySubtypeResolver` is registered for the entity: the resolver owns the
+     * rule, and gives load hints by overriding its `ResolveLoadHint` method.
+     */
+    UseForLoadedRecords?: boolean;
 }
 
 /**
@@ -88294,107 +88981,91 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
 
     /**
     * Validate() method override for MJ: Entity Form Contributions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * ReplacesFieldNames: The Replaces Field Names field, if provided, must be a valid, non-empty JSON array. This ensures that replacement fields are properly formatted as a list and not left as empty arrays or invalid JSON.
-    * * ReplacesSectionKeys: If Replaces Section Keys is provided, it must be a valid, non-empty JSON array.
-    * * Table-Level: If the presentation is set to 'bare', then both inclusion and chrome group must be empty to ensure proper layout rendering.
-    * * Table-Level: Only one of the following fields can be populated at a time: ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey. This ensures that mutually exclusive configuration options do not conflict.
-    * * Table-Level: If a related join field is specified, a related entity must also be provided to ensure the join relationship is valid.
-    * * Table-Level: Ensures that the Scope configuration is valid: if Scope is 'User', a User ID must be provided and Role ID must be empty; if Scope is 'Role', a Role ID must be provided and User ID must be empty; if Scope is 'Global', both User ID and Role ID must be empty.
-    * * Table-Level: If a Section Position is specified, either Replaces Field Names or In Section Key must also be provided to establish the context for the positioning.
+    * * ReplacesFieldNames: If Replaces Field Names is provided, it must be a valid, non-empty JSON array of field names.
+    * * ReplacesSectionKeys: If Replaces Section Keys is provided, it must be a valid JSON array containing at least one element. It cannot be empty or just an empty array structure.
+    * * Table-Level: Only one of the following fields can be set at a time: Replaces Section Key, Related Entity ID, Replaces Field Names, Replaces Section Keys, or In Section Key. This prevents conflicting configuration definitions.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateReplacesFieldNamesJsonArray(result);
+        this.ValidateReplacesFieldNamesIsNonEmptyJsonArray(result);
         this.ValidateReplacesSectionKeysIsNonEmptyJsonArray(result);
-        this.ValidateBarePresentationConstraints(result);
-        this.ValidateMutuallyExclusiveConfigurationFields(result);
-        this.ValidateRelatedJoinFieldRequiresRelatedEntityID(result);
-        this.ValidateScopeUserAndRoleAssignment(result);
-        this.ValidateSectionPositionDependencies(result);
+        this.ValidateMutuallyExclusiveReplacementAndRelationshipFields(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * The Replaces Field Names field, if provided, must be a valid, non-empty JSON array. This ensures that replacement fields are properly formatted as a list and not left as empty arrays or invalid JSON.
+    * If Replaces Field Names is provided, it must be a valid, non-empty JSON array of field names.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateReplacesFieldNamesJsonArray(result: ValidationResult) {
-    	if (this.ReplacesFieldNames != null) {
-    		let isValid = false;
-    		let errorMessage = "Replaces Field Names must be a valid, non-empty JSON array.";
-    		try {
-    			const trimmed = this.ReplacesFieldNames.trim();
-    			if (trimmed.startsWith("[")) {
-    				const parsed = JSON.parse(trimmed);
-    				if (Array.isArray(parsed)) {
-    					if (parsed.length > 0) {
-    						isValid = true;
-    					} else {
-    						errorMessage = "Replaces Field Names cannot be an empty JSON array.";
-    					}
-    				}
-    			}
-    		} catch (e) {
-    			errorMessage = "Replaces Field Names must be a valid JSON formatted array.";
-    		}
+    public ValidateReplacesFieldNamesIsNonEmptyJsonArray(result: ValidationResult) {
+        if (this.ReplacesFieldNames != null) {
+            let isValid = false;
+            try {
+                const trimmed = this.ReplacesFieldNames.trim();
+                if (trimmed.startsWith("[")) {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        isValid = true;
+                    }
+                }
+            } catch (e) {
+                // JSON parsing failed
+            }
     
-    		if (!isValid) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"ReplacesFieldNames",
-    				errorMessage,
-    				this.ReplacesFieldNames,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
+            if (!isValid) {
+                result.Errors.push(new ValidationErrorInfo(
+                    "ReplacesFieldNames",
+                    "Replaces Field Names must be a valid, non-empty JSON array (e.g., [\"FieldName\"]).",
+                    this.ReplacesFieldNames,
+                    ValidationErrorType.Failure
+                ));
+            }
+        }
     }
 
     /**
-    * If Replaces Section Keys is provided, it must be a valid, non-empty JSON array.
+    * If Replaces Section Keys is provided, it must be a valid JSON array containing at least one element. It cannot be empty or just an empty array structure.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateReplacesSectionKeysIsNonEmptyJsonArray(result: ValidationResult) {
     	if (this.ReplacesSectionKeys != null) {
-    		const trimmed = this.ReplacesSectionKeys.trim();
-    		if (!trimmed.startsWith('[')) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"ReplacesSectionKeys",
-    				"Replaces Section Keys must be a JSON array starting with '['.",
-    				this.ReplacesSectionKeys,
-    				ValidationErrorType.Failure
-    			));
-    			return;
-    		}
+    		let isValid = false;
+    		let isEmpty = true;
     		try {
-    			const parsed = JSON.parse(trimmed);
-    			if (!Array.isArray(parsed)) {
-    				result.Errors.push(new ValidationErrorInfo(
-    					"ReplacesSectionKeys",
-    					"Replaces Section Keys must be a valid JSON array.",
-    					this.ReplacesSectionKeys,
-    					ValidationErrorType.Failure
-    				));
-    			} else if (parsed.length === 0) {
-    				result.Errors.push(new ValidationErrorInfo(
-    					"ReplacesSectionKeys",
-    					"Replaces Section Keys cannot be an empty array.",
-    					this.ReplacesSectionKeys,
-    					ValidationErrorType.Failure
-    				));
+    			const value = this.ReplacesSectionKeys.trim();
+    			if (value.startsWith("[")) {
+    				const parsed = JSON.parse(value);
+    				if (Array.isArray(parsed)) {
+    					isValid = true;
+    					if (parsed.length > 0) {
+    						isEmpty = false;
+    					}
+    				}
     			}
     		} catch (e) {
+    			isValid = false;
+    		}
+    
+    		if (!isValid) {
     			result.Errors.push(new ValidationErrorInfo(
     				"ReplacesSectionKeys",
-    				"Replaces Section Keys must be a valid JSON format.",
+    				"Replaces Section Keys must be a valid JSON array.",
+    				this.ReplacesSectionKeys,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (isEmpty) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReplacesSectionKeys",
+    				"Replaces Section Keys array cannot be empty.",
     				this.ReplacesSectionKeys,
     				ValidationErrorType.Failure
     			));
@@ -88403,145 +89074,46 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
     }
 
     /**
-    * If the presentation is set to 'bare', then both inclusion and chrome group must be empty to ensure proper layout rendering.
+    * Only one of the following fields can be set at a time: Replaces Section Key, Related Entity ID, Replaces Field Names, Replaces Section Keys, or In Section Key. This prevents conflicting configuration definitions.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateBarePresentationConstraints(result: ValidationResult) {
-        if (this.Presentation === 'bare' && (this.Inclusion != null || this.ChromeGroup != null)) {
-            result.Errors.push(new ValidationErrorInfo(
-                "Presentation",
-                "When Presentation is set to 'bare', both Inclusion and ChromeGroup must be empty.",
-                this.Presentation,
-                ValidationErrorType.Failure
-            ));
-        }
-    }
-
-    /**
-    * Only one of the following fields can be populated at a time: ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey. This ensures that mutually exclusive configuration options do not conflict.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateMutuallyExclusiveConfigurationFields(result: ValidationResult) {
-    	let populatedCount = 0;
+    public ValidateMutuallyExclusiveReplacementAndRelationshipFields(result: ValidationResult) {
+    	let count = 0;
     	if (this.ReplacesSectionKey != null) {
-    		populatedCount++;
+    		count++;
     	}
     	if (this.RelatedEntityID != null) {
-    		populatedCount++;
+    		count++;
     	}
     	if (this.ReplacesFieldNames != null) {
-    		populatedCount++;
+    		count++;
     	}
     	if (this.ReplacesSectionKeys != null) {
-    		populatedCount++;
+    		count++;
     	}
     	if (this.InSectionKey != null) {
-    		populatedCount++;
+    		count++;
     	}
     
-    	if (populatedCount > 1) {
-    		const errorMessage = "Only one of the following fields can be specified: ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey.";
+    	if (count > 1) {
+    		const message = "Only one of ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey may be specified.";
     		if (this.ReplacesSectionKey != null) {
-    			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKey", errorMessage, this.ReplacesSectionKey, ValidationErrorType.Failure));
+    			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKey", message, this.ReplacesSectionKey, ValidationErrorType.Failure));
     		}
     		if (this.RelatedEntityID != null) {
-    			result.Errors.push(new ValidationErrorInfo("RelatedEntityID", errorMessage, this.RelatedEntityID, ValidationErrorType.Failure));
+    			result.Errors.push(new ValidationErrorInfo("RelatedEntityID", message, this.RelatedEntityID, ValidationErrorType.Failure));
     		}
     		if (this.ReplacesFieldNames != null) {
-    			result.Errors.push(new ValidationErrorInfo("ReplacesFieldNames", errorMessage, this.ReplacesFieldNames, ValidationErrorType.Failure));
+    			result.Errors.push(new ValidationErrorInfo("ReplacesFieldNames", message, this.ReplacesFieldNames, ValidationErrorType.Failure));
     		}
     		if (this.ReplacesSectionKeys != null) {
-    			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKeys", errorMessage, this.ReplacesSectionKeys, ValidationErrorType.Failure));
+    			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKeys", message, this.ReplacesSectionKeys, ValidationErrorType.Failure));
     		}
     		if (this.InSectionKey != null) {
-    			result.Errors.push(new ValidationErrorInfo("InSectionKey", errorMessage, this.InSectionKey, ValidationErrorType.Failure));
+    			result.Errors.push(new ValidationErrorInfo("InSectionKey", message, this.InSectionKey, ValidationErrorType.Failure));
     		}
-    	}
-    }
-
-    /**
-    * If a related join field is specified, a related entity must also be provided to ensure the join relationship is valid.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateRelatedJoinFieldRequiresRelatedEntityID(result: ValidationResult) {
-    	if (this.RelatedJoinField != null && this.RelatedEntityID == null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"RelatedJoinField",
-    			"A Related Entity must be specified when a Related Join Field is provided.",
-    			this.RelatedJoinField,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * Ensures that the Scope configuration is valid: if Scope is 'User', a User ID must be provided and Role ID must be empty; if Scope is 'Role', a Role ID must be provided and User ID must be empty; if Scope is 'Global', both User ID and Role ID must be empty.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateScopeUserAndRoleAssignment(result: ValidationResult) {
-    	const scope = this.Scope;
-    	const hasUser = this.UserID != null;
-    	const hasRole = this.RoleID != null;
-    
-    	if (scope === "User") {
-    		if (!hasUser || hasRole) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"Scope",
-    				"When Scope is 'User', a User must be specified and Role must be empty.",
-    				scope,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	} else if (scope === "Role") {
-    		if (!hasRole || hasUser) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"Scope",
-    				"When Scope is 'Role', a Role must be specified and User must be empty.",
-    				scope,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	} else if (scope === "Global") {
-    		if (hasUser || hasRole) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"Scope",
-    				"When Scope is 'Global', both User and Role must be empty.",
-    				scope,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	} else {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Scope",
-    			"Scope must be 'User', 'Role', or 'Global'.",
-    			scope,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * If a Section Position is specified, either Replaces Field Names or In Section Key must also be provided to establish the context for the positioning.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateSectionPositionDependencies(result: ValidationResult) {
-    	if (this.SectionPosition != null && this.ReplacesFieldNames == null && this.InSectionKey == null) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"SectionPosition",
-    			"When Section Position is specified, you must also provide either Replaces Field Names or In Section Key.",
-    			this.SectionPosition,
-    			ValidationErrorType.Failure
-    		));
     	}
     }
 
@@ -88791,7 +89363,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
 
     /**
     * * Field Name: Presentation
-    * * Display Name: Presentation Style
+    * * Display Name: Presentation
     * * SQL Data Type: nvarchar(10)
     * * Default Value: panel
     * * Value List Type: List
@@ -88959,7 +89531,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity Name
+    * * Display Name: Entity
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -88968,7 +89540,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
 
     /**
     * * Field Name: Component
-    * * Display Name: Component Name
+    * * Display Name: Component
     * * SQL Data Type: nvarchar(500)
     */
     get Component(): string {
@@ -88977,7 +89549,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
 
     /**
     * * Field Name: RelatedEntity
-    * * Display Name: Related Entity Name
+    * * Display Name: Related Entity
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntity(): string | null {
@@ -88986,7 +89558,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
 
     /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -88995,7 +89567,7 @@ export class MJEntityFormContributionEntity extends BaseEntity<MJEntityFormContr
 
     /**
     * * Field Name: Role
-    * * Display Name: Role Name
+    * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
     get Role(): string | null {
@@ -90591,6 +91163,27 @@ export interface MJEntityRelationshipEntity_IEntityRelationshipUIConfiguration {
      * after lead contributions such as Overview). Omit = 0.
      */
     sortKey?: number;
+
+    /**
+     * What the parent form does with this section when it has 0 rows.
+     * Counts are fetched in one batched round trip when the record loads.
+     *
+     * - `'show'` — always show (use when users create the first row here).
+     * - `'hide'` — hide while empty. The "show empty fields" toolbar toggle reveals it.
+     * - `'more'` — move into the More folder while empty; returns to its normal
+     *   placement once it has rows.
+     *
+     * Omit = inherit the parent entity's `UI.Form.RelatedWhenEmpty`, else `'show'`.
+     */
+    whenEmpty?: 'show' | 'hide' | 'more';
+
+    /**
+     * Prefetch this section's row count when the record loads and show it as a
+     * badge. Set `false` for known-expensive related entities.
+     *
+     * Omit = inherit the parent entity's `UI.Form.ShowRelatedCounts`, else `true`.
+     */
+    showCount?: boolean;
 }
 
 /**
@@ -106273,6 +106866,20 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     }
 
     /**
+    * * Field Name: OwnerUserID
+    * * Display Name: Owner User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: The user who owns this folder, or NULL when the folder is shared with the whole environment. NULL (the value every pre-existing folder carries) means SHARED: visible to anyone who can read projects in the environment, which was the only possible behaviour before this column existed. A set value means PERSONAL: the folder belongs to that user and consumers filter it to them, so it stays out of other people's sidebars. Personal is opt-in at create time; nothing is migrated.
+    */
+    get OwnerUserID(): string | null {
+        return this.Get('OwnerUserID');
+    }
+    set OwnerUserID(value: string | null) {
+        this.Set('OwnerUserID', value);
+    }
+
+    /**
     * * Field Name: Environment
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
@@ -106288,6 +106895,15 @@ export class MJProjectEntity extends BaseEntity<MJProjectEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: OwnerUser
+    * * Display Name: Owner User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OwnerUser(): string | null {
+        return this.Get('OwnerUser');
     }
 
     /**

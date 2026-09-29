@@ -36,4 +36,4 @@ sit inside one.
 - Editing a panel from the drawer keeps its field claim, and replacing another panel writes that
   panel's contribution key rather than its row ID.
 
-Requires migration `V202609240012__v6.2.x__Entity_Form_Contributions`, which creates the table in one step.
+Requires migration `V202609291630__v6.2.x__Entity_Form_Contributions`, which creates the table in one step.

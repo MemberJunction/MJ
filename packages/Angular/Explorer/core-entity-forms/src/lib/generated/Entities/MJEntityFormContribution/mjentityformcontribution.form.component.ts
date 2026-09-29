@@ -17,9 +17,8 @@ export class MJEntityFormContributionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'formIntegration', sectionName: 'Form Integration', isExpanded: true },
-            { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
             { sectionKey: 'placementAndLayout', sectionName: 'Placement and Layout', isExpanded: true },
-            { sectionKey: 'replacementRules', sectionName: 'Replacement Rules', isExpanded: true },
+            { sectionKey: 'replacementLogic', sectionName: 'Replacement Logic', isExpanded: true },
             { sectionKey: 'chromeAndPresentation', sectionName: 'Chrome and Presentation', isExpanded: true },
             { sectionKey: 'accessControl', sectionName: 'Access Control', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }

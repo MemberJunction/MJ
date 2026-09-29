@@ -734,6 +734,24 @@ describe('AgentClientSession — Session Lifecycle', () => {
             expect(callArgs.maxHistoryMessages).toBe(10);
         });
 
+        it('should forward a history floor, and leave it unset when none is given', async () => {
+            const floor = new Date('2026-09-01T12:00:00.000Z');
+            await session.RunAgentFromConversationDetail({
+                ConversationDetailId: 'detail-floor',
+                AgentId: 'agent-floor',
+                AgentHistoryFrom: floor,
+            });
+            await session.RunAgentFromConversationDetail({
+                ConversationDetailId: 'detail-no-floor',
+                AgentId: 'agent-floor',
+                AgentHistoryFrom: null,
+            });
+
+            const [withFloor, withoutFloor] = mockRunAIAgentFromConversationDetail.mock.calls.slice(-2).map(c => c[0]);
+            expect(withFloor.agentHistoryFrom).toBe(floor);
+            expect(withoutFloor.agentHistoryFrom).toBeUndefined();
+        });
+
         it('should return error when provider is unavailable', async () => {
             vi.spyOn(
                 session as unknown as { getProvider: () => unknown },

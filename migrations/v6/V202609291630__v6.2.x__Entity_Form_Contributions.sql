@@ -259,7 +259,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '9fe8274e-86eb-4900-bcde-136e02fdb792',
+         'cc48de93-71ee-403e-b5b9-ad5bdfaabc18',
          'MJ: Entity Form Contributions',
          'Entity Form Contributions',
          'Metadata-registered form contribution: mounts a form-panel Component on a parent entity''s form at a slot or inside a section, optionally standing in for baked sections, a rail tab, a set of fields or a related grid. Peer of compiled BaseFormPanel registrations.',
@@ -285,33 +285,33 @@ GO
 /* SQL generated to add new entity MJ: Entity Form Contributions to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '9fe8274e-86eb-4900-bcde-136e02fdb792', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'cc48de93-71ee-403e-b5b9-ad5bdfaabc18', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Entity Form Contributions for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('9fe8274e-86eb-4900-bcde-136e02fdb792' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('cc48de93-71ee-403e-b5b9-ad5bdfaabc18' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('9fe8274e-86eb-4900-bcde-136e02fdb792' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('cc48de93-71ee-403e-b5b9-ad5bdfaabc18' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Entity Form Contributions for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('9fe8274e-86eb-4900-bcde-136e02fdb792' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('cc48de93-71ee-403e-b5b9-ad5bdfaabc18' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('9fe8274e-86eb-4900-bcde-136e02fdb792' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('cc48de93-71ee-403e-b5b9-ad5bdfaabc18' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL generated to add new permission for entity MJ: Entity Form Contributions for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                 ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
-              SELECT CAST('9fe8274e-86eb-4900-bcde-136e02fdb792' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              SELECT CAST('cc48de93-71ee-403e-b5b9-ad5bdfaabc18' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
               WHERE NOT EXISTS (
                 SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
-                WHERE [EntityID] = CAST('9fe8274e-86eb-4900-bcde-136e02fdb792' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+                WHERE [EntityID] = CAST('cc48de93-71ee-403e-b5b9-ad5bdfaabc18' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
               );
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EntityFormContribution */
@@ -348,7 +348,7 @@ GO
 
 /* SQL text to insert 29 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '82095bcb-68d0-4f23-9d9c-90cd4d1123af' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3606fe30-ad73-44cb-9042-e79bda4ba172' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -381,9 +381,9 @@ GO
          )
          VALUES
          (
-            '82095bcb-68d0-4f23-9d9c-90cd4d1123af',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '3606fe30-ad73-44cb-9042-e79bda4ba172',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'ID',
             'ID',
             NULL,
@@ -411,7 +411,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '75a40e45-3bd1-4563-b5ef-380def463677' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'EntityID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b91bf4e8-2fd8-4648-98a9-dcb42f1df112' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'EntityID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -444,9 +444,9 @@ GO
          )
          VALUES
          (
-            '75a40e45-3bd1-4563-b5ef-380def463677',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'b91bf4e8-2fd8-4648-98a9-dcb42f1df112',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'EntityID',
             'Entity ID',
             'Parent form entity the panel mounts on.',
@@ -474,7 +474,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd196c1ae-ef50-498a-9760-80ad8039064b' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'ComponentID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5515d72a-25d8-48b2-bde7-a7394491f474' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'ComponentID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -507,9 +507,9 @@ GO
          )
          VALUES
          (
-            'd196c1ae-ef50-498a-9760-80ad8039064b',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '5515d72a-25d8-48b2-bde7-a7394491f474',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'ComponentID',
             'Component ID',
             'MJ: Components row (Type=Widget) whose Specification declares componentRole=form-panel.',
@@ -537,7 +537,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '26b45cd6-a036-4200-84c2-1a22b6e3fd6e' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Name')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '54d82f2f-529d-47cd-961c-a6b67b1c3ab9' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Name')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -570,9 +570,9 @@ GO
          )
          VALUES
          (
-            '26b45cd6-a036-4200-84c2-1a22b6e3fd6e',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '54d82f2f-529d-47cd-961c-a6b67b1c3ab9',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Name',
             'Name',
             NULL,
@@ -600,7 +600,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f2970c48-6fcb-411f-93bf-eba94dd4b791' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Description')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '81ae8859-cade-49d2-a03a-a9dc95135f96' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Description')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -633,9 +633,9 @@ GO
          )
          VALUES
          (
-            'f2970c48-6fcb-411f-93bf-eba94dd4b791',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '81ae8859-cade-49d2-a03a-a9dc95135f96',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Description',
             'Description',
             NULL,
@@ -663,7 +663,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9aab57ae-b496-45d6-afb7-4abb8977cd6d' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Slot')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3b573cdb-ce39-4c1e-9000-c9bf86dc898b' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Slot')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -696,9 +696,9 @@ GO
          )
          VALUES
          (
-            '9aab57ae-b496-45d6-afb7-4abb8977cd6d',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '3b573cdb-ce39-4c1e-9000-c9bf86dc898b',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Slot',
             'Slot',
             'Slot inside the generated form: top-area, before-fields, after-fields, after-related, after-everything.',
@@ -726,7 +726,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '09936987-5a63-482d-972a-3fde9638b948' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'SortKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '56033cae-cf1c-467d-bbb9-db9e61b2ec83' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'SortKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -759,9 +759,9 @@ GO
          )
          VALUES
          (
-            '09936987-5a63-482d-972a-3fde9638b948',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '56033cae-cf1c-467d-bbb9-db9e61b2ec83',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'SortKey',
             'Sort Key',
             'Order among panels drawn in the same place; higher renders earlier.',
@@ -789,7 +789,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2c51aa2b-e22f-426c-8a36-a21642d3c5a1' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'ContributionKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c3e75f52-bf6b-44b3-af86-2a4a6182cf14' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'ContributionKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -822,9 +822,9 @@ GO
          )
          VALUES
          (
-            '2c51aa2b-e22f-426c-8a36-a21642d3c5a1',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'c3e75f52-bf6b-44b3-af86-2a4a6182cf14',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'ContributionKey',
             'Contribution Key',
             'Last-wins identity shared with compiled registrations and MJ: Form Chrome Rules. Null derives related:<entity>:<join> for related claims, otherwise the row never collapses.',
@@ -852,7 +852,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ba866a11-ab0a-4a97-b4c7-457cd6d01988' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'RelatedEntityID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '962e5c3f-10f2-45c2-9768-ae67596b32ad' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'RelatedEntityID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -885,9 +885,9 @@ GO
          )
          VALUES
          (
-            'ba866a11-ab0a-4a97-b4c7-457cd6d01988',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '962e5c3f-10f2-45c2-9768-ae67596b32ad',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'RelatedEntityID',
             'Related Entity ID',
             'When set, this panel replaces the related-entity grid for that relationship on the parent form.',
@@ -915,7 +915,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6d2caf9b-322b-41b3-a46d-0b9cfd2c1514' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'RelatedJoinField')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5d647844-abcf-4d28-9d81-228ab00c01cb' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'RelatedJoinField')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -948,9 +948,9 @@ GO
          )
          VALUES
          (
-            '6d2caf9b-322b-41b3-a46d-0b9cfd2c1514',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '5d647844-abcf-4d28-9d81-228ab00c01cb',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'RelatedJoinField',
             'Related Join Field',
             'Disambiguates two FKs to the same related entity (BillToPersonID vs ShipToPersonID).',
@@ -978,7 +978,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f940994c-720f-43db-a60c-0b832f33460e' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'ReplacesSectionKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c8bc36e7-f6b3-4c98-9bb4-7a938f655dcd' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'ReplacesSectionKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1011,9 +1011,9 @@ GO
          )
          VALUES
          (
-            'f940994c-720f-43db-a60c-0b832f33460e',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'c8bc36e7-f6b3-4c98-9bb4-7a938f655dcd',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'ReplacesSectionKey',
             'Replaces Section Key',
             'Section key of one baked block, or rail key of one tab, this contribution stands in for. The panel draws in its place. Mutually exclusive with every other claim.',
@@ -1041,7 +1041,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7873fbd8-579c-4d41-be86-1fd3b0ca6b19' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'ReplacesSectionKeys')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '11f0411f-df79-44ea-ac8e-d6b15ef73b46' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'ReplacesSectionKeys')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1074,9 +1074,9 @@ GO
          )
          VALUES
          (
-            '7873fbd8-579c-4d41-be86-1fd3b0ca6b19',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '11f0411f-df79-44ea-ac8e-d6b15ef73b46',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'ReplacesSectionKeys',
             'Replaces Section Keys',
             'JSON array of section keys this contribution stands in for, all within one tab. The panel draws in the place of the first of them and the others are not drawn. Mutually exclusive with every other claim.',
@@ -1104,7 +1104,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a98e42e3-9dd7-4a6c-b232-cf7e2a057b7c' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'ReplacesFieldNames')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '918efa14-df8a-4354-9b79-59181c1991c8' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'ReplacesFieldNames')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1137,9 +1137,9 @@ GO
          )
          VALUES
          (
-            'a98e42e3-9dd7-4a6c-b232-cf7e2a057b7c',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '918efa14-df8a-4354-9b79-59181c1991c8',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'ReplacesFieldNames',
             'Replaces Field Names',
             'JSON array of field names this contribution stands in for, all within one section. The panel draws inside that section, at SectionPosition, and the named fields are not drawn. Mutually exclusive with every other claim.',
@@ -1167,7 +1167,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b39abffc-a2ab-47d8-8aca-59d4cc71b02d' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'InSectionKey')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9bdfa6b5-346e-4520-b752-b6a55249cdec' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'InSectionKey')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1200,9 +1200,9 @@ GO
          )
          VALUES
          (
-            'b39abffc-a2ab-47d8-8aca-59d4cc71b02d',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '9bdfa6b5-346e-4520-b752-b6a55249cdec',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'InSectionKey',
             'In Section Key',
             'Section key of a section this contribution draws inside, replacing nothing. SectionPosition says whether it draws at the start or the end. Mutually exclusive with every other claim.',
@@ -1230,7 +1230,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '56d0f504-4b02-4aea-b0b0-718c019dc3c6' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'SectionPosition')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bf27ed9f-9cfe-471e-8659-5a35cb16c05a' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'SectionPosition')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1263,9 +1263,9 @@ GO
          )
          VALUES
          (
-            '56d0f504-4b02-4aea-b0b0-718c019dc3c6',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'bf27ed9f-9cfe-471e-8659-5a35cb16c05a',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'SectionPosition',
             'Section Position',
             'Where inside its section the panel draws: start or end. Applies to InSectionKey and to a ReplacesFieldNames claim; null means start.',
@@ -1293,7 +1293,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b7ffaaa1-01c5-499f-ba9a-88711af3a2ff' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Inclusion')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'd4e78e69-50ba-41d1-a694-6113ec959b21' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Inclusion')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1326,9 +1326,9 @@ GO
          )
          VALUES
          (
-            'b7ffaaa1-01c5-499f-ba9a-88711af3a2ff',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'd4e78e69-50ba-41d1-a694-6113ec959b21',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Inclusion',
             'Inclusion',
             'L1 chrome inclusion: Primary (own rail item), More (folder), None (hidden). Null = default rail behavior.',
@@ -1356,7 +1356,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a1b1af4a-f6ee-4d4e-b71b-94d7ac0de57a' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'ChromeGroup')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0ed921e1-a848-4d30-8094-d383b68995f9' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'ChromeGroup')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1389,9 +1389,9 @@ GO
          )
          VALUES
          (
-            'a1b1af4a-f6ee-4d4e-b71b-94d7ac0de57a',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '0ed921e1-a848-4d30-8094-d383b68995f9',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'ChromeGroup',
             'Chrome Group',
             'Pin to the details or more chrome bucket instead of an own rail item.',
@@ -1419,7 +1419,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '131d4f2f-4850-4479-bb80-a412a48485f7' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Presentation')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '019c2bff-42b2-481a-ad26-5c6a2b4f3b33' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Presentation')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1452,9 +1452,9 @@ GO
          )
          VALUES
          (
-            '131d4f2f-4850-4479-bb80-a412a48485f7',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '019c2bff-42b2-481a-ad26-5c6a2b4f3b33',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Presentation',
             'Presentation',
             'panel = wrapped in a collapsible section with header; bare = hero strip with no chrome and no rail item.',
@@ -1482,7 +1482,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6f667745-5b88-4ef0-88ae-badc94eb5d12' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Title')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2d2ec821-1050-4ddb-9a44-1d70216902b1' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Title')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1515,9 +1515,9 @@ GO
          )
          VALUES
          (
-            '6f667745-5b88-4ef0-88ae-badc94eb5d12',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '2d2ec821-1050-4ddb-9a44-1d70216902b1',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Title',
             'Title',
             'Section header and rail label. Null falls back to Name.',
@@ -1545,7 +1545,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0bc4497d-1308-4e8d-9c5d-4801dd4155e7' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Icon')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '37f126c1-25f1-4c1f-9e25-966305d5d896' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Icon')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1578,9 +1578,9 @@ GO
          )
          VALUES
          (
-            '0bc4497d-1308-4e8d-9c5d-4801dd4155e7',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '37f126c1-25f1-4c1f-9e25-966305d5d896',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Icon',
             'Icon',
             'Font Awesome class for the section header and rail item.',
@@ -1608,7 +1608,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '29f12602-286d-408b-b1f4-0404951bccf8' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Scope')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '13712da6-fa07-48d6-83aa-b9e25e2a430a' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Scope')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1641,9 +1641,9 @@ GO
          )
          VALUES
          (
-            '29f12602-286d-408b-b1f4-0404951bccf8',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '13712da6-fa07-48d6-83aa-b9e25e2a430a',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Scope',
             'Scope',
             'Who sees the contribution: User (UserID), Role (RoleID) or Global.',
@@ -1671,7 +1671,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '459d0934-5402-43c6-a46a-59d65c4d849a' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'UserID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e20e40b6-8081-40d6-8fdc-4e83c15bfcef' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'UserID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1704,9 +1704,9 @@ GO
          )
          VALUES
          (
-            '459d0934-5402-43c6-a46a-59d65c4d849a',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'e20e40b6-8081-40d6-8fdc-4e83c15bfcef',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'UserID',
             'User ID',
             NULL,
@@ -1734,7 +1734,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7adb0dff-6270-4b5f-a4e0-7dbd732ada00' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'RoleID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '87cf0da5-d9b0-4356-9ab1-2bedd282e880' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'RoleID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1767,9 +1767,9 @@ GO
          )
          VALUES
          (
-            '7adb0dff-6270-4b5f-a4e0-7dbd732ada00',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '87cf0da5-d9b0-4356-9ab1-2bedd282e880',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'RoleID',
             'Role ID',
             NULL,
@@ -1797,7 +1797,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'be318a17-9753-4007-bbc9-4e97a41b2ef1' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Precedence')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b1a4b38d-1be1-4fe0-82e2-c0dc62b73fc3' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Precedence')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1830,9 +1830,9 @@ GO
          )
          VALUES
          (
-            'be318a17-9753-4007-bbc9-4e97a41b2ef1',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'b1a4b38d-1be1-4fe0-82e2-c0dc62b73fc3',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Precedence',
             'Precedence',
             'Last-wins precedence against compiled registrations sharing ContributionKey. Ties go to the compiled registration; a row wins only when strictly higher.',
@@ -1860,7 +1860,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f391e797-d5fd-4446-a7be-d04ff21894ba' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Status')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b88476d8-6127-448e-aac2-8d00a09b09aa' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Status')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1893,9 +1893,9 @@ GO
          )
          VALUES
          (
-            'f391e797-d5fd-4446-a7be-d04ff21894ba',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'b88476d8-6127-448e-aac2-8d00a09b09aa',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Status',
             'Status',
             'Active rows render. Pending rows are drafts awaiting activation. Inactive rows are history.',
@@ -1923,7 +1923,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '051b81c3-d3a6-455a-a8eb-eb7e0c03da4f' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Configuration')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3dcecd60-7f4e-4c2d-b88b-0ddb93df9411' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Configuration')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1956,9 +1956,9 @@ GO
          )
          VALUES
          (
-            '051b81c3-d3a6-455a-a8eb-eb7e0c03da4f',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '3dcecd60-7f4e-4c2d-b88b-0ddb93df9411',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Configuration',
             'Configuration',
             'JSON passed to the component as contribution.configuration so one component can serve several rows.',
@@ -1986,7 +1986,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4651c3e8-ac18-4857-a9f3-d450f5d2d707' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Notes')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9f12e98f-81bc-49d0-8070-557c96a985db' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Notes')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2019,9 +2019,9 @@ GO
          )
          VALUES
          (
-            '4651c3e8-ac18-4857-a9f3-d450f5d2d707',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '9f12e98f-81bc-49d0-8070-557c96a985db',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Notes',
             'Notes',
             'Free-form authoring notes; agents append an iteration log here.',
@@ -2049,7 +2049,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'da2bbfa3-ccf2-43cd-a12a-6bd361d3a652' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bb456a10-40ca-43f8-9cc9-a7d45eedf23a' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2082,9 +2082,9 @@ GO
          )
          VALUES
          (
-            'da2bbfa3-ccf2-43cd-a12a-6bd361d3a652',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'bb456a10-40ca-43f8-9cc9-a7d45eedf23a',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -2112,7 +2112,7 @@ GO
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8e5af416-9e64-4479-8d44-8b24aeca196d' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5d3b04dc-c232-4612-a28f-1e1a1e4cf279' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2145,9 +2145,9 @@ GO
          )
          VALUES
          (
-            '8e5af416-9e64-4479-8d44-8b24aeca196d',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '5d3b04dc-c232-4612-a28f-1e1a1e4cf279',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -2175,194 +2175,194 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 51e6ab14-38cb-4788-9075-45f84a4892b1 */
+/* SQL text to insert entity field value with ID 6e9e9b45-46a5-421e-80d5-36210c4b6bb5 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('51e6ab14-38cb-4788-9075-45f84a4892b1', '9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D', 1, 'after-everything', 'after-everything', GETUTCDATE(), GETUTCDATE());
+                                       ('6e9e9b45-46a5-421e-80d5-36210c4b6bb5', '3B573CDB-CE39-4C1E-9000-C9BF86DC898B', 1, 'after-everything', 'after-everything', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7643cb98-14a0-4296-9d22-471c5990d50b */
+/* SQL text to insert entity field value with ID 556e46bc-6ac3-4dff-982b-1cb55027c4c7 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7643cb98-14a0-4296-9d22-471c5990d50b', '9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D', 2, 'after-fields', 'after-fields', GETUTCDATE(), GETUTCDATE());
+                                       ('556e46bc-6ac3-4dff-982b-1cb55027c4c7', '3B573CDB-CE39-4C1E-9000-C9BF86DC898B', 2, 'after-fields', 'after-fields', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 37a9b043-3623-4dc8-afce-ddbae17dc6f4 */
+/* SQL text to insert entity field value with ID 822bebc9-fccd-4d71-bf69-f62daf2ce92d */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('37a9b043-3623-4dc8-afce-ddbae17dc6f4', '9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D', 3, 'after-related', 'after-related', GETUTCDATE(), GETUTCDATE());
+                                       ('822bebc9-fccd-4d71-bf69-f62daf2ce92d', '3B573CDB-CE39-4C1E-9000-C9BF86DC898B', 3, 'after-related', 'after-related', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 589e0bd2-23ea-4c62-a279-74f17e817cbe */
+/* SQL text to insert entity field value with ID d2119bcd-db8c-41e4-88b5-0e43aa4bf602 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('589e0bd2-23ea-4c62-a279-74f17e817cbe', '9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D', 4, 'before-fields', 'before-fields', GETUTCDATE(), GETUTCDATE());
+                                       ('d2119bcd-db8c-41e4-88b5-0e43aa4bf602', '3B573CDB-CE39-4C1E-9000-C9BF86DC898B', 4, 'before-fields', 'before-fields', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 49ab8814-f4c1-49a8-9096-cc50285017c0 */
+/* SQL text to insert entity field value with ID f34edc0e-941e-4218-87f4-072989f37701 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('49ab8814-f4c1-49a8-9096-cc50285017c0', '9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D', 5, 'top-area', 'top-area', GETUTCDATE(), GETUTCDATE());
+                                       ('f34edc0e-941e-4218-87f4-072989f37701', '3B573CDB-CE39-4C1E-9000-C9BF86DC898B', 5, 'top-area', 'top-area', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D';
+/* SQL text to update ValueListType for entity field ID 3B573CDB-CE39-4C1E-9000-C9BF86DC898B */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='3B573CDB-CE39-4C1E-9000-C9BF86DC898B';
 
-/* SQL text to insert entity field value with ID 12abb702-8058-4236-8ccc-529fcc68bb7c */
+/* SQL text to insert entity field value with ID e27c401d-c51f-4578-b426-f0ce041ddbd4 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('12abb702-8058-4236-8ccc-529fcc68bb7c', 'B7FFAAA1-01C5-499F-BA9A-88711AF3A2FF', 1, 'More', 'More', GETUTCDATE(), GETUTCDATE());
+                                       ('e27c401d-c51f-4578-b426-f0ce041ddbd4', 'D4E78E69-50BA-41D1-A694-6113EC959B21', 1, 'More', 'More', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID d3ef6380-2d3a-4fda-a063-d9c71c93cda0 */
+/* SQL text to insert entity field value with ID 2729ce67-db83-4a5b-b20b-3969b60d17a0 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d3ef6380-2d3a-4fda-a063-d9c71c93cda0', 'B7FFAAA1-01C5-499F-BA9A-88711AF3A2FF', 2, 'None', 'None', GETUTCDATE(), GETUTCDATE());
+                                       ('2729ce67-db83-4a5b-b20b-3969b60d17a0', 'D4E78E69-50BA-41D1-A694-6113EC959B21', 2, 'None', 'None', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID b63e7ecd-8e63-4bbd-abe5-b5ee3b1f8851 */
+/* SQL text to insert entity field value with ID 5165dc60-04ee-4629-bcc5-c3f646100a55 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b63e7ecd-8e63-4bbd-abe5-b5ee3b1f8851', 'B7FFAAA1-01C5-499F-BA9A-88711AF3A2FF', 3, 'Primary', 'Primary', GETUTCDATE(), GETUTCDATE());
+                                       ('5165dc60-04ee-4629-bcc5-c3f646100a55', 'D4E78E69-50BA-41D1-A694-6113EC959B21', 3, 'Primary', 'Primary', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID B7FFAAA1-01C5-499F-BA9A-88711AF3A2FF */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='B7FFAAA1-01C5-499F-BA9A-88711AF3A2FF';
+/* SQL text to update ValueListType for entity field ID D4E78E69-50BA-41D1-A694-6113EC959B21 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='D4E78E69-50BA-41D1-A694-6113EC959B21';
 
-/* SQL text to insert entity field value with ID 53341c39-96d6-4897-b31f-3fd57e8b6257 */
+/* SQL text to insert entity field value with ID 3e32e84a-0fe7-449b-8a12-cbeedca9c3ac */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('53341c39-96d6-4897-b31f-3fd57e8b6257', 'A1B1AF4A-F6EE-4D4E-B71B-94D7AC0DE57A', 1, 'details', 'details', GETUTCDATE(), GETUTCDATE());
+                                       ('3e32e84a-0fe7-449b-8a12-cbeedca9c3ac', '0ED921E1-A848-4D30-8094-D383B68995F9', 1, 'details', 'details', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7dad4e07-180e-418d-a564-c2eed9c28717 */
+/* SQL text to insert entity field value with ID 74c4b64e-1c27-429e-98fc-c55f44505084 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7dad4e07-180e-418d-a564-c2eed9c28717', 'A1B1AF4A-F6EE-4D4E-B71B-94D7AC0DE57A', 2, 'more', 'more', GETUTCDATE(), GETUTCDATE());
+                                       ('74c4b64e-1c27-429e-98fc-c55f44505084', '0ED921E1-A848-4D30-8094-D383B68995F9', 2, 'more', 'more', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID A1B1AF4A-F6EE-4D4E-B71B-94D7AC0DE57A */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='A1B1AF4A-F6EE-4D4E-B71B-94D7AC0DE57A';
+/* SQL text to update ValueListType for entity field ID 0ED921E1-A848-4D30-8094-D383B68995F9 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='0ED921E1-A848-4D30-8094-D383B68995F9';
 
-/* SQL text to insert entity field value with ID f0158a29-b95a-4c25-9249-80a57a0f800a */
+/* SQL text to insert entity field value with ID 4b901b1d-f907-44dc-be7d-e8d37a6689c3 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('f0158a29-b95a-4c25-9249-80a57a0f800a', '131D4F2F-4850-4479-BB80-A412A48485F7', 1, 'bare', 'bare', GETUTCDATE(), GETUTCDATE());
+                                       ('4b901b1d-f907-44dc-be7d-e8d37a6689c3', '019C2BFF-42B2-481A-AD26-5C6A2B4F3B33', 1, 'bare', 'bare', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 69a6a7e9-702f-42b8-a6f1-bba0899c4a2a */
+/* SQL text to insert entity field value with ID 26af7a53-4a25-4dba-89e8-d6a8ae0ed3af */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('69a6a7e9-702f-42b8-a6f1-bba0899c4a2a', '131D4F2F-4850-4479-BB80-A412A48485F7', 2, 'panel', 'panel', GETUTCDATE(), GETUTCDATE());
+                                       ('26af7a53-4a25-4dba-89e8-d6a8ae0ed3af', '019C2BFF-42B2-481A-AD26-5C6A2B4F3B33', 2, 'panel', 'panel', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 131D4F2F-4850-4479-BB80-A412A48485F7 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='131D4F2F-4850-4479-BB80-A412A48485F7';
+/* SQL text to update ValueListType for entity field ID 019C2BFF-42B2-481A-AD26-5C6A2B4F3B33 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='019C2BFF-42B2-481A-AD26-5C6A2B4F3B33';
 
-/* SQL text to insert entity field value with ID 01694ee2-8419-40db-9af3-bcb108a42995 */
+/* SQL text to insert entity field value with ID c9ff1fa7-2a38-4306-9e07-782b1ab00465 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('01694ee2-8419-40db-9af3-bcb108a42995', '29F12602-286D-408B-B1F4-0404951BCCF8', 1, 'Global', 'Global', GETUTCDATE(), GETUTCDATE());
+                                       ('c9ff1fa7-2a38-4306-9e07-782b1ab00465', '13712DA6-FA07-48D6-83AA-B9E25E2A430A', 1, 'Global', 'Global', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID b026e7af-e617-4e4b-96ac-753375a2af98 */
+/* SQL text to insert entity field value with ID bda47a66-ae88-413a-8827-38f31c74a184 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b026e7af-e617-4e4b-96ac-753375a2af98', '29F12602-286D-408B-B1F4-0404951BCCF8', 2, 'Role', 'Role', GETUTCDATE(), GETUTCDATE());
+                                       ('bda47a66-ae88-413a-8827-38f31c74a184', '13712DA6-FA07-48D6-83AA-B9E25E2A430A', 2, 'Role', 'Role', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID d7b20b67-1dde-4dbd-a2ca-17f4a1d9ac80 */
+/* SQL text to insert entity field value with ID 6b076ace-cac3-4ae3-b9bf-fa8d4e8fb4b9 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d7b20b67-1dde-4dbd-a2ca-17f4a1d9ac80', '29F12602-286D-408B-B1F4-0404951BCCF8', 3, 'User', 'User', GETUTCDATE(), GETUTCDATE());
+                                       ('6b076ace-cac3-4ae3-b9bf-fa8d4e8fb4b9', '13712DA6-FA07-48D6-83AA-B9E25E2A430A', 3, 'User', 'User', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 29F12602-286D-408B-B1F4-0404951BCCF8 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='29F12602-286D-408B-B1F4-0404951BCCF8';
+/* SQL text to update ValueListType for entity field ID 13712DA6-FA07-48D6-83AA-B9E25E2A430A */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='13712DA6-FA07-48D6-83AA-B9E25E2A430A';
 
-/* SQL text to insert entity field value with ID 779d5cb9-0004-419d-8cbe-bdbafca094af */
+/* SQL text to insert entity field value with ID 53918b55-2223-4725-bf53-4957f4726ddd */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('779d5cb9-0004-419d-8cbe-bdbafca094af', 'F391E797-D5FD-4446-A7BE-D04FF21894BA', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
+                                       ('53918b55-2223-4725-bf53-4957f4726ddd', 'B88476D8-6127-448E-AAC2-8D00A09B09AA', 1, 'Active', 'Active', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 7aeadf84-201a-46db-a17d-290f573e965b */
+/* SQL text to insert entity field value with ID 0333bff9-3af2-417a-922b-cd49c57e124c */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('7aeadf84-201a-46db-a17d-290f573e965b', 'F391E797-D5FD-4446-A7BE-D04FF21894BA', 2, 'Inactive', 'Inactive', GETUTCDATE(), GETUTCDATE());
+                                       ('0333bff9-3af2-417a-922b-cd49c57e124c', 'B88476D8-6127-448E-AAC2-8D00A09B09AA', 2, 'Inactive', 'Inactive', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID e08301cd-ffbe-47fc-ab0c-af8de789e159 */
+/* SQL text to insert entity field value with ID 8e2aa13b-e7bc-41bd-81d5-7eac4972a969 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('e08301cd-ffbe-47fc-ab0c-af8de789e159', 'F391E797-D5FD-4446-A7BE-D04FF21894BA', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                       ('8e2aa13b-e7bc-41bd-81d5-7eac4972a969', 'B88476D8-6127-448E-AAC2-8D00A09B09AA', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID F391E797-D5FD-4446-A7BE-D04FF21894BA */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='F391E797-D5FD-4446-A7BE-D04FF21894BA';
+/* SQL text to update ValueListType for entity field ID B88476D8-6127-448E-AAC2-8D00A09B09AA */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='B88476D8-6127-448E-AAC2-8D00A09B09AA';
 
-/* SQL text to insert entity field value with ID 1bb00200-53f4-4eee-8ab5-9e868913ec7e */
+/* SQL text to insert entity field value with ID 5c82a503-a896-4547-8ddb-5a79f815671f */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('1bb00200-53f4-4eee-8ab5-9e868913ec7e', '56D0F504-4B02-4AEA-B0B0-718C019DC3C6', 1, 'end', 'end', GETUTCDATE(), GETUTCDATE());
+                                       ('5c82a503-a896-4547-8ddb-5a79f815671f', 'BF27ED9F-9CFE-471E-8659-5A35CB16C05A', 1, 'end', 'end', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 33820a98-a6e4-4a5c-8be0-ef54c13edad0 */
+/* SQL text to insert entity field value with ID 9f6e56eb-49bb-4039-8343-26474c3cdf18 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('33820a98-a6e4-4a5c-8be0-ef54c13edad0', '56D0F504-4B02-4AEA-B0B0-718C019DC3C6', 2, 'start', 'start', GETUTCDATE(), GETUTCDATE());
+                                       ('9f6e56eb-49bb-4039-8343-26474c3cdf18', 'BF27ED9F-9CFE-471E-8659-5A35CB16C05A', 2, 'start', 'start', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 56D0F504-4B02-4AEA-B0B0-718C019DC3C6 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='56D0F504-4B02-4AEA-B0B0-718C019DC3C6';
+/* SQL text to update ValueListType for entity field ID BF27ED9F-9CFE-471E-8659-5A35CB16C05A */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='BF27ED9F-9CFE-471E-8659-5A35CB16C05A';
 
 
 /* Create Entity Relationship: MJ: Roles -> MJ: Entity Form Contributions (One To Many via RoleID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0a7f86e6-8659-4fb1-9e61-3be5b5d94c4d'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '21ce9131-a318-40ea-8bb9-a01764b7572b'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('0a7f86e6-8659-4fb1-9e61-3be5b5d94c4d', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792', 'RoleID', 'One To Many', 1, 1, 18, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('21ce9131-a318-40ea-8bb9-a01764b7572b', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', 'RoleID', 'One To Many', 1, 1, 18, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Entities -> MJ: Entity Form Contributions (One To Many via EntityID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '3fa3313c-aa50-4410-97b5-7465781c1b98'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'f39f155b-a6f2-4123-92c1-c18ed70264c6'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('3fa3313c-aa50-4410-97b5-7465781c1b98', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792', 'EntityID', 'One To Many', 1, 1, 80, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('f39f155b-a6f2-4123-92c1-c18ed70264c6', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', 'EntityID', 'One To Many', 1, 1, 80, GETUTCDATE(), GETUTCDATE())
    END;
                     
 /* Create Entity Relationship: MJ: Entities -> MJ: Entity Form Contributions (One To Many via RelatedEntityID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '54c99295-c0f6-48e0-8873-892570ce7dbe'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '666a6e09-3f29-4b44-81e6-339bb692ec74'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('54c99295-c0f6-48e0-8873-892570ce7dbe', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792', 'RelatedEntityID', 'One To Many', 1, 1, 81, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('666a6e09-3f29-4b44-81e6-339bb692ec74', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', 'RelatedEntityID', 'One To Many', 1, 1, 81, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Users -> MJ: Entity Form Contributions (One To Many via UserID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '2541a3c2-0851-4ebb-a8eb-efa2805e0667'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '01ea85bf-8dfb-4bdc-8ebe-aa9d8e28466e'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('2541a3c2-0851-4ebb-a8eb-efa2805e0667', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792', 'UserID', 'One To Many', 1, 1, 106, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('01ea85bf-8dfb-4bdc-8ebe-aa9d8e28466e', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', 'UserID', 'One To Many', 1, 1, 108, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Components -> MJ: Entity Form Contributions (One To Many via ComponentID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'fa2010e3-a90d-4765-9f46-586e7c0a9b4f'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '58268626-f742-4079-999d-49a22c42e900'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('fa2010e3-a90d-4765-9f46-586e7c0a9b4f', '0FB98A1D-C6AE-4427-B66C-7B31E669756F', '9FE8274E-86EB-4900-BCDE-136E02FDB792', 'ComponentID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('58268626-f742-4079-999d-49a22c42e900', '0FB98A1D-C6AE-4427-B66C-7B31E669756F', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', 'ComponentID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for EntityFormContribution */
@@ -2419,20 +2419,20 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_EntityFormContribution_RoleID ON [${flyway:defaultSchema}].[EntityFormContribution] ([RoleID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 75A40E45-3BD1-4563-B5EF-380DEF463677 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='75A40E45-3BD1-4563-B5EF-380DEF463677', @RelatedEntityNameFieldMap='Entity';
+/* SQL text to update entity field related entity name field map for entity field ID B91BF4E8-2FD8-4648-98A9-DCB42F1DF112 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='B91BF4E8-2FD8-4648-98A9-DCB42F1DF112', @RelatedEntityNameFieldMap='Entity';
 
-/* SQL text to update entity field related entity name field map for entity field ID D196C1AE-EF50-498A-9760-80AD8039064B */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='D196C1AE-EF50-498A-9760-80AD8039064B', @RelatedEntityNameFieldMap='Component';
+/* SQL text to update entity field related entity name field map for entity field ID 5515D72A-25D8-48B2-BDE7-A7394491F474 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='5515D72A-25D8-48B2-BDE7-A7394491F474', @RelatedEntityNameFieldMap='Component';
 
-/* SQL text to update entity field related entity name field map for entity field ID BA866A11-AB0A-4A97-B4C7-457CD6D01988 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='BA866A11-AB0A-4A97-B4C7-457CD6D01988', @RelatedEntityNameFieldMap='RelatedEntity';
+/* SQL text to update entity field related entity name field map for entity field ID 962E5C3F-10F2-45C2-9768-AE67596B32AD */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='962E5C3F-10F2-45C2-9768-AE67596B32AD', @RelatedEntityNameFieldMap='RelatedEntity';
 
-/* SQL text to update entity field related entity name field map for entity field ID 459D0934-5402-43C6-A46A-59D65C4D849A */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='459D0934-5402-43C6-A46A-59D65C4D849A', @RelatedEntityNameFieldMap='User';
+/* SQL text to update entity field related entity name field map for entity field ID E20E40B6-8081-40D6-8FDC-4E83C15BFCEF */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='E20E40B6-8081-40D6-8FDC-4E83C15BFCEF', @RelatedEntityNameFieldMap='User';
 
-/* SQL text to update entity field related entity name field map for entity field ID 7ADB0DFF-6270-4B5F-A4E0-7DBD732ADA00 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='7ADB0DFF-6270-4B5F-A4E0-7DBD732ADA00', @RelatedEntityNameFieldMap='Role';
+/* SQL text to update entity field related entity name field map for entity field ID 87CF0DA5-D9B0-4356-9AB1-2BEDD282E880 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='87CF0DA5-D9B0-4356-9AB1-2BEDD282E880', @RelatedEntityNameFieldMap='Role';
 
 /* Base View SQL for MJ: Entity Form Contributions */
 -----------------------------------------------------------------
@@ -2891,12 +2891,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityFormContribution] TO [
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityFormContribution] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to update entity field related entity name field map for entity field ID 83E95083-AE41-428B-82BD-787E1262EC89 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='83E95083-AE41-428B-82BD-787E1262EC89', @RelatedEntityNameFieldMap='FeatureValueCache';
-
 /* SQL text to insert 5 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'abd4d2b9-2a63-43b3-978c-5abcf6430b17' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Entity')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '26bd4191-32f5-4614-add4-8ba4cf8e8736' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Entity')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2929,9 +2926,9 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
          VALUES
          (
-            'abd4d2b9-2a63-43b3-978c-5abcf6430b17',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '26bd4191-32f5-4614-add4-8ba4cf8e8736',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Entity',
             'Entity',
             NULL,
@@ -2959,7 +2956,7 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3d28c025-a08e-47ad-939b-99ce3c3c15f3' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Component')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b5a9ed46-4282-4fd9-8270-f2ea15bb0b47' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Component')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2992,9 +2989,9 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
          VALUES
          (
-            '3d28c025-a08e-47ad-939b-99ce3c3c15f3',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'b5a9ed46-4282-4fd9-8270-f2ea15bb0b47',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Component',
             'Component',
             NULL,
@@ -3022,7 +3019,7 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '661e4701-8646-4e12-b6f4-3ee64f917c8e' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'RelatedEntity')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7676766f-f5fa-43ee-8ea0-aa115e640dab' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'RelatedEntity')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3055,9 +3052,9 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
          VALUES
          (
-            '661e4701-8646-4e12-b6f4-3ee64f917c8e',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            '7676766f-f5fa-43ee-8ea0-aa115e640dab',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'RelatedEntity',
             'Related Entity',
             NULL,
@@ -3085,7 +3082,7 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f2f01df0-810c-451e-8548-df53877abffb' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'User')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'cedb3788-a87b-4b99-b0b4-0eedc898af51' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'User')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3118,9 +3115,9 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
          VALUES
          (
-            'f2f01df0-810c-451e-8548-df53877abffb',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'cedb3788-a87b-4b99-b0b4-0eedc898af51',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'User',
             'User',
             NULL,
@@ -3148,7 +3145,7 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5efbdbfd-4222-4dae-8681-b31014ad1b71' OR (EntityID = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND Name = 'Role')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b1517f82-8775-43f7-8ecf-f16519009206' OR (EntityID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND Name = 'Role')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -3181,9 +3178,9 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
          )
          VALUES
          (
-            '5efbdbfd-4222-4dae-8681-b31014ad1b71',
-            '9FE8274E-86EB-4900-BCDE-136E02FDB792', -- Entity: MJ: Entity Form Contributions
-            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'),
+            'b1517f82-8775-43f7-8ecf-f16519009206',
+            'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', -- Entity: MJ: Entity Form Contributions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'),
             'Role',
             'Role',
             NULL,
@@ -3215,27 +3212,27 @@ EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @E
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D'
+               WHERE ID = '3B573CDB-CE39-4C1E-9000-C9BF86DC898B'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'F391E797-D5FD-4446-A7BE-D04FF21894BA'
+               WHERE ID = 'B88476D8-6127-448E-AAC2-8D00A09B09AA'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'ABD4D2B9-2A63-43B3-978C-5ABCF6430B17'
+               WHERE ID = '26BD4191-32F5-4614-ADD4-8BA4CF8E8736'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '3D28C025-A08E-47AD-939B-99CE3C3C15F3'
+               WHERE ID = 'B5A9ED46-4282-4FD9-8270-F2EA15BB0B47'
                AND AutoUpdateDefaultInView = 1;
 
             UPDATE [${flyway:defaultSchema}].[Entity]
             SET AllowUserSearchAPI = 0
-            WHERE ID = '9FE8274E-86EB-4900-BCDE-136E02FDB792'
+            WHERE ID = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'
             AND AutoUpdateAllowUserSearchAPI = 1;
 
 /* Set categories for 33 fields */
@@ -3247,7 +3244,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Parent Entity'
 WHERE 
-   ID = '75A40E45-3BD1-4563-B5EF-380DEF463677';
+   ID = 'B91BF4E8-2FD8-4648-98A9-DCB42F1DF112';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.ComponentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3256,23 +3253,23 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Component'
 WHERE 
-   ID = 'D196C1AE-EF50-498A-9760-80AD8039064B';
+   ID = '5515D72A-25D8-48B2-BDE7-A7394491F474';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'General Information',
+   Category = 'Form Integration',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '26B45CD6-A036-4200-84C2-1A22B6E3FD6E';
+   ID = '54D82F2F-529D-47CD-961C-A6B67B1C3AB9';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Description 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'General Information',
+   Category = 'Form Integration',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F2970C48-6FCB-411F-93BF-EBA94DD4B791';
+   ID = '81AE8859-CADE-49D2-A03A-A9DC95135F96';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Slot 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3280,7 +3277,7 @@ SET
    Category = 'Placement and Layout',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '9AAB57AE-B496-45D6-AFB7-4ABB8977CD6D';
+   ID = '3B573CDB-CE39-4C1E-9000-C9BF86DC898B';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.SortKey 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3288,74 +3285,74 @@ SET
    Category = 'Placement and Layout',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '09936987-5A63-482D-972A-3FDE9638B948';
+   ID = '56033CAE-CF1C-467D-BBB9-DB9E61B2EC83';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.ContributionKey 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Form Integration',
+   Category = 'Placement and Layout',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '2C51AA2B-E22F-426C-8A36-A21642D3C5A1';
+   ID = 'C3E75F52-BF6B-44B3-AF86-2A4A6182CF14';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.RelatedEntityID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Replacement Rules',
+   Category = 'Replacement Logic',
    GeneratedFormSection = 'Category',
    DisplayName = 'Related Entity'
 WHERE 
-   ID = 'BA866A11-AB0A-4A97-B4C7-457CD6D01988';
+   ID = '962E5C3F-10F2-45C2-9768-AE67596B32AD';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.RelatedJoinField 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Replacement Rules',
+   Category = 'Replacement Logic',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '6D2CAF9B-322B-41B3-A46D-0B9CFD2C1514';
+   ID = '5D647844-ABCF-4D28-9D81-228AB00C01CB';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.ReplacesSectionKey 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Replacement Rules',
+   Category = 'Replacement Logic',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F940994C-720F-43DB-A60C-0B832F33460E';
+   ID = 'C8BC36E7-F6B3-4C98-9BB4-7A938F655DCD';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.ReplacesSectionKeys 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Replacement Rules',
+   Category = 'Replacement Logic',
    GeneratedFormSection = 'Category',
    ExtendedType = 'JSON'
 WHERE 
-   ID = '7873FBD8-579C-4D41-BE86-1FD3B0CA6B19';
+   ID = '11F0411F-DF79-44EA-AC8E-D6B15EF73B46';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.ReplacesFieldNames 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Replacement Rules',
+   Category = 'Replacement Logic',
    GeneratedFormSection = 'Category',
    ExtendedType = 'JSON'
 WHERE 
-   ID = 'A98E42E3-9DD7-4A6C-B232-CF7E2A057B7C';
+   ID = '918EFA14-DF8A-4354-9B79-59181C1991C8';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.InSectionKey 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Placement and Layout',
+   Category = 'Replacement Logic',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B39ABFFC-A2AB-47D8-8ACA-59D4CC71B02D';
+   ID = '9BDFA6B5-346E-4520-B752-B6A55249CDEC';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.SectionPosition 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Placement and Layout',
+   Category = 'Replacement Logic',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '56D0F504-4B02-4AEA-B0B0-718C019DC3C6';
+   ID = 'BF27ED9F-9CFE-471E-8659-5A35CB16C05A';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Inclusion 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3363,7 +3360,7 @@ SET
    Category = 'Chrome and Presentation',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'B7FFAAA1-01C5-499F-BA9A-88711AF3A2FF';
+   ID = 'D4E78E69-50BA-41D1-A694-6113EC959B21';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.ChromeGroup 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3371,16 +3368,15 @@ SET
    Category = 'Chrome and Presentation',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'A1B1AF4A-F6EE-4D4E-B71B-94D7AC0DE57A';
+   ID = '0ED921E1-A848-4D30-8094-D383B68995F9';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Presentation 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Chrome and Presentation',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Presentation Style'
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '131D4F2F-4850-4479-BB80-A412A48485F7';
+   ID = '019C2BFF-42B2-481A-AD26-5C6A2B4F3B33';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Title 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3388,7 +3384,7 @@ SET
    Category = 'Chrome and Presentation',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '6F667745-5B88-4EF0-88AE-BADC94EB5D12';
+   ID = '2D2EC821-1050-4DDB-9A44-1D70216902B1';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Icon 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3397,7 +3393,7 @@ SET
    GeneratedFormSection = 'Category',
    ExtendedType = 'Icon'
 WHERE 
-   ID = '0BC4497D-1308-4E8D-9C5D-4801DD4155E7';
+   ID = '37F126C1-25F1-4C1F-9E25-966305D5D896';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Scope 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3405,7 +3401,7 @@ SET
    Category = 'Access Control',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '29F12602-286D-408B-B1F4-0404951BCCF8';
+   ID = '13712DA6-FA07-48D6-83AA-B9E25E2A430A';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.UserID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3414,7 +3410,7 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'User'
 WHERE 
-   ID = '459D0934-5402-43C6-A46A-59D65C4D849A';
+   ID = 'E20E40B6-8081-40D6-8FDC-4E83C15BFCEF';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.RoleID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3423,41 +3419,40 @@ SET
    GeneratedFormSection = 'Category',
    DisplayName = 'Role'
 WHERE 
-   ID = '7ADB0DFF-6270-4B5F-A4E0-7DBD732ADA00';
+   ID = '87CF0DA5-D9B0-4356-9AB1-2BEDD282E880';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Precedence 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Form Integration',
+   Category = 'Access Control',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'BE318A17-9753-4007-BBC9-4E97A41B2EF1';
+   ID = 'B1A4B38D-1BE1-4FE0-82E2-C0DC62B73FC3';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Form Integration',
+   Category = 'Access Control',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F391E797-D5FD-4446-A7BE-D04FF21894BA';
+   ID = 'B88476D8-6127-448E-AAC2-8D00A09B09AA';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Configuration 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Form Integration',
+   Category = 'Access Control',
    GeneratedFormSection = 'Category',
    ExtendedType = 'JSON'
 WHERE 
-   ID = '051B81C3-D3A6-455A-A8EB-EB7E0C03DA4F';
+   ID = '3DCECD60-7F4E-4C2D-B88B-0DDB93DF9411';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Notes 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'General Information',
-   GeneratedFormSection = 'Category',
-   ExtendedType = 'Markdown'
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '4651C3E8-AC18-4857-A9F3-D450F5D2D707';
+   ID = '9F12E98F-81BC-49D0-8070-557C96A985DB';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3465,7 +3460,7 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'DA2BBFA3-CCF2-43CD-A12A-6BD361D3A652';
+   ID = 'BB456A10-40CA-43F8-9CC9-A7D45EEDF23A';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -3473,111 +3468,101 @@ SET
    Category = 'System Metadata',
    GeneratedFormSection = 'Category'
 WHERE 
-   ID = '8E5AF416-9E64-4479-8D44-8B24AECA196D';
+   ID = '5D3B04DC-C232-4612-A28F-1E1A1E4CF279';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Entity 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Entity Name'
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'ABD4D2B9-2A63-43B3-978C-5ABCF6430B17';
+   ID = '26BD4191-32F5-4614-ADD4-8BA4CF8E8736';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Component 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Component Name'
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '3D28C025-A08E-47AD-939B-99CE3C3C15F3';
+   ID = 'B5A9ED46-4282-4FD9-8270-F2EA15BB0B47';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.RelatedEntity 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Related Entity Name'
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '661E4701-8646-4E12-B6F4-3EE64F917C8E';
+   ID = '7676766F-F5FA-43EE-8EA0-AA115E640DAB';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.User 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'User Name'
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'F2F01DF0-810C-451E-8548-DF53877ABFFB';
+   ID = 'CEDB3788-A87B-4B99-B0B4-0EEDC898AF51';
 
 -- UPDATE Entity Field Category Info MJ: Entity Form Contributions.Role 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Role Name'
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '5EFBDBFD-4222-4DAE-8681-B31014AD1B71';
+   ID = 'B1517F82-8775-43F7-8ECF-F16519009206';
 
 /* Set entity icon to fa fa-puzzle-piece */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-puzzle-piece', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792';
+               WHERE [ID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18';
 
 /* Insert FieldCategoryInfo setting for entity */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND [Name] = 'FieldCategoryInfo'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND [Name] = 'FieldCategoryInfo'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('ebe021ef-d547-5fb2-b681-9f45cf9f7e81', '9FE8274E-86EB-4900-BCDE-136E02FDB792', 'FieldCategoryInfo', '{
+               VALUES ('d76f3f72-cfb3-5b39-bfda-7f39f023e928', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', 'FieldCategoryInfo', '{
   "Access Control": {
-    "description": "Defines visibility rules based on users and roles.",
-    "icon": "fa fa-lock"
+    "description": "Visibility scope, status, and precedence rules",
+    "icon": "fa fa-shield-alt"
   },
   "Chrome and Presentation": {
-    "description": "Settings for the visual appearance, icons, and rail navigation.",
-    "icon": "fa fa-desktop"
+    "description": "Visual styling and UI component wrapper settings",
+    "icon": "fa fa-palette"
   },
   "Form Integration": {
-    "description": "Core settings for linking components to forms and managing precedence.",
-    "icon": "fa fa-plug"
-  },
-  "General Information": {
-    "description": "Basic identification and documentation for the contribution.",
-    "icon": "fa fa-info-circle"
+    "description": "Core configuration linking components to parent entities",
+    "icon": "fa fa-puzzle-piece"
   },
   "Placement and Layout": {
-    "description": "Controls where the panel renders on the parent form.",
+    "description": "Settings for positioning the panel on the form",
     "icon": "fa fa-th-large"
   },
-  "Replacement Rules": {
-    "description": "Logic for replacing existing sections, grids, or fields on the form.",
+  "Replacement Logic": {
+    "description": "Rules for overriding existing sections or fields",
     "icon": "fa fa-exchange-alt"
   },
   "System Metadata": {
-    "description": "System-managed audit and denormalized reference fields.",
-    "icon": "fa fa-cog"
+    "description": "Audit logs and system-managed reference data",
+    "icon": "fa fa-database"
   }
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Insert FieldCategoryIcons setting (legacy) */
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792' AND [Name] = 'FieldCategoryIcons'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18' AND [Name] = 'FieldCategoryIcons'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('582993a7-e8a6-57b2-8317-81a99121cf65', '9FE8274E-86EB-4900-BCDE-136E02FDB792', 'FieldCategoryIcons', '{
-  "Access Control": "fa fa-lock",
-  "Chrome and Presentation": "fa fa-desktop",
-  "Form Integration": "fa fa-plug",
-  "General Information": "fa fa-info-circle",
+               VALUES ('3c44348f-f9d0-505b-9ca7-eeccd75b77ef', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18', 'FieldCategoryIcons', '{
+  "Access Control": "fa fa-shield-alt",
+  "Chrome and Presentation": "fa fa-palette",
+  "Form Integration": "fa fa-puzzle-piece",
   "Placement and Layout": "fa fa-th-large",
-  "Replacement Rules": "fa fa-exchange-alt",
-  "System Metadata": "fa fa-cog"
+  "Replacement Logic": "fa fa-exchange-alt",
+  "System Metadata": "fa fa-database"
 }', GETUTCDATE(), GETUTCDATE())
    END;
 
@@ -3585,231 +3570,239 @@ IF NOT EXISTS (
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '9FE8274E-86EB-4900-BCDE-136E02FDB792';
+         WHERE [EntityID] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18';
 
 /* Generated Validation Functions for MJ: Entity Form Contributions */
 -- CHECK constraint for MJ: Entity Form Contributions: Field: ReplacesFieldNames was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'DF238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'A98E42E3-9DD7-4A6C-B232-CF7E2A057B7C'
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'DF238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '918EFA14-DF8A-4354-9B79-59181C1991C8'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('8c0ced59-940e-4d8f-ba63-6da794c6da9c', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([ReplacesFieldNames] IS NULL OR isjson([ReplacesFieldNames])=(1) AND left(ltrim([ReplacesFieldNames]),(1))=''['' AND replace(replace(replace(replace([ReplacesFieldNames],char((32)),''''),char((9)),''''),char((13)),''''),char((10)),'''')<>''[]'')', 'public ValidateReplacesFieldNamesJsonArray(result: ValidationResult) {
-	if (this.ReplacesFieldNames != null) {
-		let isValid = false;
-		let errorMessage = "Replaces Field Names must be a valid, non-empty JSON array.";
-		try {
-			const trimmed = this.ReplacesFieldNames.trim();
-			if (trimmed.startsWith("[")) {
-				const parsed = JSON.parse(trimmed);
-				if (Array.isArray(parsed)) {
-					if (parsed.length > 0) {
-						isValid = true;
-					} else {
-						errorMessage = "Replaces Field Names cannot be an empty JSON array.";
-					}
-				}
-			}
-		} catch (e) {
-			errorMessage = "Replaces Field Names must be a valid JSON formatted array.";
-		}
+VALUES ('cf61d949-07cf-4d1f-9670-2bdbebc456c7', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([ReplacesFieldNames] IS NULL OR isjson([ReplacesFieldNames])=(1) AND left(ltrim([ReplacesFieldNames]),(1))=''['' AND replace(replace(replace(replace([ReplacesFieldNames],char((32)),''''),char((9)),''''),char((13)),''''),char((10)),'''')<>''[]'')', 'public ValidateReplacesFieldNamesIsNonEmptyJsonArray(result: ValidationResult) {
+    if (this.ReplacesFieldNames != null) {
+        let isValid = false;
+        try {
+            const trimmed = this.ReplacesFieldNames.trim();
+            if (trimmed.startsWith("[")) {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    isValid = true;
+                }
+            }
+        } catch (e) {
+            // JSON parsing failed
+        }
 
-		if (!isValid) {
-			result.Errors.push(new ValidationErrorInfo(
-				"ReplacesFieldNames",
-				errorMessage,
-				this.ReplacesFieldNames,
-				ValidationErrorType.Failure
-			));
-		}
-	}
-}', 'The Replaces Field Names field, if provided, must be a valid, non-empty JSON array. This ensures that replacement fields are properly formatted as a list and not left as empty arrays or invalid JSON.', 'ValidateReplacesFieldNamesJsonArray', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'A98E42E3-9DD7-4A6C-B232-CF7E2A057B7C')
+        if (!isValid) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ReplacesFieldNames",
+                "Replaces Field Names must be a valid, non-empty JSON array (e.g., [\"FieldName\"]).",
+                this.ReplacesFieldNames,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+}', 'If Replaces Field Names is provided, it must be a valid, non-empty JSON array of field names.', 'ValidateReplacesFieldNamesIsNonEmptyJsonArray', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '918EFA14-DF8A-4354-9B79-59181C1991C8')
    END;
 
 -- CHECK constraint for MJ: Entity Form Contributions: Field: ReplacesSectionKeys was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'DF238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '7873FBD8-579C-4D41-BE86-1FD3B0CA6B19'
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'DF238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '11F0411F-DF79-44EA-AC8E-D6B15EF73B46'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('976843d6-cdc4-4e56-b66f-ce3bb0400375', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([ReplacesSectionKeys] IS NULL OR isjson([ReplacesSectionKeys])=(1) AND left(ltrim([ReplacesSectionKeys]),(1))=''['' AND replace(replace(replace(replace([ReplacesSectionKeys],char((32)),''''),char((9)),''''),char((13)),''''),char((10)),'''')<>''[]'')', 'public ValidateReplacesSectionKeysIsNonEmptyJsonArray(result: ValidationResult) {
+VALUES ('08c1dac7-dc88-48b8-9dc3-cf6adc5e60e7', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([ReplacesSectionKeys] IS NULL OR isjson([ReplacesSectionKeys])=(1) AND left(ltrim([ReplacesSectionKeys]),(1))=''['' AND replace(replace(replace(replace([ReplacesSectionKeys],char((32)),''''),char((9)),''''),char((13)),''''),char((10)),'''')<>''[]'')', 'public ValidateReplacesSectionKeysIsNonEmptyJsonArray(result: ValidationResult) {
 	if (this.ReplacesSectionKeys != null) {
-		const trimmed = this.ReplacesSectionKeys.trim();
-		if (!trimmed.startsWith(''['')) {
-			result.Errors.push(new ValidationErrorInfo(
-				"ReplacesSectionKeys",
-				"Replaces Section Keys must be a JSON array starting with ''[''.",
-				this.ReplacesSectionKeys,
-				ValidationErrorType.Failure
-			));
-			return;
-		}
+		let isValid = false;
+		let isEmpty = true;
 		try {
-			const parsed = JSON.parse(trimmed);
-			if (!Array.isArray(parsed)) {
-				result.Errors.push(new ValidationErrorInfo(
-					"ReplacesSectionKeys",
-					"Replaces Section Keys must be a valid JSON array.",
-					this.ReplacesSectionKeys,
-					ValidationErrorType.Failure
-				));
-			} else if (parsed.length === 0) {
-				result.Errors.push(new ValidationErrorInfo(
-					"ReplacesSectionKeys",
-					"Replaces Section Keys cannot be an empty array.",
-					this.ReplacesSectionKeys,
-					ValidationErrorType.Failure
-				));
+			const value = this.ReplacesSectionKeys.trim();
+			if (value.startsWith("[")) {
+				const parsed = JSON.parse(value);
+				if (Array.isArray(parsed)) {
+					isValid = true;
+					if (parsed.length > 0) {
+						isEmpty = false;
+					}
+				}
 			}
 		} catch (e) {
+			isValid = false;
+		}
+
+		if (!isValid) {
 			result.Errors.push(new ValidationErrorInfo(
 				"ReplacesSectionKeys",
-				"Replaces Section Keys must be a valid JSON format.",
+				"Replaces Section Keys must be a valid JSON array.",
+				this.ReplacesSectionKeys,
+				ValidationErrorType.Failure
+			));
+		} else if (isEmpty) {
+			result.Errors.push(new ValidationErrorInfo(
+				"ReplacesSectionKeys",
+				"Replaces Section Keys array cannot be empty.",
 				this.ReplacesSectionKeys,
 				ValidationErrorType.Failure
 			));
 		}
 	}
-}', 'If Replaces Section Keys is provided, it must be a valid, non-empty JSON array.', 'ValidateReplacesSectionKeysIsNonEmptyJsonArray', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '7873FBD8-579C-4D41-BE86-1FD3B0CA6B19')
+}', 'If Replaces Section Keys is provided, it must be a valid JSON array containing at least one element. It cannot be empty or just an empty array structure.', 'ValidateReplacesSectionKeysIsNonEmptyJsonArray', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '11F0411F-DF79-44EA-AC8E-D6B15EF73B46')
    END;
 
 -- CHECK constraint for MJ: Entity Form Contributions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('27e841bd-5b59-49a7-97a1-925e016be928', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([Presentation]<>''bare'' OR [Inclusion] IS NULL AND [ChromeGroup] IS NULL)', 'public ValidateBarePresentationConstraints(result: ValidationResult) {
-    if (this.Presentation === ''bare'' && (this.Inclusion != null || this.ChromeGroup != null)) {
-        result.Errors.push(new ValidationErrorInfo(
-            "Presentation",
-            "When Presentation is set to ''bare'', both Inclusion and ChromeGroup must be empty.",
-            this.Presentation,
-            ValidationErrorType.Failure
-        ));
-    }
-}', 'If the presentation is set to ''bare'', then both inclusion and chrome group must be empty to ensure proper layout rendering.', 'ValidateBarePresentationConstraints', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792')
-   END;
-
--- CHECK constraint for MJ: Entity Form Contributions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'
-   )
-   BEGIN
-      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('f125b323-f3da-4d4d-9f85-e12f6abf75ea', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '(((((case when [ReplacesSectionKey] IS NULL then (0) else (1) end+case when [RelatedEntityID] IS NULL then (0) else (1) end)+case when [ReplacesFieldNames] IS NULL then (0) else (1) end)+case when [ReplacesSectionKeys] IS NULL then (0) else (1) end)+case when [InSectionKey] IS NULL then (0) else (1) end)<=(1))', 'public ValidateMutuallyExclusiveConfigurationFields(result: ValidationResult) {
-	let populatedCount = 0;
+VALUES ('2ca14b9e-f203-4b12-9e7b-bf3c921d8f8c', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '(((((case when [ReplacesSectionKey] IS NULL then (0) else (1) end+case when [RelatedEntityID] IS NULL then (0) else (1) end)+case when [ReplacesFieldNames] IS NULL then (0) else (1) end)+case when [ReplacesSectionKeys] IS NULL then (0) else (1) end)+case when [InSectionKey] IS NULL then (0) else (1) end)<=(1))', 'public ValidateMutuallyExclusiveReplacementAndRelationshipFields(result: ValidationResult) {
+	let count = 0;
 	if (this.ReplacesSectionKey != null) {
-		populatedCount++;
+		count++;
 	}
 	if (this.RelatedEntityID != null) {
-		populatedCount++;
+		count++;
 	}
 	if (this.ReplacesFieldNames != null) {
-		populatedCount++;
+		count++;
 	}
 	if (this.ReplacesSectionKeys != null) {
-		populatedCount++;
+		count++;
 	}
 	if (this.InSectionKey != null) {
-		populatedCount++;
+		count++;
 	}
 
-	if (populatedCount > 1) {
-		const errorMessage = "Only one of the following fields can be specified: ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey.";
+	if (count > 1) {
+		const message = "Only one of ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey may be specified.";
 		if (this.ReplacesSectionKey != null) {
-			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKey", errorMessage, this.ReplacesSectionKey, ValidationErrorType.Failure));
+			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKey", message, this.ReplacesSectionKey, ValidationErrorType.Failure));
 		}
 		if (this.RelatedEntityID != null) {
-			result.Errors.push(new ValidationErrorInfo("RelatedEntityID", errorMessage, this.RelatedEntityID, ValidationErrorType.Failure));
+			result.Errors.push(new ValidationErrorInfo("RelatedEntityID", message, this.RelatedEntityID, ValidationErrorType.Failure));
 		}
 		if (this.ReplacesFieldNames != null) {
-			result.Errors.push(new ValidationErrorInfo("ReplacesFieldNames", errorMessage, this.ReplacesFieldNames, ValidationErrorType.Failure));
+			result.Errors.push(new ValidationErrorInfo("ReplacesFieldNames", message, this.ReplacesFieldNames, ValidationErrorType.Failure));
 		}
 		if (this.ReplacesSectionKeys != null) {
-			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKeys", errorMessage, this.ReplacesSectionKeys, ValidationErrorType.Failure));
+			result.Errors.push(new ValidationErrorInfo("ReplacesSectionKeys", message, this.ReplacesSectionKeys, ValidationErrorType.Failure));
 		}
 		if (this.InSectionKey != null) {
-			result.Errors.push(new ValidationErrorInfo("InSectionKey", errorMessage, this.InSectionKey, ValidationErrorType.Failure));
+			result.Errors.push(new ValidationErrorInfo("InSectionKey", message, this.InSectionKey, ValidationErrorType.Failure));
 		}
 	}
-}', 'Only one of the following fields can be populated at a time: ReplacesSectionKey, RelatedEntityID, ReplacesFieldNames, ReplacesSectionKeys, or InSectionKey. This ensures that mutually exclusive configuration options do not conflict.', 'ValidateMutuallyExclusiveConfigurationFields', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792')
+}', 'Only one of the following fields can be set at a time: Replaces Section Key, Related Entity ID, Replaces Field Names, Replaces Section Keys, or In Section Key. This prevents conflicting configuration definitions.', 'ValidateMutuallyExclusiveReplacementAndRelationshipFields', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18')
    END;
 
 -- CHECK constraint for MJ: Entity Form Contributions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('b7576f27-682b-4d83-81bb-acd9cdf9c5d9', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([RelatedJoinField] IS NULL OR [RelatedEntityID] IS NOT NULL)', 'public ValidateRelatedJoinFieldRequiresRelatedEntityID(result: ValidationResult) {
-	if (this.RelatedJoinField != null && this.RelatedEntityID == null) {
+VALUES ('db9b20c5-cce2-4521-9903-6a85332370bd', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([Presentation]<>''bare'' OR [Inclusion] IS NULL AND [ChromeGroup] IS NULL)', 'public ValidatePresentationBareInclusionAndChromeGroup(result: ValidationResult) {
+	if (this.Presentation === "bare") {
+		if (this.Inclusion != null || this.ChromeGroup != null) {
+			result.Errors.push(new ValidationErrorInfo(
+				"Presentation",
+				"When Presentation is set to ''bare'', both Inclusion and ChromeGroup must be empty.",
+				this.Presentation,
+				ValidationErrorType.Failure
+			));
+		}
+	}
+}', 'If the presentation style is set to ''bare'', then both Inclusion and ChromeGroup must be left empty.', 'ValidatePresentationBareInclusionAndChromeGroup', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18')
+   END;
+
+-- CHECK constraint for MJ: Entity Form Contributions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+VALUES ('8989007e-5cf9-4cbb-98da-57b0943ca866', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([RelatedJoinField] IS NULL OR [RelatedEntityID] IS NOT NULL)', 'public ValidateRelatedJoinFieldRequiresRelatedEntityID(result: ValidationResult) {
+	if (this.RelatedJoinField != null && this.RelatedJoinField.trim() !== "" && this.RelatedEntityID == null) {
 		result.Errors.push(new ValidationErrorInfo(
-			"RelatedJoinField",
+			"RelatedEntityID",
 			"A Related Entity must be specified when a Related Join Field is provided.",
-			this.RelatedJoinField,
+			this.RelatedEntityID,
 			ValidationErrorType.Failure
 		));
 	}
-}', 'If a related join field is specified, a related entity must also be provided to ensure the join relationship is valid.', 'ValidateRelatedJoinFieldRequiresRelatedEntityID', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792')
+}', 'If a Related Join Field is specified, a Related Entity must also be provided to ensure the join field has a valid target entity.', 'ValidateRelatedJoinFieldRequiresRelatedEntityID', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18')
    END;
 
 -- CHECK constraint for MJ: Entity Form Contributions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('84739043-a38c-40a7-bb2d-03bfd3ba5527', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([Scope]=''User'' AND [UserID] IS NOT NULL AND [RoleID] IS NULL OR [Scope]=''Role'' AND [RoleID] IS NOT NULL AND [UserID] IS NULL OR [Scope]=''Global'' AND [UserID] IS NULL AND [RoleID] IS NULL)', 'public ValidateScopeUserAndRoleAssignment(result: ValidationResult) {
-	const scope = this.Scope;
-	const hasUser = this.UserID != null;
-	const hasRole = this.RoleID != null;
-
-	if (scope === "User") {
-		if (!hasUser || hasRole) {
+VALUES ('4326817d-9178-442f-ba51-b7ea092f1db9', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([Scope]=''User'' AND [UserID] IS NOT NULL AND [RoleID] IS NULL OR [Scope]=''Role'' AND [RoleID] IS NOT NULL AND [UserID] IS NULL OR [Scope]=''Global'' AND [UserID] IS NULL AND [RoleID] IS NULL)', 'public ValidateScopeAssociations(result: ValidationResult) {
+	if (this.Scope === ''User'') {
+		if (this.UserID == null) {
 			result.Errors.push(new ValidationErrorInfo(
-				"Scope",
-				"When Scope is ''User'', a User must be specified and Role must be empty.",
-				scope,
+				"UserID",
+				"A User must be specified when the Scope is set to ''User''.",
+				this.UserID,
 				ValidationErrorType.Failure
 			));
 		}
-	} else if (scope === "Role") {
-		if (!hasRole || hasUser) {
+		if (this.RoleID != null) {
 			result.Errors.push(new ValidationErrorInfo(
-				"Scope",
-				"When Scope is ''Role'', a Role must be specified and User must be empty.",
-				scope,
+				"RoleID",
+				"Role cannot be specified when the Scope is set to ''User''.",
+				this.RoleID,
 				ValidationErrorType.Failure
 			));
 		}
-	} else if (scope === "Global") {
-		if (hasUser || hasRole) {
+	} else if (this.Scope === ''Role'') {
+		if (this.RoleID == null) {
 			result.Errors.push(new ValidationErrorInfo(
-				"Scope",
-				"When Scope is ''Global'', both User and Role must be empty.",
-				scope,
+				"RoleID",
+				"A Role must be specified when the Scope is set to ''Role''.",
+				this.RoleID,
 				ValidationErrorType.Failure
 			));
 		}
-	} else {
-		result.Errors.push(new ValidationErrorInfo(
-			"Scope",
-			"Scope must be ''User'', ''Role'', or ''Global''.",
-			scope,
-			ValidationErrorType.Failure
-		));
+		if (this.UserID != null) {
+			result.Errors.push(new ValidationErrorInfo(
+				"UserID",
+				"User cannot be specified when the Scope is set to ''Role''.",
+				this.UserID,
+				ValidationErrorType.Failure
+			));
+		}
+	} else if (this.Scope === ''Global'') {
+		if (this.UserID != null) {
+			result.Errors.push(new ValidationErrorInfo(
+				"UserID",
+				"User cannot be specified when the Scope is set to ''Global''.",
+				this.UserID,
+				ValidationErrorType.Failure
+			));
+		}
+		if (this.RoleID != null) {
+			result.Errors.push(new ValidationErrorInfo(
+				"RoleID",
+				"Role cannot be specified when the Scope is set to ''Global''.",
+				this.RoleID,
+				ValidationErrorType.Failure
+			));
+		}
 	}
-}', 'Ensures that the Scope configuration is valid: if Scope is ''User'', a User ID must be provided and Role ID must be empty; if Scope is ''Role'', a Role ID must be provided and User ID must be empty; if Scope is ''Global'', both User ID and Role ID must be empty.', 'ValidateScopeUserAndRoleAssignment', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792')
+}', 'Ensures that the assigned User or Role matches the selected Scope. A ''User'' scope requires a User ID and no Role ID, a ''Role'' scope requires a Role ID and no User ID, and a ''Global'' scope requires both User ID and Role ID to be empty.', 'ValidateScopeAssociations', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18')
    END;
 
 -- CHECK constraint for MJ: Entity Form Contributions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = '9FE8274E-86EB-4900-BCDE-136E02FDB792'
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-VALUES ('b5665fb8-e376-48fe-b773-8c814e110a00', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([SectionPosition] IS NULL OR [ReplacesFieldNames] IS NOT NULL OR [InSectionKey] IS NOT NULL)', 'public ValidateSectionPositionDependencies(result: ValidationResult) {
+VALUES ('b7b03151-7b8c-4f23-97e3-be1bdee06f1e', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '([SectionPosition] IS NULL OR [ReplacesFieldNames] IS NOT NULL OR [InSectionKey] IS NOT NULL)', 'public ValidateSectionPositionDependencies(result: ValidationResult) {
+	// If SectionPosition is provided, at least one of ReplacesFieldNames or InSectionKey must also be provided
 	if (this.SectionPosition != null && this.ReplacesFieldNames == null && this.InSectionKey == null) {
 		result.Errors.push(new ValidationErrorInfo(
 			"SectionPosition",
@@ -3818,6 +3811,6 @@ VALUES ('b5665fb8-e376-48fe-b773-8c814e110a00', (SELECT [ID] FROM [${flyway:defa
 			ValidationErrorType.Failure
 		));
 	}
-}', 'If a Section Position is specified, either Replaces Field Names or In Section Key must also be provided to establish the context for the positioning.', 'ValidateSectionPositionDependencies', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '9FE8274E-86EB-4900-BCDE-136E02FDB792')
+}', 'If a Section Position is specified, either the Replaces Field Names or the In Section Key must also be provided to define the context of the position.', 'ValidateSectionPositionDependencies', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'CC48DE93-71EE-403E-B5B9-AD5BDFAABC18')
    END;
 

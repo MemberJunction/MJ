@@ -2762,6 +2762,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Prompt Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIPromptRuns"
+        SectionName="AI Prompt Runs"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIPromptRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Runs','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Runs','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJAIPromptRuns')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Skill Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJAISkillPermissions"
@@ -2787,25 +2812,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Entity Form Contributions Section -->
+    <!-- Projects Section -->
     <mj-collapsible-panel
-        SectionKey="mJEntityFormContributions"
-        SectionName="Entity Form Contributions"
-        Icon="fa fa-puzzle-piece"
+        SectionKey="mJProjects"
+        SectionName="Projects"
+        Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEntityFormContributions')"
+        [BadgeCount]="GetSectionRowCount('mJProjects')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Form Contributions','UserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Form Contributions','UserID')"
-                [AllowLoad]="IsSectionExpanded('mJEntityFormContributions')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','OwnerUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Projects','OwnerUserID')"
+                [AllowLoad]="IsSectionExpanded('mJProjects')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEntityFormContributions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJProjects', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2831,6 +2856,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAISkills', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Entity Form Contributions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityFormContributions"
+        SectionName="Entity Form Contributions"
+        Icon="fa fa-puzzle-piece"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityFormContributions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Form Contributions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Form Contributions','UserID')"
+                [AllowLoad]="IsSectionExpanded('mJEntityFormContributions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityFormContributions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

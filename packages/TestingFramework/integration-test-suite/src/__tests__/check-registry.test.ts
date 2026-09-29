@@ -25,6 +25,7 @@ import { ConcurrentChecks } from '../checks/concurrent.checks';
 import { AgentRunnerChecks } from '../checks/agent-runner.checks';
 import { RemoteOpAiAuthoringChecks } from '../checks/remote-op-ai-authoring.checks';
 import { ConversationCompactionChecks } from '../checks/conversation-compaction.checks';
+import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.checks';
 import { ListsChecks } from '../checks/lists.checks';
 import { OpenAppTeardownChecks } from '../checks/open-app-teardown.checks';
 import { UserRoutinesChecks } from '../checks/user-routines.checks';
@@ -131,6 +132,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['open-app-teardown', OpenAppTeardownChecks, 2],
         ['user-routines', UserRoutinesChecks, 16],
         ['conversation-compaction', ConversationCompactionChecks, 18], // CC1-CC18
+        ['trailing-runtime-state', TrailingRuntimeStateChecks, 6], // TRS1-TRS6
         ['agent-loop-live', AgentLoopLiveChecks, 7],
         ['shipped-agents-live', ShippedAgentsLiveChecks, 4],
         ['agent-carry-forward', AgentCarryForwardChecks, 6],
@@ -149,7 +151,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['content-vectorization', ContentVectorizationChecks, 8], // CV1-CV8 content vectorization pipeline (IT67)
         ['materialized-read', MaterializedReadChecks, 3], // MR1-MR2 served-from-snapshot proof + MR3 delete-path FK cleanup (IT79)
         ['materialized-entity-read', MaterializedEntityReadChecks, 2], // EMR1-EMR2 entity base-view RunView redirect (IT78)
-        ['form-contributions', FormContributionsChecks, 15], // FC1-FC15 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims (IT95)
+        ['form-contributions', FormContributionsChecks, 15], // FC1-FC15 metadata form contributions: schema, actions, clamp, kill switch, scoping, section claims (IT96)
         ['scoped-anon-elevation', ScopedAnonElevationChecks, 5], // SA1-SA5 scoped-anonymous elevation permission contract (IT68)
         ['entity-graph', EntityGraphChecks, 11], // EG1-EG8 related-record collection graph saves (IT72)
         ['entity-embedded', EntityEmbeddedChecks, 6], // EE1-EE6 owner-held embedded records
@@ -213,13 +215,13 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     // not fail the build. When you add/remove a check DELIBERATELY, update the count here;
     // the failure message prints a paste-ready copy of the actual registry state.
     const EXPECTED_BUNDLE_COUNTS: Record<string, number> = {
-        'actions-pipeline': 5,
+        'actions-pipeline': 6,
         'agent-artifact-tools': 9,
         'agent-carry-forward': 6,
         'agent-compaction-e2e': 3,
         'agent-external-harness': 7,
         'agent-loop-live': 7,
-        'agent-loop-standin': 6,
+        'agent-loop-standin': 11,
         'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 3,
@@ -230,7 +232,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
         'aggregates-cache': 3,
-        'ai-cost': 7,
+        'ai-cost': 10,
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
@@ -248,6 +250,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'concurrent': 2,
         'content-vectorization': 8,
         'conversation-compaction': 18,
+        'trailing-runtime-state': 6,
         'dataset-cache': 3,
         'entity-actions': 8,
         'entity-embedded': 6,
@@ -331,7 +334,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(95);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(96);
     });
 });
 
