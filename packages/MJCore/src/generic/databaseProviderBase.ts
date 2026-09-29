@@ -8,6 +8,7 @@ import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
+import { LocalCacheManager } from "./localCacheManager";
 import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { EscapeSQLString, FormatBinaryChangeValue, SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
@@ -236,6 +237,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 await this.ResetTransactionState();
             }
         }
+        // Belt and braces: whatever route the rollback took, this instance is going away, so it
+        // must not leave an entity-event batch behind. A batch whose owner is collected is
+        // unreachable while its entities keep counting as pending, which makes every cached read
+        // of them miss for the life of the process (plan §16.3 #5).
+        await LocalCacheManager.Instance.AbandonEntityEventBatch(this);
     }
 
     /** @deprecated Use {@link TransactionDepth}. */
@@ -350,6 +356,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const isNested = this.IsInTransaction || this.CurrentTransactionDepth > 0;
         await this.BeginTransaction();
         const depthAtBegin = this.CurrentTransactionDepth;
+        // Cache maintenance for the saves in this scope waits for the outermost settle: one rewrite
+        // per cached slot on commit instead of one per save, and nothing written for work that is
+        // rolled back (plan N11). Nested scopes join the same batch.
+        LocalCacheManager.Instance.BeginEntityEventBatch(this);
 
         let settled = false;
         const settle = async (commit: boolean): Promise<void> => {
@@ -375,10 +385,16 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     `per-request providers (as MJServer does) or serialize the units of work.`,
                 );
             }
-            if (commit) {
-                await this.CommitTransaction();
-            } else {
-                await this.RollbackTransaction();
+            let settledAsCommit = false;
+            try {
+                if (commit) {
+                    await this.CommitTransaction();
+                    settledAsCommit = true;
+                } else {
+                    await this.RollbackTransaction();
+                }
+            } finally {
+                await LocalCacheManager.Instance.EndEntityEventBatch(this, settledAsCommit);
             }
         };
 
