@@ -445,7 +445,7 @@ describe('DecisionFeaturePipelineDriver', () => {
             // Verify Confidence dictionary
             expect(result.Confidence).toEqual({
                 IsVIP: 0.75,
-                LowThresholdFlag: 0.4,
+                LowThresholdFlag: 0.6, // written false, so its confidence is P(no) = 1 - 0.4
                 Tier: 0.88,
                 RiskScore: 0.92,
             });

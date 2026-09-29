@@ -382,9 +382,11 @@ export class DecisionFeaturePipelineDriver extends BaseFeaturePipelineDriver {
 
             if (answer.Kind === 'Likelihood') {
                 const threshold = (output.Constraint?.Type === 'boolean' ? output.Constraint.Threshold : undefined) ?? 0.5;
-                const probability = answer.Probability ?? (answer as { Likelihood?: number }).Likelihood ?? 0;
+                const probability = answer.Probability;
                 val = probability >= threshold;
-                conf = probability;
+                // Confidence is always in the value written: P(yes) for true, P(no) for false. A
+                // confident "no" (P(yes) = 0.03) is 0.97, not 0.03.
+                conf = val ? probability : 1 - probability;
             } else if (answer.Kind === 'Choice') {
                 val = answer.Value;
                 conf = answer.Confidence;
