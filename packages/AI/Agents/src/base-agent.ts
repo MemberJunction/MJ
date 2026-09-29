@@ -3764,6 +3764,10 @@ export class BaseAgent {
             return;
         }
         const result = outcome.Result;
+        // Like every decision call, it counts toward the run's cost and tokens through its step
+        if (result) {
+            this.attachDecisionPromptRun(step, result);
+        }
         const answer = outcome.Answer;
         const withoutDescription = outcome.WithoutDescription ?? [];
         await this.finalizeStepEntity(step, outcome.Succeeded, outcome.Succeeded ? undefined : outcome.Reason, {
