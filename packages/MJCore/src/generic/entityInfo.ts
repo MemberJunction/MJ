@@ -8,7 +8,7 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, Code
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare, GeneratePluralName } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
@@ -3200,6 +3200,8 @@ export class EntityInfo extends BaseInfo {
     private _encryptedFieldsCache: EntityFieldInfo[] | null = null;
     private _datetimeFieldsCache: EntityFieldInfo[] | null = null;
     private _nameFieldCache: EntityFieldInfo | null | undefined = undefined;
+    /** Memoized computed plural, keyed by the display name it was derived from (see `DisplayNamePlural`). */
+    private _displayNamePluralCache: { source: string; plural: string } | undefined = undefined;
 
     /**
      * The set of field names this user may NOT READ on this entity — the per-request primitive
@@ -3594,6 +3596,40 @@ export class EntityInfo extends BaseInfo {
      */
     get DisplayNameOrName(): string {
         return this.DisplayName ? this.DisplayName : this.Name;
+    }
+
+    /**
+     * Returns a business-user-friendly PLURAL of the entity's display name, e.g. "Contacts", "Companies",
+     * "Addresses". Derived from `DisplayNameOrName` via `GeneratePluralName`, so a per-deployment
+     * `DisplayName` override flows through (rename the entity's DisplayName to "Member" and this returns
+     * "Members"). Handles irregular plurals and the common English rules (`-y` to `-ies`, `-s/ch/sh/x/z` to `-es`).
+     *
+     * This is the seam for surfacing the user's own domain nouns in place of the platform meta-noun
+     * "entity" on business-user surfaces (empty states, counts, headers). It is display-only: never use it
+     * as a lookup key. If the display name is already plural, `GeneratePluralName` returns it unchanged.
+     *
+     * Memoized per instance: templates read this on every change-detection pass, and the source name
+     * is fixed per metadata load (the same assumption `_nameFieldCache` relies on). The cache is keyed
+     * by the source name so it stays correct if `DisplayName` is ever mutated in place.
+     */
+    get DisplayNamePlural(): string {
+        const source = this.DisplayNameOrName;
+        if (this._displayNamePluralCache?.source !== source) {
+            this._displayNamePluralCache = { source, plural: EntityInfo.matchLeadingCase(source, GeneratePluralName(source)) };
+        }
+        return this._displayNamePluralCache.plural;
+    }
+
+    /**
+     * Gives `plural` the same leading-letter case as `source`. The irregular-plural table stores
+     * lowercase values ('person' → 'people'), so without this an empty state reads "No people to
+     * display". Only the first letter is touched: `capitalizeFirstLetterOnly` would also capitalize a
+     * name that deliberately starts lowercase ("iPhone" → "IPhones").
+     */
+    private static matchLeadingCase(source: string, plural: string): string {
+        const lead = source.charAt(0);
+        const startsUpper = lead !== lead.toLowerCase();
+        return startsUpper && plural.length > 0 ? plural.charAt(0).toUpperCase() + plural.slice(1) : plural;
     }
 
     /**

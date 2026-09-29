@@ -481,7 +481,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /** No-results message for the entity list (echoes the filter text). */
   get NoEntityResultsMessage(): string {
-    return `No entities match "${this.EntityFilterText}".`;
+    return `Nothing matches "${this.EntityFilterText}".`;
   }
 
   /**
