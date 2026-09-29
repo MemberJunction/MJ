@@ -11,8 +11,25 @@ vi.mock('@memberjunction/generic-database-provider', () => ({
     SystemUserID: 'ecafccec-6a37-ef11-86d4-000d3a4e707e',
 }));
 
+/** Change callbacks the cache registers, so a test can deliver a shared-cache event to it. */
+const cacheCallbacks = new Map<string, Set<(event: unknown) => void>>();
+
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
+    LogWarning: vi.fn(),
+    LogStatusEx: vi.fn(),
+    CacheCategory: { Default: 'default', RunViewCache: 'RunViewCache', Metadata: 'Metadata', DatasetCache: 'DatasetCache', RunQueryCache: 'RunQueryCache' },
+    BaseEntity: { BaseEventCode: 'BaseEntity' },
+    LocalCacheManager: {
+        Instance: {
+            RegisterChangeCallback(key: string, cb: (event: unknown) => void) {
+                const set = cacheCallbacks.get(key) ?? new Set();
+                set.add(cb);
+                cacheCallbacks.set(key, set);
+                return () => set.delete(cb);
+            },
+        },
+    },
     UserInfo: class {
         ID: string;
         Name: string;
@@ -34,8 +51,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 // ---------------------------------------------------------------------------
 // Import after mocks
 // ---------------------------------------------------------------------------
-import { UserCache } from '../UserCache';
-import { LogError, UserInfo } from '@memberjunction/core';
+import { UserCache, USER_CACHE_STAMP_KEY } from '../UserCache';
+import { BaseEntity, LogError, UserInfo } from '@memberjunction/core';
+import { MJEventType, MJGlobal } from '@memberjunction/global';
 
 // ---------------------------------------------------------------------------
 // Helper to reset singleton state between tests
@@ -64,24 +82,79 @@ function makeUser(id: string, name: string): UserInfo {
  */
 interface ProviderStub {
     Provider: DatabaseProviderBase;
+    /** The two `SELECT *` loads, without the staleness probe. */
     Queries: string[];
+    /** Every statement, in order. */
+    AllQueries: string[];
     ExecuteSQL: ReturnType<typeof vi.fn>;
+    /** What the staleness probe reports; tests change it to simulate a change made elsewhere. */
+    Stamp: { users: number; roles: number; updatedAt: string };
+    /** Keys written to the shared store (the peer notice). */
+    Written: Array<{ key: string; category?: string }>;
 }
 
 function makeProviderStub(
-    rows: { users?: Record<string, unknown>[]; roles?: Record<string, unknown>[] } = {}
+    rows: {
+        users?: Record<string, unknown>[];
+        roles?: Record<string, unknown>[];
+        sharedStore?: boolean;
+        entities?: Array<{ Name: string; SchemaName: string; BaseView: string }>;
+        transactionDepth?: number;
+    } = {}
 ): ProviderStub {
     const queries: string[] = [];
+    const all: string[] = [];
+    const stamp = { users: (rows.users ?? []).length, roles: (rows.roles ?? []).length, updatedAt: '2026-09-17T00:00:00.000Z' };
+    const written: Array<{ key: string; category?: string }> = [];
     const executeSQL = vi.fn(async (query: string) => {
+        all.push(query);
+        if (query.includes('UNION ALL')) {
+            return [
+                { Scope: 'users', RowCount: stamp.users, MaxUpdatedAt: stamp.updatedAt },
+                { Scope: 'roles', RowCount: stamp.roles, MaxUpdatedAt: stamp.updatedAt },
+            ];
+        }
         queries.push(query);
-        return query.includes('vwUserRoles') ? (rows.roles ?? []) : (rows.users ?? []);
+        if (query.includes('vwUserRoles')) return rows.roles ?? [];
+        // A WHERE clause means the on-demand single-user read; match it against the known users.
+        const users = rows.users ?? [];
+        if (!query.includes('WHERE')) return users;
+        const match = /'([^']*)'/.exec(query)?.[1] ?? '';
+        return users.filter(u => String(u.ID).toLowerCase() === match || String(u.Email ?? '').toLowerCase() === match);
     });
     const stub = {
         MJCoreSchemaName: '__mj',
+        // Saves raise their events inside the transaction that made them; the cache must wait for
+        // it to settle before reloading (plan §16.3 #7).
+        TransactionDepth: rows.transactionDepth ?? 0,
+        // Metadata, when the host has loaded it: the views come from the entities, not from
+        // hardcoded names. `entities` is empty by default, exercising the bootstrap fallback.
+        Entities: rows.entities ?? [],
+        EntityByName: (name: string) => (rows.entities ?? []).find(e => e.Name === name),
         QuoteSchemaAndView: (schema: string, view: string) => `[${schema}].[${view}]`,
+        QuoteIdentifier: (name: string) => `[${name}]`,
         ExecuteSQL: executeSQL,
+        LocalStorageProvider: {
+            SharedAcrossProcesses: rows.sharedStore === true,
+            SetItem: async (key: string, _value: unknown, category?: string) => { written.push({ key, category }); },
+        },
     };
-    return { Provider: stub as unknown as DatabaseProviderBase, Queries: queries, ExecuteSQL: executeSQL };
+    return { Provider: stub as unknown as DatabaseProviderBase, Queries: queries, AllQueries: all, ExecuteSQL: executeSQL, Stamp: stamp, Written: written };
+}
+
+/** Raises the global save/delete event a BaseEntity raises, for `entityName`. */
+function raiseEntityEvent(entityName: string, type: 'save' | 'delete' = 'save', writer?: unknown): void {
+    MJGlobal.Instance.RaiseEvent({
+        component: {}, event: MJEventType.ComponentEvent, eventCode: (BaseEntity as unknown as { BaseEventCode: string }).BaseEventCode,
+        args: { type, baseEntity: { EntityInfo: { Name: entityName }, ProviderToUse: writer }, payload: null },
+    });
+}
+
+/** Delivers a shared-cache event to the callback the cache registered. */
+function deliverCacheEvent(event: { CacheKey: string; Category: string; Action: string }): void {
+    for (const cb of cacheCallbacks.get(USER_CACHE_STAMP_KEY) ?? []) {
+        cb(event);
+    }
 }
 
 // =====================================================================
@@ -89,7 +162,9 @@ function makeProviderStub(
 // =====================================================================
 describe('UserCache', () => {
     beforeEach(() => {
+        UserCache.Instance.Dispose();
         resetSingleton();
+        cacheCallbacks.clear();
         vi.mocked(LogError).mockClear();
     });
 
@@ -231,6 +306,23 @@ describe('UserCache', () => {
             expect((users[1] as unknown as { UserRoles: unknown[] }).UserRoles).toHaveLength(1);
         });
 
+        it('reads the views metadata names, when metadata is loaded', async () => {
+            const stub = makeProviderStub({
+                users: [], roles: [],
+                entities: [
+                    { Name: 'MJ: Users', SchemaName: 'custom', BaseView: 'vwUsersCustom' },
+                    { Name: 'MJ: User Roles', SchemaName: 'custom', BaseView: 'vwUserRolesCustom' },
+                ],
+            });
+
+            await UserCache.Instance.Refresh(stub.Provider);
+
+            expect(stub.Queries).toEqual([
+                'SELECT * FROM [custom].[vwUsersCustom]',
+                'SELECT * FROM [custom].[vwUserRolesCustom]',
+            ]);
+        });
+
         it('should be usable with a PostgreSQL-style quoting provider', async () => {
             const stub = makeProviderStub({ users: [], roles: [] });
             const pgProvider = {
@@ -264,10 +356,10 @@ describe('UserCache', () => {
             const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [] });
 
             await UserCache.Instance.Refresh(stub.Provider, 1000);
-            expect(stub.ExecuteSQL).toHaveBeenCalledTimes(2); // users + roles, one pass
+            expect(stub.Queries).toHaveLength(2); // users + roles, one pass (the staleness probe is separate)
 
             await vi.advanceTimersByTimeAsync(1000);
-            expect(stub.ExecuteSQL).toHaveBeenCalledTimes(4); // second pass, same provider
+            expect(stub.Queries).toHaveLength(4); // second pass, same provider
             expect(stub.Queries).toEqual([
                 'SELECT * FROM [__mj].[vwUsers]',
                 'SELECT * FROM [__mj].[vwUserRoles]',
@@ -282,7 +374,7 @@ describe('UserCache', () => {
             await UserCache.Instance.Refresh(stub.Provider);
             await vi.advanceTimersByTimeAsync(60_000);
 
-            expect(stub.ExecuteSQL).toHaveBeenCalledTimes(2);
+            expect(stub.Queries).toHaveLength(2);
         });
 
         it('should not schedule a refresh when the interval is zero', async () => {
@@ -291,7 +383,7 @@ describe('UserCache', () => {
             await UserCache.Instance.Refresh(stub.Provider, 0);
             await vi.advanceTimersByTimeAsync(60_000);
 
-            expect(stub.ExecuteSQL).toHaveBeenCalledTimes(2);
+            expect(stub.Queries).toHaveLength(2);
         });
     });
 
@@ -395,6 +487,287 @@ describe('UserCache', () => {
         it('should return undefined for empty string search', () => {
             const result = instance.UserByName('');
             expect(result).toBeUndefined();
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // Staying current (plan §15) — the cache no longer depends on whoever calls Refresh
+    // -----------------------------------------------------------------
+    describe('staying current', () => {
+        beforeEach(() => {
+            vi.useFakeTimers();
+        });
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        const settle = async () => {
+            await vi.advanceTimersByTimeAsync(UserCache.ChangeDebounceMs + UserCache.PeerNoticeJitterMs + 10);
+        };
+
+        it('reloads when a user is saved in this process, and tells other servers', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [], sharedStore: true });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            raiseEntityEvent('MJ: Users');
+            await settle();
+
+            expect(stub.Queries).toHaveLength(2);
+            expect(stub.Written).toEqual([{ key: USER_CACHE_STAMP_KEY, category: 'default' }]);
+        });
+
+        it('reloads when a user role changes, and ignores unrelated entities', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            raiseEntityEvent('MJ: AI Models');
+            raiseEntityEvent('MJ: AI Models', 'delete');
+            await settle();
+            expect(stub.Queries).toHaveLength(0);
+
+            raiseEntityEvent('MJ: User Roles', 'delete');
+            await settle();
+            expect(stub.Queries).toHaveLength(2);
+        });
+
+        it('collects a burst of changes into one reload', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            for (let i = 0; i < 25; i++) raiseEntityEvent('MJ: Users');
+            await settle();
+
+            expect(stub.Queries).toHaveLength(2);
+        });
+
+        it('does not write the peer notice when the store is private to this process', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] }); // sharedStore not set
+            await UserCache.Instance.Refresh(stub.Provider);
+
+            raiseEntityEvent('MJ: Users');
+            await settle();
+
+            expect(stub.Written).toEqual([]);
+        });
+
+        it("reloads when another server's notice arrives, and does not echo it back", async () => {
+            const stub = makeProviderStub({ users: [], roles: [], sharedStore: true });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            deliverCacheEvent({ CacheKey: USER_CACHE_STAMP_KEY, Category: 'default', Action: 'set' });
+            await settle();
+
+            expect(stub.Queries).toHaveLength(2);
+            expect(stub.Written).toEqual([]); // a peer's change must not publish another notice
+        });
+
+        it('reloads when a tool clears the shared RunView cache, but not for other categories', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            deliverCacheEvent({ CacheKey: 'Metadata', Category: 'Metadata', Action: 'category_cleared' });
+            await settle();
+            expect(stub.Queries).toHaveLength(0);
+
+            deliverCacheEvent({ CacheKey: 'RunViewCache', Category: 'RunViewCache', Action: 'category_cleared' });
+            await settle();
+            expect(stub.Queries).toHaveLength(2);
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // Reloading around the transaction that made the change (plan §16.3 #7)
+    // -----------------------------------------------------------------
+    describe('reloading waits for the writing transaction', () => {
+        beforeEach(() => { vi.useFakeTimers(); });
+        afterEach(() => { vi.useRealTimers(); });
+
+        const advance = async (ms: number) => { await vi.advanceTimersByTimeAsync(ms); };
+
+        it('does not reload while the transaction that saved the user is still open', async () => {
+            const stub = makeProviderStub({ users: [], roles: [], sharedStore: true });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            // A save inside a transaction: the row is not visible to another connection yet.
+            (stub.Provider as unknown as { TransactionDepth: number }).TransactionDepth = 1;
+            raiseEntityEvent('MJ: Users');
+            await advance(UserCache.ChangeDebounceMs + UserCache.PeerNoticeJitterMs + 10);
+
+            expect(stub.Queries).toHaveLength(0);       // no read of a half-written world
+            expect(stub.Written).toEqual([]);           // and no peer told to reload early
+
+            // The transaction commits.
+            (stub.Provider as unknown as { TransactionDepth: number }).TransactionDepth = 0;
+            await advance(UserCache.TransactionWaitMs + 10);
+
+            expect(stub.Queries).toHaveLength(2);
+            expect(stub.Written).toEqual([{ key: USER_CACHE_STAMP_KEY, category: 'default' }]);
+        });
+
+        it('waits for the provider that made the write, not the one this cache reads through', async () => {
+            // MJServer builds a provider per request and a resolver saves through THAT one; the
+            // cache reads through the process-wide provider, whose depth is always 0. Watching the
+            // wrong provider is the same as not waiting at all — and a single stub playing both
+            // roles cannot tell the difference, which is why the first version of this fix passed
+            // its tests and would not have worked on a server (plan §22).
+            const reader = makeProviderStub({ users: [], roles: [], sharedStore: true });
+            await UserCache.Instance.Refresh(reader.Provider);
+            reader.Queries.length = 0;
+
+            const requestProvider = { TransactionDepth: 1 };
+            raiseEntityEvent('MJ: Users', 'save', requestProvider);
+            await advance(UserCache.ChangeDebounceMs + UserCache.PeerNoticeJitterMs + 10);
+
+            expect(reader.Queries).toHaveLength(0); // the request's transaction is still open
+            expect(reader.Written).toEqual([]);
+
+            requestProvider.TransactionDepth = 0;   // the request commits
+            await advance(UserCache.TransactionWaitMs + 10);
+
+            expect(reader.Queries).toHaveLength(2);
+            expect(reader.Written).toEqual([{ key: USER_CACHE_STAMP_KEY, category: 'default' }]);
+        });
+
+        it('reloads immediately when the write was made outside any transaction', async () => {
+            const reader = makeProviderStub({ users: [], roles: [] });
+            await UserCache.Instance.Refresh(reader.Provider);
+            reader.Queries.length = 0;
+
+            raiseEntityEvent('MJ: Users', 'save', { TransactionDepth: 0 });
+            await advance(UserCache.ChangeDebounceMs + UserCache.PeerNoticeJitterMs + 10);
+
+            expect(reader.Queries).toHaveLength(2);
+        });
+
+        it('gives up waiting after a bounded number of windows, so a stuck transaction cannot block it forever', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+            (stub.Provider as unknown as { TransactionDepth: number }).TransactionDepth = 1; // never settles
+
+            raiseEntityEvent('MJ: Users');
+            await advance(UserCache.ChangeDebounceMs + UserCache.PeerNoticeJitterMs + 10
+                + UserCache.TransactionWaitMs * (UserCache.MaxTransactionWaits + 2));
+
+            expect(stub.Queries).toHaveLength(2);
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // The periodic safety net
+    // -----------------------------------------------------------------
+    describe('RefreshIfChangedInDatabase', () => {
+        it('does not reload when the database matches what the cache was built from', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(false);
+            expect(stub.Queries).toHaveLength(0); // the probe only, no reload
+        });
+
+        it('reloads when a row was added, changed or removed outside MJ', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice' }], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            stub.Stamp.users = 2; // someone inserted a row with raw SQL
+            expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(true);
+            expect(stub.Queries).toHaveLength(2);
+
+            stub.Queries.length = 0;
+            stub.Stamp.updatedAt = '2026-09-18T00:00:00.000Z'; // an update, same row count
+            expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(true);
+            expect(stub.Queries).toHaveLength(2);
+        });
+
+        it('does nothing when this process never had a provider', async () => {
+            expect(await UserCache.Instance.RefreshIfChangedInDatabase()).toBe(false);
+        });
+    });
+
+    // -----------------------------------------------------------------
+    // FindUser — a miss is a question for the database, not an answer
+    // -----------------------------------------------------------------
+    describe('FindUser', () => {
+        it('answers from the cache without touching the database', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice', Email: 'alice@example.com' }], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            expect((await UserCache.Instance.FindUser({ Email: 'ALICE@example.com ' }))?.ID).toBe('id1');
+            expect((await UserCache.Instance.FindUser({ ID: 'ID1' }))?.ID).toBe('id1');
+            expect(stub.Queries).toHaveLength(0);
+        });
+
+        it('finds a user created after this process last refreshed, and caches it', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice', Email: 'alice@example.com' }], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            // A user created on another server, after this process loaded its cache.
+            (stub.Provider as unknown as { ExecuteSQL: unknown }); // provider unchanged; the rows below are new
+            const rows = [{ ID: 'id2', Name: 'Bob', Email: 'bob@example.com' }];
+            stub.ExecuteSQL.mockImplementation(async (query: string) => {
+                if (query.includes('UNION ALL')) return [{ Scope: 'users', RowCount: 2, MaxUpdatedAt: '' }, { Scope: 'roles', RowCount: 0, MaxUpdatedAt: '' }];
+                if (query.includes('vwUserRoles')) return [];
+                stub.Queries.push(query);
+                return query.includes('WHERE') ? rows : rows;
+            });
+            stub.Queries.length = 0;
+
+            const found = await UserCache.Instance.FindUser({ Email: 'bob@example.com' });
+
+            expect(found?.ID).toBe('id2');
+            expect(UserCache.Instance.Users.map(u => u.ID)).toContain('id2'); // cached for next time
+            stub.Queries.length = 0;
+            await UserCache.Instance.FindUser({ Email: 'bob@example.com' });
+            expect(stub.Queries).toHaveLength(0);
+        });
+
+        it('asks the database once for a user that does not exist, then remembers', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            expect(await UserCache.Instance.FindUser({ Email: 'nobody@example.com' })).toBeUndefined();
+            const afterFirst = stub.Queries.length;
+            expect(afterFirst).toBeGreaterThan(0);
+
+            expect(await UserCache.Instance.FindUser({ Email: 'nobody@example.com' })).toBeUndefined();
+            expect(stub.Queries).toHaveLength(afterFirst); // no second read within the retry interval
+        });
+
+        it('reads only that user\'s roles on a miss, not the whole role table', async () => {
+            const stub = makeProviderStub({ users: [{ ID: 'id1', Name: 'Alice', Email: 'alice@example.com' }], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+            stub.Queries.length = 0;
+
+            await UserCache.Instance.FindUser({ Email: 'alice2@example.com' });
+
+            const roleReads = stub.Queries.filter(q => q.includes('vwUserRoles'));
+            // Either no role query at all (no user matched) or one scoped by UserID — never a scan.
+            expect(roleReads.every(q => q.includes('WHERE'))).toBe(true);
+        });
+
+        it('bounds what it remembers, so probing distinct addresses cannot grow the map without limit', async () => {
+            const stub = makeProviderStub({ users: [], roles: [] });
+            await UserCache.Instance.Refresh(stub.Provider);
+
+            for (let i = 0; i < UserCache.MaxRememberedMisses + 50; i++) {
+                await UserCache.Instance.FindUser({ Email: `probe-${i}@example.com` });
+            }
+
+            const misses = (UserCache.Instance as unknown as { _recentMisses: Map<string, number> })._recentMisses;
+            expect(misses.size).toBeLessThanOrEqual(UserCache.MaxRememberedMisses);
+        });
+
+        it('returns undefined without a database read when no provider was ever configured', async () => {
+            expect(await UserCache.Instance.FindUser({ Email: 'alice@example.com' })).toBeUndefined();
         });
     });
 });
