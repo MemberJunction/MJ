@@ -1103,8 +1103,10 @@ import {
     TranscriptSegmenter,
 } from '@memberjunction/ai-segmentation';
 
-// @memberjunction/ai-vector-dupe (1 classes)
+// @memberjunction/ai-vector-dupe (3 classes)
 import {
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
@@ -2277,6 +2279,8 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SemanticTextSegmenter,
     StructuralTextSegmenter,
     TranscriptSegmenter,
+    DecisionReasoningProvider,
+    DecisionThenPromptReasoningProvider,
     PromptReasoningProvider,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
@@ -2343,12 +2347,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioModelDevAgent,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRunExperimentAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
@@ -2547,12 +2551,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     ModifyDocumentSectionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
-    MoveObjectAction,
-    OAuthFlowAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MoveObjectAction,
+    OAuthFlowAction,
     ObjectExistsAction,
     PDFExtractorAction,
     ParallelExecuteAction,
@@ -2626,7 +2630,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1057;
+export const CLASS_REGISTRATIONS_COUNT = 1059;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

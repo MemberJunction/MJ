@@ -1,4 +1,9 @@
 export { DuplicateRecordDetector } from './duplicateRecordDetector';
+export type {
+    DuplicateEntryCheckStatus,
+    DuplicateEntryCandidate,
+    DuplicateEntryCheckResult,
+} from './duplicateEntryCheckTypes';
 
 // Reasoning seam (pluggable LLM reasoning for duplicate detection)
 export * from './reasoning/DuplicateReasoningTypes';
@@ -6,8 +11,13 @@ export {
     DuplicateReasoningProvider,
     PROMPT_REASONING_PROVIDER_KEY,
     AGENT_REASONING_PROVIDER_KEY,
+    DECISION_REASONING_PROVIDER_KEY,
+    DECISION_THEN_PROMPT_REASONING_PROVIDER_KEY,
 } from './reasoning/DuplicateReasoningProvider';
 export { PromptReasoningProvider } from './reasoning/PromptReasoningProvider';
+export { DecisionReasoningProvider } from './reasoning/DecisionReasoningProvider';
+export type { DuplicateCandidateProbability, DuplicateDecisionResult } from './reasoning/DecisionReasoningProvider';
+export { DecisionThenPromptReasoningProvider } from './reasoning/DecisionThenPromptReasoningProvider';
 export { MatchedSetDeltaBuilder } from './reasoning/MatchedSetDeltaBuilder';
 
 // Re-export from @memberjunction/core for backward compatibility

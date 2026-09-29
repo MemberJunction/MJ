@@ -39,6 +39,7 @@
     "@memberjunction/core": "6.2.0-edge.0",
     "@memberjunction/core-entities": "6.2.0-edge.0",
     "@memberjunction/global": "6.2.0-edge.0",
+    "@memberjunction/graphql-dataprovider": "6.2.0-edge.0",
     "@memberjunction/interactive-component-types": "6.2.0-edge.0",
     "@memberjunction/ng-base-types": "6.2.0-edge.0",
     "@memberjunction/ng-code-editor": "6.2.0-edge.0",
