@@ -31,6 +31,11 @@ now the highest-value open question in this file.
 
 One carried item closes: the **GLM-5.3-FlashX OpenRouter rate** is confirmed and recorded.
 
+**Addendum (2026-09-29): GLM-5.3-Flash gets three more hosts.** Two new inference vendors, **DeepInfra**
+and **SiliconFlow**, now route GLM-5.3-Flash, each through a new OpenAI-compatible driver
+(`DeepInfraLLM`, `SiliconFlowLLM`). The Fireworks route, which was wired without a price, gets its
+cost row. See *GLM-5.3-Flash on Fireworks, DeepInfra and SiliconFlow* below.
+
 Eight edits across two files. Nothing required an expiry this week — no vendor sunset a route, and
 no price fell on an existing record.
 
@@ -296,6 +301,9 @@ Sources: <https://openrouter.ai/xiaomi/mimo-v2.6-pro> · <https://openrouter.ai/
 | MiMo V2.6 Pro | OpenRouter | *(new model)* | $0.435 / $0.87, cache $0.004 | new record | **Yes** |
 | MiMo V2.6 Flash | OpenRouter | *(new model)* | $0.14 / $0.28, cache $0.0028 | new record | **Yes** |
 | **GLM-5.3-FlashX** | **OpenRouter** | *(route wired, no price)* | **$0.37 / $1.25, cache $0.09** | **carried item closed** | **Yes** |
+| GLM-5.3-Flash | Fireworks.ai | *(route wired, no price)* | $0.15 / $0.50, cache $0.03 | gap closed | **Yes** |
+| GLM-5.3-Flash | DeepInfra | *(new vendor)* | $0.075 / $0.25, cache $0.015 (**50% promo**; list $0.15 / $0.50) | new route | **Yes** |
+| GLM-5.3-Flash | SiliconFlow | *(new vendor)* | $0.15 / $0.50, cache $0.03 | new route | **Yes** |
 
 **No existing cost row changed, and nothing was expired.** Every price movement this week arrived as
 a new model rather than a re-rate of an old one, which is why the deprecation machinery in §0.2 did
@@ -314,6 +322,45 @@ deletion in this diff.
 
 Sources: <https://openrouter.ai/z-ai/glm-5.3-flashx> ·
 <https://aihubmix.com/blog/glm-5-3-flash-pricing-compared-openrouter-z-ai-and-aihubmix>
+
+### GLM-5.3-Flash on Fireworks, DeepInfra and SiliconFlow — addendum, 2026-09-29
+
+GLM-5.3-Flash is the most-hosted open model of the month. Artificial Analysis lists nineteen
+providers. Inco (464 t/s) and Nebius (265 t/s) lead on output speed; DeepInfra and Bitdeer are
+cheapest. This addendum wires the three hosts with first-party pricing pages:
+
+| Host | APIName | Context | In / Out / Cached (per 1M) | AA speed | Notes |
+|---|---|---|---|---|---|
+| Fireworks.ai | `accounts/fireworks/models/glm-5p3-flash` | 1,048,576 | $0.15 / $0.50 / $0.03 | 181 t/s, 1.36 s TTFT | Day-zero (2026-08-26). Route already existed; only the cost row was missing. |
+| DeepInfra | `zai-org/GLM-5.3-Flash` | 1,048,576 | **$0.075 / $0.25 / $0.015** | 38 t/s, 1.25 s TTFT | 50%-off promo with no published end date; list rate is $0.15 / $0.50 / $0.03. |
+| SiliconFlow | `zai-org/GLM-5.3-Flash` | 1,048,576 | $0.15 / $0.50 / $0.03 | 47 t/s, 2.17 s TTFT | Listed 2026-09-28 11:25 UTC on the international platform. |
+
+- **The Fireworks route's `MaxInputTokens` was corrected from 1,310,720 to 1,048,576.** Fireworks
+  lists 1040k and Artificial Analysis shows 1.05M for it. The 1.3M figure matches only Z.AI's own
+  route, which is left unchanged.
+- **The DeepInfra row records the promo rate, because that is what DeepInfra bills today.** When the
+  promo ends, expire the row and add a list-rate row, the same way the OpenRouter launch promo was
+  handled. Its `StartedAt` is the date we observed the rate; DeepInfra publishes no promo start date.
+- **`MaxOutputTokens` is held at 131,072 on both new routes**, matching every other GLM-5.3-Flash
+  route. DeepInfra's "163,840" is the benchmark generation setting in its eval footnotes, not an
+  API cap.
+- **`SupportsEffortLevel` is false**, consistent with the existing routes. Artificial Analysis does
+  not classify GLM-5.3-Flash as a reasoning model.
+- **Two new drivers.** DeepInfra and SiliconFlow are both OpenAI-compatible, so `DeepInfraLLM`
+  (`@memberjunction/ai-deepinfra`, `https://api.deepinfra.com/v1/openai`) and `SiliconFlowLLM`
+  (`@memberjunction/ai-siliconflow`, `https://api.siliconflow.com/v1`) are thin `OpenAILLM`
+  subclasses, in the same shape as `MiniMaxLLM`. One real difference: both providers document
+  `max_tokens` and **not** `max_completion_tokens`, which `OpenAILLM` sends. Each driver therefore
+  mirrors the cap onto `max_tokens` through the existing `getProviderRequestExtras` hook.
+- **Live smoke test (2026-09-29): both drivers pass** plain, streaming (with usage), JSON mode and
+  native tool calls against `zai-org/GLM-5.3-Flash`. The limit check shows the override matters:
+  asked for at most 20 tokens, **SiliconFlow ignored `max_completion_tokens` alone and produced
+  5,901 tokens**, and stopped at exactly 20 once `max_tokens` was sent. DeepInfra honored either
+  parameter. SiliconFlow also spent noticeably more output tokens on the same short prompts (27 vs
+  4 for a one-word reply), which suggests it enables thinking by default. That was not confirmed,
+  but it would raise GLM-5.3-Flash's effective cost on that route.
+- **Inco** (the Artificial Analysis speed leader, 464 to 593 t/s) is in public beta with no
+  published price, and MJ has no driver for it. It is not wired.
 
 ### Checked and unchanged
 
@@ -405,6 +452,20 @@ no further action. V4 Pro still serves at unchanged billing, and remains untouch
 credential type, no inference route (no driver class exists). Verified after the edit that the lookup
 resolves against `.ai-vendors.json`, and that `metadata/.mj-sync.json`'s `directoryOrder` pushes
 `ai-vendors` **before** `ai-models`, so the vendor row is created before anything references it.
+
+**Two added in the 2026-09-29 addendum: `DeepInfra` and `SiliconFlow`.** Both are inference
+providers with `API Key` credentials and new drivers (see the GLM-5.3-Flash addendum above).
+`ai-vendors` is pushed before `ai-models`, so the new routes' lookups resolve.
+
+**Found while wiring them, reported but not fixed: four `DriverClass` values in `.ai-models.json`
+have no registered class anywhere in this repo.** They are `ZAILLM` (the Z.AI routes of GLM 5.2,
+GLM 5.3, GLM 5V Turbo, GLM-5.3-Flash and GLM-5.3-FlashX), `DeepSeekLLM`, `KimiLLM` and
+`MoonshotLLM`. The class that exists for Z.AI is `ZhipuLLM`, which GLM 5 and 5.1 use. No driver can be
+resolved for a Z.AI-direct call on those GLM models. This run did not check whether the prompt
+runner then fails over to the next route by priority (OpenRouter, Fireworks, and now DeepInfra and
+SiliconFlow for GLM-5.3-Flash) or fails the call.
+Fixing it means either renaming the routes to `ZhipuLLM` or registering an alias. That is a
+decision for the vendor-routing owner, not a metadata refresh.
 
 **One still held: `TypeSafe AI`** (carried from 2026-09-21) — blocked on the same model-type question
 as `Jev 1.13` itself. Adding the vendor without the model serves no purpose.
@@ -615,6 +676,10 @@ OpenAI October id list — were left unapplied or set conservatively for that re
 <https://en.wikipedia.org/wiki/Xiaomi_MiMo> · <https://computingforgeeks.com/xiaomi-mimo-v2-6-pro-flash/> ·
 <https://openrouter.ai/z-ai/glm-5.3-flashx> ·
 <https://aihubmix.com/blog/glm-5-3-flash-pricing-compared-openrouter-z-ai-and-aihubmix> ·
+<https://fireworks.ai/models/fireworks/glm-5p3-flash> · <https://deepinfra.com/zai-org/GLM-5.3-Flash> ·
+<https://docs.deepinfra.com/chat/overview> · <https://www.siliconflow.com/models/glm-5-3-flash> ·
+<https://www.siliconflow.com/pricing> · <https://docs.siliconflow.com/en/api-reference/chat-completions/chat-completions> ·
+<https://artificialanalysis.ai/models/glm-5-3-flash/providers> · <https://inco.ai/blog/inco-platform-aa/> ·
 <https://benchlm.ai/google/api-pricing> · <https://benchlm.ai/mistral/api-pricing> ·
 <https://pricepertoken.com/pricing-page/provider/mistral-ai> ·
 <https://www.marktechpost.com/2026/09/24/black-forest-labs-releases-flux-3-action-a-7b-open-weights-world-action-model-that-tops-robolab-120/> ·
