@@ -119,7 +119,11 @@ export interface DecisionParams {
     Questions: Record<string, DecisionQuestion>;
 
     /**
-     * Optional cancellation token / AbortSignal to abort execution.
+     * Optional signal for cancelling the request. The driver is responsible for honoring it:
+     * `BaseDecision.Decide()` does not check it and calls the driver even when it is already
+     * aborted, as `BaseLLM` does with `ChatParams.cancellationToken`. A driver that stops because
+     * the signal fired either returns a failed result or throws; in both cases `Decide()`
+     * resolves with `success: false` and empty `Answers`.
      */
     CancellationToken?: AbortSignal;
 }

@@ -18,6 +18,7 @@ import {
   MODEL,
   VENDOR,
   MODEL_TYPE,
+  CONFIG,
   makeModel,
   makeModelVendor,
   makePromptModel,
@@ -415,22 +416,84 @@ describe('BaseModelRunner.RequiredModelType enforcement', () => {
   // -------------------------------------------------------------------------
   // Case 5: Explicit model override of the wrong type
   // -------------------------------------------------------------------------
-  it('5. Explicit model override of the wrong type: returns no candidate and does not execute the wrong-type model', async () => {
+  it('5. Explicit model override of the wrong type: fails naming both types and does not execute the wrong-type model', async () => {
     const runner = new ConcreteTestRunner('LLM');
     const prompt = makePrompt({ AIModelTypeID: null });
+    const expected = 'Model override "Text Embedding 3 Large" is type "Embeddings", but this runner requires "LLM"';
 
-    const candidates = runner.invokeBuildModelVendorCandidates(prompt, EMBEDDING_MODEL_ID);
+    expect(() => runner.invokeBuildModelVendorCandidates(prompt, EMBEDDING_MODEL_ID)).toThrow(expected);
 
-    expect(candidates).toEqual([]);
-
-    // Also verify via AIPromptRunner.ExecutePrompt
+    // Through ExecutePrompt the caller sees the reason, not the generic "no candidates" text.
     const promptRunner = new AIPromptRunner();
     const result = await promptRunner.ExecutePrompt(
       makeParams(prompt, { override: { modelId: EMBEDDING_MODEL_ID } })
     );
 
     expect(result.success).toBe(false);
+    expect(result.errorMessage).toContain(expected);
+    expect(result.errorMessage).not.toContain('No model-vendor candidates were available');
     expect(testLLM.CalledModels.length).toBe(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Case 5b: every other path by which a binding can become a candidate filters by type.
+  // Each test drives exactly one filter site and goes red if only that site stops filtering.
+  // -------------------------------------------------------------------------
+  describe('5b. Wrong-type bindings are skipped on every selection path', () => {
+    const CHILD_CONFIG = 'cfg-child-of-standard';
+    const skipMessage = /Skipping model "Text Embedding 3 Large".*does not match runner required type "LLM"/;
+
+    it('Default strategy: a wrong-type binding is skipped (addPromptSpecificCandidates)', () => {
+      const runner = new ConcreteTestRunner('LLM');
+      const logSpy = vi.spyOn(core, 'LogStatus');
+      h.state.promptModels = [
+        makePromptModel({ PromptID: 'prompt-1', ModelID: EMBEDDING_MODEL_ID, Priority: 200, Status: 'Active' }),
+        makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeSonnet45, Priority: 100, Status: 'Active' }),
+      ];
+      const prompt = makePrompt({ AIModelTypeID: null, SelectionStrategy: 'Default' });
+
+      const candidates = runner.invokeBuildModelVendorCandidates(prompt);
+
+      expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(skipMessage));
+      expect(candidates.length).toBeGreaterThan(0);
+      expect(candidates.some(c => c.model.ID === EMBEDDING_MODEL_ID)).toBe(false);
+    });
+
+    it('a wrong-type binding on a parent configuration is skipped (configuration fallback, parent chain)', () => {
+      const runner = new ConcreteTestRunner('LLM');
+      const logSpy = vi.spyOn(core, 'LogStatus');
+      h.state.configurations = [
+        ...h.state.configurations,
+        { ID: CHILD_CONFIG, Name: 'Child of Standard', ParentID: CONFIG.Standard },
+      ];
+      h.state.promptModels = [
+        makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeSonnet45, Priority: 100, Status: 'Active', ConfigurationID: CHILD_CONFIG }),
+        makePromptModel({ PromptID: 'prompt-1', ModelID: EMBEDDING_MODEL_ID, Priority: 200, Status: 'Active', ConfigurationID: CONFIG.Standard }),
+      ];
+      const prompt = makePrompt({ AIModelTypeID: null, SelectionStrategy: 'Default' });
+
+      const candidates = runner.invokeBuildModelVendorCandidates(prompt, undefined, CHILD_CONFIG);
+
+      expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(skipMessage));
+      expect(candidates.some(c => c.model.ID === MODEL.ClaudeSonnet45)).toBe(true);
+      expect(candidates.some(c => c.model.ID === EMBEDDING_MODEL_ID)).toBe(false);
+    });
+
+    it('a wrong-type binding with no configuration is skipped (configuration fallback, universal models)', () => {
+      const runner = new ConcreteTestRunner('LLM');
+      const logSpy = vi.spyOn(core, 'LogStatus');
+      h.state.promptModels = [
+        makePromptModel({ PromptID: 'prompt-1', ModelID: MODEL.ClaudeSonnet45, Priority: 100, Status: 'Active', ConfigurationID: CONFIG.Standard }),
+        makePromptModel({ PromptID: 'prompt-1', ModelID: EMBEDDING_MODEL_ID, Priority: 200, Status: 'Active' }),
+      ];
+      const prompt = makePrompt({ AIModelTypeID: null, SelectionStrategy: 'Default' });
+
+      const candidates = runner.invokeBuildModelVendorCandidates(prompt, undefined, CONFIG.Standard);
+
+      expect(logSpy).toHaveBeenCalledWith(expect.stringMatching(skipMessage));
+      expect(candidates.some(c => c.model.ID === MODEL.ClaudeSonnet45)).toBe(true);
+      expect(candidates.some(c => c.model.ID === EMBEDDING_MODEL_ID)).toBe(false);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -523,6 +586,18 @@ describe('BaseModelRunner.RequiredModelType enforcement', () => {
 
       await expect(runner.executePromptInParallel(prompt, 'rendered', makeParams(prompt), new Date()))
         .rejects.toThrow(/Embeddings.*but this runner requires "LLM"/);
+      expect(plan).not.toHaveBeenCalled();
+    });
+
+    it('refuses a model-selection prompt typed differently before the planner runs', async () => {
+      const runner = new AIPromptRunner() as unknown as ParallelHooks;
+      const plan = vi.fn((..._args: unknown[]): unknown[] => []);
+      runner._executionPlanner = { createExecutionPlan: plan };
+      const prompt = makePrompt({ AIModelTypeID: null, ParallelizationMode: 'ModelSpecific' });
+      const selectionPrompt = makePrompt({ ID: 'prompt-selection', Name: 'Selection Prompt', AIModelTypeID: MODEL_TYPE.Embeddings });
+
+      await expect(runner.executePromptInParallel(prompt, 'rendered', makeParams(prompt, { modelSelectionPrompt: selectionPrompt }), new Date()))
+        .rejects.toThrow(/Prompt "Selection Prompt" requires model type "Embeddings".*but this runner requires "LLM"/);
       expect(plan).not.toHaveBeenCalled();
     });
   });

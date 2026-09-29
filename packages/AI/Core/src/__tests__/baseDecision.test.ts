@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { BaseDecision } from '../generic/baseDecision';
+import { ModelUsage } from '../generic/baseModel';
 import {
     DecisionParams,
     DecisionResult,
     LikelihoodAnswer,
+    LikelihoodQuestion,
     ChoiceAnswer,
     ScoreAnswer,
 } from '../generic/decision.types';
@@ -24,6 +27,28 @@ class FakeDecision extends BaseDecision {
             return this.decideHandler(params);
         }
         return new DecisionResult(true, new Date(), new Date());
+    }
+}
+
+const REGISTERED_PROVIDER_KEY = 'BaseDecisionTestProvider';
+
+/**
+ * A driver registered the way a real one is, so the factory tests below resolve it by key
+ * instead of constructing it directly. It echoes the API key it was built with.
+ */
+@RegisterClass(BaseDecision, REGISTERED_PROVIDER_KEY)
+class RegisteredTestDecision extends BaseDecision {
+    public get ReceivedApiKey(): string {
+        return this.apiKey;
+    }
+
+    protected async DoDecide(params: DecisionParams): Promise<DecisionResult> {
+        const result = new DecisionResult(true, new Date(), new Date());
+        result.ResolvedModel = `${params.Model}-2026-09-01`;
+        result.Answers = {
+            isUrgent: { Kind: 'Likelihood', Probability: 0.7 },
+        };
+        return result;
     }
 }
 
@@ -727,13 +752,93 @@ describe('BaseDecision', () => {
                 expect(result.Answers).toEqual({});
             });
         });
+
+        describe('Cost telemetry on a rejected answer', () => {
+            it('keeps Usage and ResolvedModel while clearing Answers', async () => {
+                const usage = new ModelUsage(120, 8, 0.0004, 'USD');
+                fake.decideHandler = async () => {
+                    const res = createValidResult();
+                    (res.Answers.isEligible as LikelihoodAnswer).Probability = 1.5;
+                    res.Usage = usage;
+                    res.ResolvedModel = 'test-decision-model-2026-09-01';
+                    return res;
+                };
+
+                const result = await fake.Decide(createValidParams());
+
+                expect(result.success).toBe(false);
+                expect(result.errorMessage).toContain("Question 'isEligible': Likelihood Probability must be a finite number in [0, 1]");
+                expect(result.Answers).toEqual({});
+                expect(result.Usage).toBe(usage);
+                expect(result.ResolvedModel).toBe('test-decision-model-2026-09-01');
+            });
+        });
+
+        describe('Keys inherited from Object.prototype are not treated as present', () => {
+            it("rejects a Choice option Value of 'toString' that is missing from Probabilities", async () => {
+                const params = createValidParams();
+                params.Questions = {
+                    route: {
+                        Kind: 'Choice',
+                        Instructions: 'Pick the handler',
+                        Options: [
+                            { Value: 'toString', Description: 'An option whose identifier shadows an Object method' },
+                            { Value: 'billing', Description: 'Billing team' },
+                        ],
+                    },
+                };
+                fake.decideHandler = async () => {
+                    const res = new DecisionResult(true, new Date(), new Date());
+                    res.Answers = {
+                        route: { Kind: 'Choice', Value: 'billing', Probabilities: { billing: 1 }, Confidence: 0.9 },
+                    };
+                    return res;
+                };
+
+                const result = await fake.Decide(params);
+
+                expect(result.success).toBe(false);
+                expect(result.errorMessage).toContain("Question 'route': Probabilities missing key for option 'toString'");
+                expect(result.Answers).toEqual({});
+            });
+
+            it("rejects an extra answer keyed 'constructor'", async () => {
+                fake.decideHandler = async () => {
+                    const res = createValidResult();
+                    res.Answers['constructor'] = { Kind: 'Likelihood', Probability: 0.5 };
+                    return res;
+                };
+
+                const result = await fake.Decide(createValidParams());
+
+                expect(result.success).toBe(false);
+                expect(result.errorMessage).toContain("Answer provided for unexpected question 'constructor'");
+                expect(result.Answers).toEqual({});
+            });
+
+            it("reports an unanswered question keyed 'toString' as missing, and only as missing", async () => {
+                const params = createValidParams();
+                const overdue: LikelihoodQuestion = { Kind: 'Likelihood', Instructions: 'Is the account overdue?' };
+                params.Questions = { toString: overdue };
+                fake.decideHandler = async () => new DecisionResult(true, new Date(), new Date());
+
+                const result = await fake.Decide(params);
+
+                expect(result.success).toBe(false);
+                expect(result.errorMessage).toBe("Question 'toString': Missing answer");
+                expect(result.Answers).toEqual({});
+            });
+        });
     });
 
     describe('4. Driver failure pass-through', () => {
-        it('passes through driver result with success === false and sets timing', async () => {
+        it('passes through driver result with success === false, sets timing, and clears any Answers the driver filled in', async () => {
+            const usage = new ModelUsage(50, 0);
             fake.decideHandler = async () => {
                 const res = new DecisionResult(false, new Date(0), new Date(0));
                 res.errorMessage = 'Rate limit exceeded on provider';
+                res.Answers = { isEligible: { Kind: 'Likelihood', Probability: 2 } };
+                res.Usage = usage;
                 return res;
             };
 
@@ -741,6 +846,8 @@ describe('BaseDecision', () => {
 
             expect(result.success).toBe(false);
             expect(result.errorMessage).toBe('Rate limit exceeded on provider');
+            expect(result.Answers).toEqual({});
+            expect(result.Usage).toBe(usage);
             expect(result.startTime).toBeInstanceOf(Date);
             expect(result.endTime).toBeInstanceOf(Date);
             expect(result.startTime.getTime()).toBeGreaterThan(0);
@@ -922,6 +1029,29 @@ describe('BaseDecision', () => {
             expect(result.success).toBe(false);
             expect(result.errorMessage).toContain("Question 'riskScore': Probabilities sum to 1.015, which is outside tolerance [0.99, 1.01]");
             expect(result.Answers).toEqual({});
+        });
+    });
+
+    describe('7. Resolution through MJGlobal.ClassFactory', () => {
+        it('resolves a @RegisterClass(BaseDecision, key) driver by key and runs Decide() through the base', async () => {
+            const decider = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(
+                BaseDecision,
+                REGISTERED_PROVIDER_KEY,
+                'factory-api-key'
+            );
+
+            expect(decider).toBeInstanceOf(RegisteredTestDecision);
+            expect((decider as RegisteredTestDecision).ReceivedApiKey).toBe('factory-api-key');
+
+            const result = await decider!.Decide({
+                Model: 'decision-model',
+                State: 'Ticket: the checkout page returns a 500 for every customer',
+                Questions: { isUrgent: { Kind: 'Likelihood', Instructions: 'Does this need a response within the hour?' } },
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.Answers).toEqual({ isUrgent: { Kind: 'Likelihood', Probability: 0.7 } });
+            expect(result.ResolvedModel).toBe('decision-model-2026-09-01');
         });
     });
 });
