@@ -24,7 +24,7 @@ npm install @memberjunction/ng-core-entity-forms
 - @memberjunction/core
 - @memberjunction/core-entities
 - @memberjunction/ng-base-forms
-- Various MemberJunction and Kendo UI components
+- Various MemberJunction UI components
 
 ## Usage
 
@@ -162,7 +162,7 @@ In doubt: "generated form + extras" → Pattern 1. "generated form is the wrong 
   - `{entity-name}-form.component.html` (template)
 - **Inheritance**: Extend generated form components (e.g., `TemplateFormComponent`) which inherit from `BaseFormComponent`
 - **Registration**: Use `@RegisterClass(BaseFormComponent, 'EntityName')` decorator
-- **Module Integration**: Add to `custom-forms.module.ts` declarations, exports, and import required Kendo modules
+- **Module Integration**: Add to `custom-forms.module.ts` declarations, exports, and import required MJ modules
 
 ### **Entity & Data Management**
 - **Strong Typing**: Never use `any` - always use proper entity types (`TemplateEntity`, `TemplateCategoryEntity`)
@@ -173,7 +173,7 @@ In doubt: "generated form + extras" → Pattern 1. "generated form is the wrong 
 ### **Angular Best Practices**
 - **Modern Syntax**: Always use `@if`, `@for`, `@switch` instead of structural directives
 - **Track Functions**: Include `track` in `@for` loops for performance
-- **Component Integration**: Use Kendo UI components for consistency (textbox, textarea, dropdownlist, combobox, numerictextbox, button)
+- **Component Integration**: Use MJ UI components for consistency (`mj-input`, `mj-textarea`, `mj-dropdown`, `mj-combobox`, `mj-numeric-input`, `button mjButton`)
 
 ### **Save Lifecycle & Validation**
 - **Override SaveRecord()**: Handle complex saving by overriding `SaveRecord(StopEditModeAfterSave: boolean)`
@@ -264,9 +264,8 @@ Each entity form typically follows this structure:
 - @memberjunction/ng-code-editor
 - @memberjunction/ng-timeline
 - @memberjunction/ng-join-grid
-- @progress/kendo-angular-grid
-- @progress/kendo-angular-dropdowns
-- @progress/kendo-angular-dialog
+- `ag-grid-angular`
+- `@memberjunction/ng-ui-components`
 
 ### AI & Notification Dependencies
 - @memberjunction/ai

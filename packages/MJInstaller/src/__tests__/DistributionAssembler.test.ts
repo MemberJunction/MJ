@@ -57,7 +57,6 @@ async function seedBaseFixture(dir: string): Promise<void> {
   await writeUnder(dir, 'packages/MJExplorer/src/main.ts', 'bootstrap();');
   await writeUnder(dir, 'packages/MJExplorer/src/environments/environment.ts', 'export const secret = 1;');
   await writeUnder(dir, 'packages/MJExplorer/src/app/generated/form.ts', 'export const f = 1;');
-  await writeUnder(dir, 'packages/MJExplorer/kendo-ui-license.txt', 'LICENSE');
 
   // Generated packages (server)
   await writeUnder(dir, 'packages/GeneratedEntities/package.json', '{ "name": "mj_generatedentities", "scripts": { "build": "tsc && tsc-alias" } }');
@@ -116,14 +115,13 @@ describe('DistributionAssembler.Plan', () => {
     expect(d).toContain('SQL Scripts/MJ_Base.sql');
   });
 
-  it('excludes generated, node_modules, environments, kendo, and SQL exclusions', async () => {
+  it('excludes generated, node_modules, environments, and SQL exclusions', async () => {
     const ops = await new DistributionAssembler().Plan({ SourceDir: sourceDir });
     const d = dests(ops);
     expect(d).not.toContain('apps/MJAPI/src/generated/gen.ts');
     expect(d.some((p) => p.includes('node_modules'))).toBe(false);
     expect(d).not.toContain('apps/MJExplorer/src/environments/environment.ts');
     expect(d).not.toContain('apps/MJExplorer/src/app/generated/form.ts');
-    expect(d).not.toContain('apps/MJExplorer/kendo-ui-license.txt');
     expect(d).not.toContain('SQL Scripts/_all_entities.sql');
     expect(d).not.toContain('SQL Scripts/generated/gen.sql');
     expect(d).not.toContain('SQL Scripts/internal_only/secret.sql');

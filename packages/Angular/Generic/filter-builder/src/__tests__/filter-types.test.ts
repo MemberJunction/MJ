@@ -1,18 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-  IsCompositeFilter,
-  IsSimpleFilter,
   CreateEmptyFilter,
   CreateFilterRule,
   GetDefaultOperator,
   GetDefaultValue,
   EMPTY_FILTER
 } from '../lib/types/filter.types';
-import type {
-  FilterDescriptor,
-  CompositeFilterDescriptor,
-  FilterFieldType
-} from '../lib/types/filter.types';
+import { IsCompositeFilter, IsSimpleFilter } from '@memberjunction/core';
+import type { FilterFieldType } from '../lib/types/filter.types';
+import type { FilterDescriptor, CompositeFilterDescriptor } from '@memberjunction/core';
 
 describe('IsCompositeFilter', () => {
   it('should return true for composite filters', () => {

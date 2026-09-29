@@ -51,7 +51,7 @@ with components. Three real costs:
 
 | Cost | Symptom |
 |---|---|
-| **Non-Angular consumers had to fork.** | React/Vue apps that wanted MJ's conversation engine could only get it by importing the Angular widget — which pulled in `@angular/core`, Kendo, ag-Grid, Markdown rendering, and a dozen UI deps they didn't need. |
+| **Non-Angular consumers had to fork.** | React/Vue apps that wanted MJ's conversation engine could only get it by importing the Angular widget — which pulled in `@angular/core`, the MJ UI component kit, ag-Grid, Markdown rendering, and a dozen UI deps they didn't need. |
 | **Headless test harnesses had to mock Angular DI.** | Server-side tests of "send a message → agent replies" needed a fake `MJNotificationService`, `ActiveTasksService`, etc. just to call `processMessage`. |
 | **Default-agent logic was duplicated.** | The string `'Sage'` appeared in 3 files as a `.find()` lookup. Adding a per-app default required touching all 3. |
 

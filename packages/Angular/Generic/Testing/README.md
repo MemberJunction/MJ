@@ -208,7 +208,7 @@ The package exports several TypeScript interfaces for working with test data:
 | `@memberjunction/ng-notifications` | Notification system |
 | `@memberjunction/ng-shared` | Shared Angular utilities |
 | `@memberjunction/testing-engine-base` | Testing engine core |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 
 ### Peer Dependencies
 

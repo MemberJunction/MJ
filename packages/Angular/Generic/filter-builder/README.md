@@ -1,6 +1,6 @@
 # @memberjunction/ng-filter-builder
 
-A modern, intuitive Angular filter builder component for creating complex boolean filter expressions. Outputs portable, Kendo-compatible `CompositeFilterDescriptor` JSON for seamless integration with MemberJunction views and grids.
+A modern, intuitive Angular filter builder component for creating complex boolean filter expressions. Outputs MJ's portable `CompositeFilterDescriptor` JSON for seamless integration with MemberJunction views and grids.
 
 ## Installation
 

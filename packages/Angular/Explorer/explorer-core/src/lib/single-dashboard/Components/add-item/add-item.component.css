@@ -1,14 +1,10 @@
 .popup-actions {
   width: 100%;
   padding: 10px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-::ng-deep .modal-body-wrap .k-window-content {
   display: flex;
-  flex-direction: column;
-  height: 100%;
-  flex: 1;
-  padding: 0;
+  justify-content: flex-end;
+  gap: var(--mj-space-2);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 .resource-wrap {
   flex: 1;
@@ -25,20 +21,6 @@
     display: flex;
     flex-direction: column;
     gap: 20px;
-}
-::ng-deep .resource-wrap .k-label {
-  color: var(--mj-text-secondary);
-  font-size: 14px;
-  font-style: normal;
-  font-weight: 400;
-  line-height: 20px;
-}
-::ng-deep .resource-wrap .k-dropdownlist {
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: transparent;
-  line-height: 32px;
-  margin: 0;
 }
 ::ng-deep .customBtn button {
   flex: 1;

@@ -247,7 +247,7 @@
     font-size: 10pt;
 }
 
-/* ---- Action buttons (replaces Kendo buttons) ---- */
+/* ---- Action buttons ---- */
 
 .chat-action-btn {
     display: inline-flex;
@@ -288,7 +288,7 @@
     color: var(--mj-text-inverse);
 }
 
-/* ---- Confirmation dialog (replaces Kendo dialog) ---- */
+/* ---- Confirmation dialog ---- */
 
 .chat-dialog-overlay {
     position: fixed;

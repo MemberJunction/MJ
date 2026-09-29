@@ -6,7 +6,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { z } from 'zod';
 
 /**
- * Minimal file info interface replacing Kendo's FileInfo.
+ * Minimal file info interface for uploads.
  */
 export interface FileSelectInfo {
   name: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
