@@ -174,6 +174,7 @@ Emitting this ends your turn.
 When you are invoked again, the conversation history contains the plan you presented and the user's reply. Read it before doing anything else:
 
 - A form reply looks like `@{"_mode":"form","action":"formSubmit","fields":[{"name":"decision","value":"approve"}]}`. `decision = approve`, or a plain message that agrees ("yes", "go ahead", "looks good"), means **approved** → go straight to Step 3. Do NOT call Find Candidate Agents again and do NOT re-present the plan.
+- **Already started?** If the history after that approval already contains your own "Started … running" message, the graph is submitted and running. Do NOT submit it again — say that it is running and end your turn. Every extra submission runs the whole workflow a second time.
 - `decision = reject`, or a message asking for changes, means **revise**: adjust the plan as asked and present it again with the same form (Step 1).
 - Never submit a task graph without user confirmation.
 
@@ -187,11 +188,14 @@ When you are invoked again, the conversation history contains the plan you prese
     "tasks": {
       "workflowName": "...",
       "reasoning": "...",
+      "continuation": "reinvoke",
       "tasks": []
     }
   }
 }
 ```
+
+Always set `"continuation": "reinvoke"`. When the graph finishes, the conversation's agent is re-invoked with every task's output and presents the result the user asked for. Without it the raw task outputs are posted as-is, which is not an answer.
 
 Emitting this ends your turn. Say the workflow has **started**, never that it has finished — the
 dispatcher runs it independently and reports back when it completes.

@@ -10,7 +10,7 @@
  */
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
-import { StatusUpdatesFilter, type PushStatusNotificationPayload, type StatusUpdatesFilterContext } from '../generic/PushStatusResolver';
+import { BROADCAST_SESSION_ID, StatusUpdatesFilter, type PushStatusNotificationPayload, type StatusUpdatesFilterContext } from '../generic/PushStatusResolver';
 import type { UserPayload } from '../types';
 
 const OWNER = 'AA11BB22-0000-4000-8000-000000000001';
@@ -52,5 +52,27 @@ describe('statusUpdatesFilter (B49 session-hijack gate)', () => {
 
   it('matches identity case-insensitively (SQL Server upper vs PostgreSQL lower UUIDs)', () => {
     expect(StatusUpdatesFilter({ payload: push({ ownerUserId: OWNER.toUpperCase() }), args: { sessionId: SESSION }, context: ctxFor(OWNER.toLowerCase()) })).toBe(true);
+  });
+
+  describe('broadcast to every session of one user', () => {
+    it('delivers a broadcast push to any session the owner has open', () => {
+      expect(StatusUpdatesFilter({ payload: push({ sessionId: BROADCAST_SESSION_ID }), args: { sessionId: SESSION }, context: ctxFor(OWNER) })).toBe(true);
+      expect(StatusUpdatesFilter({ payload: push({ sessionId: BROADCAST_SESSION_ID }), args: { sessionId: 'another-tab' }, context: ctxFor(OWNER) })).toBe(true);
+    });
+
+    it('a broadcast is still owner-scoped — another user never sees it', () => {
+      expect(StatusUpdatesFilter({ payload: push({ sessionId: BROADCAST_SESSION_ID }), args: { sessionId: SESSION }, context: ctxFor(ATTACKER) })).toBe(false);
+    });
+
+    it('a broadcast with no owner fails closed, like every other push', () => {
+      expect(StatusUpdatesFilter({ payload: push({ sessionId: BROADCAST_SESSION_ID, ownerUserId: '' }), args: { sessionId: SESSION }, context: ctxFor(OWNER) })).toBe(false);
+    });
+
+    it('a subscriber cannot ask for the broadcast session to receive other users\' pushes', () => {
+      // The wildcard is a publisher's address, not a subscriber's. Asking for it matches only pushes
+      // that are themselves broadcasts, and those are still owner-filtered.
+      expect(StatusUpdatesFilter({ payload: push({ ownerUserId: OWNER }), args: { sessionId: BROADCAST_SESSION_ID }, context: ctxFor(ATTACKER) })).toBe(false);
+      expect(StatusUpdatesFilter({ payload: push({ ownerUserId: OWNER }), args: { sessionId: BROADCAST_SESSION_ID }, context: ctxFor(OWNER) })).toBe(false);
+    });
   });
 });

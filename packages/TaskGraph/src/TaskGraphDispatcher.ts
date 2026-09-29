@@ -386,6 +386,20 @@ type GraphState = {
     handledFailureIDs: Set<string>;
 };
 
+/**
+ * Per-task cap on the output inlined into a continuation. Generous enough for a report-sized
+ * result (a Markdown table, a summary), small enough that a ten-task graph does not swamp the
+ * follow-up turn's context. The task row keeps the full payload.
+ */
+export const MAX_CONTINUATION_OUTPUT_CHARS = 6000;
+
+/** The output a continuation carries for one task: the payload, cut at the cap with a marker. */
+export function TruncateContinuationOutput(payload: string | null | undefined): string | undefined {
+    if (!payload) return undefined;
+    if (payload.length <= MAX_CONTINUATION_OUTPUT_CHARS) return payload;
+    return `${payload.slice(0, MAX_CONTINUATION_OUTPUT_CHARS)}\n…[truncated ${payload.length - MAX_CONTINUATION_OUTPUT_CHARS} chars; the task record holds the full output]`;
+}
+
 export class TaskGraphDispatcher implements IShutdownable {
     private readonly config: TaskGraphDispatcherConfig;
     private readonly claims: TaskClaimStore;
@@ -1931,9 +1945,10 @@ export class TaskGraphDispatcher implements IShutdownable {
                 TaskID: t.ID,
                 Name: t.Name,
                 Status: t.Status,
-                // A reference, not the payload. Inlining every task's output would swamp the
-                // continuation turn's context; the agent pulls what it needs by task ID.
                 Summary: t.OutputPayload ? `output available (${t.OutputPayload.length} chars)` : undefined,
+                // A bounded copy of the payload itself — see `TaskContinuationParams.Tasks` for
+                // why a reference alone left the follow-up turn unable to present anything.
+                Output: TruncateContinuationOutput(t.OutputPayload),
                 ErrorMessage: t.ErrorMessage ?? undefined,
             })),
             Summary: summary,

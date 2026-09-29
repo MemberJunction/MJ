@@ -1,5 +1,9 @@
 ---
 "@memberjunction/ai-agents": minor
+"@memberjunction/task-graph": minor
+"@memberjunction/server": minor
+"@memberjunction/conversations-runtime": minor
+"@memberjunction/ng-conversations": minor
 ---
 
 fix(sage): the Workflow Planner's plan approval renders a button again, and the planner remembers the plan it presented
@@ -22,4 +26,19 @@ fix(agents): the task-graph capability gate reads the agent's own config, not ju
 With the button and the search fixed, the approved plan still never ran. `LoopAgentType.taskGraphsEnabled` read `enableTaskGraphs` from `params.data.__agentTypePromptParams` alone. That bag holds a per-run override and nothing else; the merged params that render the prompt live in the prompt's template data and are never written back to `params.data`. So on every real run the gate saw an empty bag and answered no — while the prompt, rendered from the merge, was inviting the `Tasks` step. The planner emitted the graph it was told to, was told it "is not enabled to emit task graphs", concluded the feature was off, and tried to run the workflow by calling agents it has no sub-agent relationship with. Not one task graph had been submitted on the host all day. The existing unit tests all supplied the flag through the runtime bag, which is why they passed.
 
 The gate now applies the same precedence as `BaseAgent.buildAgentTypePromptParams`: a runtime override wins when it says anything, otherwise the agent's `AgentTypePromptParams` decides, and absent or unparseable config still fails closed. Tests cover the agent-config path, both override directions, a silent override bag, and the fail-closed cases.
+
+---
+
+fix(task-graph): an approved workflow's results reach the conversation
+
+With the button rendered and the graph submitted, the workflow ran to completion and the conversation still showed "I'll follow up when it finishes." Four defects in the follow-up path, each of which lost the result on its own:
+
+- **The graph had no conversation.** Sub-agent runs were not handed `conversationDetailId`, so a graph the Workflow Planner (a sub-agent of Sage) submitted had nothing to post to. `ExecuteSubAgent` now propagates `conversationId` and `conversationDetailId`.
+- **The follow-up turn wrote nothing.** `TaskGraphContinuationDeliverer.Reinvoke` ran the agent through `RunAgent`, which executes a turn but never writes to a conversation. It now creates the reply detail first and runs through `RunAgentInConversation`, the path that writes the final message, response form and artifacts onto it. It reinvokes the **root** of the submitting run's chain (Sage, not the planner) with that run's `ConfigurationID`, so the same model set that answered the user answers the follow-up. A failure inside the turn writes the plain outcome onto the reply it already created.
+- **The follow-up had nothing to present.** The continuation carried "output available (N chars)" per task on the theory that the agent would pull outputs by task ID; no conversational agent has such a tool. `TaskContinuationParams.Tasks[].Output` now carries a bounded copy of each task's output (`MAX_CONTINUATION_OUTPUT_CHARS`), the rendered message includes it, and the reinvoke message says to present the results now.
+- **The write was refused.** A conversation detail may only be written by the conversation's owner or a grantee (`MJConversationDetailEntityExtended` enforces this server-side), and the dispatcher runs as the System user — so both the follow-up reply and the older plain post were refused, silently. The deliverer now resolves the conversation's owner (the root run's user, else `MJ: Conversations.UserID`, via `UserCache`) and creates the reply and runs the follow-up turn as them.
+- **The parent kept going.** After the Workflow Planner (a sub-agent) submitted the graph and parked, Sage's loop continued with the planner's "started" report as if it were a result to act on: it invoked the planner again, which submitted the same graph a second time, then answered the user with its own hand-off text. `processSubAgentStep` now treats a sub-agent that parked on a workflow (`Paused` with Success) as terminal: it relays the report as a Chat and ends the turn. The planner prompt also refuses to re-submit when its own "started" message already follows the approval.
+- **The client never heard.** Completion pushes are addressed to the browser session that started the turn, and nothing started this one, so the reply sat in the database until a reload. The push filter now accepts `BROADCAST_SESSION_ID` (`*`), still owner-scoped; the deliverer announces the landed follow-up that way in the run resolver's own shape; `CompletionEvent` carries `conversationId`; and the chat area reloads its messages on a completion for a message it has not loaded when it belongs to the conversation on screen.
+
+Sage's prompt now invokes the Workflow Planner as a `Sub-Agent` step rather than wrapping it in a one-task graph with `continuation: 'reinvoke'`, which ran the planner detached from the conversation and doubled the follow-up chain, and tells Sage that a re-invocation with results is to be presented, not re-planned.
 
