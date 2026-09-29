@@ -205,6 +205,15 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
      * make Durable worse than leaving it off; nesting it is what blew up cheese (LogActivity inside
      * Person.Save on a shared provider).
      */
+    /**
+     * The action's param definitions from the engine's live `ActionParams` list. Read this rather than
+     * `action.Params.Items`: that collection is cached and keeps serving the pre-save row after an
+     * in-place engine update (it refreshes only on a changed array reference or length).
+     */
+    protected liveParamDefinitionsFor(action: MJActionEntityExtended): MJActionParamEntity[] {
+        return ActionEngineServer.Instance.ActionParams.filter((p) => UUIDsEqual(p.ActionID, action.ID));
+    }
+
     protected BuildDurableDeferral(
         params: EntityActionInvocationParams,
         action: MJActionEntityExtended,
@@ -250,7 +259,7 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
                 // that one let a runtime LogValue=0 redact the log while its value still reached the Task.
                 RedactedParams: RedactParamsToRecord(
                     runParams.Params,
-                    ActionEngineServer.Instance.ActionParams.filter((p) => UUIDsEqual(p.ActionID, action.ID)),
+                    this.liveParamDefinitionsFor(action),
                     params.EntityAction.Params,
                 ),
                 ContextUser: params.ContextUser,
@@ -361,7 +370,10 @@ export class EntityActionInvocationSingleRecord extends EntityActionInvocationBa
 
             // prepare the variables for the action
             const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, params.EntityAction.ActionID));
-            const internalParams = await this.MapParams([...action.Params.Items], params.EntityAction.Params, params.EntityObject);
+            // Named from the live definitions, the same list the durable payload and the log are redacted
+            // against: redaction matches definitions BY NAME, so a name from the stale cached collection
+            // (after an in-place rename) matched nothing and applied no rule at all.
+            const internalParams = await this.MapParams(this.liveParamDefinitionsFor(action), params.EntityAction.Params, params.EntityObject);
             const { Filters: filters, Unresolved } = this.ResolveFilters(params);
             if (Unresolved.length > 0) {
                 const message =

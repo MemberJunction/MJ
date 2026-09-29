@@ -158,7 +158,9 @@ beforeEach(() => {
     // guarantees it doesn't leak into a test that runs after it, regardless of file order.
     durableRegistry.Submitter = null;
     mockRedactParamsToRecord.mockReset();
-    liveActionParams.splice(0, liveActionParams.length);
+    // The live list holds the same definition the cached `Params.Items` above does — both come from the
+    // same ActionParam rows. Tests that exercise a stale cache replace it.
+    liveActionParams.splice(0, liveActionParams.length, { ID: 'p1', ActionID: 'ACTION-1', Name: 'Record', Type: 'Input' });
 });
 
 // ── 'Entity Object Data' ─────────────────────────────────────────────────────────────────────────
@@ -534,5 +536,20 @@ describe('Durable AfterCreate with a queue submitter', () => {
         const definitions = mockRedactParamsToRecord.mock.calls[0][1] as unknown[];
         expect(definitions).toHaveLength(1);
         expect(definitions[0]).toBe(live);
+    });
+
+    it('names the runtime params from the same live definitions the redactor matches them against', async () => {
+        // An admin renamed a param on a running server. The cached `action.Params.Items` still says
+        // 'Record'; the live list says 'TargetRecord'. Redaction looks definitions up BY NAME, so a
+        // runtime param named from the stale copy matches nothing, no rule applies (not even the
+        // whole-record strip) and the value is written to Task.InputPayload.
+        const live = { ID: 'p1', ActionID: 'ACTION-1', Name: 'TargetRecord', Type: 'Input' };
+        liveActionParams.splice(0, liveActionParams.length, live);
+        durableRegistry.Submitter = { Submit: vi.fn().mockResolvedValue({ Success: true, ParentTaskID: 'T1' }) };
+
+        await invokeDurable([{ ActionParamID: 'p1', ValueType: 'Entity Object Data', Value: '' }]);
+
+        const runtimeParams = (mockRunAction.mock.calls[0][0] as { Params: Array<{ Name: string }> }).Params;
+        expect(runtimeParams.map(p => p.Name)).toEqual(['TargetRecord']);
     });
 });
