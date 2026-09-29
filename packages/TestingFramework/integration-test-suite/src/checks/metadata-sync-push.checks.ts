@@ -532,6 +532,54 @@ async function checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory(ctx:
     Assert(seenAtSecondFolder === true, 'MSP9: the authorization created in the first folder was not in Metadata.Provider.Authorizations when the second folder started');
 }
 
+/**
+ * MSP10 — one MJ: Row Level Security Filters record pushes (MJ#4837).
+ * Without Developer's Create grant, System's save is refused before the row exists.
+ */
+async function checkMsp10OneRecordPushOfARowLevelSecurityFilter(ctx: IntegrationCheckContext): Promise<void> {
+    const entityName = 'MJ: Row Level Security Filters';
+    const name = `${PREFIX} MSP10 filter ${Date.now()}`;
+    const id = randomUUID().toUpperCase();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-msp10-'));
+    const folder = path.join(root, 'filters');
+    let pushError: unknown;
+    try {
+        fs.mkdirSync(folder);
+        fs.writeFileSync(path.join(root, '.mj-sync.json'), JSON.stringify({
+            version: '1.0.0',
+            push: { autoCreateMissingRecords: true },
+            directoryOrder: ['filters'],
+        }));
+        fs.writeFileSync(path.join(folder, '.mj-sync.json'), JSON.stringify({
+            entity: entityName,
+            filePattern: '**/.*.json',
+        }));
+        fs.writeFileSync(path.join(folder, '.filter.json'), JSON.stringify({
+            primaryKey: { ID: id },
+            fields: { Name: name, Description: 'MSP10', FilterText: '1 = 0' },
+        }));
+        const engine = new SyncEngine(ctx.User);
+        await engine.initialize();
+        const service = new PushService(engine, ctx.User);
+        try {
+            await service.push({ dir: root });
+        } catch (error) {
+            pushError = error;
+        }
+        Assert(pushError === undefined, `MSP10: pushing one '${entityName}' record failed: ${pushError instanceof Error ? pushError.message : String(pushError)}`);
+        const found = await new RunView().RunView({
+            EntityName: entityName,
+            ExtraFilter: `ID='${id}'`,
+            ResultType: 'count_only',
+        }, ctx.User);
+        Assert(found.Success, `MSP10: counting the new filter failed: ${found.ErrorMessage}`);
+        AssertEqual(found.TotalRowCount, 1, 'MSP10: the pushed filter is not in the database');
+    } finally {
+        await deleteAll<BaseEntity>(ctx, entityName, `Name='${name.replace(/'/g, "''")}'`);
+        fs.rmSync(root, { recursive: true, force: true });
+    }
+}
+
 export const MetadataSyncPushChecks: NamedCheck[] = [
     {
         Id: 'metadata-sync-push.MSP1',
@@ -585,6 +633,12 @@ export const MetadataSyncPushChecks: NamedCheck[] = [
         Id: 'metadata-sync-push.MSP9',
         Name: 'MSP9: an authorization created in one folder is in the provider cache when the next folder starts',
         Fn: checkMsp9UncommittedAuthorizationIsVisibleToTheNextDirectory,
+        RequiresMutation: true,
+    },
+    {
+        Id: 'metadata-sync-push.MSP10',
+        Name: 'MSP10: a one-record push of an MJ: Row Level Security Filters row succeeds',
+        Fn: checkMsp10OneRecordPushOfARowLevelSecurityFilter,
         RequiresMutation: true,
     },
 ];

@@ -165,7 +165,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['fls-enforcement', FlsEnforcementChecks, 23], // FLS1-FLS23 field-level security against a live DB (IT90); FLS22/FLS23 cover the Record Changes payload projection, FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT91)
         ['fls-enforcement-client', FlsClientChecks, 6], // FC1-FC6 FLS over the wire via per-user API keys (IT92)
-        ['metadata-sync-push', MetadataSyncPushChecks, 9], // MSP1-MSP9 sync push atomicity, incl. server-derived child rows and in-transaction metadata reload, mutation tier (IT94)
+        ['metadata-sync-push', MetadataSyncPushChecks, 10], // MSP1-MSP10 sync push atomicity, in-transaction metadata reload, and one row-level security filter, mutation tier (IT94)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -266,10 +266,10 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
-        'metadata-sync-push': 9,
+        'metadata-sync-push': 10,
         'nested-transactions': 11,
         'open-app-teardown': 2,
-        'permission-engine': 16,
+        'permission-engine': 15,
         'predictive-studio': 5,
         'prompt-runner': 1,
         'queue': 7,
@@ -440,6 +440,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'fls-lifecycle.LC8',
         'fls-lifecycle.LC9',
         'metadata-sync-push.MSP1',
+        'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP2',
         'metadata-sync-push.MSP3',
         'metadata-sync-push.MSP4',
@@ -462,7 +463,6 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
-        'permission-engine.PE15',
         'role-elevation.RE6',
         'server-cache.S17',
         'server-cache.S23',
