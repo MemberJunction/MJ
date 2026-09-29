@@ -24,6 +24,27 @@ import {
 /**
  * Abstract base class for typed decision model implementations.
  * Subclasses wrap provider APIs to produce structured Likelihood, Choice, and Score answers.
+ *
+ * Implementations should:
+ * 1. Register with `@RegisterClass(BaseDecision, 'ProviderName')`
+ * 2. Implement the protected `DoDecide()` method
+ * 3. Honor `params.CancellationToken`, which the base does not check
+ *
+ * `Decide()` validates the request before calling `DoDecide()` and the answers after it,
+ * so a driver does not repeat those checks.
+ *
+ * Example:
+ * ```typescript
+ * @RegisterClass(BaseDecision, 'ExampleDecision')
+ * export class ExampleDecision extends BaseDecision {
+ *     protected async DoDecide(params: DecisionParams): Promise<DecisionResult> {
+ *         // Call the provider and map its output onto DecisionAnswer shapes
+ *     }
+ * }
+ *
+ * const decider = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDecision>(BaseDecision, 'ExampleDecision', apiKey);
+ * const result = await decider.Decide(params);
+ * ```
  */
 export abstract class BaseDecision extends BaseModel {
     /**
@@ -59,8 +80,11 @@ export abstract class BaseDecision extends BaseModel {
             const endTime = new Date();
             if (!result || result.success === false) {
                 if (result) {
+                    // Pass the driver's failure through, but never its answers: whatever it filled
+                    // in before failing may be partial or malformed.
                     result.startTime = startTime;
                     result.endTime = endTime;
+                    result.Answers = {};
                     return result;
                 }
                 const failure = new DecisionResult(false, startTime, endTime);
@@ -97,6 +121,10 @@ export abstract class BaseDecision extends BaseModel {
      * Driver-specific implementation of the decision logic.
      * Must be implemented by concrete provider subclasses.
      * Returned probabilities must already be normalised, in range, and keyed correctly.
+     *
+     * The driver owns cancellation: `Decide()` passes `params.CancellationToken` through
+     * unchecked, so the driver should check it before calling the provider and hand it to
+     * the provider's HTTP client.
      *
      * @param params Decision parameters to evaluate.
      * @returns A Promise resolving to a DecisionResult.
@@ -266,23 +294,26 @@ export abstract class BaseDecision extends BaseModel {
         const questionKeys = Object.keys(params.Questions);
         const answerKeys = Object.keys(result.Answers);
 
+        // Key checks use Object.hasOwn, not `in`: `in` also sees inherited Object.prototype
+        // names, so a key such as 'toString' or 'constructor' would count as present.
+
         // Every question key has exactly one answer
         for (const qKey of questionKeys) {
-            if (!(qKey in result.Answers) || result.Answers[qKey] === undefined) {
+            if (!Object.hasOwn(result.Answers, qKey) || result.Answers[qKey] === undefined) {
                 errors.push(`Question '${qKey}': Missing answer`);
             }
         }
 
         // No answers for keys that were not asked
         for (const aKey of answerKeys) {
-            if (!(aKey in params.Questions)) {
+            if (!Object.hasOwn(params.Questions, aKey)) {
                 errors.push(`Answer provided for unexpected question '${aKey}'`);
             }
         }
 
         // Validate each answered question
         for (const qKey of questionKeys) {
-            if (qKey in result.Answers && result.Answers[qKey] !== undefined) {
+            if (Object.hasOwn(result.Answers, qKey) && result.Answers[qKey] !== undefined) {
                 const question = params.Questions[qKey];
                 const answer = result.Answers[qKey];
                 errors.push(...this.validateSingleAnswer(qKey, question, answer));
@@ -300,18 +331,18 @@ export abstract class BaseDecision extends BaseModel {
             return [`Question '${key}': Answer must be an object`];
         }
 
-        if (answer.Kind !== question.Kind) {
-            return [`Question '${key}': Answer Kind '${answer.Kind}' does not match question Kind '${question.Kind}'`];
+        // Narrowing on both discriminants types each branch without a cast. Question kinds were
+        // checked on input, so anything that falls through is a kind mismatch.
+        if (question.Kind === 'Likelihood' && answer.Kind === 'Likelihood') {
+            return this.validateLikelihoodAnswer(key, answer);
         }
-
-        switch (question.Kind) {
-            case 'Likelihood':
-                return this.validateLikelihoodAnswer(key, answer as LikelihoodAnswer);
-            case 'Choice':
-                return this.validateChoiceAnswer(key, question, answer as ChoiceAnswer);
-            case 'Score':
-                return this.validateScoreAnswer(key, question, answer as ScoreAnswer);
+        if (question.Kind === 'Choice' && answer.Kind === 'Choice') {
+            return this.validateChoiceAnswer(key, question, answer);
         }
+        if (question.Kind === 'Score' && answer.Kind === 'Score') {
+            return this.validateScoreAnswer(key, question, answer);
+        }
+        return [`Question '${key}': Answer Kind '${answer.Kind}' does not match question Kind '${question.Kind}'`];
     }
 
     /**
@@ -390,7 +421,7 @@ export abstract class BaseDecision extends BaseModel {
         const actualKeys = Object.keys(probabilities);
 
         for (const expectedKey of expectedKeys) {
-            if (!(expectedKey in probabilities)) {
+            if (!Object.hasOwn(probabilities, expectedKey)) {
                 errors.push(`Question '${key}': Probabilities missing key for ${entityName} '${expectedKey}'`);
             }
         }
