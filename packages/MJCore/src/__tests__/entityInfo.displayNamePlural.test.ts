@@ -46,6 +46,17 @@ describe('EntityInfo.DisplayNamePlural', () => {
         expect(makeEntity('Invoice').DisplayNamePlural).toBe('Invoices');
     });
 
+    it('keeps the leading capital on an irregular plural', () => {
+        // The irregular table stores lowercase values ('person' → 'people'), so an empty state would
+        // otherwise read "No people to display".
+        expect(makeEntity('Person').DisplayNamePlural).toBe('People');
+        expect(makeEntity('Child').DisplayNamePlural).toBe('Children');
+    });
+
+    it('does not capitalize a name that starts lowercase', () => {
+        expect(makeEntity('iPhone').DisplayNamePlural).toBe('iPhones');
+    });
+
     it('is idempotent when the display name is already plural', () => {
         expect(makeEntity('Contacts').DisplayNamePlural).toBe('Contacts');
     });

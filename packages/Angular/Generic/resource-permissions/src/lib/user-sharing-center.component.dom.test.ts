@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ComponentFixture } from '@angular/core/testing';
 import { NormalizedPermission } from '@memberjunction/core';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
-import { UserSharingCenterComponent, SharingCenterDomainGroup, SharingCenterTab, GetSharingDomainDisplayLabel } from './user-sharing-center.component';
+import { UserSharingCenterComponent, SharingCenterDomainGroup, SharingCenterTab, GetSharingDomainDisplayLabel, CompareSharingDomainGroups } from './user-sharing-center.component';
 
 /**
  * DOM-level spec for <mj-user-sharing-center> — a standalone, data-bound component with
@@ -213,5 +213,23 @@ describe('GetSharingDomainDisplayLabel', () => {
   it('does not treat inherited Object.prototype members as map hits', () => {
     // A custom domain literally named "constructor" must not render the Object constructor.
     expect(GetSharingDomainDisplayLabel('constructor')).toBe('constructor');
+  });
+});
+
+describe('CompareSharingDomainGroups', () => {
+  const byDomain = (domainName: string) => group({ DomainName: domainName });
+
+  it('orders the headings alphabetically by the label the user reads, not by DomainName', () => {
+    // By DomainName this reads Rules, Artifacts, Collections, Dashboards, Shared Items, because
+    // 'Access Control Rules' sorts first.
+    const sorted = ['Resource Permissions', 'Dashboard Permissions', 'Access Control Rules', 'Collection Permissions', 'Artifact Permissions']
+      .map(byDomain)
+      .sort(CompareSharingDomainGroups);
+    expect(sorted.map(g => g.Label)).toEqual(['Artifacts', 'Collections', 'Dashboards', 'Rules', 'Shared Items']);
+  });
+
+  it('falls back to DomainName for a group without a Label', () => {
+    const sorted = [group({ DomainName: 'Zeta', Label: undefined }), group({ DomainName: 'Alpha', Label: undefined })].sort(CompareSharingDomainGroups);
+    expect(sorted.map(g => g.DomainName)).toEqual(['Alpha', 'Zeta']);
   });
 });

@@ -60,6 +60,15 @@ export const SharingDomainDisplayLabels: Record<string, string> = {
 };
 
 /**
+ * Orders Sharing Center groups by the heading the user reads (`Label`), falling back to
+ * `DomainName`. Sorting by `DomainName` put "Rules" (from "Access Control Rules") first once the
+ * headings were relabeled. Display order only; `DomainName` stays the lookup key.
+ */
+export function CompareSharingDomainGroups(a: SharingCenterDomainGroup, b: SharingCenterDomainGroup): number {
+    return (a.Label ?? a.DomainName).localeCompare(b.Label ?? b.DomainName);
+}
+
+/**
  * Returns a business-friendly heading for a permission domain. Falls back to the domain
  * name with a trailing " Permissions" stripped (so an unmapped custom domain like
  * "Widget Permissions" reads as "Widget"), then to the raw domain name.
@@ -354,7 +363,7 @@ export class UserSharingCenterComponent extends BaseAngularComponent implements 
                 Expanded: list.length <= 10,
             });
         }
-        return groups.sort((a, b) => a.DomainName.localeCompare(b.DomainName));
+        return groups.sort(CompareSharingDomainGroups);
     }
 
     private setError(message: string): void {
