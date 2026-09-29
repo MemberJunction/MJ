@@ -104,6 +104,13 @@ export interface ResponseTypeInclusionRules {
     decisions?: boolean;
 
     /**
+     * Include finishIf field in the nextStep response interface.
+     * Auto-aligns with includeFinishIfDocs unless explicitly set.
+     * @default true
+     */
+    finishIf?: boolean;
+
+    /**
      * Include `'Tasks'` in the nextStep.type union and the `tasks` property.
      * Auto-aligns with `enableTaskGraphs` unless explicitly set.
      *
@@ -128,6 +135,7 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     artifactToolCalls: true,
     pipeline: true,
     decisions: true,
+    finishIf: true,
     // The one section that defaults OFF — see `enableTaskGraphs` (D3).
     tasks: false
 };
@@ -336,6 +344,20 @@ export interface LoopAgentTypePromptParams {
     decisionPromptName?: string;
 
     /**
+     * Include conditional completion (finishIf) documentation in the prompt.
+     * Disable for agents that should never request inline completion gates.
+     * @default true
+     */
+    includeFinishIfDocs?: boolean;
+
+    /**
+     * Probability threshold (0.0 to 1.0) required for each finishIf question to pass.
+     * If all questions evaluate to a probability >= this threshold, the agent completes immediately.
+     * @default 0.9
+     */
+    finishIfThreshold?: number;
+
+    /**
      * Allow this agent to emit durable task graphs (`nextStep.type === 'Tasks'`).
      *
      * **Defaults to false, unlike every other flag here, and is enforced rather than advisory.**
@@ -399,6 +421,8 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeDecisionsDocs: true,
     decisionsMaxItems: 100,
     decisionPromptName: 'Default Decision',
+    includeFinishIfDocs: true,
+    finishIfThreshold: 0.9,
     // Deliberately false — a capability gate, not a token-savings flag (D3).
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,
