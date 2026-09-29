@@ -8,7 +8,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, LogError } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, LogError } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJUserViewEntityExtended,
@@ -524,6 +524,20 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.QuickSaveSummary = value;
   }
 
+  /**
+   * Name pre-filled in the quick-save dialog when it opens as a name prompt for a default-view
+   * Save that carries a filter (see {@link OnSaveDefaultViewSettings}). Empty for every other
+   * quick-save, which keeps the field blank as before.
+   */
+  public QuickSaveSuggestedName: string = '';
+
+  /**
+   * The config-panel save staged while the user names the view it is being promoted into.
+   * Set only when a Save on the default (unsaved) view carries a filter; consumed by
+   * {@link executeQuickSave}, which merges it with the name the dialog collects.
+   */
+  private pendingDefaultViewSave: ViewSaveEvent | null = null;
+
   /** Summary shown in the duplicate-view dialog. */
   public DuplicateSummary: ViewConfigSummary | null = null;
 
@@ -589,6 +603,15 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   public set pendingNewViewIsShared(value: boolean) {
     this.PendingNewViewIsShared = value;
   }
+
+  /** Traditional filter carried from quick-save dialog back into the config panel. */
+  public PendingNewViewFilterState: CompositeFilterDescriptor | null = null;
+
+  /** Smart-filter toggle carried from quick-save dialog back into the config panel. */
+  public PendingNewViewSmartFilterEnabled: boolean = false;
+
+  /** Smart-filter prompt carried from quick-save dialog back into the config panel. */
+  public PendingNewViewSmartFilterPrompt: string = '';
 
   // ----- Filter dialog (rendered at workspace level for full width) -----
 
@@ -712,19 +735,45 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     return this.OnExportDialogClosed(_result);
   }
 
-  /** Columns to export — from the active grid state, else the view's columns, else the entity fields. */
+  /**
+   * Columns to export: what the active renderer shows on screen (the grid), else the view's saved
+   * columns, else the entity fields. The fallbacks apply the grid's own rules, so Cards, Map and
+   * Timeline export the columns a grid of this view would show: saved settings are sorted by
+   * `orderIndex`, headed by the user's rename, resolved to the entity's field spelling (the export
+   * engine reads each row by that key), and dropped when the field no longer exists; fields the
+   * user is denied read access to are left out.
+   */
   private buildExportColumns(): ExportColumn[] {
-    if (!this._entity) {
+    const entity = this._entity;
+    if (!entity) {
       return [];
     }
+    const onScreen = this.entityViewerRef?.GetExportColumns() ?? [];
+    if (onScreen.length > 0) {
+      return onScreen;
+    }
+    const user = this.ProviderToUse?.CurrentUser;
+    const denied = user ? entity.GetDeniedReadFields(user) : new Set<string>();
+    const readable = (f: EntityFieldInfo) => !denied.has(f.Name.trim().toLowerCase());
+
     const gridCols = this.CurrentGridState?.columnSettings;
     if (gridCols && gridCols.length > 0) {
-      return gridCols
+      const columns: ExportColumn[] = [];
+      const sorted = [...gridCols]
         .filter(c => c.hidden !== true)
-        .map(c => ({ name: c.Name, displayName: c.DisplayName || c.Name }));
+        .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+      for (const c of sorted) {
+        const field = entity.Fields.find(f => f.Name.toLowerCase() === c.Name.toLowerCase());
+        if (field && readable(field)) {
+          columns.push({ name: field.Name, displayName: c.userDisplayName || c.DisplayName || field.DisplayNameOrName });
+        }
+      }
+      if (columns.length > 0) {
+        return columns;
+      }
     }
-    return this._entity.Fields
-      .filter(f => !f.IsVirtual)
+    return entity.Fields
+      .filter(f => !f.IsVirtual && readable(f))
       .map(f => ({ name: f.Name, displayName: f.DisplayNameOrName }));
   }
 
@@ -763,6 +812,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.ShowDuplicateDialog = false;
     this.ShowSharedViewWarning = false;
     this.IsFilterDialogOpen = false;
+    // A save staged for the previous entity references that entity's fields — it must not
+    // surface on the next quick-save against the new one.
+    this.clearPendingNewViewState();
   }
 
   // ========================================
@@ -1069,7 +1121,12 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.PendingNewViewName = '';
     this.PendingNewViewDescription = '';
     this.PendingNewViewIsShared = false;
+    this.PendingNewViewFilterState = null;
+    this.PendingNewViewSmartFilterEnabled = false;
+    this.PendingNewViewSmartFilterPrompt = '';
     this.DefaultSaveAsNew = false;
+    this.pendingDefaultViewSave = null;
+    this.QuickSaveSuggestedName = '';
   }
 
   // ----- Filter dialog -----
@@ -1118,10 +1175,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    * Handle a save from the config panel. When {@link AutoSaveView}, persists the view itself
    * (create-new or update) via the BaseEntity; otherwise emits {@link SaveViewRequested} for the host.
    * (Faithful generalization of DataExplorer.onSaveView, minus routing/state-service/notifications.)
+   * Resolves `true` once the view is saved (or handed to the host), `false` if it was not.
    */
-  public async OnSaveView(event: ViewSaveEvent): Promise<void> {
+  public async OnSaveView(event: ViewSaveEvent): Promise<boolean> {
     if (!this._entity) {
-      return;
+      return false;
     }
 
     if (!this.AutoSaveView) {
@@ -1129,7 +1187,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
       this.IsConfigPanelOpen = false;
       this.clearPendingNewViewState();
       this.cdr.detectChanges();
-      return;
+      return true;
     }
 
     this.IsSavingView = true;
@@ -1150,10 +1208,11 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
 
     this.IsSavingView = false;
     this.cdr.detectChanges();
+    return success;
   }
 
   /** @deprecated Use {@link OnSaveView}. */
-  public async onSaveView(event: ViewSaveEvent): Promise<void> {
+  public async onSaveView(event: ViewSaveEvent): Promise<boolean> {
     return this.OnSaveView(event);
   }
 
@@ -1252,6 +1311,22 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
    */
   public async OnSaveDefaultViewSettings(event: ViewSaveEvent): Promise<void> {
     if (!this._entity) {
+      return;
+    }
+
+    // A default-view Save that carries a filter is not a preferences save at all — the
+    // `default-view-setting/<Entity>` payload is an IGridState with nowhere to put a filter, so
+    // persisting here would silently drop it (#4220). It is really a view creation missing a
+    // name, so stage it and open the quick-save dialog to collect one. Confirming there routes
+    // through `OnSaveView`, which honours `AutoSaveView` for both host modes.
+    if (this.eventHasFilter(event)) {
+      this.pendingDefaultViewSave = event;
+      this.QuickSaveSuggestedName = this.buildSuggestedViewName(event);
+      this.QuickSaveSummary = this.buildConfigSummary(event);
+      this.DefaultSaveAsNew = true;
+      this.IsConfigPanelOpen = false;
+      this.ShowQuickSaveDialog = true;
+      this.cdr.detectChanges();
       return;
     }
 
@@ -1390,23 +1465,42 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     return this.OnQuickSave(event);
   }
 
-  /** Build a `ViewSaveEvent` from a `QuickSaveEvent` and delegate to {@link onSaveView}. */
+  /**
+   * Build a `ViewSaveEvent` from a `QuickSaveEvent` and delegate to {@link OnSaveView}.
+   *
+   * When a config-panel save is staged — a default-view Save carrying a filter, waiting only on a
+   * name (see {@link OnSaveDefaultViewSettings}) — its columns, sort, filter and aggregates are
+   * merged in and the dialog supplies just the name/description/sharing. The smart-filter fields
+   * used to be hard-coded to `false`/`''` here, which dropped a smart filter on this path too
+   * (#4220).
+   *
+   * The staged save is left in place until the save succeeds ({@link OnSaveView} clears it). If
+   * the save fails or a host cancels it, the name prompt reopens so the user can retry or cancel
+   * rather than losing the filter with nothing on screen.
+   */
   private async executeQuickSave(event: QuickSaveEvent): Promise<void> {
+    const staged = this.pendingDefaultViewSave;
+
     const viewSaveEvent: ViewSaveEvent = {
       Name: event.Name,
       Description: event.Description,
       IsShared: event.IsShared,
       SaveAsNew: event.SaveAsNew,
-      Columns: [],
-      SortField: null,
-      SortDirection: 'asc',
-      SortItems: [],
-      SmartFilterEnabled: false,
-      SmartFilterPrompt: '',
-      FilterState: this.FilterDialogState ?? null,
-      AggregatesConfig: null
+      Columns: staged?.Columns ?? [],
+      SortField: staged?.SortField ?? null,
+      SortDirection: staged?.SortDirection ?? 'asc',
+      SortItems: staged?.SortItems ?? [],
+      SmartFilterEnabled: staged?.SmartFilterEnabled ?? false,
+      SmartFilterPrompt: staged?.SmartFilterPrompt ?? '',
+      FilterState: staged?.FilterState ?? this.FilterDialogState ?? null,
+      AggregatesConfig: staged?.AggregatesConfig ?? null
     };
-    await this.OnSaveView(viewSaveEvent);
+    const saved = await this.OnSaveView(viewSaveEvent);
+    if (!saved && staged) {
+      this.QuickSaveSuggestedName = event.Name;
+      this.ShowQuickSaveDialog = true;
+      this.cdr.detectChanges();
+    }
   }
 
   /** Handle the shared-view warning action (update / save-as-copy / cancel). */
@@ -1446,6 +1540,9 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   /** Handle the quick-save dialog close. */
   public OnQuickSaveClose(): void {
     this.ShowQuickSaveDialog = false;
+    // Abandoning the name prompt abandons the promoted save with it — otherwise the staged
+    // filter would surface on whatever the user saved next.
+    this.clearPendingNewViewState();
     this.cdr.detectChanges();
   }
 
@@ -1459,6 +1556,16 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     this.PendingNewViewName = event.Name;
     this.PendingNewViewDescription = event.Description;
     this.PendingNewViewIsShared = event.IsShared;
+
+    // Hand any staged filter back to the panel, which resets its own filter state on open.
+    // Without this the escape hatch out of the name prompt would silently drop the filter.
+    const staged = this.pendingDefaultViewSave;
+    if (staged) {
+      this.PendingNewViewFilterState = staged.FilterState;
+      this.PendingNewViewSmartFilterEnabled = staged.SmartFilterEnabled;
+      this.PendingNewViewSmartFilterPrompt = staged.SmartFilterPrompt;
+    }
+
     this.DefaultSaveAsNew = true;
     this.ShowQuickSaveDialog = false;
     this.IsConfigPanelOpen = true;
@@ -1735,6 +1842,49 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     return event.FilterState
       ? JSON.stringify(event.FilterState)
       : JSON.stringify({ logic: 'and', filters: [] });
+  }
+
+  /**
+   * Whether a save event carries a filter the user would expect to be kept — a smart prompt with
+   * actual text, or at least one traditional filter. Deliberately stricter than the config panel's
+   * own `hasActiveFilters()`, which only looks at the traditional list.
+   */
+  private eventHasFilter(event: ViewSaveEvent): boolean {
+    const hasSmartFilter = event.SmartFilterEnabled && !!event.SmartFilterPrompt?.trim();
+    const hasTraditionalFilter = (event.FilterState?.filters?.length ?? 0) > 0;
+    return hasSmartFilter || hasTraditionalFilter;
+  }
+
+  /** Longest suggested name we will build before eliding the smart prompt. */
+  private static readonly SUGGESTED_NAME_MAX_LENGTH = 60;
+
+  /**
+   * Propose a name for a view being promoted out of the default view, so the user can accept it
+   * with a single click. A smart prompt describes the view better than anything we could invent,
+   * so it becomes the name (elided if long); a traditional filter gets a plain marker.
+   */
+  private buildSuggestedViewName(event: ViewSaveEvent): string {
+    const entityName = this._entity?.DisplayNameOrName ?? this._entity?.Name ?? 'View';
+    const prompt = event.SmartFilterEnabled ? event.SmartFilterPrompt?.trim() : '';
+    if (!prompt) {
+      return `${entityName} — Filtered`;
+    }
+
+    const budget = ViewWorkspaceComponent.SUGGESTED_NAME_MAX_LENGTH - entityName.length - ' — '.length;
+    const suffix = prompt.length > budget ? `${prompt.slice(0, Math.max(budget - 1, 1)).trimEnd()}…` : prompt;
+    return `${entityName} — ${suffix}`;
+  }
+
+  /** Build a {@link ViewConfigSummary} from a pending save event, for the quick-save dialog. */
+  private buildConfigSummary(event: ViewSaveEvent): ViewConfigSummary {
+    return {
+      ColumnCount: event.Columns.length,
+      FilterCount: event.FilterState?.filters?.length ?? 0,
+      SortCount: event.SortItems.length,
+      SmartFilterActive: event.SmartFilterEnabled && !!event.SmartFilterPrompt?.trim(),
+      SmartFilterPrompt: event.SmartFilterPrompt,
+      AggregateCount: event.AggregatesConfig?.expressions?.filter(a => a.enabled !== false).length ?? 0
+    };
   }
 
   // ========================================

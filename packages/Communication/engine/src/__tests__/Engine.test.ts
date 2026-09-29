@@ -259,6 +259,57 @@ describe('CommunicationEngine', () => {
             const provider = engine.GetProvider('SendGrid');
             expect(provider).toBe(subClassInstance);
         });
+
+        it('should cache and reuse the same provider instance across repeated calls', () => {
+            // Regression test: GetProvider() used to call ClassFactory.CreateInstance on
+            // every invocation, which meant a provider's own internal SDK-client cache
+            // (e.g. Twilio/Gmail/MSGraph's MJLruCache) was thrown away and rebuilt from
+            // scratch every single send.
+            const subClassInstance = {
+                constructor: { name: 'SendGridProvider' },
+                SendSingleMessage: vi.fn(),
+            };
+            mockClassFactory.CreateInstance.mockReturnValue(subClassInstance);
+
+            const first = engine.GetProvider('SendGrid');
+            const second = engine.GetProvider('SendGrid');
+            const third = engine.GetProvider('SendGrid');
+
+            expect(first).toBe(subClassInstance);
+            expect(second).toBe(first);
+            expect(third).toBe(first);
+            expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
+        });
+
+        it('should cache distinct providers separately by name', () => {
+            const sendGridInstance = { constructor: { name: 'SendGridProvider' }, SendSingleMessage: vi.fn() };
+            const twilioInstance = { constructor: { name: 'TwilioProvider' }, SendSingleMessage: vi.fn() };
+
+            mockClassFactory.CreateInstance.mockImplementation((_base: unknown, key: string) =>
+                key === 'SendGrid' ? sendGridInstance : twilioInstance
+            );
+
+            const sendGrid = engine.GetProvider('SendGrid');
+            const twilio = engine.GetProvider('Twilio');
+            const sendGridAgain = engine.GetProvider('SendGrid');
+
+            expect(sendGrid).toBe(sendGridInstance);
+            expect(twilio).toBe(twilioInstance);
+            expect(sendGridAgain).toBe(sendGridInstance);
+            expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(2);
+        });
+
+        it('should not cache a failed lookup (base-class fallback)', () => {
+            mockClassFactory.CreateInstance.mockReturnValue({
+                constructor: { name: 'BaseCommunicationProvider' },
+            });
+
+            expect(() => engine.GetProvider('Unregistered')).toThrow('Provider Unregistered not found');
+            expect(() => engine.GetProvider('Unregistered')).toThrow('Provider Unregistered not found');
+            // A failed lookup must not poison the cache with a stale/invalid instance -
+            // each retry should re-attempt ClassFactory.CreateInstance.
+            expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(2);
+        });
     });
 
     describe('SendMessages', () => {

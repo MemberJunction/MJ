@@ -339,18 +339,18 @@
 
             <!-- Advanced Raw JSON Drawer -->
             <div class="rpf-raw-json-drawer">
-                <div class="rpf-raw-json-header" (click)="toggleRawJson()">
+                <div class="rpf-raw-json-header" (click)="ToggleRawJson()">
                     <div class="rpf-raw-json-title">
-                        <i [class]="rawJsonExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
+                        <i [class]="RawJsonExpanded ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-right'"></i>
                         <i class="fa-solid fa-code"></i>
                         <span>Power User Escape Hatch: View Raw Pipeline Configuration JSON</span>
                     </div>
-                    <button type="button" class="rpf-sm-chip" (click)="$event.stopPropagation(); copyRawJson()">
-                        <i [class]="rawJsonCopied ? 'fa-solid fa-check' : 'fa-regular fa-copy'"></i>
-                        <span>{{ rawJsonCopied ? 'Copied!' : 'Copy JSON' }}</span>
+                    <button type="button" class="rpf-sm-chip" (click)="$event.stopPropagation(); CopyRawJson()">
+                        <i [class]="RawJsonCopied ? 'fa-solid fa-check' : 'fa-regular fa-copy'"></i>
+                        <span>{{ RawJsonCopied ? 'Copied!' : 'Copy JSON' }}</span>
                     </button>
                 </div>
-                @if (rawJsonExpanded) {
+                @if (RawJsonExpanded) {
                     <div class="rpf-raw-json-body">
                         <pre><code>{{ FormattedRawJson }}</code></pre>
                     </div>

@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   Component,
   Input,
   Output,
@@ -16,6 +17,8 @@ import {
 import { NgTemplateOutlet } from '@angular/common';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
+import { MJNamedControlBase } from '../a11y/named-control.base';
+import { WarnIfUnnamed } from '../a11y/unnamed-control-guard';
 
 /**
  * mj-dropdown — Dropdown select component using CDK Overlay.
@@ -107,8 +110,12 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
               composed by the accessibility tree without this component ever seeing that text.
               Without it, every filterable dropdown on a form named this way announces as an
               identical "Filter options".
+
+              A hidden node that is DIRECTLY referenced by aria-labelledby is still included in the
+              name (accname §4.1), so aria-hidden keeps the word out of the reading order without
+              costing the composed name.
             -->
-            <span class="mj-dropdown-sr-only" [attr.id]="FilterWordId">Filter</span>
+            <span class="mj-dropdown-sr-only" aria-hidden="true" [attr.id]="FilterWordId">Filter</span>
             <input
               #filterInput
               class="mj-input mj-dropdown-filter"
@@ -153,41 +160,35 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       </div>
     </ng-template>
   `,
+  styles: [`
+  /*
+   * Component-scoped ON PURPOSE, unlike the rest of this control's styling, which ships as a global
+   * stylesheet the host application imports. A host that skips that import gets unstyled chrome —
+   * survivable — but a hidden-word span that is not hidden renders its word as literal text in the
+   * middle of the field. The rule that hides it therefore has to travel with the component.
+   *
+   * Not display:none or visibility:hidden — both remove the element from the accessibility tree,
+   * which is the one thing this element exists to be in.
+   */
+  .mj-dropdown-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  `],
   providers: [{
     provide: NG_VALUE_ACCESSOR,
     useExisting: forwardRef(() => MJDropdownComponent),
     multi: true
   }]
 })
-export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
-  /**
-   * Accessible name for the combobox (#3860). Without one — and with no visible label wired via
-   * {@link AriaLabelledBy} — the control announces as an UNNAMED combobox, which fails WCAG 2.1
-   * 4.1.2 (Name, Role, Value): "combobox, collapsed" with no hint of what it selects. Applied as
-   * `aria-label` on the trigger AND on the popup listbox, so both halves announce the same name.
-   */
-  @Input() AriaLabel = '';
-
-  /**
-   * The id of a VISIBLE label element that names this control — the preferred wiring when a label
-   * already exists on screen (an `aria-label` would duplicate its text and drift on rename). This,
-   * not `<label for>`, is the visible-label path: the trigger is a `div[role=combobox]`, and the
-   * label-for association only names labelable form elements. `aria-labelledby` beats `AriaLabel`
-   * in the accessible-name computation where both are present. Applied to trigger AND listbox.
-   */
-  @Input() AriaLabelledBy = '';
-
-  /**
-   * `id` for the combobox trigger, so other markup can REFERENCE it — `aria-controls`, hint text,
-   * test hooks. It is deliberately not documented as a `<label for>` target: the trigger is a div,
-   * which `label[for]` neither names nor focuses. To name the control from a visible label, put an
-   * id on the LABEL and pass it as {@link AriaLabelledBy}.
-   */
-  @Input() InputId = '';
-
-  /** `aria-describedby` passthrough for hint/error text — same shape of gap as the name. */
-  @Input() AriaDescribedBy = '';
-
+export class MJDropdownComponent extends MJNamedControlBase implements ControlValueAccessor, AfterViewInit, OnDestroy {
   @Input() Data: Record<string, unknown>[] | string[] | readonly unknown[] | null = [];
   @Input() TextField = '';
   @Input() ValueField = '';
@@ -230,40 +231,26 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   @HostBinding('class.mj-dropdown-host') readonly hostClass = true;
 
   private cdr = inject(ChangeDetectorRef);
-  private static nextId = 0;
 
-  DropdownId = MJDropdownComponent.nextId++;
+  /** This dropdown's id suffix — the shared named-control counter, kept under its own name. */
+  readonly DropdownId = this.NamedControlId;
 
   /**
    * Id of the popup listbox, so the trigger can point `aria-controls` at it while open — the half of
    * the combobox pattern that makes "collapsed/expanded" refer to something a screen reader can
-   * find. Generated per instance from the same `static nextId` counter `dialog`, `window` and
-   * `accordion` use in this package.
+   * find. Generated per instance from the shared named-control counter.
    */
   get ListboxId(): string { return `mj-dropdown-listbox-${this.DropdownId}`; }
 
   /** Id of the hidden "Filter" word, composed into the filter box's name via an id list. */
-  get FilterWordId(): string { return `mj-dropdown-filter-word-${this.DropdownId}`; }
+  get FilterWordId(): string { return this.SecondaryWordId('filter-word'); }
 
-  /**
-   * `aria-labelledby` for the filter box when the dropdown is named by a VISIBLE label: "Filter"
-   * plus that label's own text, composed by the accessibility tree. Empty when there is no such
-   * label, in which case {@link FilterLabel} supplies a string instead.
-   */
-  get FilterLabelledBy(): string { return this.AriaLabelledBy ? `${this.FilterWordId} ${this.AriaLabelledBy}` : ''; }
+  /** `aria-labelledby` for the filter box when a VISIBLE label names the dropdown. */
+  get FilterLabelledBy(): string { return this.SecondaryLabelledBy('filter-word'); }
 
-  /**
-   * `aria-label` for the filter box in the no-visible-label case.
-   *
-   * The "filter" guard is not cosmetic: this repo's house habit is `AriaLabel="Filter roles"`, and
-   * an unconditional prefix announces that box as "Filter Filter roles". A name that already begins
-   * with the word is used as-is.
-   */
-  get FilterLabel(): string {
-    const name = this.AriaLabel.trim();
-    if (!name) return 'Filter options';
-    return /^filter\b/i.test(name) ? name : `Filter ${name}`;
-  }
+  /** `aria-label` for the filter box in the no-visible-label case. */
+  get FilterLabel(): string { return this.SecondaryLabel('Filter', 'Filter options'); }
+
   IsOpen = false;
   /**
    * The single gate on `Toggle()` / `Open()` — true when EITHER the `Disabled` input or Angular
@@ -422,6 +409,8 @@ export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   }
 
   OnBlur(): void { this.onTouched(); }
+
+  ngAfterViewInit(): void { WarnIfUnnamed(this.triggerEl?.nativeElement, 'mj-dropdown'); }
 
   GetItemText(item: unknown): string {
     if (item == null) return '';
