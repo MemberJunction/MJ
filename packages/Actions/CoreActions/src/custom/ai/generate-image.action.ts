@@ -2,17 +2,22 @@ import { ActionResultSimple, RunActionParams, RuntimeAPIKeyResolver } from "@mem
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView, UserInfo } from "@memberjunction/core";
-import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { UUIDsEqual } from "@memberjunction/global";
 import {
-    BaseImageGenerator,
+    AIAPIKey,
     ImageGenerationParams,
-    ImageGenerationResult,
-    ImageEditParams,
     GeneratedImage,
     GetAIAPIKey,
 } from "@memberjunction/ai";
 import { MJAIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
+import {
+    AIImageEditRunParams,
+    AIImageGenerationRunParams,
+    AIImageGenerationRunner,
+    AIImageRunOptions,
+    AIImageRunResult,
+} from "@memberjunction/ai-prompts";
 
 /**
  * Action that generates images using AI image generation models (DALL-E, Gemini, etc.)
@@ -135,20 +140,19 @@ export class GenerateImageAction extends BaseAction {
                 };
             }
 
-            // Get image generator model and create instance
-            const { generator, model, apiName } = await this.prepareImageGenerator(
+            // Choose the model and resolve its key exactly as before; the runner then makes the call
+            const { model, runOptions } = await this.prepareImageModel(
                 params.ContextUser,
                 modelName,
                 params.RuntimeAPIKeyResolver
             );
 
-            let result: ImageGenerationResult;
+            let runResult: AIImageRunResult;
 
             if (sourceImage) {
                 // Image-to-image: use EditImage when source image is provided
-                result = await this.executeImageEdit(generator, {
+                runResult = await this.executeImageEdit(runOptions, {
                     prompt,
-                    apiName,
                     sourceImage,
                     mask,
                     numberOfImages,
@@ -158,9 +162,8 @@ export class GenerateImageAction extends BaseAction {
                 });
             } else {
                 // Text-to-image: use GenerateImage
-                result = await this.executeImageGeneration(generator, {
+                runResult = await this.executeImageGeneration(runOptions, {
                     prompt,
-                    apiName,
                     numberOfImages,
                     size,
                     outputFormat,
@@ -170,15 +173,16 @@ export class GenerateImageAction extends BaseAction {
                 });
             }
 
-            if (!result.success) {
+            if (!runResult.Success) {
                 return {
                     Success: false,
-                    Message: `Image generation failed: ${result.errorMessage || 'Unknown error'}`,
+                    Message: `Image generation failed: ${runResult.ErrorMessage || 'Unknown error'}`,
                     ResultCode: "GENERATION_FAILED"
                 };
             }
 
-            if (!result.images || result.images.length === 0) {
+            const result = runResult.ImageResult;
+            if (!result?.images || result.images.length === 0) {
                 return {
                     Success: false,
                     Message: "No images were generated",
@@ -243,13 +247,19 @@ export class GenerateImageAction extends BaseAction {
     }
 
     /**
-     * Prepare an image generator instance using proper metadata lookup
+     * Choose the image model and resolve its key using proper metadata lookup, and build the runner
+     * options that pin that model and carry that key.
+     *
+     * The key is passed to the runner as `APIKeys` for the model's driver class. The runner's own
+     * lookup covers only the environment key for the driver class; the run's runtime key and the
+     * vendor-name fallback live here, so passing the resolved key keeps the key the generator gets
+     * identical to the one this action always used.
      */
-    private async prepareImageGenerator(
+    private async prepareImageModel(
         contextUser: UserInfo | undefined,
         modelName?: string,
         resolve?: RuntimeAPIKeyResolver
-    ): Promise<{ generator: BaseImageGenerator; model: MJAIModelEntityExtended; apiName: string }> {
+    ): Promise<{ model: MJAIModelEntityExtended; runOptions: AIImageRunOptions }> {
         // Ensure AIEngine is loaded
         await AIEngineBase.Instance.Config(false, contextUser);
 
@@ -291,31 +301,23 @@ export class GenerateImageAction extends BaseAction {
         }
 
         const driverClass = inferenceProvider.DriverClass;
-        const apiName = inferenceProvider.APIName || model.APIName || model.Name;
         const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, inferenceProvider.VendorID));
         const apiKey = ResolveImageGenerationAPIKey(driverClass, vendor?.Name, resolve);
+        const apiKeys: AIAPIKey[] = [{ driverClass, apiKey }];
 
-        const generator = MJGlobal.Instance.ClassFactory.CreateInstance<BaseImageGenerator>(
-            BaseImageGenerator,
-            driverClass,
-            apiKey
-        );
-
-        if (!generator) {
-            throw new Error(`Failed to create image generator instance for ${driverClass}. Ensure the provider is registered.`);
-        }
-
-        return { generator, model, apiName };
+        return {
+            model,
+            runOptions: { ContextUser: contextUser, ModelID: model.ID, APIKeys: apiKeys }
+        };
     }
 
     /**
-     * Execute text-to-image generation
+     * Execute text-to-image generation through the image runner, pinned to the chosen model
      */
     private async executeImageGeneration(
-        generator: BaseImageGenerator,
+        runOptions: AIImageRunOptions,
         options: {
             prompt: string;
-            apiName: string;
             numberOfImages: number;
             size: string;
             outputFormat: string;
@@ -323,10 +325,10 @@ export class GenerateImageAction extends BaseAction {
             style?: string;
             negativePrompt?: string;
         }
-    ): Promise<ImageGenerationResult> {
-        const genParams: ImageGenerationParams = {
+    ): Promise<AIImageRunResult> {
+        const genParams: AIImageGenerationRunParams = {
+            ...runOptions,
             prompt: options.prompt,
-            model: options.apiName,
             n: options.numberOfImages,
             size: options.size,
             outputFormat: options.outputFormat === 'url' ? 'url' : 'b64_json'
@@ -342,17 +344,16 @@ export class GenerateImageAction extends BaseAction {
             genParams.negativePrompt = options.negativePrompt;
         }
 
-        return generator.GenerateImage(genParams);
+        return new AIImageGenerationRunner().RunImageGeneration(genParams);
     }
 
     /**
-     * Execute image-to-image editing
+     * Execute image-to-image editing through the image runner, pinned to the chosen model
      */
     private async executeImageEdit(
-        generator: BaseImageGenerator,
+        runOptions: AIImageRunOptions,
         options: {
             prompt: string;
-            apiName: string;
             sourceImage: string;
             mask?: string;
             numberOfImages: number;
@@ -360,10 +361,10 @@ export class GenerateImageAction extends BaseAction {
             outputFormat: string;
             negativePrompt?: string;
         }
-    ): Promise<ImageGenerationResult> {
-        const editParams: ImageEditParams = {
+    ): Promise<AIImageRunResult> {
+        const editParams: AIImageEditRunParams = {
+            ...runOptions,
             prompt: options.prompt,
-            model: options.apiName,
             image: options.sourceImage,
             n: options.numberOfImages,
             size: options.size,
@@ -377,7 +378,7 @@ export class GenerateImageAction extends BaseAction {
             editParams.negativePrompt = options.negativePrompt;
         }
 
-        return generator.EditImage(editParams);
+        return new AIImageGenerationRunner().RunImageEdit(editParams);
     }
 
     /**
