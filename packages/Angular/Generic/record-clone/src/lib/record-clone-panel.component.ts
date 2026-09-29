@@ -745,8 +745,12 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
                 // The name the server will apply can move with the plan (a rule derives it from a
                 // prompted value, a rename avoids a newly taken one); follow it unless the user typed one.
                 if (this.RootNameReadOnly || !this.HasUserEditedRootName) {
-                    const planned = this.plannedRootName();
-                    if (planned !== null) this.RootRecordName = planned;
+                    const change = this.rootNameChange();
+                    if (change) {
+                        this.RootRecordName = String(change.NewValue);
+                        // The note under the name says how it was made, which can change too (a rule instead of a suffix).
+                        this.NamingStrategyReason = change.Reason || this.NamingStrategyReason;
+                    }
                 }
                 this.PlanChanged.emit(planOutput.Plan);
             }
@@ -1095,11 +1099,6 @@ export class RecordClonePanelComponent extends BaseAngularComponent {
         if (!rootNode) return undefined;
         const nameField = (this.ProviderToUse?.EntityByName(this.EffectiveEntityName)?.NameField?.Name ?? 'Name').toLowerCase();
         return [...rootNode.FieldChanges].reverse().find((fc) => fc.Field.toLowerCase() === nameField);
-    }
-
-    private plannedRootName(): string | null {
-        const change = this.rootNameChange();
-        return change ? String(change.NewValue) : null;
     }
 
     private setupInitialValues(): void {

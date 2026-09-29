@@ -318,6 +318,7 @@ describe('RecordClonePanelComponent (DOM)', () => {
         vi.mocked(mockService.PlanClone).mockResolvedValueOnce({ Plan: renamed });
         await panel.Replan();
         expect(panel.RootRecordName).toBe('jane@example.com');
+        expect(panel.NamingStrategyReason).toBe('Derived via field rule.');
 
         panel.OnRootNameChange('My own name');
         vi.mocked(mockService.PlanClone).mockResolvedValueOnce({ Plan: renamed });

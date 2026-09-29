@@ -60,7 +60,9 @@ export interface CloneConfigEntityMeta {
         }>;
         Descendants?: Record<string, {
             Policy?: string;
+            Fields?: { PromptFor?: string[] };
         }>;
+        Naming?: { Strategy?: string; Template?: string };
         Hooks?: {
             ServerGeneratedChildren?: string[];
         };
@@ -350,9 +352,8 @@ export class CloneConfigValidator {
      * its unique index at save.
      */
     private static promptNaming(entity: CloneConfigEntityMeta, config: NonNullable<CloneConfigEntityMeta['CloneConfiguration']>): CloneConfigValidationError[] {
-        const raw = config as Record<string, unknown>;
         const found: CloneConfigValidationError[] = [];
-        const naming = raw.Naming as { Strategy?: string } | undefined;
+        const naming = config.Naming;
         if (naming?.Strategy === 'prompt') {
             const covered = new Set<string>([
                 ...(config.Fields?.PromptFor ?? []),
@@ -371,7 +372,7 @@ export class CloneConfigValidator {
                 });
             }
         }
-        const descendants = (raw.Descendants as Record<string, { Fields?: { PromptFor?: string[] } }> | undefined) ?? {};
+        const descendants = config.Descendants ?? {};
         for (const [name, desc] of Object.entries(descendants)) {
             if (desc?.Fields?.PromptFor?.length) {
                 found.push({
