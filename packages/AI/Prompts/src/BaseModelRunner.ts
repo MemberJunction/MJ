@@ -2162,8 +2162,10 @@ export abstract class BaseModelRunner {
         promptRun.TokensUsedRollup = promptRun.TokensUsed;
         promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
         promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
-        if (promptRun.Cost !== undefined) {
-          promptRun.TotalCost = promptRun.Cost;
+        // TotalCost is Cost plus DescendantCost. A run with no Cost of its own (NULL once its INSERT
+        // has reloaded it) keeps the TotalCost applyResultFields gave it, rather than being nulled.
+        if (promptRun.Cost != null) {
+          promptRun.TotalCost = promptRun.Cost + (promptRun.DescendantCost ?? 0);
         }
       } catch (error) {
         this.logError(error, {

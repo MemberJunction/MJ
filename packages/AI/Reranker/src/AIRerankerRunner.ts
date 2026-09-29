@@ -8,7 +8,7 @@
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseReranker, BaseResult, ErrorAnalyzer } from '@memberjunction/ai';
-import type { AIErrorType, RerankParams, RerankResponse } from '@memberjunction/ai';
+import type { AIErrorType, ModelUsage, RerankParams, RerankResponse } from '@memberjunction/ai';
 import { AIModelSelectionInfo, AIPromptParams } from '@memberjunction/ai-core-plus';
 import type {
     MJAIModelEntityExtended,
@@ -18,6 +18,7 @@ import type {
 import { BaseModelRunner } from '@memberjunction/ai-prompts';
 import type { FailoverAttempt, ModelVendorCandidate } from '@memberjunction/ai-prompts';
 import type { AIRerankParams, AIRerankRunResult } from './rerank-runner.types';
+import { LLMReranker } from './LLMReranker';
 
 /** The driver class of the prompt-backed reranker, which needs no API key of its own. */
 const LLM_RERANKER_DRIVER = 'LLMReranker';
@@ -106,6 +107,15 @@ export class AIRerankerRunner extends BaseModelRunner {
     }
 
     /**
+     * Whether a driver makes its model call through a prompt run of its own, which this runner makes
+     * a child of the rerank's run. `LLMReranker` does: it runs a chat prompt, so its cost is that
+     * child run's cost, not the rerank run's own.
+     */
+    private driverRunsChildPrompt(driverClass: string): boolean {
+        return driverClass === LLM_RERANKER_DRIVER;
+    }
+
+    /**
      * Reranks `params.documents` against `params.query`. Never throws: every failure is a result with
      * `Success: false` and an `ErrorMessage`. An exception after the run row exists finalizes the row
      * as failed.
@@ -135,7 +145,7 @@ export class AIRerankerRunner extends BaseModelRunner {
             const run = await this.runRerank(request, candidates, selection, promptRun);
             const endTime = new Date();
             const executionTimeMS = endTime.getTime() - startTime.getTime();
-            await this.finalizeRerankRun(promptRun, run.Attempt, endTime, executionTimeMS);
+            await this.finalizeRerankRun(promptRun, run, endTime, executionTimeMS);
             return this.buildRunResult(run, promptRun, executionTimeMS);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
@@ -273,7 +283,7 @@ export class AIRerankerRunner extends BaseModelRunner {
         let answeredBy = selection.Candidate;
         const attempt = (candidate: ModelVendorCandidate): Promise<RerankAttempt> => {
             answeredBy = candidate;
-            return this.executeOnCandidate(candidate, request);
+            return this.executeOnCandidate(candidate, request, promptRun);
         };
         const failoverConfig = this.getFailoverConfiguration(request.Prompt);
         const result = failoverConfig.strategy === 'None'
@@ -292,7 +302,11 @@ export class AIRerankerRunner extends BaseModelRunner {
     }
 
     /** Reranks on one candidate: resolves its key when it needs one, builds its driver, and calls it. */
-    private async executeOnCandidate(candidate: ModelVendorCandidate, request: RerankRequest): Promise<RerankAttempt> {
+    private async executeOnCandidate(
+        candidate: ModelVendorCandidate,
+        request: RerankRequest,
+        promptRun: MJAIPromptRunEntityExtended
+    ): Promise<RerankAttempt> {
         let apiKey = '';
         if (this.DriverRequiresCredentials(candidate.driverClass)) {
             try {
@@ -301,9 +315,13 @@ export class AIRerankerRunner extends BaseModelRunner {
                 return this.failedAttempt(err instanceof Error ? err.message : String(err), 'Authentication');
             }
         }
-        const driver = this.createDriver(candidate, apiKey, request.Params);
+        const driver = this.createDriver(candidate, apiKey, request.Params, promptRun.ID);
         if (typeof driver === 'string') {
             return this.failedAttempt(driver, 'ModelError');
+        }
+        if (this.driverRunsChildPrompt(candidate.driverClass)) {
+            // The driver's run names this run as its parent, so this run's queued INSERT must land first.
+            await this.WaitForPendingPromptRunSaves();
         }
         return this.callDriver(driver, candidate, request.Params);
     }
@@ -313,8 +331,11 @@ export class AIRerankerRunner extends BaseModelRunner {
      * `RerankerService.GetReranker`. `LLMReranker` takes no key, the model's `APIName`, the ID of the
      * chat prompt it runs and the context user; every other driver takes its key and API name.
      * Returns an error message when the driver cannot be built.
+     *
+     * An `LLMReranker` is also given `parentRunId`, the rerank's run, as its `ParentPromptRunID`, so
+     * its chat run is a child of the rerank's run.
      */
-    private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIRerankParams): BaseReranker | string {
+    private createDriver(candidate: ModelVendorCandidate, apiKey: string, params: AIRerankParams, parentRunId: string): BaseReranker | string {
         const factory = MJGlobal.Instance.ClassFactory;
         let resolution: DriverResolution;
         if (candidate.driverClass === LLM_RERANKER_DRIVER) {
@@ -325,6 +346,9 @@ export class AIRerankerRunner extends BaseModelRunner {
             resolution = factory.TryCreateInstance<BaseReranker>(
                 BaseReranker, candidate.driverClass, '', candidate.model.APIName ?? '', chatPromptID, params.ContextUser
             );
+            if (resolution.Instance instanceof LLMReranker) {
+                resolution.Instance.ParentPromptRunID = parentRunId;
+            }
         } else {
             resolution = factory.TryCreateInstance<BaseReranker>(
                 BaseReranker, candidate.driverClass, apiKey, candidate.apiName ?? candidate.model.APIName ?? ''
@@ -394,22 +418,50 @@ export class AIRerankerRunner extends BaseModelRunner {
     }
 
     /**
-     * Finalizes the run row with the ranked document IDs and scores in `Result`. It records no usage:
-     * `RerankResponse` carries none and no reranker driver reports any, so tokens and cost stay empty
-     * rather than being guessed.
+     * Finalizes the run row with the ranked document IDs and scores in `Result`, and the cost the
+     * driver reports in its response's `Usage`. It records no tokens: the only driver that reports
+     * usage is `LLMReranker`, whose tokens are its chat run's and are recorded on that run. A driver
+     * that reports no cost leaves the cost empty rather than guessed.
      */
     private async finalizeRerankRun(
         promptRun: MJAIPromptRunEntityExtended,
-        attempt: RerankAttempt,
+        rerankRun: RerankRun,
         endTime: Date,
         executionTimeMS: number
     ): Promise<void> {
+        const attempt = rerankRun.Attempt;
+        const costIsDescendant = this.driverRunsChildPrompt(rerankRun.AnsweredBy.driverClass);
         await this.FinalizeRunRecord(promptRun, attempt.success, endTime, executionTimeMS, run => {
             run.Result = JSON.stringify(this.rankedScores(attempt.Response));
+            const usage = attempt.Response?.Usage;
+            if (usage) {
+                this.applyCost(run, usage, costIsDescendant);
+            }
             if (!attempt.success && attempt.errorMessage) {
                 run.ErrorMessage = attempt.errorMessage;
             }
         });
+    }
+
+    /**
+     * Records the driver's cost on the run. When the cost was incurred by a child run
+     * (`LLMReranker`'s chat prompt), it is the child's cost, so it is recorded as `DescendantCost`
+     * and in `TotalCost`, never as this run's `Cost`: a report summing `Cost` over every run would
+     * otherwise count the chat call twice. The child's save rolls the same `DescendantCost` up to
+     * this run's row, so the two writes agree.
+     */
+    private applyCost(run: MJAIPromptRunEntityExtended, usage: ModelUsage, costIsDescendant: boolean): void {
+        if (usage.cost !== undefined) {
+            if (costIsDescendant) {
+                run.DescendantCost = usage.cost;
+                run.TotalCost = (run.Cost ?? 0) + usage.cost;
+            } else {
+                run.Cost = usage.cost;
+            }
+        }
+        if (usage.costCurrency !== undefined) {
+            run.CostCurrency = usage.costCurrency;
+        }
     }
 
     /** The ranked document IDs and scores, without the document text. */
