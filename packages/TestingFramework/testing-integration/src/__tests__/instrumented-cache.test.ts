@@ -48,6 +48,25 @@ describe('InstrumentedLocalStorageProvider', () => {
         expect(provider.GetCount('RunViewCache')).toBe(0);
     });
 
+    it('exposes the optional shared-store members only when the inner provider has them', async () => {
+        expect(provider.WithKeyLock).toBeUndefined();
+        expect(provider.TryAcquireLease).toBeUndefined();
+
+        const shared = new InMemoryLocalStorageProvider() as InMemoryLocalStorageProvider & {
+            TryAcquireLease: (name: string, ttlMs: number) => Promise<boolean>;
+            WithKeyLock: <T>(key: string, category: string, work: () => Promise<T>) => Promise<T>;
+        };
+        const leases: Array<[string, number]> = [];
+        shared.TryAcquireLease = async (name, ttlMs) => { leases.push([name, ttlMs]); return leases.length === 1; };
+        shared.WithKeyLock = async (_key, _category, work) => work();
+        const wrapped = new InstrumentedLocalStorageProvider(shared);
+
+        expect(await wrapped.TryAcquireLease!('sweep:X', 500)).toBe(true);
+        expect(await wrapped.TryAcquireLease!('sweep:X', 500)).toBe(false);
+        expect(leases).toEqual([['sweep:X', 500], ['sweep:X', 500]]);
+        expect(await wrapped.WithKeyLock!('k', 'cat', async () => 42)).toBe(42);
+    });
+
     it('delegates the stored value to the inner provider', async () => {
         await provider.SetItem('k', 'hello', 'cat');
         expect(await provider.GetItem<string>('k', 'cat')).toBe('hello');

@@ -1331,6 +1331,17 @@
           "primaryKey": {
             "ID": "7364BCB7-A3AA-41D7-B77A-910F0A372E13"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT97 - Cache Architecture Invariants",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3DA009D7-6777-438C-B45A-66BE07808056"
+          }
         }
       ]
     },
