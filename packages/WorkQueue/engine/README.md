@@ -24,7 +24,7 @@ Design and contract: `02-implementation-overview.md` and `03-interfaces-and-tabl
 ## Data layer
 
 Every queue statement is a static stored procedure named `spWorkQueue*` (32 of them, in
-`migrations/v6/V202609282001__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql`). Runtime roles hold **EXECUTE on the
+`migrations/v6/V202609291801__v6.2.x__Work_Queue_Guarded_Write_Sprocs.sql`). Runtime roles hold **EXECUTE on the
 procedures only** — no direct DML on the queue tables — so the claim, settle, cancel and sweep rules cannot be
 bypassed by a caller with a connection string. The TypeScript builders render `EXEC` on SQL Server and
 `SELECT * FROM schema."proc"(...)` on PostgreSQL; the PostgreSQL functions are produced by the SQLConverter at release
@@ -51,7 +51,7 @@ MJ_WORKQUEUE_LIVE_DB=1 pnpm test
 
 It reads the repository `.env`, uses the seeded `Database` transport (`D1ED3F08-7008-4DA8-BA2B-7CD6A820AEB5`),
 names everything it creates so it can be recognised, and deletes it afterwards. The integration bundle
-`work-queue-runtime` (IT95) runs the same cases plus the host, operators, sweeper and REST endpoint under
+`work-queue-runtime` (IT96) runs the same cases plus the host, operators, sweeper and REST endpoint under
 `pnpm run test:integration`.
 
 ## Running subscriptions inside MJ

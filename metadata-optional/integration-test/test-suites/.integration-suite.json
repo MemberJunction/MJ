@@ -1210,7 +1210,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT95 - Work Queue Runtime (native host, operators, REST)",
+            "TestID": "@lookup:MJ: Tests.Name=IT96 - Work Queue Runtime (native host, operators, REST)",
             "Sequence": 48,
             "Status": "Active"
           },
