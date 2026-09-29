@@ -53,6 +53,7 @@ vi.mock('@memberjunction/core', () => {
         Metadata: MockMetadata,
         RunView: MockRunView,
         CompositeKey: MockCompositeKey,
+        BaseEngine: class MockBaseEngine {},
         LogError: vi.fn(),
         LogStatus: vi.fn(),
         UserInfo: vi.fn(),
@@ -92,6 +93,18 @@ vi.mock('@memberjunction/ai', () => ({
     BaseEmbeddings: vi.fn(),
     GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
 }));
+
+vi.mock('@memberjunction/ai-prompts', () => {
+    class MockAIEmbeddingRunner {
+        RunEmbedding = vi.fn().mockResolvedValue({
+            Success: true,
+            Vectors: [[0.1, 0.2, 0.3]],
+        });
+    }
+    return {
+        AIEmbeddingRunner: MockAIEmbeddingRunner,
+    };
+});
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
     VectorDBBase: vi.fn(),

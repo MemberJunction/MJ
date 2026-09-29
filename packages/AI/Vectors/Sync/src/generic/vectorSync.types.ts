@@ -1,4 +1,5 @@
 import { BaseEmbeddings, EmbedTextsResult } from "@memberjunction/ai";
+import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { MJEntityDocumentEntity, MJTemplateContentEntity, MJTemplateEntityExtended } from "@memberjunction/core-entities";
@@ -94,15 +95,18 @@ export type EmbeddingData = {
 };
 
 export type VectorEmeddingData = {
-    embedding: BaseEmbeddings;
-    vectorDB: VectorDBBase,
-    vectorDBClassKey: string,
-    vectorDBAPIKey: string,
-    embeddingDriverClass: string,
-    embeddingAPIKey: string,
+    /** @deprecated Use embeddingRunner instead */
+    embedding?: BaseEmbeddings;
+    embeddingRunner: AIEmbeddingRunner;
+    aiModelID: string;
+    vectorDB: VectorDBBase;
+    vectorDBClassKey: string;
+    vectorDBAPIKey: string;
+    embeddingDriverClass: string;
+    embeddingAPIKey: string;
     /** The AIModel's APIName (e.g. 'Xenova/gte-small') — required by some providers
      *  (LocalEmbedding throws if absent) to identify the underlying model. */
-    embeddingModelAPIName: string,
+    embeddingModelAPIName: string;
 };
 
 /**

@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
-import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
+import { GetAIAPIKey } from '@memberjunction/ai';
+import { AIEmbeddingRunner, EmbeddingRunResult } from '@memberjunction/ai-prompts';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
@@ -145,7 +146,7 @@ export class EntityVectorSyncer extends VectorBase {
     const templateContent = template.Content[0];
 
     const vectorCreator = this.createVectorCreator(
-      template, templateContent, obj.embedding, obj.embeddingModelAPIName, delayTimeMS,
+      template, templateContent, obj.embeddingRunner, obj.aiModelID, obj.embeddingModelAPIName, delayTimeMS,
       params.VectorizeBatchCount || pipelineConfig?.vectorizeBatchSize,
       pipelineConfig?.maxConcurrentEmbeddings,
       vectorIndexEntity.Dimensions ?? undefined
@@ -323,7 +324,8 @@ export class EntityVectorSyncer extends VectorBase {
   private createVectorCreator(
     template: MJTemplateEntityExtended,
     templateContent: MJTemplateContentEntity,
-    embedding: BaseEmbeddings,
+    embeddingRunner: AIEmbeddingRunner,
+    aiModelID: string,
     embeddingModelAPIName: string,
     delayTimeMS: number,
     batchSize?: number,
@@ -334,7 +336,7 @@ export class EntityVectorSyncer extends VectorBase {
       BatchSize: batchSize || 50,
       ConcurrencyLimit: concurrencyLimit ?? 2,
       ProcessBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
-        this.renderAndEmbedBatch(batch, template, templateContent, embedding, embeddingModelAPIName, delayTimeMS, embeddingDimensions),
+        this.renderAndEmbedBatch(batch, template, templateContent, embeddingRunner, aiModelID, embeddingModelAPIName, delayTimeMS, embeddingDimensions),
     });
   }
 
@@ -369,7 +371,8 @@ export class EntityVectorSyncer extends VectorBase {
     batch: Record<string, unknown>[],
     template: MJTemplateEntityExtended,
     templateContent: MJTemplateContentEntity,
-    embedding: BaseEmbeddings,
+    embeddingRunner: AIEmbeddingRunner,
+    aiModelID: string,
     embeddingModelAPIName: string,
     delayTimeMS: number,
     embeddingDimensions?: number
@@ -395,9 +398,15 @@ export class EntityVectorSyncer extends VectorBase {
       return [];
     }
 
-    let embeddings: EmbedTextsResult;
+    let embeddings: EmbeddingRunResult;
     try {
-      embeddings = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: embeddingModelAPIName, dimensions: embeddingDimensions });
+      embeddings = await embeddingRunner.RunEmbedding({
+        Texts: validEntries.map(e => e.text),
+        ModelID: aiModelID,
+        Dimensions: embeddingDimensions,
+        ContextUser: this.CurrentUser,
+        Description: `Vector sync batch (${template.Name})`,
+      });
     } catch (err) {
       const msg = `Embedding model "${embeddingModelAPIName}" threw an error: ${err instanceof Error ? err.message : String(err)}`;
       LogError(msg);
@@ -410,9 +419,8 @@ export class EntityVectorSyncer extends VectorBase {
 
     await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
 
-    if (!embeddings || !embeddings.vectors || embeddings.vectors.length === 0) {
-      const driverName = embedding.constructor?.name || 'unknown';
-      const msg = `Embedding model "${embeddingModelAPIName}" (driver: ${driverName}) returned 0 vectors for ${validEntries.length} record(s). Check AI_VENDOR_API_KEY__${driverName.toUpperCase()} or credentials, and check model availability.`;
+    if (!embeddings || !embeddings.Success || !embeddings.Vectors || embeddings.Vectors.length === 0) {
+      const msg = `Embedding model "${embeddingModelAPIName}" failed: ${embeddings?.ErrorMessage ?? 'Returned 0 vectors'}. Check credentials and check model availability.`;
       LogError(msg);
       for (const entry of validEntries) {
         const recordID = String(entry.record.__mj_recordID ?? entry.record.ID ?? 'unknown');
@@ -421,8 +429,8 @@ export class EntityVectorSyncer extends VectorBase {
       return [];
     }
 
-    if (embeddings.vectors.length !== validEntries.length) {
-      const msg = `Embedding model "${embeddingModelAPIName}" returned ${embeddings.vectors.length} vector(s) for ${validEntries.length} record(s); count mismatch.`;
+    if (embeddings.Vectors.length !== validEntries.length) {
+      const msg = `Embedding model "${embeddingModelAPIName}" returned ${embeddings.Vectors.length} vector(s) for ${validEntries.length} record(s); count mismatch.`;
       LogError(msg);
       for (const entry of validEntries) {
         const recordID = String(entry.record.__mj_recordID ?? entry.record.ID ?? 'unknown');
@@ -431,7 +439,7 @@ export class EntityVectorSyncer extends VectorBase {
       return [];
     }
 
-    return embeddings.vectors.map((vector: number[], index: number) => ({
+    return embeddings.Vectors.map((vector: number[], index: number) => ({
       ID: index,
       Vector: vector,
       EntityData: validEntries[index].record,
@@ -976,14 +984,10 @@ export class EntityVectorSyncer extends VectorBase {
       LogStatus(`[EntityVectorSyncer] No API key found for embedding driver "${aiModelEntity.DriverClass}" (expected env variable AI_VENDOR_API_KEY__${aiModelEntity.DriverClass.toUpperCase()}). If this is a cloud provider, embedding generation will fail.`);
     }
 
-    const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, aiModelEntity.DriverClass, embeddingAPIKey);
+    const embeddingRunner = new AIEmbeddingRunner();
     // Pass a sentinel when there's no key so the base ctor's non-empty requirement is satisfied
     // for colocated providers (which authenticate via the borrowed host connection, not a key).
     const vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, vectorDBEntity.ClassKey, vectorDBAPIKey || 'colocated');
-
-    if (!embedding) {
-      throw Error(`Failed to create Embeddings instance for AI Model ${aiModelEntity.DriverClass}`);
-    }
 
     if (!vectorDB) {
       throw Error(`Failed to create Vector Database instance for ${vectorDBEntity.ClassKey}`);
@@ -1000,7 +1004,8 @@ export class EntityVectorSyncer extends VectorBase {
     LogStatus(`Using vector database ${vectorDBEntity.Name} and AI Model ${aiModelEntity.Name}`);
 
     const obj: VectorEmeddingData = {
-      embedding,
+      embeddingRunner,
+      aiModelID: aiModelEntity.ID,
       vectorDB,
       vectorDBClassKey: vectorDBEntity.ClassKey,
       vectorDBAPIKey: vectorDBAPIKey,

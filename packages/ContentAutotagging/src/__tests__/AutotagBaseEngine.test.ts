@@ -138,6 +138,7 @@ vi.mock('@memberjunction/ai-prompts', () => {
       }),
     })),
     AIModelRunner: MockAIModelRunner,
+    AIEmbeddingRunner: MockAIModelRunner,
   };
 });
 

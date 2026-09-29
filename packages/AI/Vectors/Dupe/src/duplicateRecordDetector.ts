@@ -15,7 +15,8 @@
  * @module @memberjunction/ai-vector-dupe
  */
 
-import { BaseEmbeddings, GetAIAPIKey } from "@memberjunction/ai";
+import { GetAIAPIKey } from "@memberjunction/ai";
+import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
 import {
     PotentialDuplicateRequest,
     PotentialDuplicateResponse,
@@ -126,11 +127,23 @@ interface SetReasoning {
  */
 export class DuplicateRecordDetector extends VectorBase {
     private vectorDB: VectorDBBase;
-    private embedding: BaseEmbeddings;
+    private _embeddingRunner: AIEmbeddingRunner | null = null;
+    private embeddingModelID: string | null = null;
+    /**
+     * Protected getter/setter for the AIEmbeddingRunner instance used by duplicate detection.
+     */
+    protected get EmbeddingRunner(): AIEmbeddingRunner {
+        if (!this._embeddingRunner) {
+            this._embeddingRunner = new AIEmbeddingRunner();
+        }
+        return this._embeddingRunner;
+    }
+    protected set EmbeddingRunner(value: AIEmbeddingRunner) {
+        this._embeddingRunner = value;
+    }
     /**
      * The embedding model's API identifier (e.g. 'Xenova/gte-small', 'text-embedding-3-small'),
-     * resolved from the entity document's AIModel. Passed to `EmbedTexts` — required by local
-     * providers (which load the named ONNX pipeline) and honored by cloud providers.
+     * resolved from the entity document's AIModel.
      */
     private embeddingModelAPIName: string | null = null;
     /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
@@ -318,11 +331,19 @@ export class DuplicateRecordDetector extends VectorBase {
         const record = records.Results[0];
         const templateParser = EntityDocumentTemplateParser.CreateInstance();
         const templateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, [record], ContextUser);
-        const embedResult = await this.embedding.EmbedTexts({ texts: templateTexts, model: this.embeddingModelAPIName });
+        const embedResult = await this.EmbeddingRunner.RunEmbedding({
+            Texts: templateTexts,
+            ModelID: this.embeddingModelID ?? undefined,
+            ContextUser: ContextUser,
+            Description: `Duplicate detection single record (${entityDocument.Name})`
+        });
+        if (!embedResult.Success || !embedResult.Vectors || embedResult.Vectors.length === 0) {
+            throw new Error(`Embedding failed for duplicate detection: ${embedResult.ErrorMessage ?? 'Unknown error'}`);
+        }
 
         const topK = options.TopK ?? DEFAULT_TOP_K;
         const queryResults = await this.QueryDuplicatesForRecords(
-            [record], embedResult.vectors, templateTexts, entityDocument, topK, options,
+            [record], embedResult.Vectors, templateTexts, entityDocument, topK, options,
             this.GetQueryConcurrency(entityDocument)
         );
 
@@ -413,12 +434,20 @@ export class DuplicateRecordDetector extends VectorBase {
             // Embed this sub-batch
             this.reportProgress(options, 'Embedding', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
-            const subEmbedResult = await this.embedding.EmbedTexts({ texts: subTemplateTexts, model: this.embeddingModelAPIName });
+            const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
+                Texts: subTemplateTexts,
+                ModelID: this.embeddingModelID ?? undefined,
+                ContextUser: contextUser,
+                Description: `Duplicate detection batch (${entityDocument.Name})`
+            });
+            if (!subEmbedResult.Success || !subEmbedResult.Vectors || subEmbedResult.Vectors.length === 0) {
+                throw new Error(`Embedding failed for duplicate detection batch: ${subEmbedResult.ErrorMessage ?? 'Unknown error'}`);
+            }
 
             // Query vector DB for each record in the sub-batch with concurrency control
             this.reportProgress(options, 'Querying', totalRecords, processedSoFar, matchesSoFar, startTime);
             const subQueryResults = await this.QueryDuplicatesForRecords(
-                subRecords, subEmbedResult.vectors, subTemplateTexts, entityDocument, topK, options, concurrency
+                subRecords, subEmbedResult.Vectors, subTemplateTexts, entityDocument, topK, options, concurrency
             );
             allQueryResults.push(...subQueryResults);
         }
@@ -551,7 +580,7 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected async InitializeProviders(entityDocument: MJEntityDocumentEntity): Promise<void> {
         // Skip re-initialization if providers are already set for this entity document
-        if (this.embedding && this.vectorDB && this.indexName) {
+        if (this._embeddingRunner && this.vectorDB && this.indexName) {
             return;
         }
 
@@ -563,8 +592,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
-        // The embedding model's API name (e.g. 'Xenova/gte-small') — local providers REQUIRE it
-        // to load the right ONNX pipeline; cloud providers fall back to their own default if absent.
+        this.embeddingModelID = entityDocument.AIModelID;
         this.embeddingModelAPIName = aiModel.APIName;
         // Captured for the vector query id when the provider keys by EntityDocumentID (SVS).
         this.entityDocumentID = entityDocument.ID;
@@ -576,21 +604,15 @@ export class DuplicateRecordDetector extends VectorBase {
         // DB genuinely needs one is decided AFTER instantiation via VectorDBBase.RequiresAPIKey;
         // a cloud provider that truly needs a key will otherwise fail at the inference call
         // with a more actionable provider-level error. Mirrors EntityVectorSyncer.
-        const embeddingAPIKey = GetAIAPIKey(aiModel.DriverClass) || '';
         const vectorDBAPIKey = GetAIAPIKey(vectorDB.ClassKey) || '';
 
-        this.embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-            BaseEmbeddings, aiModel.DriverClass, embeddingAPIKey
-        );
+        this._embeddingRunner = new AIEmbeddingRunner();
         // Sentinel when keyless so the base ctor's non-empty requirement is satisfied for
         // local providers (which authenticate via the host process, not a key).
         this.vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
             VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey || 'colocated'
         );
 
-        if (!this.embedding) {
-            throw new Error(`Failed to create Embeddings instance for ${aiModel.DriverClass}`);
-        }
         if (!this.vectorDB) {
             throw new Error(`Failed to create VectorDB instance for ${vectorDB.ClassKey}`);
         }

@@ -24,7 +24,7 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { AIPromptRunner, AIModelRunner } from '@memberjunction/ai-prompts'
+import { AIPromptRunner, AIModelRunner, AIEmbeddingRunner } from '@memberjunction/ai-prompts'
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts'
 import { AIPromptParams } from '@memberjunction/ai-core-plus'
 import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
@@ -44,7 +44,9 @@ import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities'
  * Items sharing the same pair are batched together for efficient processing.
  */
 export interface ResolvedVectorInfrastructure {
-    embedding: BaseEmbeddings;
+    /** @deprecated Use embeddingRunner instead */
+    embedding?: BaseEmbeddings;
+    embeddingRunner?: AIEmbeddingRunner;
     vectorDB: VectorDBBase;
     indexName: string;
     embeddingModelName: string;
@@ -1793,7 +1795,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     ): Promise<{ vectorized: number; promptRunIDs: string[] }> {
         let vectorized = 0;
         const promptRunIDs: string[] = [];
-        const modelRunner = new AIModelRunner();
+        const embeddingRunner = new AIEmbeddingRunner();
 
         // Provider directives are built for every item BEFORE any embedding spend. A driver may
         // reject a record from BuildProviderDirectives (e.g. a mandatory routing value its config
@@ -1830,8 +1832,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             // Rate limit embedding API call
             await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
 
-            // Use AIModelRunner to embed texts with AIPromptRun tracking
-            const runResult = await modelRunner.RunEmbedding({
+            // Use AIEmbeddingRunner to embed texts with AIPromptRun tracking
+            const runResult = await embeddingRunner.RunEmbedding({
                 Texts: texts,
                 ModelID: infra.embeddingModelID,
                 PromptID: embeddingPromptID,
@@ -2626,7 +2628,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const texts = embeddable.map(e => e.chunk.text);
         await this.EmbeddingRateLimiter.Acquire(texts.reduce((sum, t) => sum + Math.ceil(t.length / 4), 0));
 
-        const runResult = await new AIModelRunner().RunEmbedding({
+        const runResult = await new AIEmbeddingRunner().RunEmbedding({
             Texts: texts,
             ModelID: infra.embeddingModelID,
             PromptID: this.resolveEmbeddingPromptID(),
@@ -2870,11 +2872,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const externalIndexName = vectorIndex.ExternalID?.trim() || vectorIndex.Name;
         LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${externalIndexName}" (Vector Index "${vectorIndex.Name}")`);
 
-        const embedding = this.createEmbeddingInstance(driverClass);
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
+        const embeddingRunner = new AIEmbeddingRunner();
 
         return {
-            embedding,
+            embeddingRunner,
             vectorDB,
             indexName: externalIndexName,
             embeddingModelName,
@@ -2912,21 +2914,6 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             throw new Error(`Embedding model ${embeddingModelID} not found in AIEngine — ensure AIEngine is configured`);
         }
         return aiModel;
-    }
-
-    /** Create a BaseEmbeddings instance for a given driver class */
-    private createEmbeddingInstance(driverClass: string): BaseEmbeddings {
-        // No pre-flight key check, deliberately — the same call the EntityDocument pipeline already
-        // makes (`entityVectorSync.ts`), for the reason documented there: an empty key is legitimate
-        // for local-only drivers (LocalEmbedding runs ONNX in-process and does `super(apiKey || 'local')`),
-        // and for a cloud driver that genuinely needs one the constructor or the first inference call
-        // raises a real provider-level auth error, which is more actionable than a guard here.
-        // Gating up front made local embedding models unusable from this pipeline without inventing a
-        // meaningless AI_VENDOR_API_KEY__LocalEmbedding.
-        const apiKey = GetAIAPIKey(driverClass);
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey || '');
-        if (!instance) throw new Error(`Failed to create embedding instance for ${driverClass}`);
-        return instance;
     }
 
     /**
@@ -3641,9 +3628,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
         await this.EmbeddingRateLimiter.Acquire(Math.ceil(truncated.length / 4));
 
-        const modelRunner = new AIModelRunner();
+        const embeddingRunner = new AIEmbeddingRunner();
         const embeddingPromptID = this.resolveEmbeddingPromptID();
-        const runResult = await modelRunner.RunEmbedding({
+        const runResult = await embeddingRunner.RunEmbedding({
             ModelID: infra.embeddingModelID,
             Texts: [truncated],
             PromptID: embeddingPromptID ?? undefined,
