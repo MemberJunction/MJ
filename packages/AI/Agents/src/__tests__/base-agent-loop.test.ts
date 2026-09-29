@@ -48,6 +48,10 @@ import type { AIPromptParams, AIPromptRunResult, ExecuteAgentParams, MJAIAgentEn
 import { RecordToolCallingDecision } from '@memberjunction/ai-prompts';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { MJActionEntityExtended } from '@memberjunction/actions-base';
+import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { AgentDecisionService } from '../AgentDecisionService';
+import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from '../agent-types/loop-agent-prompt-params';
 
 // ============================================================================
 // Module mocks (boundaries only)
@@ -1061,5 +1065,202 @@ describe('BaseAgent.Execute — a While whose condition cannot be evaluated', ()
         expect(harness.run.Status).toBe('Failed');
         expect(harness.run.ErrorMessage).toContain('Maximum iteration limit of 4 exceeded');
         expect(harness.steps.filter((s) => s.StepType === 'While').map((s) => s.Status)).toEqual(['Failed', 'Failed', 'Failed']);
+    });
+});
+
+describe('BaseAgent.Execute — the payload change check (opt-in with payloadFeedbackCheck)', () => {
+    /** Over 100 characters, so the analyzer measures its truncation. It must never reach the decision. */
+    const LONG_SUMMARY = 'The quarterly report covers revenue, churn and hiring across every region in detail. '.repeat(3);
+    const SHORT_SUMMARY = 'Short.';
+    const REASONING = 'The user asked for a one-line summary, so I am shortening it.';
+    const CHANGE_REASONING = 'Replace the long summary with one line.';
+    const CHECK_ON = JSON.stringify({ payloadFeedbackCheck: true });
+
+    const contentOf = (m: { content: unknown }): string => (typeof m.content === 'string' ? m.content : '');
+
+    /** The BaseAgent member the check asks through. Protected, so tests reach it through this seam. */
+    interface DecisionInternals {
+        _agentDecisionService: AgentDecisionService;
+    }
+
+    function decisionServiceOf(agent: HarnessAgent): AgentDecisionService {
+        return (agent as unknown as DecisionInternals)._agentDecisionService;
+    }
+
+    function likelihood(probability: number): AIDecisionRunResult {
+        return { success: true, Answers: { change_1: { Kind: 'Likelihood', Probability: probability } } };
+    }
+
+    /**
+     * Turn 1 cuts the summary to one line (a change the analyzer flags for feedback) and runs the
+     * action; turn 2 finishes. Each turn records the conversation it was sent.
+     */
+    function truncatingScript(turns: string[][], changeRequest: LoopAgentResponse['payloadChangeRequest'] = {
+        updateElements: { summary: SHORT_SUMMARY },
+        reasoning: CHANGE_REASONING,
+    }): Array<(params: AIPromptParams) => AIPromptRunResult> {
+        return [
+            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(actionsEnvelope({ reasoning: REASONING, payloadChangeRequest: changeRequest })); },
+            (p) => { turns.push((p.conversationMessages ?? []).map(contentOf)); return llmEnvelope(successEnvelope()); },
+        ];
+    }
+
+    /** The messages the loop added between turn 1 and turn 2. */
+    function addedBeforeTurn2(turns: string[][]): string[] {
+        return turns[1].slice(turns[0].length);
+    }
+
+    function outputOf(step: MockStepEntity): Record<string, unknown> {
+        return JSON.parse(step.OutputData ?? '{}');
+    }
+
+    it('defaults to off', () => {
+        expect(DEFAULT_LOOP_AGENT_PROMPT_PARAMS.payloadFeedbackCheck).toBe(false);
+    });
+
+    it.each([
+        ['the agent does not set it', null],
+        ['the agent sets it to false', JSON.stringify({ payloadFeedbackCheck: false })],
+    ])('when %s, a flagged change behaves exactly as today: no decision, no message, no extra step', async (_label, promptParams) => {
+        harness.agent = makeAgentRow({ AgentTypePromptParams: promptParams });
+        const turns: string[][] = [];
+        const { agent, runner } = makeAgent(truncatingScript(turns));
+        const ask = vi.spyOn(decisionServiceOf(agent), 'Ask');
+
+        const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+        expect(result.success).toBe(true);
+        expect(ask).not.toHaveBeenCalled();
+        // The analyzer still flags the change, and that still goes to telemetry only.
+        const payloadChangeResult = outputOf(harness.steps[1]).payloadChangeResult as { requiresFeedback: boolean };
+        expect(payloadChangeResult.requiresFeedback).toBe(true);
+        // Today's steps, and today's turn-2 additions: the action's invocation and its results.
+        expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Prompt']);
+        const added = addedBeforeTurn2(turns);
+        expect(added).toHaveLength(2);
+        expect(added[0]).toContain(`You invoked the **${ACTION_NAME}** action`);
+        expect(added[1]).toMatch(/^Action results:/);
+        // The change stands.
+        expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+        expect(result.payload).toEqual({ summary: SHORT_SUMMARY });
+    });
+
+    describe('when the agent turns it on', () => {
+        beforeEach(() => {
+            harness.agent = makeAgentRow({ AgentTypePromptParams: CHECK_ON });
+        });
+
+        it('asks one Likelihood per flagged change, in one call, about the reasoning and never the payload', async () => {
+            const turns: string[][] = [];
+            const { agent } = makeAgent(truncatingScript(turns));
+            const ask = vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.9));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(ask).toHaveBeenCalledTimes(1);
+            const asked = ask.mock.calls[0][0];
+            expect(Object.keys(asked.Questions)).toEqual(['change_1']);
+            expect(asked.Questions.change_1).toEqual({
+                Kind: 'Likelihood',
+                Instructions: expect.stringMatching(/^Given the agent's stated reasoning, this change was intended: Content reduced by .* at "summary"$/),
+            });
+            const state = String(asked.State);
+            expect(state).toContain(REASONING);
+            expect(state).toContain(CHANGE_REASONING);
+            expect(state).toContain(`from ${LONG_SUMMARY.length} to ${SHORT_SUMMARY.length} characters`);
+            expect(state).not.toContain(LONG_SUMMARY.slice(0, 40));
+            expect(asked.ContextUser?.ID).toBe(USER_ID);
+            expect(asked.AgentID).toBe(AGENT_ID);
+        });
+
+        it('uses the agent\'s decisionPromptName', async () => {
+            harness.agent = makeAgentRow({ AgentTypePromptParams: JSON.stringify({ payloadFeedbackCheck: true, decisionPromptName: 'Custom Decision' }) });
+            const { agent } = makeAgent(truncatingScript([]));
+            const ask = vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.9));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(ask.mock.calls[0][0].PromptName).toBe('Custom Decision');
+        });
+
+        it('lists a change judged unintended on the next turn, and never reverts it', async () => {
+            const turns: string[][] = [];
+            const { agent, runner } = makeAgent(truncatingScript(turns));
+            vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.1));
+
+            const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(result.success).toBe(true);
+            const added = addedBeforeTurn2(turns);
+            expect(added).toHaveLength(3);
+            expect(added[0]).toMatch(/^Payload change check: these changes to the payload may not have been intended\./);
+            expect(added[0]).toContain('at "summary" (probability it was intended: 0.10)');
+            expect(added[0]).toContain('Nothing was reverted.');
+            // Never reverted: the agent's next turn, and the run, keep the change.
+            expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+            expect(result.payload).toEqual({ summary: SHORT_SUMMARY });
+            expect(JSON.parse(harness.run.FinalPayload ?? 'null')).toEqual({ summary: SHORT_SUMMARY });
+        });
+
+        it('adds nothing to the next turn for a change judged intended', async () => {
+            const turns: string[][] = [];
+            const { agent, runner } = makeAgent(truncatingScript(turns));
+            vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.9));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            const added = addedBeforeTurn2(turns);
+            expect(added).toHaveLength(2);
+            expect(added.some((c) => c.includes('Payload change check'))).toBe(false);
+            expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+        });
+
+        it('records the check as one Decision step, with the questions and the probabilities', async () => {
+            const { agent } = makeAgent(truncatingScript([]));
+            vi.spyOn(decisionServiceOf(agent), 'Ask').mockResolvedValueOnce(likelihood(0.1));
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Decision', 'Actions', 'Prompt']);
+            const check = harness.steps[2];
+            expect(check.StepName).toContain('Payload change check');
+            expect(check.Status).toBe('Completed');
+            const input = JSON.parse(check.InputData ?? '{}') as { questions: Array<{ id: string; path: string; type: string; change: string }> };
+            expect(input.questions).toEqual([
+                { id: expect.any(String), path: 'summary', type: 'content_truncation', change: expect.stringContaining('at "summary"') },
+            ]);
+            const output = outputOf(check);
+            expect(output.threshold).toBe(0.5);
+            expect(output.probabilities).toEqual({ [input.questions[0].id]: 0.1 });
+            expect(output.unintendedPaths).toEqual(['summary']);
+        });
+
+        it('accepts every change, adds nothing, and records why, when decisions are unavailable', async () => {
+            // No spy: the harness has no 'Default Decision' prompt, so the real Ask fails.
+            const turns: string[][] = [];
+            const { agent, runner } = makeAgent(truncatingScript(turns));
+
+            const result = await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(result.success).toBe(true);
+            expect(addedBeforeTurn2(turns)).toHaveLength(2);
+            expect(injectedPayload(runner.Calls[1])).toEqual({ summary: SHORT_SUMMARY });
+            const check = harness.steps[2];
+            expect(check.StepType).toBe('Decision');
+            expect(check.Status).toBe('Failed');
+            expect(check.ErrorMessage).toBe('Accepted by default (the decision call failed: Decision prompt "Default Decision" not found)');
+        });
+
+        it('asks nothing when the analyzer flags nothing', async () => {
+            const turns: string[][] = [];
+            const { agent } = makeAgent(truncatingScript(turns, { newElements: { note: 'added' } }));
+            const ask = vi.spyOn(decisionServiceOf(agent), 'Ask');
+
+            await agent.Execute(makeParams({ payload: { summary: LONG_SUMMARY } }));
+
+            expect(ask).not.toHaveBeenCalled();
+            expect(harness.steps.map((s) => s.StepType)).toEqual(['Validation', 'Prompt', 'Actions', 'Prompt']);
+            expect(addedBeforeTurn2(turns)).toHaveLength(2);
+        });
     });
 });

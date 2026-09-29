@@ -358,6 +358,21 @@ export interface LoopAgentTypePromptParams {
     finishIfThreshold?: number;
 
     /**
+     * Check the agent's own payload changes that the payload analyzer flags as needing feedback
+     * (large truncations, removed keys, type changes). Each flagged change becomes one Likelihood
+     * ("was this change intended?"), all asked in one decision call with the `decisionPromptName`
+     * prompt and recorded as a `Payload change check` Decision step. The changes judged unintended
+     * are listed on the agent's next turn, which asks it to confirm or restore them.
+     *
+     * A change is never reverted or blocked automatically: the agent decides. When the decision
+     * fails, every change is accepted, as it is when this is off.
+     *
+     * Off by default: each check costs an extra decision call.
+     * @default false
+     */
+    payloadFeedbackCheck?: boolean;
+
+    /**
      * Allow this agent to emit durable task graphs (`nextStep.type === 'Tasks'`).
      *
      * **Defaults to false, unlike every other flag here, and is enforced rather than advisory.**
@@ -423,6 +438,8 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     decisionPromptName: 'Default Decision',
     includeFinishIfDocs: true,
     finishIfThreshold: 0.9,
+    // Off: an opt-in check that costs a decision call per flagged payload change.
+    payloadFeedbackCheck: false,
     // Deliberately false — a capability gate, not a token-savings flag (D3).
     enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,

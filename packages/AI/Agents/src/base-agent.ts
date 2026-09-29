@@ -22,7 +22,7 @@ import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner, GetToolCallingDecision, AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage, ChatToolChoice, DecisionQuestion } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString, CleanAndParseJSON } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -122,6 +122,8 @@ import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, StoredToolResult } from './ArtifactToolManager';
 import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './MemoryWriteManager';
 import { AgentDecisionService } from './AgentDecisionService';
+import { PayloadFeedbackManager, PayloadFeedbackContext, PayloadFeedbackQuestion, PayloadFeedbackResponse } from './PayloadFeedbackManager';
+import { PayloadAnalysisResult } from './PayloadChangeAnalyzer';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from './agent-types/loop-agent-prompt-params';
 import {
     PipelineExecutor,
@@ -418,6 +420,20 @@ function formatSubAgentForFinishIf<P>(result: SubAgentStepResult<P>): string {
         lines.push(`Payload: ${jsonExcerpt(payload, 4000)}`);
     }
     return capFinishIfState(lines.join('\n\n'));
+}
+
+/** The top-level `reasoning` and `message` of a prompt's JSON response, when it has them. */
+function responseReasoningAndMessage(result: unknown): { Reasoning?: string; Message?: string } {
+    const parsed: unknown = typeof result === 'string' ? CleanAndParseJSON<unknown>(result) : result;
+    if (typeof parsed !== 'object' || parsed === null) {
+        return {};
+    }
+    const reasoning = 'reasoning' in parsed ? parsed.reasoning : undefined;
+    const message = 'message' in parsed ? parsed.message : undefined;
+    return {
+        Reasoning: typeof reasoning === 'string' ? reasoning : undefined,
+        Message: typeof message === 'string' ? message : undefined
+    };
 }
 
 /** The outcome of one decision request: its answers, or why it has none. */
@@ -7908,6 +7924,122 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Whether the merged agent-type prompt params turn the payload change check on. It is off unless
+     * `payloadFeedbackCheck` is `true`.
+     */
+    private isPayloadFeedbackCheckOn(agentTypePromptParams: Record<string, unknown> | undefined): boolean {
+        return agentTypePromptParams?.payloadFeedbackCheck === true;
+    }
+
+    /**
+     * The payload change check. Asks whether each change the analyzer flagged was intended, as one
+     * Likelihood per change in one decision call, and records it as a `Payload change check`
+     * Decision step. The changes judged unintended are listed in a message for the agent's next
+     * turn, which asks it to confirm or restore them.
+     *
+     * It never reverts or blocks a change: the agent decides. When the decision cannot answer,
+     * every change is accepted, as it is with the check off. Never throws.
+     */
+    private async checkPayloadChanges(
+        analysis: PayloadAnalysisResult | undefined,
+        nextStep: BaseAgentNextStep,
+        promptResult: AIPromptRunResult,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        const promptName = agentTypePromptParams?.decisionPromptName;
+        const manager = new PayloadFeedbackManager(
+            { decisionPromptName: typeof promptName === 'string' ? promptName : undefined },
+            this._agentDecisionService
+        );
+        const questions = manager.GenerateQuestions(analysis?.warnings ?? []);
+        if (questions.length === 0) {
+            return;
+        }
+        let step: MJAIAgentRunStepEntityExtended | undefined;
+        try {
+            step = await this.createStepEntity({
+                stepType: 'Decision',
+                stepName: 'Payload change check',
+                contextUser: params.contextUser,
+                inputData: {
+                    questions: questions.map(q => ({ id: q.id, path: q.warning.path, type: q.warning.type, change: manager.DescribeChange(q.warning) }))
+                }
+            });
+            const responses = await manager.QueryAgent(questions, this.payloadFeedbackContext(nextStep, promptResult, params), params.contextUser);
+            await this.finalizePayloadCheckStep(step, questions, responses, manager.IntendedThreshold);
+            const message = manager.BuildUnintendedChangesMessage(questions, responses);
+            if (message) {
+                this.injectPayloadCheckMessage(params, message);
+            }
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            LogError(`The payload change check failed, so every change stands: ${reason}`);
+            if (step) {
+                await this.finalizeStepEntity(step, false, reason);
+            }
+        }
+    }
+
+    /**
+     * What the payload change check's decision reads: the agent's own reasoning and message for the
+     * step (from its response, else from the step), and the reasoning it gave with the change.
+     */
+    private payloadFeedbackContext(nextStep: BaseAgentNextStep, promptResult: AIPromptRunResult, params: ExecuteAgentParams): PayloadFeedbackContext {
+        const response = responseReasoningAndMessage(promptResult?.result);
+        const stepMessage = nextStep.step === 'Chat' || nextStep.step === 'Success' ? nextStep.message : undefined;
+        return {
+            Reasoning: response.Reasoning ?? nextStep.reasoning,
+            ChangeReasoning: nextStep.payloadChangeRequest?.reasoning,
+            Message: response.Message ?? stepMessage,
+            AgentID: params.agent?.ID ?? this._agentRun?.AgentID,
+            CancellationToken: params.cancellationToken
+        };
+    }
+
+    /**
+     * Finalizes the `Payload change check` step with each change's probability and outcome. The step
+     * fails when no decision answered, and its error says why. A failure to save it never affects the run.
+     */
+    private async finalizePayloadCheckStep(
+        step: MJAIAgentRunStepEntityExtended,
+        questions: PayloadFeedbackQuestion[],
+        responses: PayloadFeedbackResponse[],
+        threshold: number
+    ): Promise<void> {
+        const answered = responses.filter(r => typeof r.probability === 'number');
+        const unintended = responses.filter(r => !r.intended).map(r => questions.find(q => q.id === r.questionId)?.warning.path);
+        try {
+            await this.finalizeStepEntity(step, answered.length > 0, answered.length > 0 ? undefined : responses[0]?.explanation, {
+                threshold,
+                probabilities: Object.fromEntries(answered.map(r => [r.questionId, r.probability])),
+                responses,
+                unintendedPaths: unintended
+            });
+        } catch (error) {
+            LogError(`Could not save the payload change check step: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /** Adds the payload change check's message to the conversation, for the agent's next turn. */
+    private injectPayloadCheckMessage(params: ExecuteAgentParams, content: string): void {
+        const message: AgentChatMessage = {
+            role: 'user',
+            content,
+            metadata: {
+                turnAdded: this._promptTurnCount,
+                messageType: 'tool-result',
+                expirationTurns: 3,
+                expirationMode: 'Compact',
+                compactMode: 'First N Chars',
+                compactLength: 500,
+                compactPromptId: '',
+            },
+        };
+        params.conversationMessages.push(message);
+    }
+
+    /**
      * Whether THIS action may use the run's runtime API key for THIS driver class. The default is
      * yes: the run was started on those keys, and an action that calls a vendor on the user's behalf
      * (Generate Image) is doing what the prompts do. Override to narrow it — an agent that knows
@@ -10246,6 +10378,13 @@ The context is now within limits. Please retry your request with the recovered c
 
                 // Set the final payload - the changeResult already respects the allowed paths
                 finalPayload = changeResult.result;
+
+                // Opt-in payload change check: asks whether the flagged changes were intended. It never
+                // reverts or blocks a change; the agent reads the result on its next turn.
+                const payloadCheckParams = promptParams.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+                if (changeResult.requiresFeedback && this.isPayloadFeedbackCheckOn(payloadCheckParams)) {
+                    await this.checkPayloadChanges(changeResult.analysis, initialNextStep, promptResult, payloadCheckParams, params);
+                }
             }
 
             // Apply scratchpad changes if provided (zero turn cost — processed inline)
