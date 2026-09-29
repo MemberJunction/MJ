@@ -108,7 +108,7 @@ vi.mock('@memberjunction/credentials', async (importOriginal) => {
 import { AIPromptRunner } from '../AIPromptRunner';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJGlobal } from '@memberjunction/global';
-import type { ChatResult } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
+import type { ChatResult, AIPromptConfiguration } from '@memberjunction/ai'; // real types — the mock only replaces GetAIAPIKey
 import { TestLLM, makeFailedChatResult } from '@memberjunction/unit-testing';
 import { buildRealisticCatalog, DEFAULT_CONFIGURED_DRIVERS, MODEL_TYPE, VENDOR, makeModel, makeModelVendor, type AICatalog } from './__fixtures__/ai-metadata.fixtures';
 
@@ -131,12 +131,13 @@ interface FailoverRunner { executeModelWithFailover: (...args: ExecArgs) => Prom
 
 interface TestCandidate {
   model: { ID: string; Name: string };
-  vendorId: string;
+  vendorId?: string;
   vendorName: string;
   driverClass: string;
   apiName: string;
   supportsEffortLevel: boolean;
-  effortLevel: undefined;
+  effortLevel?: number;
+  promptModelConfiguration?: AIPromptConfiguration | null;
   isPreferredVendor: boolean;
   priority: number;
   source: string;
@@ -465,6 +466,63 @@ describe('executeModelWithFailover — candidate order and exhaustion', () => {
     expect(pr.FailoverAttempts).toBe(2);
     const errors = JSON.parse(pr.FailoverErrors ?? '[]') as RecordedFailoverError[];
     expect(errors.every(e => e.errorType === 'RateLimit')).toBe(true);
+  });
+});
+
+// ===========================================================================
+// (d2) Each attempt runs on THAT candidate's own fields. The failover loop hands executeModel the
+// candidate it is trying; nothing may fall back to the first candidate's (the call's) model,
+// vendor, effort level or prompt-model configuration, or credentials and settings would be
+// resolved against the wrong model on every failover attempt.
+// ===========================================================================
+describe('executeModelWithFailover — each attempt uses its own candidate', () => {
+  type ExecuteModel = (...args: ExecArgs) => Promise<ChatResult>;
+  // executeModel's arguments, in order (see AIPromptRunner.executeModel).
+  const ARG = { model: 0, vendorId: 4, driverClass: 8, apiName: 9, supportsEffortLevel: 10, effortLevel: 11, promptModelConfiguration: 12 } as const;
+
+  it('passes the failover candidate\'s model, vendor, driver, API name, effort settings and prompt-model configuration', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    const c2Configuration: AIPromptConfiguration = {};
+    // Every field differs from what the call itself was made with (c1's, see runFailover).
+    const c2: TestCandidate = {
+      ...candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90),
+      supportsEffortLevel: true,
+      effortLevel: 70,
+      promptModelConfiguration: c2Configuration,
+    };
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'answered by the second candidate' },
+    );
+    const executeModel = vi.spyOn(runner as unknown as { executeModel: ExecuteModel }, 'executeModel');
+
+    const result = await runFailover(runner, [c1, c2]);
+
+    expect(result.success).toBe(true);
+    expect(executeModel).toHaveBeenCalledTimes(2);
+    const second = executeModel.mock.calls[1];
+    expect(second[ARG.model]).toBe(c2.model);
+    expect(second[ARG.vendorId]).toBe('v-openai');
+    expect(second[ARG.driverClass]).toBe('OpenAILLM');
+    expect(second[ARG.apiName]).toBe('api-gpt');
+    expect(second[ARG.supportsEffortLevel]).toBe(true);
+    expect(second[ARG.effortLevel]).toBe(70);
+    expect(second[ARG.promptModelConfiguration]).toBe(c2Configuration);
+  });
+
+  it('passes null, not the first candidate\'s vendor, for a candidate with no vendor', async () => {
+    const c1 = candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100);
+    const c2: TestCandidate = { ...candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90), vendorId: undefined };
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'answered by the second candidate' },
+    );
+    const executeModel = vi.spyOn(runner as unknown as { executeModel: ExecuteModel }, 'executeModel');
+
+    const result = await runFailover(runner, [c1, c2]);
+
+    expect(result.success).toBe(true);
+    expect(executeModel.mock.calls[1][ARG.vendorId]).toBeNull();
   });
 });
 
