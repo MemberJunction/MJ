@@ -54,9 +54,10 @@ function formatCurrencyAmount(value: number, currencyCode: string): string {
             maximumFractionDigits: 2
         });
         // A real but sub-cent amount is not "$0.00": that reads as free, and free is what an
-        // unpriced value (rendered '—') is easily mistaken for.
+        // unpriced value (rendered '—') is easily mistaken for. A negative one keeps its sign in
+        // front of the magnitude ("-<$0.01"), since "<-$0.01" would be false.
         if (value !== 0 && Math.abs(value) < 0.005) {
-            return `${value < 0 ? '>' : '<'}${format.format(value < 0 ? -0.01 : 0.01)}`;
+            return `${value < 0 ? '-' : ''}<${format.format(0.01)}`;
         }
         return format.format(value);
     } catch {
@@ -91,6 +92,17 @@ export function FormatDelta(deltaPercent: number | null | undefined): string {
 }
 
 /**
+ * Parses a date/time string, reading an ISO date-time that carries no offset as UTC. `new Date()`
+ * reads such a string as LOCAL time, and the buckets below are UTC — so in UTC+10 a
+ * `2026-09-24T00:00:00` day bucket would land on the 23rd.
+ */
+function parseAsUtc(text: string): Date {
+    const trimmed = text.trim();
+    const offsetLessDateTime = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+    return new Date(offsetLessDateTime.test(trimmed) ? `${trimmed.replace(' ', 'T')}Z` : trimmed);
+}
+
+/**
  * Buckets a date/time value into the given time grain (hour or day).
  */
 export function BucketTimestamp(value: unknown, grain: PivotTimeGrain): string {
@@ -98,7 +110,7 @@ export function BucketTimestamp(value: unknown, grain: PivotTimeGrain): string {
         return '—';
     }
 
-    const date = value instanceof Date ? value : new Date(String(value));
+    const date = value instanceof Date ? value : parseAsUtc(String(value));
     if (isNaN(date.getTime())) {
         return String(value);
     }
@@ -126,7 +138,11 @@ export function AggregateValues(
     values: (number | null | undefined)[],
     aggregation: PivotAggregationType = 'sum'
 ): number | null {
-    const valid = values.filter((v): v is number => v !== null && v !== undefined && !isNaN(Number(v)));
+    // Numeric strings are converted, not trusted: some drivers (PostgreSQL's NUMERIC) return
+    // decimals as strings, and summing those as-is would concatenate them ("5" + "3" = "53").
+    const valid = (values as unknown[])
+        .map(v => (typeof v === 'string' && v.trim() !== '' ? Number(v) : v))
+        .filter((v): v is number => typeof v === 'number' && !isNaN(v));
     if (valid.length === 0) {
         return null;
     }

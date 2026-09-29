@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import {
     AggregateValues,
     BucketTimestamp,
@@ -29,6 +29,12 @@ describe('query-pivot.compute', () => {
             expect(FormatMeasureValue(0.004, 'currency', 'EUR')).toBe('<€0.01');
             expect(FormatMeasureValue(0.005, 'currency')).toBe('$0.01');
             expect(FormatMeasureValue(0, 'currency')).toBe('$0.00');
+        });
+
+        it('keeps the sign in front of a negative sub-cent amount ("-<$0.01", not ">-$0.01")', () => {
+            expect(FormatMeasureValue(-0.004, 'currency')).toBe('-<$0.01');
+            expect(FormatMeasureValue(-0.004, 'currency', 'EUR')).toBe('-<€0.01');
+            expect(FormatMeasureValue(-0.02, 'currency')).toBe('-$0.02');
         });
 
         it('formats numbers with commas and appropriate decimal places', () => {
@@ -78,6 +84,28 @@ describe('query-pivot.compute', () => {
             expect(BucketTimestamp(null, 'hour')).toBe('—');
             expect(BucketTimestamp('', 'day')).toBe('—');
         });
+
+        describe('an offset-less date-time', () => {
+            // Node re-reads process.env.TZ on assignment, so this runs genuinely in UTC+10.
+            const originalTZ = process.env.TZ;
+            afterEach(() => {
+                if (originalTZ === undefined) {
+                    delete process.env.TZ;
+                } else {
+                    process.env.TZ = originalTZ;
+                }
+            });
+
+            it('is read as UTC, so a day bucket keeps its date east of UTC (Australia/Sydney)', () => {
+                process.env.TZ = 'Australia/Sydney';
+                expect(new Date('2026-09-24T00:00:00').getUTCDate()).toBe(23); // proves the local-parse trap is live
+                expect(BucketTimestamp('2026-09-24T00:00:00', 'day')).toBe('2026-09-24');
+                expect(BucketTimestamp('2026-09-24 00:00:00', 'day')).toBe('2026-09-24');
+                expect(BucketTimestamp('2026-09-24T13:00:00.123', 'hour')).toBe('2026-09-24 13:00');
+                // A value that states its offset is still honoured.
+                expect(BucketTimestamp('2026-09-24T00:00:00+10:00', 'day')).toBe('2026-09-23');
+            });
+        });
     });
 
     describe('AggregateValues', () => {
@@ -85,6 +113,12 @@ describe('query-pivot.compute', () => {
 
         it('computes sum', () => {
             expect(AggregateValues(nums, 'sum')).toBe(60);
+        });
+
+        it('adds numeric strings (PostgreSQL NUMERIC) instead of concatenating them, and ignores non-numbers', () => {
+            const fromDriver = ['5', '3', null, 'n/a', ''] as unknown as (number | null)[];
+            expect(AggregateValues(fromDriver, 'sum')).toBe(8);
+            expect(AggregateValues(fromDriver, 'count')).toBe(2);
         });
 
         it('computes average', () => {
