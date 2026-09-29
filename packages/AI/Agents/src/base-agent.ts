@@ -124,6 +124,20 @@ import { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from './Mem
 import { AgentDecisionService } from './AgentDecisionService';
 import { DEFAULT_LOOP_AGENT_PROMPT_PARAMS } from './agent-types/loop-agent-prompt-params';
 import {
+    ApplyCatalogNarrowing,
+    BuildCatalogNarrowingQuestions,
+    CatalogNarrowingCandidate,
+    CatalogNarrowingCandidatesToAsk,
+    CatalogNarrowingKind,
+    CatalogNarrowingLimits,
+    CatalogNarrowingOutcome,
+    IsAlwaysShownAction,
+    NoCatalogNarrowing,
+    OpeningRequestText,
+    ResolveCatalogNarrowingLimits,
+    SelectCatalogNarrowing,
+} from './catalog-narrowing';
+import {
     PipelineExecutor,
     PipelineToolRegistry,
     PipelineInvocable,
@@ -1117,6 +1131,25 @@ export class BaseAgent {
     private _agentTypePromptParams: Record<string, unknown> | undefined;
 
     /**
+     * The run's catalog narrowing (plan Task 3.7): what the prompt hides from its action, sub-agent
+     * and skill lists. Computed once, on the run's first prompt, and reused by every later step, so
+     * the catalog the model sees never changes mid-run. `undefined` until then; hides nothing when
+     * narrowing is off or failed open.
+     * @private
+     */
+    private _catalogNarrowing: CatalogNarrowingOutcome | undefined;
+
+    /**
+     * The request that opened the run: the last user message when it started, before the framework
+     * added anything. Catalog narrowing judges the catalog against it.
+     * @private
+     */
+    private _openingRequest: string = '';
+
+    /** The longest the catalog narrowing decision may take before the run shows the full catalog. */
+    private static readonly CATALOG_NARROWING_TIMEOUT_MS = 30000;
+
+    /**
      * IDs of skills already activated during this run. Prevents re-activation from re-appending
      * the same instructions to context / re-pushing duplicate actionChanges/subAgentChanges entries
      * when the LLM references an already-active skill again.
@@ -1731,6 +1764,8 @@ export class BaseAgent {
             this._dynamicActionLimits = {};
             this._mediaOutputs = [];
             this._messageLifecycleCallback = params.onMessageLifecycle;
+            this._catalogNarrowing = undefined;
+            this._openingRequest = OpeningRequestText(params.conversationMessages);
 
             // Resolve storage account for file artifacts
             this._resolvedStorageAccountId = await this.getStorageAccountID(wrappedParams);
@@ -7348,6 +7383,21 @@ The context is now within limits. Please retry your request with the recovered c
             // Store for the finishIf gate, which runs after this prompt in executeActionsStep / executeNextStep
             this._agentTypePromptParams = agentTypePromptParams;
 
+            // Catalog narrowing (plan Task 3.7), off unless maxActionsInPrompt / maxSubAgentsInPrompt is
+            // positive and the list is longer. It narrows what the prompt SHOWS, once per run:
+            // _effectiveActions / _effectiveSubAgents above stay whole, so validation forbids nothing.
+            const gatedSkills = engine.GetAutoActivatableSkillsForAgent(agent, _contextUser);
+            await this.ensureCatalogNarrowing(agent, _contextUser, agentTypePromptParams, activeActions, uniqueActiveSubAgents, gatedSkills);
+            const shownActions = this.hideNarrowedOut('action', activeActions);
+            if (shownActions !== activeActions) {
+                actionDetails = this.formatActionDetails(shownActions);
+            }
+            const shownSubAgents = this.hideNarrowedOut('agent', uniqueActiveSubAgents);
+            if (shownSubAgents !== uniqueActiveSubAgents) {
+                subAgentCount = shownSubAgents.length;
+                subAgentDetails = this.formatSubAgentDetails(shownSubAgents);
+            }
+
             // Build client tool details for the prompt (per-run; depends on extraData)
             const clientToolDetails = this.buildClientToolPromptSection(agent, extraData);
 
@@ -7362,8 +7412,7 @@ The context is now within limits. Please retry your request with the recovered c
             // and filtered by the acting user's Run permission (open-by-default) so the agent
             // is never even offered a skill the user isn't entitled to — the permission
             // boundary is enforced at the catalog, not just at activation.
-            const availableSkills = await this.availableSkills(
-                engine.GetAutoActivatableSkillsForAgent(agent, _contextUser), 'catalog', agent, _contextUser);
+            const availableSkills = await this.availableSkills(gatedSkills, 'catalog', agent, _contextUser);
             const skillsCatalog = this.formatSkillsCatalog(availableSkills);
 
             const contextData: AgentContextData = {
@@ -7372,7 +7421,7 @@ The context is now within limits. Please retry your request with the recovered c
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: subAgentCount,
                 subAgentDetails: subAgentDetails,
-                actionCount: activeActions.length,
+                actionCount: shownActions.length,
                 actionDetails: actionDetails,
                 clientToolDetails: clientToolDetails,
                 skillCount: availableSkills.length,
@@ -7409,6 +7458,211 @@ The context is now within limits. Please retry your request with the recovered c
         } catch (error) {
             throw new Error(`Error gathering context data: ${error.message}`);
         }
+    }
+
+    /**
+     * Narrows the catalog once per run, on its first prompt (plan Task 3.7), and caches the result for
+     * every later step. With narrowing off it asks nothing and records nothing. Never throws: any
+     * failure leaves the full catalog in place.
+     */
+    private async ensureCatalogNarrowing(
+        agent: MJAIAgentEntityExtended,
+        contextUser: UserInfo | undefined,
+        promptParams: Record<string, unknown>,
+        actions: MJActionEntityExtended[],
+        subAgents: MJAIAgentEntityExtended[],
+        skills: MJAISkillEntity[]
+    ): Promise<void> {
+        if (this._catalogNarrowing) {
+            return;
+        }
+        // Set first, so a failure below is cached as "hide nothing" rather than retried every step.
+        this._catalogNarrowing = NoCatalogNarrowing();
+        const limits = ResolveCatalogNarrowingLimits(promptParams);
+        if (limits.Actions === 0 && limits.SubAgents === 0) {
+            return;
+        }
+        try {
+            const candidates = this.catalogNarrowingCandidates(agent, actions, subAgents, skills);
+            const asked = CatalogNarrowingCandidatesToAsk(candidates, limits);
+            if (asked.length > 0) {
+                this._catalogNarrowing = await this.narrowCatalog(agent, contextUser, promptParams, candidates, asked, limits);
+            }
+        } catch (error) {
+            this.warnCatalogNarrowing(agent, error instanceof Error ? error.message : String(error));
+        }
+    }
+
+    /**
+     * Every item of the three lists as a narrowing candidate. An action or sub-agent with
+     * `MinExecutionsPerRun` set, and the Find Candidate tools, are pinned: always shown.
+     */
+    private catalogNarrowingCandidates(
+        agent: MJAIAgentEntityExtended,
+        actions: MJActionEntityExtended[],
+        subAgents: MJAIAgentEntityExtended[],
+        skills: MJAISkillEntity[]
+    ): CatalogNarrowingCandidate[] {
+        const requiredActionIDs = AIEngine.Instance.AgentActions
+            .filter(aa => UUIDsEqual(aa.AgentID, agent.ID) && aa.Status === 'Active' && (aa.MinExecutionsPerRun ?? 0) > 0)
+            .map(aa => aa.ActionID);
+        const candidate = (kind: CatalogNarrowingKind, item: { ID: string; Name: string; Description: string | null }, pinned: boolean): CatalogNarrowingCandidate =>
+            ({ Kind: kind, ID: item.ID, Name: item.Name, Description: item.Description ?? '', Pinned: pinned });
+        return [
+            ...actions.map(a => candidate('action', a, IsAlwaysShownAction(a.Name) || requiredActionIDs.some(id => UUIDsEqual(id, a.ID)))),
+            ...subAgents.filter(s => !!s).map(s => candidate('agent', s, (s.MinExecutionsPerRun ?? 0) > 0)),
+            ...skills.map(s => candidate('skill', s, false)),
+        ];
+    }
+
+    /**
+     * Asks the one decision, records it as the `Catalog narrowing` step, and returns what to hide.
+     * Any failure is logged as a warning and hides nothing, so the prompt shows the full catalog.
+     */
+    private async narrowCatalog(
+        agent: MJAIAgentEntityExtended,
+        contextUser: UserInfo | undefined,
+        promptParams: Record<string, unknown>,
+        candidates: CatalogNarrowingCandidate[],
+        asked: CatalogNarrowingCandidate[],
+        limits: CatalogNarrowingLimits
+    ): Promise<CatalogNarrowingOutcome> {
+        if (!this._openingRequest || !contextUser) {
+            this.warnCatalogNarrowing(agent, contextUser
+                ? 'the run has no user message to judge the catalog against'
+                : 'the run has no context user');
+            return NoCatalogNarrowing();
+        }
+        const promptName = typeof promptParams.decisionPromptName === 'string'
+            ? promptParams.decisionPromptName
+            : AgentDecisionService.DEFAULT_PROMPT_NAME;
+        const step = await this.startCatalogNarrowingStep(contextUser, promptName, asked, limits);
+        const result = await this.askCatalogNarrowing(agent, contextUser, BuildCatalogNarrowingQuestions(asked), promptName);
+        const outcome = result.success ? SelectCatalogNarrowing(candidates, asked, result.Answers, limits) : undefined;
+        if (!outcome) {
+            const reason = result.success ? 'an answer was missing or was not a probability' : (result.errorMessage || 'the decision call failed');
+            this.warnCatalogNarrowing(agent, reason);
+            await this.finishCatalogNarrowingStep(step, result, undefined, reason);
+            return NoCatalogNarrowing();
+        }
+        await this.finishCatalogNarrowingStep(step, result, outcome);
+        return outcome;
+    }
+
+    /**
+     * The one decision call, against the opening request. Never throws, and never waits longer than
+     * {@link CATALOG_NARROWING_TIMEOUT_MS} or past the run's cancellation: a throw, a timeout and a
+     * cancelled run each come back as a failed result. Stopping also aborts the call.
+     */
+    private async askCatalogNarrowing(
+        agent: MJAIAgentEntityExtended,
+        contextUser: UserInfo,
+        questions: Record<string, DecisionQuestion>,
+        promptName: string
+    ): Promise<AIDecisionRunResult> {
+        const failed = (errorMessage: string): AIDecisionRunResult => ({ success: false, errorMessage, Answers: {} });
+        const controller = new AbortController();
+        const stopped = new Promise<AIDecisionRunResult>(resolve => controller.signal.addEventListener(
+            'abort', () => resolve(failed(String(controller.signal.reason))), { once: true }));
+        const runToken = this._executeParams?.cancellationToken;
+        const relayRunAbort = (): void => controller.abort('the run was cancelled');
+        if (runToken?.aborted) {
+            relayRunAbort();
+        } else {
+            runToken?.addEventListener('abort', relayRunAbort, { once: true });
+        }
+        const timeoutMS = BaseAgent.CATALOG_NARROWING_TIMEOUT_MS;
+        const timer = setTimeout(() => controller.abort(`the decision call timed out after ${timeoutMS}ms`), timeoutMS);
+        try {
+            const ask = this._agentDecisionService.Ask({
+                State: this._openingRequest,
+                Questions: questions,
+                ContextUser: contextUser,
+                AgentID: agent.ID,
+                PromptName: promptName,
+                CancellationToken: controller.signal,
+            });
+            return await Promise.race([ask, stopped]);
+        } catch (error) {
+            return failed(error instanceof Error ? error.message : String(error));
+        } finally {
+            clearTimeout(timer);
+            runToken?.removeEventListener('abort', relayRunAbort);
+        }
+    }
+
+    /** Opens the `Catalog narrowing` Decision step with the decision's inputs. Without a run there is no step. */
+    private async startCatalogNarrowingStep(
+        contextUser: UserInfo,
+        promptName: string,
+        asked: CatalogNarrowingCandidate[],
+        limits: CatalogNarrowingLimits
+    ): Promise<MJAIAgentRunStepEntityExtended | undefined> {
+        if (!this._agentRun) {
+            return undefined;
+        }
+        const count = (kind: CatalogNarrowingKind): number => asked.filter(c => c.Kind === kind).length;
+        try {
+            return await this.createStepEntity({
+                stepType: 'Decision',
+                stepName: 'Catalog narrowing',
+                contextUser,
+                inputData: {
+                    request: this._openingRequest,
+                    promptName,
+                    limits: { actions: limits.Actions, subAgents: limits.SubAgents, skills: limits.Skills },
+                    asked: { actions: count('action'), subAgents: count('agent'), skills: count('skill') },
+                },
+            });
+        } catch (error) {
+            LogError(`Could not record the catalog narrowing step: ${error instanceof Error ? error.message : String(error)}`);
+            return undefined;
+        }
+    }
+
+    /** Finalizes the `Catalog narrowing` step: each narrowed list's counts, kept names and probabilities, or why it failed open. */
+    private async finishCatalogNarrowingStep(
+        step: MJAIAgentRunStepEntityExtended | undefined,
+        result: AIDecisionRunResult,
+        outcome: CatalogNarrowingOutcome | undefined,
+        reason?: string
+    ): Promise<void> {
+        if (!step) {
+            return;
+        }
+        const usage = {
+            executionTimeMS: result.executionTimeMS,
+            tokensUsed: result.tokensUsed,
+            model: result.DecisionResult?.ResolvedModel ?? result.modelInfo?.modelName,
+            promptRunId: result.promptRun?.ID,
+        };
+        if (!outcome) {
+            await this.finalizeStepEntity(step, false, reason, { failedOpen: true, reason, ...usage });
+            return;
+        }
+        const lists: Record<string, unknown> = {};
+        const stepKeys: Record<CatalogNarrowingKind, string> = { action: 'actions', agent: 'subAgents', skill: 'skills' };
+        for (const kind of ['action', 'agent', 'skill'] as const) {
+            const list = outcome.Lists[kind];
+            if (list) {
+                lists[stepKeys[kind]] = { total: list.Total, limit: list.Limit, shown: list.Kept.length, kept: list.Kept, pinned: list.Pinned, probabilities: list.Probabilities };
+            }
+        }
+        await this.finalizeStepEntity(step, true, undefined, { ...lists, ...usage });
+    }
+
+    /** Logs that catalog narrowing failed open. */
+    private warnCatalogNarrowing(agent: MJAIAgentEntityExtended, reason: string): void {
+        LogErrorEx({
+            message: `Catalog narrowing for '${agent.Name}' failed, so the full catalog is shown: ${reason}`,
+            severity: 'warning',
+            category: 'CatalogNarrowing',
+        });
+    }
+
+    /** The items of one list the prompt shows. Returns `items` itself when the run's narrowing hides none of them. */
+    private hideNarrowedOut<T extends { ID: string }>(kind: CatalogNarrowingKind, items: T[]): T[] {
+        return ApplyCatalogNarrowing(items, this._catalogNarrowing?.Hidden[kind]);
     }
 
     /**
@@ -12834,6 +13088,9 @@ The context is now within limits. Please retry your request with the recovered c
      * them calls this after MJ's gates
      * (AcceptsSkills, Status, agent grant, user Run permission, the ActivationMode double gate) and
      * before anything activates. The default is the identity: MJ's gates are the whole policy.
+     * The one exception is the `'catalog'` purpose, where the default also applies the run's catalog
+     * narrowing (plan Task 3.7; off unless `maxActionsInPrompt` is set), which hides skills from the
+     * catalog but never refuses one. An override that wants it too calls `super.filterAvailableSkills`.
      *
      * Override it to layer a policy MJ has no table for — a tenant licensing model, a per-organization
      * entitlement, a feature flag — and it applies everywhere at once. Without this seam a subclass
@@ -12860,8 +13117,26 @@ The context is now within limits. Please retry your request with the recovered c
         agent: MJAIAgentEntityExtended,
         contextUser?: UserInfo,
     ): Promise<MJAISkillEntity[]> {
-        void purpose; void agent; void contextUser; // named (not `_`-prefixed) so an override reads naturally
-        return skills;
+        void agent; void contextUser; // named (not `_`-prefixed) so an override reads naturally
+        return purpose === 'catalog' ? this.narrowSkillCatalog(skills) : skills;
+    }
+
+    /**
+     * Hides the skills the run's catalog narrowing judged out, from the catalog only: a hidden skill
+     * can still be activated. {@link filterAvailableSkills} fails CLOSED on a throw, but narrowing must
+     * fail OPEN, so this catches its own errors and returns every skill it was given.
+     */
+    private narrowSkillCatalog(skills: MJAISkillEntity[]): MJAISkillEntity[] {
+        try {
+            return this.hideNarrowedOut('skill', skills);
+        } catch (error) {
+            LogErrorEx({
+                message: `Catalog narrowing could not filter the skill catalog, so every skill is shown: ${error instanceof Error ? error.message : String(error)}`,
+                severity: 'warning',
+                category: 'CatalogNarrowing',
+            });
+            return skills;
+        }
     }
 
     /**

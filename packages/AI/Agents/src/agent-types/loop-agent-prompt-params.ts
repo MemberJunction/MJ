@@ -379,21 +379,24 @@ export interface LoopAgentTypePromptParams {
     // === Content Limiting ===
 
     /**
-     * Maximum number of sub-agents to include in prompt details.
-     * -1 = include all (default)
-     * 0 = include none (hide sub-agent capabilities)
-     * N = include first N sub-agents
-     * Useful for agents with many sub-agents where only a few are commonly used.
+     * Catalog narrowing for sub-agents (plan Task 3.7).
+     * -1 or 0 = include all (default: narrowing is off)
+     * N = when the agent has more than N sub-agents, show the N most useful for the run's opening
+     *     request, judged once per run by one decision call, plus any with MinExecutionsPerRun set.
+     * Narrowing only hides: every permitted sub-agent can still be called, and a failed decision
+     * shows them all.
      * @default -1
      */
     maxSubAgentsInPrompt?: number;
 
     /**
-     * Maximum number of actions to include in prompt details.
-     * -1 = include all (default)
-     * 0 = include none (hide action capabilities)
-     * N = include first N actions
-     * Useful for agents with many actions where only a few are commonly used.
+     * Catalog narrowing for actions and skills (plan Task 3.7).
+     * -1 or 0 = include all (default: narrowing is off)
+     * N = when the agent has more than N actions (or skills), show the N most useful for the run's
+     *     opening request, judged once per run by one decision call, plus any action with
+     *     MinExecutionsPerRun set and Find Candidate Actions / Find Candidate Agents.
+     * Narrowing only hides: every permitted action can still be called, and a failed decision shows
+     * them all.
      * @default -1
      */
     maxActionsInPrompt?: number;
