@@ -10,7 +10,7 @@ import {
   TrendData,
   ChartData
 } from '../../../services/ai-instrumentation.service';
-import { ComputeCoveragePercent } from '../../../services/ai-usage-analytics.compute';
+import { ComputeCoveragePercent, GetBucketSizeMs } from '../../../services/ai-usage-analytics.compute';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 import { TimeSeriesConfig } from '../../charts/time-series-chart.component';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -95,6 +95,7 @@ interface ErrorHotspot {
         [data]="TrendsData"
         title="Execution Trends"
         [config]="TimeSeriesConfig"
+        [BucketSizeMs]="TrendBucketMs"
       ></app-time-series-chart>
     </div>
 
@@ -518,6 +519,8 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
 
   KpiCards: KpiDisplayCard[] = [];
   TrendsData: TrendData[] = [];
+  /** Width of each trend bucket, the same rule the service buckets by (so a one-day range is daily). */
+  TrendBucketMs: number | null = null;
   TopConsumers: TopConsumer[] = [];
   ErrorHotspots: ErrorHotspot[] = [];
   IsLoading = false;
@@ -643,6 +646,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
   private applyDateRange(): void {
     const { start, end } = this.computeDateRange(this.TimeRange);
     this.PeriodLabel = this.getPeriodLabel(this.TimeRange);
+    this.TrendBucketMs = GetBucketSizeMs(start, end);
     this.instrumentationService.SetDateRange(start, end);
     // Explicitly refresh to ensure data loads on first visit
     this.instrumentationService.Refresh();

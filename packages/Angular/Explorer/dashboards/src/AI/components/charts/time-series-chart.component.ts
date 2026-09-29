@@ -1,5 +1,6 @@
 import { Component, Input, OnInit, OnDestroy, AfterViewInit, ViewChild, ElementRef, Output, EventEmitter, ViewEncapsulation } from '@angular/core';
 import * as d3 from 'd3';
+import { AxisTickFormat, CreateTimeScale, IsDailyBucketSeries, TooltipTimeFormat } from './time-series-axis';
 import { TrendData } from '../../services/ai-instrumentation.service';
 
 export interface TimeSeriesConfig {
@@ -17,6 +18,14 @@ export interface DataPointClickEvent {
   data: TrendData;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   metric: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   event: MouseEvent;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+}
+
+/**
+ * The top of a y domain. An all-zero series would give [0, 0], which d3 maps to the vertical
+ * middle — a flat line drawn across the centre of the chart with a single "0" tick.
+ */
+function nonZeroMax(max: number): number {
+  return max > 0 ? max : 1;
 }
 
 @Component({
@@ -247,6 +256,22 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     return this.Data;
   }
   @Input() title?: string;
+  private _bucketSizeMs: number | null = null;
+  /**
+   * Width of each bucket in the series, in ms, from the caller that built it. It decides whether the
+   * series is daily UTC buckets (UTC axis, UTC dates) and is the only way to classify a one-point
+   * series. When unset, the gap between the first two points is used.
+   */
+  @Input() set BucketSizeMs(value: number | null) {
+    this._bucketSizeMs = value ?? null;
+    if (this.viewReady) {
+      this.updateChart();
+    }
+  }
+  get BucketSizeMs(): number | null {
+    return this._bucketSizeMs;
+  }
+
   @Input() set config(value: TimeSeriesConfig) {
     this._config = value ?? {};
     this.applyConfig();
@@ -419,7 +444,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       .attr('transform', `translate(${this.margin.left},${this.margin.top})`);
 
     // Create scales
-    const xScale = d3.scaleTime()
+    const xScale = CreateTimeScale(this.isDailyBuckets())
       .domain(d3.extent(this.Data, d => d.timestamp) as [Date, Date])
       .range([0, this.width]);
 
@@ -449,25 +474,22 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       const leftAxisMetrics = ['cost', 'avgTime'];
       const rightAxisMetrics = ['executions', 'tokens', 'errors'];
       // Each axis is sized to the series still shown on it: hiding Tokens (millions) must let
-      // Executions (hundreds) use the axis instead of staying flat on the baseline.
-      const shown = (metrics: string[]) => {
-        const visible = metrics.filter(m => !this.hiddenMetrics.has(m));
-        return visible.length > 0 ? visible : metrics;
-      };
+      // Executions (hundreds) use the axis instead of staying flat on the baseline. An axis whose
+      // series are all hidden gets no scale, so it is not drawn.
+      const shown = (metrics: string[]) => metrics.filter(m => !this.hiddenMetrics.has(m));
 
-      // Create left axis scale (cost and time)
+      // Create left axis scale (cost and time). Nulls (unpriced cost, empty-bucket latency) are
+      // dropped before the ms-to-seconds conversion, not coerced to 0 by it.
       const leftValues = shown(leftAxisMetrics).flatMap(metric =>
-        this.Data.map(d => {
-          const value = this.getMetricValue(d, metric);
-          // Normalize avgTime to seconds for better scale comparison with cost
-          return metric === 'avgTime' ? (value || 0) / 1000 : (value || 0);
-        }).filter((v): v is number => v != null)
+        this.Data.map(d => this.getMetricValue(d, metric))
+          .filter((v): v is number => v != null)
+          .map(v => metric === 'avgTime' ? v / 1000 : v)
       );
 
       if (leftValues.length > 0) {
         const maxLeftValue = Math.max(...leftValues);
         const leftScale = d3.scaleLinear()
-          .domain([0, maxLeftValue])
+          .domain([0, nonZeroMax(maxLeftValue)])
           .range([this.height, 0])
           .nice();
 
@@ -482,7 +504,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
       if (rightValues.length > 0) {
         const maxRightValue = Math.max(...rightValues);
         const rightScale = d3.scaleLinear()
-          .domain([0, maxRightValue])
+          .domain([0, nonZeroMax(maxRightValue)])
           .range([this.height, 0])
           .nice();
 
@@ -505,7 +527,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
         if (allValues.length > 0) {
           const maxValue = Math.max(...allValues);
           const scale = d3.scaleLinear()
-            .domain([0, maxValue])
+            .domain([0, nonZeroMax(maxValue)])
             .range([this.height, 0])
             .nice();
 
@@ -763,9 +785,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
     const tooltip = d3.select(this.Tooltip.nativeElement);
 
     const costDisplay = data.cost !== null && data.cost !== undefined ? `$${data.cost.toFixed(4)}` : '\u2014 (unpriced)';
-    const when = this.isDailyBuckets()
-      ? d3.utcFormat('%a %b %d, %Y')(data.timestamp)
-      : d3.timeFormat('%a %b %d, %H:%M')(data.timestamp);
+    const when = TooltipTimeFormat(this.isDailyBuckets())(data.timestamp);
     const content = `
       <div><strong>${when}</strong></div>
       <div>Executions: ${data.executions.toLocaleString()}</div>
@@ -793,10 +813,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
 
   /** True when consecutive points are a day or more apart, i.e. the trend is bucketed by UTC day. */
   private isDailyBuckets(): boolean {
-    if (this.Data.length < 2) {
-      return false;
-    }
-    return this.Data[1].timestamp.getTime() - this.Data[0].timestamp.getTime() >= 24 * 60 * 60 * 1000;
+    return IsDailyBucketSeries(this.Data.map(d => d.timestamp), this.BucketSizeMs);
   }
 
   /**
@@ -874,35 +891,7 @@ export class TimeSeriesChartComponent implements OnInit, OnDestroy, AfterViewIni
   }
   
   private getTimeFormat(): (date: Date) => string {
-    if (this.Data.length < 2) {
-      return d3.timeFormat('%H:%M');
-    }
-    if (this.isDailyBuckets()) {
-      // Daily buckets are UTC days; a local-time label would show the previous day west of UTC.
-      return d3.utcFormat('%m/%d');
-    }
-    
-    // Calculate the time span of the data
-    const firstDate = this.Data[0].timestamp;
-    const lastDate = this.Data[this.Data.length - 1].timestamp;
-    const timeDiff = lastDate.getTime() - firstDate.getTime();
-    const hours = timeDiff / (1000 * 60 * 60);
-    const days = hours / 24;
-    
-    // Choose format based on time span
-    if (hours <= 24) {
-      // For up to 24 hours, show hours and minutes
-      return d3.timeFormat('%H:%M');
-    } else if (days <= 7) {
-      // For up to 7 days, show day and time
-      return d3.timeFormat('%a %H:%M'); // e.g., "Mon 14:00"
-    } else if (days <= 30) {
-      // For up to 30 days, show month/day
-      return d3.timeFormat('%m/%d'); // e.g., "06/13"
-    } else {
-      // For longer periods, show month/day/year
-      return d3.timeFormat('%m/%d/%y'); // e.g., "06/13/25"
-    }
+    return AxisTickFormat(this.Data.map(d => d.timestamp), this.isDailyBuckets());
   }
   
   private getOptimalTickCount(): number {

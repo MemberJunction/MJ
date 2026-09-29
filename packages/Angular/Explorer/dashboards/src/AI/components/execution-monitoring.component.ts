@@ -9,7 +9,7 @@ import {
   ChartData,
   ExecutionDetails
 } from '../services/ai-instrumentation.service';
-import { ComputeCoveragePercent } from '../services/ai-usage-analytics.compute';
+import { ComputeCoveragePercent, GetBucketSizeMs } from '../services/ai-usage-analytics.compute';
 import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
@@ -214,6 +214,7 @@ export interface ExecutionMonitoringState {
                           [data]="(trends$ | async) ?? []"
                           title="Execution Trends"
                           [config]="timeSeriesConfig"
+                          [BucketSizeMs]="TrendBucketMs"
                           (dataPointClick)="onDataPointClick($event)"
                           (timeRangeChange)="onChartTimeRangeChange($event)"
                         ></app-time-series-chart>
@@ -2124,8 +2125,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return this.OnTimeRangeChange();
   }
 
+  /** Width of each trend bucket, the same rule the service buckets by. */
+  public TrendBucketMs: number | null = null;
+
   private setTimeRange(range: string): void {
     const { start, end } = this.getTimeRangeFromSelection(range);
+    this.TrendBucketMs = GetBucketSizeMs(start, end);
     this.instrumentationService.setDateRange(start, end);
   }
   
