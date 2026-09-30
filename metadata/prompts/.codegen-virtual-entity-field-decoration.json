@@ -73,7 +73,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 10
           },
@@ -88,7 +88,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-6 Luna",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -103,7 +103,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 9
           },
