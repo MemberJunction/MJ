@@ -164,7 +164,8 @@ export class TaskGraphCancelServerOperation extends TaskGraphCancelOperation {
  * exactly as stuck as before, because nothing downstream ever becomes eligible again.
  *
  * Also the way out of a Decision step's hold: a completed Decision holding an answer below its
- * question's `minConfidence` is asked again (see `TaskGraphService.Retry`).
+ * question's `minConfidence` is asked the questions it is holding again, and keeps the rest (see
+ * `TaskGraphService.Retry`).
  */
 @RegisterClass(BaseRemotableOperation, 'TaskGraph.RetryTask')
 export class TaskGraphRetryTaskServerOperation extends TaskGraphRetryTaskOperation {
