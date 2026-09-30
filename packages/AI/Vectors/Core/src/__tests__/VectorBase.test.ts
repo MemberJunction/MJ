@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { IsColocatedVectorHost } from '@memberjunction/ai-vectordb';
+import type { IMetadataProvider } from '@memberjunction/core';
 
-const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs } = vi.hoisted(() => {
+const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs, mockProvider } = vi.hoisted(() => {
   const mockRunView = vi.fn();
   const mockRunViews = vi.fn();
   const mockEntities = [
@@ -13,7 +15,15 @@ const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs } = v
   const mockVectorDBs = [
     { ID: 'vdb-1', ClassKey: 'TestVectorDB' },
   ];
-  return { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs };
+  const mockProvider = {
+    Entities: mockEntities,
+    CurrentUser: { ID: 'user-1', Email: 'test@test.com' },
+    EntityByID: (id: string) => mockEntities.find(e => e.ID === id),
+    ColocatedDialect: 'sqlserver',
+    ColocatedSchema: '__mj',
+    RunColocatedSQL: vi.fn(),
+  };
+  return { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs, mockProvider };
 });
 
 vi.mock('@memberjunction/core', () => {
@@ -21,10 +31,12 @@ vi.mock('@memberjunction/core', () => {
     Entities = mockEntities;
     CurrentUser = { ID: 'user-1', Email: 'test@test.com' };
     EntityByID(id: string) { return mockEntities.find(e => e.ID === id); }
+    static get Provider() { return mockProvider; }
   }
   class MockRunViewClass {
     RunView = mockRunView;
     RunViews = mockRunViews;
+    static FromMetadataProvider = vi.fn().mockImplementation(() => new MockRunViewClass());
   }
   return {
     Metadata: MockMetadata,
@@ -87,6 +99,34 @@ describe('VectorBase', () => {
       const newUser = { ID: 'user-2', Email: 'new@test.com' } as never;
       vectorBase.CurrentUser = newUser;
       expect(vectorBase.CurrentUser).toBe(newUser);
+    });
+  });
+
+  describe('Provider and colocated host wiring', () => {
+    it('should fall back to Metadata.Provider when no provider is supplied', () => {
+      expect(vectorBase.Provider).toBe(mockProvider);
+      expect(vectorBase.Metadata).toBe(mockProvider);
+    });
+
+    it('should satisfy IsColocatedVectorHost via Provider fallback to colocated host', () => {
+      expect(IsColocatedVectorHost(vectorBase.Provider)).toBe(true);
+      // Contrast with _metadata which is the helper wrapper and does NOT implement IColocatedVectorHost
+      expect(IsColocatedVectorHost(vectorBase._metadata)).toBe(false);
+    });
+
+    it('should use explicit provider when supplied in constructor', () => {
+      const explicitProvider = {
+        Entities: mockEntities,
+        CurrentUser: { ID: 'user-custom', Email: 'custom@test.com' },
+        EntityByID: (id: string) => mockEntities.find(e => e.ID === id),
+        ColocatedDialect: 'postgresql',
+        ColocatedSchema: 'public',
+        RunColocatedSQL: vi.fn(),
+      } as IMetadataProvider;
+      const customBase = new VectorBase(explicitProvider);
+      expect(customBase.Provider).toBe(explicitProvider);
+      expect(customBase.Metadata).toBe(explicitProvider);
+      expect(IsColocatedVectorHost(customBase.Provider)).toBe(true);
     });
   });
 

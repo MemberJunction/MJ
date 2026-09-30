@@ -19,8 +19,9 @@ export class VectorBase {
      * multi-provider scenarios. Falls back to the global default provider when omitted.
      */
     constructor(provider?: IMetadataProvider | null) {
-        // Fall back to the global default only when no provider was supplied
-        this._metadata = (provider as unknown as Metadata) ?? new Metadata();
+        // `_metadata` is the global `Metadata` helper, kept only because the field is public. It is
+        // not an IMetadataProvider, so nothing may hand it to code that expects one — see `Provider`.
+        this._metadata = new Metadata(); // global-provider-ok: legacy public field; metadata reads go through Provider
         this.Provider = provider ?? null; // setter also binds _runView to the provider
         this._currentUser = provider?.CurrentUser ?? this._metadata.CurrentUser;
     }
@@ -31,7 +32,7 @@ export class VectorBase {
      * operations in this class hierarchy go through this getter so a bound instance never
      * leaks onto the global provider.
      */
-    public get Metadata(): IMetadataProvider { return this._provider ?? (this._metadata as unknown as IMetadataProvider); }
+    public get Metadata(): IMetadataProvider { return this.Provider; }
     public get RunView(): RunView { return this._runView; }
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
@@ -41,9 +42,13 @@ export class VectorBase {
      * or set `instance.Provider = providerToUse` before invoking helper methods in
      * multi-provider contexts. Setting it rebinds the internal RunView instance so view
      * execution rides the same provider. Falls back to the global default when unset.
+     *
+     * The fallback is the global provider itself, never the `Metadata` wrapper: consumers
+     * type-check what they get here (e.g. `VectorDBBase.TryWireColocatedHost` needs an
+     * `IColocatedVectorHost`), and the wrapper fails those checks.
      */
     public get Provider(): IMetadataProvider {
-        return this._provider ?? (this._metadata as unknown as IMetadataProvider);
+        return this._provider ?? Metadata.Provider;
     }
     public set Provider(value: IMetadataProvider | null) {
         this._provider = value;
