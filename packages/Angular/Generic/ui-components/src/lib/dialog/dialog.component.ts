@@ -31,6 +31,9 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
  * else the first button in the body or actions (never the ✕), else the container.
  * Tab between stops is left to the browser. Tab on the last stop wraps to the
  * first, and Shift+Tab on the first stop or the container wraps to the last.
+ * A Tab that arrives from outside is taken only by the topmost open dialog, and
+ * only when focus is on the page behind it: not in another modal, and not in an
+ * overlay panel (a dropdown, a calendar) rendered on the body.
  * Focus returns to the trigger on close.
  * `AutoFocus`, `TrapFocus`, and `RestoreFocus` each default on so a dialog that
  * manages focus itself can turn that one behavior off.
@@ -99,6 +102,8 @@ export class MJDialogComponent implements OnDestroy {
   private previouslyFocused: HTMLElement | null = null;
   /** Set while the open focus is waiting for the `@if (Visible)` container. */
   private initialFocusPending = false;
+  /** Open dialogs, oldest first. Only the last one takes a Tab that arrives from outside. */
+  private static readonly openDialogs: MJDialogComponent[] = [];
   private static nextId = 0;
 
   private static readonly TAB_STOP_SELECTOR =
@@ -107,9 +112,16 @@ export class MJDialogComponent implements OnDestroy {
   private readonly onDocumentKeyDown = (event: KeyboardEvent): void => {
     if (event.defaultPrevented || event.key !== 'Tab' || !this.TrapFocus || !this._visible) return;
     if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (!this.isTopmostOpenDialog()) return;
     const container = this.containerElement();
     if (!container) return;
     const active = document.activeElement;
+    // Another modal, or a CDK overlay panel on body (dropdown, calendar, filter popover), keeps its Tab.
+    if (active instanceof Element) {
+      const modal = active.closest('[aria-modal="true"]');
+      if (modal && modal !== container) return;
+      if (active.closest('.cdk-overlay-container')) return;
+    }
     if (active instanceof Node && container.contains(active)) return;
     const stops = this.tabStops(container);
     event.preventDefault();
@@ -153,7 +165,8 @@ export class MJDialogComponent implements OnDestroy {
   /**
    * Keep focus in the dialog. The browser moves Tab between stops. Tab on the last
    * stop wraps to the first, and Shift+Tab on the first stop or the container wraps
-   * to the last. A Tab that arrives while focus is outside the open dialog is brought back in.
+   * to the last. A Tab from outside is brought in only when this dialog is the topmost
+   * one open, and not while focus is already inside another modal.
    */
   @Input() TrapFocus = true;
 
@@ -250,7 +263,8 @@ export class MJDialogComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
-    this.clearInitialFocusTimer();
+    this.cancelPendingInitialFocus();
+    this.forgetOpen();
     document.removeEventListener('keydown', this.onDocumentKeyDown);
     if (this._visible) {
       this.restoreFocus();
@@ -259,6 +273,7 @@ export class MJDialogComponent implements OnDestroy {
   }
 
   private onOpen(): void {
+    this.rememberOpen();
     document.body.style.overflow = 'hidden';
     document.addEventListener('keydown', this.onDocumentKeyDown);
     const active = document.activeElement;
@@ -271,8 +286,33 @@ export class MJDialogComponent implements OnDestroy {
   private onCloseInternal(): void {
     document.body.style.overflow = '';
     document.removeEventListener('keydown', this.onDocumentKeyDown);
-    this.clearInitialFocusTimer();
+    this.cancelPendingInitialFocus();
+    this.forgetOpen();
     this.restoreFocus();
+  }
+
+  private rememberOpen(): void {
+    if (!MJDialogComponent.openDialogs.includes(this)) {
+      MJDialogComponent.openDialogs.push(this);
+    }
+  }
+
+  private forgetOpen(): void {
+    const index = MJDialogComponent.openDialogs.indexOf(this);
+    if (index >= 0) {
+      MJDialogComponent.openDialogs.splice(index, 1);
+    }
+  }
+
+  /** The last open dialog that traps focus. Dialogs underneath leave an outside Tab alone. */
+  private isTopmostOpenDialog(): boolean {
+    for (let i = MJDialogComponent.openDialogs.length - 1; i >= 0; i--) {
+      const dialog = MJDialogComponent.openDialogs[i];
+      if (dialog._visible && dialog.TrapFocus) {
+        return dialog === this;
+      }
+    }
+    return false;
   }
 
   private scheduleInitialFocus(): void {
@@ -285,7 +325,7 @@ export class MJDialogComponent implements OnDestroy {
     });
   }
 
-  private clearInitialFocusTimer(): void {
+  private cancelPendingInitialFocus(): void {
     this.initialFocusPending = false;
   }
 
@@ -368,13 +408,16 @@ export class MJDialogComponent implements OnDestroy {
     return true;
   }
 
-  /** display:none, visibility:hidden, and [hidden] cannot take focus, so they are not stops. */
+  /**
+   * display:none and [hidden] hide the whole subtree. visibility is inherited, and a child
+   * can set visible again, so that check is only on the element itself.
+   */
   private isVisibleStop(el: HTMLElement): boolean {
+    if (getComputedStyle(el).visibility === 'hidden') return false;
     let current: HTMLElement | null = el;
     while (current) {
       if (current.hasAttribute('hidden')) return false;
-      const style = getComputedStyle(current);
-      if (style.display === 'none' || style.visibility === 'hidden') return false;
+      if (getComputedStyle(current).display === 'none') return false;
       current = current.parentElement;
     }
     return true;

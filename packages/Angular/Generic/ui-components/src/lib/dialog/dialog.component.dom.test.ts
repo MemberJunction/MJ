@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { Component, Input } from '@angular/core';
-import { ComponentFixture } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { renderComponentFixture, renderTemplate, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
 import { MJDialogComponent, MJDialogActionsComponent, MJDialogTitlebarComponent } from './dialog.component';
+import { MJDialogService } from './dialog.service';
 
 /**
  * DOM coverage for the mj-dialog family (dialog.component.ts) — the native-<dialog>-based modal that
@@ -115,6 +116,51 @@ class HiddenStopHostComponent {}
   `,
 })
 class EditableStopHostComponent {}
+
+/** The inner dialog is one OK button, and that button is the outer dialog's last stop. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Outer">
+      <mj-dialog [Visible]="true" [Closeable]="false" [AutoFocus]="false">
+        <button type="button" class="only-ok">OK</button>
+      </mj-dialog>
+    </mj-dialog>
+  `,
+})
+class InnerOnlyStopHostComponent {}
+
+/** Two dialogs next to each other. The second is on top; it is not projected inside the first. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Under">
+      <button type="button" class="under-btn">Under</button>
+    </mj-dialog>
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Over">
+      <button type="button" class="over-first">First</button>
+      <button type="button" class="over-last">Last</button>
+    </mj-dialog>
+  `,
+})
+class SiblingDialogHostComponent {}
+
+/** A child can turn visibility back on. That child is a stop; a hidden parent is not enough to skip it. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent],
+  template: `
+    <mj-dialog [Visible]="true" [Closeable]="false" [AutoFocus]="false">
+      <button type="button" class="shown">Shown</button>
+      <span style="visibility: hidden">
+        <button type="button" class="visible-again" style="visibility: visible">Again</button>
+      </span>
+    </mj-dialog>
+  `,
+})
+class VisibilityOverrideHostComponent {}
 
 const render = (inputs: Record<string, unknown> = {}) =>
   renderComponentFixture(MJDialogComponent, { imports: [MJDialogComponent], inputs: { Visible: true, ...inputs } });
@@ -425,6 +471,67 @@ describe('MJDialogComponent nested focus (DOM)', () => {
     expect(document.activeElement).toBe(innerFirst);
     expect(document.activeElement).not.toBe(outerClose);
   });
+
+  it('keeps Tab on an inner dialog whose only stop is the last stop of the outer dialog', async () => {
+    const f = renderComponentFixture(InnerOnlyStopHostComponent, { imports: [InnerOnlyStopHostComponent] });
+    await flushMacrotask();
+    const outerClose = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const ok = query(f, '.only-ok') as HTMLButtonElement;
+
+    ok.focus();
+    const wrap = press(ok, 'Tab');
+    expect(wrap.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(ok);
+    expect(document.activeElement).not.toBe(outerClose);
+  });
+});
+
+describe('MJDialogComponent topmost focus (DOM)', () => {
+  it('leaves Tab inside a dialog MJDialogService added to the body', async () => {
+    const f = renderHost({ AutoFocus: false, Visible: true });
+    await flushMacrotask();
+    const underClose = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const opened = TestBed.inject(MJDialogService).Open({
+      title: 'Confirm',
+      content: 'Are you sure?',
+      actions: [{ text: 'OK', primary: true }],
+    });
+    try {
+      const topFirst = document.body.querySelector('mj-dialog-container-internal button') as HTMLButtonElement;
+      expect(topFirst).not.toBeNull();
+      topFirst.focus();
+      const tab = press(topFirst, 'Tab');
+      expect(tab.defaultPrevented).toBe(false);
+      expect(document.activeElement).toBe(topFirst);
+      expect(document.activeElement).not.toBe(underClose);
+    } finally {
+      opened.Close();
+    }
+  });
+
+  it('leaves Tab inside a second mj-dialog declared beside the first', async () => {
+    const f = renderComponentFixture(SiblingDialogHostComponent, { imports: [SiblingDialogHostComponent] });
+    await flushMacrotask();
+    const underClose = f.nativeElement.querySelectorAll('.mj-dialog-close')[0] as HTMLButtonElement;
+    const overFirst = query(f, '.over-first') as HTMLButtonElement;
+    const overLast = query(f, '.over-last') as HTMLButtonElement;
+
+    overFirst.focus();
+    const tab = press(overFirst, 'Tab');
+    expect(tab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(overFirst);
+    expect(document.activeElement).not.toBe(underClose);
+
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    const fromOutside = press(outside, 'Tab');
+    const overClose = overLast.closest('.mj-dialog-container')?.querySelector('.mj-dialog-close') as HTMLButtonElement;
+    expect(fromOutside.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(overClose);
+    expect(document.activeElement).not.toBe(underClose);
+    outside.remove();
+  });
 });
 
 describe('MJDialogComponent tab stops (DOM)', () => {
@@ -434,6 +541,17 @@ describe('MJDialogComponent tab stops (DOM)', () => {
     const shown = query(f, '.shown') as HTMLButtonElement;
     shown.focus();
     const wrap = press(shown, 'Tab');
+    expect(wrap.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(shown);
+  });
+
+  it('keeps a stop that sets visibility back to visible inside a hidden parent', async () => {
+    const f = renderComponentFixture(VisibilityOverrideHostComponent, { imports: [VisibilityOverrideHostComponent] });
+    await flushMacrotask();
+    const again = query(f, '.visible-again') as HTMLButtonElement;
+    const shown = query(f, '.shown') as HTMLButtonElement;
+    again.focus();
+    const wrap = press(again, 'Tab');
     expect(wrap.defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(shown);
   });

@@ -2,8 +2,9 @@ import { Component, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { renderComponentFixture, overlayQuery, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, overlayQuery, clearOverlayContainers } from '@memberjunction/ng-test-utils';
 import { MJDatepickerComponent } from './datepicker.component';
+import { MJDialogComponent } from '../dialog/dialog.component';
 
 /**
  * DOM-level spec for <mj-datepicker>. Special case: the calendar is a CDK overlay
@@ -248,5 +249,64 @@ describe('MJDatepickerComponent — accessible name (#4116)', () => {
     const f = render();
     open(f);
     expect(overlayQuery('.mj-calendar')?.getAttribute('aria-label')).toBe('Calendar');
+  });
+});
+
+/** The calendar renders on body, outside the dialog. Tab on a day must not jump to the dialog's ✕. */
+@Component({
+  standalone: true,
+  imports: [MJDialogComponent, MJDatepickerComponent],
+  template: `
+    <mj-dialog [Visible]="true" [AutoFocus]="false" Title="Form">
+      <button type="button" class="before">Before</button>
+      <mj-datepicker AriaLabel="Due date"></mj-datepicker>
+      <button type="button" class="after">After</button>
+    </mj-dialog>
+  `,
+})
+class DatepickerInDialogHostComponent {}
+
+describe('MJDatepickerComponent inside mj-dialog (DOM)', () => {
+  afterEach(() => clearOverlayContainers());
+
+  const press = (el: HTMLElement, key: string, init: KeyboardEventInit = {}): KeyboardEvent => {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+    el.dispatchEvent(event);
+    return event;
+  };
+
+  it('Tab on a calendar button closes the calendar and returns to the field, not the dialog close', () => {
+    const f = renderComponentFixture(DatepickerInDialogHostComponent, { imports: [DatepickerInDialogHostComponent] });
+    const closeBtn = query(f, '.mj-dialog-close') as HTMLButtonElement;
+    const field = query(f, '.mj-datepicker-input') as HTMLInputElement;
+    (query(f, '.mj-datepicker-toggle') as HTMLButtonElement).click();
+    f.detectChanges();
+    const day = overlayQuery('.mj-calendar-day') as HTMLButtonElement;
+    expect(day).not.toBeNull();
+    day.focus();
+
+    const tab = press(day, 'Tab');
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(overlayQuery('.mj-calendar')).toBeNull();
+    expect(document.activeElement).toBe(field);
+    expect(document.activeElement).not.toBe(closeBtn);
+  });
+
+  it('Shift+Tab on a calendar button does not land on the dialog last stop', () => {
+    const f = renderComponentFixture(DatepickerInDialogHostComponent, { imports: [DatepickerInDialogHostComponent] });
+    (query(f, '.mj-datepicker-toggle') as HTMLButtonElement).click();
+    f.detectChanges();
+    const day = overlayQuery('.mj-calendar-nav') as HTMLButtonElement;
+    day.focus();
+
+    const tab = press(day, 'Tab', { shiftKey: true });
+    f.detectChanges();
+
+    expect(tab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(query(f, '.mj-datepicker-input'));
+    expect(document.activeElement).not.toBe(query(f, '.after'));
+    expect(overlayQuery('.mj-calendar')).toBeNull();
   });
 });
