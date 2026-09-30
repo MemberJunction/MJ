@@ -451,25 +451,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() ReadOnly = false;
 
-  /** @deprecated Use {@link ReadOnly}. */
-  @Input() set readOnly(value: boolean) {
-    this.ReadOnly = value;
-  }
-  /** @deprecated Use {@link ReadOnly}. */
-  get readOnly(): boolean {
-    return this.ReadOnly;
-  }
   /** Banner copy when {@link ReadOnly} is set. Null uses the View-share text. */
   @Input() ReadOnlyMessage: string | null = null;
-
-  /** @deprecated Use {@link ReadOnlyMessage}. */
-  @Input() set readOnlyMessage(value: string | null) {
-    this.ReadOnlyMessage = value;
-  }
-  /** @deprecated Use {@link ReadOnlyMessage}. */
-  get readOnlyMessage(): string | null {
-    return this.ReadOnlyMessage;
-  }
   /** Show the empty-state's built-in suggested-prompt chips (and the @mention tip). */
   @Input() ShowSuggestedPrompts = true;
 
@@ -4642,11 +4625,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** Read-only for any reason: the host said so, or the conversation is shared with View access. */
   public get EffectiveReadOnly(): boolean {
     return this.ReadOnly || this.IsReadOnlyView;
-  }
-
-  /** @deprecated Use {@link EffectiveReadOnly}. */
-  public get effectiveReadOnly(): boolean {
-    return this.EffectiveReadOnly;
   }
 
   /**

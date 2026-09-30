@@ -44,15 +44,6 @@ export class PinnedMessagesPanelComponent {
   /** When false, pins stay listed and jumpable but Unpin is hidden. */
   @Input() public AllowUnpin = true;
 
-  /** @deprecated Use {@link AllowUnpin}. */
-  @Input() public set allowUnpin(value: boolean) {
-    this.AllowUnpin = value;
-  }
-  /** @deprecated Use {@link AllowUnpin}. */
-  public get allowUnpin(): boolean {
-    return this.AllowUnpin;
-  }
-
   @Output() public Closed = new EventEmitter<void>();
 
   /**

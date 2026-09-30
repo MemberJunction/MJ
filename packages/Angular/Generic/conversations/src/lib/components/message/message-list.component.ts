@@ -239,16 +239,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
   private _readOnly = false;
 
-  /** @deprecated Use {@link ReadOnly}. */
-  @Input()
-  public set readOnly(value: boolean) {
-    this.ReadOnly = value;
-  }
-  /** @deprecated Use {@link ReadOnly}. */
-  public get readOnly(): boolean {
-    return this.ReadOnly;
-  }
-
   // ── Windowed-transcript paging state ────────────────────────────────────────
   // The list renders only the LOADED window, not the whole conversation. These two
   // describe what lies above it. Unused until the Phase 5 sentinel lands; wired now so

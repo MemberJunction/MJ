@@ -93,15 +93,6 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Blocks sending. Distinct from {@link Disabled}, which means the composer is busy.
    */
   @Input() ReadOnly = false;
-
-  /** @deprecated Use {@link ReadOnly}. */
-  @Input() set readOnly(value: boolean) {
-    this.ReadOnly = value;
-  }
-  /** @deprecated Use {@link ReadOnly}. */
-  get readOnly(): boolean {
-    return this.ReadOnly;
-  }
   @Input() Placeholder: string = 'Type a message... (Ctrl+Enter to send)';
 
   /** @deprecated Use {@link Placeholder}. */

@@ -43,6 +43,58 @@ describe('chat-area ReadOnly template contract', () => {
     expect(html).toContain('[disabled]="isProcessing || isReadOnlyView"');
     expect(html).toContain('>You have view-only access to this conversation.</span>');
   });
+
+  it('every mj-message-input the chat area renders binds ReadOnly to EffectiveReadOnly', () => {
+    const positions = findTags(html, 'mj-message-input');
+    expect(positions.length).toBe(2);
+    for (const position of positions) {
+      const end = html.indexOf('</mj-message-input>', position);
+      expect(html.slice(position, end)).toContain('[ReadOnly]="EffectiveReadOnly"');
+    }
+  });
+
+  it('the mode picker is hidden when EffectiveReadOnly and the agent picker is disabled', () => {
+    expect(html).toContain(
+      '@if (!overlayMode && showAgentModePicker && ModePickerTargetAgentId && !EffectiveReadOnly)'
+    );
+    expect(html).toContain('[Disabled]="EffectiveReadOnly"');
+  });
+
+  it("the pins panel's AllowUnpin binding follows EffectiveReadOnly", () => {
+    expect(html).toContain('[AllowUnpin]="!EffectiveReadOnly"');
+  });
+});
+
+describe('read-only template contracts outside the chat area', () => {
+  const messageItem = readFileSync(
+    resolve(__dirname, '../lib/components/message/message-item.component.html'),
+    'utf8'
+  );
+  const pins = readFileSync(
+    resolve(__dirname, '../lib/components/conversation/pinned-messages-panel.component.html'),
+    'utf8'
+  );
+
+  it('the response form is not shown when the message is ReadOnly', () => {
+    expect(messageItem).toContain(
+      '@if (!ReadOnly && isLastMessageInConversation && isConversationOwner && responseForm)'
+    );
+  });
+
+  it('ratings cannot be edited when the message is ReadOnly', () => {
+    const bindings = messageItem.match(/\[canEdit]="[^"]*"/g) ?? [];
+    expect(bindings.length).toBeGreaterThan(0);
+    for (const binding of bindings) {
+      expect(binding).toBe('[canEdit]="isConversationOwner && !ReadOnly"');
+    }
+  });
+
+  it('the unpin button is inside @if (AllowUnpin)', () => {
+    const gate = pins.indexOf('@if (AllowUnpin)');
+    const button = pins.indexOf('class="pin-action-btn unpin-btn"');
+    expect(gate).toBeGreaterThanOrEqual(0);
+    expect(button).toBeGreaterThan(gate);
+  });
 });
 
 describe('read-only send path', () => {

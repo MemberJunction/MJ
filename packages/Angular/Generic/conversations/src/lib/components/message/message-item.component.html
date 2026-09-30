@@ -225,7 +225,7 @@
                 [currentUser]="currentUser"
                 [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
                 [ratingsData]="ratings"
-                [canEdit]="isConversationOwner">
+                [canEdit]="isConversationOwner && !ReadOnly">
               </mj-conversation-message-rating>
             }
             @if (allowPinning) {
@@ -328,7 +328,7 @@
                       [conversationDetailId]="message.ID"
                       [currentUser]="currentUser"
                       [ratingsData]="ratings"
-                      [canEdit]="isConversationOwner">
+                      [canEdit]="isConversationOwner && !ReadOnly">
                     </mj-conversation-message-rating>
                   }
                   @if (allowPinning) {
