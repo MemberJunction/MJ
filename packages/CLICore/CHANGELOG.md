@@ -1,5 +1,12 @@
 # @memberjunction/cli-core
 
+## 6.2.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [80905a1]
+  - @memberjunction/global@6.2.0-edge.1
+
 ## 6.2.0-edge.0
 
 ### Patch Changes
