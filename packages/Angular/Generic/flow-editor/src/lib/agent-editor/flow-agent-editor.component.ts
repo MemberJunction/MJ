@@ -11,6 +11,7 @@ import { FlowEditorComponent } from '../components/flow-editor.component';
 import { AgentFlowTransformerService, AGENT_STEP_TYPE_CONFIGS } from './agent-flow-transformer.service';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ReadDecisionStepKey } from './decision-step-config';
+import { CheckFlowRun, type FlowRunProblem } from './flow-run-check';
 
 /** View mode for the agent editor */
 export type AgentEditorViewMode = 'diagram' | 'list';
@@ -268,8 +269,72 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   }
 
   private rebuildFlowModel(): void {
-    this.nodes = this.transformer.StepsToNodes(this.steps, this.availableActions, this.availableAgents);
-    this.connections = this.transformer.PathsToConnections(this.paths);
+    this.refreshRunCheck();
+    this.nodes = this.transformer.StepsToNodes(this.steps, this.availableActions, this.availableAgents, this.runProblems);
+    this.connections = this.transformer.PathsToConnections(this.paths, this.runProblems);
+    this.drawnPathProblems = this.pathProblemSignature();
+  }
+
+  // ── Run check ───────────────────────────────────────────────
+
+  /**
+   * Why the flow would not run as it stands — the runtime compiler's and validator's refusals, placed on
+   * the steps and paths they are about (see {@link CheckFlowRun}). Rechecked on every change and before
+   * a save. A save is not blocked by it: an unfinished flow is still worth saving, and the dispatcher
+   * refuses a flow that cannot run before any of it does.
+   */
+  public get RunProblems(): readonly FlowRunProblem[] {
+    return this.runProblems;
+  }
+
+  /** The heading of the run-check banner. */
+  public get RunProblemsTitle(): string {
+    const count = this.runProblems.length;
+    return `${count} ${count === 1 ? 'problem' : 'problems'} would stop this flow from running`;
+  }
+
+  private runProblems: FlowRunProblem[] = [];
+
+  /** The path problems the canvas last drew, so connections are rebuilt only when they change. */
+  private drawnPathProblems = '';
+
+  private refreshRunCheck(): void {
+    this.runProblems = CheckFlowRun(this.steps, this.paths);
+  }
+
+  /** Rechecks the flow and re-marks the canvas with the result. */
+  private applyRunCheck(): void {
+    this.refreshRunCheck();
+    this.markRunProblems();
+  }
+
+  /**
+   * Re-marks every node and path with the last run check. A change to one step — a renamed question, a
+   * removed option — can break a path or a fork elsewhere in the flow. Only nodes whose warning changed
+   * are pushed to the canvas, and connections are rebuilt only when a path's problems changed.
+   */
+  private markRunProblems(): void {
+    for (const node of this.nodes) {
+      const step = this.steps.find(s => UUIDsEqual(s.ID, node.ID));
+      if (!step) continue;
+      const message = this.transformer.BuildNodeWarning(step, this.runProblems) ?? undefined;
+      const status = message ? 'warning' : this.transformer.MapStepStatus(step.Status);
+      if (status === node.Status && message === node.StatusMessage) continue;
+      node.Status = status;
+      node.StatusMessage = message;
+      this.flowEditor?.UpdateNode(node.ID, { Status: status, StatusMessage: message });
+    }
+
+    const pathProblems = this.pathProblemSignature();
+    if (pathProblems !== this.drawnPathProblems) {
+      this.drawnPathProblems = pathProblems;
+      this.connections = this.transformer.PathsToConnections(this.paths, this.runProblems);
+    }
+  }
+
+  /** The path problems of the last run check, as one comparable string. */
+  private pathProblemSignature(): string {
+    return JSON.stringify(this.runProblems.filter(p => p.PathID).map(p => [p.PathID, p.Message]));
   }
 
   /**
@@ -367,6 +432,8 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
     // Positions live on the canvas until asked for, so pull them onto the entities first — otherwise
     // a drag made just before saving is the one change that does not persist.
     this.syncPositionsFromCanvas();
+    // What is saved is what the run check last judged, so the banner never describes an older flow.
+    this.applyRunCheck();
 
     await this.queueRemovedEntitiesForDelete(tg);
 
@@ -456,10 +523,12 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
     // Add the unsaved step to the array - it already has a UUID from NewRecord()
     // This allows connections to be drawn immediately without waiting for a database save
     this.steps.push(step);
+    this.refreshRunCheck();
 
     // Build a FlowNode using the entity's pre-generated ID so Foblex can track it
-    const newNode = this.transformer.StepToNode(step, this.availableActions, this.availableAgents);
+    const newNode = this.transformer.StepToNode(step, this.availableActions, this.availableAgents, this.runProblems);
     this.nodes.push(newNode);
+    this.markRunProblems();
     this.markDirty();
 
     // Select the new node
@@ -548,6 +617,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       this.paths = this.paths.filter(
         p => !UUIDsEqual(p.OriginStepID, node.ID) && !UUIDsEqual(p.DestinationStepID, node.ID)
       );
+      this.applyRunCheck();
       this.markDirty();
     }
   }
@@ -559,6 +629,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
         this.deletedPathIDs.push(path.ID);
       }
       this.paths = this.paths.filter(p => !UUIDsEqual(p.ID, conn.ID));
+      this.applyRunCheck();
       this.markDirty();
     }
   }
@@ -594,13 +665,14 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   // ── Properties Panel Events ─────────────────────────────────
 
   protected onStepChanged(step: MJAIAgentStepEntity): void {
+    this.refreshRunCheck();
     // Update the corresponding flow node in-place and push to generic editor
     const node = this.nodes.find(n => UUIDsEqual(n.ID, step.ID));
     if (node) {
       const newLabel = step.Name;
       const newSubtitle = this.transformer.BuildStepSubtitle(step);
       const baseStatus = this.transformer.MapStepStatus(step.Status);
-      const warningMessage = (baseStatus !== 'disabled') ? this.transformer.BuildConfigWarningMessage(step) : null;
+      const warningMessage = this.transformer.BuildNodeWarning(step, this.runProblems);
       const newStatus = warningMessage ? 'warning' : baseStatus;
       const newIsStart = step.StartingStep === true;
 
@@ -639,6 +711,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
         Data: node.Data
       });
     }
+    this.markRunProblems();
     this.markDirty();
     this.cdr.detectChanges();
   }

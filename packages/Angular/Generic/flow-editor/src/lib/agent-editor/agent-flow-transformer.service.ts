@@ -3,6 +3,7 @@ import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/co
 import { FlowNode, FlowConnection, FlowConnectionStyle, FlowNodeTypeConfig, FlowNodePort } from '../interfaces/flow-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ReadFlowDecisionStepConfiguration } from '@memberjunction/ai-core-plus';
+import { PathRunProblems, StepRunProblems, type FlowRunProblem } from './flow-run-check';
 
 /** Picker item shape for Actions with optional icon */
 export interface ActionPickerItem { ID: string; Name: string; IconClass?: string | null; }
@@ -87,24 +88,47 @@ function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
+/** How an edge reads on the canvas. */
+type PathVisual = {
+  label?: string;
+  labelIcon?: string;
+  labelIconColor?: string;
+  labelDetail?: string;
+  color: string;
+  style: FlowConnectionStyle;
+};
+
 /**
  * Transforms MJ AIAgentStep/Path entities to/from generic FlowNode/FlowConnection models.
  */
 @Injectable()
 export class AgentFlowTransformerService {
 
-  /** Convert MJ step entities to generic FlowNodes */
+  /** Convert MJ step entities to generic FlowNodes, each warning about its share of `problems` */
   StepsToNodes(
     steps: MJAIAgentStepEntity[],
     actions?: ActionPickerItem[],
-    agents?: AgentPickerItem[]
+    agents?: AgentPickerItem[],
+    problems: readonly FlowRunProblem[] = []
   ): FlowNode[] {
-    return steps.map(step => this.StepToNode(step, actions, agents));
+    return steps.map(step => this.StepToNode(step, actions, agents, problems));
   }
 
-  /** Convert MJ path entities to generic FlowConnections */
-  PathsToConnections(paths: MJAIAgentStepPathEntity[]): FlowConnection[] {
-    return paths.map(path => this.pathToConnection(path, paths));
+  /** Convert MJ path entities to generic FlowConnections, each flagging its share of `problems` */
+  PathsToConnections(paths: MJAIAgentStepPathEntity[], problems: readonly FlowRunProblem[] = []): FlowConnection[] {
+    return paths.map(path => this.pathToConnection(path, paths, problems));
+  }
+
+  /**
+   * What a step's node warns about: its own missing configuration, then each flow-check problem on the
+   * step that is not already that. A path's problem is flagged on the path instead. Nothing for a
+   * disabled step, which the author has taken out of the flow.
+   */
+  BuildNodeWarning(step: MJAIAgentStepEntity, problems: readonly FlowRunProblem[] = []): string | null {
+    if (this.MapStepStatus(step.Status) === 'disabled') return null;
+    const flow = StepRunProblems(problems, step.ID).map(p => p.Message);
+    const messages = [this.BuildConfigWarningMessage(step), ...flow].filter((m): m is string => !!m);
+    return messages.length > 0 ? messages.join('\n') : null;
   }
 
   /** Build the subtitle for a step based on its configured action/prompt/agent */
@@ -286,7 +310,8 @@ export class AgentFlowTransformerService {
   StepToNode(
     step: MJAIAgentStepEntity,
     actions?: ActionPickerItem[],
-    agents?: AgentPickerItem[]
+    agents?: AgentPickerItem[],
+    problems: readonly FlowRunProblem[] = []
   ): FlowNode {
     const stepId = step.ID;
     const ports: FlowNodePort[] = [
@@ -305,10 +330,10 @@ export class AgentFlowTransformerService {
       }
     ];
 
-    // Show warning status when the step is missing its required configuration,
-    // unless the step is explicitly disabled (respect the user's intent).
+    // Show warning status when the step is missing its required configuration or the flow check
+    // refuses something on it, unless the step is explicitly disabled (respect the user's intent).
     const baseStatus = this.MapStepStatus(step.Status);
-    const warningMessage = (baseStatus !== 'disabled') ? this.BuildConfigWarningMessage(step) : null;
+    const warningMessage = this.BuildNodeWarning(step, problems);
     const effectiveStatus = warningMessage ? 'warning' : baseStatus;
 
     // Build loop-specific data for ForEach/While nodes
@@ -345,7 +370,11 @@ export class AgentFlowTransformerService {
     };
   }
 
-  private pathToConnection(path: MJAIAgentStepPathEntity, allPaths: MJAIAgentStepPathEntity[]): FlowConnection {
+  private pathToConnection(
+    path: MJAIAgentStepPathEntity,
+    allPaths: MJAIAgentStepPathEntity[],
+    problems: readonly FlowRunProblem[] = []
+  ): FlowConnection {
     const hasCondition = path.Condition != null && path.Condition.trim().length > 0;
     const isAlwaysPath = !hasCondition;
 
@@ -369,7 +398,11 @@ export class AgentFlowTransformerService {
       : null;
 
     // Build label, icon, and visual style
-    const visual = this.buildPathVisuals(path, hasCondition, isOnlyPath, hasAmbiguousAlways, rank);
+    const pathProblems = PathRunProblems(problems, path.ID).map(p => p.Message);
+    const visual = this.withPathProblems(
+      this.buildPathVisuals(path, hasCondition, isOnlyPath, hasAmbiguousAlways, rank),
+      pathProblems
+    );
 
     return {
       ID: path.ID,
@@ -411,7 +444,7 @@ export class AgentFlowTransformerService {
     isOnlyPath: boolean,
     hasAmbiguousAlways: boolean,
     rank: { position: number; total: number } | null = null
-  ): { label?: string; labelIcon?: string; labelIconColor?: string; labelDetail?: string; color: string; style: FlowConnectionStyle } {
+  ): PathVisual {
     const rationale = path.Description?.trim();
 
     // Conditional path — amber dashed, labelled with the RULE.
@@ -457,6 +490,22 @@ export class AgentFlowTransformerService {
       labelDetail: rationale || undefined,
       color: isOnlyPath ? '#64748b' : '#16a34a',
       style: 'solid'
+    };
+  }
+
+  /**
+   * An edge the flow check refuses keeps its label but turns red with a warning icon, and its detail
+   * leads with why — so a broken condition is visible on the canvas without selecting the path.
+   */
+  private withPathProblems(visual: PathVisual, problems: readonly string[]): PathVisual {
+    if (problems.length === 0) return visual;
+    const why = problems.join('\n\n');
+    return {
+      ...visual,
+      labelIcon: 'fa-triangle-exclamation',
+      labelIconColor: '#ef4444',
+      labelDetail: visual.labelDetail ? `${why}\n\n${visual.labelDetail}` : why,
+      color: '#ef4444'
     };
   }
 

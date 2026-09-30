@@ -588,23 +588,19 @@ select.mj-agent-props-input {
   color: var(--mj-text-disabled);
 }
 
-.mj-agent-props-validation-error {
+.mj-agent-props-run-problems {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--mj-status-error-subtle);
-  color: var(--mj-status-error);
-  border: 1px solid var(--mj-status-error);
-  border-radius: var(--mj-radius-md);
-  font-size: var(--mj-text-xs);
-  margin-top: 10px;
+  margin: 10px 0 0;
 }
 
-.mj-agent-props-validation-error i {
-  font-size: var(--mj-text-xs);
-  margin-top: 2px;
-  flex-shrink: 0;
+.mj-agent-props-content > .mj-agent-props-run-problems {
+  margin: 10px 14px;
+}
+
+.mj-agent-props-run-problems-list {
+  margin: 4px 0 0;
+  padding-inline-start: 1.1rem;
+  word-break: break-word;
 }
 
 .mj-agent-props-route-helper {

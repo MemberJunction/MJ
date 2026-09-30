@@ -149,15 +149,23 @@ describe('AgentPropertiesPanelComponent — Decision step properties', () => {
     expect(panel.DecisionConfig.key).toBe('');
   });
 
-  it('DecisionStateError validates state format', () => {
-    panel.Step = MakeDecisionStep('s1', { key: 'triage', state: 'payload', questions: {} });
-    expect(panel.DecisionStateError).toBeNull();
+  it('reports a state the runtime cannot resolve in the runtime reader\'s words, including "payload."', () => {
+    const questions = { q: { kind: 'Likelihood', instructions: 'Is it?' } };
+    panel.Step = MakeDecisionStep('s1', { key: 'triage', state: 'payload.ticket.details', questions });
+    expect(panel.DecisionValidationError).toBeNull();
 
-    panel.Step.Configuration = JSON.stringify({ key: 'triage', state: 'payload.ticket.details', questions: {} });
-    expect(panel.DecisionStateError).toBeNull();
+    for (const state of ['other_root.data', 'payload.']) {
+      panel.Step = MakeDecisionStep('s1', { key: 'triage', state, questions });
+      expect(panel.DecisionValidationError).toBe(`its state "${state}" is not "payload" or "payload.<path>"`);
+    }
+  });
 
-    panel.Step.Configuration = JSON.stringify({ key: 'triage', state: 'other_root.data', questions: {} });
-    expect(panel.DecisionStateError).toContain('State must be "payload" or start with "payload."');
+  it('stores no state for an empty state field, which the runtime reads as the whole payload', () => {
+    panel.Step = MakeDecisionStep('s1', { key: 'triage', state: 'payload.ticket', questions: {} });
+    panel.OnDecisionStateChange('  ');
+    expect(JSON.parse(panel.Step.Configuration ?? '{}')).not.toHaveProperty('state');
+    panel.OnDecisionStateChange(' payload.order ');
+    expect(panel.DecisionConfig.state).toBe('payload.order');
   });
 
   it('manages question lifecycle (add, rename, remove, kind change)', () => {

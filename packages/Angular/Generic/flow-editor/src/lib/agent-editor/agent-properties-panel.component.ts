@@ -16,6 +16,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import type { TaskGraphDecisionQuestion } from '@memberjunction/ai-core-plus';
 import { DECISION_QUESTION_KEY_PATTERN, ReadDecisionStepKey, ReadEditableDecisionConfig } from './decision-step-config';
+import { PathRunProblems, StepRunProblems, type FlowRunProblem } from './flow-run-check';
 
 /** Step type accent color mapping */
 const STEP_TYPE_COLORS: Record<string, string> = {
@@ -92,6 +93,8 @@ export class AgentPropertiesPanelComponent {
   @Input() Agents: Array<{ ID: string; Name: string; IconClass?: string | null; LogoURL?: string | null }> = [];
   @Input() AllSteps: MJAIAgentStepEntity[] = [];
   @Input() AllPaths: MJAIAgentStepPathEntity[] = [];
+  /** The flow editor's run check: why the flow would not run as it stands, by step and path. */
+  @Input() RunProblems: readonly FlowRunProblem[] = [];
 
   // ── Outputs ─────────────────────────────────────────────────
   @Output() StepChanged = new EventEmitter<MJAIAgentStepEntity>();
@@ -332,16 +335,14 @@ export class AgentPropertiesPanelComponent {
     return this.decisionKeyProblem(this.DecisionKeyText.trim());
   }
 
-  get DecisionStateError(): string | null {
-    if (this.Step?.StepType !== 'Decision') return null;
-    const state = this.DecisionConfig.state;
-    if (state !== undefined && state !== null && state.trim().length > 0) {
-      const trimmed = state.trim();
-      if (trimmed !== 'payload' && !trimmed.startsWith('payload.')) {
-        return 'State must be "payload" or start with "payload."';
-      }
-    }
-    return null;
+  /** The run check's problems on the selected step, less what the step's own warnings already say. */
+  get StepRunProblemMessages(): string[] {
+    return StepRunProblems(this.RunProblems, this.Step?.ID).map(p => p.Message);
+  }
+
+  /** The run check's problems with the selected path's condition. */
+  get PathRunProblemMessages(): string[] {
+    return PathRunProblems(this.RunProblems, this.PathEntity?.ID).map(p => p.Message);
   }
 
   get DecisionQuestionsList(): Array<{ key: string; question: TaskGraphDecisionQuestion }> {
@@ -436,14 +437,21 @@ export class AgentPropertiesPanelComponent {
     this.StepChanged.emit(this.Step);
   }
 
+  /**
+   * The state field's `input` event. An empty field stores no state, which the runtime reads as the
+   * whole payload; whether a state it can resolve was typed is the runtime reader's to say
+   * ({@link DecisionValidationError}).
+   */
   OnDecisionStateChange(newState: string): void {
     if (!this.Step || this.ReadOnly) return;
-    const currentConfig = this.DecisionConfig;
-    const updated: FlowDecisionStepConfiguration = {
-      ...currentConfig,
-      state: newState.trim().length > 0 ? newState.trim() : 'payload'
-    };
-    this.updateDecisionConfig(updated);
+    const config: FlowDecisionStepConfiguration = { ...this.DecisionConfig };
+    const state = newState.trim();
+    if (state) {
+      config.state = state;
+    } else {
+      delete config.state;
+    }
+    this.updateDecisionConfig(config);
   }
 
   OnAddDecisionQuestion(): void {

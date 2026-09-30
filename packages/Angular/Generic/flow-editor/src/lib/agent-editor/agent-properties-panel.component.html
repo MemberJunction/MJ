@@ -41,6 +41,16 @@
       </div>
     </div>
     <div class="mj-agent-props-content">
+      <!-- The flow run check's problems on this step (the runtime compiler's and validator's). -->
+      @if (StepRunProblemMessages.length > 0) {
+        <mj-alert class="mj-agent-props-run-problems" Variant="warning" Size="sm" Title="This flow would not run">
+          <ul class="mj-agent-props-run-problems-list">
+            @for (message of StepRunProblemMessages; track $index) {
+              <li>{{ message }}</li>
+            }
+          </ul>
+        </mj-alert>
+      }
       <!-- ── General Section ─────────────────── -->
       <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('general')" (ExpandedChange)="ToggleSection('general')">
         <ng-template mjAccordionTitle><span>General</span></ng-template>
@@ -252,16 +262,12 @@
               <div class="mj-agent-props-field">
                 <label>State</label>
                 @if (!ReadOnly) {
-                  <input type="text" [value]="DecisionConfig.state || 'payload'"
+                  <input type="text" [value]="DecisionConfig.state ?? ''"
                     (input)="OnDecisionStateChange(InputValue($event))"
-                    placeholder="payload" class="mj-agent-props-input"
-                    [class.mj-agent-props-input--error]="!!DecisionStateError">
+                    placeholder="payload" class="mj-agent-props-input">
                 }
                 @if (ReadOnly) {
                   <div class="mj-agent-props-readonly-value">{{ DecisionConfig.state || 'payload' }}</div>
-                }
-                @if (DecisionStateError) {
-                  <span class="mj-agent-props-error">{{ DecisionStateError }}</span>
                 }
                 <span class="mj-agent-props-hint">What the questions are about: "payload" (default) or "payload.&lt;path&gt;"</span>
               </div>
@@ -454,12 +460,10 @@
                 }
               </div>
 
-              <!-- Inline Validation Error Banner from ReadFlowDecisionStepConfiguration -->
+              <!-- Why the runtime would refuse this step, in the runtime reader's own words -->
               @if (DecisionValidationError) {
-                <div class="mj-agent-props-validation-error">
-                  <i class="fa-solid fa-triangle-exclamation"></i>
-                  <span>{{ DecisionValidationError }}</span>
-                </div>
+                <mj-alert class="mj-agent-props-run-problems" Variant="error" Size="sm"
+                  Title="This step cannot run" [Message]="DecisionValidationError"></mj-alert>
               }
             }
           </div>
@@ -674,6 +678,16 @@
                 <span class="mj-agent-props-hint">
                   JavaScript expression evaluated at runtime. Leave empty for unconditional.
                 </span>
+              }
+              <!-- The flow run check's problems with this condition (the runtime validator's). -->
+              @if (PathRunProblemMessages.length > 0) {
+                <mj-alert class="mj-agent-props-run-problems" Variant="warning" Size="sm" Title="This condition would stop the flow">
+                  <ul class="mj-agent-props-run-problems-list">
+                    @for (message of PathRunProblemMessages; track $index) {
+                      <li>{{ message }}</li>
+                    }
+                  </ul>
+                </mj-alert>
               }
             </div>
             <!-- Route on Answer Helper (when origin step is a Decision step) -->

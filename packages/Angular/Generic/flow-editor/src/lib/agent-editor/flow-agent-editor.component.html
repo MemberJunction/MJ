@@ -124,6 +124,17 @@
   <!-- ── Main Content ──────────────────────────────────────── -->
   @if (!isLoading) {
     <div class="mj-agent-editor-body">
+      <!-- What the runtime's own compiler and validator would refuse, rechecked on every change. The
+           same problems are flagged on the steps and paths they are about. -->
+      @if (RunProblems.length > 0) {
+        <mj-alert class="mj-agent-editor-run-problems" Variant="warning" Size="sm" [Title]="RunProblemsTitle">
+          <ul class="mj-agent-editor-run-problems-list">
+            @for (problem of RunProblems; track $index) {
+              <li>{{ problem.Message }}</li>
+            }
+          </ul>
+        </mj-alert>
+      }
       <!-- Diagram View -->
       @if (viewMode === 'diagram') {
         <div class="mj-agent-editor-diagram">
@@ -166,6 +177,7 @@
               [AllSteps]="steps"
               [AllPaths]="paths"
               [DecisionModelTypeID]="decisionModelTypeID"
+              [RunProblems]="RunProblems"
               (StepChanged)="onStepChanged($event)"
               (PathChanged)="onPathChanged($event)"
               (DeleteStepRequested)="onDeleteStepRequested($event)"
@@ -198,6 +210,7 @@
               [AllSteps]="steps"
               [AllPaths]="paths"
               [DecisionModelTypeID]="decisionModelTypeID"
+              [RunProblems]="RunProblems"
               (StepChanged)="onStepChanged($event)"
               (PathChanged)="onPathChanged($event)"
               (DeleteStepRequested)="onDeleteStepRequested($event)"
