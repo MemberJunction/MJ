@@ -266,18 +266,18 @@ describe('AISpeechToTextRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/this runner requires "Speech to Text"/);
       expect(calls).toHaveLength(0);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it('fails clearly, without a run row, when no candidate has a key', async () => {
-      MediaHarness.State.configuredDrivers.clear();
+      MediaHarness.State.ConfiguredDrivers.clear();
 
       const result = await runner.RunSpeechToText(transcriptionParams());
 
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/No Speech to Text model has credentials available for prompt 'Default Speech To Text'/);
       expect(calls).toHaveLength(0);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it('refuses a call with no audio', async () => {
@@ -285,11 +285,11 @@ describe('AISpeechToTextRunner', () => {
 
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/Audio is required/);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it('fails clearly when the default carrier prompt is missing', async () => {
-      MediaHarness.State.prompts = [];
+      MediaHarness.State.Prompts = [];
 
       const result = await runner.RunSpeechToText(transcriptionParams());
 

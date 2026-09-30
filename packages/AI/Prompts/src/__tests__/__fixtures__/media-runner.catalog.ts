@@ -67,13 +67,13 @@ export function LoadMediaCatalog(harness: MediaRunnerHarness, spec: MediaCatalog
   const base = BuildRealisticCatalog();
   const models = spec.Models.map(m => mediaModel(m, spec));
   const state = harness.State;
-  state.vendorTypeDefinitions = base.vendorTypeDefinitions;
-  state.vendors = base.vendors;
-  state.modelTypes = [...base.modelTypes, { ID: spec.ModelTypeID, Name: spec.ModelTypeName }];
-  state.models = [...base.models, ...models];
-  state.modelVendors = [...base.modelVendors, ...models.flatMap(m => m.ModelVendors)];
-  state.promptModels = spec.Models.map(m => MakePromptModel({ PromptID: spec.PromptID, ModelID: m.ID, Priority: m.PromptPriority }));
-  state.prompts = [{
+  state.VendorTypeDefinitions = base.vendorTypeDefinitions;
+  state.Vendors = base.vendors;
+  state.ModelTypes = [...base.modelTypes, { ID: spec.ModelTypeID, Name: spec.ModelTypeName }];
+  state.Models = [...base.models, ...models];
+  state.ModelVendors = [...base.modelVendors, ...models.flatMap(m => m.ModelVendors)];
+  state.PromptModels = spec.Models.map(m => MakePromptModel({ PromptID: spec.PromptID, ModelID: m.ID, Priority: m.PromptPriority }));
+  state.Prompts = [{
     ID: spec.PromptID,
     Name: spec.PromptName,
     Status: 'Active',
@@ -84,13 +84,13 @@ export function LoadMediaCatalog(harness: MediaRunnerHarness, spec: MediaCatalog
     RequireSpecificModels: true,
     MaxRetries: 0,
   }];
-  state.configuredDrivers = new Set(spec.Models.flatMap(m => m.Vendors.map(v => v.DriverClass)));
-  state.usageTypes = Object.entries(USAGE_TYPE).map(([Name, ID]) => ({ ID, Name }));
+  state.ConfiguredDrivers = new Set(spec.Models.flatMap(m => m.Vendors.map(v => v.DriverClass)));
+  state.UsageTypes = Object.entries(USAGE_TYPE).map(([Name, ID]) => ({ ID, Name }));
 }
 
 /** An active LLM from the realistic catalog, for the wrong-type tests. */
 export function AnLLMModelID(harness: MediaRunnerHarness): string {
-  const llm = harness.State.models.find(m => m.AIModelType === 'LLM' && m.IsActive);
+  const llm = harness.State.Models.find(m => m.AIModelType === 'LLM' && m.IsActive);
   if (!llm) {
     throw new Error('The realistic catalog has no active LLM');
   }

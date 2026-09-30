@@ -51,32 +51,32 @@ interface NamedRow {
 
 /** Everything the fakes serve. */
 export interface MediaHarnessState {
-  vendorTypeDefinitions: NamedRow[];
-  vendors: FxVendor[];
-  modelTypes: NamedRow[];
-  models: FxModel[];
-  modelVendors: FxModelVendor[];
-  promptModels: FxPromptModel[];
-  prompts: FakePrompt[];
+  VendorTypeDefinitions: NamedRow[];
+  Vendors: FxVendor[];
+  ModelTypes: NamedRow[];
+  Models: FxModel[];
+  ModelVendors: FxModelVendor[];
+  PromptModels: FxPromptModel[];
+  Prompts: FakePrompt[];
   /** Driver classes with an "environment" key. */
-  configuredDrivers: Set<string>;
-  usageTypes: NamedRow[];
+  ConfiguredDrivers: Set<string>;
+  UsageTypes: NamedRow[];
   /** Every run row created, in order. */
-  runs: RecordedRun[];
+  Runs: RecordedRun[];
 }
 
 function emptyState(): MediaHarnessState {
   return {
-    vendorTypeDefinitions: [],
-    vendors: [],
-    modelTypes: [],
-    models: [],
-    modelVendors: [],
-    promptModels: [],
-    prompts: [],
-    configuredDrivers: new Set<string>(),
-    usageTypes: [],
-    runs: [],
+    VendorTypeDefinitions: [],
+    Vendors: [],
+    ModelTypes: [],
+    Models: [],
+    ModelVendors: [],
+    PromptModels: [],
+    Prompts: [],
+    ConfiguredDrivers: new Set<string>(),
+    UsageTypes: [],
+    Runs: [],
   };
 }
 
@@ -102,7 +102,7 @@ class FakePromptRun implements RecordedRun {
 
   public NewRecord(): boolean {
     this.ID = `media-run-${++FakePromptRun.seq}`;
-    this.state().runs.push(this);
+    this.state().Runs.push(this);
     return true;
   }
 
@@ -145,7 +145,7 @@ export class MediaRunnerHarness {
   /** Stands in for `GetAIAPIKey`: the caller's key for the driver class, else the "environment" key. */
   public GetAPIKey(driverClass: string, apiKeys?: ApiKeyEntry[]): string {
     const callerKey = apiKeys?.find(k => k.driverClass === driverClass)?.apiKey;
-    return callerKey ?? (this.State.configuredDrivers.has(driverClass) ? 'env-api-key' : '');
+    return callerKey ?? (this.State.ConfiguredDrivers.has(driverClass) ? 'env-api-key' : '');
   }
 
   /** Clears the state for the next test. */
@@ -155,30 +155,30 @@ export class MediaRunnerHarness {
 
   /** The last run row created. */
   public get LastRun(): RecordedRun | undefined {
-    return this.State.runs[this.State.runs.length - 1];
+    return this.State.Runs[this.State.Runs.length - 1];
   }
 
   private createEngine() {
     const state = (): MediaHarnessState => this.State;
     return {
       Config: async (): Promise<void> => undefined,
-      get VendorTypeDefinitions() { return state().vendorTypeDefinitions; },
-      get Vendors() { return state().vendors; },
-      get ModelTypes() { return state().modelTypes; },
+      get VendorTypeDefinitions() { return state().VendorTypeDefinitions; },
+      get Vendors() { return state().Vendors; },
+      get ModelTypes() { return state().ModelTypes; },
       get Configurations() { return []; },
-      get Models() { return state().models; },
-      get ModelVendors() { return state().modelVendors; },
-      get PromptModels() { return state().promptModels; },
-      get Prompts() { return state().prompts; },
+      get Models() { return state().Models; },
+      get ModelVendors() { return state().ModelVendors; },
+      get PromptModels() { return state().PromptModels; },
+      get Prompts() { return state().Prompts; },
       IsInferenceProvider(mv: { TypeID?: string }): boolean {
-        const inference = state().vendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID;
+        const inference = state().VendorTypeDefinitions.find(v => v.Name === 'Inference Provider')?.ID;
         return inference ? norm(mv?.TypeID) === norm(inference) : true;
       },
-      get ModelsByID() { return new Map(state().models.map(m => [norm(m.ID), m])); },
-      get VendorsByID() { return new Map(state().vendors.map(v => [norm(v.ID), v])); },
-      get ModelTypesByID() { return new Map(state().modelTypes.map(t => [norm(t.ID), t])); },
-      get ModelVendorsByModelID() { return groupBy(state().modelVendors, mv => mv.ModelID); },
-      get PromptModelsByPromptID() { return groupBy(state().promptModels, pm => pm.PromptID); },
+      get ModelsByID() { return new Map(state().Models.map(m => [norm(m.ID), m])); },
+      get VendorsByID() { return new Map(state().Vendors.map(v => [norm(v.ID), v])); },
+      get ModelTypesByID() { return new Map(state().ModelTypes.map(t => [norm(t.ID), t])); },
+      get ModelVendorsByModelID() { return groupBy(state().ModelVendors, mv => mv.ModelID); },
+      get PromptModelsByPromptID() { return groupBy(state().PromptModels, pm => pm.PromptID); },
       GetConfigurationChain(): never[] { return []; },
       GetEffectiveModelConfiguration(): undefined { return undefined; },
       HasCredentialBindings(): boolean { return false; },
@@ -189,7 +189,7 @@ export class MediaRunnerHarness {
   private createEngineBase() {
     const state = (): MediaHarnessState => this.State;
     return {
-      get UsageTypes() { return state().usageTypes; },
+      get UsageTypes() { return state().UsageTypes; },
     };
   }
 }

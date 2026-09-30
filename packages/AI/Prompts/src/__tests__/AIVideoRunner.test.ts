@@ -257,18 +257,18 @@ describe('AIVideoRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/this runner requires "Video"/);
       expect(calls).toHaveLength(0);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it('fails clearly, without a run row, when no candidate has a key', async () => {
-      MediaHarness.State.configuredDrivers.clear();
+      MediaHarness.State.ConfiguredDrivers.clear();
 
       const result = await runner.RunAvatarVideo(videoParams());
 
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/No Video model has credentials available for prompt 'Default Video Generation'/);
       expect(calls).toHaveLength(0);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it('refuses a request with no avatar', async () => {
@@ -276,11 +276,11 @@ describe('AIVideoRunner', () => {
 
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/An avatar is required/);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it('fails clearly when the default carrier prompt is missing', async () => {
-      MediaHarness.State.prompts = [];
+      MediaHarness.State.Prompts = [];
 
       const result = await runner.RunAvatarVideo(videoParams());
 

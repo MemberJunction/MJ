@@ -317,11 +317,11 @@ describe('AITextToSpeechRunner', () => {
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/this runner requires "TTS"/);
       expect(calls).toHaveLength(0);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it('fails clearly, without a run row, when no candidate has a key', async () => {
-      MediaHarness.State.configuredDrivers.clear();
+      MediaHarness.State.ConfiguredDrivers.clear();
 
       const result = await runner.RunTextToSpeech(speechParams());
 
@@ -329,11 +329,11 @@ describe('AITextToSpeechRunner', () => {
       expect(result.ErrorMessage).toMatch(/No TTS model has credentials available for prompt 'Default Text To Speech'/);
       expect(result.ErrorMessage).toContain(DRIVER_A);
       expect(calls).toHaveLength(0);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it("passes the caller's key to the driver of its class", async () => {
-      MediaHarness.State.configuredDrivers.clear();
+      MediaHarness.State.ConfiguredDrivers.clear();
 
       const result = await runner.RunTextToSpeech(speechParams({ APIKeys: [{ driverClass: DRIVER_A, apiKey: 'caller-key' }] }));
 
@@ -346,11 +346,11 @@ describe('AITextToSpeechRunner', () => {
 
       expect(result.Success).toBe(false);
       expect(result.ErrorMessage).toMatch(/Text to speak is required/);
-      expect(MediaHarness.State.runs).toHaveLength(0);
+      expect(MediaHarness.State.Runs).toHaveLength(0);
     });
 
     it('fails clearly when the default carrier prompt is missing', async () => {
-      MediaHarness.State.prompts = [];
+      MediaHarness.State.Prompts = [];
 
       const result = await runner.RunTextToSpeech(speechParams());
 
@@ -360,12 +360,12 @@ describe('AITextToSpeechRunner', () => {
 
     it('fails over past a driver class nothing is registered for', async () => {
       loadCatalog('NextBestModel');
-      MediaHarness.State.models.forEach(m => m.ModelVendors.forEach(mv => {
+      MediaHarness.State.Models.forEach(m => m.ModelVendors.forEach(mv => {
         if (mv.DriverClass === DRIVER_A) {
           mv.DriverClass = 'UnregisteredTTSDriver';
         }
       }));
-      MediaHarness.State.configuredDrivers.add('UnregisteredTTSDriver');
+      MediaHarness.State.ConfiguredDrivers.add('UnregisteredTTSDriver');
 
       const result = await runner.RunTextToSpeech(speechParams());
 
