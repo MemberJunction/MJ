@@ -12,7 +12,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
 import { DecisionQuestion, DecisionAnswer } from '@memberjunction/ai';
 import { AIDecisionRunner, AIDecisionParams, AIDecisionRunResult } from '@memberjunction/ai-prompts';
-import { AgentDecisionQuestion, AgentDecisionAnswerSummary } from '@memberjunction/ai-core-plus';
+import { AgentDecisionAnswerSummary } from '@memberjunction/ai-core-plus';
 
 /**
  * Parameters for the AgentDecisionService.Ask method.
@@ -50,6 +50,37 @@ export interface AgentDecisionAskParams {
 }
 
 /**
+ * The questions of one decision request after their shapes are checked: the valid ones mapped onto
+ * BaseDecision's shape, and why each invalid one was dropped.
+ */
+export interface DecisionQuestionMapping {
+    /** The valid questions, keyed as the agent keyed them, in BaseDecision's (PascalCase) shape. */
+    Questions: Record<string, DecisionQuestion>;
+
+    /** One reason per dropped question, naming its key. Empty when every question was valid. */
+    Invalid: string[];
+}
+
+/** A plain object, as opposed to null, an array or a primitive. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** An array whose every item passes `guard`. */
+function isArrayOf<T>(value: unknown, guard: (item: unknown) => item is T): value is T[] {
+    return Array.isArray(value) && value.every(item => guard(item));
+}
+
+function isString(value: unknown): value is string {
+    return typeof value === 'string';
+}
+
+/** One option of a Choice question, as the model writes it. */
+function isChoiceOption(value: unknown): value is { value: string; description: string } {
+    return isPlainObject(value) && typeof value.value === 'string' && typeof value.description === 'string';
+}
+
+/**
  * Asks decision questions for an agent run through AIDecisionRunner and the configured decision prompt.
  */
 export class AgentDecisionService {
@@ -63,61 +94,95 @@ export class AgentDecisionService {
      * Never throws: on failure or missing prompt, returns a failed AIDecisionRunResult.
      */
     public async Ask(args: AgentDecisionAskParams): Promise<AIDecisionRunResult> {
-        await AIEngine.Instance.Config(false, args.ContextUser);
-        const targetName = (args.PromptName ?? AgentDecisionService.DEFAULT_PROMPT_NAME).trim().toLowerCase();
-        const prompt = AIEngine.Instance.Prompts?.find(p => (p.Name ?? '').trim().toLowerCase() === targetName);
+        try {
+            await AIEngine.Instance.Config(false, args.ContextUser);
+            const targetName = (args.PromptName ?? AgentDecisionService.DEFAULT_PROMPT_NAME).trim().toLowerCase();
+            const prompt = AIEngine.Instance.Prompts?.find(p => (p.Name ?? '').trim().toLowerCase() === targetName);
 
-        if (!prompt) {
+            if (!prompt) {
+                return {
+                    success: false,
+                    errorMessage: `Decision prompt "${args.PromptName ?? AgentDecisionService.DEFAULT_PROMPT_NAME}" not found`,
+                    Answers: {},
+                };
+            }
+
+            const params = new AIDecisionParams();
+            params.prompt = prompt;
+            params.contextUser = args.ContextUser;
+            params.State = args.State;
+            params.Questions = args.Questions;
+            params.cancellationToken = args.CancellationToken;
+            params.agentId = args.AgentID;
+            return await new AIDecisionRunner().ExecuteDecision(params);
+        } catch (error) {
             return {
                 success: false,
-                errorMessage: `Decision prompt "${args.PromptName ?? AgentDecisionService.DEFAULT_PROMPT_NAME}" not found`,
+                errorMessage: `The decision call failed: ${error instanceof Error ? error.message : String(error)}`,
                 Answers: {},
             };
         }
-
-        const params = new AIDecisionParams();
-        params.prompt = prompt;
-        params.contextUser = args.ContextUser;
-        params.State = args.State;
-        params.Questions = args.Questions;
-        params.cancellationToken = args.CancellationToken;
-        params.agentId = args.AgentID;
-        return await new AIDecisionRunner().ExecuteDecision(params);
     }
 
     /**
-     * Maps the LLM-facing question shape (camelCase) onto BaseDecision's (PascalCase).
+     * Checks each question's shape and maps the valid ones from the LLM-facing shape (camelCase) onto
+     * BaseDecision's (PascalCase). The questions are unchecked model output, so an invalid one is
+     * dropped, with its reason, rather than failing the others.
      */
-    public static ToDecisionQuestions(questions: Record<string, AgentDecisionQuestion>): Record<string, DecisionQuestion> {
-        const result: Record<string, DecisionQuestion> = {};
-        for (const [key, q] of Object.entries(questions)) {
-            switch (q.kind) {
-                case 'Likelihood':
-                    result[key] = {
-                        Kind: 'Likelihood',
-                        Instructions: q.instructions,
-                    };
-                    break;
-                case 'Choice':
-                    result[key] = {
-                        Kind: 'Choice',
-                        Instructions: q.instructions,
-                        Options: q.options.map(opt => ({
-                            Value: opt.value,
-                            Description: opt.description,
-                        })),
-                    };
-                    break;
-                case 'Score':
-                    result[key] = {
-                        Kind: 'Score',
-                        Instructions: q.instructions,
-                        Levels: [...q.levels],
-                    };
-                    break;
+    public static ToDecisionQuestions(questions: Record<string, unknown>): DecisionQuestionMapping {
+        const mapping: DecisionQuestionMapping = { Questions: {}, Invalid: [] };
+        for (const [key, candidate] of Object.entries(questions)) {
+            const mapped = AgentDecisionService.toDecisionQuestion(candidate);
+            if (typeof mapped === 'string') {
+                mapping.Invalid.push(`Question "${key}" ${mapped}`);
+            } else {
+                mapping.Questions[key] = mapped;
             }
         }
-        return result;
+        return mapping;
+    }
+
+    /** Maps one question, or returns why it is invalid. */
+    private static toDecisionQuestion(candidate: unknown): DecisionQuestion | string {
+        if (!isPlainObject(candidate)) {
+            return 'is not an object';
+        }
+        if (typeof candidate.instructions !== 'string') {
+            return 'has no "instructions" string';
+        }
+        switch (candidate.kind) {
+            case 'Likelihood':
+                return { Kind: 'Likelihood', Instructions: candidate.instructions };
+            case 'Choice':
+                return AgentDecisionService.toChoiceQuestion(candidate.instructions, candidate.options);
+            case 'Score':
+                return AgentDecisionService.toScoreQuestion(candidate.instructions, candidate.levels);
+            default:
+                return `has an unknown kind "${String(candidate.kind)}" (use Likelihood, Choice or Score)`;
+        }
+    }
+
+    /** A Choice needs a non-empty `options` array of `{ value, description }` strings. */
+    private static toChoiceQuestion(instructions: string, options: unknown): DecisionQuestion | string {
+        if (!isArrayOf(options, isChoiceOption) || options.length === 0) {
+            return 'is a Choice without a non-empty "options" array of { value, description } strings';
+        }
+        return {
+            Kind: 'Choice',
+            Instructions: instructions,
+            Options: options.map(opt => ({
+                Value: opt.value,
+                Description: opt.description,
+            })),
+        };
+    }
+
+    /** A Score needs a non-empty `levels` array of strings, lowest first. */
+    private static toScoreQuestion(instructions: string, levels: unknown): DecisionQuestion | string {
+        if (!isArrayOf(levels, isString) || levels.length === 0) {
+            return 'is a Score without a non-empty "levels" array of strings';
+        }
+        return { Kind: 'Score', Instructions: instructions, Levels: [...levels] };
     }
 
     /**

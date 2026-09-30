@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageUnpricedAudit",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "Which completed AI runs have not been priced and need pricing tiers or investigation?",
+      "Description": "Surfaces completed AI prompt runs where IsPriced = 0 (parallel parents excluded), newest first, with a diagnostic explanation for why each run was unpriced (unmeasured, or missing pricing tier).",
+      "SQL": "@file:SQL/ai-usage-unpriced-audit.sql",
+      "TechnicalDescription": "Quality and audit query over [__mj].vwAIUsageFacts for IsCompleted = 1 AND IsPriced = 0 AND IsParallelParent = 0, bounded by an optional start/end window on the base RunAt column and a row cap (maxRows, default 500), ordered by RunAt descending. Emits UnpricedReason to assist administrators in backfilling model cost configurations.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "226484B9-8178-418A-8CDB-25D2BF234684"
+    }
+  }
+]
