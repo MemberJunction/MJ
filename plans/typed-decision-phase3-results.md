@@ -8,7 +8,7 @@ Phase 2 set routing's threshold from data, and left every other consumer on a pl
 
 Every measurement:
 - **runs production's own code path,** rather than a reimplementation, so it measures what ships;
-- **pins each decision model,** with failover off;
+- **pins each decision model,** with failover off. The one exception is the Feature Pipeline measurement (§3). It ran through each pipeline's own prompt bindings, and didn't record which model answered. Its Decision arm's latency (172 ms p50) and cost ($0.025 per 1k) match Jev, not LLM Decision. The rig now records the answering model and can fail on a mismatch (#4890);
 - **repeats every point** (2–3 reps);
 - **names records by ID only.** Corpora and reports stay outside the repository.
 
