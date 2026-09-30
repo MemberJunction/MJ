@@ -105,9 +105,10 @@ class DecisionRerankRunner extends AIDecisionRunner {
 }
 
 /**
- * Decision-based implementation of the BaseReranker class. It makes one `AIDecisionRunner` call: the
- * query is the state, and each document is one Likelihood question ("This note bears on the request:
- * <document text>"). A document's relevance score is the probability.
+ * Decision-based implementation of the BaseReranker class. It asks through `AIDecisionRunner`, with the
+ * query as the state and each document as one Likelihood question ("This note bears on the request:
+ * <document text>"), in one call or, for more documents than a call may carry, in parallel calls. A
+ * document's relevance score is the probability. Documents with equal scores keep their input order.
  *
  * Every call writes an `MJ: AI Prompt Runs` row through the decision runner, which also selects the
  * decision model, resolves its credentials and fails over. When the reranker is given a parent run
