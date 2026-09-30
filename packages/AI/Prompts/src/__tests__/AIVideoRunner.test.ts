@@ -5,6 +5,7 @@ import {
   AvatarInfo,
   AvatarVideoParams,
   BaseVideoGenerator,
+  ErrorAnalyzer,
   ModelUsage,
   VideoResult,
   VideoTranslationParams,
@@ -78,11 +79,22 @@ function accepted(videoId: string, usage?: ModelUsage): VideoResult {
   return result;
 }
 
-/** A failure the way HeyGen's driver reports one: caught, with only a message. */
+/** A failure from a driver that reports only a message, and leaves it unclassified. */
 function failed(message: string): VideoResult {
   const result = new VideoResult();
   result.success = false;
   result.errorMessage = message;
+  return result;
+}
+
+/**
+ * A failure the way HeyGen's driver reports one: the HTTP client's generic message, and the
+ * analyzer's reading of the response status the driver hands it.
+ */
+function rejectedWith(status: number): VideoResult {
+  const message = `Request failed with status code ${status}`;
+  const result = failed(message);
+  result.errorInfo = ErrorAnalyzer.AnalyzeError(Object.assign(new Error(message), { status }), 'HeyGen');
   return result;
 }
 
@@ -233,6 +245,28 @@ describe('AIVideoRunner', () => {
       expect(result.VideoID).toBe('video-job-3');
       expect(result.DriverClass).toBe(DRIVER_B);
       expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
+    });
+
+    it('a request the provider rejects (a 400) does not fail over', async () => {
+      respond = () => rejectedWith(400);
+
+      const result = await runner.RunAvatarVideo(videoParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(calls.map(c => c.Driver)).toEqual([DRIVER_A]);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe('Request failed with status code 400');
+      expect(MediaHarness.LastRun?.Status).toBe('Failed');
+    });
+
+    it('an outage the HTTP client reports only by its status (a 503) fails over', async () => {
+      respond = driver => (driver === DRIVER_A ? rejectedWith(503) : accepted('video-job-4'));
+
+      const result = await runner.RunAvatarVideo(videoParams());
+
+      expect(calls.map(c => c.Driver)).toEqual([DRIVER_A, DRIVER_B]);
+      expect(result.Success).toBe(true);
+      expect(result.VideoID).toBe('video-job-4');
     });
 
     it('a thrown outage fails over too, and a failure from every vendor is reported', async () => {

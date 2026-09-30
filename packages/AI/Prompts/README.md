@@ -213,7 +213,16 @@ Non-chat models run through runners built on the same `BaseModelRunner`, so they
 | `AISpeechToTextRunner` | `Speech to Text` | `RunSpeechToText` | `Default Speech To Text` | the driver's: audio seconds (`Seconds`) when reported, otherwise nothing |
 | `AIVideoRunner` | `Video` | `RunAvatarVideo` | `Default Video Generation` | the driver's: video seconds (`Seconds`) when reported, otherwise nothing |
 
-The text-to-speech, speech-to-text and video runners share their lifecycle through `BaseMediaRunner`. It follows the carrier prompt's `FailoverStrategy`, narrowing `SameModelDifferentVendor` to the selected model's vendors. A driver that reports a failure with only a message gets the vendor's classification of that message, so an outage fails over and a bad request does not.
+The text-to-speech, speech-to-text and video runners share their lifecycle through `BaseMediaRunner`. It follows the carrier prompt's `FailoverStrategy`, narrowing `SameModelDifferentVendor` to the selected model's vendors.
+
+Whether a failed call fails over is `ErrorAnalyzer`'s decision, as it is for chat prompts. The shipped audio and video drivers report it on `SpeechResult.errorInfo` / `VideoResult.errorInfo`, from the error their SDK threw, so it keeps the HTTP status:
+
+- a rate limit, an outage, a server error or a timeout fails over;
+- a request the vendor rejected as invalid (a 400 or 422, such as an unknown voice or an unsupported audio format) does not, since every other candidate would reject it too;
+- a 400 whose message reads as vendor-specific validation (`required`, `must be`, …) fails over to another vendor, as it does for chat;
+- a 401 stops failover, as it does for chat.
+
+A driver that reports only `errorMessage` is classified from the message, which recognizes rate limits, outages and a few malformed requests; any other message reads as `Unknown`, which fails over. A driver should set `errorInfo` with `ErrorAnalyzer.AnalyzeError(error)` on the error it caught.
 
 Video generation is asynchronous at the provider, and the primitive offers no status call, so `AIVideoRunner` does not wait for a render. A successful run means the provider accepted the request; the row records the video ID (for HeyGen, the render job's ID) and records the video's length only if a driver reports it.
 

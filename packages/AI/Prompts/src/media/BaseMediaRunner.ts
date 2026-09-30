@@ -73,9 +73,13 @@ interface MediaRunPlan {
  *
  * Failover follows the carrier prompt's `FailoverStrategy`: `None` makes one attempt,
  * `SameModelDifferentVendor` stays on the selected model's vendors, and `NextBestModel` or
- * `PowerRank` may reach any candidate. A driver that reports a failure without classifying it gets
- * the vendor's classification of its message, so a rate limit or outage fails over and a bad request
- * does not.
+ * `PowerRank` may reach any candidate. Whether a failure fails over is `ErrorAnalyzer`'s call, as it
+ * is for chat prompts, made on the error the provider returned: the driver's `errorInfo`, or the
+ * error a driver threw. The shipped drivers report `errorInfo`, which keeps the HTTP status, so a rate
+ * limit, an outage or a timeout fails over, and a request the vendor rejected as invalid (a 400 or 422
+ * the analyzer does not read as vendor-specific validation) does not. A driver that reports only a
+ * message is classified from the message, which recognizes rate limits, outages and a few malformed
+ * requests; any other message reads as `Unknown`, which fails over.
  *
  * @typeParam TParams The operation params, including {@link AIMediaRunOptions}.
  * @typeParam TDriver The driver base class, resolved through the ClassFactory by driver class.
@@ -333,12 +337,16 @@ export abstract class BaseMediaRunner<
     }
   }
 
-  /** Wraps the driver's result for the failover loop, classifying a failure the driver left unclassified. */
+  /**
+   * Wraps the driver's result for the failover loop. A failure keeps the driver's classification,
+   * which the shipped drivers take from the error the provider's SDK threw, with its HTTP status. A
+   * driver that reports only a message gets the analyzer's reading of the message.
+   */
   private callResultFrom(output: TOutput, candidate: ModelVendorCandidate): MediaCallResult<TOutput> {
     const call = new MediaCallResult<TOutput>(output.success, output);
     if (!output.success) {
       call.errorMessage = output.errorMessage || `The driver '${candidate.driverClass}' reported a failure with no message`;
-      call.errorInfo = ErrorAnalyzer.AnalyzeError(new Error(call.errorMessage), candidate.vendorName);
+      call.errorInfo = output.errorInfo ?? ErrorAnalyzer.AnalyzeError(new Error(call.errorMessage), candidate.vendorName);
     }
     return call;
   }

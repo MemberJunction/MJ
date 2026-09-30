@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
-import { AudioModel, BaseSpeechToText, ModelUsage, SpeechResult, SpeechToTextParams } from '@memberjunction/ai';
+import { AudioModel, BaseSpeechToText, ErrorAnalyzer, ModelUsage, SpeechResult, SpeechToTextParams } from '@memberjunction/ai';
 import { VENDOR } from '@memberjunction/unit-testing';
 import { MediaHarness } from './__fixtures__/media-runner.harness';
 import { AnLLMModelID, LoadMediaCatalog, USAGE_TYPE } from './__fixtures__/media-runner.catalog';
@@ -75,13 +75,26 @@ function transcribed(durationSeconds?: number): SpeechResult {
   return result;
 }
 
-/** A failure the way the OpenAI and Groq drivers report one: caught, with only a message. */
+/** A failure from a driver that reports only a message, and leaves it unclassified. */
 function failed(message: string): SpeechResult {
   const result = new SpeechResult();
   result.success = false;
   result.errorMessage = message;
   return result;
 }
+
+/**
+ * A failure the way the OpenAI and Groq drivers report one: the message, and the analyzer's reading
+ * of the error their SDK threw, which keeps its HTTP status on `status`.
+ */
+function rejected(message: string, status: number): SpeechResult {
+  const result = failed(message);
+  result.errorInfo = ErrorAnalyzer.AnalyzeError(Object.assign(new Error(message), { status }), 'Test vendor');
+  return result;
+}
+
+/** What OpenAI's Whisper endpoint returns for audio it cannot read. */
+const INVALID_FORMAT_400 = "400 Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']";
 
 abstract class ScriptedSpeechToText extends BaseSpeechToText {
   constructor(private readonly key: string, private readonly driverKey: string) {
@@ -256,6 +269,28 @@ describe('AISpeechToTextRunner', () => {
 
       expect(result.Success).toBe(true);
       expect(result.ModelID).toBe(SECONDARY_ID);
+    });
+
+    it('audio the vendor rejects (a 400) is not uploaded to any other candidate', async () => {
+      respond = () => rejected(INVALID_FORMAT_400, 400);
+
+      const result = await runner.RunSpeechToText(transcriptionParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(calls.map(c => c.Params.model)).toEqual(['whisper-groq']);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe(INVALID_FORMAT_400);
+      expect(MediaHarness.LastRun?.Status).toBe('Failed');
+    });
+
+    it('a rate limit (a 429) still reaches the next candidate', async () => {
+      respond = driver => (driver === DRIVER_A ? rejected('429 Rate limit reached for model `whisper-large-v3`', 429) : transcribed(5));
+
+      const result = await runner.RunSpeechToText(transcriptionParams());
+
+      expect(calls.map(c => c.Params.model)).toEqual(['whisper-groq', 'whisper-openai']);
+      expect(result.Success).toBe(true);
+      expect(result.DriverClass).toBe(DRIVER_B);
     });
   });
 

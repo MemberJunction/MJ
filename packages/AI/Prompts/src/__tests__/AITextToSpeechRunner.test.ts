@@ -4,6 +4,7 @@ import { UserInfo } from '@memberjunction/core';
 import {
   AudioModel,
   BaseTextToSpeech,
+  ErrorAnalyzer,
   ModelUsage,
   PronounciationDictionary,
   SpeechResult,
@@ -82,13 +83,44 @@ function spoken(usage?: ModelUsage): SpeechResult {
   return result;
 }
 
-/** A failure the way the OpenAI and ElevenLabs drivers report one: caught, with only a message. */
+/** A failure from a driver that reports only a message, and leaves it unclassified. */
 function failed(message: string): SpeechResult {
   const result = new SpeechResult();
   result.success = false;
   result.errorMessage = message;
   return result;
 }
+
+/**
+ * An error shaped as a provider SDK throws one: its message, and its HTTP status where that SDK keeps
+ * it (`status` for the OpenAI and Groq SDKs, `statusCode` for ElevenLabs'; the HeyGen driver hands
+ * the analyzer `status`).
+ */
+function sdkError(message: string, fields: { status?: number; statusCode?: number }): Error {
+  return Object.assign(new Error(message), fields);
+}
+
+/** A failure the way the shipped drivers report one: the message, and the analyzer's reading of the SDK's error. */
+function rejected(error: Error): SpeechResult {
+  const result = failed(error.message);
+  result.errorInfo = ErrorAnalyzer.AnalyzeError(error, 'Test vendor');
+  return result;
+}
+
+/** Request errors the shipped drivers return, with the status their SDKs keep. */
+const INVALID_VOICE_400 = sdkError(
+  "400 Invalid value: 'bogus'. Supported values are: 'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'onyx', 'nova', 'sage', 'shimmer' and 'verse'.",
+  { status: 400 },
+);
+const VOICE_NOT_FOUND_400 = sdkError(
+  'Status code: 400\nBody: {\n  "detail": {\n    "status": "voice_not_found",\n    "message": "A voice with the voice_id bogus was not found."\n  }\n}',
+  { statusCode: 400 },
+);
+const INVALID_SETTINGS_422 = sdkError(
+  'UnprocessableEntityError\nStatus code: 422\nBody: {\n  "detail": [\n    {\n      "loc": ["body", "voice_settings", "stability"],\n      "msg": "Input should be less than or equal to 1",\n      "type": "less_than_equal"\n    }\n  ]\n}',
+  { statusCode: 422 },
+);
+const HTTP_CLIENT_400 = sdkError('Request failed with status code 400', { status: 400 });
 
 abstract class ScriptedTextToSpeech extends BaseTextToSpeech {
   constructor(private readonly key: string, private readonly driverKey: string) {
@@ -300,13 +332,50 @@ describe('AITextToSpeechRunner', () => {
       expect(result.ModelID).toBe(SECONDARY_ID);
     });
 
-    it('a bad request does not fail over', async () => {
+    it('a driver that reports only a message is classified by the message', async () => {
       respond = () => failed('Invalid JSON in request body');
 
       const result = await runner.RunTextToSpeech(speechParams());
 
       expect(calls).toHaveLength(1);
       expect(result.Success).toBe(false);
+    });
+  });
+
+  describe('failover, on the failures the shipped drivers report', () => {
+    it.each([
+      ['an invalid voice (OpenAI, 400)', INVALID_VOICE_400],
+      ['an unknown voice (ElevenLabs, 400)', VOICE_NOT_FOUND_400],
+      ['invalid voice settings (ElevenLabs, 422)', INVALID_SETTINGS_422],
+      ['a rejected request (HeyGen, 400)', HTTP_CLIENT_400],
+    ])('%s does not fail over: another vendor would reject it too', async (_name, error) => {
+      respond = () => rejected(error);
+
+      const result = await runner.RunTextToSpeech(speechParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(calls.map(c => c.Driver)).toEqual([DRIVER_A]);
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toBe(error.message);
+      expect(MediaHarness.LastRun?.Status).toBe('Failed');
+      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(0);
+    });
+
+    it.each([
+      ['an outage (503)', sdkError('Request failed with status code 503', { status: 503 })],
+      ['a rate limit (429)', sdkError('429 Rate limit reached for requests', { status: 429 })],
+      ['a server error (500)', sdkError('500 The server had an error while processing your request.', { status: 500 })],
+      ['a gateway error (502)', sdkError('Status code: 502\nBody: "Bad Gateway"', { statusCode: 502 })],
+    ])("%s fails over to the model's other vendor", async (_name, error) => {
+      respond = driver => (driver === DRIVER_A ? rejected(error) : spoken());
+
+      const result = await runner.RunTextToSpeech(speechParams());
+      await runner.WaitForPendingPromptRunSaves();
+
+      expect(calls.map(c => c.Driver)).toEqual([DRIVER_A, DRIVER_B]);
+      expect(result.Success).toBe(true);
+      expect(result.DriverClass).toBe(DRIVER_B);
+      expect(MediaHarness.LastRun?.FailoverAttempts).toBe(1);
     });
   });
 

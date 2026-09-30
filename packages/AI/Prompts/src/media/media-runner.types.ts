@@ -92,10 +92,11 @@ export interface AIMediaRunOutcome<TOutput> extends AIMediaRunResult {
 }
 
 /**
- * The fields of a driver result the shared lifecycle reads: the outcome, the error message, and the
- * usage when the driver reported it. `SpeechResult` and `VideoResult` both have them.
+ * The fields of a driver result the shared lifecycle reads: the outcome, the error message and its
+ * classification, and the usage when the driver reported it. `SpeechResult` and `VideoResult` both
+ * have them.
  */
-export type MediaDriverOutput = Pick<SpeechResult, 'success' | 'errorMessage' | 'usage'>;
+export type MediaDriverOutput = Pick<SpeechResult, 'success' | 'errorMessage' | 'errorInfo' | 'usage'>;
 
 /**
  * One operation a media runner performs: its name, how it validates and describes the request for
