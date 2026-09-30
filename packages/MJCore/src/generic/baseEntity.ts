@@ -1066,6 +1066,37 @@ type RecordSnapshot = {
 };
 
 /**
+ * What a unit of work that holds a transaction keeps for the records it writes, so that it can settle
+ * them when it settles. A unit of work is an IS-A chain's save or delete, or a graph.
+ *
+ * - `Snapshots`: each record as it was before the unit wrote it, put back if the unit rolls back. A
+ *   save finalizes its record as saved and clean when the write returns, before the unit commits.
+ * - `DeletedRecords`: the records it deleted, reset with `NewRecord()` once it commits. Resetting a
+ *   record as its delete returns would leave it reset, with a new key, if the unit then rolled back.
+ *
+ * A unit nested in another adds to the outer unit's lists instead of keeping its own: an IS-A chain
+ * that is one of a graph's records, or the graph of an IS-A parent's companions inside its child's
+ * chain. The outermost unit settles everything, so no record is reset before it commits. A nested
+ * unit that rolls back also puts its own records back at once, in case the outer unit goes on.
+ */
+type UnitOfWork = {
+    Snapshots: RecordSnapshot[];
+    DeletedRecords: BaseEntity[];
+};
+
+/**
+ * One unit of work's part in a {@link UnitOfWork}: the unit it owns, or the enclosing unit it joined.
+ * It keeps its own snapshots, and how many deleted records the unit held when it began, so that it can
+ * settle its own share if it rolls back inside a unit that goes on.
+ */
+type UnitOfWorkPart = {
+    unit: UnitOfWork;
+    owns: boolean;
+    snapshots: RecordSnapshot[];
+    deletedMark: number;
+};
+
+/**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
 export abstract class BaseEntity<T = unknown> {
@@ -1343,6 +1374,13 @@ export abstract class BaseEntity<T = unknown> {
      * routing through the provider: participants stay ignorant of one another.
      */
     private _entityTransactionScope: EntityTransactionScope | null = null;
+
+    /**
+     * The unit of work this record is saved or deleted in, while it runs as part of a larger one: an
+     * IS-A chain's initiator sets it on each parent for the parent's write, and a graph sets it on
+     * each of its records. See {@link UnitOfWork}.
+     */
+    private _unitOfWork: UnitOfWork | null = null;
 
     /**
      * Companions registered on this entity, keyed by {@link EntityCompanion.Name}.
@@ -3201,11 +3239,15 @@ export abstract class BaseEntity<T = unknown> {
         const childDeleteOptions = Object.assign(new EntityDeleteOptions(), deleteOptions ?? {});
         childDeleteOptions.GraphVisited = visited;
 
-        // A node's write finalizes the node and each IS-A parent above it before the graph commits:
-        // a save marks them saved and clean, a delete resets them with NewRecord(). A rollback
-        // undoes neither in memory, and a retry would then skip a peer or fail its FK, so capture
-        // every node's chain now and put it back on failure.
-        const participants = BaseEntity.captureChains(plan.Nodes.map(node => node.Entity));
+        // A graph that holds a scope is a unit of work: what its records write is put back if it
+        // rolls back, and what they delete is reset only once it commits (see UnitOfWork). Nested in
+        // another unit — the companions of an IS-A parent deleted in its child's chain, say — it
+        // joins that one. Without a scope each write stands as it runs, so a failure leaves the
+        // records that already wrote as they are, which is what the database holds.
+        const enclosing = this._unitOfWork;
+        const records = plan.Nodes.map(node => node.Entity);
+        const previousUnits = records.map(record => record._unitOfWork);
+        let part: UnitOfWorkPart | null = null;
 
         // Acquired INSIDE the try: a begin failure (pool exhausted, dead connection) is a failed
         // save, and Save()/Delete() report failure by returning false — an escaping throw here
@@ -3216,6 +3258,12 @@ export abstract class BaseEntity<T = unknown> {
                 provider?.SupportsEntityTransactions === true && provider.BeginEntityTransaction
                     ? await provider.BeginEntityTransaction()
                     : null;
+            if (scope) {
+                part = BaseEntity.beginUnitOfWork(enclosing, BaseEntity.captureChains(records));
+                for (const record of records) {
+                    record._unitOfWork = part.unit;
+                }
+            }
             const result = await ExecuteEntitySavePlan(plan, {
                 SaveOptions: childSaveOptions,
                 DeleteOptions: childDeleteOptions,
@@ -3225,13 +3273,14 @@ export abstract class BaseEntity<T = unknown> {
             });
             if (!result.Success) {
                 await scope?.Rollback();
-                BaseEntity.restoreChains(participants);
+                BaseEntity.settleRollback(part);
                 this.registerGraphFailure(result.ErrorMessage, operation);
                 this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: result.ErrorMessage });
                 return false;
             }
 
             await scope?.Commit();
+            BaseEntity.settleCommit(part);
             this.acceptCompanionChanges();
             this.RaiseEvent('graph_save', { Success: true, NodeCount: plan.NodeCount });
             return true;
@@ -3247,12 +3296,16 @@ export abstract class BaseEntity<T = unknown> {
                     `${this.EntityInfo?.Name}: ${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
                 );
             }
-            BaseEntity.restoreChains(participants);
+            BaseEntity.settleRollback(part);
             const detail = e instanceof Error ? e.message : String(e);
             LogError(`BaseEntity.executeGraphLocal failed for ${this.EntityInfo?.Name}: ${detail}`);
             this.registerGraphFailure(detail, operation);
             this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: detail });
             return false;
+        } finally {
+            records.forEach((record, index) => {
+                record._unitOfWork = previousUnits[index];
+            });
         }
     }
 
@@ -3308,12 +3361,12 @@ export abstract class BaseEntity<T = unknown> {
      * Puts this record back as a snapshot captured it, after the unit of work that finalized it
      * rolled back.
      *
-     * A save's `finalizeSave()` rebuilds the record's fields from what its write returned and marks
-     * it saved; a delete's `NewRecord()` rebuilds them empty and marks it unsaved. Both also empty
-     * its result history. The database undid the write, so the record gets back its saved and loaded
-     * flags, its result history, and each field's value and tracking state. A field edited since
-     * then keeps the edit, and is compared with its captured baseline again, since that is what the
-     * database holds after the rollback.
+     * A save's `finalizeSave()` rebuilds the record's fields from what its write returned, marks it
+     * saved and empties its result history. The database undid the write, so the record gets back
+     * its saved and loaded flags, its result history, and each field's value and tracking state. A
+     * field edited since then keeps the edit, and is compared with its captured baseline again, since
+     * that is what the database holds after the rollback. (A delete leaves nothing to put back: a
+     * record deleted inside a unit of work isn't reset until the unit commits.)
      *
      * The history matters to the caller: a save records its failure only when nothing else did,
      * judged by the history's length when it started, which an emptied history would make wrong.
@@ -3403,13 +3456,95 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * The failure path of a save: rolls back the transaction scope this entity holds, if any, then
-     * puts the IS-A chain back as `chain` captured it. `chain` is null when this save captured none
-     * (see `_innerSave`), and then only the scope is rolled back.
+     * settles this save's part in its unit of work (see {@link settleRollback}). `part` is null when
+     * this save took none (see `_innerSave`), and then only the scope is rolled back.
      */
-    private async rollbackChainSave(chain: RecordSnapshot[] | null): Promise<void> {
+    private async rollbackChainSave(part: UnitOfWorkPart | null): Promise<void> {
         await this.rollbackEntityTransactionScope();
-        if (chain) {
-            BaseEntity.restoreChains(chain);
+        BaseEntity.settleRollback(part);
+    }
+
+    /**
+     * Starts a unit of work's part in a {@link UnitOfWork}: joins `enclosing` when the unit runs
+     * inside one, and owns a new one when it doesn't. `snapshots` are the unit's records as they are
+     * before it writes them. They join the unit's, so that the outermost unit can put them back.
+     */
+    private static beginUnitOfWork(enclosing: UnitOfWork | null, snapshots: RecordSnapshot[]): UnitOfWorkPart {
+        const unit = enclosing ?? { Snapshots: [], DeletedRecords: [] };
+        unit.Snapshots.push(...snapshots);
+        return { unit, owns: !enclosing, snapshots, deletedMark: unit.DeletedRecords.length };
+    }
+
+    /**
+     * Runs `work` on `record` as part of `unit` (see {@link UnitOfWork}), and gives the record back
+     * the unit it was in before, however `work` ends. Used for an IS-A parent's delete, which runs
+     * inside its child's chain, along with the graph of its companions if it has any.
+     */
+    private static async inUnitOfWork<T>(
+        record: BaseEntity,
+        unit: UnitOfWork | null,
+        work: (record: BaseEntity) => Promise<T>,
+    ): Promise<T> {
+        const previous = record._unitOfWork;
+        record._unitOfWork = unit;
+        try {
+            return await work(record);
+        }
+        finally {
+            record._unitOfWork = previous;
+        }
+    }
+
+    /**
+     * After a unit of work rolls back: puts its records back as they were before it wrote them, and
+     * drops the deletes the rollback undid, so that nothing resets their records. The owner does this
+     * for everything the unit and the units nested in it wrote. A nested part does it for its own
+     * records only; when the owner then rolls back too, restoring them again changes nothing.
+     */
+    private static settleRollback(part: UnitOfWorkPart | null): void {
+        if (!part) {
+            return;
+        }
+        BaseEntity.restoreChains(part.owns ? part.unit.Snapshots : part.snapshots);
+        part.unit.DeletedRecords.length = part.owns ? 0 : part.deletedMark;
+    }
+
+    /**
+     * After a unit of work commits: its owner resets the records it deleted. A nested part leaves
+     * them to the owner, since the enclosing unit can still roll back.
+     */
+    private static settleCommit(part: UnitOfWorkPart | null): void {
+        if (part?.owns) {
+            BaseEntity.resetDeletedRecords(part.unit.DeletedRecords);
+        }
+    }
+
+    /**
+     * Resets the records a unit of work deleted, once the unit has committed, as each record's own
+     * `Delete()` does when no unit of work is involved. See {@link UnitOfWork}.
+     *
+     * Last-deleted first, skipping a record that no longer reads as saved. `NewRecord()` on a record
+     * also resets every IS-A level above it, and relinks them. A chain's initiator records its delete
+     * after its parents do, so it's reset first, and its parents with it. Resetting a parent again
+     * after that would unlink it from its child and give it a key the child doesn't share.
+     *
+     * The unit has committed, so a reset that throws is logged and the rest still run: the deletes
+     * stand whatever happens here.
+     */
+    private static resetDeletedRecords(records: BaseEntity[]): void {
+        for (let index = records.length - 1; index >= 0; index--) {
+            const record = records[index];
+            if (!record.IsSaved) {
+                continue;
+            }
+            try {
+                record.NewRecord();
+            } catch (e) {
+                LogError(
+                    `BaseEntity.resetDeletedRecords: resetting a deleted ${record.EntityInfo?.Name} record failed: ` +
+                    `${e instanceof Error ? e.message : String(e)}`,
+                );
+            }
         }
     }
 
@@ -4790,8 +4925,10 @@ export abstract class BaseEntity<T = unknown> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
-        // The IS-A chain as it was before this save, captured only when this entity starts a chain save.
-        let chain: RecordSnapshot[] | null = null;
+        // The unit of work this save runs inside, if any (see UnitOfWork), and this save's own part
+        // in one, taken only when this entity starts an IS-A chain save whose writes a failure undoes.
+        const enclosing = this._unitOfWork;
+        let part: UnitOfWorkPart | null = null;
 
         try {
             const initialDirtyState = this.Dirty; // save this because parent entity save cycle, if any, will clear their dirty flags
@@ -4818,15 +4955,16 @@ export abstract class BaseEntity<T = unknown> {
 
             // Each level of the chain is finalized as saved and clean when its own write returns,
             // before the chain commits. A failure that undoes those writes has to put the chain
-            // back in memory too, so capture it before the parents save. The writes are undone
-            // when this save holds a scope, and on a provider without entity transactions, which
-            // doesn't talk to a database directly: there each parent's save is recorded in memory
-            // and the leaf's one write carries the chain (GraphQLDataProvider). Anywhere else a
-            // level may really have written (in a TransactionGroup, a level outside the group
-            // does), and marking it unsaved would make the retry insert it twice.
+            // back in memory too, so the chain save is a unit of work, captured before the parents
+            // save. The writes are undone when this save holds a scope, and on a provider without
+            // entity transactions, which doesn't talk to a database directly: there each parent's
+            // save is recorded in memory and the leaf's one write carries the chain
+            // (GraphQLDataProvider). Anywhere else a level may really have written (in a
+            // TransactionGroup, a level outside the group does), and marking it unsaved would make
+            // the retry insert it twice.
             if (isISAInitiator && !this.TransactionGroup &&
                 (scopeOpened || this.ProviderToUse?.SupportsEntityTransactions !== true)) {
-                chain = BaseEntity.captureChains([this]);
+                part = BaseEntity.beginUnitOfWork(enclosing, BaseEntity.captureChains([this]));
             }
 
             // Save parent chain first (root → branch → immediate parent)
@@ -4846,7 +4984,7 @@ export abstract class BaseEntity<T = unknown> {
                 if (!parentResult) {
                     // Parent save failed — roll back if we started the transaction, and put back
                     // the levels above it that had already saved
-                    await this.rollbackChainSave(chain);
+                    await this.rollbackChainSave(part);
 
                     // RECORD the failure on THIS entity's ResultHistory before returning. Without
                     // this the caller gets `false` with LatestResult === null and an empty
@@ -5000,9 +5138,10 @@ export abstract class BaseEntity<T = unknown> {
                             // this scope exists to prevent.
                             if (result) {
                                 await this.commitEntityTransactionScope();
+                                BaseEntity.settleCommit(part);
                             }
                             else {
-                                await this.rollbackChainSave(chain);
+                                await this.rollbackChainSave(part);
                             }
 
                             return result;
@@ -5051,6 +5190,7 @@ export abstract class BaseEntity<T = unknown> {
                 // commit, so later "successful" saves were silently non-durable. Committing an
                 // empty scope writes nothing; it only releases the transaction.
                 await this.commitEntityTransactionScope();
+                BaseEntity.settleCommit(part);
                 return true; // nothing to save since we're not dirty
             }
         }
@@ -5058,7 +5198,7 @@ export abstract class BaseEntity<T = unknown> {
             // Roll back the scope this entity opened, if any (a no-op when it holds none), and put
             // back what the chain's saves changed in memory, this entity included when the commit
             // is what threw. Before the result below, which reads IsSaved and the old values.
-            await this.rollbackChainSave(chain);
+            await this.rollbackChainSave(part);
 
             if (currentResultCount === this.ResultHistory.length) {
                 // this means that NO new results were added to the history anywhere
@@ -5963,6 +6103,13 @@ export abstract class BaseEntity<T = unknown> {
         const currentResultCount = this.ResultHistory.length;
         const newResult = new BaseEntityResult();
         newResult.StartedAt = new Date();
+        // The unit of work this delete runs inside, if any (see UnitOfWork), and this delete's own
+        // part in one, taken when it opens a scope for an IS-A chain.
+        const enclosing = this._unitOfWork;
+        let part: UnitOfWorkPart | null = null;
+        // Set once this record's own row is deleted. From then on its history holds the provider's
+        // entry for that delete, which doesn't report a failure later in the chain.
+        let ownRowDeleted = false;
 
         try {
             const _options: EntityDeleteOptions = options ? options : new EntityDeleteOptions();
@@ -6018,7 +6165,16 @@ export abstract class BaseEntity<T = unknown> {
                 // Open (or join) a transaction scope for the parent chain — see the matching
                 // comment in _InnerSave and EntityTransactionScope for why this is provider-
                 // arbitrated rather than IS-A-specific.
-                await this.beginEntityTransactionScope(isISAInitiator);
+                const scopeOpened = await this.beginEntityTransactionScope(isISAInitiator);
+
+                // A chain delete that holds a scope is a unit of work. Each parent is deleted inside
+                // it and isn't reset when its delete returns: the unit resets the chain once it
+                // commits, so a failure that rolls it back leaves every level as it was. Without a
+                // scope each delete stands as it runs and resets its record at once, as before.
+                if (scopeOpened) {
+                    part = BaseEntity.beginUnitOfWork(enclosing, BaseEntity.captureChains([this]));
+                }
+                const unit = part?.unit ?? enclosing;
 
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
 
@@ -6037,6 +6193,7 @@ export abstract class BaseEntity<T = unknown> {
 
                 // Delete OWN row first (FK constraint: child must be deleted before parent)
                 if (await this.ProviderToUse.Delete(this, _options, this.ActiveUser)) {
+                    ownRowDeleted = true;
                     // IS-A: after own delete succeeds, cascade to parent chain
                     if (hasParentChain) {
                         // For overlapping subtypes, check if other children still reference
@@ -6050,40 +6207,43 @@ export abstract class BaseEntity<T = unknown> {
                             parentDeleteOptions.ReplayOnly = _options.ReplayOnly;
                             parentDeleteOptions.IsParentEntityDelete = true;
 
-                            const parentResult = await this._parentEntity.Delete(parentDeleteOptions);
+                            // The parent's delete belongs to this chain's unit of work, so it doesn't
+                            // reset the parent when it returns: the unit does, once it commits.
+                            const parentResult = await BaseEntity.inUnitOfWork(this._parentEntity, unit,
+                                parent => parent.Delete(parentDeleteOptions));
                             if (!parentResult) {
                                 // Parent delete failed — rollback if we started the transaction
                                 await this.rollbackEntityTransactionScope();
+                                BaseEntity.settleRollback(part);
 
                                 // RECORD the failure on THIS entity's ResultHistory before returning —
-                                // symmetric with the parent-SAVE-failure path in _InnerSave. Without this
-                                // the caller gets `false` with LatestResult === null and an empty
-                                // ResultHistory, because every result was written to the PARENT object,
-                                // which callers have no reference to (`_parentEntity` is private). Note
-                                // THIS entity's own row was already deleted successfully above; it is the
-                                // parent-chain delete that failed and rolled the transaction back.
-                                if (currentResultCount === this.ResultHistory.length) {
-                                    const parentLatest = this._parentEntity.LatestResult;
-                                    const parentErrors = parentLatest?.Errors ?? [];
-                                    // A failed parent commonly reports its detail ONLY in Errors, so fall
-                                    // back to the error text rather than a message that says nothing.
-                                    const detail =
-                                        parentLatest?.Message ||
-                                        parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
-                                        'no error detail was reported by the parent';
-                                    newResult.Success = false;
-                                    newResult.Type = 'delete';
-                                    newResult.Message =
-                                        `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
-                                    // Surface the parent's field-level errors so the caller can act on them.
-                                    newResult.Errors = parentErrors;
-                                    // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
-                                    // them — say so, or CompleteMessage repeats every one.
-                                    newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
-                                    newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
-                                    newResult.EndedAt = new Date();
-                                    this.RegisterResultHistoryEntry(newResult);
-                                }
+                                // symmetric with the parent-SAVE-failure path in _InnerSave. Every result
+                                // for the parent's failure was written to the PARENT object, which callers
+                                // have no reference to (`_parentEntity` is private). THIS entity's own row
+                                // was already deleted successfully above, and the only entry its history
+                                // gained is the provider's for that delete, which the rollback just undid.
+                                // So the failure is recorded whatever that entry says: skipping it when
+                                // the history had grown left the caller holding the provider's entry.
+                                const parentLatest = this._parentEntity.LatestResult;
+                                const parentErrors = parentLatest?.Errors ?? [];
+                                // A failed parent commonly reports its detail ONLY in Errors, so fall
+                                // back to the error text rather than a message that says nothing.
+                                const detail =
+                                    parentLatest?.Message ||
+                                    parentErrors.map(e => e?.Message ?? String(e)).filter(Boolean).join('; ') ||
+                                    'no error detail was reported by the parent';
+                                newResult.Success = false;
+                                newResult.Type = 'delete';
+                                newResult.Message =
+                                    `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
+                                // Surface the parent's field-level errors so the caller can act on them.
+                                newResult.Errors = parentErrors;
+                                // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
+                                // them — say so, or CompleteMessage repeats every one.
+                                newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
+                                newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
+                                newResult.EndedAt = new Date();
+                                this.RegisterResultHistoryEntry(newResult);
 
                                 return false;
                             }
@@ -6099,8 +6259,16 @@ export abstract class BaseEntity<T = unknown> {
                         // record deleted correctly
                         this.RaiseEvent('delete', {OldValues: oldVals});
 
-                        // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
-                        this.NewRecord(); // will trigger a new record event here too
+                        if (unit) {
+                            // Deleted inside a unit of work, which resets the record once it commits:
+                            // now, when this delete owns the unit and has just committed it.
+                            unit.DeletedRecords.push(this);
+                            BaseEntity.settleCommit(part);
+                        }
+                        else {
+                            // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
+                            this.NewRecord(); // will trigger a new record event here too
+                        }
                     }
                     else {
                         // part of a transaction, wait for the transaction to submit successfully and then
@@ -6144,6 +6312,7 @@ export abstract class BaseEntity<T = unknown> {
                     // every subsequent "committed" write on this provider silently never commits.
                     // (Also: don't wipe out the entity like we do when the Delete() worked.)
                     await this.rollbackEntityTransactionScope();
+                    BaseEntity.settleRollback(part);
                     return false;
                 }
             }
@@ -6151,10 +6320,12 @@ export abstract class BaseEntity<T = unknown> {
         catch (e) {
             // Roll back the scope this entity opened, if any. No-op when it holds none.
             await this.rollbackEntityTransactionScope();
+            BaseEntity.settleRollback(part);
 
-            if (currentResultCount === this.ResultHistory.length) {
-                // this means that NO new results were added to the history anywhere
-                // so we need to add a new result to the history here
+            // Record the failure when nothing else did. Once this record's own row was deleted, its
+            // history holds the provider's entry for that delete, which doesn't report this failure
+            // (a failed commit, most often), so the failure is recorded then too.
+            if (ownRowDeleted || currentResultCount === this.ResultHistory.length) {
                 newResult.Success = false;
                 newResult.Type = 'delete'
                 newResult.Message = e.message || null;

@@ -17,16 +17,25 @@
  * The same holds on the client, where the parent saves are recorded in memory and the leaf's single
  * mutation carries the whole chain: a failed mutation wrote nothing, so no parent may claim a save.
  *
+ * A chain DELETE has the same shape the other way up: the leaf deletes its own row, then each parent
+ * deletes its row, and only then does the chain commit. Each parent used to reset itself with
+ * `NewRecord()` as its own delete returned, so a commit that failed left every parent unsaved, under a
+ * new key and unlinked from its child, while its row still existed, and the retry failed. A chain
+ * delete that holds a transaction now resets its records only once it commits.
+ *
+ * The mock's subtypes declare no key of their own, so a publication reads the product's key through
+ * its link; a real subtype carries a copy, which `NewRecord()` sets from the parent's.
+ *
  * IS-A wiring note: `_parentEntity` is wired by hand (as in `baseEntity.transactionSettle.test.ts`)
  * because what's under test is the chain's save and rollback, not metadata-driven discovery.
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { BaseEntity, EntitySaveOptions } from '../generic/baseEntity';
+import { BaseEntity, BaseEntityResult } from '../generic/baseEntity';
 import { EntityInfo } from '../generic/entityInfo';
 import { Metadata } from '../generic/metadata';
 import { ProviderBase } from '../generic/providerBase';
-import type { IEntityDataProvider } from '../generic/interfaces';
+import type { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider } from '../generic/interfaces';
 import type { RelatedRecordCollection } from '../generic/relatedRecordCollection';
 import type { UserInfo } from '../generic/securityInfo';
 import {
@@ -34,6 +43,7 @@ import {
     PRODUCT_ENTITY_ID,
     MEETING_ENTITY_ID,
     WEBINAR_ENTITY_ID,
+    PUBLICATION_ENTITY_ID,
     STANDALONE_ENTITY_ID,
 } from './mocks/MockEntityData';
 
@@ -42,6 +52,7 @@ const MOCK_USER = { ID: 'u-1', Name: 'T', Email: 't@t', UserRoles: [] } as unkno
 let productInfo: EntityInfo;
 let meetingInfo: EntityInfo;
 let webinarInfo: EntityInfo;
+let publicationInfo: EntityInfo;
 let standaloneInfo: EntityInfo;
 
 /** What the database does with one entity's write. */
@@ -56,8 +67,20 @@ interface SaveCall {
     IsParentEntitySave: boolean;
 }
 
+/** One provider Delete call, as the provider saw it. */
+interface DeleteCall {
+    Entity: string;
+    Key: unknown;
+    IsParentEntityDelete: boolean;
+}
+
 let txnLog: string[] = [];
 let saveCalls: SaveCall[] = [];
+let deleteCalls: DeleteCall[] = [];
+/** Entities whose delete the database refuses. */
+let deleteFailures: Set<string> = new Set();
+/** Run as the outermost transaction starts to commit, to see what the records say at that moment. */
+let duringCommit: (() => void) | null = null;
 let failures: Map<string, Failure> = new Map();
 /** Values the database changed on the way back, such as a trigger or a view column. */
 let rewrites: Map<string, Record<string, unknown>> = new Map();
@@ -65,6 +88,7 @@ let rewrites: Map<string, Record<string, unknown>> = new Map();
 let omissions: Map<string, string[]> = new Map();
 /** Run when the named entity's write starts: someone editing while the save is in flight. */
 let duringWrite: Map<string, () => void> = new Map();
+/** Whether the outermost commit fails. A savepoint's release still succeeds. */
 let commitFails = false;
 let depth = 0;
 
@@ -92,8 +116,12 @@ async function beginEntityTransaction() {
         async Commit() {
             if (settled) return;
             settled = true;
+            const outermost = depth === 1;
+            if (outermost) {
+                duringCommit?.();
+            }
             depth--;
-            if (commitFails) {
+            if (commitFails && outermost) {
                 txnLog.push('commit failed');
                 throw new Error('the transaction could not be committed');
             }
@@ -148,7 +176,23 @@ function makeProvider(transactional: boolean, opensScopes: boolean = transaction
         async GetEntityObject<T extends BaseEntity>(): Promise<T> {
             return new ChainEntity(standaloneInfo, provider as unknown as IEntityDataProvider) as unknown as T;
         },
-        async Delete(): Promise<boolean> {
+        async Delete(entity: BaseEntity, options: EntityDeleteOptions): Promise<boolean> {
+            const name = entity.EntityInfo.Name;
+            deleteCalls.push({ Entity: name, Key: entity.Get('ID'), IsParentEntityDelete: !!options?.IsParentEntityDelete });
+            // Like DatabaseProviderBase: the provider puts its own result on the record before the
+            // statement runs, gives a failure its reason, and returns whether the row went. It leaves
+            // the result's Success false even when the row went, and a record that was never saved
+            // has no row to delete.
+            const result = new BaseEntityResult(false, '', 'delete');
+            entity.RegisterResultHistoryEntry(result);
+            if (!entity.IsSaved) {
+                result.Message = `There is no ${name} row to delete: the record was never saved`;
+                return false;
+            }
+            if (deleteFailures.has(name)) {
+                result.Message = `The DELETE statement conflicted with a REFERENCE constraint on ${name}`;
+                return false;
+            }
             return true;
         },
         SetCachedRecordName(): void {
@@ -190,11 +234,43 @@ function editedMeetingChain() {
     return { product, meeting };
 }
 
+/** A product that owns a collection of related records, which its delete deletes too. */
+class ProductWithItems extends ChainEntity {
+    public readonly Items = this.DeclareRelatedRecords<BaseEntity>({
+        Name: 'Items',
+        RelatedEntity: 'Standalone Items',
+        RelatedEntityJoinField: 'Name',
+        OnRemove: 'delete',
+    });
+}
+
+/**
+ * A Publication IS-A Product that already exists, loaded and not edited. A publication is not itself a
+ * parent type, so its delete runs no query for subtype rows.
+ */
+function savedPublicationChain(
+    transactional = true,
+    makeProduct: (provider: IEntityDataProvider) => ChainEntity = provider => new ChainEntity(productInfo, provider),
+) {
+    const provider = makeProvider(transactional) as unknown as IEntityDataProvider;
+    const product = makeProduct(provider);
+    const publication = new ChainEntity(publicationInfo, provider);
+    publication.WireParent(product);
+    publication.NewRecord();
+    // The first set of a field sets its baseline too, so these read as loaded values.
+    publication.Set('Name', 'Field Guide');
+    publication.Set('ISBN', '978-0-00-000000-2');
+    product.MarkSaved();
+    publication.MarkSaved();
+    return { product, publication, key: publication.Get('ID') };
+}
+
 beforeAll(() => {
     const entities = ALL_ENTITY_DATA.map(d => new EntityInfo(d));
     productInfo = entities.find(e => e.ID === PRODUCT_ENTITY_ID)!;
     meetingInfo = entities.find(e => e.ID === MEETING_ENTITY_ID)!;
     webinarInfo = entities.find(e => e.ID === WEBINAR_ENTITY_ID)!;
+    publicationInfo = entities.find(e => e.ID === PUBLICATION_ENTITY_ID)!;
     standaloneInfo = entities.find(e => e.ID === STANDALONE_ENTITY_ID)!;
     Metadata.Provider = {
         Entities: entities,
@@ -213,6 +289,9 @@ beforeEach(() => {
     rewrites = new Map();
     omissions = new Map();
     duringWrite = new Map();
+    deleteCalls = [];
+    deleteFailures = new Set();
+    duringCommit = null;
     commitFails = false;
 });
 
@@ -519,5 +598,161 @@ describe('a chain save that succeeds', () => {
         expect(product.IsSaved).toBe(true);
         expect(product.GetFieldByName('Name')!.Dirty).toBe(false);
         expect(meeting.GetFieldByName('MaxAttendees')!.Dirty).toBe(false);
+    });
+});
+
+describe('an IS-A chain delete whose commit fails', () => {
+    it('leaves both levels as they were, so the retry deletes both rows', async () => {
+        const { product, publication, key } = savedPublicationChain();
+        commitFails = true;
+
+        expect(await publication.Delete()).toBe(false);
+
+        expect(txnLog).toEqual(['begin', 'commit failed']);
+        expect(deleteCalls.map(c => c.Entity)).toEqual([publicationInfo.Name, productInfo.Name]);
+        expect(product.IsSaved, 'the product row was rolled back, so it still exists').toBe(true);
+        expect(product.Get('ID'), 'under the key it had').toBe(key);
+        expect(product.Get('Name')).toBe('Field Guide');
+        expect(product.ISAChild, 'still linked to the publication').toBe(publication);
+        expect(publication.IsSaved).toBe(true);
+        expect(publication.Get('ID'), "the publication reads the shared key from the product").toBe(key);
+
+        commitFails = false;
+        deleteCalls = [];
+        expect(await publication.Delete()).toBe(true);
+        expect(deleteCalls.map(c => [c.Entity, c.Key])).toEqual([
+            [publicationInfo.Name, key],
+            [productInfo.Name, key],
+        ]);
+    });
+
+    it('records the failed commit on the leaf', async () => {
+        // The leaf's own delete succeeded first, and the provider recorded that on it. Without its
+        // own entry after that one, the caller reads the provider's entry for a delete that was undone.
+        const { publication } = savedPublicationChain();
+        commitFails = true;
+
+        expect(await publication.Delete()).toBe(false);
+
+        expect(publication.LatestResult?.Success).toBe(false);
+        expect(publication.LatestResult?.Type).toBe('delete');
+        expect(publication.LatestResult?.Message).toContain('could not be committed');
+    });
+});
+
+describe('an IS-A chain delete whose parent delete fails', () => {
+    it("records the parent's failure on the leaf, and leaves both levels as they were", async () => {
+        const { product, publication } = savedPublicationChain();
+        deleteFailures.add(productInfo.Name);
+
+        expect(await publication.Delete()).toBe(false);
+
+        expect(txnLog).toEqual(['begin', 'rollback']);
+        expect(publication.LatestResult?.Success).toBe(false);
+        expect(publication.LatestResult?.Message).toContain(`Failed to delete parent entity '${productInfo.Name}'`);
+        expect(publication.LatestResult?.Message).toContain('REFERENCE constraint');
+        expect(product.IsSaved).toBe(true);
+        expect(publication.IsSaved).toBe(true);
+    });
+
+    it("carries the root's failure up through every level", async () => {
+        const provider = makeProvider(true) as unknown as IEntityDataProvider;
+        const product = new ChainEntity(productInfo, provider);
+        const meeting = new ChainEntity(meetingInfo, provider);
+        const webinar = new ChainEntity(webinarInfo, provider);
+        meeting.WireParent(product);
+        webinar.WireParent(meeting);
+        webinar.NewRecord();
+        webinar.Set('Name', 'Launch Webinar');
+        product.MarkSaved();
+        meeting.MarkSaved();
+        webinar.MarkSaved();
+        deleteFailures.add(productInfo.Name);
+
+        expect(await webinar.Delete()).toBe(false);
+
+        expect(deleteCalls.map(c => c.Entity)).toEqual([webinarInfo.Name, meetingInfo.Name, productInfo.Name]);
+        expect(webinar.LatestResult?.Message).toContain(`Failed to delete parent entity '${meetingInfo.Name}'`);
+        expect(webinar.LatestResult?.Message, "the root's own reason, not a message that says nothing").toContain(
+            'REFERENCE constraint',
+        );
+        expect(meeting.IsSaved).toBe(true);
+        expect(product.IsSaved).toBe(true);
+    });
+});
+
+describe('an IS-A chain delete that succeeds', () => {
+    it('resets every level once the chain commits, still linked and sharing one key', async () => {
+        const { product, publication, key } = savedPublicationChain();
+        let productSavedAtCommit: boolean | undefined;
+        duringCommit = () => {
+            productSavedAtCommit = product.IsSaved;
+        };
+
+        expect(await publication.Delete()).toBe(true);
+
+        expect(txnLog).toEqual(['begin', 'commit']);
+        expect(productSavedAtCommit, 'the product is not reset before the chain commits').toBe(true);
+        expect(product.IsSaved).toBe(false);
+        expect(publication.IsSaved).toBe(false);
+        expect(product.Get('ID'), 'a new record, with a new key').not.toBe(key);
+        expect(publication.Get('ID'), 'the publication reads the new key through its link to the product').toBe(
+            product.Get('ID'),
+        );
+        expect(product.ISAChild, 'and the product still links back to it').toBe(publication);
+    });
+});
+
+describe('an IS-A chain delete through a provider with no transactions of its own', () => {
+    it('resets every level, as before', async () => {
+        // GraphQLDataProvider sends the leaf's delete, which the server runs for the whole chain in
+        // one transaction, and answers each parent's delete in memory. Nothing here can roll back
+        // what already happened, so each record resets as its delete returns.
+        const { product, publication, key } = savedPublicationChain(false);
+
+        expect(await publication.Delete()).toBe(true);
+
+        expect(txnLog).toEqual([]);
+        expect(deleteCalls.map(c => [c.Entity, c.IsParentEntityDelete])).toEqual([
+            [publicationInfo.Name, false],
+            [productInfo.Name, true],
+        ]);
+        expect(product.IsSaved).toBe(false);
+        expect(publication.IsSaved).toBe(false);
+        expect(product.Get('ID')).not.toBe(key);
+        expect(publication.Get('ID')).toBe(product.Get('ID'));
+        expect(product.ISAChild).toBe(publication);
+    });
+});
+
+describe("an IS-A chain delete whose parent's companions delete records", () => {
+    it("leaves the parent's related record as it was when the chain's commit fails", async () => {
+        // The product owns a collection of related records, so its delete runs as a graph: the
+        // records, then the product, in a savepoint of the chain's transaction. Releasing the
+        // savepoint commits nothing, and the chain's commit then fails.
+        const { product, publication } = savedPublicationChain(true, provider => new ProductWithItems(productInfo, provider));
+        const item = await product.GetCompanion<RelatedRecordCollection>('Items')!.Create();
+        (item as ChainEntity).MarkSaved();
+        const itemKey = item.Get('ID');
+        commitFails = true;
+
+        expect(await publication.Delete()).toBe(false);
+
+        expect(txnLog, "the chain's transaction, and the graph's savepoint inside it").toEqual([
+            'begin',
+            'begin',
+            'commit',
+            'commit failed',
+        ]);
+        expect(deleteCalls.map(c => c.Entity)).toEqual([publicationInfo.Name, standaloneInfo.Name, productInfo.Name]);
+        expect(item.IsSaved, "the item's row was rolled back with the chain").toBe(true);
+        expect(item.Get('ID')).toBe(itemKey);
+        expect(product.IsSaved).toBe(true);
+
+        commitFails = false;
+        deleteCalls = [];
+        expect(await publication.Delete()).toBe(true);
+        expect(deleteCalls.map(c => c.Entity)).toEqual([publicationInfo.Name, standaloneInfo.Name, productInfo.Name]);
+        expect(item.IsSaved, 'reset once the chain committed').toBe(false);
     });
 });

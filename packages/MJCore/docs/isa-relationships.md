@@ -482,7 +482,8 @@ sequenceDiagram
     P->>DB: DELETE from Product
     DB-->>P: Success
 
-    W->>W: CommitISATransaction()
+    W->>W: scope.Commit()
+    W->>W: NewRecord() on every level, still linked
     W-->>App: true (success)
 ```
 
@@ -493,6 +494,19 @@ This order is required because of foreign key constraints — the child row refe
 A parent `Delete()` that the leaf calls with `IsParentEntityDelete` returns after that row is deleted. The call the application awaits is the leaf's.
 
 The GraphQL client sends one delete for the chain. `Delete()` with `IsParentEntityDelete` records success and does not send a second mutation for a row the leaf's mutation already removed.
+
+**On failure:** The entire transaction is rolled back, so no row is deleted, and every level of the
+chain stays in memory as it was before `Delete()`: saved, under the same key, and still linked, so the
+same call can be retried. That holds because nothing is reset until the chain commits: each level is
+reset with `NewRecord()` once the commit succeeds, and so is each record that a parent's related-record
+collections deleted along the way. The failure is recorded on the leaf, the record the application
+called, whichever level failed. A parent's failure reads
+`Failed to delete parent entity '<name>': <its reason>`, and a failed commit is recorded with the
+commit's own error.
+
+On the client there is nothing to roll back: each parent's delete is answered in memory, and the
+leaf's one mutation deletes the whole chain in a single server transaction. Each level resets as its
+delete returns, as before.
 
 ### Parent Delete Protection
 

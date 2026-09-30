@@ -137,7 +137,9 @@ being evaluated after half of it has landed.
 **A failure leaves every record as it was before `Save()`.** Each node that saved before the failure
 was finalized as saved and clean, and so was each IS-A parent above it. The rollback undoes their
 writes, and the graph puts them back in memory too: saved flags, values and pending edits. The same
-`Save()` can then simply be called again.
+`Save()` can then simply be called again. A delete graph works the same way: a record it deletes is
+reset with `NewRecord()` only once the graph commits, so a rollback leaves it saved and a retry
+deletes it.
 
 ---
 
@@ -461,6 +463,11 @@ await order.Delete();   // OnRemove:'delete' collections cascade — related rec
 
 Records still go through their own `Delete()`, so soft-delete, Record Changes and entity actions
 all behave normally.
+
+The one transaction is the server's. There, a failed delete rolls back and every record stays saved,
+so the same `Delete()` can be retried. A client provider has no transaction to open, so the deletes run
+one at a time: a failure partway leaves the earlier deletes done, and their records reset. For an
+atomic delete from the browser, expose a remote operation that deletes the graph on the server.
 
 ### Validating across records
 
