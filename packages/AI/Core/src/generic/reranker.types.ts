@@ -8,6 +8,8 @@
  * @since 3.0.0
  */
 
+import type { ModelUsage } from './baseModel';
+
 /**
  * A document to be reranked.
  */
@@ -113,4 +115,10 @@ export interface RerankResponse {
      * Model name used for reranking (for logging/debugging)
      */
     modelName?: string;
+
+    /**
+     * Optional token usage and cost of the call, for cost tracking. Set by a driver that knows
+     * them, such as one that reranks through a chat prompt; absent when the driver reports none.
+     */
+    Usage?: ModelUsage;
 }

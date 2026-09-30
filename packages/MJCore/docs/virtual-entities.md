@@ -85,24 +85,29 @@ Define virtual entities in your `database-metadata-config.json` file (referenced
 }
 ```
 
-**What happens at CodeGen time:**
+**What happens at CodeGen time (one run):**
 1. `processVirtualEntityConfig()` reads the `VirtualEntities` array
-2. For each entry, checks if an entity already exists for that view
-3. If not, calls `spCreateVirtualEntity` to create the entity record with `VirtualEntity=1`
-4. `manageVirtualEntities()` then syncs fields from `sys.columns`
-5. `applySoftPKFKConfig()` applies any explicit PK/FK overrides
+2. For each entry, checks if an entity already exists for that view (by `SchemaName` + `BaseView`; `SchemaName` defaults to `dbo`)
+3. If not, inserts the `Entity` row (fixed CodeGen-generated ID, `VirtualEntity=1`, read-only flags, `Description` kept) and seeds the first `PrimaryKey` column; both statements are written to the CodeGen_Run capture so a migration replays them with the same ID. If another entity already uses the `EntityName` (compared without case), the entry is skipped with an error and nothing is written; a name derived from `ViewName` gets a `__<schema>` suffix instead
+4. Adds the entity to its schema's application and grants the configured default permissions
+5. `manageVirtualEntities()` syncs the fields from `sys.columns`
+6. `applyVirtualEntitySoftKeys()` applies every `PrimaryKey` column (`IsPrimaryKey=1`, `IsSoftPrimaryKey=1`) and every `ForeignKeys` entry (`RelatedEntityID`, `RelatedEntityFieldName`, `IsSoftForeignKey=1`). It runs on every CodeGen run, right after step 5, so a column added to the view and named as a key in the same change gets its key in one run. A configured column that is not in the view is skipped with a warning. On a composite key, `IsUnique` is cleared on the key columns
+7. When step 6 changed a key, relationships are rebuilt from the soft foreign keys; then the entity class, GraphQL type and form are generated
 
 ### Method 2: Direct Database Creation
 
-Call the stored procedure directly:
+Call the stored procedure directly. `@PrimaryKeyFieldName` is required; it seeds one key column that CodeGen types on the next run.
 
 ```sql
 EXEC [__mj].spCreateVirtualEntity
     @Name = 'Sales Summary',
-    @Description = 'Read-only summary view',
     @BaseView = 'vwSalesSummary',
-    @SchemaName = 'dbo'
+    @SchemaName = 'dbo',
+    @PrimaryKeyFieldName = 'SummaryID',
+    @Description = 'Read-only summary view'
 ```
+
+This method creates no application link and no permissions, and the procedure does not store `@Description`. Add an `ApplicationEntity` row and `EntityPermission` rows yourself, or prefer Method 1.
 
 ### Method 3: LLM-Assisted Field Decoration
 
@@ -221,10 +226,10 @@ Similarly, relationships are defined as "soft" FKs:
 
 During CodeGen, `manageSingleVirtualEntity()` queries `sys.columns` for the view and:
 
-1. **Removes** EntityField records for columns no longer in the view
+1. **Removes** EntityField records for columns no longer in the view (names are compared without case)
 2. **Creates** EntityField records for new columns
-3. **Updates** existing fields if type/length/nullability changed
-4. If no field has `IsPrimaryKey=1`, defaults the first field as PK
+3. **Updates** existing fields if type/length/nullability changed, and sets the field name to the view column's casing when only the case differs
+4. If no field has `IsPrimaryKey=1` after step 1, defaults the first view column as PK and logs a warning — set `PrimaryKey` in the config to choose the key
 
 ## UI Representation
 
@@ -300,3 +305,4 @@ module.exports = {
 | Save() throws error | Expected — virtual entities are read-only | Use `entity.EntityInfo.VirtualEntity` to check before attempting writes |
 | Entity not created | View name mismatch in config | Ensure `ViewName` matches exactly (case-sensitive) |
 | LLM decoration skipped | Entity already has soft annotations | Intentional — explicit config takes precedence over LLM |
+| `PrimaryKey`/`ForeignKeys` from `VirtualEntities` not applied, or a second run was needed | CodeGen older than this fix | Upgrade `@memberjunction/codegen-lib`; on older versions add a schema-key table entry whose `TableName` is the view name |
