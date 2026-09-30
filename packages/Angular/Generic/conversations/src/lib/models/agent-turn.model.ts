@@ -109,7 +109,9 @@ export interface AgentTurnResult {
     /**
      * The rows the host wrote for the turn, oldest first: the agent's reply and any status rows.
      * The chat area loads and shows them. A row still `In-Progress` is followed like any other
-     * in-progress reply.
+     * in-progress reply. The host reports that row's live status through `AgentRunStatusPublisher`
+     * (`@memberjunction/server`) on the caller's session: significant-step progress, streamed text,
+     * the partial result, and the completion. The completion's `conversationDetailId` is the reply row.
      */
     ReplyDetailIds?: string[];
     /** The agent run, when the host has one. Carried on `AfterAgentTurn`. */
