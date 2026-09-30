@@ -310,7 +310,7 @@ function loadCatalog(): void {
     Type: 'Embedding',
     AIModelTypeID: MODEL_TYPE.Embeddings,
     SelectionStrategy: 'Specific',
-    FailoverStrategy: 'NextBestModel',
+    FailoverStrategy: 'SameModelDifferentVendor',
     RequireSpecificModels: false,
   }];
   h.state.promptModels = [
@@ -318,6 +318,18 @@ function loadCatalog(): void {
     MakePromptModel({ ID: 'pm-002', PromptID: PROMPT_ID, ModelID: MODEL_2_ID, Priority: 5 }),
   ];
   h.state.configuredDrivers = new Set([DRIVER_1, DRIVER_1B, DRIVER_2]);
+}
+
+function setFailoverStrategy(strategy: FakePrompt['FailoverStrategy']): void {
+  h.state.prompts[0].FailoverStrategy = strategy;
+}
+
+/** Gives model 1 a second, lower-priority vendor on driver 1B, so same-model failover has somewhere to go. */
+function addSecondVendorToModel1(): FxModelVendor {
+  const mv1b = embeddingVendor('mv-001b', MODEL_1_ID, VENDOR.AmazonBedrock, 'Amazon Bedrock', DRIVER_1B, 'text-embed-1', 8);
+  h.state.modelVendors.push(mv1b);
+  h.state.models.find(m => m.ID === MODEL_1_ID)?.ModelVendors.push(mv1b);
+  return mv1b;
 }
 
 /** Drops the keyless local model, so a catalog with no keys configured has no usable candidate at all. */
@@ -390,20 +402,107 @@ describe('AIEmbeddingRunner', () => {
     expect(scriptFor(DRIVER_1).Calls).toHaveLength(0);
   });
 
-  it('under NextBestModel, fails over to the second model after a Retriable failure, naming the second model', async () => {
-    scriptFor(DRIVER_1).Answer = () => Promise.reject(new Error('503 Service Unavailable'));
+  describe('failover follows the prompt\'s FailoverStrategy', () => {
+    const serviceUnavailable = (): Promise<EmbedTextsResult> => Promise.reject(new Error('503 Service Unavailable'));
+
+    it('a 503 under SameModelDifferentVendor fails rather than answering from another model', async () => {
+      scriptFor(DRIVER_1).Answer = serviceUnavailable;
+
+      const result = await runner.RunEmbedding({
+        Texts: ['failover test text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('503');
+      expect(result.ModelID).toBe(MODEL_1_ID);
+      expect(result.Vectors).toEqual([]);
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+      expect(scriptFor(DRIVER_2).Calls).toHaveLength(0);
+      expect(scriptFor(DRIVER_LOCAL).Calls).toHaveLength(0);
+    });
+
+    it('under SameModelDifferentVendor, a 503 fails over to another vendor of the same model', async () => {
+      const mv1b = addSecondVendorToModel1();
+      scriptFor(DRIVER_1).Answer = serviceUnavailable;
+
+      const result = await runner.RunEmbedding({
+        Texts: ['failover test text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.ModelID).toBe(MODEL_1_ID);
+      expect(result.ModelInfo?.vendorId).toBe(mv1b.VendorID);
+      expect(scriptFor(DRIVER_1B).Calls).toHaveLength(1);
+      expect(scriptFor(DRIVER_2).Calls).toHaveLength(0);
+    });
+
+    it('under None, a 503 fails without trying another vendor of the same model', async () => {
+      setFailoverStrategy('None');
+      addSecondVendorToModel1();
+      scriptFor(DRIVER_1).Answer = serviceUnavailable;
+
+      const result = await runner.RunEmbedding({
+        Texts: ['failover test text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(result.ModelID).toBe(MODEL_1_ID);
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+      expect(scriptFor(DRIVER_1B).Calls).toHaveLength(0);
+      expect(scriptFor(DRIVER_2).Calls).toHaveLength(0);
+    });
+
+    it('under NextBestModel, a 503 fails over to the second model, naming the second model', async () => {
+      setFailoverStrategy('NextBestModel');
+      scriptFor(DRIVER_1).Answer = serviceUnavailable;
+
+      const result = await runner.RunEmbedding({
+        Texts: ['failover test text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+      });
+
+      expect(result.Success).toBe(true);
+      expect(result.ModelID).toBe(MODEL_2_ID);
+      expect(result.ModelName).toBe('Test Embedding Model 2');
+      expect(result.Vectors).toHaveLength(1);
+      expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+    });
+
+    it('a pinned call under NextBestModel still never leaves the pinned model', async () => {
+      setFailoverStrategy('NextBestModel');
+      scriptFor(DRIVER_1).Answer = serviceUnavailable;
+
+      const result = await runner.RunEmbedding({
+        Texts: ['pinned failover text'],
+        ContextUser: mockUser,
+        PromptID: PROMPT_ID,
+        ModelID: MODEL_1_ID,
+      });
+
+      expect(result.Success).toBe(false);
+      expect(scriptFor(DRIVER_2).Calls).toHaveLength(0);
+      expect(scriptFor(DRIVER_LOCAL).Calls).toHaveLength(0);
+    });
+  });
+
+  it('an unpinned call may answer from a model the prompt does not name: here the keyless fallback', async () => {
+    h.state.configuredDrivers.clear();
 
     const result = await runner.RunEmbedding({
-      Texts: ['failover test text'],
+      Texts: ['unpinned text'],
       ContextUser: mockUser,
       PromptID: PROMPT_ID,
     });
 
     expect(result.Success).toBe(true);
-    expect(result.ModelID).toBe(MODEL_2_ID);
-    expect(result.ModelName).toBe('Test Embedding Model 2');
-    expect(result.Vectors).toHaveLength(1);
-    expect(scriptFor(DRIVER_1).Calls).toHaveLength(1);
+    expect(result.ModelID).toBe(LOCAL_MODEL_ID);
   });
 
   it('no candidate with credentials gives a clear Success: false', async () => {

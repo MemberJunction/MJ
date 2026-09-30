@@ -17,7 +17,7 @@ import {
 import {
   BaseModelRunner,
   ModelVendorCandidate,
-  FailoverAttempt,
+  FailoverConfiguration,
 } from '../BaseModelRunner';
 import {
   EmbeddingRunParams,
@@ -95,8 +95,25 @@ export class AIEmbeddingRunner extends BaseModelRunner {
   }
 
   /**
-   * Executes an embedding call with full AIPromptRun tracking and candidate failover.
-   * Never throws: every failure returns an EmbeddingRunResult with Success: false.
+   * Embeds `params.Texts` and records the call as an `MJ: AI Prompt Runs` row.
+   *
+   * Which model answers:
+   * - With `params.ModelID`, the only candidates are that model's vendors, so every vector comes
+   *   from that model.
+   * - Without it, the candidates come from the prompt. A prompt with `SelectionStrategy = 'Specific'`
+   *   and `RequireSpecificModels` off (both shipped Embedding prompts) also lists every other active
+   *   Embeddings model as a lower-priority fallback. So **an unpinned call may answer from any
+   *   Embeddings model**: the first one with credentials, or the one failover moves to.
+   *   `result.ModelID` names the model that answered.
+   * - Failover follows the prompt's `FailoverStrategy`. `SameModelDifferentVendor` (the entity
+   *   default) stays on the selected model and only tries its other vendors. `None` tries only the
+   *   selected candidate. `NextBestModel` and `PowerRank` may move to another model.
+   *
+   * **Callers that compare the vectors with stored vectors** (a vector index, persisted tag vectors,
+   * a cache) **must pass `ModelID`**. Vectors from different models are not comparable, even when
+   * their dimensions match.
+   *
+   * Never throws: every failure returns an EmbeddingRunResult with `Success: false`.
    */
   public async RunEmbedding(params: EmbeddingRunParams): Promise<EmbeddingRunResult> {
     const startTime = new Date();
@@ -398,25 +415,51 @@ export class AIEmbeddingRunner extends BaseModelRunner {
       return this.executeOnCandidate(candidate, prompt, promptParams, params);
     };
     const failoverConfig = this.getFailoverConfiguration(prompt);
-    const result = failoverConfig.strategy === 'None'
-      ? await attempt(selection.Candidate)
-      : await this.ExecuteWithFailover<EmbeddingInternalResult>(
-          prompt,
-          promptParams,
-          candidates,
-          failoverConfig,
-          attempt,
-          (lastError: Error, _failoverAttempts: FailoverAttempt[]) => {
-            const errRes = new EmbeddingInternalResult(false);
-            errRes.errorMessage = lastError?.message ?? 'All embedding candidates failed';
-            errRes.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: false };
-            errRes.exception = lastError;
-            return errRes;
-          },
-          promptRun ?? undefined,
-          selection.CredentialAvailability
-        );
+    const result = await this.ExecuteWithFailover<EmbeddingInternalResult>(
+      prompt,
+      promptParams,
+      this.failoverCandidates(failoverConfig.strategy, candidates, selection.Candidate),
+      failoverConfig,
+      attempt,
+      (lastError: Error | null) => this.allCandidatesFailedResult(lastError),
+      promptRun ?? undefined,
+      selection.CredentialAvailability
+    );
     return { result, answeredBy };
+  }
+
+  /**
+   * The candidates a call may fail over to, following the prompt's `FailoverStrategy`:
+   * - `SameModelDifferentVendor`: only the selected model's vendors. Moving to another model would
+   *   return vectors from a different vector space, often with a different dimension.
+   * - `None`: only the selected candidate.
+   * - `NextBestModel`, `PowerRank`: every candidate, unchanged.
+   *
+   * `BaseModelRunner.ExecuteWithFailover` walks the list it is given without applying the strategy.
+   * The narrowing is done here, not in the base, because the chat runner relies on the base's
+   * current behavior.
+   */
+  private failoverCandidates(
+    strategy: FailoverConfiguration['strategy'],
+    candidates: ModelVendorCandidate[],
+    selected: ModelVendorCandidate
+  ): ModelVendorCandidate[] {
+    switch (strategy) {
+      case 'SameModelDifferentVendor':
+        return candidates.filter(c => UUIDsEqual(c.model.ID, selected.model.ID));
+      case 'None':
+        return [selected];
+      default:
+        return candidates;
+    }
+  }
+
+  private allCandidatesFailedResult(lastError: Error | null): EmbeddingInternalResult {
+    const errRes = new EmbeddingInternalResult(false);
+    errRes.errorMessage = lastError?.message ?? 'All embedding candidates failed';
+    errRes.errorInfo = { errorType: 'ModelError', severity: 'Retriable', canFailover: false };
+    errRes.exception = lastError ?? undefined;
+    return errRes;
   }
 
   private async executeOnCandidate(
