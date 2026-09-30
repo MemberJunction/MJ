@@ -15,7 +15,11 @@
  *
  * The same grammar rewrites the step names in a condition ({@link RewriteDecisionReferences}): a flow
  * names a Decision step by its key and a compiled graph by its step ID, so a condition crossing
- * between the two must still name the step it named.
+ * between the two must still name the step it named. It also writes and rewrites conditions for an
+ * editor — a reference ({@link DecisionReferenceText}), an option literal
+ * ({@link DecisionConditionLiteral}), and a renamed question or option
+ * ({@link RewriteDecisionQuestionReferences}, {@link RewriteDecisionChoiceValues}) — so what an
+ * editor writes is exactly what this scanner reads back.
  *
  * Two more readers serve the validator only: every comparison of a Choice `value` with a literal, so
  * a misspelled option is refused on any edge, and every read of `decisions` as a PROPERTY of another
@@ -82,8 +86,11 @@ const ROOT_PATTERN = /(?<![A-Za-z0-9_$.])decisions(?![A-Za-z0-9_$])/g;
 /** A name that can follow a dot. Anything else is written in brackets. */
 const IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
-/** The step segment of one reference, where it sits, and how it was written. */
-type StepSegment = {
+/** Characters no literal can carry verbatim: the scanner compares a literal's raw text, escapes included. */
+const UNQUOTABLE = /[\\\r\n\u2028\u2029]/;
+
+/** One path segment of a reference, where it sits, and how it was written. */
+type PathSegment = {
     Name: string;
     Start: number;
     End: number;
@@ -169,13 +176,8 @@ export function RewriteDecisionReferences(
     const rewrite: DecisionReferenceRewrite = { Expression: condition, Unknown: [] };
     if (!condition) return rewrite;
 
-    const strings = stringSpans(condition);
-    const parts: string[] = [];
-    let copied = 0;
-    for (const match of condition.matchAll(ROOT_PATTERN)) {
-        const start = match.index ?? 0;
-        if (insideString(strings, start)) continue;
-
+    const edits: TextEdit[] = [];
+    for (const start of rootsIn(condition)) {
         const segment = stepSegmentAt(condition, start + ROOT.length);
         if (!segment) continue;
         const renamed = rename(segment.Name);
@@ -183,26 +185,183 @@ export function RewriteDecisionReferences(
             if (!rewrite.Unknown.includes(segment.Name)) rewrite.Unknown.push(segment.Name);
             continue;
         }
-        parts.push(condition.slice(copied, segment.Start), formatStepSegment(segment, renamed));
-        copied = segment.End;
+        edits.push({ Start: segment.Start, End: segment.End, Text: formatSegment(segment, renamed) });
     }
-    parts.push(condition.slice(copied));
-    rewrite.Expression = parts.join('');
+    rewrite.Expression = applyEdits(condition, edits);
     return rewrite;
 }
 
-/** The step segment of a reference that also names a question, or `null` for a malformed use. */
-function stepSegmentAt(expression: string, from: number): StepSegment | null {
-    const [step, question] = readSegments(expression, from, 2).Segments;
-    if (!step || !question) return null;
+/**
+ * Rewrites the question name in every `decisions.<step>.<question>` reference to one step.
+ *
+ * {@link RewriteDecisionReferences} renames a step; this renames one of its questions, in the same
+ * grammar and keeping each reference's form the same way: `.intent` stays a dot when the new name
+ * can follow one, and becomes `['<name>']` when it cannot. References to other steps, malformed uses
+ * and text inside string literals are left as written.
+ *
+ * @param condition the condition to rewrite
+ * @param step      the step whose question is renamed, as the condition names it (a flow's step key)
+ * @param rename    maps a question key to its new key, or `undefined` to leave it
+ * @returns the rewritten condition
+ */
+export function RewriteDecisionQuestionReferences(
+    condition: string,
+    step: string,
+    rename: (questionKey: string) => string | undefined,
+): string {
+    if (!condition) return condition;
 
-    const segment = readSegment(expression, from);
-    if (!segment) return null;
-    return { Name: step, Start: from, End: segment.End, Text: expression.slice(from, segment.End), Quote: segment.Quote };
+    const edits: TextEdit[] = [];
+    for (const start of rootsIn(condition)) {
+        const [stepSegment, questionSegment] = pathSegmentsAt(condition, start + ROOT.length, 2);
+        if (!stepSegment?.Name || !questionSegment?.Name || stepSegment.Name !== step) continue;
+        const renamed = rename(questionSegment.Name);
+        if (renamed === undefined || renamed === questionSegment.Name) continue;
+        edits.push({ Start: questionSegment.Start, End: questionSegment.End, Text: formatSegment(questionSegment, renamed) });
+    }
+    return applyEdits(condition, edits);
 }
 
-/** A step segment written with a new name, in its original form where the name allows. */
-function formatStepSegment(segment: StepSegment, name: string): string {
+/**
+ * Rewrites the option values a condition compares one Choice question's answer with.
+ *
+ * Reads the comparisons {@link DecisionChoiceTestOf} recognizes, wherever they sit in a condition:
+ * `decisions.<step>.<question>.value` against a string literal by `===`, `==`, `!==` or `!=`, with the
+ * literal on either side. A literal is matched by its raw text, as the Choice test and the fork check
+ * read it, and written back with {@link DecisionConditionLiteral}; a new value no literal can carry
+ * verbatim leaves its literal as written. Other reads of the answer — `probabilities.<value>`, a
+ * literal passed to a function — are not comparisons of `value` and are left alone.
+ *
+ * @param condition the condition to rewrite
+ * @param step      the step whose answer is compared, as the condition names it (a flow's step key)
+ * @param question  the Choice question's key
+ * @param rename    maps an option value to its new value, or `undefined` to leave it
+ * @returns the rewritten condition
+ */
+export function RewriteDecisionChoiceValues(
+    condition: string,
+    step: string,
+    question: string,
+    rename: (value: string) => string | undefined,
+): string {
+    if (!condition) return condition;
+
+    const strings = stringSpans(condition);
+    const edits: TextEdit[] = [];
+    for (const start of rootsIn(condition, strings)) {
+        const [stepSegment, questionSegment, field] = pathSegmentsAt(condition, start + ROOT.length, 3);
+        if (stepSegment?.Name !== step || questionSegment?.Name !== question || field?.Name !== 'value') continue;
+
+        const literal = comparedLiteral(condition, start, field.End, strings);
+        if (!literal) continue;
+        const renamed = rename(literal.Value);
+        const text = renamed === undefined || renamed === literal.Value ? null : DecisionConditionLiteral(renamed);
+        if (text !== null) edits.push({ Start: literal.Start, End: literal.End, Text: text });
+    }
+    return applyEdits(condition, edits);
+}
+
+/**
+ * Writes `decisions.<step>.<question>.<field>` so that {@link DecisionReferencesIn} reads back exactly
+ * those names, or returns `null` when one of them cannot be written that way.
+ *
+ * A name that can follow a dot is written `.name`; any other is written `['name']`, quoted as
+ * {@link DecisionConditionLiteral} quotes a value. An empty name has no reference at all.
+ */
+export function DecisionReferenceText(step: string, question: string, field: string): string | null {
+    const segments = [step, question, field].map(writeSegment);
+    return segments.every((segment): segment is string => segment !== null) ? ROOT + segments.join('') : null;
+}
+
+/**
+ * A string literal for `value`, written so the condition grammar reads back exactly `value`, or
+ * `null` when no literal can be.
+ *
+ * The grammar compares a literal's raw text — {@link DecisionChoiceTestOf}, and through it the
+ * exhaustiveness check — so an escape would be read back with its backslash and never match the
+ * option it was meant to name. A value is therefore quoted with whichever quote it does not contain,
+ * and a value holding both quotes, a backslash or a line break has no literal that reads back.
+ */
+export function DecisionConditionLiteral(value: string): string | null {
+    if (UNQUOTABLE.test(value)) return null;
+    if (!value.includes('\'')) return `'${value}'`;
+    if (!value.includes('"')) return `"${value}"`;
+    return null;
+}
+
+/** One replacement of the text in `[Start, End)`. */
+type TextEdit = { Start: number; End: number; Text: string };
+
+/** The condition with every edit applied. Edits must not overlap. */
+function applyEdits(expression: string, edits: readonly TextEdit[]): string {
+    if (edits.length === 0) return expression;
+    const parts: string[] = [];
+    let copied = 0;
+    for (const edit of [...edits].sort((a, b) => a.Start - b.Start)) {
+        parts.push(expression.slice(copied, edit.Start), edit.Text);
+        copied = edit.End;
+    }
+    parts.push(expression.slice(copied));
+    return parts.join('');
+}
+
+/** Where each use of the `decisions` root starts, outside string literals. */
+function rootsIn(expression: string, strings: ReadonlyArray<[number, number]> = stringSpans(expression)): number[] {
+    return [...expression.matchAll(ROOT_PATTERN)]
+        .map((match) => match.index ?? 0)
+        .filter((start) => !insideString(strings, start));
+}
+
+/**
+ * The string literal compared with the reference spanning `[start, end)`, on either side of an
+ * equality or inequality, or `null` when it is compared with anything else.
+ */
+function comparedLiteral(
+    expression: string,
+    start: number,
+    end: number,
+    strings: ReadonlyArray<[number, number]>,
+): { Start: number; End: number; Value: string } | null {
+    const span = literalRightAfter(expression, end, strings) ?? literalRightBefore(expression, start, strings);
+    return span ? { Start: span[0], End: span[1], Value: expression.slice(span[0] + 1, span[1] - 1) } : null;
+}
+
+/** The string literal that opens right after an equality or inequality following `end`, or `undefined`. */
+function literalRightAfter(expression: string, end: number, strings: ReadonlyArray<[number, number]>): [number, number] | undefined {
+    const operatorEnd = operatorEndAt(expression, skipSpaces(expression, end), COMPARISONS);
+    if (operatorEnd < 0) return undefined;
+    const open = skipSpaces(expression, operatorEnd);
+    const span = strings[firstSpanEndingAfter(strings, open)];
+    return span?.[0] === open ? span : undefined;
+}
+
+/**
+ * The last string literal before `start` when nothing but an equality or inequality, and whitespace,
+ * separates the two; or `undefined`.
+ */
+function literalRightBefore(expression: string, start: number, strings: ReadonlyArray<[number, number]>): [number, number] | undefined {
+    const span = strings[firstSpanEndingAfter(strings, start) - 1];
+    if (!span) return undefined;
+    const operatorStart = operatorStartBefore(expression, skipSpacesBack(expression, start));
+    return operatorStart >= span[1] && skipSpacesBack(expression, operatorStart) === span[1] ? span : undefined;
+}
+
+/** One name as a path segment the scanner reads back, or `null` when none can carry it. */
+function writeSegment(name: string): string | null {
+    if (!name) return null;
+    if (IDENTIFIER.test(name)) return `.${name}`;
+    const literal = DecisionConditionLiteral(name);
+    return literal === null ? null : `[${literal}]`;
+}
+
+/** The step segment of a reference that also names a question, or `null` for a malformed use. */
+function stepSegmentAt(expression: string, from: number): PathSegment | null {
+    const [step, question] = pathSegmentsAt(expression, from, 2);
+    return step?.Name && question?.Name ? step : null;
+}
+
+/** A segment written with a new name, in its original form where the name allows. */
+function formatSegment(segment: PathSegment, name: string): string {
     const lead = segment.Text.slice(0, skipSpaces(segment.Text, 0));
     const optional = segment.Text.startsWith('?.', lead.length);
     if (segment.Quote === null && IDENTIFIER.test(name)) return `${lead}${optional ? '?.' : '.'}${name}`;
@@ -294,6 +453,12 @@ function stringSpans(expression: string): Array<[number, number]> {
 
 /** Whether `at` falls inside one of `spans`, which are in order and do not overlap. */
 function insideString(spans: ReadonlyArray<[number, number]>, at: number): boolean {
+    const index = firstSpanEndingAfter(spans, at);
+    return index < spans.length && spans[index][0] <= at;
+}
+
+/** The index of the first of `spans` that ends after `at`, or `spans.length` when none does. */
+function firstSpanEndingAfter(spans: ReadonlyArray<[number, number]>, at: number): number {
     let low = 0;
     let high = spans.length;
     while (low < high) {
@@ -301,20 +466,26 @@ function insideString(spans: ReadonlyArray<[number, number]>, at: number): boole
         if (spans[middle][1] <= at) low = middle + 1;
         else high = middle;
     }
-    return low < spans.length && spans[low][0] <= at;
+    return low;
 }
 
-/** Reads up to `max` path segments starting at `from`. */
-function readSegments(expression: string, from: number, max: number): { Segments: string[]; End: number } {
-    const segments: string[] = [];
+/** Up to `max` path segments starting at `from`, each with where it sits and how it was written. */
+function pathSegmentsAt(expression: string, from: number, max: number): PathSegment[] {
+    const segments: PathSegment[] = [];
     let at = from;
     while (segments.length < max) {
         const segment = readSegment(expression, at);
         if (!segment) break;
-        segments.push(segment.Name);
+        segments.push({ Name: segment.Name, Start: at, End: segment.End, Text: expression.slice(at, segment.End), Quote: segment.Quote });
         at = segment.End;
     }
-    return { Segments: segments, End: at };
+    return segments;
+}
+
+/** Reads up to `max` path segments starting at `from`. */
+function readSegments(expression: string, from: number, max: number): { Segments: string[]; End: number } {
+    const segments = pathSegmentsAt(expression, from, max);
+    return { Segments: segments.map((s) => s.Name), End: segments.length > 0 ? segments[segments.length - 1].End : from };
 }
 
 /** Splits on `||` outside strings and parentheses, or returns `null` when a term is empty. */

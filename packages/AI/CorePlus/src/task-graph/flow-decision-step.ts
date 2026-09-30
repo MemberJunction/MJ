@@ -13,6 +13,8 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import { UUIDsEqual } from '@memberjunction/global';
+import type { MJAIPromptEntity } from '@memberjunction/core-entities';
 import type { TaskGraphDecisionQuestion } from './task-graph-spec';
 import { DecisionConfigurationProblems } from './task-graph-validator';
 
@@ -51,7 +53,8 @@ export function ReadFlowDecisionStepConfiguration(
     if ('Error' in parsed) return parsed;
 
     const candidate = parsed.Object as FlowDecisionStepConfiguration;
-    const problems = keyProblems(parsed.Object.key);
+    const keyProblem = FlowDecisionKeyProblem(parsed.Object.key);
+    const problems = keyProblem ? [keyProblem] : [];
     if (parsed.Object.questions === undefined || parsed.Object.questions === null) {
         problems.push('it asks no questions');
     }
@@ -76,12 +79,39 @@ function parseConfigurationObject(json: string | null | undefined): { Object: Re
         : { Error: 'its configuration is not a JSON object' };
 }
 
-/** What is wrong with a step's key, as phrases. Empty when it is usable. */
-function keyProblems(key: unknown): string[] {
+/**
+ * What is wrong with a Decision step's key, as a phrase in {@link ReadFlowDecisionStepConfiguration}'s
+ * voice, or `null` when a path condition can name the step by it.
+ *
+ * The reader's own key check, exported so an editor can say it about a key the author has not
+ * committed yet. Whether another Decision step already uses the key is a question about the whole
+ * flow, which `CollectDecisionStepKeys` answers.
+ *
+ * @param key the key to check, as it would be stored (untrimmed)
+ */
+export function FlowDecisionKeyProblem(key: unknown): string | null {
     if (typeof key !== 'string' || !key.trim()) {
-        return ['it has no key; give it one that path conditions can name it by, such as "triage"'];
+        return 'it has no key; give it one that path conditions can name it by, such as "triage"';
     }
     return FLOW_DECISION_KEY_PATTERN.test(key)
-        ? []
-        : [`its key "${key}" cannot be named in a path condition; use letters, digits and underscores, not starting with a digit`];
+        ? null
+        : `its key "${key}" cannot be named in a path condition; use letters, digits and underscores, not starting with a digit`;
+}
+
+/**
+ * Whether a prompt is for a Decision model type, so an editor offers it as a decision prompt. Prefer the ID: `AIModelType` is
+ * a view column, and cached engine entities may not populate it (see RunAIPromptResolver). The name is the fallback for rows
+ * read from the view without the ID. The runtime enforces the type on the models themselves
+ * (`AIDecisionRunner.RequiredModelType`); this only filters a picker.
+ */
+export function IsDecisionPrompt(
+    prompt: Pick<MJAIPromptEntity, 'AIModelType' | 'AIModelTypeID'> | null | undefined,
+    decisionModelTypeID?: string | null,
+): boolean {
+    if (!prompt) return false;
+    if (decisionModelTypeID && prompt.AIModelTypeID) {
+        return UUIDsEqual(prompt.AIModelTypeID, decisionModelTypeID);
+    }
+    const typeName = typeof prompt.AIModelType === 'string' ? prompt.AIModelType.trim().toLowerCase() : '';
+    return typeName === 'decision';
 }

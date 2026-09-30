@@ -12,6 +12,8 @@ import {
     DecisionReferencesIn,
     DecisionsReadAsProperty,
     DecisionValueComparisonsIn,
+    RewriteDecisionChoiceValues,
+    RewriteDecisionQuestionReferences,
     RewriteDecisionReferences,
 } from '../task-graph/decision-conditions';
 
@@ -86,6 +88,18 @@ describe('the decisions scanner on pathological input', () => {
             Expression: `decisions${' '.repeat(LONG)}?.['step-1'].intent${'\t'.repeat(LONG)}&& true`,
             Unknown: [],
         });
+    });
+
+    it('leaves a question reference cut short by a long run of whitespace alone', () => {
+        const cutShort = `decisions.triage${'\t'.repeat(LONG)}!`;
+        expect(withinBudget(() => RewriteDecisionQuestionReferences(cutShort, 'triage', (key) => `${key}2`))).toBe(cutShort);
+    });
+
+    it('rewrites the option in many comparisons, on either side, without re-reading the condition for each', () => {
+        const pair = "decisions.triage.intent.value === 'a' || 'a' !== decisions.triage.intent.value || ";
+        const condition = `${pair.repeat(LONG / 8)}true`;
+        const renamed = withinBudget(() => RewriteDecisionChoiceValues(condition, 'triage', 'intent', (value) => (value === 'a' ? 'b' : undefined)));
+        expect(renamed).toBe(`${pair.replaceAll("'a'", "'b'").repeat(LONG / 8)}true`);
     });
 });
 

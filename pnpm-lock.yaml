@@ -7523,6 +7523,9 @@ importers:
       '@foblex/utils':
         specifier: 1.1.1
         version: 1.1.1
+      '@memberjunction/ai-core-plus':
+        specifier: 6.2.0-edge.1
+        version: link:../../../AI/CorePlus
       '@memberjunction/core':
         specifier: 6.2.0-edge.1
         version: link:../../../MJCore
