@@ -194,16 +194,31 @@ function copyAlias(record: Record<string, unknown>, from: string, to: string): v
  * an object rather than as JSON text, as it may for a loop; text that is not a JSON object is
  * returned unchanged, so {@link ReadFlowDecisionStepConfiguration} reports why it cannot be read.
  */
-export function DecisionConfigurationText(raw: unknown): string | null {
+export function DecisionConfigurationText(raw: AgentStep['Configuration'] | null): string | null {
     if (raw == null) return null;
-    if (isPlainObject(raw)) return JSON.stringify(NormalizeDecisionConfiguration(raw));
-    if (typeof raw !== 'string') return String(raw);
+    if (typeof raw !== 'string') {
+        // Typed as an object, but it is a model's JSON: an array or a number can arrive here too, and
+        // is written as the JSON it is so the reader can say it is not an object.
+        return isPlainObject(raw) ? JSON.stringify(NormalizeDecisionConfiguration(raw)) : JSON.stringify(raw);
+    }
     try {
         const parsed: unknown = JSON.parse(raw);
         return isPlainObject(parsed) ? JSON.stringify(NormalizeDecisionConfiguration(parsed)) : raw;
     } catch {
         return raw;
     }
+}
+
+/**
+ * A step's `Configuration` as the JSON text `AIAgentStep.Configuration` stores, which is what the
+ * runtime reads. An object is written as text, and a Decision step's is normalized
+ * ({@link DecisionConfigurationText}).
+ */
+export function StepConfigurationText(step: Pick<AgentStep, 'StepType' | 'Configuration'>): string | null {
+    if (step.StepType === 'Decision') return DecisionConfigurationText(step.Configuration);
+    const raw = step.Configuration;
+    if (raw == null || raw === '') return null;
+    return typeof raw === 'string' ? raw : JSON.stringify(raw);
 }
 
 /** A step's identity in a spec: its ID, or its name for a step not yet saved. */

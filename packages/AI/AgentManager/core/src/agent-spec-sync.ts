@@ -19,7 +19,7 @@ import {
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
-import { DecisionConfigurationText } from './flow-step-validation';
+import { StepConfigurationText } from './flow-step-validation';
 
 /**
  * Represents a single database mutation performed by AgentSpecSync
@@ -1389,11 +1389,9 @@ export class AgentSpecSync {
             // Configuration carries the bounds. Written for every step because a step that STOPS
             // being a loop must have these cleared, not left behind from its previous shape.
             stepEntity.LoopBodyType = stepSpec.LoopBodyType || null;
-            // A Decision step's configuration is stored as JSON text with the model's aliases
-            // normalized, even when the model wrote it as an object.
-            stepEntity.Configuration = stepSpec.StepType === 'Decision'
-                ? DecisionConfigurationText(stepSpec.Configuration)
-                : stepSpec.Configuration || null;
+            // Stored as JSON text even when the model wrote an object, with a Decision step's aliases
+            // normalized.
+            stepEntity.Configuration = StepConfigurationText(stepSpec);
 
             // Handle inline prompt creation for Prompt-type steps
             // If StepType is Prompt and PromptID is empty, create a new AIPrompt record

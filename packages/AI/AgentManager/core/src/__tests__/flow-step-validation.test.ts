@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { AgentStep, AgentStepPath } from '@memberjunction/ai-core-plus';
-import { IsLoopStep, ValidateLoopStep, IsDecisionStep, ValidateDecisionStep, ValidateDecisionSteps } from '../flow-step-validation';
+import { IsLoopStep, ValidateLoopStep, IsDecisionStep, ValidateDecisionStep, ValidateDecisionSteps, StepConfigurationText } from '../flow-step-validation';
 
 const step = (over: Partial<AgentStep> = {}): AgentStep => ({
     ID: '',
@@ -48,7 +48,7 @@ describe('ValidateLoopStep — the happy paths', () => {
     it('accepts a Configuration supplied as an object, not only as JSON text', () => {
         // A model that was just shown an object literal in the prompt will send one. Rejecting that
         // would make the prompt and the validator disagree about the same example.
-        const s = step({ Configuration: { type: 'ForEach', collectionPath: 'leads', itemVariable: 'lead' } as unknown as string });
+        const s = step({ Configuration: { type: 'ForEach', collectionPath: 'leads', itemVariable: 'lead' } });
         expect(ValidateLoopStep(s, 0)).toEqual([]);
     });
 
@@ -97,9 +97,9 @@ describe('ValidateLoopStep — a loop that would silently do nothing', () => {
     it('rejects a Configuration that parses to something other than an object', () => {
         expect(ValidateLoopStep(step({ Configuration: '"just a string"' }), 0)[0]).toContain('not a JSON object');
         expect(ValidateLoopStep(step({ Configuration: '[1,2,3]' }), 0)[0]).toContain('not a JSON object');
-        expect(
-            ValidateLoopStep(step({ Configuration: [1, 2, 3] as unknown as string }), 0)[0],
-        ).toContain('array rather than an object');
+        // A model's JSON can put anything here, so this step is read from JSON, as a spec is.
+        const fromModel: AgentStep = JSON.parse(JSON.stringify({ ...step(), Configuration: [1, 2, 3] }));
+        expect(ValidateLoopStep(fromModel, 0)[0]).toContain('array rather than an object');
     });
 });
 
@@ -213,7 +213,7 @@ describe('ValidateDecisionStep — happy paths', () => {
                         ],
                     },
                 },
-            } as unknown as string,
+            },
         });
         expect(ValidateDecisionStep(s, 0)).toEqual([]);
     });
@@ -354,3 +354,23 @@ describe('ValidateDecisionSteps', () => {
     });
 });
 
+describe('StepConfigurationText', () => {
+    it('writes an object as JSON text and passes text through', () => {
+        const loop = { type: 'ForEach', collectionPath: 'leads', itemVariable: 'lead' };
+        expect(StepConfigurationText({ StepType: 'ForEach', Configuration: loop })).toBe(JSON.stringify(loop));
+        expect(StepConfigurationText({ StepType: 'ForEach', Configuration: '{"collectionPath":"leads"}' })).toBe('{"collectionPath":"leads"}');
+    });
+
+    it('normalizes the aliases in a Decision step', () => {
+        const text = StepConfigurationText({
+            StepType: 'Decision',
+            Configuration: { key: 'triage', questions: { urgent: { text: 'Is it urgent?', kind: 'Likelihood' } } },
+        });
+        expect(JSON.parse(text ?? '{}').questions.urgent.instructions).toBe('Is it urgent?');
+    });
+
+    it('stores nothing for an empty configuration', () => {
+        expect(StepConfigurationText({ StepType: 'Action', Configuration: undefined })).toBeNull();
+        expect(StepConfigurationText({ StepType: 'Action', Configuration: '' })).toBeNull();
+    });
+});

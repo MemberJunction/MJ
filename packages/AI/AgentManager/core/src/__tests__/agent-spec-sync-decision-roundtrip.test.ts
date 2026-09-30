@@ -69,10 +69,12 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     SubAgentSpec: vi.fn(),
 }));
 
+import { UserInfo } from '@memberjunction/core';
 import { AgentSpecSync } from '../agent-spec-sync';
 
 describe('AgentSpecSync Decision step round-trip', () => {
-    const mockUser = { ID: 'user-1', Email: 'test@test.com' } as never;
+    // UserInfo is mocked above, so this is the mock's instance.
+    const mockUser = new UserInfo();
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -106,7 +108,7 @@ describe('AgentSpecSync Decision step round-trip', () => {
                         StepType: 'Decision',
                         StartingStep: true,
                         PromptID: 'custom-prompt-uuid-999',
-                        Configuration: decisionConfig as unknown as string,
+                        Configuration: decisionConfig,
                     },
                 ],
             },

@@ -349,9 +349,13 @@ const graphWith = (tempId: string, promptName?: string): TaskGraphSpec => {
     };
 };
 
+/** A saved step's configuration text. Saving as a workflow writes text, so anything else reads as none. */
+const storedText = (step: AgentStep | undefined): string | undefined =>
+    typeof step?.Configuration === 'string' ? step.Configuration : undefined;
+
 /** The stored configuration of a saved Decision step. */
 const decisionConfigOf = (step: AgentStep | undefined): FlowDecisionStepConfiguration => {
-    const read = ReadFlowDecisionStepConfiguration(step?.Configuration);
+    const read = ReadFlowDecisionStepConfiguration(storedText(step));
     if ('Error' in read) throw new Error(read.Error);
     return read.Config;
 };
@@ -412,7 +416,7 @@ describe('Save as Workflow — a Decision node becomes a Decision step', () => {
         const saved = ConvertTaskGraphToAgentSpec(original, saveOptions()).Spec!;
         const steps: FlowCompilerStep[] = (saved.Steps ?? []).map((s) => ({
             ID: s.ID, Name: s.Name, StepType: s.StepType, StartingStep: s.StartingStep, Status: 'Active',
-            SubAgentID: s.SubAgentID, PromptID: s.PromptID, Configuration: s.Configuration,
+            SubAgentID: s.SubAgentID, PromptID: s.PromptID, Configuration: storedText(s),
         }));
         const paths: FlowCompilerPath[] = (saved.Paths ?? []).map((p) => ({
             ID: p.ID, OriginStepID: p.OriginStepID, DestinationStepID: p.DestinationStepID, Condition: p.Condition, Priority: p.Priority,
